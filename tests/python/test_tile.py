@@ -85,9 +85,9 @@ def test_zeros(TILE, make_tile, tdim, m_size, tensor_type, qd_dtype, use_zeros_a
     Ann = _ann(tensor_type, qd_dtype, 2)
 
     @qd.kernel(fastcache=True)
-    def k1(dst_arr: Ann):
-        qd.loop_config(block_dim=TILE.SIZE)
-        tile_size = TILE.SIZE
+    def k1(dst_arr: Ann, N: qd.Template):
+        qd.loop_config(block_dim=N)
+        tile_size = N
         for _ in range(tile_size):
             if qd.static(use_zeros_alias):
                 t = Tile.zeros()
@@ -96,7 +96,7 @@ def test_zeros(TILE, make_tile, tdim, m_size, tensor_type, qd_dtype, use_zeros_a
                 t = Tile()
                 t._store(dst_arr, 0, tile_size, 0, tile_size)
 
-    k1(dst)
+    k1(dst, tdim)
     np.testing.assert_allclose(dst.to_numpy(), np.zeros((tdim, tdim), dtype=np_dtype))
 
 
@@ -114,9 +114,9 @@ def test_eye(TILE, make_tile, tdim, m_size, tensor_type, qd_dtype, inplace):
     Ann = _ann(tensor_type, qd_dtype, 2)
 
     @qd.kernel(fastcache=True)
-    def k1(src_arr: Ann, dst_arr: Ann):
-        qd.loop_config(block_dim=TILE.SIZE)
-        tile_size = TILE.SIZE
+    def k1(src_arr: Ann, dst_arr: Ann, N: qd.Template):
+        qd.loop_config(block_dim=N)
+        tile_size = N
         for _ in range(tile_size):
             if qd.static(inplace):
                 t = Tile()
@@ -129,7 +129,7 @@ def test_eye(TILE, make_tile, tdim, m_size, tensor_type, qd_dtype, inplace):
 
     data = np.arange(tdim * tdim, dtype=np_dtype).reshape(tdim, tdim) + 100.0
     src.from_numpy(data)
-    k1(src, dst)
+    k1(src, dst, tdim)
     np.testing.assert_allclose(dst.to_numpy(), np.eye(tdim, dtype=np_dtype))
 
 
@@ -180,9 +180,10 @@ def test_load_store(
         dst_row_end: qd.i32,
         dst_col: qd.i32,
         dst_col_end: qd.i32,
+        N: qd.Template,
     ):
-        qd.loop_config(block_dim=TILE.SIZE)
-        tile_size = TILE.SIZE
+        qd.loop_config(block_dim=N)
+        tile_size = N
         for _ in range(tile_size):
             t = Tile()
             t._load(src_arr, src_row, src_row_end, src_col, src_col_end)
@@ -191,7 +192,7 @@ def test_load_store(
     data = np.arange(GRID * GRID, dtype=np_dtype).reshape(GRID, GRID) + 1.0
     src.from_numpy(data)
     dst.from_numpy(np.full((GRID, GRID), -1.0, dtype=np_dtype))
-    k1(src, dst, src_row, src_row_end, src_col, src_col_end, dst_row, dst_row_end, dst_col, dst_col_end)
+    k1(src, dst, src_row, src_row_end, src_col, src_col_end, dst_row, dst_row_end, dst_col, dst_col_end, tdim)
 
     result = dst.to_numpy()
     expected = np.full((GRID, GRID), -1.0, dtype=np_dtype)
@@ -219,9 +220,9 @@ def test_clamp_to_array_rows(TILE, make_tile, tdim, m_size, tensor_type, qd_dtyp
     Ann = _ann(tensor_type, qd_dtype, 2)
 
     @qd.kernel(fastcache=True)
-    def k1(src_arr: Ann, dst_arr: Ann):
-        qd.loop_config(block_dim=TILE.SIZE)
-        tile_size = TILE.SIZE
+    def k1(src_arr: Ann, dst_arr: Ann, N: qd.Template):
+        qd.loop_config(block_dim=N)
+        tile_size = N
         for _ in range(tile_size):
             t = Tile()
             t._load(src_arr, 0, tile_size, 0, tile_size)
@@ -229,7 +230,7 @@ def test_clamp_to_array_rows(TILE, make_tile, tdim, m_size, tensor_type, qd_dtyp
 
     data = np.arange(src_rows * tdim, dtype=np_dtype).reshape(src_rows, tdim) + 1.0
     src.from_numpy(data)
-    k1(src, dst)
+    k1(src, dst, tdim)
     result = dst.to_numpy()
     if clamp_side == "load":
         np.testing.assert_allclose(result[:NROWS, :], data)
@@ -256,9 +257,9 @@ def test_3d_clamp_to_array_rows(TILE, make_tile, tdim, m_size, tensor_type, qd_d
     Ann = _ann(tensor_type, qd_dtype, 3)
 
     @qd.kernel(fastcache=True)
-    def k1(src_arr: Ann, dst_arr: Ann):
-        qd.loop_config(block_dim=TILE.SIZE)
-        tile_size = TILE.SIZE
+    def k1(src_arr: Ann, dst_arr: Ann, N: qd.Template):
+        qd.loop_config(block_dim=N)
+        tile_size = N
         for _ in range(tile_size):
             t = Tile()
             t._load3d(src_arr, 0, 0, tile_size, 0, tile_size)
@@ -266,7 +267,7 @@ def test_3d_clamp_to_array_rows(TILE, make_tile, tdim, m_size, tensor_type, qd_d
 
     data = np.arange(src_rows * tdim, dtype=np_dtype).reshape(1, src_rows, tdim) + 1.0
     src.from_numpy(data)
-    k1(src, dst)
+    k1(src, dst, tdim)
     result = dst.to_numpy()
     if clamp_side == "load":
         np.testing.assert_allclose(result[0, :NROWS, :], data[0])
@@ -312,9 +313,10 @@ def test_load3d_store3d(TILE, make_tile, tdim, m_size, tensor_type, qd_dtype, ba
         row_end: qd.i32,
         src_col: qd.i32,
         col_end: qd.i32,
+        N: qd.Template,
     ):
-        qd.loop_config(block_dim=TILE.SIZE)
-        tile_size = TILE.SIZE
+        qd.loop_config(block_dim=N)
+        tile_size = N
         for _ in range(tile_size):
             t = Tile()
             t._load3d(src_arr, batch, src_row, row_end, src_col, col_end)
@@ -323,7 +325,7 @@ def test_load3d_store3d(TILE, make_tile, tdim, m_size, tensor_type, qd_dtype, ba
     data = np.arange(NBATCH * GRID * GRID, dtype=np_dtype).reshape(NBATCH, GRID, GRID) + 1.0
     src.from_numpy(data)
     dst.from_numpy(np.full((NBATCH, GRID, GRID), -1.0, dtype=np_dtype))
-    k1(src, dst, batch, src_row, row_end, src_col, col_end)
+    k1(src, dst, batch, src_row, row_end, src_col, col_end, tdim)
 
     result = dst.to_numpy()
     expected = np.full((NBATCH, GRID, GRID), -1.0, dtype=np_dtype)
@@ -345,13 +347,13 @@ def test_size_constant_in_kernel(TILE, make_tile, tdim, m_size):
     out = qd.ndarray(qd.i32, (1,))
 
     @qd.kernel(fastcache=True)
-    def k1(result: qd.types.NDArray[qd.i32, 1]):
-        qd.loop_config(block_dim=TILE.SIZE)
-        tile_size = TILE.SIZE
+    def k1(result: qd.types.NDArray[qd.i32, 1], N: qd.Template):
+        qd.loop_config(block_dim=N)
+        tile_size = N
         for _ in range(tile_size):
             result[0] = Tile.SIZE
 
-    k1(out)
+    k1(out, tdim)
     assert out.to_numpy()[0] == tdim
 
 
@@ -370,9 +372,9 @@ def test_load_clamp_to_array_cols(TILE, make_tile, tdim, m_size, tensor_type, qd
     Ann = _ann(tensor_type, qd_dtype, 2)
 
     @qd.kernel(fastcache=True)
-    def k1(src_arr: Ann, dst_arr: Ann):
-        qd.loop_config(block_dim=TILE.SIZE)
-        tile_size = TILE.SIZE
+    def k1(src_arr: Ann, dst_arr: Ann, N: qd.Template):
+        qd.loop_config(block_dim=N)
+        tile_size = N
         for _ in range(tile_size):
             t = Tile()
             t._load(src_arr, 0, tile_size, 0, tile_size)
@@ -380,7 +382,7 @@ def test_load_clamp_to_array_cols(TILE, make_tile, tdim, m_size, tensor_type, qd
 
     data = np.arange(tdim * NCOLS, dtype=np_dtype).reshape(tdim, NCOLS) + 1.0
     src.from_numpy(data)
-    k1(src, dst)
+    k1(src, dst, tdim)
     result = dst.to_numpy()
     np.testing.assert_allclose(result[:, :NCOLS], data)
     np.testing.assert_allclose(result[:, NCOLS:], 0.0)
@@ -401,9 +403,9 @@ def test_store_partial_cols_untouched(TILE, make_tile, tdim, m_size, tensor_type
     Ann = _ann(tensor_type, qd_dtype, 2)
 
     @qd.kernel(fastcache=True)
-    def k1(src_arr: Ann, dst_arr: Ann, NCOLS: qd.i32):
-        qd.loop_config(block_dim=TILE.SIZE)
-        tile_size = TILE.SIZE
+    def k1(src_arr: Ann, dst_arr: Ann, NCOLS: qd.i32, N: qd.Template):
+        qd.loop_config(block_dim=N)
+        tile_size = N
         for _ in range(tile_size):
             t = Tile()
             t._load(src_arr, 0, tile_size, 0, tile_size)
@@ -412,7 +414,7 @@ def test_store_partial_cols_untouched(TILE, make_tile, tdim, m_size, tensor_type
     data = np.arange(tdim * tdim, dtype=np_dtype).reshape(tdim, tdim) + 1.0
     src.from_numpy(data)
     dst.from_numpy(np.full((tdim, tdim), -1.0, dtype=np_dtype))
-    k1(src, dst, NCOLS)
+    k1(src, dst, NCOLS, tdim)
     result = dst.to_numpy()
     np.testing.assert_allclose(result[:, :NCOLS], data[:, :NCOLS])
     np.testing.assert_allclose(result[:, NCOLS:], -1.0)
@@ -457,9 +459,10 @@ def test_ger_sub(TILE, make_tile, tdim, m_size, tensor_type, qd_dtype):
         a_arr: Ann1,
         b_arr: Ann1,
         out_arr: Ann2,
+        N: qd.Template,
     ):
-        qd.loop_config(block_dim=TILE.SIZE)
-        tile_size = TILE.SIZE
+        qd.loop_config(block_dim=N)
+        tile_size = N
         for _ in range(tile_size):
             t = Tile()
             t._load(mat_arr, 0, tile_size, 0, tile_size)
@@ -475,7 +478,7 @@ def test_ger_sub(TILE, make_tile, tdim, m_size, tensor_type, qd_dtype):
     mat.from_numpy(M)
     vec_a.from_numpy(a)
     vec_b.from_numpy(b)
-    k1(mat, vec_a, vec_b, out)
+    k1(mat, vec_a, vec_b, out, tdim)
 
     expected = M - np.outer(a, b)
     atol = 1e-10 if qd_dtype == qd.f64 else 1e-5
@@ -509,9 +512,10 @@ def test_cholesky(TILE, make_tile, tdim, m_size, tensor_type, qd_dtype, src_offs
         src_row_end: qd.i32,
         dst_offset: qd.i32,
         dst_row_end: qd.i32,
+        N: qd.Template,
     ):
-        qd.loop_config(block_dim=TILE.SIZE)
-        tile_size = TILE.SIZE
+        qd.loop_config(block_dim=N)
+        tile_size = N
         for _ in range(tile_size):
             t = Tile()
             t._load(src_arr, src_offset, src_row_end, src_offset, src_row_end)
@@ -526,7 +530,7 @@ def test_cholesky(TILE, make_tile, tdim, m_size, tensor_type, qd_dtype, src_offs
     src_np[src_offset : src_offset + tdim, src_offset : src_offset + tdim] = A
     src.from_numpy(src_np)
     dst.from_numpy(np.full((GRID, GRID), -1.0, dtype=np_dtype))
-    k1(src, dst, src_offset, src_row_end, dst_offset, dst_row_end)
+    k1(src, dst, src_offset, src_row_end, dst_offset, dst_row_end, tdim)
 
     result = dst.to_numpy()
     L_gpu = np.tril(result[dst_offset : dst_offset + tdim, dst_offset : dst_offset + tdim])
@@ -558,9 +562,10 @@ def test_trsm(TILE, make_tile, tdim, m_size, tensor_type, qd_dtype):
         a_in: Ann,
         b_in: Ann,
         out: Ann,
+        N: qd.Template,
     ):
-        qd.loop_config(block_dim=TILE.SIZE)
-        tile_size = TILE.SIZE
+        qd.loop_config(block_dim=N)
+        tile_size = N
         for _ in range(tile_size):
             L = Tile()
             L._load(a_in, 0, tile_size, 0, tile_size)
@@ -575,7 +580,7 @@ def test_trsm(TILE, make_tile, tdim, m_size, tensor_type, qd_dtype):
 
     a_arr.from_numpy(L_ref)
     b_arr.from_numpy(B)
-    k1(a_arr, b_arr, dst)
+    k1(a_arr, b_arr, dst, tdim)
 
     X_ref = scipy.linalg.solve_triangular(L_ref.astype(np.float64), B.astype(np.float64).T, lower=True).T.astype(
         np_dtype
@@ -609,9 +614,9 @@ def test_slice_load_store_roundtrip(TILE, make_tile, tdim, m_size, tensor_type, 
     Ann = _ann(tensor_type, qd_dtype, 2)
 
     @qd.kernel(fastcache=True)
-    def k1(src_arr: Ann, dst_arr: Ann):
-        qd.loop_config(block_dim=TILE.SIZE)
-        tile_size = TILE.SIZE
+    def k1(src_arr: Ann, dst_arr: Ann, N: qd.Template):
+        qd.loop_config(block_dim=N)
+        tile_size = N
         for _ in range(tile_size):
             t = Tile()
             t[:] = src_arr[0:tile_size, 0:tile_size]
@@ -619,7 +624,7 @@ def test_slice_load_store_roundtrip(TILE, make_tile, tdim, m_size, tensor_type, 
 
     data = np.arange(tdim * tdim, dtype=np_dtype).reshape(tdim, tdim) + 1.0
     src.from_numpy(data)
-    k1(src, dst)
+    k1(src, dst, tdim)
     np.testing.assert_allclose(dst.to_numpy(), data)
 
 
@@ -637,9 +642,9 @@ def test_slice_partial_cols(TILE, make_tile, tdim, m_size, tensor_type, qd_dtype
     Ann = _ann(tensor_type, qd_dtype, 2)
 
     @qd.kernel(fastcache=True)
-    def k1(src_arr: Ann, dst_arr: Ann, NCOLS: qd.i32):
-        qd.loop_config(block_dim=TILE.SIZE)
-        tile_size = TILE.SIZE
+    def k1(src_arr: Ann, dst_arr: Ann, NCOLS: qd.i32, N: qd.Template):
+        qd.loop_config(block_dim=N)
+        tile_size = N
         for _ in range(tile_size):
             t = Tile()
             t[:] = src_arr[0:tile_size, 0:NCOLS]
@@ -648,7 +653,7 @@ def test_slice_partial_cols(TILE, make_tile, tdim, m_size, tensor_type, qd_dtype
     data = np.arange(tdim * tdim, dtype=np_dtype).reshape(tdim, tdim) + 1.0
     src.from_numpy(data)
     dst.from_numpy(np.full((tdim, tdim), -1.0, dtype=np_dtype))
-    k1(src, dst, NCOLS)
+    k1(src, dst, NCOLS, tdim)
 
     result = dst.to_numpy()
     expected = np.full((tdim, tdim), -1.0, dtype=np_dtype)
@@ -670,9 +675,9 @@ def test_slice_3d_batch(TILE, make_tile, tdim, m_size, tensor_type, qd_dtype):
     Ann = _ann(tensor_type, qd_dtype, 3)
 
     @qd.kernel(fastcache=True)
-    def k1(src_arr: Ann, dst_arr: Ann, NBATCH: qd.i32):
-        qd.loop_config(block_dim=TILE.SIZE)
-        tile_size = TILE.SIZE
+    def k1(src_arr: Ann, dst_arr: Ann, NBATCH: qd.i32, N: qd.Template):
+        qd.loop_config(block_dim=N)
+        tile_size = N
         for _ in range(tile_size):
             for b in range(NBATCH):
                 t = Tile()
@@ -681,7 +686,7 @@ def test_slice_3d_batch(TILE, make_tile, tdim, m_size, tensor_type, qd_dtype):
 
     data = np.arange(NBATCH * tdim * tdim, dtype=np_dtype).reshape(NBATCH, tdim, tdim) + 1.0
     src.from_numpy(data)
-    k1(src, dst, NBATCH)
+    k1(src, dst, NBATCH, tdim)
     np.testing.assert_allclose(dst.to_numpy(), data)
 
 
@@ -706,9 +711,10 @@ def test_slice_ger_sub_via_outer(TILE, make_tile, tdim, m_size, tensor_type, qd_
         a_arr: Ann1,
         b_arr: Ann1,
         out_arr: Ann2,
+        N: qd.Template,
     ):
-        qd.loop_config(block_dim=TILE.SIZE)
-        tile_size = TILE.SIZE
+        qd.loop_config(block_dim=N)
+        tile_size = N
         for _ in range(tile_size):
             t = Tile()
             t[:] = mat_arr[0:tile_size, 0:tile_size]
@@ -724,7 +730,7 @@ def test_slice_ger_sub_via_outer(TILE, make_tile, tdim, m_size, tensor_type, qd_
     mat.from_numpy(M)
     vec_a.from_numpy(a)
     vec_b.from_numpy(b)
-    k1(mat, vec_a, vec_b, out)
+    k1(mat, vec_a, vec_b, out, tdim)
 
     expected = M - np.outer(a, b)
     atol = 1e-10 if qd_dtype == qd.f64 else 1e-5
@@ -746,9 +752,10 @@ def test_vec_proxy_ger_sub_2d(TILE, make_tile, tdim, m_size, qd_dtype):
         mat_arr: qd.types.NDArray[qd_dtype, 2],
         vecs_arr: qd.types.NDArray[qd_dtype, 2],
         out_arr: qd.types.NDArray[qd_dtype, 2],
+        N: qd.Template,
     ):
-        qd.loop_config(block_dim=TILE.SIZE)
-        tile_size = TILE.SIZE
+        qd.loop_config(block_dim=N)
+        tile_size = N
         for _ in range(tile_size):
             t = Tile()
             t[:] = mat_arr[0:tile_size, 0:tile_size]
@@ -760,7 +767,7 @@ def test_vec_proxy_ger_sub_2d(TILE, make_tile, tdim, m_size, qd_dtype):
     b = np.arange(tdim, dtype=np_dtype) + 2.0
     mat.from_numpy(M)
     vecs.from_numpy(np.column_stack([a, b]))
-    k1(mat, vecs, out)
+    k1(mat, vecs, out, tdim)
 
     expected = M - np.outer(a, b)
     atol = 1e-10 if qd_dtype == qd.f64 else 1e-5
@@ -780,9 +787,10 @@ def test_outer_symmetric_same_variable(TILE, make_tile, tdim, m_size):
         mat_arr: qd.types.NDArray[qd.f32, 2],
         vecs_arr: qd.types.NDArray[qd.f32, 2],
         out_arr: qd.types.NDArray[qd.f32, 2],
+        N: qd.Template,
     ):
-        qd.loop_config(block_dim=TILE.SIZE)
-        tile_size = TILE.SIZE
+        qd.loop_config(block_dim=N)
+        tile_size = N
         for _ in range(tile_size):
             t = Tile()
             t[:] = mat_arr[0:tile_size, 0:tile_size]
@@ -794,7 +802,7 @@ def test_outer_symmetric_same_variable(TILE, make_tile, tdim, m_size):
     a = np.arange(tdim, dtype=np.float32) + 1.0
     mat.from_numpy(M)
     vecs.from_numpy(a.reshape(-1, 1))
-    k1(mat, vecs, out)
+    k1(mat, vecs, out, tdim)
 
     expected = M - np.outer(a, a)
     np.testing.assert_allclose(out.to_numpy(), expected, atol=1e-5)
@@ -814,9 +822,10 @@ def test_vec_proxy_ger_sub_3d(TILE, make_tile, tdim, m_size):
         mat_arr: qd.types.NDArray[qd.f32, 2],
         vecs_arr: qd.types.NDArray[qd.f32, 3],
         out_arr: qd.types.NDArray[qd.f32, 2],
+        N: qd.Template,
     ):
-        qd.loop_config(block_dim=TILE.SIZE)
-        tile_size = TILE.SIZE
+        qd.loop_config(block_dim=N)
+        tile_size = N
         for _ in range(tile_size):
             t = Tile()
             t[:] = mat_arr[0:tile_size, 0:tile_size]
@@ -833,7 +842,7 @@ def test_vec_proxy_ger_sub_3d(TILE, make_tile, tdim, m_size):
     vecs_np[1, :, 1] = b
     mat.from_numpy(M)
     vecs.from_numpy(vecs_np)
-    k1(mat, vecs, out)
+    k1(mat, vecs, out, tdim)
 
     expected = M - np.outer(a, b)
     np.testing.assert_allclose(out.to_numpy(), expected, atol=1e-5)
@@ -895,9 +904,9 @@ def test_load_slice_errors(TILE, make_tile, tdim, m_size, bad_slice, match):
     dst = qd.ndarray(qd.f32, (tdim, tdim))
 
     @qd.kernel(fastcache=True)
-    def k1(s: qd.types.NDArray[qd.f32, 2], d: qd.types.NDArray[qd.f32, 2]):
-        qd.loop_config(block_dim=TILE.SIZE)
-        tile_size = TILE.SIZE
+    def k1(s: qd.types.NDArray[qd.f32, 2], d: qd.types.NDArray[qd.f32, 2], N: qd.Template):
+        qd.loop_config(block_dim=N)
+        tile_size = N
         for _ in range(tile_size):
             t = Tile()
             if qd.static(bad_slice == "neg_row"):
@@ -911,7 +920,7 @@ def test_load_slice_errors(TILE, make_tile, tdim, m_size, bad_slice, match):
             d[0:tile_size, 0:tile_size] = t
 
     with pytest.raises(QuadrantsSyntaxError, match=match):
-        k1(src, dst)
+        k1(src, dst, tdim)
 
 
 @pytest.mark.parametrize(
@@ -930,9 +939,9 @@ def test_store_slice_errors(TILE, make_tile, tdim, m_size, bad_slice, match):
     dst = qd.ndarray(qd.f32, (tdim, tdim))
 
     @qd.kernel(fastcache=True)
-    def k1(s: qd.types.NDArray[qd.f32, 2], d: qd.types.NDArray[qd.f32, 2]):
-        qd.loop_config(block_dim=TILE.SIZE)
-        tile_size = TILE.SIZE
+    def k1(s: qd.types.NDArray[qd.f32, 2], d: qd.types.NDArray[qd.f32, 2], N: qd.Template):
+        qd.loop_config(block_dim=N)
+        tile_size = N
         for _ in range(tile_size):
             t = Tile()
             t[:] = s[0:tile_size, 0:tile_size]
@@ -946,7 +955,7 @@ def test_store_slice_errors(TILE, make_tile, tdim, m_size, bad_slice, match):
                 d[0:, 0:tile_size] = t
 
     with pytest.raises(QuadrantsSyntaxError, match=match):
-        k1(src, dst)
+        k1(src, dst, tdim)
 
 
 @test_utils.test(arch=qd.gpu)
@@ -956,16 +965,16 @@ def test_slice_wrong_index_order_raises(TILE, make_tile, tdim, m_size):
     src = qd.ndarray(qd.f32, (3, tdim, 2))
 
     @qd.kernel(fastcache=True)
-    def k1(s: qd.types.NDArray[qd.f32, 3]):
-        qd.loop_config(block_dim=TILE.SIZE)
-        tile_size = TILE.SIZE
+    def k1(s: qd.types.NDArray[qd.f32, 3], N: qd.Template):
+        qd.loop_config(block_dim=N)
+        tile_size = N
         for _ in range(tile_size):
             t = Tile()
             v = s[0:tile_size, 0, 1]
             t -= qd.outer(v, v)
 
     with pytest.raises(Exception):
-        k1(src)
+        k1(src, tdim)
 
 
 @test_utils.test(arch=qd.gpu)
@@ -976,16 +985,16 @@ def test_slice_extra_indices_raises(TILE, make_tile, tdim, m_size):
     dst = qd.ndarray(qd.f32, (tdim, tdim))
 
     @qd.kernel(fastcache=True)
-    def k1(s: qd.types.NDArray[qd.f32, 2], d: qd.types.NDArray[qd.f32, 2]):
-        qd.loop_config(block_dim=TILE.SIZE)
-        tile_size = TILE.SIZE
+    def k1(s: qd.types.NDArray[qd.f32, 2], d: qd.types.NDArray[qd.f32, 2], N: qd.Template):
+        qd.loop_config(block_dim=N)
+        tile_size = N
         for _ in range(tile_size):
             t = Tile()
             t[:] = s[0, 0, 0:tile_size, 0:tile_size]
             d[0:tile_size, 0:tile_size] = t
 
     with pytest.raises(Exception):
-        k1(src, dst)
+        k1(src, dst, tdim)
 
 
 @test_utils.test(arch=qd.gpu)
@@ -999,9 +1008,10 @@ def test_outer_product_intermediate_variable(TILE, make_tile, tdim, m_size):
     def k1(
         mat_arr: qd.types.NDArray[qd.f32, 2],
         out_arr: qd.types.NDArray[qd.f32, 2],
+        N: qd.Template,
     ):
-        qd.loop_config(block_dim=TILE.SIZE)
-        tile_size = TILE.SIZE
+        qd.loop_config(block_dim=N)
+        tile_size = N
         for _ in range(tile_size):
             t = Tile()
             t[:] = mat_arr[0:tile_size, 0:tile_size]
@@ -1016,7 +1026,7 @@ def test_outer_product_intermediate_variable(TILE, make_tile, tdim, m_size):
     a = np.arange(tdim, dtype=np.float32) + 1.0
     b = np.arange(tdim, dtype=np.float32) + 2.0
     mat.from_numpy(M)
-    k1(mat, out)
+    k1(mat, out, tdim)
 
     expected = M - np.outer(a, b)
     np.testing.assert_allclose(out.to_numpy(), expected, atol=1e-5)
@@ -1030,9 +1040,9 @@ def test_load_without_slice_rebinds(TILE, make_tile, tdim, m_size):
     dst = qd.ndarray(qd.f32, (tdim, tdim))
 
     @qd.kernel(fastcache=True)
-    def k1(s: qd.types.NDArray[qd.f32, 2], d: qd.types.NDArray[qd.f32, 2]):
-        qd.loop_config(block_dim=TILE.SIZE)
-        tile_size = TILE.SIZE
+    def k1(s: qd.types.NDArray[qd.f32, 2], d: qd.types.NDArray[qd.f32, 2], N: qd.Template):
+        qd.loop_config(block_dim=N)
+        tile_size = N
         for _ in range(tile_size):
             t = Tile()
             t = s[0:tile_size, 0:tile_size]
@@ -1041,7 +1051,7 @@ def test_load_without_slice_rebinds(TILE, make_tile, tdim, m_size):
     data = np.arange(tdim * tdim, dtype=np.float32).reshape(tdim, tdim) + 1.0
     src.from_numpy(data)
     with pytest.raises(Exception):
-        k1(src, dst)
+        k1(src, dst, tdim)
 
 
 @test_utils.test(arch=qd.gpu)
@@ -1051,9 +1061,9 @@ def test_augassign_add_outer_raises(TILE, make_tile, tdim, m_size):
     src = qd.ndarray(qd.f32, (tdim, tdim))
 
     @qd.kernel(fastcache=True)
-    def k1(s: qd.types.NDArray[qd.f32, 2]):
-        qd.loop_config(block_dim=TILE.SIZE)
-        tile_size = TILE.SIZE
+    def k1(s: qd.types.NDArray[qd.f32, 2], N: qd.Template):
+        qd.loop_config(block_dim=N)
+        tile_size = N
         for _ in range(tile_size):
             t = Tile()
             t[:] = s[0:tile_size, 0:tile_size]
@@ -1061,7 +1071,7 @@ def test_augassign_add_outer_raises(TILE, make_tile, tdim, m_size):
             t += qd.outer(tid, tid)
 
     with pytest.raises(TypeError, match="unsupported augmented assignment op"):
-        k1(src)
+        k1(src, tdim)
 
 
 @test_utils.test(arch=qd.gpu)
@@ -1071,16 +1081,16 @@ def test_augassign_non_outer_raises(TILE, make_tile, tdim, m_size):
     src = qd.ndarray(qd.f32, (tdim, tdim))
 
     @qd.kernel(fastcache=True)
-    def k1(s: qd.types.NDArray[qd.f32, 2]):
-        qd.loop_config(block_dim=TILE.SIZE)
-        tile_size = TILE.SIZE
+    def k1(s: qd.types.NDArray[qd.f32, 2], N: qd.Template):
+        qd.loop_config(block_dim=N)
+        tile_size = N
         for _ in range(tile_size):
             t = Tile()
             t[:] = s[0:tile_size, 0:tile_size]
             t -= qd.f32(1.0)
 
     with pytest.raises(TypeError, match="unsupported augmented assignment"):
-        k1(src)
+        k1(src, tdim)
 
 
 @pytest.mark.parametrize("bad_slice", ["no_stop", "no_start"])
@@ -1091,9 +1101,9 @@ def test_vec_slice_errors(TILE, make_tile, tdim, m_size, bad_slice):
     dst = qd.ndarray(qd.f32, (tdim, tdim))
 
     @qd.kernel(fastcache=True)
-    def k1(s: qd.types.NDArray[qd.f32, 2], d: qd.types.NDArray[qd.f32, 2]):
-        qd.loop_config(block_dim=TILE.SIZE)
-        tile_size = TILE.SIZE
+    def k1(s: qd.types.NDArray[qd.f32, 2], d: qd.types.NDArray[qd.f32, 2], N: qd.Template):
+        qd.loop_config(block_dim=N)
+        tile_size = N
         for _ in range(tile_size):
             t = Tile()
             if qd.static(bad_slice == "no_stop"):
@@ -1104,7 +1114,7 @@ def test_vec_slice_errors(TILE, make_tile, tdim, m_size, bad_slice):
             d[0:tile_size, 0:tile_size] = t
 
     with pytest.raises(QuadrantsSyntaxError, match="both start and stop"):
-        k1(src, dst)
+        k1(src, dst, tdim)
 
 
 # =============================================================================
@@ -1125,9 +1135,9 @@ def test_load_store_partial(TILE, make_tile, tdim, m_size, tensor_type, qd_dtype
     Ann = _ann(tensor_type, qd_dtype, 2)
 
     @qd.kernel(fastcache=True)
-    def k1(src_arr: Ann, dst_arr: Ann, NCOLS: qd.i32):
-        qd.loop_config(block_dim=TILE.SIZE)
-        tile_size = TILE.SIZE
+    def k1(src_arr: Ann, dst_arr: Ann, NCOLS: qd.i32, N: qd.Template):
+        qd.loop_config(block_dim=N)
+        tile_size = N
         for _ in range(tile_size):
             t = TILE.zeros(dtype=qd_dtype)
             t[:] = src_arr[0:tile_size, 0:NCOLS]
@@ -1135,7 +1145,7 @@ def test_load_store_partial(TILE, make_tile, tdim, m_size, tensor_type, qd_dtype
 
     data = np.arange(tdim * tdim, dtype=np_dtype).reshape(tdim, tdim) + 1.0
     src.from_numpy(data)
-    k1(src, dst, NCOLS)
+    k1(src, dst, NCOLS, tdim)
     result = dst.to_numpy()
     np.testing.assert_allclose(result[:, :NCOLS], data[:, :NCOLS])
     np.testing.assert_allclose(result[:, NCOLS:], 0.0)
@@ -1153,9 +1163,11 @@ def test_load_store_partial_rows(TILE, make_tile, tdim, m_size, qd_dtype, nrows)
     dst = qd.ndarray(qd_dtype, (GRID, GRID))
 
     @qd.kernel(fastcache=True)
-    def k1(src_arr: qd.types.NDArray[qd_dtype, 2], dst_arr: qd.types.NDArray[qd_dtype, 2], nrows: qd.i32):
-        qd.loop_config(block_dim=TILE.SIZE)
-        tile_size = TILE.SIZE
+    def k1(
+        src_arr: qd.types.NDArray[qd_dtype, 2], dst_arr: qd.types.NDArray[qd_dtype, 2], nrows: qd.i32, N: qd.Template
+    ):
+        qd.loop_config(block_dim=N)
+        tile_size = N
         for _ in range(tile_size):
             t = TILE.zeros(dtype=qd_dtype)
             t[:] = src_arr[0:nrows, 0:tile_size]
@@ -1164,7 +1176,7 @@ def test_load_store_partial_rows(TILE, make_tile, tdim, m_size, qd_dtype, nrows)
     data = np.arange(GRID * GRID, dtype=np_dtype).reshape(GRID, GRID) + 1.0
     src.from_numpy(data)
     dst.from_numpy(np.full((GRID, GRID), -1.0, dtype=np_dtype))
-    k1(src, dst, nrows)
+    k1(src, dst, nrows, tdim)
 
     result = dst.to_numpy()
     expected = np.full((GRID, GRID), -1.0, dtype=np_dtype)
@@ -1186,9 +1198,9 @@ def test_syr_sub(TILE, make_tile, tdim, m_size, tensor_type, qd_dtype):
     Ann1 = _ann(tensor_type, qd_dtype, 1)
 
     @qd.kernel(fastcache=True)
-    def k1(mat_arr: Ann2, vec_arr: Ann1, out_arr: Ann2):
-        qd.loop_config(block_dim=TILE.SIZE)
-        tile_size = TILE.SIZE
+    def k1(mat_arr: Ann2, vec_arr: Ann1, out_arr: Ann2, N: qd.Template):
+        qd.loop_config(block_dim=N)
+        tile_size = N
         for tid in range(tile_size):
             t = TILE.zeros(dtype=qd_dtype)
             t[:] = mat_arr[0:tile_size, 0:tile_size]
@@ -1200,7 +1212,7 @@ def test_syr_sub(TILE, make_tile, tdim, m_size, tensor_type, qd_dtype):
     v = rng.randn(tdim).astype(np_dtype)
     mat.from_numpy(R)
     vec.from_numpy(v)
-    k1(mat, vec, out)
+    k1(mat, vec, out, tdim)
     np.testing.assert_allclose(out.to_numpy(), R - np.outer(v, v), atol=1e-5)
 
 
@@ -1218,9 +1230,9 @@ def test_potrf(TILE, make_tile, tdim, m_size, tensor_type, qd_dtype):
     Ann = _ann(tensor_type, qd_dtype, 2)
 
     @qd.kernel(fastcache=True)
-    def k1(src_arr: Ann, dst_arr: Ann, eps_f: qd.Template):
-        qd.loop_config(block_dim=TILE.SIZE)
-        tile_size = TILE.SIZE
+    def k1(src_arr: Ann, dst_arr: Ann, eps_f: qd.Template, N: qd.Template):
+        qd.loop_config(block_dim=N)
+        tile_size = N
         for _ in range(tile_size):
             t = TILE.zeros(dtype=qd_dtype)
             t[:] = src_arr[0:tile_size, 0:tile_size]
@@ -1230,7 +1242,7 @@ def test_potrf(TILE, make_tile, tdim, m_size, tensor_type, qd_dtype):
     A = _make_spd(tdim, np_dtype)
     src.from_numpy(A)
     eps_field[None] = _EPS_VALS[qd_dtype]
-    k1(src, dst, eps_field)
+    k1(src, dst, eps_field, tdim)
     L_expected = np.linalg.cholesky(A.astype(np.float64)).astype(np_dtype)
     np.testing.assert_allclose(np.tril(dst.to_numpy()), L_expected, atol=atol)
 
@@ -1250,9 +1262,9 @@ def test_potrf_then_trsm(TILE, make_tile, tdim, m_size, tensor_type, qd_dtype):
     Ann = _ann(tensor_type, qd_dtype, 2)
 
     @qd.kernel(fastcache=True)
-    def k1(a_arr: Ann, b_arr: Ann, x_arr: Ann, eps_f: qd.Template):
-        qd.loop_config(block_dim=TILE.SIZE)
-        tile_size = TILE.SIZE
+    def k1(a_arr: Ann, b_arr: Ann, x_arr: Ann, eps_f: qd.Template, N: qd.Template):
+        qd.loop_config(block_dim=N)
+        tile_size = N
         for _ in range(tile_size):
             L = TILE.zeros(dtype=qd_dtype)
             L[:] = a_arr[0:tile_size, 0:tile_size]
@@ -1268,7 +1280,7 @@ def test_potrf_then_trsm(TILE, make_tile, tdim, m_size, tensor_type, qd_dtype):
     a_field.from_numpy(A)
     b_field.from_numpy(Bnp)
     eps_field[None] = _EPS_VALS[qd_dtype]
-    k1(a_field, b_field, x_field, eps_field)
+    k1(a_field, b_field, x_field, eps_field, tdim)
     X = x_field.to_numpy()
     L_ref = np.linalg.cholesky(A.astype(np.float64))
     X_ref = scipy.linalg.solve_triangular(L_ref, Bnp.T.astype(np.float64), lower=True).T.astype(np_dtype)
@@ -1285,9 +1297,9 @@ def test_shared_array_roundtrip(TILE, make_tile, tdim, m_size):
     dst = qd.field(dtype=qd.f32, shape=(tdim, tdim))
 
     @qd.kernel(fastcache=True)
-    def k1(src_f: qd.Template, dst_f: qd.Template):
-        qd.loop_config(block_dim=TILE.SIZE)
-        tile_size = TILE.SIZE
+    def k1(src_f: qd.Template, dst_f: qd.Template, N: qd.Template):
+        qd.loop_config(block_dim=N)
+        tile_size = N
         for _ in range(tile_size):
             sh = qd.simt.block.SharedArray((TILE.SIZE, TILE.SIZE), qd.f32)
             t = TILE.zeros(dtype=qd.f32)
@@ -1300,7 +1312,7 @@ def test_shared_array_roundtrip(TILE, make_tile, tdim, m_size):
 
     data = np.arange(tdim * tdim, dtype=np.float32).reshape(tdim, tdim) + 1.0
     src.from_numpy(data)
-    k1(src, dst)
+    k1(src, dst, tdim)
     np.testing.assert_allclose(dst.to_numpy(), data)
 
 
@@ -1313,9 +1325,9 @@ def test_shared_array_partial_cols(TILE, make_tile, tdim, m_size, partial_store,
     dst = qd.field(dtype=qd.f32, shape=(tdim, tdim))
 
     @qd.kernel(fastcache=True)
-    def k1(src_f: qd.Template, dst_f: qd.Template, NCOLS: qd.i32):
-        qd.loop_config(block_dim=TILE.SIZE)
-        tile_size = TILE.SIZE
+    def k1(src_f: qd.Template, dst_f: qd.Template, NCOLS: qd.i32, N: qd.Template):
+        qd.loop_config(block_dim=N)
+        tile_size = N
         for _ in range(tile_size):
             sh = qd.simt.block.SharedArray((TILE.SIZE, TILE.SIZE), qd.f32)
             tid = qd.simt.subgroup.invocation_id()
@@ -1341,7 +1353,7 @@ def test_shared_array_partial_cols(TILE, make_tile, tdim, m_size, partial_store,
 
     data = np.arange(tdim * tdim, dtype=np.float32).reshape(tdim, tdim) + 1.0
     src.from_numpy(data)
-    k1(src, dst, NCOLS)
+    k1(src, dst, NCOLS, tdim)
     result = dst.to_numpy()
     np.testing.assert_allclose(result[:, :NCOLS], data[:, :NCOLS])
     if partial_load:
@@ -1358,9 +1370,9 @@ def test_shared_array_cholesky(TILE, make_tile, tdim, m_size):
     eps_field = qd.field(dtype=qd.f32, shape=())
 
     @qd.kernel(fastcache=True)
-    def k1(src_f: qd.Template, dst_f: qd.Template, eps_f: qd.Template):
-        qd.loop_config(block_dim=TILE.SIZE)
-        tile_size = TILE.SIZE
+    def k1(src_f: qd.Template, dst_f: qd.Template, eps_f: qd.Template, N: qd.Template):
+        qd.loop_config(block_dim=N)
+        tile_size = N
         for _ in range(tile_size):
             sh = qd.simt.block.SharedArray((TILE.SIZE, TILE.SIZE), qd.f32)
             t = TILE.zeros(dtype=qd.f32)
@@ -1375,7 +1387,7 @@ def test_shared_array_cholesky(TILE, make_tile, tdim, m_size):
     A = _make_spd(tdim)
     src.from_numpy(A)
     eps_field[None] = 1e-10
-    k1(src, dst, eps_field)
+    k1(src, dst, eps_field, tdim)
     L_expected = np.linalg.cholesky(A.astype(np.float64)).astype(np.float32)
     np.testing.assert_allclose(np.tril(dst.to_numpy()), L_expected, atol=1e-4)
 
@@ -1388,9 +1400,9 @@ def test_shared_array_clamp_store(TILE, make_tile, tdim, m_size):
     dst = qd.field(dtype=qd.f32, shape=(tdim, NCOLS))
 
     @qd.kernel(fastcache=True)
-    def k1(src_f: qd.Template, dst_f: qd.Template, NCOLS: qd.i32):
-        qd.loop_config(block_dim=TILE.SIZE)
-        tile_size = TILE.SIZE
+    def k1(src_f: qd.Template, dst_f: qd.Template, NCOLS: qd.i32, N: qd.Template):
+        qd.loop_config(block_dim=N)
+        tile_size = N
         for _ in range(tile_size):
             sh = qd.simt.block.SharedArray((TILE.SIZE, 10), qd.f32)
             t = TILE.zeros(dtype=qd.f32)
@@ -1403,7 +1415,7 @@ def test_shared_array_clamp_store(TILE, make_tile, tdim, m_size):
 
     data = np.arange(tdim * tdim, dtype=np.float32).reshape(tdim, tdim) + 1.0
     src.from_numpy(data)
-    k1(src, dst, NCOLS)
+    k1(src, dst, NCOLS, tdim)
     result = dst.to_numpy()
     np.testing.assert_allclose(result, data[:, :NCOLS])
 
@@ -1416,9 +1428,9 @@ def test_shared_array_clamp_load(TILE, make_tile, tdim, m_size):
     dst = qd.field(dtype=qd.f32, shape=(tdim, tdim))
 
     @qd.kernel(fastcache=True)
-    def k1(src_f: qd.Template, dst_f: qd.Template, NCOLS: qd.i32):
-        qd.loop_config(block_dim=TILE.SIZE)
-        tile_size = TILE.SIZE
+    def k1(src_f: qd.Template, dst_f: qd.Template, NCOLS: qd.i32, N: qd.Template):
+        qd.loop_config(block_dim=N)
+        tile_size = N
         for _ in range(tile_size):
             sh = qd.simt.block.SharedArray((TILE.SIZE, 10), qd.f32)
             t_load = TILE.zeros(dtype=qd.f32)
@@ -1431,7 +1443,7 @@ def test_shared_array_clamp_load(TILE, make_tile, tdim, m_size):
 
     data = np.arange(tdim * NCOLS, dtype=np.float32).reshape(tdim, NCOLS) + 1.0
     src.from_numpy(data)
-    k1(src, dst, NCOLS)
+    k1(src, dst, NCOLS, tdim)
     result = dst.to_numpy()
     np.testing.assert_allclose(result[:, :NCOLS], data)
     np.testing.assert_allclose(result[:, NCOLS:], 0.0)
@@ -1455,9 +1467,9 @@ def test_vec_proxy_syr_sub_2d(TILE, make_tile, tdim, m_size, tensor_type):
     COL = 5
 
     @qd.kernel(fastcache=True)
-    def k1(mat_arr: Ann_tile, vecs_arr: Ann_vecs, out_arr: Ann_tile, K0: qd.i32, COL: qd.i32):
-        qd.loop_config(block_dim=TILE.SIZE)
-        tile_size = TILE.SIZE
+    def k1(mat_arr: Ann_tile, vecs_arr: Ann_vecs, out_arr: Ann_tile, K0: qd.i32, COL: qd.i32, N: qd.Template):
+        qd.loop_config(block_dim=N)
+        tile_size = N
         for _ in range(tile_size):
             t = TILE.zeros(dtype=qd.f32)
             t[:] = mat_arr[0:tile_size, 0:tile_size]
@@ -1470,7 +1482,7 @@ def test_vec_proxy_syr_sub_2d(TILE, make_tile, tdim, m_size, tensor_type):
     V = rng.randn(m_size, m_size).astype(np.float32)
     mat.from_numpy(R)
     vecs.from_numpy(V)
-    k1(mat, vecs, out, K0, COL)
+    k1(mat, vecs, out, K0, COL, tdim)
     col = V[K0 : K0 + tdim, COL]
     np.testing.assert_allclose(out.to_numpy(), R - np.outer(col, col), atol=1e-5)
 
@@ -1491,9 +1503,9 @@ def test_vec_proxy_syr_sub_3d(TILE, make_tile, tdim, m_size, tensor_type):
     COL = 3
 
     @qd.kernel(fastcache=True)
-    def k1(mat_arr: Ann_tile, vecs_arr: Ann_vecs, out_arr: Ann_tile, K0: qd.i32, COL: qd.i32):
-        qd.loop_config(block_dim=TILE.SIZE)
-        tile_size = TILE.SIZE
+    def k1(mat_arr: Ann_tile, vecs_arr: Ann_vecs, out_arr: Ann_tile, K0: qd.i32, COL: qd.i32, N: qd.Template):
+        qd.loop_config(block_dim=N)
+        tile_size = N
         for _ in range(tile_size):
             t = TILE.zeros(dtype=qd.f32)
             t[:] = mat_arr[0:tile_size, 0:tile_size]
@@ -1506,7 +1518,7 @@ def test_vec_proxy_syr_sub_3d(TILE, make_tile, tdim, m_size, tensor_type):
     V = rng.randn(N_BATCH, m_size, m_size).astype(np.float32)
     mat.from_numpy(R)
     vecs.from_numpy(V)
-    k1(mat, vecs, out, K0, COL)
+    k1(mat, vecs, out, K0, COL, tdim)
     col = V[1, K0 : K0 + tdim, COL]
     np.testing.assert_allclose(out.to_numpy(), R - np.outer(col, col), atol=1e-5)
 
@@ -1530,9 +1542,10 @@ def test_vec_proxy_shared_array(TILE, make_tile, tdim, m_size):
         COL: qd.i32,
         m_runtime: qd.i32,
         M_dim: qd.Template,
+        N: qd.Template,
     ):
-        qd.loop_config(block_dim=TILE.SIZE)
-        tile_size = TILE.SIZE
+        qd.loop_config(block_dim=N)
+        tile_size = N
         for _ in range(tile_size):
             # SharedArray dim must be a compile-time literal; M_dim arrives as a qd.Template primitive
             # so each (tile size, m_size) combo gets its own cached kernel.
@@ -1554,7 +1567,7 @@ def test_vec_proxy_shared_array(TILE, make_tile, tdim, m_size):
     V = rng.randn(m_size, m_size).astype(np.float32)
     mat.from_numpy(R)
     vecs.from_numpy(V)
-    k1(mat, vecs, out, K0, COL, m_size, m_size)
+    k1(mat, vecs, out, K0, COL, m_size, m_size, tdim)
     col = V[K0 : K0 + tdim, COL]
     np.testing.assert_allclose(out.to_numpy(), R - np.outer(col, col), atol=1e-5)
 
@@ -1574,9 +1587,17 @@ def test_vec_proxy_partial_rows(TILE, make_tile, tdim, m_size, tensor_type):
     COL = 3
 
     @qd.kernel(fastcache=True)
-    def k1(mat_arr: Ann_tile, vecs_arr: Ann_vecs, out_arr: Ann_tile, K0: qd.i32, COL: qd.i32, m_size: qd.i32):
-        qd.loop_config(block_dim=TILE.SIZE)
-        tile_size = TILE.SIZE
+    def k1(
+        mat_arr: Ann_tile,
+        vecs_arr: Ann_vecs,
+        out_arr: Ann_tile,
+        K0: qd.i32,
+        COL: qd.i32,
+        m_size: qd.i32,
+        N: qd.Template,
+    ):
+        qd.loop_config(block_dim=N)
+        tile_size = N
         for _ in range(tile_size):
             t = TILE.zeros(dtype=qd.f32)
             t[:] = mat_arr[0:tile_size, 0:tile_size]
@@ -1589,7 +1610,7 @@ def test_vec_proxy_partial_rows(TILE, make_tile, tdim, m_size, tensor_type):
     V = rng.randn(m_size, m_size).astype(np.float32)
     mat.from_numpy(R)
     vecs.from_numpy(V)
-    k1(mat, vecs, out, K0, COL, m_size)
+    k1(mat, vecs, out, K0, COL, m_size, tdim)
     col_padded = np.zeros(tdim, dtype=np.float32)
     col_padded[: m_size - K0] = V[K0:m_size, COL]
     np.testing.assert_allclose(out.to_numpy(), R - np.outer(col_padded, col_padded), atol=1e-5)
@@ -1610,9 +1631,9 @@ def test_vec_proxy_multi_column_accumulate(TILE, make_tile, tdim, m_size, tensor
     NCOLS = 4
 
     @qd.kernel(fastcache=True)
-    def k1(mat_arr: Ann_tile, vecs_arr: Ann_vecs, out_arr: Ann_tile, K0: qd.i32, NCOLS: qd.i32):
-        qd.loop_config(block_dim=TILE.SIZE)
-        tile_size = TILE.SIZE
+    def k1(mat_arr: Ann_tile, vecs_arr: Ann_vecs, out_arr: Ann_tile, K0: qd.i32, NCOLS: qd.i32, N: qd.Template):
+        qd.loop_config(block_dim=N)
+        tile_size = N
         for _ in range(tile_size):
             t = TILE.zeros(dtype=qd.f32)
             t[:] = mat_arr[0:tile_size, 0:tile_size]
@@ -1626,7 +1647,7 @@ def test_vec_proxy_multi_column_accumulate(TILE, make_tile, tdim, m_size, tensor
     V = rng.randn(m_size, m_size).astype(np.float32)
     mat.from_numpy(R)
     vecs.from_numpy(V)
-    k1(mat, vecs, out, K0, NCOLS)
+    k1(mat, vecs, out, K0, NCOLS, tdim)
     expected = R.copy()
     for c in range(NCOLS):
         col = V[K0 : K0 + tdim, c]
@@ -1644,18 +1665,18 @@ def test_f64_roundtrip_into_f32_array(TILE, make_tile, tdim, m_size):
     Ann = qd.types.NDArray[qd.f32, 2]
 
     @qd.kernel(fastcache=True)
-    def roundtrip_f32(s: Ann, d: Ann):
-        qd.loop_config(block_dim=TILE.SIZE)
-        tile_size = TILE.SIZE
+    def roundtrip_f32(s: Ann, d: Ann, N: qd.Template):
+        qd.loop_config(block_dim=N)
+        tile_size = N
         for _ in range(tile_size):
             t = TILE.zeros(dtype=qd.f32)
             t[:] = s[0:tile_size, 0:tile_size]
             d[0:tile_size, 0:tile_size] = t
 
     @qd.kernel(fastcache=True)
-    def roundtrip_f64(s: Ann, d: Ann):
-        qd.loop_config(block_dim=TILE.SIZE)
-        tile_size = TILE.SIZE
+    def roundtrip_f64(s: Ann, d: Ann, N: qd.Template):
+        qd.loop_config(block_dim=N)
+        tile_size = N
         for _ in range(tile_size):
             t = TILE.zeros(dtype=qd.f64)
             t[:] = s[0:tile_size, 0:tile_size]
@@ -1664,8 +1685,8 @@ def test_f64_roundtrip_into_f32_array(TILE, make_tile, tdim, m_size):
     data = np.arange(tdim * tdim, dtype=np.float32).reshape(tdim, tdim) + 1.0
     src.from_numpy(data)
 
-    roundtrip_f32(src, dst_f32)
-    roundtrip_f64(src, dst_f64)
+    roundtrip_f32(src, dst_f32, tdim)
+    roundtrip_f64(src, dst_f64, tdim)
 
     np.testing.assert_array_equal(dst_f32.to_numpy(), data)
     np.testing.assert_array_equal(dst_f64.to_numpy(), data)
@@ -1676,16 +1697,16 @@ def test_raises_on_cpu(TILE, make_tile, tdim, m_size):
     """Using Tile16x16 on a CPU backend must raise QuadrantsSyntaxError, not crash."""
 
     @qd.kernel(fastcache=True)
-    def k1(dst: qd.types.NDArray[qd.f32, 2]):
-        qd.loop_config(block_dim=TILE.SIZE)
-        tile_size = TILE.SIZE
+    def k1(dst: qd.types.NDArray[qd.f32, 2], N: qd.Template):
+        qd.loop_config(block_dim=N)
+        tile_size = N
         for _ in range(tile_size):
             t = TILE.zeros(dtype=qd.f32)
             dst[0:tile_size, 0:tile_size] = t
 
     dst = qd.ndarray(qd.f32, (tdim, tdim))
     with pytest.raises(QuadrantsSyntaxError, match="requires a GPU backend"):
-        k1(dst)
+        k1(dst, tdim)
 
 
 # -- Proxy tests (TILE as a proxy object) --
@@ -1711,14 +1732,14 @@ def test_proxy_default_dtype(TILE, make_tile, tdim, m_size, tensor_type):
     Ann = _ann(tensor_type, qd.f32, 2)
 
     @qd.kernel(fastcache=True)
-    def k1(dst_arr: Ann):
-        qd.loop_config(block_dim=TILE.SIZE)
-        tile_size = TILE.SIZE
+    def k1(dst_arr: Ann, N: qd.Template):
+        qd.loop_config(block_dim=N)
+        tile_size = N
         for _ in range(tile_size):
             t = TILE.zeros()
             dst_arr[0:tile_size, 0:tile_size] = t
 
-    k1(dst)
+    k1(dst, tdim)
     np.testing.assert_allclose(dst.to_numpy(), np.zeros((tdim, tdim), dtype=np.float32))
 
 
@@ -1731,14 +1752,14 @@ def test_proxy_eye_explicit_dtype(TILE, make_tile, tdim, m_size, qd_dtype):
     dst = qd.ndarray(qd_dtype, (tdim, tdim))
 
     @qd.kernel(fastcache=True)
-    def k1(d: qd.types.NDArray[qd_dtype, 2]):
-        qd.loop_config(block_dim=TILE.SIZE)
-        tile_size = TILE.SIZE
+    def k1(d: qd.types.NDArray[qd_dtype, 2], N: qd.Template):
+        qd.loop_config(block_dim=N)
+        tile_size = N
         for _ in range(tile_size):
             t = TILE.eye(dtype=qd_dtype)
             d[0:tile_size, 0:tile_size] = t
 
-    k1(dst)
+    k1(dst, tdim)
     np.testing.assert_allclose(dst.to_numpy(), np.eye(tdim, dtype=np_dtype))
 
 
@@ -1759,16 +1780,16 @@ def test_proxy_in_func(TILE, make_tile, tdim, m_size, tensor_type):
         d[0 : TILE.SIZE, 0 : TILE.SIZE] = t
 
     @qd.kernel(fastcache=True)
-    def k1(src_arr: Ann, dst_arr: Ann):
-        qd.loop_config(block_dim=TILE.SIZE)
-        tile_size = TILE.SIZE
+    def k1(src_arr: Ann, dst_arr: Ann, N: qd.Template):
+        qd.loop_config(block_dim=N)
+        tile_size = N
         for _ in range(tile_size):
             cholesky_via_proxy(src_arr, dst_arr)
 
     H = _make_spd(tdim)
     src.from_numpy(H)
     dst.from_numpy(np.zeros_like(H))
-    k1(src, dst)
+    k1(src, dst, tdim)
 
     L_qd = np.tril(dst.to_numpy())
     L_ref = np.linalg.cholesky(H)
@@ -1794,31 +1815,31 @@ def test_proxy_default_dtype_survives_reinit(TILE, make_tile, tdim, m_size, tens
     Ann32 = _ann(tensor_type, qd.f32, 2)
 
     @qd.kernel(fastcache=True)
-    def write_eye_f64(dst: Ann64):
-        qd.loop_config(block_dim=TILE.SIZE)
-        tile_size = TILE.SIZE
+    def write_eye_f64(dst: Ann64, N: qd.Template):
+        qd.loop_config(block_dim=N)
+        tile_size = N
         for _ in range(tile_size):
             t = TILE.eye()
             dst[0:tile_size, 0:tile_size] = t
 
     @qd.kernel(fastcache=True)
-    def write_eye_f32(dst: Ann32):
-        qd.loop_config(block_dim=TILE.SIZE)
-        tile_size = TILE.SIZE
+    def write_eye_f32(dst: Ann32, N: qd.Template):
+        qd.loop_config(block_dim=N)
+        tile_size = N
         for _ in range(tile_size):
             t = TILE.eye()
             dst[0:tile_size, 0:tile_size] = t
 
     impl.get_runtime().set_default_fp(qd.f64)
     dst64 = _make(qd.f64)
-    write_eye_f64(dst64)
+    write_eye_f64(dst64, tdim)
     np.testing.assert_allclose(dst64.to_numpy(), np.eye(tdim))
 
     qd.reset()
     qd.init(arch=qd.gpu, default_fp=qd.f32)
 
     dst32 = _make(qd.f32)
-    write_eye_f32(dst32)
+    write_eye_f32(dst32, tdim)
     result32 = dst32.to_numpy()
 
     np.testing.assert_allclose(result32, np.eye(tdim, dtype=np.float32))
