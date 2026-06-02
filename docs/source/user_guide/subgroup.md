@@ -86,13 +86,13 @@ The SPV-only no-arg reductions (`subgroup.reduce_mul` / `reduce_and` / `reduce_o
 
 ### Sorting
 
-In-register key/value sort across the subgroup, one `(key, value)` pair per lane.  Pure `shuffle` -- no shared memory, no barriers -- fully unrolled at compile time.
+In-register key/value sort across the subgroup, one `(key, value)` pair per lane.  Pure `shuffle` -no shared memory, no barriers -fully unrolled at compile time.
 
 | Op                                     | CUDA | AMDGPU | SPIR-V (Vulkan / Metal) | dtypes                                                          |
 |----------------------------------------|------|--------|-------------------------|-----------------------------------------------------------------|
 | `subgroup.bitonic_sort_kv(key, value)` | yes  | yes    | yes                     | key & value: i32, u32, f32, f64, i64, u64 (independently typed) |
 
-Returns `(key, value)` -- assign with `key, value = subgroup.bitonic_sort_kv(key, value)`.  Sorts ascending on `key`; ties on `key` break on ascending `value` (stable).  Tiled variant: `bitonic_sort_kv_tiled(key, value, log2_size)` runs the same sort independently on each `2**log2_size`-aligned tile - see [Tiled variants](#tiled-variants).  See [`bitonic_sort_kv`](#bitonic_sort_kvkey-value) for the short-input pattern (sentinel padding) and float NaN caveat.
+Returns `(key, value)` - assign with `key, value = subgroup.bitonic_sort_kv(key, value)`.  Sorts ascending on `key`; ties on `key` break on ascending `value` (stable).  Tiled variant: `bitonic_sort_kv_tiled(key, value, log2_size)` runs the same sort independently on each `2**log2_size`-aligned tile - see [Tiled variants](#tiled-variants).  See [`bitonic_sort_kv`](#bitonic_sort_kvkey-value) for the short-input pattern (sentinel padding) and float NaN caveat.
 
 ## Semantics
 
@@ -315,11 +315,11 @@ Per-lane exclusive scan across the entire subgroup, under the binary operator na
 
 ### `bitonic_sort_kv(key, value)`
 
-In-register stable bitonic key/value sort across the subgroup, one `(key, value)` pair per lane.  Returns `(key, value)` -- the lex-smallest pair on lane 0, the next on lane 1, ..., the lex-largest on lane `group_size() - 1`.  Tiled variant: `bitonic_sort_kv_tiled(key, value, log2_size)` runs the same sort independently on each `2**log2_size`-aligned tile - see [Tiled variants](#tiled-variants).
+In-register stable bitonic key/value sort across the subgroup, one `(key, value)` pair per lane.  Returns `(key, value)` - the lex-smallest pair on lane 0, the next on lane 1, ..., the lex-largest on lane `group_size() - 1`.  Tiled variant: `bitonic_sort_kv_tiled(key, value, log2_size)` runs the same sort independently on each `2**log2_size`-aligned tile - see [Tiled variants](#tiled-variants).
 
 - Sorts ascending on `key`; ties on `key` break on ascending `value` (the comparison is the lex compare `(key, value) < (key', value')`).  The stability tiebreak is built into the compare, so the relative order of equal-keyed pairs in the input is preserved.
 - `key` and `value` are scalar values held one-per-lane.  Both must support `<` and `==`; the supported scalar dtypes are the union of what `subgroup.shuffle` accepts (`i32`, `u32`, `f32`, `f64`, `i64`, `u64`).  `key` and `value` do not have to share a dtype.
-- Implementation: classic 1-D bitonic sorting network.  For each outer `k_log2 in [1, log2_size]` and inner `j_log2 in [k_log2 - 1, 0]`, lane `i` exchanges with lane `i ^ (1 << j_log2)` via two `shuffle` ops (one each for partner key and partner value), then keeps min or max depending on whether `(i & (1 << j_log2)) == 0` agrees with `(i & (1 << k_log2)) == 0`.  Total cost is exactly `log2_size * (log2_size + 1)` `shuffle` ops plus the same number of lex compares + predicated assignments, all fully unrolled into the calling kernel's IR -- 30 shuffles for `log2_size = 5` (wave32), 42 for `log2_size = 6` (wave64).
+- Implementation: classic 1-D bitonic sorting network.  For each outer `k_log2 in [1, log2_size]` and inner `j_log2 in [k_log2 - 1, 0]`, lane `i` exchanges with lane `i ^ (1 << j_log2)` via two `shuffle` ops (one each for partner key and partner value), then keeps min or max depending on whether `(i & (1 << j_log2)) == 0` agrees with `(i & (1 << k_log2)) == 0`.  Total cost is exactly `log2_size * (log2_size + 1)` `shuffle` ops plus the same number of lex compares + predicated assignments, all fully unrolled into the calling kernel's IR - 30 shuffles for `log2_size = 5` (wave32), 42 for `log2_size = 6` (wave64).
 - Decorated with `@qd.func` and inlined into the calling kernel - there is no kernel-launch overhead and no separate symbol to link.  The full-subgroup wrapper `bitonic_sort_kv(key, value)` is a plain Python function that forwards to `bitonic_sort_kv_tiled` with `log2_size = log2_group_size()`, so the generated IR is identical to a hand-written `bitonic_sort_kv_tiled` call.
 - AMDGPU note: the shuffles use the partner-XOR butterfly common to every other `_tiled` op in this module, so the wave64 cross-half handling (the `permlane64` + dual `ds_bpermute` lowering described in [AMDGPU wave64 cross-half lowering](#amdgpu-wave64-cross-half-lowering)) is inherited transparently.
 - Float NaN handling is implementation-defined: comparisons with NaN return false on most backends, so a NaN-keyed lane drifts to an arbitrary position within the sorted tile and the result loses its "sorted" guarantee.  Bit-cast the key to a same-width integer dtype if you need a portable NaN-respecting order.
@@ -545,7 +545,7 @@ def sort_contacts(keys: qd.types.ndarray(dtype=qd.f32, ndim=1),
 
 After the kernel, `keys[0..n_con]` is sorted ascending and `idxs` is the matching permutation. The body unrolls at compile time into 30 shuffles + lex compares (for `log2_size = 5`, the wave32 default); no shared memory, no barriers.
 
-Use `bitonic_sort_kv_tiled(k, v, log2_size)` directly to run multiple independent sorts per subgroup -- e.g. `bitonic_sort_kv_tiled(k, v, 3)` runs `group_size() / 8` independent 8-element sorts in parallel. The tiles are `2**log2_size`-aligned within the subgroup and do not interact.
+Use `bitonic_sort_kv_tiled(k, v, log2_size)` directly to run multiple independent sorts per subgroup - e.g. `bitonic_sort_kv_tiled(k, v, 3)` runs `group_size() / 8` independent 8-element sorts in parallel. The tiles are `2**log2_size`-aligned within the subgroup and do not interact.
 
 ### Inclusive scan with `inclusive_add_tiled`
 
@@ -586,7 +586,7 @@ One subtlety worth knowing about (mostly for anyone reading the generated IR): t
 - Pick `reduce_all_add` over `reduce_add + broadcast` when you need the result in every lane - same cost, one fewer shuffle.
 - 64-bit dtypes (`i64`, `u64`, `f64`) are emulated as two 32-bit shuffles on AMDGPU. Prefer 32-bit values when you have a choice.
 - All seven `inclusive_*` ops are `@qd.func` Hillis-Steele scans; cost is exactly `log2_group_size()` shuffle+op pairs, the same as a hand-rolled CUDA warp scan, on every backend. Hardware-accelerated `OpGroupNonUniformInclusiveScan` on SPIR-V is no longer used - the cost difference vs. a portable shuffle tree is small in practice, and the uniform implementation makes performance predictable across CUDA, AMDGPU, and SPIR-V.
-- `bitonic_sort_kv` runs the standard 1-D bitonic schedule: `log2_size * (log2_size + 1) / 2` compare-exchange stages, each two `shuffle` ops + a lex compare + a predicated assignment. Total: `log2_size * (log2_size + 1)` shuffles -- 30 for `log2_size = 5` (wave32), 42 for `log2_size = 6` (wave64). All compile-time unrolled into the calling kernel's IR; no shared memory, no barriers within the sort.
+- `bitonic_sort_kv` runs the standard 1-D bitonic schedule: `log2_size * (log2_size + 1) / 2` compare-exchange stages, each two `shuffle` ops + a lex compare + a predicated assignment. Total: `log2_size * (log2_size + 1)` shuffles - 30 for `log2_size = 5` (wave32), 42 for `log2_size = 6` (wave64). All compile-time unrolled into the calling kernel's IR; no shared memory, no barriers within the sort.
 
 ## Related
 
