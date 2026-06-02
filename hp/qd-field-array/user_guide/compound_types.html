@@ -612,7 +612,7 @@ my_struct.b[37] 5
     <span class="n">mass</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">f32</span>
 </pre></div>
 </div>
-<p>For larger statically-indexed groups (e.g. a row or tile of scalars that you want SROA to register-promote independently), see <a class="reference internal" href="unpacked_vector.html"><span class="doc">Unpacked vector</span></a>.</p>
+<p>For larger statically-indexed groups that might spill into local memory, and that you want to allow partial spilling for, see <a class="reference internal" href="unpacked_vector.html"><span class="doc">Unpacked vector</span></a>.</p>
 </section>
 </section>
 
