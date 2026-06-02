@@ -32,7 +32,7 @@ It's of course very subjective, but some guidelines you could consider:
 
 - if you are trying to write a python class that runs on the GPU => use a `@qd.data_oriented`
 - if you are trying to write typed dataclasses, for passing data around between the `@data_oriented` classes, and between methods of the same `@data_oriented` class => use `@dataclasses.dataclass`es
-- `@qd.dataclass` is used to create structured element types for field tensors. We also use it to create the Cholesky [tiles](tile16.md)
+- `@qd.dataclass` is used to create structured element types for field tensors. We also use it to create the Cholesky [tiles](tile16.md).
 
 ## dataclasses.dataclass
 
@@ -231,7 +231,9 @@ Unlike `@qd.data_oriented` and `@dataclasses.dataclass`, `@qd.dataclass` creates
 - fixed-size vectors (`qd.types.vector(N, dtype)`)
 - fixed-size matrices (`qd.types.matrix(M, N, dtype)`)
 
-It cannot contain `qd.field` or `qd.ndarray` members — those are dynamically-sized tensor types and don't fit into a fixed-size struct cell.
+A `qd.dataclass` is analogous to a C struct. All members, including the fixed-size vectors and fixed-size matrices, are laid out within the struct itself. They are not pointers to tensors allocated elsewhere. Changing the size of a vector or matrix changes thus the size of the qd.dataclass.
+
+A consequence of a qd.dataclass containing all members within itself, rather than being pointers, is that a qd.dataclass cannot contain `qd.field` or `qd.ndarray` members.
 
 A `@qd.dataclass` can be turned into a tensor of structs (e.g. `MyStruct.field(shape=(N,))`) with two possible memory layouts:
 
