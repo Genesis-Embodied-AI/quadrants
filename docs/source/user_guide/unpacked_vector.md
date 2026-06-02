@@ -100,7 +100,6 @@ Prefer `qd.types.vector(N, dtype)` for small groups where register pressure is l
 ## Constraints and pitfalls
 
 - **Use `@qd.dataclass`, not `@dataclasses.dataclass`.** The `UnpackedVector[dtype, count]` annotation is only expanded by `@qd.dataclass`; on a stdlib dataclass the annotation is inert metadata and the indexed-access syntax will not work. Subscripting or calling the marker outside that context raises a `QuadrantsSyntaxError`.
-- **Static indices only.** `t.r[k]` must resolve at compile time, i.e. `k` is a python-int literal or a `for k in qd.static(range(N)):` loop variable. A runtime-int index raises a `QuadrantsSyntaxError` at compile time. If you need a runtime index over the group, spell out the cascade explicitly. This is by design: the whole point of the layout is that each slot can be promoted to its own register, which requires every access site to name a specific slot at compile time.
 - **No vector arithmetic.** An `UnpackedVector` group is storage only. There is no `t.r + other`, no `t.r.dot(...)`, no broadcast operations. If you want those, use `qd.types.vector(N, dtype)` instead.
 - **Synthetic field-name collisions are rejected.** The expansion uses the convention `_{group_name}{i}` (e.g. `_r0`, `_r1`, ..., `_r31`). If you declare your own field with one of those names, `@qd.dataclass` raises a `QuadrantsSyntaxError` pointing at the collision.
 
