@@ -327,7 +327,7 @@
 <li class="toctree-l1"><a class="reference internal" href="grid.html">Grid primitives</a></li>
 <li class="toctree-l1"><a class="reference internal" href="math.html">Math</a></li>
 <li class="toctree-l1"><a class="reference internal" href="subgroup.html">Subgroup primitives</a></li>
-<li class="toctree-l1"><a class="reference internal" href="tile16.html">Tile16x16: register-resident 16x16 tiles</a></li>
+<li class="toctree-l1"><a class="reference internal" href="tile.html">Register-resident tiles: <code class="docutils literal notranslate"><span class="pre">Tile16x16</span></code> and <code class="docutils literal notranslate"><span class="pre">Tile32x32</span></code></a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Algorithms</span></p>
 <ul class="nav bd-sidenav">
@@ -625,6 +625,13 @@
 </pre></div>
 </div>
 <p>The kernel argument is unwrapped to the bare impl before the template-mapper / AST sees it, so kernel bodies still write <code class="docutils literal notranslate"><span class="pre">x[i,</span> <span class="pre">j]</span></code> and pay no per-call cost for the wrapper.</p>
+<p><code class="docutils literal notranslate"><span class="pre">qd.Tensor</span></code> is also the right annotation when storing a tensor as a <code class="docutils literal notranslate"><span class="pre">dataclasses.dataclass</span></code> member:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@dataclass</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">State</span><span class="p">:</span>
+    <span class="n">a</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">Tensor</span>
+    <span class="n">b</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">Tensor</span>
+</pre></div>
+</div>
 </section>
 <section id="pickle">
 <h2>Pickle<a class="headerlink" href="#pickle" title="Link to this heading">#</a></h2>

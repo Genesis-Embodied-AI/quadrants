@@ -327,7 +327,7 @@
 <li class="toctree-l1"><a class="reference internal" href="grid.html">Grid primitives</a></li>
 <li class="toctree-l1"><a class="reference internal" href="math.html">Math</a></li>
 <li class="toctree-l1"><a class="reference internal" href="subgroup.html">Subgroup primitives</a></li>
-<li class="toctree-l1"><a class="reference internal" href="tile16.html">Tile16x16: register-resident 16x16 tiles</a></li>
+<li class="toctree-l1"><a class="reference internal" href="tile.html">Register-resident tiles: <code class="docutils literal notranslate"><span class="pre">Tile16x16</span></code> and <code class="docutils literal notranslate"><span class="pre">Tile32x32</span></code></a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Algorithms</span></p>
 <ul class="nav bd-sidenav">
@@ -493,35 +493,12 @@
 </div>
 </section>
 </section>
-<section id="dataclass-fields-with-cached-values">
-<h2>Dataclass fields with cached values<a class="headerlink" href="#dataclass-fields-with-cached-values" title="Link to this heading">#</a></h2>
-<p>By default, for <code class="docutils literal notranslate"><span class="pre">dataclasses.dataclass</span></code> parameters, fastcache only includes the <em>types</em> of each field in the cache key, not their values. This is fine for fields like ndarrays, where the compiled kernel doesn’t depend on the actual data, only the dtype and dimensionality.</p>
-<p>However, some dataclass fields hold configuration values that get baked into the compiled kernel — typically values used with <code class="docutils literal notranslate"><span class="pre">qd.static()</span></code>, such as loop bounds or feature flags:</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">qd</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="n">config</span><span class="o">.</span><span class="n">num_layers</span><span class="p">)):</span>
-    <span class="o">...</span>
-</pre></div>
-</div>
-<p>Here the value of <code class="docutils literal notranslate"><span class="pre">num_layers</span></code> is compiled into the kernel. Concretely the loop will be unrolled, at compile time. If <code class="docutils literal notranslate"><span class="pre">num_layers</span></code> changes, a different kernel must be compiled.</p>
-<p>Mark such fields with <code class="docutils literal notranslate"><span class="pre">add_value_to_cache_key</span></code> so their values are included in the cache key:</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">dataclasses</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._fast_caching</span><span class="w"> </span><span class="kn">import</span> <span class="n">FIELD_METADATA_CACHE_VALUE</span>
-
-<span class="nd">@dataclasses</span><span class="o">.</span><span class="n">dataclass</span>
-<span class="k">class</span><span class="w"> </span><span class="nc">SimConfig</span><span class="p">:</span>
-    <span class="n">num_envs</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="n">dataclasses</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">metadata</span><span class="o">=</span><span class="p">{</span><span class="n">FIELD_METADATA_CACHE_VALUE</span><span class="p">:</span> <span class="kc">True</span><span class="p">})</span>
-    <span class="n">dt</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">dataclasses</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">metadata</span><span class="o">=</span><span class="p">{</span><span class="n">FIELD_METADATA_CACHE_VALUE</span><span class="p">:</span> <span class="kc">True</span><span class="p">})</span>
-    <span class="n">use_gravity</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="n">dataclasses</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">metadata</span><span class="o">=</span><span class="p">{</span><span class="n">FIELD_METADATA_CACHE_VALUE</span><span class="p">:</span> <span class="kc">True</span><span class="p">})</span>
-</pre></div>
-</div>
-<p>With this annotation, changing <code class="docutils literal notranslate"><span class="pre">num_envs</span></code> from 100 to 200 produces a different cache key so the correct compiled kernel is looked up (or compiled if not yet cached). Without it, the wrong kernel could be loaded.</p>
-<p>Note: <code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code> objects and <code class="docutils literal notranslate"><span class="pre">qd.Template</span></code> parameters already include primitive values in the cache key automatically — this annotation is only needed for <code class="docutils literal notranslate"><span class="pre">dataclasses.dataclass</span></code> fields.</p>
-</section>
 <section id="constraints">
 <h2>Constraints<a class="headerlink" href="#constraints" title="Link to this heading">#</a></h2>
 <p>A kernel is eligible for fastcache only if all of the following hold:</p>
 <section id="all-data-flows-through-parameters">
 <h3>1. All data flows through parameters<a class="headerlink" href="#all-data-flows-through-parameters" title="Link to this heading">#</a></h3>
-<p>The kernel must receive every piece of data it operates on as an explicit parameter. It must <strong>not</strong> capture variables from the enclosing Python scope (closures over fields, ndarrays, or mutable globals). This is the core “purity” constraint — the compiled kernel’s behavior must be fully determined by its arguments.</p>
+<p>The kernel must receive every piece of data it operates on as an explicit parameter. It must <strong>not</strong> capture variables from the enclosing Python scope (closures over ndarrays, mutable globals, or any other external state). This is the core “purity” constraint — the compiled kernel’s behavior must be fully determined by its arguments.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">a</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="p">(</span><span class="mi">10</span><span class="p">,))</span>
 
 <span class="c1"># Not eligible: captures `a` from enclosing scope</span>
@@ -585,11 +562,11 @@
 </tr>
 <tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">dataclasses.dataclass</span></code></p></td>
 <td><p>Yes</p></td>
-<td><p>field types recursively; field values if annotated with <code class="docutils literal notranslate"><span class="pre">add_value_to_cache_key</span></code> (see <a class="reference internal" href="#dataclass-fields-with-cached-values">above</a>)</p></td>
+<td><p>member types recursively; member values if annotated with <code class="docutils literal notranslate"><span class="pre">FIELD_METADATA_CACHE_VALUE</span></code> (see <a class="reference internal" href="#compound-type-cache-keying">Appendix — compound-type cache keying</a>)</p></td>
 </tr>
 <tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code> objects</p></td>
 <td><p>Yes</p></td>
-<td><p>member types and primitive member values recursively</p></td>
+<td><p>member types recursively; primitive member types and values baked into kernel (see <a class="reference internal" href="#compound-type-cache-keying">Appendix — compound-type cache keying</a>)</p></td>
 </tr>
 <tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">qd.Template</span></code> primitives (int, float, bool)</p></td>
 <td><p>Yes</p></td>
@@ -651,6 +628,33 @@
 <p>On the first run you’ll see <code class="docutils literal notranslate"><span class="pre">cache_stored=True</span></code> but <code class="docutils literal notranslate"><span class="pre">cache_loaded=False</span></code>. On the second run (after <code class="docutils literal notranslate"><span class="pre">qd.init</span></code>), <code class="docutils literal notranslate"><span class="pre">cache_loaded=True</span></code>.</p>
 </section>
 </section>
+<section id="appendix">
+<h2>Appendix<a class="headerlink" href="#appendix" title="Link to this heading">#</a></h2>
+<section id="compound-type-cache-keying">
+<h3>Compound-type cache keying<a class="headerlink" href="#compound-type-cache-keying" title="Link to this heading">#</a></h3>
+<p>The args hasher walks compound-type kernel parameters recursively. For each leaf member it decides what (if anything) contributes to the cache key. The headline rules:</p>
+<p><strong><code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code>:</strong> the walker descends into <code class="docutils literal notranslate"><span class="pre">vars(obj)</span></code>. For each child:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">qd.ndarray</span></code> member — <code class="docutils literal notranslate"><span class="pre">(dtype,</span> <span class="pre">ndim,</span> <span class="pre">layout)</span></code> is included in the cache key. Element values are not.</p></li>
+<li><p>Primitive (<code class="docutils literal notranslate"><span class="pre">int</span></code> / <code class="docutils literal notranslate"><span class="pre">float</span></code> / <code class="docutils literal notranslate"><span class="pre">bool</span></code> / <code class="docutils literal notranslate"><span class="pre">enum.Enum</span></code>) member — value is baked into the kernel (same semantics as a <code class="docutils literal notranslate"><span class="pre">qd.Template</span></code> primitive). Two instances of the same class with different primitive member values get different cache entries.</p></li>
+<li><p>Nested <code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code> member — recurses.</p></li>
+<li><p>Nested <code class="docutils literal notranslate"><span class="pre">dataclasses.dataclass</span></code> member — recurses (with the dataclass rules below).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">qd.field</span></code> member — fastcache is disabled for the entire kernel call. The kernel still runs via normal compilation; a warn-level log line is emitted.</p></li>
+</ul>
+<p><strong><code class="docutils literal notranslate"><span class="pre">dataclasses.dataclass</span></code>:</strong> the walker descends into the declared members. For each member, only the <em>type</em> is included in the cache key by default — <strong>not</strong> the value. To include a member’s value, annotate it:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">dataclasses</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._fast_caching</span><span class="w"> </span><span class="kn">import</span> <span class="n">FIELD_METADATA_CACHE_VALUE</span>
+
+<span class="nd">@dataclasses</span><span class="o">.</span><span class="n">dataclass</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">SimConfig</span><span class="p">:</span>
+    <span class="n">num_layers</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="n">dataclasses</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">metadata</span><span class="o">=</span><span class="p">{</span><span class="n">FIELD_METADATA_CACHE_VALUE</span><span class="p">:</span> <span class="kc">True</span><span class="p">})</span>
+    <span class="n">dt</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">dataclasses</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">metadata</span><span class="o">=</span><span class="p">{</span><span class="n">FIELD_METADATA_CACHE_VALUE</span><span class="p">:</span> <span class="kc">True</span><span class="p">})</span>
+</pre></div>
+</div>
+<p>This is necessary whenever the compiled kernel depends on the member’s <em>value</em> rather than just its type (for example, when the value is used as a loop bound that the compiler bakes into the generated code). Without the annotation, two <code class="docutils literal notranslate"><span class="pre">SimConfig</span></code> instances with different <code class="docutils literal notranslate"><span class="pre">num_layers</span></code> values would share a fastcache key, and the second instance would silently load a kernel compiled for the wrong value.</p>
+<p>Note the asymmetry: <code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code> primitive members are baked into the kernel automatically (same semantics as <code class="docutils literal notranslate"><span class="pre">qd.Template</span></code>); <code class="docutils literal notranslate"><span class="pre">dataclasses.dataclass</span></code> members contribute only their <em>type</em> to the cache key unless you opt in per-member.</p>
+</section>
+</section>
 </section>
 
 
@@ -706,7 +710,6 @@
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#runtime-configuration">Runtime configuration</a></li>
 </ul>
 </li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#dataclass-fields-with-cached-values">Dataclass fields with cached values</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#constraints">Constraints</a><ul class="nav section-nav flex-column">
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#all-data-flows-through-parameters">1. All data flows through parameters</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#supported-parameter-types">2. Supported parameter types</a></li>
@@ -716,6 +719,10 @@
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#cache-keying">Cache keying</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#advanced">Advanced</a><ul class="nav section-nav flex-column">
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#diagnostics">Diagnostics</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#appendix">Appendix</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#compound-type-cache-keying">Compound-type cache keying</a></li>
 </ul>
 </li>
 </ul>

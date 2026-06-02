@@ -327,7 +327,7 @@
 <li class="toctree-l1"><a class="reference internal" href="grid.html">Grid primitives</a></li>
 <li class="toctree-l1"><a class="reference internal" href="math.html">Math</a></li>
 <li class="toctree-l1"><a class="reference internal" href="subgroup.html">Subgroup primitives</a></li>
-<li class="toctree-l1"><a class="reference internal" href="tile16.html">Tile16x16: register-resident 16x16 tiles</a></li>
+<li class="toctree-l1"><a class="reference internal" href="tile.html">Register-resident tiles: <code class="docutils literal notranslate"><span class="pre">Tile16x16</span></code> and <code class="docutils literal notranslate"><span class="pre">Tile32x32</span></code></a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Algorithms</span></p>
 <ul class="nav bd-sidenav">
@@ -594,7 +594,7 @@
 <li><p><code class="docutils literal notranslate"><span class="pre">dtype</span></code>: a scalar Quadrants dtype (<code class="docutils literal notranslate"><span class="pre">qd.f32</span></code>, <code class="docutils literal notranslate"><span class="pre">qd.i32</span></code>, …) or a <code class="docutils literal notranslate"><span class="pre">qd.types.matrix(...)</span></code> / <code class="docutils literal notranslate"><span class="pre">qd.types.vector(...)</span></code> type. Matrix types are flattened to their element tensor type.</p></li>
 </ul>
 <p>Element access uses the standard <code class="docutils literal notranslate"><span class="pre">arr[i]</span></code> / <code class="docutils literal notranslate"><span class="pre">arr[i,</span> <span class="pre">j]</span></code> subscript syntax inside a kernel.</p>
-<p>A worked example with <code class="docutils literal notranslate"><span class="pre">Tile16x16</span></code> interaction is in <a class="reference internal" href="tile16.html"><span class="std std-doc">tile16</span></a>.</p>
+<p>A worked example with <code class="docutils literal notranslate"><span class="pre">Tile16x16</span></code> interaction is in <a class="reference internal" href="tile.html"><span class="std std-doc">tile</span></a>.</p>
 </section>
 <section id="block-global-thread-idx">
 <h3><code class="docutils literal notranslate"><span class="pre">block.global_thread_idx()</span></code><a class="headerlink" href="#block-global-thread-idx" title="Link to this heading">#</a></h3>
@@ -703,7 +703,7 @@
 <li><p><a class="reference internal" href="grid.html"><span class="std std-doc">grid</span></a> - the device-scope counterpart of <code class="docutils literal notranslate"><span class="pre">block.mem_fence()</span></code>. For coordination within a single block, prefer <code class="docutils literal notranslate"><span class="pre">block.mem_fence()</span></code> - it is cheaper.</p></li>
 <li><p><a class="reference internal" href="parallelization.html"><span class="std std-doc">parallelization</span></a> - kernel-launch and grid-stride patterns.</p></li>
 <li><p><a class="reference internal" href="subgroup.html"><span class="std std-doc">subgroup</span></a> - primitives that operate within a single subgroup (warp / wavefront), one tier below block scope.</p></li>
-<li><p><a class="reference internal" href="tile16.html"><span class="std std-doc">tile16</span></a> - <code class="docutils literal notranslate"><span class="pre">Tile16x16</span></code> register-resident tiles, built on <code class="docutils literal notranslate"><span class="pre">subgroup.shuffle</span></code>.</p></li>
+<li><p><a class="reference internal" href="tile.html"><span class="std std-doc">tile</span></a> - <code class="docutils literal notranslate"><span class="pre">Tile16x16</span></code> and <code class="docutils literal notranslate"><span class="pre">Tile32x32</span></code> register-resident tiles, built on <code class="docutils literal notranslate"><span class="pre">subgroup.shuffle</span></code>.</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">qd.atomic_add</span></code> / <code class="docutils literal notranslate"><span class="pre">qd.atomic_min</span></code> / … - global-memory atomics, the other common cross-block coordination mechanism.</p></li>
 </ul>
 </section>

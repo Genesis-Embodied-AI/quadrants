@@ -365,10 +365,10 @@
                   
   <section id="module-quadrants.lang.simt.tile_slicing">
 <span id="quadrants-lang-simt-tile-slicing"></span><h1>quadrants.lang.simt.tile_slicing<a class="headerlink" href="#module-quadrants.lang.simt.tile_slicing" title="Link to this heading">#</a></h1>
-<p>Tile16x16 slice-syntax dispatch for impl.subscript().</p>
+<p>Tile slice-syntax dispatch for impl.subscript().</p>
 <p>Intercepts array subscripts during compilation and returns deferred proxy objects
 (_TileSliceProxy, _VecSliceProxy, _TileRefProxy) that execute tile load/store
-when consumed by an assignment.</p>
+when consumed by an assignment. Works for any registered tile size (currently 16 and 32).</p>
 <section id="functions">
 <h2>Functions<a class="headerlink" href="#functions" title="Link to this heading">#</a></h2>
 <div class="pst-scrollable-table-container"><table class="autosummary longtable table autosummary">
@@ -389,7 +389,7 @@ when consumed by an assignment.</p>
 <dt class="sig sig-object py" id="quadrants.lang.simt.tile_slicing.try_tile_ref">
 <span class="sig-prename descclassname"><span class="pre">quadrants.lang.simt.tile_slicing.</span></span><span class="sig-name descname"><span class="pre">try_tile_ref</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">_indices</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/quadrants/lang/simt/tile_slicing.html#try_tile_ref"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.simt.tile_slicing.try_tile_ref" title="Link to this definition">#</a></dt>
 <dd><p>Handle tile[:] → _TileRefProxy.</p>
-<p>Returns (True, proxy) if value is a Tile16x16 struct subscripted with [:], otherwise (False, None).</p>
+<p>Returns (True, proxy) if value is a tile struct subscripted with [:], otherwise (False, None).</p>
 </dd></dl>
 
 <dl class="py function">
