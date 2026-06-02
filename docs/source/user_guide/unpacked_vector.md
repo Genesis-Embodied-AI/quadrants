@@ -27,7 +27,7 @@ class Tile:
     r31: qd.f32
 ```
 
-That works, but every read or write site has to spell out a cascade like `if k == 0: ... elif k == 1: ...` across all `N` slots -- ugly, error-prone, and slow to type-check and compile.
+That works, but every read or write site has to spell out a cascade like `if k == 0: ... elif k == 1: ...` across all `N` slots - ugly, error-prone, and slow to type-check and compile.
 
 `qd.types.UnpackedVector` is the named-field layout with the indexed syntax restored:
 
@@ -95,7 +95,7 @@ Use `UnpackedVector` when:
 - the kernel body accesses it with python-int / `qd.static`-resolved indices (typically unrolled inner loops), and
 - an equivalent `qd.types.vector(N, dtype)` version of the same kernel is, or might be, spilling the group to local memory under register pressure. See [How to check for spills](#how-to-check-for-spills) below for the concrete workflow to confirm a spill is actually happening.
 
-Prefer `qd.types.vector(N, dtype)` for small groups where register pressure is low and runtime indexing is needed -- vectors keep all the usual arithmetic conveniences (element-wise ops, dot products, etc.) that `UnpackedVector` does not.
+Prefer `qd.types.vector(N, dtype)` for small groups where register pressure is low and runtime indexing is needed - vectors keep all the usual arithmetic conveniences (element-wise ops, dot products, etc.) that `UnpackedVector` does not.
 
 ## Constraints and pitfalls
 
@@ -125,7 +125,7 @@ An `UnpackedVector[dtype, N]` field expands to `N` independent `alloca` instruct
 
 ## How to check for spills
 
-Quadrants compiles LLVM -> PTX directly via the LLVM NVPTX target -- it does not invoke `nvcc` / `ptxas` at compile time, so the familiar `ptxas --verbose` "X bytes spill stores" output is not produced inline. To get that diagnostic you dump the PTX from Quadrants and run `ptxas -v` on it yourself. Three workflows, in order of usefulness:
+Quadrants compiles LLVM -> PTX directly via the LLVM NVPTX target - it does not invoke `nvcc` / `ptxas` at compile time, so the familiar `ptxas --verbose` "X bytes spill stores" output is not produced inline. To get that diagnostic you dump the PTX from Quadrants and run `ptxas -v` on it yourself. Three workflows, in order of usefulness:
 
 ### 1. Dump PTX, run `ptxas -v` offline
 
@@ -150,7 +150,7 @@ ptxas info    : Used 64 registers, 0 bytes spill stores, 0 bytes spill loads
 ptxas info    : Used 96 registers, 384 bytes stack frame, 256 bytes spill stores, 128 bytes spill loads
 ```
 
-`spill stores` + `spill loads` > 0 means the register allocator gave up on something. `stack frame` > 0 indicates local memory in use (which is usually, but not always, spills -- `qd.simt.shared_array` and explicitly addressed locals also count).
+`spill stores` + `spill loads` > 0 means the register allocator gave up on something. `stack frame` > 0 indicates local memory in use (which is usually, but not always, spills - `qd.simt.shared_array` and explicitly addressed locals also count).
 
 Adjust `-arch=sm_XX` to match your GPU (`sm_86` = Ampere consumer / RTX 30, `sm_89` = Ada / RTX 40, `sm_90` = Hopper).
 
@@ -176,7 +176,7 @@ Look at the "Memory Workload Analysis -> Local Memory" section. This reports *ac
 qd.init(arch=qd.cuda, print_kernel_llvm_ir_optimized=True)
 ```
 
-Dumps `quadrants_kernel_cuda_llvm_ir_optimized_NNNN.ll`. Look for `alloca` instructions that survived `mem2reg` -- those will become PTX local memory.
+Dumps `quadrants_kernel_cuda_llvm_ir_optimized_NNNN.ll`. Look for `alloca` instructions that survived `mem2reg` - those will become PTX local memory.
 
 ### Gotcha: the offline cache
 
@@ -187,6 +187,6 @@ Dumps `quadrants_kernel_cuda_llvm_ir_optimized_NNNN.ll`. Look for `alloca` instr
 
 ## See also
 
-- {doc}`compound_types` -- `@qd.dataclass` overview
-- {doc}`matrix_vector_per_thread` -- `qd.types.vector` and per-thread matrices
-- {doc}`linalg_per_thread` -- examples of tile-resident linear algebra where register residency matters
+- {doc}`compound_types` - `@qd.dataclass` overview
+- {doc}`matrix_vector_per_thread` - `qd.types.vector` and per-thread matrices
+- {doc}`linalg_per_thread` - examples of tile-resident linear algebra where register residency matters
