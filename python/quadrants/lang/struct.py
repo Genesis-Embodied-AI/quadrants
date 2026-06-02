@@ -617,6 +617,13 @@ class StructType(CompoundType):
                 elements.append([dtype, k])
         self.dtype = _qd_core.get_type_factory_instance().get_struct_type(elements)
 
+    def __mro_entries__(self, bases):
+        # A ``@qd.dataclass`` is a ``StructType`` *instance*, not a class, so it cannot normally appear in a base-class
+        # list. PEP 560 lets us return a real placeholder class to stand in for it; that placeholder carries a
+        # back-reference to this ``StructType`` so ``dataclass`` can merge our members and methods into the subclass.
+        placeholder = type("_QuadrantsDataclassBase", (object,), {"_quadrants_struct_type": self})
+        return (placeholder,)
+
     def __call__(self, *args, **kwargs):
         """Create an instance of this struct type."""
         d = {}
@@ -817,18 +824,37 @@ def dataclass(cls):
         A quadrants struct with the annotations as fields
             and methods from the class attached.
     """
+    # Merge in members and methods from any @qd.dataclass base classes. A @qd.dataclass parent is a StructType
+    # instance, so it appears in __bases__ as the placeholder class injected by StructType.__mro_entries__, which
+    # back-references the parent via _quadrants_struct_type. Bases are visited left-to-right and an already-seen name
+    # is never overwritten, so on a conflict the leftmost base wins — matching Python's MRO precedence for
+    # ``class C(A, B)`` — while members keep their natural leftmost-base-first order.
+    inherited_fields = {}
+    inherited_methods = {}
+    for base in getattr(cls, "__bases__", ()):
+        parent_struct = getattr(base, "_quadrants_struct_type", None)
+        if parent_struct is not None:
+            for member_name, member_type in parent_struct.members.items():
+                inherited_fields.setdefault(member_name, member_type)
+            for method_name, method in parent_struct.methods.items():
+                inherited_methods.setdefault(method_name, method)
+
     # save the annotation fields for the struct
-    fields = getattr(cls, "__annotations__", {})
+    own_fields = dict(getattr(cls, "__annotations__", {}))
     # raise error if there are default values
-    for k in fields.keys():
+    for k in own_fields.keys():
         if hasattr(cls, k):
             raise QuadrantsSyntaxError("Default value in @dataclass is not supported.")
+    fields = {**inherited_fields, **own_fields}
     # get the class methods to be attached to the struct types
-    fields["__struct_methods"] = {
+    own_methods = {
         attribute: getattr(cls, attribute)
         for attribute in dir(cls)
-        if callable(getattr(cls, attribute)) and not attribute.startswith("__")
+        if callable(getattr(cls, attribute))
+        and not attribute.startswith("__")
+        and attribute != "_quadrants_struct_type"
     }
+    fields["__struct_methods"] = {**inherited_methods, **own_methods}
     return StructType(**fields)
 
 

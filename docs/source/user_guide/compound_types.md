@@ -159,3 +159,28 @@ class Particle:
     vel: qd.types.vector(3, qd.f32)
     mass: qd.f32
 ```
+
+### Inheritance
+
+A `@qd.dataclass` may subclass one or more other `@qd.dataclass` types. The subclass inherits the parent's members and `@qd.func` methods, and can add its own or override inherited ones:
+
+```python
+@qd.dataclass
+class Body:
+    pos: qd.types.vector(3, qd.f32)
+    mass: qd.f32
+
+    @qd.func
+    def momentum(self):
+        return self.mass * self.pos
+
+@qd.dataclass
+class ChargedBody(Body):
+    charge: qd.f32        # added to inherited `pos` and `mass`
+
+    @qd.func
+    def charged_mass(self):
+        return self.mass + self.charge
+```
+
+`ChargedBody` ends up with members `pos`, `mass`, `charge` (parent members first, in declaration order) and both `momentum` and `charged_mass` methods. A member or method declared on the subclass overrides the inherited one of the same name.

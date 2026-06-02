@@ -133,6 +133,106 @@ def test_func_of_data_class_as_kernel_return():
 
 
 @test_utils.test()
+def test_data_class_inheritance():
+    @qd.dataclass
+    class Base:
+        x: qd.f32
+        y: qd.f32
+
+        @qd.func
+        def sum_xy(self):
+            return self.x + self.y
+
+    @qd.dataclass
+    class Child(Base):
+        z: qd.f32
+
+        @qd.func
+        def sum_xyz(self):
+            return self.sum_xy() + self.z
+
+    # Inherited members come first, in declaration order, followed by own members.
+    assert list(Child.members.keys()) == ["x", "y", "z"]
+    # Both inherited and own methods are attached.
+    assert "sum_xy" in Child.methods
+    assert "sum_xyz" in Child.methods
+
+    @qd.kernel
+    def use_inherited(c: Child) -> qd.f32:
+        return c.sum_xy()
+
+    @qd.kernel
+    def use_own(c: Child) -> qd.f32:
+        return c.sum_xyz()
+
+    assert use_inherited(Child(1, 2, 4)) == 3
+    assert use_own(Child(1, 2, 4)) == 7
+
+
+@test_utils.test()
+def test_data_class_inheritance_override():
+    @qd.dataclass
+    class Base:
+        x: qd.f32
+
+        @qd.func
+        def value(self):
+            return self.x
+
+    @qd.dataclass
+    class Child(Base):
+        x: qd.f32
+        y: qd.f32
+
+        @qd.func
+        def value(self):
+            return self.x + self.y
+
+    assert list(Child.members.keys()) == ["x", "y"]
+
+    @qd.kernel
+    def k(c: Child) -> qd.f32:
+        return c.value()
+
+    assert k(Child(1, 2)) == 3
+
+
+@test_utils.test()
+def test_data_class_multiple_inheritance_leftmost_wins():
+    @qd.dataclass
+    class A:
+        x: qd.i32
+
+        @qd.func
+        def who(self):
+            return 1
+
+    @qd.dataclass
+    class B:
+        x: qd.f32
+        y: qd.f32
+
+        @qd.func
+        def who(self):
+            return 2
+
+    @qd.dataclass
+    class C(A, B):
+        pass
+
+    # On a conflict the leftmost base (A) wins, matching Python's MRO; distinct members keep
+    # leftmost-base-first order (A's `x`, then B's new `y`).
+    assert list(C.members.keys()) == ["x", "y"]
+    assert C.members["x"] == qd.i32
+
+    @qd.kernel
+    def k(c: C) -> qd.i32:
+        return c.who()
+
+    assert k(C(x=0, y=0)) == 1
+
+
+@test_utils.test()
 def test_nested_data_class_func():
     @qd.dataclass
     class Foo:
