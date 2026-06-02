@@ -198,6 +198,41 @@ def test_data_class_inheritance_override():
 
 
 @test_utils.test()
+def test_data_class_multiple_inheritance_leftmost_wins():
+    @qd.dataclass
+    class A:
+        x: qd.i32
+
+        @qd.func
+        def who(self):
+            return 1
+
+    @qd.dataclass
+    class B:
+        x: qd.f32
+        y: qd.f32
+
+        @qd.func
+        def who(self):
+            return 2
+
+    @qd.dataclass
+    class C(A, B):
+        pass
+
+    # On a conflict the leftmost base (A) wins, matching Python's MRO; distinct members keep
+    # leftmost-base-first order (A's `x`, then B's new `y`).
+    assert list(C.members.keys()) == ["x", "y"]
+    assert C.members["x"] == qd.i32
+
+    @qd.kernel
+    def k(c: C) -> qd.i32:
+        return c.who()
+
+    assert k(C(x=0, y=0)) == 1
+
+
+@test_utils.test()
 def test_nested_data_class_func():
     @qd.dataclass
     class Foo:

@@ -826,14 +826,18 @@ def dataclass(cls):
     """
     # Merge in members and methods from any @qd.dataclass base classes. A @qd.dataclass parent is a StructType
     # instance, so it appears in __bases__ as the placeholder class injected by StructType.__mro_entries__, which
-    # back-references the parent via _quadrants_struct_type.
+    # back-references the parent via _quadrants_struct_type. Bases are visited left-to-right and an already-seen name
+    # is never overwritten, so on a conflict the leftmost base wins — matching Python's MRO precedence for
+    # ``class C(A, B)`` — while members keep their natural leftmost-base-first order.
     inherited_fields = {}
     inherited_methods = {}
     for base in getattr(cls, "__bases__", ()):
         parent_struct = getattr(base, "_quadrants_struct_type", None)
         if parent_struct is not None:
-            inherited_fields.update(parent_struct.members)
-            inherited_methods.update(parent_struct.methods)
+            for member_name, member_type in parent_struct.members.items():
+                inherited_fields.setdefault(member_name, member_type)
+            for method_name, method in parent_struct.methods.items():
+                inherited_methods.setdefault(method_name, method)
 
     # save the annotation fields for the struct
     own_fields = dict(getattr(cls, "__annotations__", {}))
