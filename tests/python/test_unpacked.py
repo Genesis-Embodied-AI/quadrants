@@ -1,9 +1,9 @@
 # pyright: reportInvalidTypeForm=false
-"""Tests for ``qd.types.UnpackedVector[dtype, count]`` on ``@qd.dataclass``.
+"""Tests for the ``qd.unpacked[qd.types.vector(N, dtype)]`` layout annotation on ``@qd.dataclass``.
 
-``UnpackedVector`` gives users an ergonomic indexed-write syntax on a per-thread struct, while keeping the underlying
-storage as N separate named scalar fields so SROA + ``mem2reg`` can register-promote each slot independently. The
-static-index case must lower to a direct field reference; PTX must be byte-identical to the named-field equivalent.
+The annotation declares a Vector-typed field with *unpacked* storage: N independent scalar slots, one ``alloca`` each,
+rather than a single packed ``alloca``. The static-index access ``obj.r[i]`` must lower to a direct reference to the
+synthetic scalar field ``_r{i}``; PTX must be byte-identical to the named-field equivalent.
 """
 
 import numpy as np
@@ -26,16 +26,15 @@ def _qd_init_cuda():
 # ---------------------------------------------------------------------------
 
 
-def test_unpacked_vector_construction_python_scope():
-    """A dataclass with ``r: qd.types.UnpackedVector[dtype, N]`` should construct as if it had N named scalar fields named
-    ``_r0.._r{N-1}``."""
+def test_unpacked_construction_python_scope():
+    """A dataclass with ``r: qd.unpacked[qd.types.vector(N, dtype)]`` should construct as if it had N named scalar
+    fields ``_r0.._r{N-1}``."""
     _qd_init_cuda()
 
     @qd.dataclass
     class Tile:
-        r: qd.types.UnpackedVector[qd.f32, 4]
+        r: qd.unpacked[qd.types.vector(4, qd.f32)]
 
-    # The underlying struct type should report N synthetic scalar members plus expose ``r`` as a group name.
     assert hasattr(Tile, "_unpacked_groups")
     groups = Tile._unpacked_groups
     assert "r" in groups
@@ -43,10 +42,9 @@ def test_unpacked_vector_construction_python_scope():
     assert count == 4
     assert dtype is qd.f32
 
-    # The underlying scalar fields must exist.
     assert "_r0" in Tile.members
     assert "_r3" in Tile.members
-    assert "r" not in Tile.members  # ``r`` is a logical group, not a real member
+    assert "r" not in Tile.members  # logical group, not a real member
 
 
 # ---------------------------------------------------------------------------
@@ -54,13 +52,13 @@ def test_unpacked_vector_construction_python_scope():
 # ---------------------------------------------------------------------------
 
 
-def test_unpacked_vector_static_index_write_then_read():
+def test_unpacked_static_index_write_then_read():
     """Write to ``t.r[0..3]`` with python-int indices, then read back."""
     _qd_init_cuda()
 
     @qd.dataclass
     class Tile:
-        r: qd.types.UnpackedVector[qd.f32, 4]
+        r: qd.unpacked[qd.types.vector(4, qd.f32)]
 
     out = qd.field(dtype=qd.f32, shape=(4,))
 
@@ -81,14 +79,14 @@ def test_unpacked_vector_static_index_write_then_read():
     np.testing.assert_array_equal(out.to_numpy(), np.array([1, 2, 3, 4], dtype=np.float32))
 
 
-def test_unpacked_vector_qd_static_loop_index():
+def test_unpacked_qd_static_loop_index():
     """Index via a ``qd.static(range(N))`` loop variable. Each iter sees a python-int index, so the lowering must be the
     same direct-field path as the explicit python-int case."""
     _qd_init_cuda()
 
     @qd.dataclass
     class Tile:
-        r: qd.types.UnpackedVector[qd.f32, 4]
+        r: qd.unpacked[qd.types.vector(4, qd.f32)]
 
     out = qd.field(dtype=qd.f32, shape=(4,))
 
@@ -106,71 +104,20 @@ def test_unpacked_vector_qd_static_loop_index():
 
 
 # ---------------------------------------------------------------------------
-# Equivalence with named-field baseline: identical PTX.
+# Runtime / OOB rejection.
 # ---------------------------------------------------------------------------
 
 
-def _build_named_kernel():
-    """Same as test_unpacked_vector_static_index_write_then_read but with 4 named ``r0..r3`` fields. Used for PTX byte-
-    equality comparison against the ``UnpackedVector`` form."""
-
-    @qd.dataclass
-    class TileNamed:
-        r0: qd.f32
-        r1: qd.f32
-        r2: qd.f32
-        r3: qd.f32
-
-    out = qd.field(dtype=qd.f32, shape=(4,))
-
-    @qd.kernel(fastcache=False)
-    def k(o: qd.template()):
-        for _ in range(1):
-            t = TileNamed()
-            t.r0 = qd.f32(1.0)
-            t.r1 = qd.f32(2.0)
-            t.r2 = qd.f32(3.0)
-            t.r3 = qd.f32(4.0)
-            o[0] = t.r0
-            o[1] = t.r1
-            o[2] = t.r2
-            o[3] = t.r3
-
-    return k, out
-
-
-def _build_unpacked_vector_kernel():
-    @qd.dataclass
-    class TileRA:
-        r: qd.types.UnpackedVector[qd.f32, 4]
-
-    out = qd.field(dtype=qd.f32, shape=(4,))
-
-    @qd.kernel(fastcache=False)
-    def k(o: qd.template()):
-        for _ in range(1):
-            t = TileRA()
-            t.r[0] = qd.f32(1.0)
-            t.r[1] = qd.f32(2.0)
-            t.r[2] = qd.f32(3.0)
-            t.r[3] = qd.f32(4.0)
-            o[0] = t.r[0]
-            o[1] = t.r[1]
-            o[2] = t.r[2]
-            o[3] = t.r[3]
-
-    return k, out
-
-
-def test_unpacked_vector_runtime_index_rejected():
+def test_unpacked_runtime_index_rejected():
     """Indexing ``t.r[k]`` with a runtime ``k`` raises a clear error pointing at the python-int / ``qd.static``
-    requirement. Long term the runtime case can lower to an explicit cascade; for now the limitation is surfaced
-    early so callers don't get a confusing LLVM/SROA failure downstream."""
+    requirement. Long term the runtime case can lower to an explicit cascade (or fall through to a Vector-value
+    materialise + index); for now the limitation is surfaced early so callers don't get a confusing LLVM/SROA failure
+    downstream."""
     _qd_init_cuda()
 
     @qd.dataclass
     class Tile:
-        r: qd.types.UnpackedVector[qd.f32, 4]
+        r: qd.unpacked[qd.types.vector(4, qd.f32)]
 
     out = qd.field(dtype=qd.f32, shape=(4,))
 
@@ -185,16 +132,16 @@ def test_unpacked_vector_runtime_index_rejected():
     with pytest.raises(Exception) as e:
         k(out)
     msg = str(e.value)
-    assert "UnpackedVector" in msg and "python-int" in msg, msg
+    assert "python-int" in msg, msg
 
 
-def test_unpacked_vector_oob_static_index():
+def test_unpacked_oob_static_index():
     """Static-int out-of-bounds index is caught at compile time with a clear message."""
     _qd_init_cuda()
 
     @qd.dataclass
     class Tile:
-        r: qd.types.UnpackedVector[qd.f32, 4]
+        r: qd.unpacked[qd.types.vector(4, qd.f32)]
 
     out = qd.field(dtype=qd.f32, shape=(4,))
 
@@ -215,26 +162,37 @@ def test_unpacked_vector_oob_static_index():
 # ---------------------------------------------------------------------------
 
 
-def test_unpacked_vector_marker_subscript_rejected():
-    """Subscripting an already-parameterised marker raises a clear error pointing at the @qd.dataclass requirement.
-    Catches the common mistake of decorating with @dataclasses.dataclass and trying to read ``obj.r[i]`` outside a
-    kernel."""
-    marker = qd.types.UnpackedVector[qd.f32, 4]
+def test_unpacked_call_rejected():
+    """``qd.unpacked()`` (calling the marker class) raises a clear error pointing at the annotation form."""
     with pytest.raises(qd.QuadrantsSyntaxError) as e:
-        _ = marker[0]
-    assert "@qd.dataclass" in str(e.value), str(e.value)
+        qd.unpacked()
+    assert "qd.unpacked[qd.types.vector" in str(e.value), str(e.value)
 
 
-def test_unpacked_vector_marker_call_rejected():
-    """Calling an already-parameterised marker (mistaking it for a constructor) raises a clear error."""
-    marker = qd.types.UnpackedVector[qd.f32, 4]
+def test_unpacked_subscript_with_non_vector_rejected():
+    """``qd.unpacked[<not a VectorType>]`` raises with a helpful message naming the required form."""
     with pytest.raises(qd.QuadrantsSyntaxError) as e:
-        marker()
-    assert "@qd.dataclass" in str(e.value), str(e.value)
+        _ = qd.unpacked[qd.f32]  # bare dtype, not a vector type
+    msg = str(e.value)
+    assert "vector type" in msg and "qd.types.vector(N, dtype)" in msg, msg
 
 
-def test_unpacked_vector_nested_in_outer_dataclass():
-    """An ``UnpackedVector`` on an *inner* ``@qd.dataclass`` should keep working when that dataclass is itself nested
+def test_unpacked_subscript_with_tuple_rejected():
+    """The old two-arg ``qd.unpacked[dtype, N]`` form is no longer supported; subscribing with a tuple should fail
+    cleanly rather than silently produce a malformed marker."""
+    with pytest.raises(qd.QuadrantsSyntaxError) as e:
+        _ = qd.unpacked[qd.f32, 4]  # python collects this as ``(qd.f32, 4)``
+    msg = str(e.value)
+    assert "vector type" in msg, msg
+
+
+# ---------------------------------------------------------------------------
+# Composition tests (nested struct, StructField subscript).
+# ---------------------------------------------------------------------------
+
+
+def test_unpacked_nested_in_outer_dataclass():
+    """An ``qd.unpacked[...]`` on an *inner* ``@qd.dataclass`` should keep working when that dataclass is itself nested
     inside an outer ``@qd.dataclass``. Regression test for the metadata-stripping path in ``expr_init`` /
     ``StructType.cast``: the ``_qd_unpacked_groups`` tag must propagate through nested-struct rewrap so the AST
     transformer can still recognise ``o.inner.r[i]`` as a group access."""
@@ -242,7 +200,7 @@ def test_unpacked_vector_nested_in_outer_dataclass():
 
     @qd.dataclass
     class Inner:
-        r: qd.types.UnpackedVector[qd.f32, 4]
+        r: qd.unpacked[qd.types.vector(4, qd.f32)]
 
     @qd.dataclass
     class Outer:
@@ -264,8 +222,8 @@ def test_unpacked_vector_nested_in_outer_dataclass():
     assert out.to_numpy()[0] == 24.0
 
 
-def test_unpacked_vector_struct_field_subscript():
-    """``Tile.field(shape=...)`` should preserve ``UnpackedVector`` semantics: ``f[i].r[k]`` must lower to the synthetic
+def test_unpacked_struct_field_subscript():
+    """``Tile.field(shape=...)`` should preserve unpacked-vector semantics: ``f[i].r[k]`` must lower to the synthetic
     ``f[i]._r{k}`` field, not fall through to a plain attribute lookup. Regression test for the ``impl.subscript`` /
     ``_IntermediateStruct`` codepath: the ``_qd_unpacked_groups`` tag must propagate from ``StructType.field``'s
     ``StructField`` onto every per-index intermediate struct it produces."""
@@ -273,7 +231,7 @@ def test_unpacked_vector_struct_field_subscript():
 
     @qd.dataclass
     class Tile:
-        r: qd.types.UnpackedVector[qd.f32, 4]
+        r: qd.unpacked[qd.types.vector(4, qd.f32)]
 
     tile_field = Tile.field(shape=(2,))
     out = qd.field(dtype=qd.f32, shape=(1,))
@@ -289,15 +247,15 @@ def test_unpacked_vector_struct_field_subscript():
     assert out.to_numpy()[0] == 14.0  # 1 + 13
 
 
-def test_unpacked_vector_struct_field_subscript_nested():
-    """Same as above, but with ``Outer.field(shape=...)`` where ``Outer`` contains an ``Inner`` with an
-    ``UnpackedVector``. The nested ``StructField`` for ``inner`` must also carry the group tag, so
-    ``outer_field[i].inner.r[k]`` resolves."""
+def test_unpacked_struct_field_subscript_nested():
+    """Same as above, but with ``Outer.field(shape=...)`` where ``Outer`` contains an ``Inner`` with an unpacked group.
+    The nested ``StructField`` for ``inner`` must also carry the group tag, so ``outer_field[i].inner.r[k]`` resolves.
+    """
     _qd_init_cuda()
 
     @qd.dataclass
     class Inner:
-        r: qd.types.UnpackedVector[qd.f32, 4]
+        r: qd.unpacked[qd.types.vector(4, qd.f32)]
 
     @qd.dataclass
     class Outer:
@@ -318,69 +276,63 @@ def test_unpacked_vector_struct_field_subscript_nested():
     assert out.to_numpy()[0] == 21.0  # 7 * 3
 
 
-def test_unpacked_vector_collision_with_earlier_field():
-    """A user-declared field whose name matches a future synthetic field of an UnpackedVector group should raise
-    rather than silently overwriting."""
+# ---------------------------------------------------------------------------
+# Synthetic-field-name collision rejection.
+# ---------------------------------------------------------------------------
+
+
+def test_unpacked_collision_with_earlier_field():
+    """A user-declared field whose name matches a future synthetic field of an unpacked group should raise rather than
+    silently overwriting."""
     with pytest.raises(qd.QuadrantsSyntaxError) as e:
 
         @qd.dataclass
         class Bad1:
             _r0: qd.f32
-            r: qd.types.UnpackedVector[qd.f32, 4]
+            r: qd.unpacked[qd.types.vector(4, qd.f32)]
 
     msg = str(e.value)
-    assert "UnpackedVector" in msg and "_r0" in msg, msg
+    assert "_r0" in msg and "unpacked" in msg.lower(), msg
 
 
-def test_unpacked_vector_collision_with_later_field():
-    """A user-declared field whose name matches an already-expanded synthetic field of an earlier UnpackedVector group
-    should also raise."""
+def test_unpacked_collision_with_later_field():
+    """A user-declared field whose name matches an already-expanded synthetic field of an earlier unpacked group should
+    also raise."""
     with pytest.raises(qd.QuadrantsSyntaxError) as e:
 
         @qd.dataclass
         class Bad2:
-            r: qd.types.UnpackedVector[qd.f32, 4]
+            r: qd.unpacked[qd.types.vector(4, qd.f32)]
             _r2: qd.f32
 
     msg = str(e.value)
-    assert "UnpackedVector" in msg and "_r2" in msg, msg
-
-
-def test_unpacked_vector_bad_subscript_arity():
-    """Wrong subscript shape raises a clear error pointing at the expected ``[dtype, count]`` spelling."""
-    with pytest.raises(qd.QuadrantsSyntaxError) as e:
-        _ = qd.types.UnpackedVector[qd.f32]  # missing count
-    assert "UnpackedVector[dtype, count]" in str(e.value), str(e.value)
-
-    with pytest.raises(qd.QuadrantsSyntaxError) as e:
-        _ = qd.types.UnpackedVector[4, qd.f32]  # wrong order: count first instead of dtype first
-    assert "python int" in str(e.value), str(e.value)
+    assert "_r2" in msg and "unpacked" in msg.lower(), msg
 
 
 if __name__ == "__main__":
-    test_unpacked_vector_construction_python_scope()
+    test_unpacked_construction_python_scope()
     print("construction test passed")
-    test_unpacked_vector_static_index_write_then_read()
+    test_unpacked_static_index_write_then_read()
     print("static-int subscript test passed")
-    test_unpacked_vector_qd_static_loop_index()
+    test_unpacked_qd_static_loop_index()
     print("qd.static loop-var subscript test passed")
-    test_unpacked_vector_runtime_index_rejected()
+    test_unpacked_runtime_index_rejected()
     print("runtime-index rejection test passed")
-    test_unpacked_vector_oob_static_index()
+    test_unpacked_oob_static_index()
     print("static OOB rejection test passed")
-    test_unpacked_vector_marker_subscript_rejected()
-    print("marker subscript rejection test passed")
-    test_unpacked_vector_marker_call_rejected()
+    test_unpacked_call_rejected()
     print("marker call rejection test passed")
-    test_unpacked_vector_nested_in_outer_dataclass()
+    test_unpacked_subscript_with_non_vector_rejected()
+    print("subscript-non-vector rejection test passed")
+    test_unpacked_subscript_with_tuple_rejected()
+    print("subscript-tuple rejection test passed")
+    test_unpacked_nested_in_outer_dataclass()
     print("nested-in-outer-dataclass test passed")
-    test_unpacked_vector_struct_field_subscript()
+    test_unpacked_struct_field_subscript()
     print("struct_field subscript test passed")
-    test_unpacked_vector_struct_field_subscript_nested()
+    test_unpacked_struct_field_subscript_nested()
     print("struct_field nested subscript test passed")
-    test_unpacked_vector_collision_with_earlier_field()
+    test_unpacked_collision_with_earlier_field()
     print("collision-with-earlier-field test passed")
-    test_unpacked_vector_collision_with_later_field()
+    test_unpacked_collision_with_later_field()
     print("collision-with-later-field test passed")
-    test_unpacked_vector_bad_subscript_arity()
-    print("bad subscript arity test passed")

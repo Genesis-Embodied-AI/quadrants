@@ -17,6 +17,7 @@ from quadrants._lib import core as _qd_core
 from quadrants.lang import exception, expr, impl, matrix, mesh
 from quadrants.lang import ops as qd_ops
 from quadrants.lang._ndrange import _Ndrange
+from quadrants.lang._unpacked import _UnpackedVectorRef
 from quadrants.lang.ast.ast_transformer_utils import (
     ASTTransformerFuncContext,
     Builder,
@@ -40,7 +41,6 @@ from quadrants.lang.field import Field
 from quadrants.lang.matrix import Matrix, MatrixType
 from quadrants.lang.snode import append, deactivate, length
 from quadrants.lang.struct import Struct, StructType
-from quadrants.lang.unpacked_vector import _UnpackedVectorRef
 from quadrants.lang.util import (
     is_from_quadrants_module as _is_from_quadrants_module,
 )
@@ -296,7 +296,7 @@ class ASTTransformer(Builder):
     def build_Subscript(ctx: ASTTransformerFuncContext, node: ast.Subscript):
         build_stmt(ctx, node.value)
         build_stmt(ctx, node.slice)
-        # ``unpacked_vector`` group subscript: rewrite ``obj.{group}[k]`` to a direct reference to the synthetic scalar
+        # Unpacked-vector group subscript: rewrite ``obj.{group}[k]`` to a direct reference to the synthetic scalar
         # field ``_{group}{k}`` when ``k`` is a python-int. The resolution lives entirely at AST-build time so the
         # runtime IR/PTX is byte-identical to the named-field form. Runtime indices are not supported here -- the user
         # must spell the cascade explicitly.
@@ -753,11 +753,11 @@ class ASTTransformer(Builder):
                 node.ptr = node.ptr._unwrap()
             node.ptr = ASTTransformer._promote_ndarray_if_declared(ctx, node.ptr)
         else:
-            # ``unpacked_vector`` group access on a ``@qd.dataclass`` Struct expression. Returns a transient
+            # Unpacked-vector group access on a ``@qd.dataclass`` Struct expression. Returns a transient
             # ``_UnpackedVectorRef`` that ``build_Subscript`` (or its assignment-LHS sibling) resolves to a direct field
             # reference. The lookup is by-name on ``_qd_unpacked_groups``, which ``StructType.__call__`` attaches to
-            # every Struct instance whose type declared at least one ``unpacked_vector`` annotation. Tested in
-            # ``test_unpacked_vector.py``.
+            # every Struct instance whose type declared at least one ``qd.unpacked[...]`` annotation. Tested in
+            # ``test_unpacked.py``.
             groups = getattr(node.value.ptr, "_qd_unpacked_groups", None)
             if groups and node.attr in groups:
                 count, dtype, naming_fn = groups[node.attr]

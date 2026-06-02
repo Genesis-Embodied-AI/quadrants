@@ -111,7 +111,7 @@ def expr_init(rhs):
         if rhs._Struct__methods:  # type: ignore[attr-defined]
             d["__struct_methods"] = rhs._Struct__methods  # type: ignore[attr-defined]
         new_struct = Struct(d)
-        # Preserve ``unpacked_vector`` group metadata on this level (nested levels are handled by the recursion above).
+        # Preserve unpacked-vector group metadata on this level (nested levels are handled by the recursion above).
         # ``setattr`` (rather than attribute assignment) sidesteps pyright's ``reportAttributeAccessIssue``; ``Struct``
         # doesn't statically declare this attribute -- it's a per-instance metadata tag.
         groups = getattr(rhs, "_qd_unpacked_groups", None)
@@ -341,7 +341,7 @@ def subscript(ast_builder, value, *_indices, skip_reordered=False):
             struct = _IntermediateStruct(entries)
             # Carry ``_qd_unpacked_groups`` from the originating ``StructType`` (attached to the ``StructField`` in
             # ``StructType.field``) onto the per-index intermediate struct so the AST transformer recognises
-            # ``f[i].r[k]`` as an UnpackedVector group access. Nested StructFields contribute their own tags via the
+            # ``f[i].r[k]`` as an unpacked-vector group access. Nested StructFields contribute their own tags via the
             # recursive ``subscript`` call above, so ``outer_field[i].inner.r[k]`` also works.
             groups = getattr(value, "_qd_unpacked_groups", None)
             if groups is not None:

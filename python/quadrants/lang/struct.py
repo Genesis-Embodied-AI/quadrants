@@ -7,6 +7,12 @@ import numpy as np
 
 from quadrants._lib import core as _qd_core
 from quadrants.lang import expr, impl, ops
+from quadrants.lang._unpacked import (
+    _check_no_unpacked_collision,
+    _UnpackedAnnotation,
+    attach_unpacked_groups,
+    expand_unpacked_into,
+)
 from quadrants.lang.exception import (
     QuadrantsRuntimeTypeError,
     QuadrantsSyntaxError,
@@ -15,12 +21,6 @@ from quadrants.lang.exception import (
 from quadrants.lang.expr import Expr
 from quadrants.lang.field import Field, ScalarField, SNodeHostAccess
 from quadrants.lang.matrix import Matrix, MatrixType
-from quadrants.lang.unpacked_vector import (
-    UnpackedVector,
-    _check_no_unpacked_collision,
-    attach_unpacked_groups,
-    expand_unpacked_vector_into,
-)
 from quadrants.lang.util import (
     cook_dtype,
     in_python_scope,
@@ -607,15 +607,16 @@ class StructType(CompoundType):
     def __init__(self, **kwargs):
         self.members = {}
         self.methods = {}
-        # Maps group name -> (count, dtype, naming_fn). Populated when a member annotation is an ``UnpackedVector``;
-        # consumed by the AST transformer to rewrite ``obj.{group}[i]`` into a direct synthetic-field reference.
+        # Maps group name -> (count, dtype, naming_fn). Populated when a member annotation is a ``qd.unpacked[...]``
+        # layout marker; consumed by the AST transformer to rewrite ``obj.{group}[i]`` into a direct synthetic-field
+        # reference.
         self._unpacked_groups: dict = {}
         elements = []
         for k, dtype in kwargs.items():
             if k == "__struct_methods":
                 self.methods = dtype
-            elif isinstance(dtype, UnpackedVector):
-                expand_unpacked_vector_into(k, dtype, self.members, self._unpacked_groups, elements, cook_dtype)
+            elif isinstance(dtype, _UnpackedAnnotation):
+                expand_unpacked_into(k, dtype, self.members, self._unpacked_groups, elements, cook_dtype)
             elif isinstance(dtype, StructType):
                 _check_no_unpacked_collision(k, self.members)
                 self.members[k] = dtype
@@ -653,7 +654,7 @@ class StructType(CompoundType):
         entries = Struct(d)
         entries._Struct__dtype = self.dtype
         # ``cast`` is the single tagging point for ``_qd_unpacked_groups``; it propagates through nested struct casts
-        # too, so ``Outer().inner.r[i]`` lowers correctly when ``Outer`` contains an ``Inner`` with an UnpackedVector.
+        # too, so ``Outer().inner.r[i]`` lowers correctly when ``Outer`` contains an ``Inner`` with an unpacked group.
         struct = self.cast(entries)
         struct._Struct__dtype = self.dtype
         return struct
@@ -796,7 +797,7 @@ class StructType(CompoundType):
     def field(self, **kwargs):
         # Tag the returned ``StructField`` with this type's ``_unpacked_groups`` so ``impl.subscript`` can transfer the
         # metadata onto the ``_IntermediateStruct`` it builds for ``f[i]`` -- without that, ``f[i].r[k]`` on a struct
-        # field whose type declared ``r: UnpackedVector[...]`` would fall through to a plain attribute lookup and fail.
+        # field whose type declared ``r: qd.unpacked[...]`` would fall through to a plain attribute lookup and fail.
         # Nested cases work transparently because ``Struct.field`` calls ``dtype.field(...)`` for any ``StructType``
         # member, recursing into this method.
         field = Struct.field(self.members, self.methods, **kwargs)
