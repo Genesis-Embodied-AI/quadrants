@@ -25,6 +25,7 @@ immutably bound to 'type(arg)'. Moreover, some privates fields of standard modul
 a consequence of inlining 'is_dataclass' and 'fields'.
 """
 
+import dataclasses
 import weakref
 from dataclasses import _FIELD, _FIELDS
 from typing import Any, Union
@@ -69,6 +70,112 @@ AnnotationType = Union[
 _ExprCxx = _qd_core.ExprCxx
 _composite_mutable_types = {list, dict, set}
 _primitive_types = {int, float, bool}
+
+
+# Per-class cache: ``type(arg) -> list[tuple[str, ...]]`` of attribute paths whose values are ``Ndarray`` instances at
+# first observation. Populated lazily by ``_struct_nd_paths_for`` on the first call with each new data_oriented (or
+# nested dataclass) class. Empty list means "this class holds no ndarrays anywhere", in which case subsequent calls
+# pay only a dict-lookup per arg. Non-empty list short-circuits the full ``vars()`` recursion and just resolves each
+# cached path via ``getattr`` chains. Critical for the genesis field-backend hot path: the ``@qd.data_oriented``
+# Solver is passed as ``self`` to most kernels and holds dozens of attributes, so a full per-call ``vars()`` walk
+# costs >100ns per kernel and trashed FPS until this cache was added.
+_struct_nd_paths_cache: dict[type, list[tuple]] = {}
+
+
+def _build_struct_nd_paths(obj: Any, prefix: tuple, out: list) -> None:
+    if dataclasses.is_dataclass(obj) and not isinstance(obj, type):
+        children = ((f.name, getattr(obj, f.name)) for f in dataclasses.fields(obj))
+    else:
+        # ``NamedTuple`` (decorated as ``@qd.data_oriented``) has no instance ``__dict__`` — fall back to ``_asdict()``
+        # which materialises a dict view of the named fields. Mirrors the same fallback in
+        # ``args_hasher.stringify_obj_type`` so the per-class path cache here picks up ndarray members on NamedTuples
+        # too (regression covered by ``test_args_hasher_named_tuple``).
+        try:
+            children = obj._asdict().items()
+        except AttributeError:
+            children = obj.__dict__.items()
+    for k, v in children:
+        chain = prefix + (k,)
+        if type(v) in _TENSOR_WRAPPER_TYPES:
+            v = v._unwrap()
+        v_type = type(v)
+        if issubclass(v_type, Ndarray):
+            out.append(chain)
+        elif is_data_oriented(v) or (dataclasses.is_dataclass(v) and not isinstance(v, type)):
+            _build_struct_nd_paths(v, chain, out)
+
+
+def _struct_nd_paths_for(arg: Any) -> list[tuple]:
+    """Return the cached attribute paths (each a tuple of attr-name strings) at which ``Ndarray`` instances are
+    reachable from ``arg`` of type ``type(arg)``. First call for a class walks ``arg`` once via
+    ``_build_struct_nd_paths``; subsequent calls are dict-lookups.
+
+    Trades freshness for speed: assumes the *set* of ndarray-holding attribute paths is stable across instances of
+    the same class. The genesis Solver and similar ``@qd.data_oriented`` containers satisfy this — their ndarray
+    members are declared in ``__init__`` and not added later. If you need to add an ndarray attribute after the first
+    kernel launch on an instance of a given class, the new attribute won't be tracked. Call ``invalidate_struct_nd_
+    paths_for`` (below) or restart the program.
+
+    FIXME (Codex #3 on PR #704, https://github.com/Genesis-Embodied-AI/quadrants/pull/704#discussion_r3253281957):
+    the cache is keyed by ``type(arg)`` only. If two instances of the same class have *polymorphic attribute
+    structure* — e.g. instance A has ``.x`` as a ``qd.ndarray``-backed ``qd.Tensor`` while instance B has the same
+    ``.x`` as a field-backed ``qd.Tensor`` — the paths discovered from the first-walked instance are reused for the
+    second. ``_collect_struct_nd_descriptors`` then unconditionally reads ndarray-only attrs (``element_type``,
+    ``grad``, ``_qd_layout``) on what is now a ``ScalarField``, raising before the kernel can run. The fix is the
+    per-instance walk implemented on top of this branch in PR #705; this branch ships the class-level cache as-is.
+    """
+    cls = type(arg)
+    paths = _struct_nd_paths_cache.get(cls)
+    if paths is None:
+        paths = []
+        _build_struct_nd_paths(arg, (), paths)
+        _struct_nd_paths_cache[cls] = paths
+    return paths
+
+
+def chain_has_mutable_container(args, template_arg_idx, attr_chain) -> bool:
+    """Return True if any container along ``attr_chain`` from ``args[template_arg_idx]`` down to (but excluding) the
+    leaf ndarray attribute is mutable in a way that lets it rebind its child attribute. Such a parent makes
+    ``id(args[template_arg_idx])`` alone insufficient to uniquely identify the leaf, so the leaf id must be folded
+    into the launch-context cache key.
+
+    A container is "mutable" here iff:
+    - its type has ``__hash__ is None`` (Python sets this for non-frozen ``@dataclass(eq=True)`` types), or
+    - it is a ``@qd.data_oriented`` instance (these inherit ``object.__hash__`` so the ``__hash__ is None`` check
+      misses them; they support normal attribute assignment).
+
+    Walks all parents from the root down to ``attr_chain[:-1]`` — the final entry is the leaf itself, whose own
+    mutability does not affect rebinding by its parent. Returns on the first mutable parent.
+    """
+    cur = args[template_arg_idx]
+    if type(cur).__hash__ is None or is_data_oriented(cur):
+        return True
+    for attr_name in attr_chain[:-1]:
+        cur = getattr(cur, attr_name)
+        if type(cur).__hash__ is None or is_data_oriented(cur):
+            return True
+    return False
+
+
+def _collect_struct_nd_descriptors(arg: Any, out: list) -> None:
+    """Emit per-ndarray shape descriptors ``(joined-path, element_type, ndim, needs_grad, layout)`` for every ndarray
+    reachable from ``arg``. Used by the template-mapper to refine the spec key for ``@qd.data_oriented`` args holding
+    ndarrays — see the data_oriented branch in ``_extract_arg``.
+
+    FIXME (Codex #3 on PR #704): when a polymorphic instance reuses a cached path that pointed to an ``Ndarray`` on
+    the first-walked instance, ``v`` here can be a ``ScalarField`` and the ``v.element_type`` / ``v.grad`` /
+    ``v._qd_layout`` reads will raise. See ``_struct_nd_paths_for`` above for details. Fixed in PR #705 via the
+    per-instance walk redesign.
+    """
+    for chain in _struct_nd_paths_for(arg):
+        v = arg
+        for a in chain:
+            v = getattr(v, a)
+        if type(v) in _TENSOR_WRAPPER_TYPES:
+            v = v._unwrap()
+        type_id = id(v.element_type)
+        element_type = type_id if type_id in primitive_types.type_ids else v.element_type
+        out.append((".".join(chain), element_type, len(v.shape), v.grad is not None, v._qd_layout))
 
 
 def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: AnnotationType, arg_name: str) -> Any:
@@ -124,7 +231,7 @@ def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: Annotati
             raise QuadrantsRuntimeTypeError(
                 "Ndarray shouldn't be passed in via `qd.template()`, please annotate your kernel using `qd.types.ndarray(...)` instead"
             )
-        if arg_type in _composite_mutable_types or is_data_oriented(arg):
+        if arg_type in _composite_mutable_types:
             # [Composite arguments] Return weak reference to the object
             # Quadrants kernel will cache the extracted arguments, thus we can't simply return the original argument.
             # Instead, a weak reference to the original value is returned to avoid memory leak.
@@ -133,6 +240,21 @@ def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: Annotati
             # This can resolve the following issues:
             # 1. Invalid weak-ref will leave a dead(dangling) entry in both caches: "self.mapping" and "self.compiled_functions"
             # 2. Different argument instances with same type and same value, will get templatized into separate kernels.
+            return weakref.ref(arg)
+        if is_data_oriented(arg):
+            # Same memory-leak avoidance as above — keep ``weakref.ref(arg)`` so the spec key never holds a strong
+            # reference to user state. But for data_oriented containers that hold ``Ndarray`` members, the live
+            # ``weakref`` alone is too coarse: same instance with ``state.x = other_ndarray`` of a different dtype/ndim
+            # would re-use the previously-compiled kernel, which was specialised for the old shape. Walk the reachable
+            # ndarrays and prepend their shape descriptors so dtype/ndim changes trigger re-specialisation. Mirrors what
+            # the dataclass branch below does via ``annotation_fields``.
+            #
+            # Containers with no ndarrays keep the original short-path (one spec per instance via weakref) so this is
+            # a no-op for the existing data_oriented + qd.field workloads (genesis field-backend).
+            nd_descriptors: list = []
+            _collect_struct_nd_descriptors(arg, nd_descriptors)
+            if nd_descriptors:
+                return (id(type(arg)), tuple(nd_descriptors), weakref.ref(arg))
             return weakref.ref(arg)
 
         # Return value directly for other types, i.e. primitive types and all qd.Field-derived classes

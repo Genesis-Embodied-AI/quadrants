@@ -103,7 +103,15 @@ def _test_python(args, default_dir="python"):
         print(f"Due to how pytest-xdist is implemented, the -s option does not work with multiple thread...")
     else:
         if int(threads) > 1:
-            pytest_args += ["-n", str(threads), "--dist=worksteal"]
+            # We intentionally kill workers on test failure (see conftest.py) to reset GPU state.  Stock xdist counts
+            # each kill toward --max-worker-restart and shuts down the session when the cap is reached, so we set a
+            # very high cap to prevent that.
+            pytest_args += [
+                "-n",
+                str(threads),
+                "--dist=worksteal",
+                "--max-worker-restart=999999",
+            ]
     if os.environ.get("QD_FILE_TIMING", "0") == "1":
         import sys as _sys
 
