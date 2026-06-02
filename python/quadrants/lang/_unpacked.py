@@ -1,27 +1,21 @@
 # type: ignore
-"""``qd.unpacked[T]`` -- per-thread storage-layout annotation for Vector-typed fields.
+"""Per-thread unpacked-storage layout for ``@qd.dataclass`` fields.
 
-The user-facing API is one symbol: :class:`unpacked`. Used as ``r: qd.unpacked[qd.types.vector(N, dtype)]`` on a
-``@qd.dataclass`` field, it declares that the field's storage should be laid out as ``N`` independent scalar slots
-(one ``alloca`` each) rather than the default packed ``alloca`` of ``N`` scalars. The *value type* is still
-``qd.types.vector(N, dtype)`` -- the wrapper only affects the per-thread storage layout, not the operations the field
-supports.
+The user-facing surface is the ``unpacked=True`` kwarg on :func:`quadrants.types.vector` -- see
+:doc:`/user_guide/unpacked` and ``VectorType.__init__`` in ``lang/matrix.py``. This module contains the internal
+machinery consumed by ``StructType.__init__`` and the AST transformer.
 
-Why: under high register pressure (e.g. several concurrent 32x32 tiles in a Cholesky + triangular solve), LLVM's
-SROA + ``mem2reg`` can fail to decompose the packed ``alloca``, causing the whole group to spill to local memory as a
-unit. An unpacked layout puts each slot in its own ``alloca`` up front, so the optimiser can promote slots
+Why an unpacked layout: under high register pressure (e.g. several concurrent 32x32 tiles in a Cholesky + triangular
+solve), LLVM's SROA + ``mem2reg`` can fail to decompose a packed ``alloca``, causing the whole group to spill to local
+memory as a unit. An unpacked layout puts each slot in its own ``alloca`` up front, so the optimiser can promote slots
 independently and spill only the ones it has to.
 
 Today this affects only how ``obj.r[i]`` accesses lower -- the AST transformer rewrites ``obj.r[i]`` (for python-int /
 ``qd.static``-resolved ``i``) into a direct reference to a synthetic scalar field ``obj._r{i}``. Materialising
-``obj.r`` itself as a Vector value (for arithmetic, swizzle, reductions, runtime indexing) is a follow-up; for now,
+``obj.r`` itself as a vector value (for arithmetic, swizzle, reductions, runtime indexing) is a follow-up; for now,
 the supported access pattern is indexed reads/writes only.
 
-Public:
-- :class:`unpacked`         -- subscriptable marker: ``r: qd.unpacked[qd.types.vector(N, dtype)]``
-
 Internal (used by ``StructType`` and the AST transformer):
-- ``_UnpackedAnnotation``                  -- the parameterised marker produced by ``unpacked[T]``
 - ``_expand_unpacked_naming(group, i)``    -- synthetic-field naming convention
 - ``_UnpackedVectorRef``                   -- transient proxy yielded by attribute access
 - ``expand_unpacked_into(...)``            -- per-member expansion driver, called from ``StructType.__init__``
@@ -36,56 +30,6 @@ import numpy as np
 from quadrants.lang.exception import QuadrantsSyntaxError
 
 
-class _UnpackedAnnotation:
-    """Parameterised marker returned by ``unpacked[T]``. Carries the wrapped value type (a ``VectorType``).
-
-    Exposes ``.count`` and ``.dtype`` (mirroring the inner ``VectorType``) so the dataclass-expansion code can read
-    them uniformly -- the rest of the machinery doesn't need to know about the wrapper.
-    """
-
-    def __init__(self, vector_type):
-        self.vector_type = vector_type
-        # Mirror the inner type's count / dtype so callers can stay type-agnostic.
-        self.count = vector_type.n
-        self.dtype = vector_type.dtype
-
-    def __repr__(self):
-        return f"unpacked[{self.vector_type!r}]"
-
-
-class unpacked:  # noqa: N801  -- lower-case is intentional; this is used in annotations as ``qd.unpacked[T]``
-    """Per-thread storage-layout annotation. Subscript with a ``VectorType`` to declare unpacked storage on a field of
-    a ``@qd.dataclass``::
-
-        @qd.dataclass
-        class Tile:
-            r: qd.unpacked[qd.types.vector(32, qd.f32)]
-
-    The class itself is not instantiable -- it exists only as a subscriptable marker. Subscripting it with anything
-    other than a ``VectorType`` raises ``QuadrantsSyntaxError``.
-    """
-
-    def __class_getitem__(cls, vector_type):
-        # Imported here (not at module top) to avoid a circular import: ``lang.matrix`` transitively imports this
-        # module via the dataclass machinery.
-        # pylint: disable=import-outside-toplevel
-        from quadrants.lang.matrix import VectorType
-
-        if not isinstance(vector_type, VectorType):
-            raise QuadrantsSyntaxError(
-                f"qd.unpacked[T] requires T to be a vector type (qd.types.vector(N, dtype)); "
-                f"got {vector_type!r} of type {type(vector_type).__name__}"
-            )
-        return _UnpackedAnnotation(vector_type)
-
-    def __init__(self):
-        # Catch ``qd.unpacked()`` (the most likely misuse): the marker is not a constructor.
-        raise QuadrantsSyntaxError(
-            "qd.unpacked is a layout annotation, not a constructor. Use it as "
-            "``r: qd.unpacked[qd.types.vector(N, dtype)]`` inside a class decorated with @qd.dataclass."
-        )
-
-
 def _expand_unpacked_naming(group_name, index):
     """Naming convention for the synthetic scalar fields of an unpacked-vector group.
 
@@ -95,26 +39,27 @@ def _expand_unpacked_naming(group_name, index):
 
 
 def _check_no_unpacked_collision(name, members):
-    """Reject a member name that collides with a synthetic field generated by an earlier ``qd.unpacked[...]`` group in
-    the same struct. Called from ``StructType.__init__`` for each non-unpacked member; the in-loop branch handles the
-    reverse case (synthetic field colliding with an already-declared member)."""
+    """Reject a member name that collides with a synthetic field generated by an earlier ``unpacked=True`` vector
+    field in the same struct. Called from ``StructType.__init__`` for each non-unpacked member; the in-loop branch
+    handles the reverse case (synthetic field colliding with an already-declared member)."""
     if name in members:
         raise QuadrantsSyntaxError(
-            f"member name {name!r} collides with a synthetic field generated by an unpacked-vector group "
-            f"earlier in this struct. Rename the colliding field or the group."
+            f"member name {name!r} collides with a synthetic field generated by an earlier vector field declared "
+            f"with ``unpacked=True``. Rename the colliding field or the unpacked vector."
         )
 
 
-def expand_unpacked_into(group_name, marker, members, unpacked_groups, elements, cook_dtype):
-    """Expand a ``qd.unpacked[qd.types.vector(N, dtype)]`` marker into ``N`` synthetic scalar members.
+def expand_unpacked_into(group_name, vector_type, members, unpacked_groups, elements, cook_dtype):
+    """Expand a ``qd.types.vector(N, dtype, unpacked=True)`` field into ``N`` synthetic scalar members.
 
     Mutates ``members``, ``unpacked_groups``, and ``elements`` in place. Called from ``StructType.__init__``; kept as
     a free function here (rather than a method on ``StructType``) so the unpacked-layout feature surface lives in one
     module. ``cook_dtype`` is injected to avoid an import cycle (``struct.py`` -> this module -> ``lang.util``).
     """
-    cooked = cook_dtype(marker.dtype)
-    unpacked_groups[group_name] = (marker.count, cooked, _expand_unpacked_naming)
-    for i in range(marker.count):
+    count = vector_type.n
+    cooked = cook_dtype(vector_type.dtype)
+    unpacked_groups[group_name] = (count, cooked, _expand_unpacked_naming)
+    for i in range(count):
         sub = _expand_unpacked_naming(group_name, i)
         # Reject collisions with previously-declared fields so the user gets a clear error rather than a silent
         # overwrite that would route ``s.r[i]`` to the wrong storage. Note this only catches collisions with members
@@ -122,8 +67,8 @@ def expand_unpacked_into(group_name, marker, members, unpacked_groups, elements,
         # is caught by ``_check_no_unpacked_collision`` in the caller's other branches.
         if sub in members:
             raise QuadrantsSyntaxError(
-                f"unpacked group {group_name!r} would expand to a synthetic field {sub!r} that collides with "
-                f"another member of the same struct. Rename the colliding field or the group."
+                f"unpacked vector field {group_name!r} would expand to a synthetic field {sub!r} that collides with "
+                f"another member of the same struct. Rename the colliding field or the unpacked vector."
             )
         members[sub] = cooked
         elements.append([cooked, sub])
@@ -145,8 +90,8 @@ def attach_unpacked_groups(target, unpacked_groups):
 
 
 class _UnpackedVectorRef:
-    """Transient proxy returned by the AST transformer for ``obj.{group}`` where ``group`` is an unpacked-vector group
-    declared on the struct type.
+    """Transient proxy returned by the AST transformer for ``obj.{group}`` where ``group`` is a vector field declared
+    with ``unpacked=True`` on the struct type.
 
     Only valid as the value of a Subscript node: ``obj.{group}[i]``. Resolved by ``ASTTransformer.build_Subscript``
     to a direct reference to the synthetic scalar field ``_{group}{i}`` when ``i`` is a python-int /
@@ -180,6 +125,3 @@ class _UnpackedVectorRef:
 
     def __repr__(self) -> str:  # pragma: no cover - debug only
         return f"<unpacked_vector_ref group={self._qd_group_name!r} count={self._qd_count} dtype={self._qd_dtype}>"
-
-
-__all__ = ["unpacked"]

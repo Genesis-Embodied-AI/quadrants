@@ -1,6 +1,6 @@
 # Unpacked vector storage
 
-`qd.unpacked[qd.types.vector(N, dtype)]` is a `@qd.dataclass` field annotation that declares a vector-typed field with an *unpacked* per-thread storage layout: `N` independent scalar slots, one per slot, instead of the default single packed slot. The *value type* of the field is the wrapped vector type itself - the annotation only affects how that field's storage is laid out, not what operations the field supports.
+`qd.types.vector(N, dtype, unpacked=True)` declares a vector type whose per-thread storage layout is *unpacked*: `N` independent scalar slots (one per slot) instead of the default single packed slot. The value type is still a vector - the kwarg only affects how that vector is laid out in per-thread memory. The flag is honored on `@qd.dataclass` field annotations.
 
 ## What problem does it solve?
 
@@ -14,7 +14,7 @@ class Tile:
 
 A plain vector member is stored as a single group. The compiler either keeps the whole group in registers, or, if registers are tight, spills the whole group to "local" memory (which despite the name lives in off-chip DRAM and is slow). It is all-or-nothing per group.
 
-`qd.unpacked` is a storage annotation that keeps the same vector type but lays the field out as `N` independent slots. The compiler can decide per slot whether to keep it in a register or spill it. Under register pressure this can be the difference between "most of the group still lives in registers" and "the entire group is in DRAM".
+Setting `unpacked=True` keeps the same vector type but lays the field out as `N` independent slots. The compiler can decide per slot whether to keep it in a register or spill it. Under register pressure this can be the difference between "most of the group still lives in registers" and "the entire group is in DRAM".
 
 The alternative way to get the same per-slot layout is to declare `N` named scalar fields by hand:
 
@@ -29,21 +29,21 @@ class Tile:
 
 That works, but every read or write site has to spell out a cascade like `if k == 0: ... elif k == 1: ...` across all `N` slots - ugly, error-prone, and slow to type-check and compile.
 
-`qd.unpacked[qd.types.vector(N, dtype)]` is the named-field layout with the indexed syntax restored:
+`qd.types.vector(N, dtype, unpacked=True)` is the named-field layout with the indexed syntax restored:
 
 ```python
 @qd.dataclass
 class Tile:
-    r: qd.unpacked[qd.types.vector(32, qd.f32)]
+    r: qd.types.vector(32, qd.f32, unpacked=True)
 ```
 
-The annotation expands at class-definition time into the `N` named-field equivalent, and the AST transformer rewrites each `obj.r[i]` (for python-int / `qd.static`-resolved `i`) into a direct reference to the i-th slot. So you get the best of both worlds: a clean indexed write/read at the source level, and the per-slot register residency of the hand-rolled named-field version.
+The flag is consumed at class-definition time: `@qd.dataclass` expands the field into the `N` named-field equivalent, and the AST transformer rewrites each `obj.r[i]` (for python-int / `qd.static`-resolved `i`) into a direct reference to the i-th slot. So you get the best of both worlds: a clean indexed write/read at the source level, and the per-slot register residency of the hand-rolled named-field version.
 
-The word "unpacked" contrasts with the default packed layout: a packed vector is one slot; an unpacked vector is `N` independent slots. Whether each slot ends up in a register is the optimiser's call; the annotation removes the layout obstacle that was preventing it.
+The word "unpacked" contrasts with the default packed layout: a packed vector is one slot; an unpacked vector is `N` independent slots. Whether each slot ends up in a register is the optimiser's call; the kwarg removes the layout obstacle that was preventing it.
 
 ## How to use it
 
-Apply `qd.unpacked[...]` to a vector type on a `@qd.dataclass` field:
+Apply `unpacked=True` to the vector type on a `@qd.dataclass` field:
 
 ```python
 import quadrants as qd
@@ -53,7 +53,7 @@ qd.init(arch=qd.gpu)
 
 @qd.dataclass
 class Tile:
-    r: qd.unpacked[qd.types.vector(32, qd.f32)]
+    r: qd.types.vector(32, qd.f32, unpacked=True)
 
 
 @qd.kernel
@@ -75,13 +75,13 @@ v = t.r[5]              # python-int index
 v = t.r[i]              # i bound by `for i in qd.static(range(N)):`
 ```
 
-You can mix unpacked groups with regular scalar / vector fields on the same dataclass; they are independent. You can also have several unpacked groups in one struct:
+You can mix unpacked-vector fields with regular scalar / vector fields on the same dataclass; they are independent. You can also have several unpacked-vector fields in one struct:
 
 ```python
 @qd.dataclass
 class TwoTiles:
-    a: qd.unpacked[qd.types.vector(32, qd.f32)]
-    b: qd.unpacked[qd.types.vector(32, qd.f32)]
+    a: qd.types.vector(32, qd.f32, unpacked=True)
+    b: qd.types.vector(32, qd.f32, unpacked=True)
     scale: qd.f32
 ```
 
@@ -89,27 +89,28 @@ The generated struct has 65 scalar members (`_a0..._a31`, `_b0..._b31`, `scale`)
 
 ## When to reach for it
 
-Use `qd.unpacked` when:
+Use `unpacked=True` when:
 
 - the group is *small relative to the per-thread register budget* (roughly speaking, a few dozen slots on current NVIDIA GPUs; an SM gives each thread up to 255 32-bit registers, shared with all live state in the kernel, so what counts as "small" depends on what else the kernel is holding), and
 - the kernel body accesses it with python-int / `qd.static`-resolved indices (typically unrolled inner loops), and
 - an equivalent plain-vector version of the same kernel is, or might be, spilling the group to local memory under register pressure. See [How to check for spills](#how-to-check-for-spills) below for the concrete workflow to confirm a spill is actually happening.
 
-Prefer plain `qd.types.vector(N, dtype)` (no `qd.unpacked` wrapper) for small groups where register pressure is low and you need vector arithmetic at the use site - dot products, `.norm()`, element-wise ops, broadcast, swizzle, runtime indexing, passing the value across a `@qd.func` boundary or into shared memory, and so on. Those all work today on plain vectors; on unpacked-layout fields only indexed access is currently supported (see Constraints below).
+Prefer plain `qd.types.vector(N, dtype)` (no `unpacked=True`) for small groups where register pressure is low and you need vector arithmetic at the use site - dot products, `.norm()`, element-wise ops, broadcast, swizzle, runtime indexing, passing the value across a `@qd.func` boundary or into shared memory, and so on. Those all work today on plain vectors; on unpacked-layout fields only indexed access is currently supported (see Constraints below).
 
 ## Constraints and pitfalls
 
-- **Use `@qd.dataclass`, not `@dataclasses.dataclass`.** The `qd.unpacked[...]` annotation is only expanded by `@qd.dataclass`; on a stdlib dataclass the annotation is inert metadata and the indexed-access syntax will not work. Calling or mis-subscripting the marker outside that context raises a `QuadrantsSyntaxError`.
-- **Indexed access only (today).** The currently supported pattern on an unpacked field is `obj.r[i]` for python-int / `qd.static`-resolved `i`. Operations that treat `obj.r` itself as a vector value - vector arithmetic (`obj.r + other`), reductions (`obj.r.norm()`, `obj.r.dot(...)`), swizzle, runtime indexing, broadcasts, passing the field across a `@qd.func` boundary, copying it into shared memory as a unit - are *not* supported on an unpacked field today, even though the value type is a vector. They are planned follow-ups. If you need them now, use plain `qd.types.vector(N, dtype)` (no `qd.unpacked` wrapper).
+- **Use `@qd.dataclass`, not `@dataclasses.dataclass`.** The `unpacked=True` flag is only consumed by `@qd.dataclass`; on a stdlib dataclass it is inert metadata and the indexed-access syntax will not work.
+- **The type cannot be instantiated as a value.** Attempting to use a `qd.types.vector(N, dtype, unpacked=True)` outside a `@qd.dataclass` field annotation - e.g. as a kernel-local (`r = qd.types.vector(32, qd.f32, unpacked=True)()`), as a kernel-arg / `qd.func` parameter, or via `.field(...)` / `.ndarray(...)` - raises `QuadrantsSyntaxError`. The unpacked layout has no meaning outside of the dataclass field-expansion path. If you need a value type, drop `unpacked=True`.
+- **Indexed access only (today).** The currently supported pattern on an unpacked field is `obj.r[i]` for python-int / `qd.static`-resolved `i`. Operations that treat `obj.r` itself as a vector value - vector arithmetic (`obj.r + other`), reductions (`obj.r.norm()`, `obj.r.dot(...)`), swizzle, runtime indexing, broadcasts, passing the field across a `@qd.func` boundary, copying it into shared memory as a unit - are *not* supported on an unpacked field today, even though the value type is a vector. They are planned follow-ups. If you need them now, use plain `qd.types.vector(N, dtype)` (no `unpacked=True`).
 - **Synthetic field-name collisions are rejected.** The expansion uses the convention `_{group_name}{i}` (e.g. `_r0`, `_r1`, ..., `_r31`). If you declare your own field with one of those names, `@qd.dataclass` raises a `QuadrantsSyntaxError` pointing at the collision.
 
 ## Relationship to other annotations
 
-| annotation                                       | storage layout                          | runtime indexing | best for                                                  |
-|--------------------------------------------------|-----------------------------------------|:----------------:|-----------------------------------------------------------|
-| `qd.f32` (per-field)                             | one independent slot per field          | n/a              | individually-named scalars                                |
-| `qd.types.vector(N, dtype)`                      | one slot holding `N` packed scalars     | yes              | small groups with vector arithmetic                       |
-| `qd.unpacked[qd.types.vector(N, dtype)]`         | `N` independent slots                   | not yet          | groups that need to stay register-resident under pressure |
+| annotation                                            | storage layout                          | runtime indexing | best for                                                  |
+|-------------------------------------------------------|-----------------------------------------|:----------------:|-----------------------------------------------------------|
+| `qd.f32` (per-field)                                  | one independent slot per field          | n/a              | individually-named scalars                                |
+| `qd.types.vector(N, dtype)`                           | one slot holding `N` packed scalars     | yes              | small groups with vector arithmetic                       |
+| `qd.types.vector(N, dtype, unpacked=True)`            | `N` independent slots                   | not yet          | groups that need to stay register-resident under pressure |
 
 Under low register pressure the three options generate similar code. Under high register pressure the unpacked layout is the one most likely to stay in registers because the optimiser can promote each slot independently.
 
@@ -119,7 +120,7 @@ Under low register pressure the three options generate similar code. Under high 
 
 A plain `qd.types.vector(N, dtype)` field lowers to a single `alloca` of `N` packed scalars. LLVM's SROA + `mem2reg` passes attempt to decompose that `alloca` into `N` per-slot SSA values so each can live in a register, but the decomposition is conservative: under high register pressure (e.g. two concurrent `32x32` tiles in a Cholesky + triangular solve), SROA bails out on the packed `alloca` and the whole group spills to local memory as a unit. Each access then becomes a `ld.local` / `st.local`.
 
-`qd.unpacked[qd.types.vector(N, dtype)]` expands to `N` independent `alloca` instructions, one per slot, so `mem2reg` can promote each slot independently and the register allocator can spill only the slots it has to. That is exactly what the hand-rolled `r0..r{N-1}` form produces; the generated LLVM IR / PTX matches it byte-for-byte.
+`qd.types.vector(N, dtype, unpacked=True)` expands to `N` independent `alloca` instructions, one per slot, so `mem2reg` can promote each slot independently and the register allocator can spill only the slots it has to. That is exactly what the hand-rolled `r0..r{N-1}` form produces; the generated LLVM IR / PTX matches it byte-for-byte.
 
 ## How to check for spills
 

@@ -9,7 +9,6 @@ from quadrants._lib import core as _qd_core
 from quadrants.lang import expr, impl, ops
 from quadrants.lang._unpacked import (
     _check_no_unpacked_collision,
-    _UnpackedAnnotation,
     attach_unpacked_groups,
     expand_unpacked_into,
 )
@@ -607,15 +606,15 @@ class StructType(CompoundType):
     def __init__(self, **kwargs):
         self.members = {}
         self.methods = {}
-        # Maps group name -> (count, dtype, naming_fn). Populated when a member annotation is a ``qd.unpacked[...]``
-        # layout marker; consumed by the AST transformer to rewrite ``obj.{group}[i]`` into a direct synthetic-field
-        # reference.
+        # Maps group name -> (count, dtype, naming_fn). Populated when a member annotation is a vector type declared
+        # with ``unpacked=True``; consumed by the AST transformer to rewrite ``obj.{group}[i]`` into a direct
+        # synthetic-field reference.
         self._unpacked_groups: dict = {}
         elements = []
         for k, dtype in kwargs.items():
             if k == "__struct_methods":
                 self.methods = dtype
-            elif isinstance(dtype, _UnpackedAnnotation):
+            elif getattr(dtype, "_is_unpacked", False):
                 expand_unpacked_into(k, dtype, self.members, self._unpacked_groups, elements, cook_dtype)
             elif isinstance(dtype, StructType):
                 _check_no_unpacked_collision(k, self.members)
@@ -797,7 +796,7 @@ class StructType(CompoundType):
     def field(self, **kwargs):
         # Tag the returned ``StructField`` with this type's ``_unpacked_groups`` so ``impl.subscript`` can transfer the
         # metadata onto the ``_IntermediateStruct`` it builds for ``f[i]`` -- without that, ``f[i].r[k]`` on a struct
-        # field whose type declared ``r: qd.unpacked[...]`` would fall through to a plain attribute lookup and fail.
+        # field whose type was declared with ``unpacked=True`` would fall through to a plain attribute lookup and fail.
         # Nested cases work transparently because ``Struct.field`` calls ``dtype.field(...)`` for any ``StructType``
         # member, recursing into this method.
         field = Struct.field(self.members, self.methods, **kwargs)

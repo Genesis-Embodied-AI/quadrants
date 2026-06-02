@@ -1,7 +1,7 @@
 # pyright: reportInvalidTypeForm=false
-"""Tests for the ``qd.unpacked[qd.types.vector(N, dtype)]`` layout annotation on ``@qd.dataclass``.
+"""Tests for the ``qd.types.vector(N, dtype, unpacked=True)`` layout flag on ``@qd.dataclass`` fields.
 
-The annotation declares a Vector-typed field with *unpacked* storage: N independent scalar slots, one ``alloca`` each,
+The flag declares a vector-typed field with *unpacked* storage: N independent scalar slots, one ``alloca`` each,
 rather than a single packed ``alloca``. The static-index access ``obj.r[i]`` must lower to a direct reference to the
 synthetic scalar field ``_r{i}``; PTX must be byte-identical to the named-field equivalent.
 """
@@ -27,13 +27,13 @@ def _qd_init_cuda():
 
 
 def test_unpacked_construction_python_scope():
-    """A dataclass with ``r: qd.unpacked[qd.types.vector(N, dtype)]`` should construct as if it had N named scalar
+    """A dataclass with ``r: qd.types.vector(N, dtype, unpacked=True)`` should construct as if it had N named scalar
     fields ``_r0.._r{N-1}``."""
     _qd_init_cuda()
 
     @qd.dataclass
     class Tile:
-        r: qd.unpacked[qd.types.vector(4, qd.f32)]
+        r: qd.types.vector(4, qd.f32, unpacked=True)
 
     assert hasattr(Tile, "_unpacked_groups")
     groups = Tile._unpacked_groups
@@ -58,7 +58,7 @@ def test_unpacked_static_index_write_then_read():
 
     @qd.dataclass
     class Tile:
-        r: qd.unpacked[qd.types.vector(4, qd.f32)]
+        r: qd.types.vector(4, qd.f32, unpacked=True)
 
     out = qd.field(dtype=qd.f32, shape=(4,))
 
@@ -86,7 +86,7 @@ def test_unpacked_qd_static_loop_index():
 
     @qd.dataclass
     class Tile:
-        r: qd.unpacked[qd.types.vector(4, qd.f32)]
+        r: qd.types.vector(4, qd.f32, unpacked=True)
 
     out = qd.field(dtype=qd.f32, shape=(4,))
 
@@ -110,14 +110,14 @@ def test_unpacked_qd_static_loop_index():
 
 def test_unpacked_runtime_index_rejected():
     """Indexing ``t.r[k]`` with a runtime ``k`` raises a clear error pointing at the python-int / ``qd.static``
-    requirement. Long term the runtime case can lower to an explicit cascade (or fall through to a Vector-value
+    requirement. Long term the runtime case can lower to an explicit cascade (or fall through to a vector-value
     materialise + index); for now the limitation is surfaced early so callers don't get a confusing LLVM/SROA failure
     downstream."""
     _qd_init_cuda()
 
     @qd.dataclass
     class Tile:
-        r: qd.unpacked[qd.types.vector(4, qd.f32)]
+        r: qd.types.vector(4, qd.f32, unpacked=True)
 
     out = qd.field(dtype=qd.f32, shape=(4,))
 
@@ -141,7 +141,7 @@ def test_unpacked_oob_static_index():
 
     @qd.dataclass
     class Tile:
-        r: qd.unpacked[qd.types.vector(4, qd.f32)]
+        r: qd.types.vector(4, qd.f32, unpacked=True)
 
     out = qd.field(dtype=qd.f32, shape=(4,))
 
@@ -159,31 +159,38 @@ def test_unpacked_oob_static_index():
 
 # ---------------------------------------------------------------------------
 # Misuse guards (python-side, no GPU needed).
+#
+# The kwarg form makes one kind of misuse silent-but-likely: declaring an unpacked vector type and then trying to
+# instantiate it as a value (outside a @qd.dataclass field). VectorType refuses to be instantiated when the flag is
+# set, and the surrounding helpers ``.field()`` and ``.ndarray()`` follow suit. These tests pin those guards.
 # ---------------------------------------------------------------------------
 
 
-def test_unpacked_call_rejected():
-    """``qd.unpacked()`` (calling the marker class) raises a clear error pointing at the annotation form."""
+def test_unpacked_call_rejected_outside_dataclass():
+    """``qd.types.vector(N, dtype, unpacked=True)(1, 2, 3, 4)`` -- trying to instantiate an unpacked-vector type as a
+    value -- raises with a message pointing at the @qd.dataclass annotation site."""
+    T = qd.types.vector(4, qd.f32, unpacked=True)
     with pytest.raises(qd.QuadrantsSyntaxError) as e:
-        qd.unpacked()
-    assert "qd.unpacked[qd.types.vector" in str(e.value), str(e.value)
-
-
-def test_unpacked_subscript_with_non_vector_rejected():
-    """``qd.unpacked[<not a VectorType>]`` raises with a helpful message naming the required form."""
-    with pytest.raises(qd.QuadrantsSyntaxError) as e:
-        _ = qd.unpacked[qd.f32]  # bare dtype, not a vector type
+        T(1.0, 2.0, 3.0, 4.0)
     msg = str(e.value)
-    assert "vector type" in msg and "qd.types.vector(N, dtype)" in msg, msg
+    assert "unpacked=True" in msg and "@qd.dataclass" in msg, msg
 
 
-def test_unpacked_subscript_with_tuple_rejected():
-    """The old two-arg ``qd.unpacked[dtype, N]`` form is no longer supported; subscribing with a tuple should fail
-    cleanly rather than silently produce a malformed marker."""
+def test_unpacked_field_constructor_rejected_outside_dataclass():
+    """``unpacked_vector_type.field(...)`` is a misuse; the unpacked layout has no meaning outside the @qd.dataclass
+    field-expansion path. Should raise rather than silently producing a packed field."""
+    T = qd.types.vector(4, qd.f32, unpacked=True)
     with pytest.raises(qd.QuadrantsSyntaxError) as e:
-        _ = qd.unpacked[qd.f32, 4]  # python collects this as ``(qd.f32, 4)``
-    msg = str(e.value)
-    assert "vector type" in msg, msg
+        T.field(shape=(8,))
+    assert "unpacked=True" in str(e.value), str(e.value)
+
+
+def test_unpacked_ndarray_constructor_rejected_outside_dataclass():
+    """``unpacked_vector_type.ndarray(...)`` -- same idea, but for ndarrays."""
+    T = qd.types.vector(4, qd.f32, unpacked=True)
+    with pytest.raises(qd.QuadrantsSyntaxError) as e:
+        T.ndarray(shape=(8,))
+    assert "unpacked=True" in str(e.value), str(e.value)
 
 
 # ---------------------------------------------------------------------------
@@ -192,15 +199,15 @@ def test_unpacked_subscript_with_tuple_rejected():
 
 
 def test_unpacked_nested_in_outer_dataclass():
-    """An ``qd.unpacked[...]`` on an *inner* ``@qd.dataclass`` should keep working when that dataclass is itself nested
-    inside an outer ``@qd.dataclass``. Regression test for the metadata-stripping path in ``expr_init`` /
+    """An unpacked-vector field on an *inner* ``@qd.dataclass`` should keep working when that dataclass is itself
+    nested inside an outer ``@qd.dataclass``. Regression test for the metadata-stripping path in ``expr_init`` /
     ``StructType.cast``: the ``_qd_unpacked_groups`` tag must propagate through nested-struct rewrap so the AST
     transformer can still recognise ``o.inner.r[i]`` as a group access."""
     _qd_init_cuda()
 
     @qd.dataclass
     class Inner:
-        r: qd.unpacked[qd.types.vector(4, qd.f32)]
+        r: qd.types.vector(4, qd.f32, unpacked=True)
 
     @qd.dataclass
     class Outer:
@@ -231,7 +238,7 @@ def test_unpacked_struct_field_subscript():
 
     @qd.dataclass
     class Tile:
-        r: qd.unpacked[qd.types.vector(4, qd.f32)]
+        r: qd.types.vector(4, qd.f32, unpacked=True)
 
     tile_field = Tile.field(shape=(2,))
     out = qd.field(dtype=qd.f32, shape=(1,))
@@ -255,7 +262,7 @@ def test_unpacked_struct_field_subscript_nested():
 
     @qd.dataclass
     class Inner:
-        r: qd.unpacked[qd.types.vector(4, qd.f32)]
+        r: qd.types.vector(4, qd.f32, unpacked=True)
 
     @qd.dataclass
     class Outer:
@@ -282,27 +289,27 @@ def test_unpacked_struct_field_subscript_nested():
 
 
 def test_unpacked_collision_with_earlier_field():
-    """A user-declared field whose name matches a future synthetic field of an unpacked group should raise rather than
-    silently overwriting."""
+    """A user-declared field whose name matches a future synthetic field of an unpacked vector should raise rather
+    than silently overwriting."""
     with pytest.raises(qd.QuadrantsSyntaxError) as e:
 
         @qd.dataclass
         class Bad1:
             _r0: qd.f32
-            r: qd.unpacked[qd.types.vector(4, qd.f32)]
+            r: qd.types.vector(4, qd.f32, unpacked=True)
 
     msg = str(e.value)
     assert "_r0" in msg and "unpacked" in msg.lower(), msg
 
 
 def test_unpacked_collision_with_later_field():
-    """A user-declared field whose name matches an already-expanded synthetic field of an earlier unpacked group should
-    also raise."""
+    """A user-declared field whose name matches an already-expanded synthetic field of an earlier unpacked vector
+    should also raise."""
     with pytest.raises(qd.QuadrantsSyntaxError) as e:
 
         @qd.dataclass
         class Bad2:
-            r: qd.unpacked[qd.types.vector(4, qd.f32)]
+            r: qd.types.vector(4, qd.f32, unpacked=True)
             _r2: qd.f32
 
     msg = str(e.value)
@@ -320,12 +327,12 @@ if __name__ == "__main__":
     print("runtime-index rejection test passed")
     test_unpacked_oob_static_index()
     print("static OOB rejection test passed")
-    test_unpacked_call_rejected()
-    print("marker call rejection test passed")
-    test_unpacked_subscript_with_non_vector_rejected()
-    print("subscript-non-vector rejection test passed")
-    test_unpacked_subscript_with_tuple_rejected()
-    print("subscript-tuple rejection test passed")
+    test_unpacked_call_rejected_outside_dataclass()
+    print("call-outside-dataclass rejection test passed")
+    test_unpacked_field_constructor_rejected_outside_dataclass()
+    print("field-outside-dataclass rejection test passed")
+    test_unpacked_ndarray_constructor_rejected_outside_dataclass()
+    print("ndarray-outside-dataclass rejection test passed")
     test_unpacked_nested_in_outer_dataclass()
     print("nested-in-outer-dataclass test passed")
     test_unpacked_struct_field_subscript()

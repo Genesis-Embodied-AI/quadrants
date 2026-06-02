@@ -756,7 +756,7 @@ class ASTTransformer(Builder):
             # Unpacked-vector group access on a ``@qd.dataclass`` Struct expression. Returns a transient
             # ``_UnpackedVectorRef`` that ``build_Subscript`` (or its assignment-LHS sibling) resolves to a direct field
             # reference. The lookup is by-name on ``_qd_unpacked_groups``, which ``StructType.__call__`` attaches to
-            # every Struct instance whose type declared at least one ``qd.unpacked[...]`` annotation. Tested in
+            # every Struct instance whose type declared at least one vector field with ``unpacked=True``. Tested in
             # ``test_unpacked.py``.
             groups = getattr(node.value.ptr, "_qd_unpacked_groups", None)
             if groups and node.attr in groups:
