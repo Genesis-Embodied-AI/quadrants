@@ -492,7 +492,7 @@ Passing a <code class="docutils literal notranslate"><span class="pre">&#64;data
 <ul class="simple">
 <li><p>if you are trying to write a python class that runs on the GPU =&gt; use a <code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code></p></li>
 <li><p>if you are trying to write typed dataclasses, for passing data around between the <code class="docutils literal notranslate"><span class="pre">&#64;data_oriented</span></code> classes, and between methods of the same <code class="docutils literal notranslate"><span class="pre">&#64;data_oriented</span></code> class =&gt; use <code class="docutils literal notranslate"><span class="pre">&#64;dataclasses.dataclass</span></code>es</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">&#64;qd.dataclass</span></code> is used to create structured element types for field tensors. We also use it to create the Cholesky <a class="reference internal" href="tile16.html"><span class="std std-doc">tiles</span></a></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">&#64;qd.dataclass</span></code> is used to create structured element types for field tensors. We also use it to create the Cholesky <a class="reference internal" href="tile16.html"><span class="std std-doc">tiles</span></a>.</p></li>
 </ul>
 </section>
 <section id="dataclasses-dataclass">
@@ -600,7 +600,7 @@ my_struct.b[37] 5
 </section>
 <section id="frozen-vs-non-frozen">
 <h3>Frozen vs non-frozen<a class="headerlink" href="#frozen-vs-non-frozen" title="Link to this heading">#</a></h3>
-<p>A <code class="docutils literal notranslate"><span class="pre">dataclasses.dataclass</span></code> may be either non-frozen (the default) or frozen (<code class="docutils literal notranslate"><span class="pre">&#64;dataclass(frozen=True)</span></code>). Both work as kernel arguments, but <strong>kernel launch is faster with <code class="docutils literal notranslate"><span class="pre">frozen=True</span></code></strong> (because it enables some optimizations that would otherwise not be possible). Recommend <code class="docutils literal notranslate"><span class="pre">frozen=True</span></code> unless you specifically need to rebind members after construction.</p>
+<p>A <code class="docutils literal notranslate"><span class="pre">dataclasses.dataclass</span></code> may be either non-frozen (the default) or frozen (<code class="docutils literal notranslate"><span class="pre">&#64;dataclass(frozen=True)</span></code>). Both work as kernel arguments, but <strong>kernel launch is faster with <code class="docutils literal notranslate"><span class="pre">frozen=True</span></code></strong> (because it enables some optimizations that would otherwise not be possible). Recommend <code class="docutils literal notranslate"><span class="pre">frozen=True</span></code> unless you specifically need to rebind members after construction. Note that rebinding members after construction contradicts certain best practices; for example, it is typically incompatible with type linters such as pyright and mypy.</p>
 </section>
 <section id="under-the-hood">
 <h3>Under the hood<a class="headerlink" href="#under-the-hood" title="Link to this heading">#</a></h3>
@@ -685,7 +685,8 @@ my_struct.b[37] 5
 <li><p>fixed-size vectors (<code class="docutils literal notranslate"><span class="pre">qd.types.vector(N,</span> <span class="pre">dtype)</span></code>)</p></li>
 <li><p>fixed-size matrices (<code class="docutils literal notranslate"><span class="pre">qd.types.matrix(M,</span> <span class="pre">N,</span> <span class="pre">dtype)</span></code>)</p></li>
 </ul>
-<p>It cannot contain <code class="docutils literal notranslate"><span class="pre">qd.field</span></code> or <code class="docutils literal notranslate"><span class="pre">qd.ndarray</span></code> members — those are dynamically-sized tensor types and don’t fit into a fixed-size struct cell.</p>
+<p>A <code class="docutils literal notranslate"><span class="pre">qd.dataclass</span></code> is analogous to a C struct. All members, including the fixed-size vectors and fixed-size matrices, are laid out within the struct itself. They are not pointers to tensors allocated elsewhere. Changing the size of a vector or matrix changes thus the size of the qd.dataclass.</p>
+<p>A consequence of a qd.dataclass containing all members within itself, rather than being pointers, is that a qd.dataclass cannot contain <code class="docutils literal notranslate"><span class="pre">qd.field</span></code> or <code class="docutils literal notranslate"><span class="pre">qd.ndarray</span></code> members.</p>
 <p>A <code class="docutils literal notranslate"><span class="pre">&#64;qd.dataclass</span></code> can be turned into a tensor of structs (e.g. <code class="docutils literal notranslate"><span class="pre">MyStruct.field(shape=(N,))</span></code>) with two possible memory layouts:</p>
 <ul class="simple">
 <li><p><strong>Struct-of-arrays (SoA)</strong> (<code class="docutils literal notranslate"><span class="pre">qd.Layout.SOA</span></code>): extrudes each member of the struct into its own tensor of length <code class="docutils literal notranslate"><span class="pre">N</span></code>.</p></li>
