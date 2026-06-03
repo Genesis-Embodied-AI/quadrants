@@ -1,35 +1,43 @@
 # pyright: reportInvalidTypeForm=false
 
 """
-Register-resident 16x16 tile operations.
+Register-resident 32x32 tile operations.
 
-Each tile is a 16x16 matrix distributed across 16 threads in a subgroup, one row per thread, with each row stored
-in 16 scalar registers (r0-r15).  Cross-thread communication uses subgroup shuffles -- no shared memory needed.
+Each tile is a 32x32 matrix distributed across 32 threads in a subgroup, one row per thread, with each row stored
+in 32 scalar registers (r0-r31).  Cross-thread communication uses subgroup shuffles -- no shared memory needed.
 
-The thread's lane index (tid) is obtained internally via ``subgroup.invocation_id()``, so callers never need to
-pass it.  See docs/source/user_guide/tile.md for usage documentation.
+Surface mirrors :mod:`quadrants.lang.simt._tile16`: use ``qd.simt.Tile32x32.zeros(dtype=...)`` /
+``qd.simt.Tile32x32.eye(dtype=...)`` inside a kernel, then load / store via slice syntax
+(``tile[:] = arr[r0:r1, c0:c1]`` / ``arr[r0:r1, c0:c1] = tile``) and update via ``tile -= qd.outer(a, b)``.
+
+The slice / outer-product proxy classes are imported from :mod:`._tile16` so a single set of dispatch helpers serves
+both tile sizes (a tile instance is duck-typed against ``_load`` / ``_store`` / ``_ger_sub``).
 """
 
 from typing import TYPE_CHECKING as _TYPE_CHECKING
-from typing import Any, NoReturn
+from typing import Any
 
 import quadrants as qd
+from quadrants.lang.simt._tile16 import (
+    _OuterProduct,
+    _VecSliceProxy,
+)
 
 if _TYPE_CHECKING:
 
-    class _Tile16x16Proto:  # noqa: E303
-        """Static type stub so pyright sees Tile16x16 methods correctly."""
+    class _Tile32x32Proto:  # noqa: E303
+        """Static type stub so pyright sees Tile32x32 methods correctly."""
 
         SIZE: int
 
         def __init__(self, *args: Any, **kwargs: Any) -> None: ...  # noqa: E704
         @classmethod
-        def zeros(cls) -> "_Tile16x16Proto": ...  # noqa: E704
+        def zeros(cls) -> "_Tile32x32Proto": ...  # noqa: E704
         @classmethod
-        def eye(cls) -> "_Tile16x16Proto": ...  # noqa: E704
+        def eye(cls) -> "_Tile32x32Proto": ...  # noqa: E704
         def eye_(self) -> None: ...  # noqa: E704
         def cholesky_(self, eps: Any) -> None: ...  # noqa: E704
-        def solve_triangular_(self, B: "_Tile16x16Proto", lower: bool = True) -> None: ...  # noqa: E704
+        def solve_triangular_(self, B: "_Tile32x32Proto", lower: bool = True) -> None: ...  # noqa: E704
         def _load(self, arr: Any, row_start: Any, row_end: Any, col_start: Any, col_end: Any) -> None: ...  # noqa: E704
         def _store(
             self, arr: Any, row_start: Any, row_end: Any, col_start: Any, col_end: Any
@@ -43,175 +51,40 @@ if _TYPE_CHECKING:
         def _get_col(self, k: Any) -> Any: ...  # noqa: E704
         def _set_col(self, k: Any, val: Any) -> None: ...  # noqa: E704
         def _ger_sub(self, a: Any, b: Any) -> None: ...  # noqa: E704
-        def _trsm(self, L: "_Tile16x16Proto") -> None: ...  # noqa: E704
-        def __isub__(self, other: Any) -> "_Tile16x16Proto": ...  # noqa: E704
+        def _trsm(self, L: "_Tile32x32Proto") -> None: ...  # noqa: E704
+        def __isub__(self, other: Any) -> "_Tile32x32Proto": ...  # noqa: E704
         def __getitem__(self, key: Any) -> Any: ...  # noqa: E704
         def __setitem__(self, key: Any, value: Any) -> None: ...  # noqa: E704
 
 
-_TILE = 16
+_TILE = 32
 
-# Field-name lookup table for direct register access in qd.static-unrolled loops. Used via ``self._r(k)`` (defined
-# below) which is just ``getattr(self, _REGS[k])``. With a python-int ``k`` (which is what ``qd.static(range(_TILE))``
-# binds inside its body) this collapses to a single field-reference AST node, vs. the _TILE-way ``if k == 0: val =
-# self.r0; if k == 1: ...`` cascade emitted by a dynamic ``_get_col(k)`` call. Empirically this cuts cold-compile time
-# significantly on hot Cholesky paths because every such call site avoids re-emitting (and later folding) _TILE
-# conditional nodes per use.
+# Field-name lookup table for direct register access in qd.static-unrolled loops. See ``_tile16._REGS`` for the
+# rationale; the same trick applies here, just with 32 fields instead of 16.
 _REGS = tuple(f"r{i}" for i in range(_TILE))
 
 
-class _OuterProduct:
-    """Deferred outer product proxy for use with augmented assignment on Tile16x16.
-
-    Created by qd.outer(a, b). Not a quadrants expression -- only valid as the RHS of ``tile -= qd.outer(a, b)``.
-    """
-
-    _qd_is_deferred = True
-
-    def __init__(self, a: Any, b: Any) -> None:
-        self.a = a
-        self.b = b
-
-    def __add__(self, other: Any) -> NoReturn:
-        raise TypeError("OuterProduct does not support composition; apply each update separately")
-
-    def __radd__(self, other: Any) -> NoReturn:
-        raise TypeError("OuterProduct does not support composition; apply each update separately")
+_tile32_cache = {}
 
 
-def outer(a: Any, b: Any) -> _OuterProduct:
-    """Create a deferred outer product for use with Tile16x16 augmented assignment.
+def _make_tile32x32(dtype=None) -> "type[_Tile32x32Proto]":
+    """Create a Tile32x32 dataclass whose registers use the given scalar dtype (qd.f32 or qd.f64).
 
-    Usage::
-
-        t -= qd.outer(a, b)   # equivalent to t._ger_sub(a, b)
-        t -= qd.outer(v, v)   # symmetric case (a == b)
-    """
-    return _OuterProduct(a, b)
-
-
-class _DeferredProxyMixin:
-    """Raises clear errors if a deferred tile proxy is accidentally used as a value."""
-
-    _proxy_description = "Tile proxy"
-
-    def _misuse(self, op: str = "used") -> NoReturn:
-        raise TypeError(
-            f"{self._proxy_description} was {op}, but it is only valid in tile operations (tile[:] = ..., ... = tile, qd.outer(...))"
-        )
-
-    def __add__(self, other: Any) -> NoReturn:
-        self._misuse("added")
-
-    def __radd__(self, other: Any) -> NoReturn:
-        self._misuse("added")
-
-    def __sub__(self, other: Any) -> NoReturn:
-        self._misuse("subtracted")
-
-    def __mul__(self, other: Any) -> NoReturn:
-        self._misuse("multiplied")
-
-    def __getitem__(self, key: Any) -> NoReturn:
-        self._misuse("subscripted")
-
-    def __repr__(self) -> str:
-        return f"<{self._proxy_description} — not a value; use with tile[:] = ... or qd.outer(...)>"
-
-
-class _TileSliceProxy(_DeferredProxyMixin):
-    """Deferred 2D/3D array slice for tile load/store.
-
-    Created by subscripting a Field or ndarray with 2D slices, e.g. ``arr[row_start:row_stop, col_start:col_stop]``.
-    Not a quadrants expression -- only valid as the RHS of a tile assignment (load) or as the LHS target (store).
-    """
-
-    _qd_is_deferred = True
-    _proxy_description = "Array slice proxy (arr[r0:r1, c0:c1])"
-
-    def __init__(
-        self, arr: Any, row_start: Any, row_stop: Any, col_start: Any, col_stop: Any, batch_idx: Any = None
-    ) -> None:
-        self.arr = arr
-        self.row_start = row_start
-        self.row_stop = row_stop
-        self.col_start = col_start
-        self.col_stop = col_stop
-        self.batch_idx = batch_idx
-
-    def _assign(self, tile: Any) -> None:
-        """Store path: arr[r:r+n_rows, c:c+n_cols] = tile."""
-        if self.batch_idx is not None:
-            tile._store3d(self.arr, self.batch_idx, self.row_start, self.row_stop, self.col_start, self.col_stop)
-        else:
-            tile._store(self.arr, self.row_start, self.row_stop, self.col_start, self.col_stop)
-
-
-class _VecSliceProxy(_DeferredProxyMixin):
-    """Deferred column-vector load from a 2D/3D array.
-
-    Created by ``arr[row_start:row_stop, col]`` or ``arr[batch_idx, row_start:row_stop, col]``.
-    Each subgroup thread loads one element; out-of-range threads get 0.
-    Only valid as an argument to ``qd.outer()`` in tile augmented assignment.
-    """
-
-    _qd_is_deferred = True
-    _proxy_description = "Vec slice proxy (arr[r0:r1, col])"
-
-    def __init__(self, arr: Any, row_start: Any, row_stop: Any, col: Any, batch_idx: Any = None) -> None:
-        self.arr = arr
-        self.row_start = row_start
-        self.row_stop = row_stop
-        self.col = col
-        self.batch_idx = batch_idx
-
-
-class _TileRefProxy:
-    """Proxy returned by tile[:] for the LHS of a load assignment.
-
-    Enables ``tile[:] = arr[r:r+16, c:n]``.  The ``[:]`` is required to distinguish in-place tile loads from
-    variable rebinding.
-    """
-
-    _qd_is_deferred = True
-
-    def __init__(self, tile: Any) -> None:
-        self.tile = tile
-
-    def _assign(self, value: Any) -> None:
-        """Load path: tile[:] = arr[r:r+n, c:c+n]. Dispatches to _load or _load3d."""
-        if isinstance(value, _TileSliceProxy):
-            if value.batch_idx is not None:
-                self.tile._load3d(
-                    value.arr, value.batch_idx, value.row_start, value.row_stop, value.col_start, value.col_stop
-                )
-            else:
-                self.tile._load(value.arr, value.row_start, value.row_stop, value.col_start, value.col_stop)
-        else:
-            raise TypeError(f"Tile16x16[:] can only be assigned from an array slice, got {type(value)}")
-
-
-_tile16_cache = {}
-
-
-def _make_tile16x16(dtype=None) -> "type[_Tile16x16Proto]":
-    """Create a Tile16x16 dataclass whose registers use the given scalar dtype (qd.f32 or qd.f64).
-
-    This is an internal factory. Use ``qd.simt.Tile16x16`` (the proxy) instead.
+    This is an internal factory. Use ``qd.simt.Tile32x32`` (the proxy) instead.
     """
     if dtype is None:
         dtype = qd.f32
-    if dtype in _tile16_cache:
-        return _tile16_cache[dtype]  # pyright: ignore[reportReturnType]
-    cls = _make_tile16x16_class(dtype)
-    _tile16_cache[dtype] = cls
+    if dtype in _tile32_cache:
+        return _tile32_cache[dtype]  # pyright: ignore[reportReturnType]
+    cls = _make_tile32x32_class(dtype)
+    _tile32_cache[dtype] = cls
     return cls  # pyright: ignore[reportReturnType]
 
 
-def _make_tile16x16_class(dtype):
-    class _Tile16x16:
-        """A 16x16 tile distributed one row per subgroup thread, held in 16 scalar registers.  All fields default to
-        0.0 when omitted: ``Tile16x16()`` creates a zero tile."""
+def _make_tile32x32_class(dtype):
+    class _Tile32x32:
+        """A 32x32 tile distributed one row per subgroup thread, held in 32 scalar registers.  All fields default to
+        0.0 when omitted: ``Tile32x32()`` creates a zero tile."""
 
         r0: dtype
         r1: dtype
@@ -229,6 +102,22 @@ def _make_tile16x16_class(dtype):
         r13: dtype
         r14: dtype
         r15: dtype
+        r16: dtype
+        r17: dtype
+        r18: dtype
+        r19: dtype
+        r20: dtype
+        r21: dtype
+        r22: dtype
+        r23: dtype
+        r24: dtype
+        r25: dtype
+        r26: dtype
+        r27: dtype
+        r28: dtype
+        r29: dtype
+        r30: dtype
+        r31: dtype
 
         @qd.func
         def _load(self, arr: qd.template(), row_start, row_stop, col_start, col_stop):
@@ -246,8 +135,8 @@ def _make_tile16x16_class(dtype):
                 if arr_col_stop < col_stop:
                     col_stop = arr_col_stop
                 # Inline cascade: with j a python-int from qd.static, only the matching branch is emitted into the AST.
-                # Avoids the _TILE-way duplication that calling _set_col(j) through the @qd.func boundary would force.
-                for j in qd.static(range(_TILE)):
+                # Avoids the 32x duplication that calling _set_col(j) through the @qd.func boundary would force.
+                for j in qd.static(range(32)):
                     if col_start + j < col_stop:
                         val = arr[row, col_start + j]
                         if j == 0:
@@ -282,6 +171,38 @@ def _make_tile16x16_class(dtype):
                             self.r14 = val
                         if j == 15:
                             self.r15 = val
+                        if j == 16:
+                            self.r16 = val
+                        if j == 17:
+                            self.r17 = val
+                        if j == 18:
+                            self.r18 = val
+                        if j == 19:
+                            self.r19 = val
+                        if j == 20:
+                            self.r20 = val
+                        if j == 21:
+                            self.r21 = val
+                        if j == 22:
+                            self.r22 = val
+                        if j == 23:
+                            self.r23 = val
+                        if j == 24:
+                            self.r24 = val
+                        if j == 25:
+                            self.r25 = val
+                        if j == 26:
+                            self.r26 = val
+                        if j == 27:
+                            self.r27 = val
+                        if j == 28:
+                            self.r28 = val
+                        if j == 29:
+                            self.r29 = val
+                        if j == 30:
+                            self.r30 = val
+                        if j == 31:
+                            self.r31 = val
 
         @qd.func
         def _load3d(self, arr: qd.template(), batch, row_start, row_stop, col_start, col_stop):
@@ -298,7 +219,7 @@ def _make_tile16x16_class(dtype):
                 arr_col_stop = arr.shape[2]
                 if arr_col_stop < col_stop:
                     col_stop = arr_col_stop
-                for j in qd.static(range(_TILE)):
+                for j in qd.static(range(32)):
                     if col_start + j < col_stop:
                         val = arr[batch, row, col_start + j]
                         if j == 0:
@@ -333,6 +254,38 @@ def _make_tile16x16_class(dtype):
                             self.r14 = val
                         if j == 15:
                             self.r15 = val
+                        if j == 16:
+                            self.r16 = val
+                        if j == 17:
+                            self.r17 = val
+                        if j == 18:
+                            self.r18 = val
+                        if j == 19:
+                            self.r19 = val
+                        if j == 20:
+                            self.r20 = val
+                        if j == 21:
+                            self.r21 = val
+                        if j == 22:
+                            self.r22 = val
+                        if j == 23:
+                            self.r23 = val
+                        if j == 24:
+                            self.r24 = val
+                        if j == 25:
+                            self.r25 = val
+                        if j == 26:
+                            self.r26 = val
+                        if j == 27:
+                            self.r27 = val
+                        if j == 28:
+                            self.r28 = val
+                        if j == 29:
+                            self.r29 = val
+                        if j == 30:
+                            self.r30 = val
+                        if j == 31:
+                            self.r31 = val
 
         @qd.func
         def _store(self, arr: qd.template(), row_start, row_stop, col_start, col_stop):
@@ -349,7 +302,7 @@ def _make_tile16x16_class(dtype):
                 arr_col_stop = arr.shape[1]
                 if arr_col_stop < col_stop:
                     col_stop = arr_col_stop
-                for j in qd.static(range(_TILE)):
+                for j in qd.static(range(32)):
                     if col_start + j < col_stop:
                         arr[row, col_start + j] = self._r(j)
 
@@ -368,16 +321,16 @@ def _make_tile16x16_class(dtype):
                 arr_col_stop = arr.shape[2]
                 if arr_col_stop < col_stop:
                     col_stop = arr_col_stop
-                for j in qd.static(range(_TILE)):
+                for j in qd.static(range(32)):
                     if col_start + j < col_stop:
                         arr[batch, row, col_start + j] = self._r(j)
 
         @qd.func
         def eye_(self):
-            """Set this tile to the 16x16 identity matrix.  Each thread sets its diagonal element to 1.0 and all
+            """Set this tile to the 32x32 identity matrix.  Each thread sets its diagonal element to 1.0 and all
             others to 0.0."""
             tid = qd.simt.subgroup.invocation_id()
-            for j in qd.static(range(_TILE)):
+            for j in qd.static(range(32)):
                 val = 1.0 if tid == j else 0.0
                 if j == 0:
                     self.r0 = val
@@ -411,6 +364,38 @@ def _make_tile16x16_class(dtype):
                     self.r14 = val
                 if j == 15:
                     self.r15 = val
+                if j == 16:
+                    self.r16 = val
+                if j == 17:
+                    self.r17 = val
+                if j == 18:
+                    self.r18 = val
+                if j == 19:
+                    self.r19 = val
+                if j == 20:
+                    self.r20 = val
+                if j == 21:
+                    self.r21 = val
+                if j == 22:
+                    self.r22 = val
+                if j == 23:
+                    self.r23 = val
+                if j == 24:
+                    self.r24 = val
+                if j == 25:
+                    self.r25 = val
+                if j == 26:
+                    self.r26 = val
+                if j == 27:
+                    self.r27 = val
+                if j == 28:
+                    self.r28 = val
+                if j == 29:
+                    self.r29 = val
+                if j == 30:
+                    self.r30 = val
+                if j == 31:
+                    self.r31 = val
 
         @qd.func
         def _get_col(self, k):
@@ -448,6 +433,38 @@ def _make_tile16x16_class(dtype):
                 val = self.r14
             if k == 15:
                 val = self.r15
+            if k == 16:
+                val = self.r16
+            if k == 17:
+                val = self.r17
+            if k == 18:
+                val = self.r18
+            if k == 19:
+                val = self.r19
+            if k == 20:
+                val = self.r20
+            if k == 21:
+                val = self.r21
+            if k == 22:
+                val = self.r22
+            if k == 23:
+                val = self.r23
+            if k == 24:
+                val = self.r24
+            if k == 25:
+                val = self.r25
+            if k == 26:
+                val = self.r26
+            if k == 27:
+                val = self.r27
+            if k == 28:
+                val = self.r28
+            if k == 29:
+                val = self.r29
+            if k == 30:
+                val = self.r30
+            if k == 31:
+                val = self.r31
             return val
 
         @qd.func
@@ -485,11 +502,43 @@ def _make_tile16x16_class(dtype):
                 self.r14 = val
             if k == 15:
                 self.r15 = val
+            if k == 16:
+                self.r16 = val
+            if k == 17:
+                self.r17 = val
+            if k == 18:
+                self.r18 = val
+            if k == 19:
+                self.r19 = val
+            if k == 20:
+                self.r20 = val
+            if k == 21:
+                self.r21 = val
+            if k == 22:
+                self.r22 = val
+            if k == 23:
+                self.r23 = val
+            if k == 24:
+                self.r24 = val
+            if k == 25:
+                self.r25 = val
+            if k == 26:
+                self.r26 = val
+            if k == 27:
+                self.r27 = val
+            if k == 28:
+                self.r28 = val
+            if k == 29:
+                self.r29 = val
+            if k == 30:
+                self.r30 = val
+            if k == 31:
+                self.r31 = val
 
         @qd.func
         def _ger_sub(self, a, b):
             """General rank-1 subtract in-place: self -= a @ b^T."""
-            for j in qd.static(range(_TILE)):
+            for j in qd.static(range(32)):
                 bc = qd.simt.subgroup.shuffle(b, qd.u32(j))
                 val = self._r(j) - a * bc
                 if j == 0:
@@ -524,25 +573,57 @@ def _make_tile16x16_class(dtype):
                     self.r14 = val
                 if j == 15:
                     self.r15 = val
+                if j == 16:
+                    self.r16 = val
+                if j == 17:
+                    self.r17 = val
+                if j == 18:
+                    self.r18 = val
+                if j == 19:
+                    self.r19 = val
+                if j == 20:
+                    self.r20 = val
+                if j == 21:
+                    self.r21 = val
+                if j == 22:
+                    self.r22 = val
+                if j == 23:
+                    self.r23 = val
+                if j == 24:
+                    self.r24 = val
+                if j == 25:
+                    self.r25 = val
+                if j == 26:
+                    self.r26 = val
+                if j == 27:
+                    self.r27 = val
+                if j == 28:
+                    self.r28 = val
+                if j == 29:
+                    self.r29 = val
+                if j == 30:
+                    self.r30 = val
+                if j == 31:
+                    self.r31 = val
 
         @qd.func
         def cholesky_(self, eps):
-            """In-place 16x16 Cholesky factorization via subgroup shuffles.
+            """In-place 32x32 Cholesky factorization via subgroup shuffles.
 
-            On return, the lower triangle holds L such that A = L @ L^T.  Diagonal clamped to
-            sqrt(max(value, eps)) for numerical stability.
+            On return, the lower triangle holds L such that A = L @ L^T.  Diagonal clamped to sqrt(max(value, eps))
+            for numerical stability.
             """
-            # ``k`` and ``j`` are wrapped in qd.static so the ``if k > j`` predicates fold at compile time and register
-            # access on the outer ``k`` and inner ``j`` collapses to a single field reference via ``self._r(<py_int>)``
-            # (a thin getattr wrapper) rather than a _TILE-deep register-indexing cascade. Writes use an inline
-            # ``if k == N: self.rN = ...`` chain (setattr is rejected by the quadrants AST builder) which the AST
-            # transformer folds at build time when ``k`` is a python int. The per-lane row-norm used for the diagonal
-            # update is carried in ``my_norm_sq``, so each diagonal step is O(1) rather than O(k). The off-diagonal
-            # ``dot`` is split into two interleaved partial sums (``dot0`` / ``dot1``) so the back-to-back FMA
-            # dependency chain is cut in half, exposing more instruction-level parallelism.
+            # `k` and `j` are wrapped in qd.static so the `if k > j` predicates fold at compile time and register access
+            # on the outer `k` and inner `j` collapses to a single field reference via `self._r(<py_int>)` (a thin
+            # getattr wrapper) rather than a 32-deep register-indexing cascade. Writes use an inline `if k == N:
+            # self.rN = ...` chain (setattr is rejected by the quadrants AST builder) which the AST transformer folds at
+            # build time when `k` is a python int. The per-lane row-norm used for the diagonal update is carried in
+            # `my_norm_sq`, so each diagonal step is O(1) rather than O(k). The off-diagonal `dot` is split into two
+            # interleaved partial sums (`dot0`/`dot1`) so the back-to-back FMA dependency chain is cut in half,
+            # exposing more instruction-level parallelism.
             tid = qd.i32(qd.simt.subgroup.invocation_id())
             my_norm_sq = qd.cast(0.0, dtype)
-            for k in qd.static(range(_TILE)):
+            for k in qd.static(range(32)):
                 diag_val = qd.cast(0.0, dtype)
                 if tid == k:
                     diag_val = qd.sqrt(qd.max(self._r(k) - my_norm_sq, eps))
@@ -578,12 +659,44 @@ def _make_tile16x16_class(dtype):
                         self.r14 = diag_val
                     if k == 15:
                         self.r15 = diag_val
+                    if k == 16:
+                        self.r16 = diag_val
+                    if k == 17:
+                        self.r17 = diag_val
+                    if k == 18:
+                        self.r18 = diag_val
+                    if k == 19:
+                        self.r19 = diag_val
+                    if k == 20:
+                        self.r20 = diag_val
+                    if k == 21:
+                        self.r21 = diag_val
+                    if k == 22:
+                        self.r22 = diag_val
+                    if k == 23:
+                        self.r23 = diag_val
+                    if k == 24:
+                        self.r24 = diag_val
+                    if k == 25:
+                        self.r25 = diag_val
+                    if k == 26:
+                        self.r26 = diag_val
+                    if k == 27:
+                        self.r27 = diag_val
+                    if k == 28:
+                        self.r28 = diag_val
+                    if k == 29:
+                        self.r29 = diag_val
+                    if k == 30:
+                        self.r30 = diag_val
+                    if k == 31:
+                        self.r31 = diag_val
 
                 diag_k = qd.simt.subgroup.shuffle(diag_val, qd.u32(k))
 
                 dot0 = qd.cast(0.0, dtype)
                 dot1 = qd.cast(0.0, dtype)
-                for j in qd.static(range(_TILE)):
+                for j in qd.static(range(32)):
                     if k > j:
                         my_col = self._r(j)
                         Lkj = qd.simt.subgroup.shuffle(my_col, qd.u32(k))
@@ -628,6 +741,38 @@ def _make_tile16x16_class(dtype):
                         self.r14 = new_val
                     if k == 15:
                         self.r15 = new_val
+                    if k == 16:
+                        self.r16 = new_val
+                    if k == 17:
+                        self.r17 = new_val
+                    if k == 18:
+                        self.r18 = new_val
+                    if k == 19:
+                        self.r19 = new_val
+                    if k == 20:
+                        self.r20 = new_val
+                    if k == 21:
+                        self.r21 = new_val
+                    if k == 22:
+                        self.r22 = new_val
+                    if k == 23:
+                        self.r23 = new_val
+                    if k == 24:
+                        self.r24 = new_val
+                    if k == 25:
+                        self.r25 = new_val
+                    if k == 26:
+                        self.r26 = new_val
+                    if k == 27:
+                        self.r27 = new_val
+                    if k == 28:
+                        self.r28 = new_val
+                    if k == 29:
+                        self.r29 = new_val
+                    if k == 30:
+                        self.r30 = new_val
+                    if k == 31:
+                        self.r31 = new_val
                 if tid > k:  # type: ignore[reportOperatorIssue]
                     my_norm_sq += new_val * new_val
 
@@ -635,12 +780,12 @@ def _make_tile16x16_class(dtype):
         def _trsm(self, L):
             """In-place triangular solve: solve self @ L^T = B (original self).
 
-            L is a Tile16x16 holding the lower-triangular Cholesky factor (from cholesky_).  On return, self holds
+            L is a Tile32x32 holding the lower-triangular Cholesky factor (from cholesky_).  On return, self holds
             the solution X.
             """
-            for c in range(_TILE):
+            for c in range(32):
                 dot = qd.cast(0.0, dtype)
-                for j in range(_TILE):
+                for j in range(32):
                     if c > j:
                         Lkj = qd.simt.subgroup.shuffle(L._get_col(j), qd.u32(c))
                         dot += self._get_col(j) * Lkj  # type: ignore[reportOperatorIssue]
@@ -656,7 +801,7 @@ def _make_tile16x16_class(dtype):
             matrix causes division by zero, producing inf/NaN without warning.  Only lower=True is supported.
             """
             if not lower:
-                raise TypeError("Tile16x16.solve_triangular_: only lower=True is supported")
+                raise TypeError("Tile32x32.solve_triangular_: only lower=True is supported")
             B._trsm(self)
 
         def _r(self, k):
@@ -713,13 +858,13 @@ def _make_tile16x16_class(dtype):
                     )
                     self._ger_sub(a, b)
                 else:
-                    raise TypeError(f"Tile16x16: unsupported augmented assignment op '{op}' with outer product")
+                    raise TypeError(f"Tile32x32: unsupported augmented assignment op '{op}' with outer product")
             else:
-                raise TypeError(f"Tile16x16: unsupported augmented assignment with {type(other)}")
+                raise TypeError(f"Tile32x32: unsupported augmented assignment with {type(other)}")
 
     # StructType.__call__ already defaults missing args to 0, so Tile() produces a zero-initialized tile
     # without needing default values in the class definition (which @qd.dataclass doesn't support).
-    result = qd.dataclass(_Tile16x16)
+    result = qd.dataclass(_Tile32x32)
     result.SIZE = _TILE  # type: ignore[reportAttributeAccessIssue]
     result.zeros = result  # type: ignore[reportAttributeAccessIssue]
 
@@ -733,10 +878,10 @@ def _make_tile16x16_class(dtype):
     return result
 
 
-class _Tile16x16Proxy:
+class _Tile32x32Proxy:
     """Proxy for dtype-at-point-of-use tile creation.
 
-    Use as ``qd.simt.Tile16x16.zeros(dtype=qd.f32)`` inside a kernel. The dtype is resolved at kernel compilation
+    Use as ``qd.simt.Tile32x32.zeros(dtype=qd.f32)`` inside a kernel. The dtype is resolved at kernel compilation
     time, defaulting to the compile config's ``default_fp`` if omitted.
     """
 
@@ -752,13 +897,13 @@ class _Tile16x16Proxy:
         arch = impl.current_cfg().arch
         if arch in (qd.cpu, qd.x64, getattr(qd, "arm64", None)):
             raise QuadrantsSyntaxError(
-                "Tile16x16 requires a GPU backend (cuda, metal, vulkan, amdgpu). " f"Current arch is {arch}."
+                "Tile32x32 requires a GPU backend (cuda, metal, vulkan, amdgpu). " f"Current arch is {arch}."
             )
         if dtype is None:
             dtype = impl.get_runtime().default_fp
-        if dtype in _tile16_cache:
-            return _tile16_cache[dtype]
-        return _make_tile16x16(dtype)
+        if dtype in _tile32_cache:
+            return _tile32_cache[dtype]
+        return _make_tile32x32(dtype)
 
     def zeros(self, *, dtype=None):
         """Zero-initialized tile."""
@@ -769,4 +914,4 @@ class _Tile16x16Proxy:
         return self._resolve(dtype).eye()
 
 
-Tile16x16Proxy = _Tile16x16Proxy()
+Tile32x32Proxy = _Tile32x32Proxy()

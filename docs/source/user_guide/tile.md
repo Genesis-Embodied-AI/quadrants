@@ -1,10 +1,15 @@
-# Tile16x16: register-resident 16x16 tiles
+# Register-resident tiles: `Tile16x16` and `Tile32x32`
 
-`Tile16x16` provides a 16x16 matrix tile that lives entirely in registers, distributed across 16 threads in a subgroup (warp). Each thread holds one row as 16 scalar registers. Cross-thread communication uses subgroup shuffles — no shared memory needed.
+Quadrants provides two register-resident matrix tile types:
 
-This is useful for implementing blocked linear algebra kernels (Cholesky, triangular solve, etc.) where you want to keep working data in registers for maximum throughput.
+- `qd.simt.Tile16x16` — a 16x16 tile distributed across 16 threads in a subgroup (one row per thread, 16 scalar registers per thread).
+- `qd.simt.Tile32x32` — a 32x32 tile distributed across 32 threads in a subgroup (one row per thread, 32 scalar registers per thread).
 
-Tile16x16 runs on all GPU backends supported by Quadrants: CUDA, AMD, Metal, and Vulkan. It builds on `qd.simt.subgroup.shuffle`, which is cross-platform — no vendor-specific libraries required. Using Tile16x16 on a CPU backend raises `QuadrantsSyntaxError`.
+Both have identical APIs (creation, slice-syntax load/store, `qd.outer` rank-1 updates, `cholesky_`, `solve_triangular_`, SharedArray interop) and use subgroup shuffles for cross-thread communication — no shared memory needed. The rest of this page documents the API in terms of `Tile16x16`; everything carries over to `Tile32x32` by swapping the class name and using `SIZE == 32` / `block_dim=32`. The [`Tile32x32` section](#tile32x32) below has guidance on when to pick 32x32 vs 16x16 and a short example.
+
+Tiles are useful for implementing blocked linear algebra kernels (Cholesky, triangular solve, etc.) where you want to keep working data in registers for maximum throughput.
+
+Both tiles run on all GPU backends supported by Quadrants: CUDA, AMD, Metal, and Vulkan. They build on `qd.simt.subgroup.shuffle`, which is cross-platform — no vendor-specific libraries required. Using either tile on a CPU backend raises `QuadrantsSyntaxError`.
 
 ## Quick start
 
@@ -166,6 +171,31 @@ Pass `dtype=qd.f64` for double precision:
 ```python
 t = qd.simt.Tile16x16.zeros(dtype=qd.f64)
 ```
+
+## `Tile32x32`
+
+The 32x32 sibling is used the same way as `Tile16x16`, just with `block_dim=32` and `SIZE == 32`:
+
+```python
+import quadrants as qd
+
+@qd.func
+def my_blocked_op(A, row0, col0, eps):
+    N = qd.simt.Tile32x32.SIZE   # == 32
+    t = qd.simt.Tile32x32.zeros(dtype=qd.f32)
+    t[:] = A[row0:row0+N, col0:col0+N]
+    t.cholesky_(eps)
+    A[row0:row0+N, col0:col0+N] = t
+```
+
+`Tile16x16` and `Tile32x32` can be mixed within the same kernel — their slice-dispatch caches are independent.
+
+### When to pick 32x32 vs 16x16
+
+| Size  | Threads per block | Registers per thread | Best for |
+|-------|------------------:|---------------------:|----------|
+| 16x16 | 16                | 16                   | Small problems where occupancy from many narrow blocks matters; very small N (e.g. N≤16 or N≈48) where the 32-tile would waste lanes |
+| 32x32 | 32                | 32                   | Larger problems (N ≳ 32) where bigger tiles cut the number of blocked passes and the FMA chain inside `cholesky_` amortizes the larger register file |
 
 ## Method reference
 

@@ -205,6 +205,15 @@ fill(b)   # ndarray branch
 
 The kernel argument is unwrapped to the bare impl before the template-mapper / AST sees it, so kernel bodies still write `x[i, j]` and pay no per-call cost for the wrapper.
 
+`qd.Tensor` is also the right annotation when storing a tensor as a `dataclasses.dataclass` member:
+
+```python
+@dataclass
+class State:
+    a: qd.Tensor
+    b: qd.Tensor
+```
+
 ## Pickle
 
 `qd.Tensor` objects are picklable on **both** backends, including under non-identity layouts. Round-trip (pickle then unpickle) preserves the canonical data, the dtype, the shape, and the layout:
