@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>Matrix and Vector &#8212; Quadrants 1.0.1 documentation</title>
+    <title>Matrix and Vector &#8212; Quadrants 1.0.2 documentation</title>
   
   
   
@@ -43,7 +43,7 @@
   <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=0790524f97105ba85085" />
 <link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=0790524f97105ba85085" />
 
-    <script src="../_static/documentation_options.js?v=292eb321"></script>
+    <script src="../_static/documentation_options.js?v=1ed6394b"></script>
     <script src="../_static/doctools.js?v=9bcbadda"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -63,7 +63,7 @@
     <link rel="prev" title="Scalar tensors" href="scalar_tensors.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="1.0.1" />
+  <meta name="docsearch:version" content="1.0.2" />
   
     
     <script src="../_static/searchtools.js"></script>
@@ -131,7 +131,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 1.0.1 documentation</p>
+    <p class="title logo__title">Quadrants 1.0.2 documentation</p>
   
 </a></div>
     
@@ -528,36 +528,94 @@
 </pre></div>
 </div>
 <p>The flag is consumed at class-definition time. <code class="docutils literal notranslate"><span class="pre">&#64;qd.dataclass</span></code> expands the field into <code class="docutils literal notranslate"><span class="pre">N</span></code> synthetic scalar members <code class="docutils literal notranslate"><span class="pre">_r0.._r{N-1}</span></code>, and each <code class="docutils literal notranslate"><span class="pre">obj.r[i]</span></code> (for python-int / <code class="docutils literal notranslate"><span class="pre">qd.static</span></code>-resolved <code class="docutils literal notranslate"><span class="pre">i</span></code>) is lowered to a direct reference to the i-th synthetic member. The generated LLVM IR / PTX is byte-identical to declaring <code class="docutils literal notranslate"><span class="pre">N</span></code> named scalar fields by hand (<code class="docutils literal notranslate"><span class="pre">r0:</span> <span class="pre">qd.f32</span></code>, <code class="docutils literal notranslate"><span class="pre">r1:</span> <span class="pre">qd.f32</span></code>, …), but the source keeps the indexed read/write syntax.</p>
-<section id="when-to-choose-unpacked-true-vs-unpacked-false">
-<h3>When to choose <code class="docutils literal notranslate"><span class="pre">unpacked=True</span></code> vs <code class="docutils literal notranslate"><span class="pre">unpacked=False</span></code><a class="headerlink" href="#when-to-choose-unpacked-true-vs-unpacked-false" title="Link to this heading">#</a></h3>
+<section id="what-works-on-each-layout">
+<h3>What works on each layout<a class="headerlink" href="#what-works-on-each-layout" title="Link to this heading">#</a></h3>
 <div class="pst-scrollable-table-container"><table class="table">
 <thead>
-<tr class="row-odd"><th class="head"><p>If you…</p></th>
-<th class="head"><p>Use</p></th>
+<tr class="row-odd"><th class="head"><p>operation / property</p></th>
+<th class="head"><p>packed</p></th>
+<th class="head"><p>unpacked</p></th>
 </tr>
 </thead>
 <tbody>
-<tr class="row-even"><td><p>want vector arithmetic (<code class="docutils literal notranslate"><span class="pre">a</span> <span class="pre">+</span> <span class="pre">b</span></code>, <code class="docutils literal notranslate"><span class="pre">a.dot(b)</span></code>, <code class="docutils literal notranslate"><span class="pre">a.norm()</span></code>, swizzle, broadcast) at the use site</p></td>
-<td><p><code class="docutils literal notranslate"><span class="pre">unpacked=False</span></code> (the default)</p></td>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">obj.r[i]</span></code> with python-int / <code class="docutils literal notranslate"><span class="pre">qd.static</span></code>-resolved <code class="docutils literal notranslate"><span class="pre">i</span></code></p></td>
+<td><p>yes</p></td>
+<td><p>yes</p></td>
 </tr>
-<tr class="row-odd"><td><p>need to index with a <em>runtime</em> integer (<code class="docutils literal notranslate"><span class="pre">v[k]</span></code> where <code class="docutils literal notranslate"><span class="pre">k</span></code> isn’t a python-int)</p></td>
-<td><p><code class="docutils literal notranslate"><span class="pre">unpacked=False</span></code></p></td>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">obj.r[k]</span></code> with runtime <code class="docutils literal notranslate"><span class="pre">k</span></code></p></td>
+<td><p>yes</p></td>
+<td><p>no</p></td>
 </tr>
-<tr class="row-even"><td><p>need to pass the vector across a <code class="docutils literal notranslate"><span class="pre">&#64;qd.func</span></code> boundary, copy it into shared memory, or instantiate it as a kernel-local value</p></td>
-<td><p><code class="docutils literal notranslate"><span class="pre">unpacked=False</span></code></p></td>
+<tr class="row-even"><td><p>vector arithmetic / reductions on <code class="docutils literal notranslate"><span class="pre">obj.r</span></code> (<code class="docutils literal notranslate"><span class="pre">obj.r</span> <span class="pre">+</span> <span class="pre">other</span></code>, <code class="docutils literal notranslate"><span class="pre">obj.r</span> <span class="pre">*</span> <span class="pre">2</span></code>, <code class="docutils literal notranslate"><span class="pre">obj.r.norm()</span></code>, <code class="docutils literal notranslate"><span class="pre">obj.r.dot(...)</span></code>, …)</p></td>
+<td><p>yes</p></td>
+<td><p>no</p></td>
 </tr>
-<tr class="row-odd"><td><p>are storing the field in a smallish struct, register pressure is low, and the kernel works as-is</p></td>
-<td><p><code class="docutils literal notranslate"><span class="pre">unpacked=False</span></code></p></td>
+<tr class="row-odd"><td><p>swizzle on <code class="docutils literal notranslate"><span class="pre">obj.r</span></code> (<code class="docutils literal notranslate"><span class="pre">obj.r.xy</span></code>, …)</p></td>
+<td><p>yes</p></td>
+<td><p>no</p></td>
 </tr>
-<tr class="row-even"><td><p>only ever access the field as <code class="docutils literal notranslate"><span class="pre">obj.r[i]</span></code> with python-int / <code class="docutils literal notranslate"><span class="pre">qd.static</span></code>-resolved <code class="docutils literal notranslate"><span class="pre">i</span></code> (unrolled inner loops), the group is small relative to the per-thread register budget, <em>and</em> the packed version is spilling under register pressure</p></td>
-<td><p><code class="docutils literal notranslate"><span class="pre">unpacked=True</span></code></p></td>
+<tr class="row-even"><td><p>pass <code class="docutils literal notranslate"><span class="pre">obj.r</span></code> across a <code class="docutils literal notranslate"><span class="pre">&#64;qd.func</span></code> boundary</p></td>
+<td><p>yes</p></td>
+<td><p>no</p></td>
+</tr>
+<tr class="row-odd"><td><p>copy <code class="docutils literal notranslate"><span class="pre">obj.r</span></code> into shared memory as a unit</p></td>
+<td><p>yes</p></td>
+<td><p>no</p></td>
+</tr>
+<tr class="row-even"><td><p>use the type as a kernel-arg / <code class="docutils literal notranslate"><span class="pre">&#64;qd.func</span></code> parameter type</p></td>
+<td><p>yes</p></td>
+<td><p>raises <code class="docutils literal notranslate"><span class="pre">QuadrantsSyntaxError</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>instantiate as a kernel-local value (<code class="docutils literal notranslate"><span class="pre">T(...)</span></code>), <code class="docutils literal notranslate"><span class="pre">T.field(...)</span></code>, <code class="docutils literal notranslate"><span class="pre">T.ndarray(...)</span></code></p></td>
+<td><p>yes</p></td>
+<td><p>raises <code class="docutils literal notranslate"><span class="pre">QuadrantsSyntaxError</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><strong>compile-time speed</strong></p></td>
+<td><p>faster (one storage slot per field)</p></td>
+<td><p>slower (<code class="docutils literal notranslate"><span class="pre">N</span></code> synthetic members per field, more IR to process)</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>runtime speed</strong></p></td>
+<td><p>whole vector lives in registers, or spills to local memory as a unit if the register budget is exceeded</p></td>
+<td><p>same as packed when there’s no register pressure; faster than packed under pressure (only the slots that don’t fit spill)</p></td>
 </tr>
 </tbody>
 </table>
 </div>
-<p>With the default packed layout, all <code class="docutils literal notranslate"><span class="pre">N</span></code> elements share a single piece of stack memory, and the optimiser’s “promote this to registers vs leave it in memory” decision is made once for the whole group: either every element gets a register, or none do and the whole vector lives in slow off-chip memory. Splitting the field into <code class="docutils literal notranslate"><span class="pre">N</span></code> independent pieces of memory up front gives the optimiser <code class="docutils literal notranslate"><span class="pre">N</span></code> independent promote-or-leave-in-memory decisions, so it can keep as many elements in registers as actually fit and leave the rest in memory.</p>
-<p>As a rough rule on current NVIDIA GPUs, the practical per-thread register budget is around 32 to 64 32-bit registers. The architectural cap is 255, but using anywhere near that drops occupancy (the number of warps the SM can keep resident in parallel) sharply, so any production kernel ends up well below the cap. What counts as “small relative to the per-thread register budget” therefore depends on the occupancy target and what else is live. The pattern that motivates <code class="docutils literal notranslate"><span class="pre">unpacked=True</span></code> is high register pressure — e.g. several concurrent 32×32 tiles in a Cholesky + triangular solve — where the compiler gives up on the packed group as a whole and the whole vector ends up in local memory.</p>
-<p>See <a class="reference internal" href="#how-to-check-for-spills">How to check for spills</a> below for how to confirm a spill is actually happening before reaching for <code class="docutils literal notranslate"><span class="pre">unpacked=True</span></code>.</p>
+</section>
+<section id="when-to-choose-unpacked-true-vs-unpacked-false">
+<h3>When to choose <code class="docutils literal notranslate"><span class="pre">unpacked=True</span></code> vs <code class="docutils literal notranslate"><span class="pre">unpacked=False</span></code><a class="headerlink" href="#when-to-choose-unpacked-true-vs-unpacked-false" title="Link to this heading">#</a></h3>
+<p>Generally, the trade-off is compile time vs runtime, assuming you don’t need any of the plethora of functionalities that packed offers you (see the table above). The target use-case that unpacked was built for was holding a tile of size 16x16 or 32x32, in a warp of threads, where each thread in the warp holds a single row of 16 or 32 values. In this case, the size of each row is pre-determined (either 16 or 32, templated), which meets one pre-requisite of using unpacked. We want all values to ideally be stored in registers. However, when we start holding multiple 32x32 tiles in a warp, we found that we were spilling entire 32-length vectors into local memory, causing very noticeable slowdowns. Migrating to use hand-coded scalars, instead of vectors, was faster, but painful to write, and very slow to compile. Using unpacked vectors is as fast as hand-coded scalars, but faster to compile.</p>
+<p>In such a scenario, we prefer to use for loops, to avoid having to unroll for-loops by hand. But we can use static for loops, satisfying the condition of only ever indexing with python int or qd.static resolved values. i.e. something like:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">qd</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="mi">32</span><span class="p">)):</span>
+        <span class="c1"># Do something with tile.r[i], where tile is the qd.dataclass, and tile.r is the unpacked vector.</span>
+</pre></div>
+</div>
+<p>We can then see the runtime/compile time trade-off because:</p>
+<ul class="simple">
+<li><p>static unrolled loops increase compile time</p></li>
+<li><p>using unpacked vectors increases compile time, compared to packed vectors</p></li>
+</ul>
+<p>However:</p>
+<ul class="simple">
+<li><p>static unrolled loops, and unpacked vectors run much faster at runtime</p></li>
+<li><p>the compile time of unpacked vectors is still much faster than hand coded scalars</p></li>
+</ul>
+<p>The issue with hand coded scalars is that you either have to literally hand-code everything, or you end up writing convenience functions like:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">get_r</span><span class="p">(</span><span class="n">i</span><span class="p">):</span>
+    <span class="k">if</span> <span class="n">i</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">tile</span><span class="o">.</span><span class="n">r0</span>
+    <span class="k">if</span> <span class="n">i</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">tile</span><span class="o">.</span><span class="n">r1</span>
+    <span class="o">...</span>
+</pre></div>
+</div>
+<p>Such functions cause heavy IR bloat, and slow down runtime considerably, and/or slow down compile time too, depending on exact implementation choices made.</p>
+<p>Using unpacked vector gives:</p>
+<ul class="simple">
+<li><p>compact code =&gt; easy to maintain</p></li>
+<li><p>fast runtime code</p></li>
+<li><p>fast compile time (relative to certain hand-coded approaches).</p></li>
+</ul>
 </section>
 <section id="constraints">
 <h3>Constraints<a class="headerlink" href="#constraints" title="Link to this heading">#</a></h3>
@@ -703,6 +761,7 @@
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#operations">Operations</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#size-limit">Size limit</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#storage-layout-packed-vs-unpacked-vectors">Storage layout: packed vs unpacked vectors</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#what-works-on-each-layout">What works on each layout</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#when-to-choose-unpacked-true-vs-unpacked-false">When to choose <code class="docutils literal notranslate"><span class="pre">unpacked=True</span></code> vs <code class="docutils literal notranslate"><span class="pre">unpacked=False</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#constraints">Constraints</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#mixing-with-other-fields">Mixing with other fields</a></li>

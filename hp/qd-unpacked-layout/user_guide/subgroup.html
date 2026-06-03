@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>Subgroup primitives &#8212; Quadrants 1.0.1 documentation</title>
+    <title>Subgroup primitives &#8212; Quadrants 1.0.2 documentation</title>
   
   
   
@@ -43,7 +43,7 @@
   <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=0790524f97105ba85085" />
 <link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=0790524f97105ba85085" />
 
-    <script src="../_static/documentation_options.js?v=292eb321"></script>
+    <script src="../_static/documentation_options.js?v=1ed6394b"></script>
     <script src="../_static/doctools.js?v=9bcbadda"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -63,7 +63,7 @@
     <link rel="prev" title="Math" href="math.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="1.0.1" />
+  <meta name="docsearch:version" content="1.0.2" />
   
     
     <script src="../_static/searchtools.js"></script>
@@ -131,7 +131,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 1.0.1 documentation</p>
+    <p class="title logo__title">Quadrants 1.0.2 documentation</p>
   
 </a></div>
     
@@ -649,6 +649,30 @@
 <p>Every op above has a paired <code class="docutils literal notranslate"><span class="pre">_tiled</span></code> form that takes an extra <code class="docutils literal notranslate"><span class="pre">log2_size</span></code> template parameter and operates on independent <code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code>-aligned tiles within the subgroup - see <a class="reference internal" href="#tiled-variants">Tiled variants</a>.</p>
 <p>The SPV-only no-arg reductions (<code class="docutils literal notranslate"><span class="pre">subgroup.reduce_mul</span></code> / <code class="docutils literal notranslate"><span class="pre">reduce_and</span></code> / <code class="docutils literal notranslate"><span class="pre">reduce_or</span></code> / <code class="docutils literal notranslate"><span class="pre">reduce_xor</span></code>, plus the original <code class="docutils literal notranslate"><span class="pre">reduce_add_tiled(value)</span></code> with no <code class="docutils literal notranslate"><span class="pre">log2_size</span></code>) have been removed in favour of the portable sized API. For reductions other than the ones listed above, build a sized helper on top of <code class="docutils literal notranslate"><span class="pre">shuffle_down</span></code> / <code class="docutils literal notranslate"><span class="pre">shuffle</span></code> following the same pattern as <code class="docutils literal notranslate"><span class="pre">reduce_add_tiled</span></code> / <code class="docutils literal notranslate"><span class="pre">reduce_all_add_tiled</span></code>.</p>
 </section>
+<section id="sorting">
+<h3>Sorting<a class="headerlink" href="#sorting" title="Link to this heading">#</a></h3>
+<p>In-register key/value sort across the subgroup, one <code class="docutils literal notranslate"><span class="pre">(key,</span> <span class="pre">value)</span></code> pair per lane.  Pure <code class="docutils literal notranslate"><span class="pre">shuffle</span></code> -no shared memory, no barriers -fully unrolled at compile time.</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>Op</p></th>
+<th class="head"><p>CUDA</p></th>
+<th class="head"><p>AMDGPU</p></th>
+<th class="head"><p>SPIR-V (Vulkan / Metal)</p></th>
+<th class="head"><p>dtypes</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">subgroup.bitonic_sort_kv(key,</span> <span class="pre">value)</span></code></p></td>
+<td><p>yes</p></td>
+<td><p>yes</p></td>
+<td><p>yes</p></td>
+<td><p>key &amp; value: i32, u32, f32, f64, i64, u64 (independently typed)</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Returns <code class="docutils literal notranslate"><span class="pre">(key,</span> <span class="pre">value)</span></code> - assign with <code class="docutils literal notranslate"><span class="pre">key,</span> <span class="pre">value</span> <span class="pre">=</span> <span class="pre">subgroup.bitonic_sort_kv(key,</span> <span class="pre">value)</span></code>.  Sorts ascending on the <code class="docutils literal notranslate"><span class="pre">(key,</span> <span class="pre">value)</span></code> lex tuple; ties on <code class="docutils literal notranslate"><span class="pre">key</span></code> break on ascending <code class="docutils literal notranslate"><span class="pre">value</span></code> (not a textbook-stable sort - equal-keyed lanes come back in ascending-<code class="docutils literal notranslate"><span class="pre">value</span></code> order, not in original-lane order).  Tiled variant: <code class="docutils literal notranslate"><span class="pre">bitonic_sort_kv_tiled(key,</span> <span class="pre">value,</span> <span class="pre">log2_size)</span></code> runs the same sort independently on each <code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code>-aligned tile - see <a class="reference internal" href="#tiled-variants">Tiled variants</a>.  See <a class="reference internal" href="#bitonic-sort-kv-key-value"><code class="docutils literal notranslate"><span class="pre">bitonic_sort_kv</span></code></a> for the short-input pattern (sentinel padding), the textbook-stability caveat, and the float NaN behaviour. See <a class="reference internal" href="#bitonic-key-value-sort-example">Bitonic key/value sort example</a> for an example.</p>
+</section>
 </section>
 <section id="semantics">
 <h2>Semantics<a class="headerlink" href="#semantics" title="Link to this heading">#</a></h2>
@@ -820,6 +844,9 @@
 <tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">subgroup.exclusive_{add,mul,min,max,and,or,xor}_tiled(v,</span> <span class="pre">log2_size)</span></code></p></td>
 <td><p>broadcast-to-tile</p></td>
 </tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">subgroup.bitonic_sort_kv_tiled(key,</span> <span class="pre">value,</span> <span class="pre">log2_size)</span></code></p></td>
+<td><p>broadcast-to-tile (every lane in the tile holds its sorted-position pair)</p></td>
+</tr>
 </tbody>
 </table>
 </div>
@@ -954,6 +981,23 @@
 <li><p>AMDGPU performance note (<code class="docutils literal notranslate"><span class="pre">*</span></code> in the table): same <code class="docutils literal notranslate"><span class="pre">ds_bpermute</span></code> cost as <code class="docutils literal notranslate"><span class="pre">shuffle_up</span></code>. Cost is one inclusive scan plus one extra <code class="docutils literal notranslate"><span class="pre">shuffle_up</span></code> and a select.</p></li>
 </ul>
 </section>
+<section id="bitonic-sort-kv-key-value">
+<h3><code class="docutils literal notranslate"><span class="pre">bitonic_sort_kv(key,</span> <span class="pre">value)</span></code><a class="headerlink" href="#bitonic-sort-kv-key-value" title="Link to this heading">#</a></h3>
+<p>In-register ascending lex sort on <code class="docutils literal notranslate"><span class="pre">(key,</span> <span class="pre">value)</span></code> pairs across the subgroup, one <code class="docutils literal notranslate"><span class="pre">(key,</span> <span class="pre">value)</span></code> pair per lane.  Returns <code class="docutils literal notranslate"><span class="pre">(key,</span> <span class="pre">value)</span></code> - the lex-smallest pair on lane 0, the next on lane 1, …, the lex-largest on lane <code class="docutils literal notranslate"><span class="pre">group_size()</span> <span class="pre">-</span> <span class="pre">1</span></code>.  Tiled variant: <code class="docutils literal notranslate"><span class="pre">bitonic_sort_kv_tiled(key,</span> <span class="pre">value,</span> <span class="pre">log2_size)</span></code> runs the same sort independently on each <code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code>-aligned tile - see <a class="reference internal" href="#tiled-variants">Tiled variants</a>.</p>
+<ul class="simple">
+<li><p>Sorts ascending on <code class="docutils literal notranslate"><span class="pre">key</span></code>; ties on <code class="docutils literal notranslate"><span class="pre">key</span></code> break on ascending <code class="docutils literal notranslate"><span class="pre">value</span></code> (the comparison is the lex compare <code class="docutils literal notranslate"><span class="pre">(key,</span> <span class="pre">value)</span> <span class="pre">&lt;</span> <span class="pre">(key',</span> <span class="pre">value')</span></code>).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">key</span></code> and <code class="docutils literal notranslate"><span class="pre">value</span></code> should be scalar values.  Supported dtypes are <code class="docutils literal notranslate"><span class="pre">i32</span></code>, <code class="docutils literal notranslate"><span class="pre">u32</span></code>, <code class="docutils literal notranslate"><span class="pre">f32</span></code>, <code class="docutils literal notranslate"><span class="pre">f64</span></code>, <code class="docutils literal notranslate"><span class="pre">i64</span></code>, <code class="docutils literal notranslate"><span class="pre">u64</span></code>. The dtypes of <code class="docutils literal notranslate"><span class="pre">key</span></code> and <code class="docutils literal notranslate"><span class="pre">value</span></code> do not have to match.</p></li>
+<li><p>Implementation: classic 1-D bitonic sorting network.</p></li>
+</ul>
+<section id="float-nan-handling">
+<h4>Float NaN handling<a class="headerlink" href="#float-nan-handling" title="Link to this heading">#</a></h4>
+<p>Float NaN handling is implementation-defined: comparisons with NaN return false on most backends, so a NaN-keyed lane drifts to an arbitrary position within the sorted tile and the result loses its “sorted” guarantee. Bit-cast the key to a same-width integer dtype if you need a portable NaN-respecting order.</p>
+</section>
+<section id="short-input-pattern">
+<h4>Short-input pattern<a class="headerlink" href="#short-input-pattern" title="Link to this heading">#</a></h4>
+<p>When sorting fewer than <code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code> real elements, load real data into the low <code class="docutils literal notranslate"><span class="pre">n</span></code> lanes, initialise the high lanes with a sentinel <code class="docutils literal notranslate"><span class="pre">key</span></code> that compares greater than every real key (<code class="docutils literal notranslate"><span class="pre">+inf</span></code> for floats, <code class="docutils literal notranslate"><span class="pre">INT_MAX</span></code> / <code class="docutils literal notranslate"><span class="pre">UINT_MAX</span></code> for ints) and any safe <code class="docutils literal notranslate"><span class="pre">value</span></code>, then ignore the high lanes in the result.</p>
+</section>
+</section>
 <section id="ballot-first-n-predicate-n">
 <h3><code class="docutils literal notranslate"><span class="pre">ballot_first_n(predicate,</span> <span class="pre">n)</span></code><a class="headerlink" href="#ballot-first-n-predicate-n" title="Link to this heading">#</a></h3>
 <p>Returns a <code class="docutils literal notranslate"><span class="pre">u32</span></code> bitmask whose bit <code class="docutils literal notranslate"><span class="pre">i</span></code> is set iff <code class="docutils literal notranslate"><span class="pre">i</span> <span class="pre">&lt;</span> <span class="pre">n</span></code> AND lane <code class="docutils literal notranslate"><span class="pre">i</span></code>’s <code class="docutils literal notranslate"><span class="pre">predicate</span></code> is non-zero. Bits <code class="docutils literal notranslate"><span class="pre">&gt;=</span> <span class="pre">n</span></code> are always zero.</p>
@@ -1051,8 +1095,8 @@
 </section>
 <section id="examples">
 <h2>Examples<a class="headerlink" href="#examples" title="Link to this heading">#</a></h2>
-<section id="broadcast-lane-0-to-all-lanes">
-<h3>Broadcast lane 0 to all lanes<a class="headerlink" href="#broadcast-lane-0-to-all-lanes" title="Link to this heading">#</a></h3>
+<section id="broadcast-lane-0-to-all-lanes-example">
+<h3>Broadcast lane 0 to all lanes example<a class="headerlink" href="#broadcast-lane-0-to-all-lanes-example" title="Link to this heading">#</a></h3>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">quadrants</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">qd</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.simt</span><span class="w"> </span><span class="kn">import</span> <span class="n">subgroup</span>
 
@@ -1065,8 +1109,8 @@
 </div>
 <p>After the kernel, every lane in a subgroup holds the original value of its lane 0. <code class="docutils literal notranslate"><span class="pre">subgroup.broadcast(a[i],</span> <span class="pre">qd.u32(0))</span></code> is interchangeable here.</p>
 </section>
-<section id="ballot-count-how-many-lanes-satisfy-a-condition">
-<h3>Ballot: count how many lanes satisfy a condition<a class="headerlink" href="#ballot-count-how-many-lanes-satisfy-a-condition" title="Link to this heading">#</a></h3>
+<section id="ballot-count-how-many-lanes-satisfy-a-condition-example">
+<h3>Ballot: count how many lanes satisfy a condition example<a class="headerlink" href="#ballot-count-how-many-lanes-satisfy-a-condition-example" title="Link to this heading">#</a></h3>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">count_positive</span><span class="p">(</span><span class="n">a</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">dtype</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">ndim</span><span class="o">=</span><span class="mi">1</span><span class="p">),</span>
                    <span class="n">counts</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">dtype</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">u32</span><span class="p">,</span> <span class="n">ndim</span><span class="o">=</span><span class="mi">1</span><span class="p">)):</span>
@@ -1079,8 +1123,8 @@
 </div>
 <p>After the kernel, <code class="docutils literal notranslate"><span class="pre">counts[g]</span></code> contains a bitmask of which lanes in group <code class="docutils literal notranslate"><span class="pre">g</span></code> had positive values. Use <code class="docutils literal notranslate"><span class="pre">popcount(mask)</span></code> on the host to get the count.</p>
 </section>
-<section id="identity-shuffle-each-lane-reads-its-own-id">
-<h3>Identity shuffle (each lane reads its own id)<a class="headerlink" href="#identity-shuffle-each-lane-reads-its-own-id" title="Link to this heading">#</a></h3>
+<section id="identity-shuffle-each-lane-reads-its-own-id-example">
+<h3>Identity shuffle (each lane reads its own id) example<a class="headerlink" href="#identity-shuffle-each-lane-reads-its-own-id-example" title="Link to this heading">#</a></h3>
 <p>Useful as a sanity check:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">identity</span><span class="p">(</span><span class="n">src</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">dtype</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">ndim</span><span class="o">=</span><span class="mi">1</span><span class="p">),</span>
@@ -1093,8 +1137,8 @@
 </div>
 <p><code class="docutils literal notranslate"><span class="pre">dst[i]</span></code> equals <code class="docutils literal notranslate"><span class="pre">src[i]</span></code> on every lane.</p>
 </section>
-<section id="swap-neighbours-xor-pattern-via-explicit-lane">
-<h3>Swap neighbours (xor pattern via explicit lane)<a class="headerlink" href="#swap-neighbours-xor-pattern-via-explicit-lane" title="Link to this heading">#</a></h3>
+<section id="swap-neighbours-xor-pattern-via-explicit-lane-example">
+<h3>Swap neighbours (xor pattern via explicit lane) example<a class="headerlink" href="#swap-neighbours-xor-pattern-via-explicit-lane-example" title="Link to this heading">#</a></h3>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">swap_pairs</span><span class="p">(</span><span class="n">src</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">dtype</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">ndim</span><span class="o">=</span><span class="mi">1</span><span class="p">),</span>
                <span class="n">dst</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">dtype</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">ndim</span><span class="o">=</span><span class="mi">1</span><span class="p">)):</span>
@@ -1106,8 +1150,8 @@
 </div>
 <p>Pairs <code class="docutils literal notranslate"><span class="pre">(0,1)</span></code>, <code class="docutils literal notranslate"><span class="pre">(2,3)</span></code>, … swap their values.</p>
 </section>
-<section id="arbitrary-per-lane-gather">
-<h3>Arbitrary per-lane gather<a class="headerlink" href="#arbitrary-per-lane-gather" title="Link to this heading">#</a></h3>
+<section id="arbitrary-per-lane-gather-example">
+<h3>Arbitrary per-lane gather example<a class="headerlink" href="#arbitrary-per-lane-gather-example" title="Link to this heading">#</a></h3>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">reverse4</span><span class="p">(</span><span class="n">src</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">dtype</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">ndim</span><span class="o">=</span><span class="mi">1</span><span class="p">),</span>
              <span class="n">dst</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">dtype</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">ndim</span><span class="o">=</span><span class="mi">1</span><span class="p">)):</span>
@@ -1121,8 +1165,8 @@
 </div>
 <p>Within each group of 4 contiguous lanes the values are reversed.</p>
 </section>
-<section id="tree-reduction-with-shuffle-down">
-<h3>Tree reduction with <code class="docutils literal notranslate"><span class="pre">shuffle_down</span></code><a class="headerlink" href="#tree-reduction-with-shuffle-down" title="Link to this heading">#</a></h3>
+<section id="tree-reduction-with-shuffle-down-example">
+<h3>Tree reduction with <code class="docutils literal notranslate"><span class="pre">shuffle_down</span></code> example<a class="headerlink" href="#tree-reduction-with-shuffle-down-example" title="Link to this heading">#</a></h3>
 <p>Classic warp-level sum of 4 values - after the second step, lane 0 of each group of 4 holds the total:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">reduce4</span><span class="p">(</span><span class="n">src</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">dtype</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">ndim</span><span class="o">=</span><span class="mi">1</span><span class="p">),</span>
@@ -1137,8 +1181,8 @@
 </div>
 <p>Extend the pattern (offsets 16, 8, 4, 2, 1, …) to reduce a full subgroup; only lane 0’s final value is meaningful, because the lanes near the top read past the end of the subgroup.</p>
 </section>
-<section id="sum-32-lanes-with-reduce-add-tiled">
-<h3>Sum 32 lanes with <code class="docutils literal notranslate"><span class="pre">reduce_add_tiled</span></code><a class="headerlink" href="#sum-32-lanes-with-reduce-add-tiled" title="Link to this heading">#</a></h3>
+<section id="sum-32-lanes-with-reduce-add-tiled-example">
+<h3>Sum 32 lanes with <code class="docutils literal notranslate"><span class="pre">reduce_add_tiled</span></code> example<a class="headerlink" href="#sum-32-lanes-with-reduce-add-tiled-example" title="Link to this heading">#</a></h3>
 <p>The same tree, packaged as a one-liner. Lane 0 of each group of 32 holds the total; other lanes hold partial sums:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">sum32</span><span class="p">(</span><span class="n">src</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">dtype</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">ndim</span><span class="o">=</span><span class="mi">1</span><span class="p">),</span>
@@ -1152,8 +1196,8 @@
 </div>
 <p><code class="docutils literal notranslate"><span class="pre">5</span></code> is <code class="docutils literal notranslate"><span class="pre">log2_size</span></code>; <code class="docutils literal notranslate"><span class="pre">2**5</span> <span class="pre">==</span> <span class="pre">32</span></code> matches the block dim. The body of <code class="docutils literal notranslate"><span class="pre">reduce_add_tiled</span></code> unrolls at compile time into five <code class="docutils literal notranslate"><span class="pre">shuffle_down</span> <span class="pre">+</span> <span class="pre">add</span></code> pairs, so the generated IR is identical to a hand-written tree reduction.</p>
 </section>
-<section id="broadcast-the-sum-to-all-lanes-with-reduce-all-add-tiled">
-<h3>Broadcast the sum to all lanes with <code class="docutils literal notranslate"><span class="pre">reduce_all_add_tiled</span></code><a class="headerlink" href="#broadcast-the-sum-to-all-lanes-with-reduce-all-add-tiled" title="Link to this heading">#</a></h3>
+<section id="broadcast-the-sum-to-all-lanes-with-reduce-all-add-tiled-example">
+<h3>Broadcast the sum to all lanes with <code class="docutils literal notranslate"><span class="pre">reduce_all_add_tiled</span></code> example<a class="headerlink" href="#broadcast-the-sum-to-all-lanes-with-reduce-all-add-tiled-example" title="Link to this heading">#</a></h3>
 <p>When every lane needs the reduction result - e.g. to normalise by the sum - use the butterfly variant. No follow-up broadcast needed:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">normalize32</span><span class="p">(</span><span class="n">a</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">dtype</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">ndim</span><span class="o">=</span><span class="mi">1</span><span class="p">)):</span>
@@ -1165,12 +1209,39 @@
 </div>
 <p>Every lane in each group of 32 sees the same <code class="docutils literal notranslate"><span class="pre">total</span></code>.</p>
 </section>
-<section id="partial-subgroup-reductions">
-<h3>Partial-subgroup reductions<a class="headerlink" href="#partial-subgroup-reductions" title="Link to this heading">#</a></h3>
+<section id="partial-subgroup-reductions-example">
+<h3>Partial-subgroup reductions example<a class="headerlink" href="#partial-subgroup-reductions-example" title="Link to this heading">#</a></h3>
 <p><code class="docutils literal notranslate"><span class="pre">log2_size</span></code> does not have to match the full subgroup. Sum groups of 8 with <code class="docutils literal notranslate"><span class="pre">reduce_add_tiled(v,</span> <span class="pre">3)</span></code> or groups of 16 with <code class="docutils literal notranslate"><span class="pre">reduce_all_add_tiled(v,</span> <span class="pre">4)</span></code>; the caller just ensures <code class="docutils literal notranslate"><span class="pre">2**log2_size</span> <span class="pre">&lt;=</span> <span class="pre">group_size()</span></code> (so <code class="docutils literal notranslate"><span class="pre">log2_size</span> <span class="pre">&lt;=</span> <span class="pre">5</span></code> on CUDA / Metal / Vulkan-wave32, <code class="docutils literal notranslate"><span class="pre">&lt;=</span> <span class="pre">6</span></code> on AMDGPU wave64). Use the bare <code class="docutils literal notranslate"><span class="pre">reduce_add(v)</span></code> / <code class="docutils literal notranslate"><span class="pre">reduce_all_add(v)</span></code> form when you want “the whole subgroup” without hard-coding the limit.</p>
 </section>
-<section id="inclusive-scan-with-inclusive-add-tiled">
-<h3>Inclusive scan with <code class="docutils literal notranslate"><span class="pre">inclusive_add_tiled</span></code><a class="headerlink" href="#inclusive-scan-with-inclusive-add-tiled" title="Link to this heading">#</a></h3>
+<section id="bitonic-key-value-sort-example">
+<h3>Bitonic key/value sort example<a class="headerlink" href="#bitonic-key-value-sort-example" title="Link to this heading">#</a></h3>
+<p>Sort up to 32 <code class="docutils literal notranslate"><span class="pre">(key,</span> <span class="pre">value)</span></code> pairs in registers, one per lane, with <code class="docutils literal notranslate"><span class="pre">bitonic_sort_kv</span></code>. The pattern below is the contact-pruning sort used by Genesis: each lane carries a packed link-pair id (<code class="docutils literal notranslate"><span class="pre">key</span></code>) and a contact index (<code class="docutils literal notranslate"><span class="pre">value</span></code>); after the sort, lane <code class="docutils literal notranslate"><span class="pre">i</span></code> holds the <code class="docutils literal notranslate"><span class="pre">i</span></code>-th smallest pair under the lex order <code class="docutils literal notranslate"><span class="pre">(key,</span> <span class="pre">value)</span></code>. Lanes past the real data (<code class="docutils literal notranslate"><span class="pre">lane</span> <span class="pre">&gt;=</span> <span class="pre">n_con</span></code>) carry a sentinel key (<code class="docutils literal notranslate"><span class="pre">+inf</span></code> here) that the sort moves to the tail:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">sort_contacts</span><span class="p">(</span><span class="n">keys</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">dtype</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">ndim</span><span class="o">=</span><span class="mi">1</span><span class="p">),</span>
+                  <span class="n">idxs</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">dtype</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">,</span> <span class="n">ndim</span><span class="o">=</span><span class="mi">1</span><span class="p">),</span>
+                  <span class="n">n_con</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">):</span>
+    <span class="n">qd</span><span class="o">.</span><span class="n">loop_config</span><span class="p">(</span><span class="n">block_dim</span><span class="o">=</span><span class="mi">32</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">tid</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">32</span><span class="p">):</span>
+        <span class="c1"># Load real data into the low n_con lanes; sentinel-pad the rest.  +inf compares greater than every real</span>
+        <span class="c1"># key, so the sentinels drift to the high end of the sort.</span>
+        <span class="n">my_key</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">(</span><span class="mf">1.0e30</span><span class="p">)</span>
+        <span class="n">my_idx</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">tid</span> <span class="o">&lt;</span> <span class="n">n_con</span><span class="p">:</span>
+            <span class="n">my_key</span> <span class="o">=</span> <span class="n">keys</span><span class="p">[</span><span class="n">tid</span><span class="p">]</span>
+            <span class="n">my_idx</span> <span class="o">=</span> <span class="n">idxs</span><span class="p">[</span><span class="n">tid</span><span class="p">]</span>
+
+        <span class="n">my_key</span><span class="p">,</span> <span class="n">my_idx</span> <span class="o">=</span> <span class="n">subgroup</span><span class="o">.</span><span class="n">bitonic_sort_kv</span><span class="p">(</span><span class="n">my_key</span><span class="p">,</span> <span class="n">my_idx</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">tid</span> <span class="o">&lt;</span> <span class="n">n_con</span><span class="p">:</span>
+            <span class="n">keys</span><span class="p">[</span><span class="n">tid</span><span class="p">]</span> <span class="o">=</span> <span class="n">my_key</span>
+            <span class="n">idxs</span><span class="p">[</span><span class="n">tid</span><span class="p">]</span> <span class="o">=</span> <span class="n">my_idx</span>
+</pre></div>
+</div>
+<p>After the kernel, <code class="docutils literal notranslate"><span class="pre">keys[0..n_con]</span></code> is sorted ascending and <code class="docutils literal notranslate"><span class="pre">idxs</span></code> is the matching permutation. The body unrolls at compile time into 30 shuffles + lex compares (for <code class="docutils literal notranslate"><span class="pre">log2_size</span> <span class="pre">=</span> <span class="pre">5</span></code>, the wave32 default); no shared memory, no barriers.</p>
+<p>Use <code class="docutils literal notranslate"><span class="pre">bitonic_sort_kv_tiled(k,</span> <span class="pre">v,</span> <span class="pre">log2_size)</span></code> directly to run multiple independent sorts per subgroup - e.g. <code class="docutils literal notranslate"><span class="pre">bitonic_sort_kv_tiled(k,</span> <span class="pre">v,</span> <span class="pre">3)</span></code> runs <code class="docutils literal notranslate"><span class="pre">group_size()</span> <span class="pre">/</span> <span class="pre">8</span></code> independent 8-element sorts in parallel. The tiles are <code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code>-aligned within the subgroup and do not interact.</p>
+</section>
+<section id="inclusive-scan-with-inclusive-add-tiled-example">
+<h3>Inclusive scan with <code class="docutils literal notranslate"><span class="pre">inclusive_add_tiled</span></code> example<a class="headerlink" href="#inclusive-scan-with-inclusive-add-tiled-example" title="Link to this heading">#</a></h3>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">cumsum</span><span class="p">(</span><span class="n">a</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">dtype</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">,</span> <span class="n">ndim</span><span class="o">=</span><span class="mi">1</span><span class="p">)):</span>
     <span class="n">qd</span><span class="o">.</span><span class="n">loop_config</span><span class="p">(</span><span class="n">block_dim</span><span class="o">=</span><span class="mi">32</span><span class="p">)</span>
@@ -1205,6 +1276,7 @@ result  = ((target_lane ^ self_lane) &amp; 32) ? hi : lo
 <li><p>Pick <code class="docutils literal notranslate"><span class="pre">reduce_all_add</span></code> over <code class="docutils literal notranslate"><span class="pre">reduce_add</span> <span class="pre">+</span> <span class="pre">broadcast</span></code> when you need the result in every lane - same cost, one fewer shuffle.</p></li>
 <li><p>64-bit dtypes (<code class="docutils literal notranslate"><span class="pre">i64</span></code>, <code class="docutils literal notranslate"><span class="pre">u64</span></code>, <code class="docutils literal notranslate"><span class="pre">f64</span></code>) are emulated as two 32-bit shuffles on AMDGPU. Prefer 32-bit values when you have a choice.</p></li>
 <li><p>All seven <code class="docutils literal notranslate"><span class="pre">inclusive_*</span></code> ops are <code class="docutils literal notranslate"><span class="pre">&#64;qd.func</span></code> Hillis-Steele scans; cost is exactly <code class="docutils literal notranslate"><span class="pre">log2_group_size()</span></code> shuffle+op pairs, the same as a hand-rolled CUDA warp scan, on every backend. Hardware-accelerated <code class="docutils literal notranslate"><span class="pre">OpGroupNonUniformInclusiveScan</span></code> on SPIR-V is no longer used - the cost difference vs. a portable shuffle tree is small in practice, and the uniform implementation makes performance predictable across CUDA, AMDGPU, and SPIR-V.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">bitonic_sort_kv</span></code> runs the standard 1-D bitonic schedule: <code class="docutils literal notranslate"><span class="pre">log2_size</span> <span class="pre">*</span> <span class="pre">(log2_size</span> <span class="pre">+</span> <span class="pre">1)</span> <span class="pre">/</span> <span class="pre">2</span></code> compare-exchange stages, each two <code class="docutils literal notranslate"><span class="pre">shuffle</span></code> ops + a lex compare + a predicated assignment. Total: <code class="docutils literal notranslate"><span class="pre">log2_size</span> <span class="pre">*</span> <span class="pre">(log2_size</span> <span class="pre">+</span> <span class="pre">1)</span></code> shuffles - 30 for <code class="docutils literal notranslate"><span class="pre">log2_size</span> <span class="pre">=</span> <span class="pre">5</span></code> (wave32), 42 for <code class="docutils literal notranslate"><span class="pre">log2_size</span> <span class="pre">=</span> <span class="pre">6</span></code> (wave64). All compile-time unrolled into the calling kernel’s IR; no shared memory, no barriers within the sort.</p></li>
 </ul>
 </section>
 <section id="related">
@@ -1267,6 +1339,7 @@ result  = ((target_lane ^ self_lane) &amp; 32) ? hi : lo
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#identification-and-control">Identification and control</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#voting-and-predicate-ops">Voting and predicate ops</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#reductions-and-scans">Reductions and scans</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#sorting">Sorting</a></li>
 </ul>
 </li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#semantics">Semantics</a><ul class="nav section-nav flex-column">
@@ -1294,6 +1367,11 @@ result  = ((target_lane ^ self_lane) &amp; 32) ? hi : lo
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#segmented-reduce-add-min-max-value-head-flag"><code class="docutils literal notranslate"><span class="pre">segmented_reduce_{add,min,max}(value,</span> <span class="pre">head_flag)</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#inclusive-add-mul-min-max-and-or-xor-value"><code class="docutils literal notranslate"><span class="pre">inclusive_{add,mul,min,max,and,or,xor}(value)</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#exclusive-add-mul-min-max-and-or-xor-value"><code class="docutils literal notranslate"><span class="pre">exclusive_{add,mul,min,max,and,or,xor}(value)</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#bitonic-sort-kv-key-value"><code class="docutils literal notranslate"><span class="pre">bitonic_sort_kv(key,</span> <span class="pre">value)</span></code></a><ul class="nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#float-nan-handling">Float NaN handling</a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#short-input-pattern">Short-input pattern</a></li>
+</ul>
+</li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#ballot-first-n-predicate-n"><code class="docutils literal notranslate"><span class="pre">ballot_first_n(predicate,</span> <span class="pre">n)</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#ballot-predicate"><code class="docutils literal notranslate"><span class="pre">ballot(predicate)</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#all-any-true-predicate"><code class="docutils literal notranslate"><span class="pre">{all,any}_true(predicate)</span></code></a></li>
@@ -1302,16 +1380,17 @@ result  = ((target_lane ^ self_lane) &amp; 32) ? hi : lo
 </ul>
 </li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#examples">Examples</a><ul class="nav section-nav flex-column">
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#broadcast-lane-0-to-all-lanes">Broadcast lane 0 to all lanes</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#ballot-count-how-many-lanes-satisfy-a-condition">Ballot: count how many lanes satisfy a condition</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#identity-shuffle-each-lane-reads-its-own-id">Identity shuffle (each lane reads its own id)</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#swap-neighbours-xor-pattern-via-explicit-lane">Swap neighbours (xor pattern via explicit lane)</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#arbitrary-per-lane-gather">Arbitrary per-lane gather</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#tree-reduction-with-shuffle-down">Tree reduction with <code class="docutils literal notranslate"><span class="pre">shuffle_down</span></code></a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#sum-32-lanes-with-reduce-add-tiled">Sum 32 lanes with <code class="docutils literal notranslate"><span class="pre">reduce_add_tiled</span></code></a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#broadcast-the-sum-to-all-lanes-with-reduce-all-add-tiled">Broadcast the sum to all lanes with <code class="docutils literal notranslate"><span class="pre">reduce_all_add_tiled</span></code></a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#partial-subgroup-reductions">Partial-subgroup reductions</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#inclusive-scan-with-inclusive-add-tiled">Inclusive scan with <code class="docutils literal notranslate"><span class="pre">inclusive_add_tiled</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#broadcast-lane-0-to-all-lanes-example">Broadcast lane 0 to all lanes example</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#ballot-count-how-many-lanes-satisfy-a-condition-example">Ballot: count how many lanes satisfy a condition example</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#identity-shuffle-each-lane-reads-its-own-id-example">Identity shuffle (each lane reads its own id) example</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#swap-neighbours-xor-pattern-via-explicit-lane-example">Swap neighbours (xor pattern via explicit lane) example</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#arbitrary-per-lane-gather-example">Arbitrary per-lane gather example</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#tree-reduction-with-shuffle-down-example">Tree reduction with <code class="docutils literal notranslate"><span class="pre">shuffle_down</span></code> example</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#sum-32-lanes-with-reduce-add-tiled-example">Sum 32 lanes with <code class="docutils literal notranslate"><span class="pre">reduce_add_tiled</span></code> example</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#broadcast-the-sum-to-all-lanes-with-reduce-all-add-tiled-example">Broadcast the sum to all lanes with <code class="docutils literal notranslate"><span class="pre">reduce_all_add_tiled</span></code> example</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#partial-subgroup-reductions-example">Partial-subgroup reductions example</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#bitonic-key-value-sort-example">Bitonic key/value sort example</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#inclusive-scan-with-inclusive-add-tiled-example">Inclusive scan with <code class="docutils literal notranslate"><span class="pre">inclusive_add_tiled</span></code> example</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#amdgpu-wave64-cross-half-lowering">AMDGPU wave64 cross-half lowering</a></li>
 </ul>
 </li>
