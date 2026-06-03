@@ -32,7 +32,7 @@ It's of course very subjective, but some guidelines you could consider:
 
 - if you are trying to write a python class that runs on the GPU => use a `@qd.data_oriented`
 - if you are trying to write typed dataclasses, for passing data around between the `@data_oriented` classes, and between methods of the same `@data_oriented` class => use `@dataclasses.dataclass`es
-- `@qd.dataclass` is used to create structured element types for field tensors. We also use it to create the Cholesky [tiles](tile16.md).
+- `@qd.dataclass` is used to create structured element types for field tensors. We also use it to create the Cholesky [tiles](tile.md).
 
 ## dataclasses.dataclass
 
