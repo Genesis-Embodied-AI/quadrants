@@ -3995,12 +3995,12 @@ def test_subgroup_reduce_add_absolute():
 
 # --------------------------------------------------------------------------------------------------------------------
 # Bitonic key/value sort tests.  ``subgroup.bitonic_sort_kv_tiled`` is a register-resident sort over ``2**log2_size``
-# consecutive lanes, one ``(key, value)`` pair per lane.  Stability is built in: ties on the key break on the value.
-# We exercise:
+# consecutive lanes, one ``(key, value)`` pair per lane.  The compare is a lex compare on ``(key, value)``: ties on
+# the key break on ascending value (this is NOT a textbook stable sort -- see the primitive's docstring).  We exercise:
 #
 # 1. Full-warp sort, scrambled keys -- locks the "sorted ascending on key" contract across the standard
 #    ``log2_size = 5`` schedule (15 compare-exchange stages).
-# 2. Stability under duplicate keys -- the test feeds each key twice with two distinct values and asserts the result
+# 2. Lex tiebreak on duplicate keys -- the test feeds each key twice with two distinct values and asserts the result
 #    is sorted by ``(key, value)`` lex order rather than just by key.
 # 3. Sentinel-padded short-input pattern -- the documented way to sort fewer than ``2**log2_size`` real elements;
 #    high-lane sentinel keys (``INT_MAX``) drift to the tail and the real prefix ends up sorted at the head.
@@ -4063,13 +4063,15 @@ def test_subgroup_bitonic_sort_kv_tiled_log2_size_5_i32():
 
 
 @test_utils.test(arch=qd.gpu)
-def test_subgroup_bitonic_sort_kv_tiled_stable_on_duplicate_keys():
-    """Stability check: every key appears twice, with two distinct values.  The sort must preserve the original
-    relative order of equal-key pairs (which the lex tiebreak on ``value`` achieves)."""
+def test_subgroup_bitonic_sort_kv_tiled_lex_tiebreak_on_duplicate_keys():
+    """Lex-tiebreak check: every key appears twice, with two distinct values.  The sort orders equal-keyed pairs by
+    ascending ``value`` (the documented lex tiebreak); this is *not* a textbook-stable sort, but the lex order is
+    deterministic and observable here because we choose ``value``s that disambiguate.  See ``bitonic_sort_kv_tiled``'s
+    docstring for the textbook-stability caveat."""
     N = 32
     # Keys 0..15 each appear twice.  We deliberately do NOT put the two copies adjacent -- the first copy gets value
-    # ``key * 2`` and the second gets value ``key * 2 + 1``, so a stable lex sort by (key, value) puts them in that
-    # order regardless of their input lane positions.  Then we scramble the lane positions.
+    # ``key * 2`` and the second gets value ``key * 2 + 1``, so a lex sort on (key, value) puts them in that order
+    # regardless of their input lane positions.  Then we scramble the lane positions.
     pairs = []
     for k in range(16):
         pairs.append((k, k * 2))
@@ -4121,7 +4123,7 @@ def test_subgroup_bitonic_sort_kv_tiled_f32_key_i32_value():
     """f32 key + i32 value -- the exact dtype combination used by Genesis's contact-pruning bitonic sort.  Exercises
     the f32 shuffle path through the lex compare."""
     N = 32
-    # Spread keys across negative and positive floats with a couple of duplicates to stress the stability tiebreak.
+    # Spread keys across negative and positive floats with a couple of duplicates to stress the lex tiebreak.
     keys_py = [float((i * 11 + 5) % 64) - 32.0 for i in range(N)]
     keys_py[5] = keys_py[19] = 7.5  # force one explicit duplicate
     vals_py = [i for i in range(N)]

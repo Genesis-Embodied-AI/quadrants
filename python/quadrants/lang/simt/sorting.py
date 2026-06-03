@@ -8,9 +8,13 @@ implementation unit.  Public API is unchanged: everything defined here is re-exp
 
 Only one family lives here today:
 
-* ``bitonic_sort_kv_tiled`` -- in-register stable bitonic key/value sort across ``2**log2_size`` consecutive lanes, one
-  ``(key, value)`` pair per lane.  Pure ``shuffle`` (no shared memory, no barriers within the sort), fully unrolled at
-  compile time into the standard ``log2_size * (log2_size + 1) / 2`` compare-exchange stages.
+* ``bitonic_sort_kv_tiled`` -- in-register ascending lex sort on ``(key, value)`` pairs across ``2**log2_size``
+  consecutive lanes, one ``(key, value)`` pair per lane.  Pure ``shuffle`` (no shared memory, no barriers within the
+  sort), fully unrolled at compile time into the standard ``log2_size * (log2_size + 1) / 2`` compare-exchange stages.
+
+Note this is *not* a stable sort in the textbook sense (preserve input lane order for equal keys): equal-keyed lanes
+come back ordered by ``value``, not by their original lane id.  Callers that need lane-order stability should encode it
+into ``value`` themselves (e.g. pack ``(payload, original_lane)``).
 
 The full-subgroup form ``bitonic_sort_kv(key, value)`` is a one-liner that picks ``log2_size = log2_group_size()``,
 following the same convention as ``reduce_add`` / ``reduce_all_add`` / etc.
@@ -35,22 +39,30 @@ from quadrants.types.primitive_types import u32
 # ``(i & (1 << k_log2)) == 0`` says "this is an ascending half of the bitonic sequence".  When those bits agree the
 # lane keeps the min, otherwise the max.
 #
-# Stability is built in by extending the key compare to a lex compare on ``(key, value)``: ties between equal keys
-# break on ascending value, so the relative order of equal-keyed pairs is preserved.  Sentinel-padding the high lanes
-# with a key that compares greater than every real key (e.g. ``+inf`` for floats, ``INT_MAX`` for ints) is the
-# documented way to sort fewer than ``2**log2_size`` real elements -- the sort moves the sentinels to the high end of
-# the group, leaving the meaningful data contiguous starting at lane 0.
+# The compare is a lex compare on ``(key, value)``: ties on ``key`` break on ascending ``value``.  This is *not* a
+# stable sort in the textbook sense -- equal-keyed lanes come back in ascending-``value`` order, not in original-lane
+# order.  Callers needing lane-order stability should pack the lane id into ``value`` themselves; for unique-``value``
+# inputs (the Genesis contact-sort case) the distinction is invisible.  Sentinel-padding the high lanes with a key that
+# compares greater than every real key (e.g. ``+inf`` for floats, ``INT_MAX`` for ints) is the documented way to sort
+# fewer than ``2**log2_size`` real elements -- the sort moves the sentinels to the high end of the group, leaving the
+# meaningful data contiguous starting at lane 0.
 
 
 @func
 def bitonic_sort_kv_tiled(key, value, log2_size: template()):
-    """In-register stable bitonic key/value sort across ``2**log2_size`` consecutive lanes.
+    """In-register ascending lex sort on ``(key, value)`` pairs across ``2**log2_size`` consecutive lanes.
 
-    Sorts ``(key, value)`` pairs ascending by ``key``; ties on ``key`` are broken by ascending ``value`` (stable).  Each
-    lane holds one pair on entry; on exit, lane ``i`` (within its ``2**log2_size``-aligned tile) holds the ``i``-th
-    smallest pair under that lex order.  Lanes in different tiles sort independently of each other; the result is
-    broadcast-to-tile in the sense of [Tiled variants](#tiled-variants) -- every lane in a tile has a valid sorted
-    pair, just not the same one.
+    Sorts ``(key, value)`` pairs by ascending ``key``; ties on ``key`` break on ascending ``value`` (lex order on the
+    ``(key, value)`` tuple).  Each lane holds one pair on entry; on exit, lane ``i`` (within its ``2**log2_size``-aligned
+    tile) holds the ``i``-th smallest pair under that lex order.  Lanes in different tiles sort independently of each
+    other; the result is broadcast-to-tile in the sense of [Tiled variants](#tiled-variants) -- every lane in a tile
+    has a valid sorted pair, just not the same one.
+
+    Not a textbook-stable sort: equal-keyed lanes come back in ascending-``value`` order, *not* in their original lane
+    order.  If you need lane-order stability (i.e. ``value`` treated as opaque payload), encode the lane id into
+    ``value`` yourself before calling -- e.g. pack ``(payload, original_lane)`` into a single value, or call from a
+    context where ``value`` is unique by construction (the Genesis contact-sort case, where ``value`` is a contact
+    index).
 
     Caller contract:
 
@@ -63,9 +75,9 @@ def bitonic_sort_kv_tiled(key, value, log2_size: template()):
     * Same uniform-CF + all-lanes-active contract as the rest of ``qd.simt.subgroup``: every lane in the subgroup must
       execute every call to ``bitonic_sort_kv_tiled`` together.
     * ``key`` and ``value`` are scalar values held one-per-lane.  ``key`` must support ``<`` and ``==``; ``value``
-      must support ``<`` and ``==`` as well (the stability tiebreak compares values).  The supported scalar dtypes are
-      the union of what ``subgroup.shuffle`` accepts for each (i32, u32, f32, f64, i64, u64).  ``key`` and ``value``
-      do not have to share a dtype.
+      must support ``<`` and ``==`` as well (the lex tiebreak compares values).  The supported scalar dtypes are the
+      union of what ``subgroup.shuffle`` accepts for each (i32, u32, f32, f64, i64, u64).  ``key`` and ``value`` do not
+      have to share a dtype.
 
     Short-input pattern (sorting fewer than ``2**log2_size`` real elements):
 
