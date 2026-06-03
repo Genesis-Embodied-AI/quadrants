@@ -103,7 +103,7 @@ The 144-element threshold matches the largest size officially supported by the p
 
 `qd.types.vector(N, dtype)` accepts an optional `unpacked: bool = False` kwarg that controls how the vector is laid out in per-thread memory when used as a `@qd.dataclass` field. The kwarg does not affect the *value type* — the field still holds a vector — it only affects the storage layout.
 
-- `unpacked=False` (default): the field is stored as a single group of `N` scalars. The compiler keeps the whole vector in registers, or, if registers are tight, spills the whole vector to "local" memory (which despite the name lives in off-chip DRAM and is slow). It is all-or-nothing per vector.
+- `unpacked=False` (default): the field is stored as a single group of `N` scalars. The compiler keeps the whole vector in registers, or, if there is insufficient register storage, spills the whole vector to "local" memory (which despite the name lives in off-chip DRAM and is slow). It is all-or-nothing per vector.
 - `unpacked=True`: the field is stored as `N` independent scalar slots. The compiler can decide per slot whether to keep it in a register or spill it. Under register pressure this can be the difference between "most of the vector still lives in registers" and "the entire vector is in DRAM".
 
 ```python
