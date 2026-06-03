@@ -103,8 +103,8 @@ The 144-element threshold matches the largest size officially supported by the p
 
 `qd.types.vector(N, dtype)` accepts an optional `unpacked: bool = False` kwarg that controls how the vector is laid out in per-thread memory when used as a `@qd.dataclass` field. The kwarg does not affect the *value type* — the field still holds a vector — it only affects the storage layout.
 
-- `unpacked=False` (default): the field is one slot holding `N` packed scalars (a single `alloca` of `N` lanes). The compiler keeps the whole vector in registers, or, if registers are tight, spills the whole vector to "local" memory (which despite the name lives in off-chip DRAM and is slow). It is all-or-nothing per vector.
-- `unpacked=True`: the field is `N` independent scalar slots. The compiler can decide per slot whether to keep it in a register or spill it. Under register pressure this can be the difference between "most of the vector still lives in registers" and "the entire vector is in DRAM".
+- `unpacked=False` (default): the field is stored as a single group of `N` scalars. The compiler keeps the whole vector in registers, or, if there is insufficient register storage, spills the whole vector to "local" memory (which despite the name lives in off-chip DRAM and is slow). It is all-or-nothing per vector.
+- `unpacked=True`: the field is stored as `N` independent scalar slots. The compiler can decide per slot whether to keep it in a register or spill it. Under register pressure this can be the difference between "most of the vector still lives in registers" and "the entire vector is in DRAM".
 
 ```python
 @qd.dataclass
@@ -112,7 +112,7 @@ class Tile:
     r: qd.types.vector(32, qd.f32, unpacked=True)
 ```
 
-The flag is consumed at class-definition time. `@qd.dataclass` expands the field into `N` synthetic scalar members `_r0.._r{N-1}`, and the AST transformer rewrites each `obj.r[i]` (for python-int / `qd.static`-resolved `i`) into a direct reference to the i-th synthetic member. The generated LLVM IR / PTX is byte-identical to declaring `N` named scalar fields by hand (`r0: qd.f32`, `r1: qd.f32`, ...), but the source keeps the indexed read/write syntax.
+The flag is consumed at class-definition time. `@qd.dataclass` expands the field into `N` synthetic scalar members `_r0.._r{N-1}`, and each `obj.r[i]` (for python-int / `qd.static`-resolved `i`) is lowered to a direct reference to the i-th synthetic member. The generated LLVM IR / PTX is byte-identical to declaring `N` named scalar fields by hand (`r0: qd.f32`, `r1: qd.f32`, ...), but the source keeps the indexed read/write syntax.
 
 ### When to choose `unpacked=True` vs `unpacked=False`
 
@@ -124,9 +124,9 @@ The flag is consumed at class-definition time. `@qd.dataclass` expands the field
 | are storing the field in a smallish struct, register pressure is low, and the kernel works as-is        | `unpacked=False`                 |
 | only ever access the field as `obj.r[i]` with python-int / `qd.static`-resolved `i` (unrolled inner loops), the group is small relative to the per-thread register budget, *and* the packed version is spilling under register pressure | `unpacked=True`                  |
 
-`unpacked=True` is a targeted fix for a specific problem (the entire vector spilling as a unit when only some of its lanes are actually hot). If you're not measuring spills, default to plain `qd.types.vector(N, dtype)`.
+With the default packed layout, all `N` elements share a single piece of stack memory, and the optimiser's "promote this to registers vs leave it in memory" decision is made once for the whole group: either every element gets a register, or none do and the whole vector lives in slow off-chip memory. Splitting the field into `N` independent pieces of memory up front gives the optimiser `N` independent promote-or-leave-in-memory decisions, so it can keep as many elements in registers as actually fit and leave the rest in memory.
 
-Roughly, on current NVIDIA GPUs, an SM gives each thread up to 255 32-bit registers shared with all live state in the kernel, so what counts as "small relative to the per-thread register budget" depends on what else is live. The pattern that motivates `unpacked=True` is high register pressure — e.g. several concurrent 32×32 tiles in a Cholesky + triangular solve — where LLVM's SROA + `mem2reg` bails out on a packed `alloca` and the whole vector ends up in local memory.
+As a rough rule on current NVIDIA GPUs, the practical per-thread register budget is around 32 to 64 32-bit registers. The architectural cap is 255, but using anywhere near that drops occupancy (the number of warps the SM can keep resident in parallel) sharply, so any production kernel ends up well below the cap. What counts as "small relative to the per-thread register budget" therefore depends on the occupancy target and what else is live. The pattern that motivates `unpacked=True` is high register pressure — e.g. several concurrent 32×32 tiles in a Cholesky + triangular solve — where the compiler gives up on the packed group as a whole and the whole vector ends up in local memory.
 
 See [How to check for spills](#how-to-check-for-spills) below for how to confirm a spill is actually happening before reaching for `unpacked=True`.
 
@@ -148,15 +148,15 @@ class TwoTiles:
     scale: qd.f32
 ```
 
-The generated struct has 65 scalar members (`_a0..._a31`, `_b0..._b31`, `scale`).
+The generated struct in this example has 65 scalar members (`_a0..._a31`, `_b0..._b31`, `scale`).
 
 # Advanced
 
 ## How the packed vs unpacked layout differs at the LLVM level
 
-A plain `qd.types.vector(N, dtype)` field on a `@qd.dataclass` lowers to a single `alloca` of `N` packed scalars. LLVM's SROA + `mem2reg` passes attempt to decompose that `alloca` into `N` per-slot SSA values so each can live in a register, but the decomposition is conservative: under high register pressure (e.g. two concurrent 32×32 tiles in a Cholesky + triangular solve), SROA bails out on the packed `alloca` and the whole vector spills to local memory as a unit. Each access then becomes a `ld.local` / `st.local`.
+A plain `qd.types.vector(N, dtype)` field on a `@qd.dataclass` lowers to a single stack-allocated group of `N` packed scalars. LLVM's optimiser attempts to decompose that group into `N` per-slot register-resident values, but the decomposition is conservative: under high register pressure (e.g. two concurrent 32×32 tiles in a Cholesky + triangular solve) the optimiser bails out and the whole vector spills to local memory as a unit.
 
-`qd.types.vector(N, dtype, unpacked=True)` expands to `N` independent `alloca` instructions, one per slot, so `mem2reg` can promote each slot independently and the register allocator can spill only the slots it has to. That is exactly what the hand-rolled `r0..r{N-1}` form produces; the generated LLVM IR / PTX matches it byte-for-byte.
+`qd.types.vector(N, dtype, unpacked=True)` expands to `N` independent scalar stack slots, one per element, so the optimiser can promote each slot to a register independently and the register allocator can spill only the slots it has to. That is exactly what the hand-rolled `r0..r{N-1}` form produces; the generated LLVM IR / PTX matches it byte-for-byte.
 
 ## How to check for spills
 
@@ -189,13 +189,15 @@ ptxas info    : Used 96 registers, 384 bytes stack frame, 256 bytes spill stores
 
 Adjust `-arch=sm_XX` to match your GPU (`sm_86` = Ampere consumer / RTX 30, `sm_89` = Ada / RTX 40, `sm_90` = Hopper).
 
-### 2. Inspect the PTX directly for `ld.local` / `st.local`
+### 2. Inspect the PTX directly for local-memory loads / stores
+
+NVIDIA's PTX assembly uses the mnemonics `ld.local` and `st.local` for loads and stores against per-thread local memory (off-chip DRAM). Any kernel that spills must contain these mnemonics. Grep the dumped PTX for them:
 
 ```bash
 grep -nE "ld\.local|st\.local" quadrants_kernel_nvptx_0007.ptx | head -20
 ```
 
-Any matches that aren't from deliberate `qd.simt.shared_array` accesses (which show up as `ld.shared` / `st.shared`, not `.local`) are spill traffic.
+Matches that aren't from deliberate `qd.simt.shared_array` accesses (those use the shared-memory mnemonics `ld.shared` / `st.shared`, not the `.local` ones) are spill traffic.
 
 ### 3. Runtime spill counters via Nsight Compute (most authoritative)
 
@@ -211,7 +213,11 @@ Look at the "Memory Workload Analysis -> Local Memory" section. This reports *ac
 qd.init(arch=qd.cuda, print_kernel_llvm_ir_optimized=True)
 ```
 
-Dumps `quadrants_kernel_cuda_llvm_ir_optimized_NNNN.ll`. Look for `alloca` instructions that survived `mem2reg` — those will become PTX local memory.
+Dumps `quadrants_kernel_cuda_llvm_ir_optimized_NNNN.ll`. In LLVM IR, every per-function stack allocation appears as an `alloca` instruction. The optimiser tries to promote each `alloca` into a register-resident value; any `alloca` that survives the optimiser into the post-optimisation dump is a stack slot it couldn't promote, and it will become PTX local memory. Grep for them:
+
+```bash
+grep -nE "alloca" quadrants_kernel_cuda_llvm_ir_optimized_0007.ll | head
+```
 
 ### Gotcha: the offline cache
 
