@@ -148,7 +148,7 @@ class TwoTiles:
     scale: qd.f32
 ```
 
-The generated struct has 65 scalar members (`_a0..._a31`, `_b0..._b31`, `scale`).
+The generated struct in this example has 65 scalar members (`_a0..._a31`, `_b0..._b31`, `scale`).
 
 # Advanced
 
