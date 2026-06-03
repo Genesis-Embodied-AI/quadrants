@@ -154,7 +154,7 @@ The generated struct has 65 scalar members (`_a0..._a31`, `_b0..._b31`, `scale`)
 
 ## How the packed vs unpacked layout differs at the LLVM level
 
-A plain `qd.types.vector(N, dtype)` field on a `@qd.dataclass` lowers to a single stack-allocated group of `N` packed scalars. LLVM's SROA + `mem2reg` passes attempt to decompose that group into `N` per-slot SSA values so each can live in a register, but the decomposition is conservative: under high register pressure (e.g. two concurrent 32×32 tiles in a Cholesky + triangular solve), SROA bails out and the whole vector spills to local memory as a unit. Each access then becomes a `ld.local` / `st.local`.
+A plain `qd.types.vector(N, dtype)` field on a `@qd.dataclass` lowers to a single stack-allocated group of `N` packed scalars. LLVM's optimiser attempts to decompose that group into `N` per-slot SSA values so each can live in a register, but the decomposition is conservative: under high register pressure (e.g. two concurrent 32×32 tiles in a Cholesky + triangular solve), the optimiser bails out and the whole vector spills to local memory as a unit. Each access then becomes a `ld.local` / `st.local`.
 
 `qd.types.vector(N, dtype, unpacked=True)` expands to `N` independent scalar stack slots, one per element, so `mem2reg` can promote each slot independently and the register allocator can spill only the slots it has to. That is exactly what the hand-rolled `r0..r{N-1}` form produces; the generated LLVM IR / PTX matches it byte-for-byte.
 
