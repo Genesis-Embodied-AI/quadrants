@@ -92,7 +92,7 @@ In-register key/value sort across the subgroup, one `(key, value)` pair per lane
 |----------------------------------------|------|--------|-------------------------|-----------------------------------------------------------------|
 | `subgroup.bitonic_sort_kv(key, value)` | yes  | yes    | yes                     | key & value: i32, u32, f32, f64, i64, u64 (independently typed) |
 
-Returns `(key, value)` - assign with `key, value = subgroup.bitonic_sort_kv(key, value)`.  Sorts ascending on `key`; ties on `key` break on ascending `value` (stable).  Tiled variant: `bitonic_sort_kv_tiled(key, value, log2_size)` runs the same sort independently on each `2**log2_size`-aligned tile - see [Tiled variants](#tiled-variants).  See [`bitonic_sort_kv`](#bitonic_sort_kvkey-value) for the short-input pattern (sentinel padding) and float NaN caveat.
+Returns `(key, value)` - assign with `key, value = subgroup.bitonic_sort_kv(key, value)`.  Sorts ascending on `key`; ties on `key` break on ascending `value` (stable).  Tiled variant: `bitonic_sort_kv_tiled(key, value, log2_size)` runs the same sort independently on each `2**log2_size`-aligned tile - see [Tiled variants](#tiled-variants).  See [`bitonic_sort_kv`](#bitonic_sort_kvkey-value) for the short-input pattern (sentinel padding) and float NaN caveat. See [Bitonic key/value sort example](#bitonic-keyvalue-sort-example) for an example.
 
 ## Semantics
 
@@ -387,7 +387,7 @@ Closed-form `u32` lane-mask constants parametrised by a lane id. Bit `i` of the 
 
 ## Examples
 
-### Broadcast lane 0 to all lanes
+### Broadcast lane 0 to all lanes example
 
 ```python
 import quadrants as qd
@@ -402,7 +402,7 @@ def broadcast(a: qd.types.ndarray(dtype=qd.f32, ndim=1)):
 
 After the kernel, every lane in a subgroup holds the original value of its lane 0. `subgroup.broadcast(a[i], qd.u32(0))` is interchangeable here.
 
-### Ballot: count how many lanes satisfy a condition
+### Ballot: count how many lanes satisfy a condition example
 
 ```python
 @qd.kernel
@@ -417,7 +417,7 @@ def count_positive(a: qd.types.ndarray(dtype=qd.f32, ndim=1),
 
 After the kernel, `counts[g]` contains a bitmask of which lanes in group `g` had positive values. Use `popcount(mask)` on the host to get the count.
 
-### Identity shuffle (each lane reads its own id)
+### Identity shuffle (each lane reads its own id) example
 
 Useful as a sanity check:
 
@@ -433,7 +433,7 @@ def identity(src: qd.types.ndarray(dtype=qd.f32, ndim=1),
 
 `dst[i]` equals `src[i]` on every lane.
 
-### Swap neighbours (xor pattern via explicit lane)
+### Swap neighbours (xor pattern via explicit lane) example
 
 ```python
 @qd.kernel
@@ -447,7 +447,7 @@ def swap_pairs(src: qd.types.ndarray(dtype=qd.f32, ndim=1),
 
 Pairs `(0,1)`, `(2,3)`, ... swap their values.
 
-### Arbitrary per-lane gather
+### Arbitrary per-lane gather example
 
 ```python
 @qd.kernel
@@ -463,7 +463,7 @@ def reverse4(src: qd.types.ndarray(dtype=qd.f32, ndim=1),
 
 Within each group of 4 contiguous lanes the values are reversed.
 
-### Tree reduction with `shuffle_down`
+### Tree reduction with `shuffle_down` example
 
 Classic warp-level sum of 4 values - after the second step, lane 0 of each group of 4 holds the total:
 
@@ -481,7 +481,7 @@ def reduce4(src: qd.types.ndarray(dtype=qd.f32, ndim=1),
 
 Extend the pattern (offsets 16, 8, 4, 2, 1, ...) to reduce a full subgroup; only lane 0's final value is meaningful, because the lanes near the top read past the end of the subgroup.
 
-### Sum 32 lanes with `reduce_add_tiled`
+### Sum 32 lanes with `reduce_add_tiled` example
 
 The same tree, packaged as a one-liner. Lane 0 of each group of 32 holds the total; other lanes hold partial sums:
 
@@ -498,7 +498,7 @@ def sum32(src: qd.types.ndarray(dtype=qd.f32, ndim=1),
 
 `5` is `log2_size`; `2**5 == 32` matches the block dim. The body of `reduce_add_tiled` unrolls at compile time into five `shuffle_down + add` pairs, so the generated IR is identical to a hand-written tree reduction.
 
-### Broadcast the sum to all lanes with `reduce_all_add_tiled`
+### Broadcast the sum to all lanes with `reduce_all_add_tiled` example
 
 When every lane needs the reduction result - e.g. to normalise by the sum - use the butterfly variant. No follow-up broadcast needed:
 
@@ -513,11 +513,11 @@ def normalize32(a: qd.types.ndarray(dtype=qd.f32, ndim=1)):
 
 Every lane in each group of 32 sees the same `total`.
 
-### Partial-subgroup reductions
+### Partial-subgroup reductions example
 
 `log2_size` does not have to match the full subgroup. Sum groups of 8 with `reduce_add_tiled(v, 3)` or groups of 16 with `reduce_all_add_tiled(v, 4)`; the caller just ensures `2**log2_size <= group_size()` (so `log2_size <= 5` on CUDA / Metal / Vulkan-wave32, `<= 6` on AMDGPU wave64). Use the bare `reduce_add(v)` / `reduce_all_add(v)` form when you want "the whole subgroup" without hard-coding the limit.
 
-### Bitonic key/value sort
+### Bitonic key/value sort example
 
 Sort up to 32 `(key, value)` pairs in registers, one per lane, with `bitonic_sort_kv`. The pattern below is the contact-pruning sort used by Genesis: each lane carries a packed link-pair id (`key`) and a contact index (`value`); after the sort, lane `i` holds the `i`-th smallest pair under the lex order `(key, value)`. Lanes past the real data (`lane >= n_con`) carry a sentinel key (`+inf` here) that the sort moves to the tail:
 
@@ -547,7 +547,7 @@ After the kernel, `keys[0..n_con]` is sorted ascending and `idxs` is the matchin
 
 Use `bitonic_sort_kv_tiled(k, v, log2_size)` directly to run multiple independent sorts per subgroup - e.g. `bitonic_sort_kv_tiled(k, v, 3)` runs `group_size() / 8` independent 8-element sorts in parallel. The tiles are `2**log2_size`-aligned within the subgroup and do not interact.
 
-### Inclusive scan with `inclusive_add_tiled`
+### Inclusive scan with `inclusive_add_tiled` example
 
 ```python
 @qd.kernel
