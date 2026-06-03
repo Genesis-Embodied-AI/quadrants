@@ -213,7 +213,11 @@ Look at the "Memory Workload Analysis -> Local Memory" section. This reports *ac
 qd.init(arch=qd.cuda, print_kernel_llvm_ir_optimized=True)
 ```
 
-Dumps `quadrants_kernel_cuda_llvm_ir_optimized_NNNN.ll`. Look for unpromoted stack slots in the IR — those will become PTX local memory.
+Dumps `quadrants_kernel_cuda_llvm_ir_optimized_NNNN.ll`. In LLVM IR, every per-function stack allocation appears as an `alloca` instruction. The optimiser tries to promote each `alloca` into a register-resident value; any `alloca` that survives the optimiser into the post-optimisation dump is a stack slot it couldn't promote, and it will become PTX local memory. Grep for them:
+
+```bash
+grep -nE "alloca" quadrants_kernel_cuda_llvm_ir_optimized_0007.ll | head
+```
 
 ### Gotcha: the offline cache
 
