@@ -154,9 +154,9 @@ The generated struct in this example has 65 scalar members (`_a0..._a31`, `_b0..
 
 ## How the packed vs unpacked layout differs at the LLVM level
 
-A plain `qd.types.vector(N, dtype)` field on a `@qd.dataclass` lowers to a single stack-allocated group of `N` packed scalars. LLVM's optimiser attempts to decompose that group into `N` per-slot SSA values so each can live in a register, but the decomposition is conservative: under high register pressure (e.g. two concurrent 32×32 tiles in a Cholesky + triangular solve), the optimiser bails out and the whole vector spills to local memory as a unit. Each access then becomes a `ld.local` / `st.local`.
+A plain `qd.types.vector(N, dtype)` field on a `@qd.dataclass` lowers to a single stack-allocated group of `N` packed scalars. LLVM's optimiser attempts to decompose that group into `N` per-slot register-resident values, but the decomposition is conservative: under high register pressure (e.g. two concurrent 32×32 tiles in a Cholesky + triangular solve) the optimiser bails out and the whole vector spills to local memory as a unit.
 
-`qd.types.vector(N, dtype, unpacked=True)` expands to `N` independent scalar stack slots, one per element, so `mem2reg` can promote each slot independently and the register allocator can spill only the slots it has to. That is exactly what the hand-rolled `r0..r{N-1}` form produces; the generated LLVM IR / PTX matches it byte-for-byte.
+`qd.types.vector(N, dtype, unpacked=True)` expands to `N` independent scalar stack slots, one per element, so the optimiser can promote each slot to a register independently and the register allocator can spill only the slots it has to. That is exactly what the hand-rolled `r0..r{N-1}` form produces; the generated LLVM IR / PTX matches it byte-for-byte.
 
 ## How to check for spills
 
@@ -189,13 +189,15 @@ ptxas info    : Used 96 registers, 384 bytes stack frame, 256 bytes spill stores
 
 Adjust `-arch=sm_XX` to match your GPU (`sm_86` = Ampere consumer / RTX 30, `sm_89` = Ada / RTX 40, `sm_90` = Hopper).
 
-### 2. Inspect the PTX directly for `ld.local` / `st.local`
+### 2. Inspect the PTX directly for local-memory loads / stores
+
+NVIDIA's PTX assembly uses the mnemonics `ld.local` and `st.local` for loads and stores against per-thread local memory (off-chip DRAM). Any kernel that spills must contain these mnemonics. Grep the dumped PTX for them:
 
 ```bash
 grep -nE "ld\.local|st\.local" quadrants_kernel_nvptx_0007.ptx | head -20
 ```
 
-Any matches that aren't from deliberate `qd.simt.shared_array` accesses (which show up as `ld.shared` / `st.shared`, not `.local`) are spill traffic.
+Matches that aren't from deliberate `qd.simt.shared_array` accesses (those use the shared-memory mnemonics `ld.shared` / `st.shared`, not the `.local` ones) are spill traffic.
 
 ### 3. Runtime spill counters via Nsight Compute (most authoritative)
 
