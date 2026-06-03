@@ -547,7 +547,7 @@ After the kernel, `keys[0..n_con]` is sorted ascending and `idxs` is the matchin
 
 Use `bitonic_sort_kv_tiled(k, v, log2_size)` directly to run multiple independent sorts per subgroup - e.g. `bitonic_sort_kv_tiled(k, v, 3)` runs `group_size() / 8` independent 8-element sorts in parallel. The tiles are `2**log2_size`-aligned within the subgroup and do not interact.
 
-### Inclusive scan with `inclusive_add_tiled`
+### Inclusive scan with `inclusive_add_tiled` example
 
 ```python
 @qd.kernel
