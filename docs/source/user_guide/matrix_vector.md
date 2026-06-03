@@ -112,7 +112,7 @@ class Tile:
     r: qd.types.vector(32, qd.f32, unpacked=True)
 ```
 
-The flag is consumed at class-definition time. `@qd.dataclass` expands the field into `N` synthetic scalar members `_r0.._r{N-1}`, and the AST transformer rewrites each `obj.r[i]` (for python-int / `qd.static`-resolved `i`) into a direct reference to the i-th synthetic member. The generated LLVM IR / PTX is byte-identical to declaring `N` named scalar fields by hand (`r0: qd.f32`, `r1: qd.f32`, ...), but the source keeps the indexed read/write syntax.
+The flag is consumed at class-definition time. `@qd.dataclass` expands the field into `N` synthetic scalar members `_r0.._r{N-1}`, and each `obj.r[i]` (for python-int / `qd.static`-resolved `i`) is lowered to a direct reference to the i-th synthetic member. The generated LLVM IR / PTX is byte-identical to declaring `N` named scalar fields by hand (`r0: qd.f32`, `r1: qd.f32`, ...), but the source keeps the indexed read/write syntax.
 
 ### When to choose `unpacked=True` vs `unpacked=False`
 
