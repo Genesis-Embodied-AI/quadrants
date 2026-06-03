@@ -131,19 +131,40 @@ The flag is consumed at class-definition time. `@qd.dataclass` expands the field
 
 ### When to choose `unpacked=True` vs `unpacked=False`
 
-| If you...                                                                                                | Use                              |
-|----------------------------------------------------------------------------------------------------------|----------------------------------|
-| want vector arithmetic (`a + b`, `a.dot(b)`, `a.norm()`, swizzle, broadcast) at the use site             | `unpacked=False` (the default)   |
-| need to index with a *runtime* integer (`v[k]` where `k` isn't a python-int)                             | `unpacked=False`                 |
-| need to pass the vector across a `@qd.func` boundary, copy it into shared memory, or instantiate it as a kernel-local value | `unpacked=False`                 |
-| are storing the field in a smallish struct, register pressure is low, and the kernel works as-is        | `unpacked=False`                 |
-| only ever access the field as `obj.r[i]` with python-int / `qd.static`-resolved `i` (unrolled inner loops), the group is small relative to the per-thread register budget, *and* the packed version is spilling under register pressure | `unpacked=True`                  |
+Generally, the trade-off is compile time vs runtime, assuming you don't need any of the plethora of functionalities that packed offers you (see the table above). The target use-case that unpacked was built for was holding a tile of size 16x16 or 32x32, in a warp of threads, where each thread in the warp holds a single row of 16 or 32 values. In this case, the size of each row is pre-determined (either 16 or 32, templated), which meets one pre-requisite of using unpacked. We want all values to ideally be stored in registers. However, when we start holding multiple 32x32 tiles in a warp, we found that we were spilling entire 32-length vectors into local memory, causing very noticeable slowdowns. Migrating to use hand-coded scalars, instead of vectors, was faster, but painful to write, and very slow to compile. Using unpacked vectors is as fast as hand-coded scalars, but faster to compile.
 
-With the default packed layout, all `N` elements share a single piece of stack memory, and the optimiser's "promote this to registers vs leave it in memory" decision is made once for the whole group: either every element gets a register, or none do and the whole vector lives in slow off-chip memory. Splitting the field into `N` independent pieces of memory up front gives the optimiser `N` independent promote-or-leave-in-memory decisions, so it can keep as many elements in registers as actually fit and leave the rest in memory.
+In such a scenario, we prefer to use for loops, to avoid having to unroll for-loops by hand. But we can use static for loops, satisfying the condition of only ever indexing with python int or qd.static resolved values. i.e. something like:
 
-As a rough rule on current NVIDIA GPUs, the practical per-thread register budget is around 32 to 64 32-bit registers. The architectural cap is 255, but using anywhere near that drops occupancy (the number of warps the SM can keep resident in parallel) sharply, so any production kernel ends up well below the cap. What counts as "small relative to the per-thread register budget" therefore depends on the occupancy target and what else is live. The pattern that motivates `unpacked=True` is high register pressure — e.g. several concurrent 32×32 tiles in a Cholesky + triangular solve — where the compiler gives up on the packed group as a whole and the whole vector ends up in local memory.
+```
+    for i in qd.static(range(32)):
+        # Do something with tile.r[i], where tile is the qd.dataclass, and tile.r is the unpacked vector.
+```
 
-See [How to check for spills](#how-to-check-for-spills) below for how to confirm a spill is actually happening before reaching for `unpacked=True`.
+We can then see the runtime/compile time trade-off because:
+- static unrolled loops increase compile time
+- using unpacked vectors increases compile time, compared to packed vectors
+
+However:
+- static unrolled loops, and unpacked vectors run much faster at runtime
+- the compile time of unpacked vectors is still much faster than hand coded scalars
+
+The issue with hand coded scalars is that you either have to literally hand-code everything, or you end up writing convenience functions like:
+
+```
+def get_r(i):
+    if i == 0:
+        return tile.r0
+    if i == 1:
+        return tile.r1
+    ...
+```
+
+Such functions cause heavy IR bloat, and slow down runtime considerably, and/or slow down compile time too, depending on exact implementation choices made.
+
+Using unpacked vector gives:
+- compact code => easy to maintain
+- fast runtime code
+- fast compile time (relative to certain hand-coded approaches).
 
 ### Constraints
 
