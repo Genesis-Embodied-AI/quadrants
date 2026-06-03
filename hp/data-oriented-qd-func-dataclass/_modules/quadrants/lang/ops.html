@@ -26,8 +26,8 @@
   </noscript>
   
   <!-- Loaded before other Sphinx assets -->
-  <link href="../../../_static/styles/theme.css?digest=55c26ed414f5f8a31ebb" rel="stylesheet" />
-<link href="../../../_static/styles/pydata-sphinx-theme.css?digest=55c26ed414f5f8a31ebb" rel="stylesheet" />
+  <link href="../../../_static/styles/theme.css?digest=0790524f97105ba85085" rel="stylesheet" />
+<link href="../../../_static/styles/pydata-sphinx-theme.css?digest=0790524f97105ba85085" rel="stylesheet" />
 
     <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=8f2a1f02" />
     <link rel="stylesheet" type="text/css" href="../../../_static/copybutton.css?v=76b2166b" />
@@ -37,10 +37,10 @@
     <link rel="stylesheet" type="text/css" href="../../../_static/css/custom.css" />
   
   <!-- So that users can add custom icons -->
-  <script defer src="../../../_static/scripts/fontawesome.js?digest=55c26ed414f5f8a31ebb"></script>
+  <script defer src="../../../_static/scripts/fontawesome.js?digest=0790524f97105ba85085"></script>
   <!-- Pre-loaded scripts that we'll load fully later -->
-  <link rel="preload" as="script" href="../../../_static/scripts/bootstrap.js?digest=55c26ed414f5f8a31ebb" />
-<link rel="preload" as="script" href="../../../_static/scripts/pydata-sphinx-theme.js?digest=55c26ed414f5f8a31ebb" />
+  <link rel="preload" as="script" href="../../../_static/scripts/bootstrap.js?digest=0790524f97105ba85085" />
+<link rel="preload" as="script" href="../../../_static/scripts/pydata-sphinx-theme.js?digest=0790524f97105ba85085" />
 
     <script src="../../../_static/documentation_options.js?v=292eb321"></script>
     <script src="../../../_static/doctools.js?v=9bcbadda"></script>
@@ -176,11 +176,18 @@
       
         <div class="navbar-item">
 
-<button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button pst-js-only" aria-label="Color mode" data-bs-title="Color mode"  data-bs-placement="bottom" data-bs-toggle="tooltip">
-  <i class="theme-switch fa-solid fa-sun                fa-lg" data-mode="light" title="Light"></i>
-  <i class="theme-switch fa-solid fa-moon               fa-lg" data-mode="dark"  title="Dark"></i>
-  <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"  title="System Settings"></i>
-</button></div>
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg fa-fw" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg fa-fw" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg fa-fw" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg fa-fw me-1"></i>System Settings</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg fa-fw me-1"></i>Light</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg fa-fw me-1"></i>Dark</button></li>
+  </ul>
+</div></div>
       
     </div>
     
@@ -251,11 +258,18 @@
         
           <div class="navbar-item">
 
-<button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button pst-js-only" aria-label="Color mode" data-bs-title="Color mode"  data-bs-placement="bottom" data-bs-toggle="tooltip">
-  <i class="theme-switch fa-solid fa-sun                fa-lg" data-mode="light" title="Light"></i>
-  <i class="theme-switch fa-solid fa-moon               fa-lg" data-mode="dark"  title="Dark"></i>
-  <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"  title="System Settings"></i>
-</button></div>
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg fa-fw" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg fa-fw" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg fa-fw" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg fa-fw me-1"></i>System Settings</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg fa-fw me-1"></i>Light</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg fa-fw me-1"></i>Dark</button></li>
+  </ul>
+</div></div>
         
       </div>
     
@@ -1986,6 +2000,61 @@
 
 
 
+<div class="viewcode-block" id="volatile_load">
+<a class="viewcode-back" href="../../../autoapi/quadrants/lang/ops/index.html#quadrants.lang.ops.volatile_load">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">volatile_load</span><span class="p">(</span><span class="n">target</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Read `target` with volatile semantics: the compiler is forbidden from caching, hoisting, or merging the</span>
+<span class="sd">    load with prior reads of the same address.  Required for spin-wait patterns where another thread or block</span>
+<span class="sd">    writes the cell and the reader must observe the update on every iteration.</span>
+
+<span class="sd">    Without this primitive, a loop like ::</span>
+
+<span class="sd">        while flags[prev] == STATE_INVALID:</span>
+<span class="sd">            pass</span>
+
+<span class="sd">    is undefined: the compiler may hoist the `flags[prev]` load out of the loop and the spin becomes infinite.</span>
+<span class="sd">    The portable workarounds (`grid.mem_fence()` inside the loop, or `atomic_add(flags[prev], 0)`) are both</span>
+<span class="sd">    correct but pay an order-of-magnitude perf tax over a real volatile read.</span>
+
+<span class="sd">    Codegen on every backend:</span>
+
+<span class="sd">    * CUDA / AMDGPU: LLVM `load volatile`, lowered to `ld.volatile.global` (PTX) /  unhoistable `global_load_*`</span>
+<span class="sd">      (AMDGPU).</span>
+<span class="sd">    * Vulkan / Metal: SPIR-V `OpLoad` with the `Volatile` `MemoryAccess` mask, propagated through SPIRV-Cross to</span>
+<span class="sd">      a re-read on every use in the generated MSL / GLSL.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        target: a global lvalue (field / ndarray subscript).  Function-scope local arrays are rejected -- a</span>
+<span class="sd">            local cannot be observed by another thread, so a volatile load there would be meaningless.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        The freshly-read value of `target`, with the same dtype an ordinary read would produce.</span>
+
+<span class="sd">    Example::</span>
+
+<span class="sd">        &gt;&gt;&gt; @qd.kernel</span>
+<span class="sd">        &gt;&gt;&gt; def lookback_scan(...):</span>
+<span class="sd">        &gt;&gt;&gt;     # block-level decoupled-look-back scan: spin until the predecessor publishes its aggregate</span>
+<span class="sd">        &gt;&gt;&gt;     while qd.volatile_load(flags[prev]) == STATE_INVALID:</span>
+<span class="sd">        &gt;&gt;&gt;         pass</span>
+<span class="sd">        &gt;&gt;&gt;     prev_agg = qd.volatile_load(aggregates[prev])</span>
+
+<span class="sd">    See also:</span>
+<span class="sd">        `qd.atomic_*` for the read-modify-write side; `qd.simt.grid.mem_fence` for the heavyweight</span>
+<span class="sd">        device-scope fence that was the only correct (but slow) workaround before this primitive existed.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="n">impl</span><span class="o">.</span><span class="n">is_python_backend</span><span class="p">():</span>
+        <span class="k">return</span> <span class="n">target</span><span class="o">.</span><span class="n">item</span><span class="p">()</span> <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">target</span><span class="p">,</span> <span class="s2">&quot;item&quot;</span><span class="p">)</span> <span class="k">else</span> <span class="n">target</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">target</span><span class="p">,</span> <span class="n">Field</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span>
+            <span class="s2">&quot;cannot pass a Field directly to &#39;qd.volatile_load&#39;; index it first (e.g. `field[None]`)&quot;</span>
+        <span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="p">(</span><span class="n">is_quadrants_expr</span><span class="p">(</span><span class="n">target</span><span class="p">)</span> <span class="ow">and</span> <span class="n">target</span><span class="o">.</span><span class="n">ptr</span><span class="o">.</span><span class="n">is_lvalue</span><span class="p">()):</span>
+        <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">&quot;qd.volatile_load requires an lvalue (field / ndarray subscript) as its argument&quot;</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">expr_init</span><span class="p">(</span><span class="n">expr</span><span class="o">.</span><span class="n">Expr</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">expr_volatile_load</span><span class="p">(</span><span class="n">target</span><span class="o">.</span><span class="n">ptr</span><span class="p">),</span> <span class="n">dbg_info</span><span class="o">=</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">DebugInfo</span><span class="p">(</span><span class="n">stack_info</span><span class="p">())))</span></div>
+
+
+
 <span class="nd">@writeback_binary</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">assign</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">):</span>
     <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">compiling_callable</span><span class="o">.</span><span class="n">ast_builder</span><span class="p">()</span><span class="o">.</span><span class="n">expr_assign</span><span class="p">(</span><span class="n">a</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">b</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">DebugInfo</span><span class="p">(</span><span class="n">stack_info</span><span class="p">()))</span>
@@ -2076,6 +2145,7 @@
     <span class="s2">&quot;atomic_mul&quot;</span><span class="p">,</span>
     <span class="s2">&quot;atomic_exchange&quot;</span><span class="p">,</span>
     <span class="s2">&quot;atomic_cas&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;volatile_load&quot;</span><span class="p">,</span>
     <span class="s2">&quot;bit_cast&quot;</span><span class="p">,</span>
     <span class="s2">&quot;bit_shr&quot;</span><span class="p">,</span>
     <span class="s2">&quot;cast&quot;</span><span class="p">,</span>
@@ -2129,8 +2199,8 @@
   </div>
   
   <!-- Scripts loaded after <body> so the DOM is not blocked -->
-  <script defer src="../../../_static/scripts/bootstrap.js?digest=55c26ed414f5f8a31ebb"></script>
-<script defer src="../../../_static/scripts/pydata-sphinx-theme.js?digest=55c26ed414f5f8a31ebb"></script>
+  <script defer src="../../../_static/scripts/bootstrap.js?digest=0790524f97105ba85085"></script>
+<script defer src="../../../_static/scripts/pydata-sphinx-theme.js?digest=0790524f97105ba85085"></script>
 
   <footer class="bd-footer">
 <div class="bd-footer__inner bd-page-width">
@@ -2164,7 +2234,7 @@
         <div class="footer-item">
 <p class="theme-version">
   <!-- # L10n: Setting the PST URL as an argument as this does not need to be localized -->
-  Built with the <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a> 0.17.1.
+  Built with the <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a> 0.18.0.
 </p></div>
       
     </div>
