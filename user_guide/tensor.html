@@ -626,13 +626,6 @@
 </pre></div>
 </div>
 <p>The kernel argument is unwrapped to the bare impl before the template-mapper / AST sees it, so kernel bodies still write <code class="docutils literal notranslate"><span class="pre">x[i,</span> <span class="pre">j]</span></code> and pay no per-call cost for the wrapper.</p>
-<p><code class="docutils literal notranslate"><span class="pre">qd.Tensor</span></code> is also the right annotation when storing a tensor as a <code class="docutils literal notranslate"><span class="pre">dataclasses.dataclass</span></code> member:</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@dataclass</span>
-<span class="k">class</span><span class="w"> </span><span class="nc">State</span><span class="p">:</span>
-    <span class="n">a</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">Tensor</span>
-    <span class="n">b</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">Tensor</span>
-</pre></div>
-</div>
 </section>
 <section id="pickle">
 <h2>Pickle<a class="headerlink" href="#pickle" title="Link to this heading">#</a></h2>
