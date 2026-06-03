@@ -1,0 +1,970 @@
+
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="../" >
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Algorithms &#8212; Quadrants 1.0.2 documentation</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "";
+  </script>
+  <!--
+    this give us a css class that will be invisible only if js is disabled
+  -->
+  <noscript>
+    <style>
+      .pst-js-only { display: none !important; }
+
+    </style>
+  </noscript>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="../_static/styles/theme.css?digest=0790524f97105ba85085" rel="stylesheet" />
+<link href="../_static/styles/pydata-sphinx-theme.css?digest=0790524f97105ba85085" rel="stylesheet" />
+
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=8f2a1f02" />
+    <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../_static/togglebutton.css?v=9c3e77be" />
+    <link rel="stylesheet" type="text/css" href="../_static/graphviz.css?v=4ae1632d" />
+    <link rel="stylesheet" type="text/css" href="../_static/sphinx-design.min.css?v=95c83b7e" />
+    <link rel="stylesheet" type="text/css" href="../_static/css/custom.css" />
+  
+  <!-- So that users can add custom icons -->
+  <script defer src="../_static/scripts/fontawesome.js?digest=0790524f97105ba85085"></script>
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=0790524f97105ba85085" />
+<link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=0790524f97105ba85085" />
+
+    <script src="../_static/documentation_options.js?v=1ed6394b"></script>
+    <script src="../_static/doctools.js?v=9bcbadda"></script>
+    <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../_static/copybutton.js?v=f281be69"></script>
+    <script>let toggleHintShow = 'Click to show';</script>
+    <script>let toggleHintHide = 'Click to hide';</script>
+    <script>let toggleOpenOnPrint = 'true';</script>
+    <script src="../_static/togglebutton.js?v=b8b12719"></script>
+    <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
+    <script src="../_static/design-tabs.js?v=f930bc37"></script>
+    <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'user_guide/algorithms';</script>
+    <script>DOCUMENTATION_OPTIONS.search_as_you_type = false;</script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Fastcache" href="fastcache.html" />
+    <link rel="prev" title="Register-resident tiles: Tile16x16 and Tile32x32" href="tile.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="docsearch:language" content="en"/>
+  <meta name="docsearch:version" content="1.0.2" />
+  
+    
+    <script src="../_static/searchtools.js"></script>
+    <script src="../_static/language_data.js"></script>
+    <script src="../searchindex.js"></script>
+  
+  </head>
+  <body data-default-mode="">
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+  
+  
+  
+  
+  <dialog id="pst-search-dialog">
+    
+<form class="bd-search d-flex align-items-center"
+      action="../search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         placeholder="Search the docs ..."
+         aria-label="Search the docs ..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form>
+  </dialog>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header id="pst-header" class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+<div class="bd-header__inner bd-page-width">
+  <button class="pst-navbar-icon sidebar-toggle primary-toggle" aria-label="Site navigation">
+    <span class="fa-solid fa-bars"></span>
+  </button>
+  
+  
+  <div class="col-lg-3 navbar-header-items__start">
+    
+      <div class="navbar-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="../index.html">
+  
+  
+  
+  
+  
+  
+    <p class="title logo__title">Quadrants 1.0.2 documentation</p>
+  
+</a></div>
+    
+  </div>
+  
+  <div class="col-lg-9 navbar-header-items">
+    
+    <div class="me-auto navbar-header-items__center">
+      
+        <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item current active">
+  <a class="nav-link nav-internal" href="index.html">
+    User guide
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../autoapi/index.html">
+    API Reference
+  </a>
+</li>
+
+  </ul>
+</nav></div>
+      
+    </div>
+    
+    
+    <div class="navbar-header-items__end">
+      
+        <div class="navbar-item navbar-persistent--container">
+          
+
+<button class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+        </div>
+      
+      
+        <div class="navbar-item">
+
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg fa-fw" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg fa-fw" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg fa-fw" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg fa-fw me-1"></i>System Settings</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg fa-fw me-1"></i>Light</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg fa-fw me-1"></i>Dark</button></li>
+  </ul>
+</div></div>
+      
+    </div>
+    
+  </div>
+  
+  
+    <div class="navbar-persistent--mobile">
+
+<button class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+    </div>
+  
+
+  
+    <button class="pst-navbar-icon sidebar-toggle secondary-toggle" aria-label="On this page">
+      <span class="fa-solid fa-outdent"></span>
+    </button>
+  
+</div>
+
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+      <dialog id="pst-primary-sidebar-modal"></dialog>
+      <div id="pst-primary-sidebar" class="bd-sidebar-primary bd-sidebar">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+      <div class="sidebar-header-items__center">
+        
+          
+          
+            <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item current active">
+  <a class="nav-link nav-internal" href="index.html">
+    User guide
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../autoapi/index.html">
+    API Reference
+  </a>
+</li>
+
+  </ul>
+</nav></div>
+          
+        
+      </div>
+    
+    
+    
+      <div class="sidebar-header-items__end">
+        
+          <div class="navbar-item">
+
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg fa-fw" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg fa-fw" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg fa-fw" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg fa-fw me-1"></i>System Settings</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg fa-fw me-1"></i>Light</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg fa-fw me-1"></i>Dark</button></li>
+  </ul>
+</div></div>
+        
+      </div>
+    
+  </div>
+  
+    <div class="sidebar-primary-items__start sidebar-primary__section">
+        <div class="sidebar-primary-item pst-sidebar-collapse"><button id="pst-collapse-sidebar-button" aria-expanded="true" aria-controls="pst-primary-sidebar"><svg class="pst-icon svg-inline--fa" role="img" aria-hidden="true" focusable="false" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
+    <path fill="currentColor" d="M3 15.5C2.36232 15.5 1.74874 15.2564 1.28478 14.8189C0.820828 14.3815 0.541576 13.7832 0.504167 13.1467L0.5 13L0.5 3C0.499965 2.36232 0.743605 1.74874 1.18107 1.28478C1.61854 0.820828 2.21676 0.541576 2.85333 0.504167L3 0.5L13 0.5C13.6377 0.499965 14.2513 0.743605 14.7152 1.18107C15.1792 1.61854 15.4584 2.21676 15.4958 2.85333L15.5 3L15.5 13C15.5 13.6377 15.2564 14.2513 14.8189 14.7152C14.3815 15.1792 13.7832 15.4584 13.1467 15.4958L13 15.5L3 15.5ZM3 13.8333L10.5 13.8333L10.5 2.16667L3 2.16667C2.79589 2.16669 2.59889 2.24163 2.44636 2.37726C2.29383 2.5129 2.19638 2.69979 2.1725 2.9025L2.16667 3L2.16667 13C2.16669 13.2041 2.24163 13.4011 2.37726 13.5536C2.5129 13.7062 2.69979 13.8036 2.9025 13.8275L3 13.8333ZM6.65583 10.325L6.5775 10.2558L4.91083 8.58917C4.76735 8.44567 4.68116 8.25476 4.66843 8.05223C4.65569 7.84971 4.71729 7.6495 4.84167 7.48917L4.91083 7.41083L6.5775 5.74417C6.72747 5.59471 6.9287 5.50794 7.14032 5.50148C7.35194 5.49502 7.55809 5.56935 7.7169 5.70937C7.8757 5.8494 7.97525 6.04463 7.99533 6.25539C8.01541 6.46616 7.95451 6.67667 7.825 6.84417L7.75583 6.9225L6.67917 8L7.75583 9.0775C7.89931 9.22099 7.98551 9.41191 7.99824 9.61443C8.01097 9.81695 7.94938 10.0172 7.825 10.1775L7.75583 10.2558C7.61234 10.3993 7.42142 10.4855 7.2189 10.4982C7.01638 10.511 6.81617 10.4494 6.65583 10.325Z"/>
+  </svg>
+  <span class="pst-collapse-sidebar-label">Collapse Sidebar</span>
+  <span class="pst-expand-sidebar-label">Expand Sidebar</span>
+</button></div>
+        <div class="sidebar-primary-item">
+
+<nav class="bd-docs-nav bd-links"
+     aria-label="Section Navigation">
+  <p class="bd-links__title" role="heading" aria-level="1">Section Navigation</p>
+  <div class="bd-toc-item navbar-nav"><p aria-level="2" class="caption" role="heading"><span class="caption-text">Getting started</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="getting_started.html">Getting started</a></li>
+<li class="toctree-l1"><a class="reference internal" href="supported_systems.html">Supported systems</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Core concepts</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="tensor_types.html">Tensor types</a></li>
+<li class="toctree-l1"><a class="reference internal" href="scalar_tensors.html">Scalar tensors</a></li>
+<li class="toctree-l1"><a class="reference internal" href="matrix_vector.html">Matrix and Vector</a></li>
+
+<li class="toctree-l1"><a class="reference internal" href="matrix_vector_per_thread.html">Per-thread matrix and vector operations</a></li>
+<li class="toctree-l1"><a class="reference internal" href="linalg_per_thread.html">Per-thread linear algebra</a></li>
+<li class="toctree-l1"><a class="reference internal" href="tensor.html">Tensors</a></li>
+<li class="toctree-l1"><a class="reference internal" href="compound_types.html">Compound types</a></li>
+<li class="toctree-l1"><a class="reference internal" href="buffer_view.html">BufferView</a></li>
+<li class="toctree-l1"><a class="reference internal" href="static.html">qd.static</a></li>
+<li class="toctree-l1"><a class="reference internal" href="sub_functions.html">Sub-functions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="parallelization.html">Parallelization</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Integration</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="interop.html">Numpy and Torch interop</a></li>
+<li class="toctree-l1"><a class="reference internal" href="metal_shared_queue.html">Shared Metal command queue (PyTorch MPS)</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Autodiff</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="autodiff.html">Automatic differentiation</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">SIMT primitives</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="atomics.html">Atomics</a></li>
+<li class="toctree-l1"><a class="reference internal" href="block.html">Block primitives</a></li>
+<li class="toctree-l1"><a class="reference internal" href="grid.html">Grid primitives</a></li>
+<li class="toctree-l1"><a class="reference internal" href="math.html">Math</a></li>
+<li class="toctree-l1"><a class="reference internal" href="subgroup.html">Subgroup primitives</a></li>
+<li class="toctree-l1"><a class="reference internal" href="tile.html">Register-resident tiles: <code class="docutils literal notranslate"><span class="pre">Tile16x16</span></code> and <code class="docutils literal notranslate"><span class="pre">Tile32x32</span></code></a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Algorithms</span></p>
+<ul class="current nav bd-sidenav">
+<li class="toctree-l1 current active"><a class="current reference internal" href="#">Algorithms</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Performance</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="fastcache.html">Fastcache</a></li>
+<li class="toctree-l1"><a class="reference internal" href="graph.html">Graph</a></li>
+<li class="toctree-l1"><a class="reference internal" href="streams.html">Streams</a></li>
+<li class="toctree-l1"><a class="reference internal" href="perf_dispatch.html">Performance Dispatch</a></li>
+<li class="toctree-l1"><a class="reference internal" href="init_options.html">qd.init options</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Testing</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="unit_testing.html">Unit testing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="kernel_coverage.html">Kernel code coverage</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Reference</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="unsupported_python.html">Python features in kernel scope</a></li>
+<li class="toctree-l1"><a class="reference internal" href="python_backend.html">Python backend</a></li>
+<li class="toctree-l1"><a class="reference internal" href="debug.html">Debug mode</a></li>
+<li class="toctree-l1"><a class="reference internal" href="quirks.html">Quirks</a></li>
+<li class="toctree-l1"><a class="reference internal" href="troubleshooting.html">Troubleshooting</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Contributing</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="contributing.html">Contributing to quadrants</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Internal</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="building_cudagraph_conditional_fatbin.html">Building the CUDA graph conditional fatbin</a></li>
+</ul>
+</div>
+</nav></div>
+    </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+      <div class="sidebar-primary-item">
+<div id="ethical-ad-placement"
+      class="flat"
+      data-ea-publisher="readthedocs"
+      data-ea-type="readthedocs-sidebar"
+      data-ea-manual="true">
+</div></div>
+  </div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item">
+
+<nav aria-label="Breadcrumb" class="d-print-none">
+  <ul class="bd-breadcrumbs">
+    
+    <li class="breadcrumb-item breadcrumb-home">
+      <a href="../index.html" class="nav-link" aria-label="Home">
+        <i class="fa-solid fa-home"></i>
+      </a>
+    </li>
+    
+    <li class="breadcrumb-item"><a href="index.html" class="nav-link">User guide</a></li>
+    
+    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">Algorithms</span></li>
+  </ul>
+</nav>
+</div>
+      
+    </div>
+  
+  
+</div>
+</div>
+              
+              
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <section class="tex2jax_ignore mathjax_ignore" id="algorithms">
+<h1>Algorithms<a class="headerlink" href="#algorithms" title="Link to this heading">#</a></h1>
+<p>Device-wide algorithms are primitives that consume and produce whole arrays, executed as one or more kernel launches under the hood. They sit one tier above block and subgroup primitives: they <em>use</em> <code class="docutils literal notranslate"><span class="pre">block.reduce</span></code>, <code class="docutils literal notranslate"><span class="pre">block.exclusive_scan</span></code>, <code class="docutils literal notranslate"><span class="pre">block.radix_rank_match_atomic_or</span></code>, and <code class="docutils literal notranslate"><span class="pre">subgroup</span></code> reductions internally, and rely on the kernel-launch boundary (plus <code class="docutils literal notranslate"><span class="pre">atomic_add</span></code> in a few places) for cross-block synchronization rather than any in-kernel grid-scope barrier. The user calls them from host (Python) code, not from inside a kernel.</p>
+<section id="what-s-available">
+<h2>What’s available<a class="headerlink" href="#what-s-available" title="Link to this heading">#</a></h2>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>Op</p></th>
+<th class="head"><p>What it does</p></th>
+<th class="head"><p>CUDA</p></th>
+<th class="head"><p>AMDGPU</p></th>
+<th class="head"><p>Vulkan</p></th>
+<th class="head"><p>Metal</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">qd.algorithms.device_reduce_{add,min,max}(arr,</span> <span class="pre">out)</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">out[0]</span> <span class="pre">=</span> <span class="pre">sum/min/max(arr)</span></code> (two-or-more-pass tree reduction; identity derived from <code class="docutils literal notranslate"><span class="pre">arr.dtype</span></code> for min / max)</p></td>
+<td><p>yes</p></td>
+<td><p>yes*</p></td>
+<td><p>yes</p></td>
+<td><p>yes*</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">qd.algorithms.device_exclusive_scan_{add,min,max}(arr,</span> <span class="pre">out)</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">out[i]</span> <span class="pre">=</span> <span class="pre">sum/min/max(arr[0:i])</span></code> (three-pass Blelloch-style scan; 32-bit + 64-bit scalars; identity derived from <code class="docutils literal notranslate"><span class="pre">arr.dtype</span></code> for min / max)</p></td>
+<td><p>yes</p></td>
+<td><p>yes*</p></td>
+<td><p>yes</p></td>
+<td><p>yes*</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">qd.algorithms.device_select(arr,</span> <span class="pre">flags,</span> <span class="pre">out,</span> <span class="pre">num_out)</span></code></p></td>
+<td><p>Stream compaction: copy <code class="docutils literal notranslate"><span class="pre">arr[i]</span></code> to a dense prefix of <code class="docutils literal notranslate"><span class="pre">out</span></code> for every <code class="docutils literal notranslate"><span class="pre">flags[i]</span> <span class="pre">==</span> <span class="pre">1</span></code> (<code class="docutils literal notranslate"><span class="pre">flags</span></code> must be exactly 0/1).</p></td>
+<td><p>yes</p></td>
+<td><p>yes*</p></td>
+<td><p>yes</p></td>
+<td><p>yes*</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">qd.algorithms.device_radix_sort(keys,</span> <span class="pre">tmp_keys,</span> <span class="pre">values=None,</span> <span class="pre">tmp_values=None,</span> <span class="pre">end_bit=None)</span></code></p></td>
+<td><p>LSB radix sort for 32-bit or 64-bit scalar keys (optional key-value).</p></td>
+<td><p>yes</p></td>
+<td><p>yes*</p></td>
+<td><p>yes</p></td>
+<td><p>yes*</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">qd.algorithms.device_reduce_by_key_add(keys_in,</span> <span class="pre">values_in,</span> <span class="pre">keys_out,</span> <span class="pre">values_out,</span> <span class="pre">num_runs)</span></code></p></td>
+<td><p>Collapse each consecutive run of equal keys into <code class="docutils literal notranslate"><span class="pre">(key,</span> <span class="pre">sum_of_values)</span></code>.</p></td>
+<td><p>yes</p></td>
+<td><p>yes*</p></td>
+<td><p>yes</p></td>
+<td><p>yes*</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">qd.algorithms.parallel_sort</span></code></p></td>
+<td><p>Odd-even merge sort (in-place, key or key-value). <strong>Deprecated</strong>: prefer <code class="docutils literal notranslate"><span class="pre">device_radix_sort</span></code>.</p></td>
+<td><p>yes</p></td>
+<td><p>yes*</p></td>
+<td><p>yes</p></td>
+<td><p>yes*</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">qd.algorithms.PrefixSumExecutor</span></code></p></td>
+<td><p>Inclusive in-place prefix sum (i32 only). <strong>Deprecated</strong>: prefer <code class="docutils literal notranslate"><span class="pre">device_exclusive_scan_add</span></code>.</p></td>
+<td><p>yes</p></td>
+<td><p>no</p></td>
+<td><p>yes</p></td>
+<td><p>no</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>* <code class="docutils literal notranslate"><span class="pre">device_reduce_*</span></code>, <code class="docutils literal notranslate"><span class="pre">device_exclusive_scan_*</span></code>, <code class="docutils literal notranslate"><span class="pre">device_select</span></code>, <code class="docutils literal notranslate"><span class="pre">device_radix_sort</span></code>, <code class="docutils literal notranslate"><span class="pre">device_reduce_by_key_add</span></code>, and <code class="docutils literal notranslate"><span class="pre">parallel_sort</span></code> run anywhere a Quadrants kernel runs; portability is inherited from the underlying block / subgroup primitives.</p>
+</section>
+<section id="scratch-space">
+<h2>Scratch space<a class="headerlink" href="#scratch-space" title="Link to this heading">#</a></h2>
+<p>Every device-wide algorithm in this module decomposes into “per-block partial → cross-block combine → finalize” passes (tree reduction, three-pass Blelloch scan, four-pass radix sort, scan-then-scatter compaction). The per-block partials need somewhere to live between kernel launches - that buffer is called <strong>scratch</strong>. Rather than ask each algorithm to allocate its own (forcing a <code class="docutils literal notranslate"><span class="pre">qd.field(...)</span></code> per call and undermining the no-implicit-allocation contract of the rest of the API), <code class="docutils literal notranslate"><span class="pre">qd.algorithms</span></code> shares a single set of module-level scratch fields across every call.</p>
+<p>There are <strong>two scratch fields</strong>, one per element width that algorithm partials need to live in:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">Field(u32)</span></code> - used by every 4-byte algorithm: <code class="docutils literal notranslate"><span class="pre">i32</span></code> / <code class="docutils literal notranslate"><span class="pre">u32</span></code> / <code class="docutils literal notranslate"><span class="pre">f32</span></code> reduce + scan, <code class="docutils literal notranslate"><span class="pre">device_select</span></code> indices, <code class="docutils literal notranslate"><span class="pre">device_reduce_by_key_add</span></code> flags + values, <code class="docutils literal notranslate"><span class="pre">device_radix_sort</span></code> tile histograms (regardless of key width). 4-byte values are <code class="docutils literal notranslate"><span class="pre">bit_cast</span></code> to / from <code class="docutils literal notranslate"><span class="pre">u32</span></code> on the way in and out.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">Field(u64)</span></code> - used by every 8-byte algorithm: <code class="docutils literal notranslate"><span class="pre">i64</span></code> / <code class="docutils literal notranslate"><span class="pre">u64</span></code> / <code class="docutils literal notranslate"><span class="pre">f64</span></code> reduce + scan, <code class="docutils literal notranslate"><span class="pre">u64</span></code> radix-sort keys. Same <code class="docutils literal notranslate"><span class="pre">bit_cast</span></code> story, just at 8-byte width.</p></li>
+</ul>
+<p>Sizing: each field defaults to <strong>5 MB</strong> (<code class="docutils literal notranslate"><span class="pre">DEFAULT_SCRATCH_BYTES</span> <span class="pre">=</span> <span class="pre">5</span> <span class="pre">&lt;&lt;</span> <span class="pre">20</span></code>). That covers <code class="docutils literal notranslate"><span class="pre">N</span></code> up to ~1.3M elements for <code class="docutils literal notranslate"><span class="pre">device_select</span></code> / <code class="docutils literal notranslate"><span class="pre">device_radix_sort</span></code> / <code class="docutils literal notranslate"><span class="pre">device_reduce_by_key_add</span></code> (<code class="docutils literal notranslate"><span class="pre">~N</span></code> u32 slots, qipc’s hot path), and well past <code class="docutils literal notranslate"><span class="pre">N</span> <span class="pre">=</span> <span class="pre">64M</span></code> for <code class="docutils literal notranslate"><span class="pre">device_reduce_*</span></code> / <code class="docutils literal notranslate"><span class="pre">device_exclusive_scan_*</span></code> (<code class="docutils literal notranslate"><span class="pre">~N</span> <span class="pre">/</span> <span class="pre">BLOCK_DIM</span></code> u32 slots, <code class="docutils literal notranslate"><span class="pre">BLOCK_DIM</span> <span class="pre">=</span> <span class="pre">256</span></code>). The u64 field is sized to the same byte budget, so it covers half as many elements.</p>
+<p><strong>Allocation is lazy.</strong> A scratch field is only allocated on its first <code class="docutils literal notranslate"><span class="pre">get_scratch_*()</span></code> call from inside an algorithm. Programs that never touch <code class="docutils literal notranslate"><span class="pre">qd.algorithms.*</span></code> pay nothing; programs that only touch 4-byte algorithms never allocate the u64 buffer. (The default budget is therefore a per-field worst case, not a fixed cost: a 4-byte-only caller pays 5 MB, not 10 MB.)</p>
+<p><strong><code class="docutils literal notranslate"><span class="pre">qd.reset()</span></code> invalidates every scratch field</strong> via an <code class="docutils literal notranslate"><span class="pre">impl.on_reset</span></code> hook, and resets the byte budget back to <code class="docutils literal notranslate"><span class="pre">DEFAULT_SCRATCH_BYTES</span></code>. The next algorithm call after a <code class="docutils literal notranslate"><span class="pre">qd.init()</span></code> reallocates against the fresh runtime at the default capacity. This keeps <code class="docutils literal notranslate"><span class="pre">qd.init</span></code> / <code class="docutils literal notranslate"><span class="pre">qd.reset</span></code> a “clean slate” - all runtime-scoped state (resource handles <em>and</em> config) goes away on reset, by design. Apps that need a persistent bump should call <code class="docutils literal notranslate"><span class="pre">set_scratch_bytes</span></code> immediately after each <code class="docutils literal notranslate"><span class="pre">qd.init</span></code>.</p>
+<p><strong>Tuning the budget.</strong> Call <code class="docutils literal notranslate"><span class="pre">quadrants._scratch.set_scratch_bytes(N)</span></code> before any algorithm runs (or before any algorithm runs after a <code class="docutils literal notranslate"><span class="pre">qd.reset()</span></code>). Pass a larger value to cover bigger <code class="docutils literal notranslate"><span class="pre">N</span></code>, or a smaller value to reduce the resident footprint on memory-constrained devices:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">quadrants</span><span class="w"> </span><span class="kn">import</span> <span class="n">_scratch</span>
+<span class="n">_scratch</span><span class="o">.</span><span class="n">set_scratch_bytes</span><span class="p">(</span><span class="mi">20</span> <span class="o">&lt;&lt;</span> <span class="mi">20</span><span class="p">)</span>   <span class="c1"># 20 MB; covers N up to ~5M for device_select / radix sort</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">set_scratch_bytes</span></code> raises <code class="docutils literal notranslate"><span class="pre">RuntimeError</span></code> if any scratch field has already been allocated in the current runtime cycle (re-<code class="docutils literal notranslate"><span class="pre">qd.init</span></code>-ing wipes that constraint). <code class="docutils literal notranslate"><span class="pre">scratch_bytes</span></code> must be a positive multiple of 8.</p>
+<p>The per-algorithm sections below mention scratch only to call out per-algo footprint (so you can size the budget for a known <code class="docutils literal notranslate"><span class="pre">N</span></code>); the mechanics live here.</p>
+</section>
+<section id="semantics">
+<h2>Semantics<a class="headerlink" href="#semantics" title="Link to this heading">#</a></h2>
+<section id="qd-algorithms-device-reduce-add-min-max-arr-out">
+<h3><code class="docutils literal notranslate"><span class="pre">qd.algorithms.device_reduce_{add,min,max}(arr,</span> <span class="pre">out)</span></code><a class="headerlink" href="#qd-algorithms-device-reduce-add-min-max-arr-out" title="Link to this heading">#</a></h3>
+<p>Device-wide tree reduction over a 1-D tensor: <code class="docutils literal notranslate"><span class="pre">out[0]</span></code> holds <code class="docutils literal notranslate"><span class="pre">sum(arr)</span></code> / <code class="docutils literal notranslate"><span class="pre">min(arr)</span></code> / <code class="docutils literal notranslate"><span class="pre">max(arr)</span></code>. The monoid identity is derived from <code class="docutils literal notranslate"><span class="pre">arr.dtype</span></code> automatically (<code class="docutils literal notranslate"><span class="pre">0</span></code> for <code class="docutils literal notranslate"><span class="pre">add</span></code>; largest representable value for <code class="docutils literal notranslate"><span class="pre">min</span></code> - <code class="docutils literal notranslate"><span class="pre">+inf</span></code> for floats, <code class="docutils literal notranslate"><span class="pre">INT{32,64}_MAX</span></code> for signed ints, <code class="docutils literal notranslate"><span class="pre">UINT{32,64}_MAX</span></code> for unsigned; smallest representable value for <code class="docutils literal notranslate"><span class="pre">max</span></code> - <code class="docutils literal notranslate"><span class="pre">-inf</span></code> for floats, <code class="docutils literal notranslate"><span class="pre">INT{32,64}_MIN</span></code> for signed ints, <code class="docutils literal notranslate"><span class="pre">0</span></code> for unsigned), mirroring the <code class="docutils literal notranslate"><span class="pre">block.reduce_min</span></code> / <code class="docutils literal notranslate"><span class="pre">subgroup.reduce_min</span></code> typed wrappers which don’t take an identity for the same reason.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">quadrants</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">qd</span>
+
+<span class="n">inp</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="n">N</span><span class="p">)</span>
+<span class="n">out</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+<span class="c1"># ... fill inp ...</span>
+
+<span class="n">qd</span><span class="o">.</span><span class="n">algorithms</span><span class="o">.</span><span class="n">device_reduce_add</span><span class="p">(</span><span class="n">inp</span><span class="p">,</span> <span class="n">out</span><span class="o">=</span><span class="n">out</span><span class="p">)</span>
+<span class="n">total</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">out</span><span class="o">.</span><span class="n">to_numpy</span><span class="p">()[</span><span class="mi">0</span><span class="p">])</span>   <span class="c1"># explicit device-&gt;host hop</span>
+</pre></div>
+</div>
+<p>Arguments:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">arr</span></code>: 1-D input tensor. Pass a <code class="docutils literal notranslate"><span class="pre">qd.field</span></code>, <code class="docutils literal notranslate"><span class="pre">qd.ndarray</span></code>, or <code class="docutils literal notranslate"><span class="pre">qd.Tensor</span></code> wrapper around either - the kernels are polymorphic via the <code class="docutils literal notranslate"><span class="pre">qd.Tensor</span></code> annotation.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">out</span></code>: 1-element tensor with the same dtype as <code class="docutils literal notranslate"><span class="pre">arr</span></code>. Caller-supplied so the call is fully asynchronous - there is no implicit device→host sync. To get a Python scalar, do <code class="docutils literal notranslate"><span class="pre">out.to_numpy()[0]</span></code> explicitly after the call. This makes the host hop visible at the call site rather than hidden inside the algorithm.</p></li>
+</ul>
+<p>Constraints:</p>
+<ul class="simple">
+<li><p><strong>Dtypes:</strong> scalar <code class="docutils literal notranslate"><span class="pre">qd.i32</span></code>, <code class="docutils literal notranslate"><span class="pre">qd.u32</span></code>, <code class="docutils literal notranslate"><span class="pre">qd.f32</span></code>, <code class="docutils literal notranslate"><span class="pre">qd.i64</span></code>, <code class="docutils literal notranslate"><span class="pre">qd.u64</span></code>, <code class="docutils literal notranslate"><span class="pre">qd.f64</span></code>. Narrower / wider scalar dtypes (e.g. <code class="docutils literal notranslate"><span class="pre">qd.i16</span></code>, <code class="docutils literal notranslate"><span class="pre">qd.f16</span></code>) and struct dtypes raise <code class="docutils literal notranslate"><span class="pre">NotImplementedError</span></code>. 4-byte dtypes stage through the shared u32 scratch and 8-byte dtypes through the shared u64 scratch; see <a class="reference internal" href="#scratch-space">Scratch space</a> for the mechanics.</p></li>
+<li><p><strong>Shape:</strong> <code class="docutils literal notranslate"><span class="pre">arr</span></code> must be 1-D; <code class="docutils literal notranslate"><span class="pre">out.shape</span></code> must be <code class="docutils literal notranslate"><span class="pre">(1,)</span></code>. Both must share the same dtype.</p></li>
+<li><p><strong>f32 / f64 non-associativity:</strong> <code class="docutils literal notranslate"><span class="pre">device_reduce_add</span></code> on a floating-point dtype is not bitwise-reproducible across <code class="docutils literal notranslate"><span class="pre">N</span></code> changes, nor bitwise-equal to host <code class="docutils literal notranslate"><span class="pre">numpy.sum</span></code>. Tests tolerate a small relative error rather than asserting bitwise.</p></li>
+</ul>
+<p>Implementation:</p>
+<ul class="simple">
+<li><p>Two-or-more-pass tree reduction. Each pass uses <code class="docutils literal notranslate"><span class="pre">BLOCK_DIM</span> <span class="pre">=</span> <span class="pre">256</span></code> threads per block and reduces 256 elements per block via <code class="docutils literal notranslate"><span class="pre">block.reduce_{add,min,max}</span></code>. For <code class="docutils literal notranslate"><span class="pre">N</span> <span class="pre">&lt;=</span> <span class="pre">256</span></code> one pass suffices; for <code class="docutils literal notranslate"><span class="pre">N</span></code> up to <code class="docutils literal notranslate"><span class="pre">256^2</span> <span class="pre">=</span> <span class="pre">65536</span></code>, two passes; for larger <code class="docutils literal notranslate"><span class="pre">N</span></code>, additional intermediate passes are added until the reduction terminates in a single block.</p></li>
+<li><p>Per-block partials are written to the shared scratch field (u32 for 4-byte dtypes, u64 for 8-byte dtypes; see <a class="reference internal" href="#scratch-space">Scratch space</a>).</p></li>
+<li><p>The last pass writes the final value to <code class="docutils literal notranslate"><span class="pre">out[0]</span></code> directly. The kernel launches are pipelined back-to-back; correctness relies on the kernel-boundary serialization that Quadrants provides between host-launched kernels.</p></li>
+</ul>
+<p>Scratch footprint: <code class="docutils literal notranslate"><span class="pre">ceil(N</span> <span class="pre">/</span> <span class="pre">BLOCK_DIM)</span></code> slots, where <code class="docutils literal notranslate"><span class="pre">BLOCK_DIM</span> <span class="pre">=</span> <span class="pre">256</span></code>. Well under the 5 MB default for any reasonable <code class="docutils literal notranslate"><span class="pre">N</span></code> (<code class="docutils literal notranslate"><span class="pre">N</span> <span class="pre">=</span> <span class="pre">1G</span></code> is ~4M slots); see <a class="reference internal" href="#scratch-space">Scratch space</a> if you need a different budget.</p>
+</section>
+<section id="qd-algorithms-device-exclusive-scan-add-min-max-arr-out">
+<h3><code class="docutils literal notranslate"><span class="pre">qd.algorithms.device_exclusive_scan_{add,min,max}(arr,</span> <span class="pre">out)</span></code><a class="headerlink" href="#qd-algorithms-device-exclusive-scan-add-min-max-arr-out" title="Link to this heading">#</a></h3>
+<p>Device-wide exclusive prefix scan over a 1-D tensor: <code class="docutils literal notranslate"><span class="pre">out[i]</span></code> holds the reduction (<code class="docutils literal notranslate"><span class="pre">sum</span></code> / <code class="docutils literal notranslate"><span class="pre">min</span></code> / <code class="docutils literal notranslate"><span class="pre">max</span></code>) of <code class="docutils literal notranslate"><span class="pre">arr[0:i]</span></code>. <code class="docutils literal notranslate"><span class="pre">out[0]</span></code> is always the monoid identity, which is derived from <code class="docutils literal notranslate"><span class="pre">arr.dtype</span></code> automatically (<code class="docutils literal notranslate"><span class="pre">0</span></code> for <code class="docutils literal notranslate"><span class="pre">add</span></code>; largest representable value for <code class="docutils literal notranslate"><span class="pre">min</span></code> - <code class="docutils literal notranslate"><span class="pre">+inf</span></code> for floats, <code class="docutils literal notranslate"><span class="pre">INT{32,64}_MAX</span></code> for signed ints, <code class="docutils literal notranslate"><span class="pre">UINT{32,64}_MAX</span></code> for unsigned; smallest representable value for <code class="docutils literal notranslate"><span class="pre">max</span></code> - <code class="docutils literal notranslate"><span class="pre">-inf</span></code> for floats, <code class="docutils literal notranslate"><span class="pre">INT{32,64}_MIN</span></code> for signed ints, <code class="docutils literal notranslate"><span class="pre">0</span></code> for unsigned), mirroring the <code class="docutils literal notranslate"><span class="pre">block.exclusive_min</span></code> / <code class="docutils literal notranslate"><span class="pre">subgroup.exclusive_min_tiled</span></code> typed wrappers.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">quadrants</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">qd</span>
+
+<span class="n">N</span> <span class="o">=</span> <span class="mi">1_000_000</span>
+<span class="n">inp</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="n">N</span><span class="p">)</span>
+<span class="n">out</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="n">N</span><span class="p">)</span>
+<span class="c1"># ... fill inp ...</span>
+
+<span class="n">qd</span><span class="o">.</span><span class="n">algorithms</span><span class="o">.</span><span class="n">device_exclusive_scan_add</span><span class="p">(</span><span class="n">inp</span><span class="p">,</span> <span class="n">out</span><span class="o">=</span><span class="n">out</span><span class="p">)</span>
+<span class="c1"># out[0] == 0.0; out[i] == sum(inp[0:i]) for i &gt; 0.</span>
+</pre></div>
+</div>
+<p>Constraints:</p>
+<ul class="simple">
+<li><p><strong>Dtypes:</strong> scalar <code class="docutils literal notranslate"><span class="pre">qd.i32</span></code>, <code class="docutils literal notranslate"><span class="pre">qd.u32</span></code>, <code class="docutils literal notranslate"><span class="pre">qd.f32</span></code>, <code class="docutils literal notranslate"><span class="pre">qd.i64</span></code>, <code class="docutils literal notranslate"><span class="pre">qd.u64</span></code>, <code class="docutils literal notranslate"><span class="pre">qd.f64</span></code>. Narrower / wider scalar dtypes (e.g. <code class="docutils literal notranslate"><span class="pre">qd.i16</span></code>, <code class="docutils literal notranslate"><span class="pre">qd.f16</span></code>) and struct dtypes raise <code class="docutils literal notranslate"><span class="pre">NotImplementedError</span></code>. 4-byte dtypes stage through the shared u32 scratch and 8-byte dtypes through the shared u64 scratch; see <a class="reference internal" href="#scratch-space">Scratch space</a> for the mechanics.</p></li>
+<li><p><strong>Shape:</strong> <code class="docutils literal notranslate"><span class="pre">arr</span></code> and <code class="docutils literal notranslate"><span class="pre">out</span></code> must both be 1-D with the same shape and dtype.</p></li>
+<li><p><strong>No in-place scan:</strong> <code class="docutils literal notranslate"><span class="pre">out</span></code> must be a distinct buffer from <code class="docutils literal notranslate"><span class="pre">arr</span></code>. Calling with <code class="docutils literal notranslate"><span class="pre">out</span> <span class="pre">is</span> <span class="pre">arr</span></code> raises <code class="docutils literal notranslate"><span class="pre">ValueError</span></code>. (The kernels do not protect against same-buffer aliasing; allocating one extra buffer once is cheap relative to the scan itself.)</p></li>
+<li><p><strong>Float non-associativity:</strong> the order of additions inside a scan tree is not the same as a left-to-right host scan, so <code class="docutils literal notranslate"><span class="pre">f32</span></code> / <code class="docutils literal notranslate"><span class="pre">f64</span></code> results are <em>not</em> bitwise-equal to <code class="docutils literal notranslate"><span class="pre">numpy.cumsum</span></code>. Tests tolerate a small relative error (scaled by dtype precision).</p></li>
+</ul>
+<p>Implementation:</p>
+<ul class="simple">
+<li><p>Blelloch 1990 three-pass exclusive scan:</p>
+<ol class="arabic simple">
+<li><p><strong>Pass 1</strong> - per-block tile reduce into the shared scratch (one slot per block).</p></li>
+<li><p><strong>Pass 2</strong> - exclusive-scan the partials buffer in place. For <code class="docutils literal notranslate"><span class="pre">N</span> <span class="pre">≤</span> <span class="pre">BLOCK_DIM²</span></code> (= 65536) a single block does this. For larger <code class="docutils literal notranslate"><span class="pre">N</span></code>, the driver recurses: another tile-reduce on the partials, a recursive scan, then a downsweep that applies the higher-level prefixes.</p></li>
+<li><p><strong>Pass 3</strong> - per-block tile scan + add the block prefix from scratch. Each block re-reads its tile from <code class="docutils literal notranslate"><span class="pre">arr</span></code>, runs <code class="docutils literal notranslate"><span class="pre">block.exclusive_scan</span></code> to get per-thread tile prefixes, and adds its <code class="docutils literal notranslate"><span class="pre">block_prefix</span></code> from the scanned partials.</p></li>
+</ol>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">BLOCK_DIM</span> <span class="pre">=</span> <span class="pre">256</span></code>. Total scratch usage at <code class="docutils literal notranslate"><span class="pre">N</span> <span class="pre">=</span> <span class="pre">1M</span></code> is <code class="docutils literal notranslate"><span class="pre">4096</span> <span class="pre">+</span> <span class="pre">16</span> <span class="pre">=</span> <span class="pre">4112</span></code> slots (~16 KB for 4-byte dtypes, ~32 KB for 8-byte), trivial relative to the 5 MB default. See <a class="reference internal" href="#scratch-space">Scratch space</a> for budget mechanics.</p></li>
+</ul>
+</section>
+<section id="qd-algorithms-device-select-arr-flags-out-num-out">
+<h3><code class="docutils literal notranslate"><span class="pre">qd.algorithms.device_select(arr,</span> <span class="pre">flags,</span> <span class="pre">out,</span> <span class="pre">num_out)</span></code><a class="headerlink" href="#qd-algorithms-device-select-arr-flags-out-num-out" title="Link to this heading">#</a></h3>
+<p>Stream compaction. Copy every <code class="docutils literal notranslate"><span class="pre">arr[i]</span></code> whose corresponding <code class="docutils literal notranslate"><span class="pre">flags[i]</span></code> is <code class="docutils literal notranslate"><span class="pre">1</span></code> into a dense prefix of <code class="docutils literal notranslate"><span class="pre">out</span></code>, in stable input order, and write the count of selected elements to <code class="docutils literal notranslate"><span class="pre">num_out[0]</span></code>. Flags must be exactly <code class="docutils literal notranslate"><span class="pre">0</span></code> or <code class="docutils literal notranslate"><span class="pre">1</span></code> - see the constraints below.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">quadrants</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">qd</span>
+
+<span class="n">N</span> <span class="o">=</span> <span class="mi">100_000</span>
+<span class="n">inp</span>     <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="n">N</span><span class="p">)</span>
+<span class="n">flags</span>   <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="n">N</span><span class="p">)</span>         <span class="c1"># caller fills with 0 / 1</span>
+<span class="n">out</span>     <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="n">N</span><span class="p">)</span>         <span class="c1"># large enough for worst case</span>
+<span class="n">num_out</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+
+<span class="c1"># ... fill inp + flags via a separate kernel ...</span>
+
+<span class="n">qd</span><span class="o">.</span><span class="n">algorithms</span><span class="o">.</span><span class="n">device_select</span><span class="p">(</span><span class="n">inp</span><span class="p">,</span> <span class="n">flags</span><span class="p">,</span> <span class="n">out</span><span class="o">=</span><span class="n">out</span><span class="p">,</span> <span class="n">num_out</span><span class="o">=</span><span class="n">num_out</span><span class="p">)</span>
+
+<span class="c1"># Only out[0 : count] is meaningful; copy out the count host-side explicitly:</span>
+<span class="n">count</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">num_out</span><span class="o">.</span><span class="n">to_numpy</span><span class="p">()[</span><span class="mi">0</span><span class="p">])</span>
+<span class="n">selected</span> <span class="o">=</span> <span class="n">out</span><span class="o">.</span><span class="n">to_numpy</span><span class="p">()[:</span><span class="n">count</span><span class="p">]</span>
+</pre></div>
+</div>
+<p>Constraints:</p>
+<ul class="simple">
+<li><p><strong>Dtypes:</strong> <code class="docutils literal notranslate"><span class="pre">arr.dtype</span></code> is any scalar dtype in <code class="docutils literal notranslate"><span class="pre">{qd.i32,</span> <span class="pre">qd.u32,</span> <span class="pre">qd.f32,</span> <span class="pre">qd.i64,</span> <span class="pre">qd.u64,</span> <span class="pre">qd.f64}</span></code> <em>or</em> any <code class="docutils literal notranslate"><span class="pre">qd.types.struct(...)</span></code> / <code class="docutils literal notranslate"><span class="pre">qd.Struct.field({...})</span></code> composite (e.g. libuipc <code class="docutils literal notranslate"><span class="pre">Vector2i</span></code> / <code class="docutils literal notranslate"><span class="pre">Vector3i</span></code> / <code class="docutils literal notranslate"><span class="pre">Vector4i</span></code> / <code class="docutils literal notranslate"><span class="pre">LinearBVHAABB</span></code>-style structs). The scatter is <code class="docutils literal notranslate"><span class="pre">dst[idx]</span> <span class="pre">=</span> <span class="pre">src[i]</span></code>, which lowers per-field, so the algorithm is dtype-agnostic - no scratch reinterpretation needed for wider or composite element types.</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">flags</span></code>:</strong> 1-D <code class="docutils literal notranslate"><span class="pre">qd.i32</span></code> tensor with the same shape as <code class="docutils literal notranslate"><span class="pre">arr</span></code>. <strong>Every entry must be exactly <code class="docutils literal notranslate"><span class="pre">0</span></code> or <code class="docutils literal notranslate"><span class="pre">1</span></code></strong> (<code class="docutils literal notranslate"><span class="pre">1</span></code> selects). The algorithm prefix-sums <code class="docutils literal notranslate"><span class="pre">flags</span></code> directly as counts, so non-0/1 values produce wrong indices and a wrong <code class="docutils literal notranslate"><span class="pre">num_out</span></code> count - the caller is responsible for normalization, no implicit normalization pass is performed. <code class="docutils literal notranslate"><span class="pre">flags</span></code> is caller-built - populate it with a kernel applying whatever predicate you want, writing exactly <code class="docutils literal notranslate"><span class="pre">1</span></code> for selected and <code class="docutils literal notranslate"><span class="pre">0</span></code> otherwise.</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">out</span></code>:</strong> 1-D tensor, same dtype as <code class="docutils literal notranslate"><span class="pre">arr</span></code>, with <code class="docutils literal notranslate"><span class="pre">len(out)</span> <span class="pre">&gt;=</span> <span class="pre">len(arr)</span></code> so the worst-case all-selected run is safe. Only <code class="docutils literal notranslate"><span class="pre">out[0</span> <span class="pre">:</span> <span class="pre">num_out[0]]</span></code> carries meaningful data on return; the tail is left untouched (whatever was in <code class="docutils literal notranslate"><span class="pre">out</span></code> before the call remains).</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">num_out</span></code>:</strong> 1-element <code class="docutils literal notranslate"><span class="pre">qd.i32</span></code> tensor. Same explicit-host-hop rule: do <code class="docutils literal notranslate"><span class="pre">int(num_out.to_numpy()[0])</span></code> after the call to get the count as a Python scalar.</p></li>
+</ul>
+<p>Algorithm: the textbook scan-based compaction.</p>
+<ol class="arabic simple">
+<li><p><strong>Exclusive scan of <code class="docutils literal notranslate"><span class="pre">flags</span></code></strong> into the shared u32 scratch, producing per-element write indices. Same three-pass internals as <code class="docutils literal notranslate"><span class="pre">device_exclusive_scan_add</span></code>.</p></li>
+<li><p><strong>Scatter:</strong> one parallel kernel reads each <code class="docutils literal notranslate"><span class="pre">(arr[i],</span> <span class="pre">flags[i],</span> <span class="pre">indices[i])</span></code> and, if the flag is set, writes <code class="docutils literal notranslate"><span class="pre">out[indices[i]]</span> <span class="pre">=</span> <span class="pre">arr[i]</span></code>. No races by construction of the exclusive scan over 0 / 1 flags.</p></li>
+<li><p><strong>Count tail:</strong> one-thread kernel computes <code class="docutils literal notranslate"><span class="pre">indices[N-1]</span> <span class="pre">+</span> <span class="pre">flags[N-1]</span></code> and stores it in <code class="docutils literal notranslate"><span class="pre">num_out[0]</span></code>.</p></li>
+</ol>
+<p>Scratch footprint: ~<code class="docutils literal notranslate"><span class="pre">N</span></code> u32 slots (one write index per input element). The default 5 MB scratch covers <code class="docutils literal notranslate"><span class="pre">N</span></code> up to ~1.3M (qipc’s hot path lands here out of the box); bump the budget per <a class="reference internal" href="#scratch-space">Scratch space</a> for larger inputs.</p>
+</section>
+<section id="qd-algorithms-device-radix-sort-keys-tmp-keys-values-none-tmp-values-none-end-bit-none">
+<h3><code class="docutils literal notranslate"><span class="pre">qd.algorithms.device_radix_sort(keys,</span> <span class="pre">tmp_keys,</span> <span class="pre">values=None,</span> <span class="pre">tmp_values=None,</span> <span class="pre">end_bit=None)</span></code><a class="headerlink" href="#qd-algorithms-device-radix-sort-keys-tmp-keys-values-none-tmp-values-none-end-bit-none" title="Link to this heading">#</a></h3>
+<p>Ascending in-place radix sort over a 1-D tensor of 32-bit or 64-bit scalar keys (<code class="docutils literal notranslate"><span class="pre">u32</span></code> / <code class="docutils literal notranslate"><span class="pre">i32</span></code> / <code class="docutils literal notranslate"><span class="pre">f32</span></code> / <code class="docutils literal notranslate"><span class="pre">u64</span></code> / <code class="docutils literal notranslate"><span class="pre">i64</span></code> / <code class="docutils literal notranslate"><span class="pre">f64</span></code>), with optional lock-step permutation of an <code class="docutils literal notranslate"><span class="pre">values</span></code> tensor (key-value sort).</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">quadrants</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">qd</span>
+
+<span class="n">N</span> <span class="o">=</span> <span class="mi">100_000</span>
+<span class="n">keys</span>     <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="n">N</span><span class="p">)</span>
+<span class="n">tmp_keys</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="n">N</span><span class="p">)</span>   <span class="c1"># workspace; contents on return are garbage</span>
+<span class="c1"># ... fill keys ...</span>
+
+<span class="n">qd</span><span class="o">.</span><span class="n">algorithms</span><span class="o">.</span><span class="n">device_radix_sort</span><span class="p">(</span><span class="n">keys</span><span class="p">,</span> <span class="n">tmp_keys</span><span class="o">=</span><span class="n">tmp_keys</span><span class="p">)</span>
+<span class="c1"># keys is now ascending; tmp_keys holds intermediate state.</span>
+
+<span class="c1"># Key-value sort:</span>
+<span class="n">values</span>     <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="n">N</span><span class="p">)</span>
+<span class="n">tmp_values</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="n">N</span><span class="p">)</span>
+<span class="c1"># ... fill values (e.g. with original indices) ...</span>
+
+<span class="n">qd</span><span class="o">.</span><span class="n">algorithms</span><span class="o">.</span><span class="n">device_radix_sort</span><span class="p">(</span>
+    <span class="n">keys</span><span class="p">,</span> <span class="n">tmp_keys</span><span class="o">=</span><span class="n">tmp_keys</span><span class="p">,</span> <span class="n">values</span><span class="o">=</span><span class="n">values</span><span class="p">,</span> <span class="n">tmp_values</span><span class="o">=</span><span class="n">tmp_values</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="c1"># keys ascending; values permuted so values[k] corresponds to keys[k].</span>
+</pre></div>
+</div>
+<p>Arguments:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">keys</span></code>: 1-D tensor. Sorted <strong>in place</strong>. Pass <code class="docutils literal notranslate"><span class="pre">qd.field</span></code>, <code class="docutils literal notranslate"><span class="pre">qd.ndarray</span></code>, or <code class="docutils literal notranslate"><span class="pre">qd.Tensor</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">tmp_keys</span></code>: ping-pong workspace, same shape &amp; dtype as <code class="docutils literal notranslate"><span class="pre">keys</span></code>, distinct buffer. Contents on return are intermediate and should be considered garbage.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">values</span></code>: optional 1-D tensor of any supported scalar dtype (the value dtype is independent of the key dtype), same shape as <code class="docutils literal notranslate"><span class="pre">keys</span></code>. If provided, permuted in lock-step with the keys.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">tmp_values</span></code>: required iff <code class="docutils literal notranslate"><span class="pre">values</span></code> is provided. Same shape &amp; dtype as <code class="docutils literal notranslate"><span class="pre">values</span></code>, distinct buffer. Same workspace semantics as <code class="docutils literal notranslate"><span class="pre">tmp_keys</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">end_bit</span></code>: number of low bits of the key to consider. Defaults to the full key width (32 for 4-byte keys, 64 for 8-byte keys). Must be a positive multiple of <code class="docutils literal notranslate"><span class="pre">8</span></code> (the radix-digit width). An even number of digit passes is required so the result lands back in <code class="docutils literal notranslate"><span class="pre">keys</span></code>; with the default <code class="docutils literal notranslate"><span class="pre">end_bit</span></code> this is automatic. Pass a smaller value when the high bits are known to be zero (e.g. <code class="docutils literal notranslate"><span class="pre">end_bit=16</span></code> for keys with values <code class="docutils literal notranslate"><span class="pre">&lt;</span> <span class="pre">2**16</span></code>) to save passes.</p></li>
+</ul>
+<p>Constraints:</p>
+<ul class="simple">
+<li><p><strong>Dtypes:</strong> <code class="docutils literal notranslate"><span class="pre">keys.dtype</span></code> and <code class="docutils literal notranslate"><span class="pre">values.dtype</span></code> are each independently one of <code class="docutils literal notranslate"><span class="pre">{qd.u32,</span> <span class="pre">qd.i32,</span> <span class="pre">qd.f32,</span> <span class="pre">qd.u64,</span> <span class="pre">qd.i64,</span> <span class="pre">qd.f64}</span></code>. Narrower scalar dtypes (<code class="docutils literal notranslate"><span class="pre">qd.i16</span></code>, <code class="docutils literal notranslate"><span class="pre">qd.f16</span></code>, …) and struct dtypes raise <code class="docutils literal notranslate"><span class="pre">NotImplementedError</span></code>. 8-byte keys run 8 digit passes per sort; 4-byte keys run 4. Scratch footprint is the same for both widths (the per-tile histograms are <code class="docutils literal notranslate"><span class="pre">u32</span></code> regardless).</p></li>
+<li><p><strong>Aliasing:</strong> <code class="docutils literal notranslate"><span class="pre">keys</span></code> and <code class="docutils literal notranslate"><span class="pre">tmp_keys</span></code> must be distinct buffers; same for <code class="docutils literal notranslate"><span class="pre">values</span></code> / <code class="docutils literal notranslate"><span class="pre">tmp_values</span></code>. Calling with the same buffer raises <code class="docutils literal notranslate"><span class="pre">ValueError</span></code>.</p></li>
+<li><p><strong>Stability:</strong> stable sort - equal keys keep their original input order in the output.</p></li>
+<li><p><strong>NaN handling (f32):</strong> matches <code class="docutils literal notranslate"><span class="pre">numpy.sort</span></code> (NaNs land at the end). NaNs are not tested separately and should not be relied on for ordering invariants beyond <code class="docutils literal notranslate"><span class="pre">numpy.sort</span></code>.</p></li>
+</ul>
+<p>Implementation:</p>
+<ul class="simple">
+<li><p>Classical LSB radix sort with 8-bit digits, four passes for <code class="docutils literal notranslate"><span class="pre">u32</span></code> / <code class="docutils literal notranslate"><span class="pre">i32</span></code> / <code class="docutils literal notranslate"><span class="pre">f32</span></code>. Each digit pass is three internal kernels:</p>
+<ol class="arabic simple">
+<li><p><strong>Histogram</strong> - every block computes its per-digit count into shared memory, then publishes the 256-bin tile histogram to the shared u32 scratch (digit-major layout: <code class="docutils literal notranslate"><span class="pre">tile_histograms[d</span> <span class="pre">*</span> <span class="pre">num_blocks</span> <span class="pre">+</span> <span class="pre">b]</span></code>).</p></li>
+<li><p><strong>Scan</strong> - in-place exclusive scan over the flat tile_histograms buffer. The digit-major layout makes a single 1-D scan enough to produce per-(digit, block) global offsets.</p></li>
+<li><p><strong>Scatter</strong> - each block ranks its keys via <code class="docutils literal notranslate"><span class="pre">block.radix_rank_match_atomic_or</span></code> (wave32 + wave64 clean), looks up the per-(digit, block) global offset from the scan output, and scatters keys (and values, if provided) to the destination buffer.</p></li>
+</ol>
+</li>
+<li><p>After each pass we swap <code class="docutils literal notranslate"><span class="pre">keys</span></code> ↔ <code class="docutils literal notranslate"><span class="pre">tmp_keys</span></code>. Four passes is even, so the sorted keys end up back in <code class="docutils literal notranslate"><span class="pre">keys</span></code>.</p></li>
+<li><p>Signed-integer (<code class="docutils literal notranslate"><span class="pre">i32</span></code> / <code class="docutils literal notranslate"><span class="pre">i64</span></code>) and floating-point (<code class="docutils literal notranslate"><span class="pre">f32</span></code> / <code class="docutils literal notranslate"><span class="pre">f64</span></code>) keys are mapped to a sortable unsigned representation (<code class="docutils literal notranslate"><span class="pre">u32</span></code> / <code class="docutils literal notranslate"><span class="pre">u64</span></code>) before the first pass and mapped back after the last pass via in-place “twiddle” kernels (signed: XOR sign bit; float: flip sign bit on positives, flip all bits on negatives - the standard sortable-key transform). <code class="docutils literal notranslate"><span class="pre">u32</span></code> / <code class="docutils literal notranslate"><span class="pre">u64</span></code> keys are sorted directly with no twiddle.</p></li>
+</ul>
+<p>Scratch footprint: <code class="docutils literal notranslate"><span class="pre">num_blocks</span> <span class="pre">*</span> <span class="pre">256</span> <span class="pre">+</span> <span class="pre">...</span></code> u32 slots per pass (re-used across passes), where <code class="docutils literal notranslate"><span class="pre">num_blocks</span> <span class="pre">=</span> <span class="pre">ceil(N</span> <span class="pre">/</span> <span class="pre">256)</span></code>. The default 5 MB scratch covers <code class="docutils literal notranslate"><span class="pre">N</span></code> up to ~1.3M (qipc’s hot path lands here out of the box); bump the budget per <a class="reference internal" href="#scratch-space">Scratch space</a> for larger inputs.</p>
+</section>
+<section id="qd-algorithms-device-reduce-by-key-add-keys-in-values-in-keys-out-values-out-num-runs">
+<h3><code class="docutils literal notranslate"><span class="pre">qd.algorithms.device_reduce_by_key_add(keys_in,</span> <span class="pre">values_in,</span> <span class="pre">keys_out,</span> <span class="pre">values_out,</span> <span class="pre">num_runs)</span></code><a class="headerlink" href="#qd-algorithms-device-reduce-by-key-add-keys-in-values-in-keys-out-values-out-num-runs" title="Link to this heading">#</a></h3>
+<p>Collapse every <strong>consecutive run of equal keys</strong> into a single output entry <code class="docutils literal notranslate"><span class="pre">(unique_key,</span> <span class="pre">sum_of_values_in_run)</span></code>. Keys that compare equal but are separated by other keys form separate runs. For a global per-key sum, sort by key first (e.g. with <code class="docutils literal notranslate"><span class="pre">qd.algorithms.device_radix_sort</span></code>) and then reduce-by-key.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">quadrants</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">qd</span>
+
+<span class="n">N</span> <span class="o">=</span> <span class="mi">100_000</span>
+<span class="n">keys_in</span>    <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="n">N</span><span class="p">)</span>       <span class="c1"># sorted by key beforehand</span>
+<span class="n">values_in</span>  <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="n">N</span><span class="p">)</span>
+<span class="n">keys_out</span>   <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="n">N</span><span class="p">)</span>       <span class="c1"># capacity = N (worst case: all unique)</span>
+<span class="n">values_out</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="n">N</span><span class="p">)</span>
+<span class="n">num_runs</span>   <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+
+<span class="c1"># ... fill keys_in + values_in ...</span>
+
+<span class="n">qd</span><span class="o">.</span><span class="n">algorithms</span><span class="o">.</span><span class="n">device_reduce_by_key_add</span><span class="p">(</span>
+    <span class="n">keys_in</span><span class="p">,</span> <span class="n">values_in</span><span class="p">,</span> <span class="n">keys_out</span><span class="o">=</span><span class="n">keys_out</span><span class="p">,</span> <span class="n">values_out</span><span class="o">=</span><span class="n">values_out</span><span class="p">,</span> <span class="n">num_runs</span><span class="o">=</span><span class="n">num_runs</span><span class="p">,</span>
+<span class="p">)</span>
+
+<span class="n">count</span>    <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">num_runs</span><span class="o">.</span><span class="n">to_numpy</span><span class="p">()[</span><span class="mi">0</span><span class="p">])</span>
+<span class="n">uniq_k</span>   <span class="o">=</span> <span class="n">keys_out</span><span class="o">.</span><span class="n">to_numpy</span><span class="p">()[:</span><span class="n">count</span><span class="p">]</span>
+<span class="n">sums</span>     <span class="o">=</span> <span class="n">values_out</span><span class="o">.</span><span class="n">to_numpy</span><span class="p">()[:</span><span class="n">count</span><span class="p">]</span>
+</pre></div>
+</div>
+<p>Arguments:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">keys_in</span></code>: 1-D tensor of <code class="docutils literal notranslate"><span class="pre">u32</span></code> / <code class="docutils literal notranslate"><span class="pre">i32</span></code> / <code class="docutils literal notranslate"><span class="pre">f32</span></code>. Pass a <code class="docutils literal notranslate"><span class="pre">qd.field</span></code>, <code class="docutils literal notranslate"><span class="pre">qd.ndarray</span></code>, or <code class="docutils literal notranslate"><span class="pre">qd.Tensor</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">values_in</span></code>: 1-D tensor of <code class="docutils literal notranslate"><span class="pre">u32</span></code> / <code class="docutils literal notranslate"><span class="pre">i32</span></code> / <code class="docutils literal notranslate"><span class="pre">f32</span></code>, same shape as <code class="docutils literal notranslate"><span class="pre">keys_in</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">keys_out</span></code>: 1-D tensor of the same dtype as <code class="docutils literal notranslate"><span class="pre">keys_in</span></code>, with <code class="docutils literal notranslate"><span class="pre">len(keys_out)</span> <span class="pre">&gt;=</span> <span class="pre">len(keys_in)</span></code> so the worst-case-all-unique run is safe. Only <code class="docutils literal notranslate"><span class="pre">keys_out[0</span> <span class="pre">:</span> <span class="pre">num_runs[0]]</span></code> carries meaningful data on return; the tail is untouched.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">values_out</span></code>: 1-D tensor of the same dtype as <code class="docutils literal notranslate"><span class="pre">values_in</span></code>, same length requirement. The first <code class="docutils literal notranslate"><span class="pre">num_runs[0]</span></code> slots are overwritten; the tail past that prefix is left untouched.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">num_runs</span></code>: 1-element <code class="docutils literal notranslate"><span class="pre">qd.i32</span></code> tensor receiving the number of runs. Same explicit-host-hop rule: do <code class="docutils literal notranslate"><span class="pre">int(num_runs.to_numpy()[0])</span></code> after the call to get the count as a Python scalar.</p></li>
+</ul>
+<p>Constraints:</p>
+<ul class="simple">
+<li><p><strong>Dtypes (first land):</strong> <code class="docutils literal notranslate"><span class="pre">keys_in.dtype</span></code> and <code class="docutils literal notranslate"><span class="pre">values_in.dtype</span></code> ∈ {<code class="docutils literal notranslate"><span class="pre">qd.i32</span></code>, <code class="docutils literal notranslate"><span class="pre">qd.u32</span></code>, <code class="docutils literal notranslate"><span class="pre">qd.f32</span></code>}. Other dtypes raise <code class="docutils literal notranslate"><span class="pre">NotImplementedError</span></code>.</p></li>
+<li><p><strong>Reduction:</strong> only <code class="docutils literal notranslate"><span class="pre">add</span></code> is exposed for first land. <code class="docutils literal notranslate"><span class="pre">min</span></code> / <code class="docutils literal notranslate"><span class="pre">max</span></code> variants need <code class="docutils literal notranslate"><span class="pre">atomic_min</span></code> / <code class="docutils literal notranslate"><span class="pre">atomic_max</span></code> for <code class="docutils literal notranslate"><span class="pre">f32</span></code>, which has spottier cross-backend support; defer to a follow-up gated on real qipc usage.</p></li>
+<li><p><strong>f32 non-associativity:</strong> the order of additions inside a run is set by hardware atomic ordering, not host order, so <code class="docutils literal notranslate"><span class="pre">f32</span></code> results are <em>not</em> bitwise-equal to a serial scan. Tests tolerate a small relative error.</p></li>
+<li><p><strong>NaN handling (f32 keys):</strong> <code class="docutils literal notranslate"><span class="pre">NaN</span> <span class="pre">!=</span> <span class="pre">NaN</span></code> is true, so each NaN-keyed element becomes its own run. Consistent with treating NaN as “different from everything”, which matches the run-length-encoding spirit.</p></li>
+</ul>
+<p>Algorithm: scan + scatter + atomic_add - no segmented-scan primitive needed.</p>
+<ol class="arabic simple">
+<li><p><strong>Head-flag pass.</strong> <code class="docutils literal notranslate"><span class="pre">head_flags[i]</span> <span class="pre">=</span> <span class="pre">1</span></code> if <code class="docutils literal notranslate"><span class="pre">i</span> <span class="pre">==</span> <span class="pre">0</span></code> or <code class="docutils literal notranslate"><span class="pre">keys[i]</span> <span class="pre">!=</span> <span class="pre">keys[i-1]</span></code>, else <code class="docutils literal notranslate"><span class="pre">0</span></code>. Written to the shared u32 scratch (bit-cast from <code class="docutils literal notranslate"><span class="pre">i32</span></code>).</p></li>
+<li><p><strong>In-place exclusive scan</strong> of <code class="docutils literal notranslate"><span class="pre">head_flags</span></code> (using the same three-pass internals as <code class="docutils literal notranslate"><span class="pre">device_exclusive_scan_add</span></code>). After this, <code class="docutils literal notranslate"><span class="pre">scratch[i]</span> <span class="pre">=</span> <span class="pre">sum(head_flags[0:i])</span></code>.</p></li>
+<li><p><strong>Zero-init <code class="docutils literal notranslate"><span class="pre">values_out[0:N]</span></code>.</strong> The scatter uses <code class="docutils literal notranslate"><span class="pre">atomic_add</span></code>; slots must start at the additive identity <code class="docutils literal notranslate"><span class="pre">0</span></code>.</p></li>
+<li><p><strong>Scatter.</strong> For each <code class="docutils literal notranslate"><span class="pre">i</span></code>, recompute <code class="docutils literal notranslate"><span class="pre">head_flag(i)</span></code> from <code class="docutils literal notranslate"><span class="pre">keys[i]</span></code> / <code class="docutils literal notranslate"><span class="pre">keys[i-1]</span></code>, derive the run index <code class="docutils literal notranslate"><span class="pre">pos</span> <span class="pre">=</span> <span class="pre">scratch[i]</span> <span class="pre">+</span> <span class="pre">head_flag(i)</span> <span class="pre">-</span> <span class="pre">1</span></code> (inclusive scan minus 1), and write <code class="docutils literal notranslate"><span class="pre">keys_out[pos]</span> <span class="pre">=</span> <span class="pre">keys[i]</span></code> + <code class="docutils literal notranslate"><span class="pre">atomic_add(values_out[pos],</span> <span class="pre">values[i])</span></code>.</p></li>
+<li><p><strong>Count.</strong> <code class="docutils literal notranslate"><span class="pre">num_runs[0]</span> <span class="pre">=</span> <span class="pre">scratch[N-1]</span> <span class="pre">+</span> <span class="pre">head_flag(N-1)</span></code>.</p></li>
+</ol>
+<p>Scratch footprint: ~<code class="docutils literal notranslate"><span class="pre">1.004</span> <span class="pre">*</span> <span class="pre">N</span></code> u32 slots. The default 5 MB scratch covers <code class="docutils literal notranslate"><span class="pre">N</span></code> up to ~1.3M; bump the budget per <a class="reference internal" href="#scratch-space">Scratch space</a> for larger inputs.</p>
+</section>
+<section id="qd-algorithms-parallel-sort-keys-values-none">
+<h3><code class="docutils literal notranslate"><span class="pre">qd.algorithms.parallel_sort(keys,</span> <span class="pre">values=None)</span></code><a class="headerlink" href="#qd-algorithms-parallel-sort-keys-values-none" title="Link to this heading">#</a></h3>
+<blockquote>
+<div><p><strong>Deprecated.</strong> New code should call <code class="docutils literal notranslate"><span class="pre">qd.algorithms.device_radix_sort(keys,</span> <span class="pre">tmp_keys,</span> <span class="pre">values=...,</span> <span class="pre">tmp_values=...)</span></code> instead. <code class="docutils literal notranslate"><span class="pre">device_radix_sort</span></code> is asymptotically <code class="docutils literal notranslate"><span class="pre">O(N</span> <span class="pre">log_radix</span> <span class="pre">N)</span></code> rather than <code class="docutils literal notranslate"><span class="pre">O(N</span> <span class="pre">log^2</span> <span class="pre">N)</span></code>, is <strong>stable</strong> (odd-even merge sort is not), supports 32-bit and 64-bit scalar keys across CUDA / AMDGPU / Vulkan / Metal, and accepts <code class="docutils literal notranslate"><span class="pre">qd.field</span></code>, <code class="docutils literal notranslate"><span class="pre">qd.ndarray</span></code>, and <code class="docutils literal notranslate"><span class="pre">qd.Tensor</span></code> (<code class="docutils literal notranslate"><span class="pre">parallel_sort</span></code> is field-only). The only thing <code class="docutils literal notranslate"><span class="pre">parallel_sort</span></code> is competitive on is very small N (~4K and below); even there the radix path is comparable on modern hardware. To migrate, allocate a <code class="docutils literal notranslate"><span class="pre">tmp_keys</span></code> field of the same shape and dtype as <code class="docutils literal notranslate"><span class="pre">keys</span></code>, then call <code class="docutils literal notranslate"><span class="pre">device_radix_sort</span></code>. <code class="docutils literal notranslate"><span class="pre">parallel_sort</span></code> is kept for one release cycle for backward compat and will be removed thereafter.</p>
+</div></blockquote>
+<p>In-place sort. Reorders <code class="docutils literal notranslate"><span class="pre">keys</span></code> ascending; if <code class="docutils literal notranslate"><span class="pre">values</span></code> is provided, applies the same permutation to <code class="docutils literal notranslate"><span class="pre">values</span></code> (key-value sort). Both arguments must be 1-D <code class="docutils literal notranslate"><span class="pre">qd.field</span></code> - <code class="docutils literal notranslate"><span class="pre">parallel_sort</span></code> reaches into <code class="docutils literal notranslate"><span class="pre">snode.ptr.offset</span></code> internally, so <code class="docutils literal notranslate"><span class="pre">ndarray</span></code> is <strong>not</strong> supported and will fail at compile time with an <code class="docutils literal notranslate"><span class="pre">AttributeError</span></code>.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">quadrants</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">qd</span>
+
+<span class="n">keys</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="n">N</span><span class="p">,))</span>
+<span class="n">qd</span><span class="o">.</span><span class="n">algorithms</span><span class="o">.</span><span class="n">parallel_sort</span><span class="p">(</span><span class="n">keys</span><span class="p">)</span>
+</pre></div>
+</div>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">keys</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="n">N</span><span class="p">,))</span>
+<span class="n">vals</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="n">N</span><span class="p">,))</span>
+<span class="n">qd</span><span class="o">.</span><span class="n">algorithms</span><span class="o">.</span><span class="n">parallel_sort</span><span class="p">(</span><span class="n">keys</span><span class="p">,</span> <span class="n">vals</span><span class="p">)</span>
+</pre></div>
+</div>
+<ul class="simple">
+<li><p><strong>Algorithm.</strong> Batcher’s odd-even merge sort. Time complexity <code class="docutils literal notranslate"><span class="pre">O(N</span> <span class="pre">log²</span> <span class="pre">N)</span></code>, work-efficient for small / mid-sized arrays.</p></li>
+<li><p><strong>Key dtype.</strong> Whatever the key field’s dtype is, as long as <code class="docutils literal notranslate"><span class="pre">&lt;</span></code> is meaningful for it (integer and float types).</p></li>
+<li><p><strong>Stability.</strong> Odd-even merge sort is <em>not</em> a stable sort - equal keys may be reordered relative to one another. If stability matters, encode tiebreakers into the keys (e.g. pack the original index into the low bits).</p></li>
+<li><p><strong>Memory.</strong> Strictly in-place - no auxiliary buffers from the caller’s perspective.</p></li>
+<li><p><strong>Performance characteristic.</strong> Beats radix-style sorts for small N (roughly N ≲ 4K).</p></li>
+</ul>
+</section>
+<section id="qd-algorithms-prefixsumexecutor">
+<h3><code class="docutils literal notranslate"><span class="pre">qd.algorithms.PrefixSumExecutor</span></code><a class="headerlink" href="#qd-algorithms-prefixsumexecutor" title="Link to this heading">#</a></h3>
+<blockquote>
+<div><p><strong>Deprecated.</strong> New code should call <code class="docutils literal notranslate"><span class="pre">qd.algorithms.device_exclusive_scan_add(arr,</span> <span class="pre">out)</span></code> instead. <code class="docutils literal notranslate"><span class="pre">PrefixSumExecutor</span></code> is <strong>inclusive</strong>-only, <strong><code class="docutils literal notranslate"><span class="pre">i32</span></code></strong>-only, and <strong>CUDA / Vulkan</strong>-only; the new functional API covers <code class="docutils literal notranslate"><span class="pre">{i32,</span> <span class="pre">u32,</span> <span class="pre">f32,</span> <span class="pre">i64,</span> <span class="pre">u64,</span> <span class="pre">f64}</span></code> on every supported backend and runs the exclusive variant directly. To migrate from inclusive in-place to exclusive out-of-place, drop the <code class="docutils literal notranslate"><span class="pre">Executor</span></code> wrapper, allocate a distinct <code class="docutils literal notranslate"><span class="pre">out</span></code> field, and post-process if you actually need the inclusive form (<code class="docutils literal notranslate"><span class="pre">inclusive[i]</span> <span class="pre">=</span> <span class="pre">exclusive[i]</span> <span class="pre">+</span> <span class="pre">arr[i]</span></code>). <code class="docutils literal notranslate"><span class="pre">PrefixSumExecutor</span></code> is kept for one release cycle for backward compat and will be removed in a future release.</p>
+</div></blockquote>
+<p>Inclusive in-place prefix sum (scan) over a 1-D <code class="docutils literal notranslate"><span class="pre">i32</span></code> field. Construct once with the array length, then call <code class="docutils literal notranslate"><span class="pre">.run(field)</span></code> to scan.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">psum</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">algorithms</span><span class="o">.</span><span class="n">PrefixSumExecutor</span><span class="p">(</span><span class="n">N</span><span class="p">)</span>
+<span class="n">arr</span>  <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="n">N</span><span class="p">,))</span>
+<span class="c1"># ... fill arr ...</span>
+<span class="n">psum</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">arr</span><span class="p">)</span>
+<span class="c1"># arr now holds the inclusive prefix sum: arr[i] = sum(arr_original[0..=i]).</span>
+</pre></div>
+</div>
+<p>Constructor:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">length:</span> <span class="pre">int</span></code> - the <strong>fixed</strong> number of elements the executor will scan on every <code class="docutils literal notranslate"><span class="pre">.run()</span></code> call. Internally allocates an auxiliary <code class="docutils literal notranslate"><span class="pre">qd.field(i32,</span> <span class="pre">shape=padded_length)</span></code> sized to the Kogge-Stone hierarchy (block size = 64).</p></li>
+</ul>
+<p><code class="docutils literal notranslate"><span class="pre">run(input_arr)</span></code>:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">input_arr</span></code> must be a 1-D <code class="docutils literal notranslate"><span class="pre">qd.field(qd.i32,</span> <span class="pre">shape=(length,))</span></code> - its length must match the constructor’s <code class="docutils literal notranslate"><span class="pre">length</span></code> exactly. <code class="docutils literal notranslate"><span class="pre">run()</span></code> always blits <code class="docutils literal notranslate"><span class="pre">length</span></code> elements between <code class="docutils literal notranslate"><span class="pre">input_arr</span></code> and the internal buffer; passing a shorter field results in out-of-bounds reads / writes (no runtime check today).</p></li>
+<li><p>Returns nothing; <code class="docutils literal notranslate"><span class="pre">input_arr</span></code> is overwritten with the scan result.</p></li>
+</ul>
+<p>Constraints:</p>
+<ul class="simple">
+<li><p><strong>Dtype:</strong> <code class="docutils literal notranslate"><span class="pre">qd.i32</span></code> only. Calling with any other dtype raises <code class="docutils literal notranslate"><span class="pre">RuntimeError(&quot;Only</span> <span class="pre">qd.i32</span> <span class="pre">type</span> <span class="pre">is</span> <span class="pre">supported</span> <span class="pre">for</span> <span class="pre">prefix</span> <span class="pre">sum.&quot;)</span></code>.</p></li>
+<li><p><strong>Inclusive only.</strong> No exclusive variant exposed. To convert to exclusive, post-process: <code class="docutils literal notranslate"><span class="pre">exclusive[i]</span> <span class="pre">=</span> <span class="pre">inclusive[i]</span> <span class="pre">-</span> <span class="pre">input_original[i]</span></code>.</p></li>
+<li><p><strong>Backend coverage.</strong> CUDA and Vulkan only. AMDGPU and Metal raise <code class="docutils literal notranslate"><span class="pre">RuntimeError(f&quot;{arch}</span> <span class="pre">is</span> <span class="pre">not</span> <span class="pre">supported</span> <span class="pre">for</span> <span class="pre">prefix</span> <span class="pre">sum.&quot;)</span></code> at compile time.</p></li>
+</ul>
+<p>The implementation is a Kogge-Stone hierarchical scan: per-block inclusive scan on shared memory, then a small recursive scan over per-block totals, then a uniform-add pass to propagate back. This means the executor reuses the underlying buffer across calls, which is why it’s a class (allocate once, run many times) rather than a free function.</p>
+<p>No explicit fence is required between a kernel that writes the input and the subsequent <code class="docutils literal notranslate"><span class="pre">.run()</span></code> call. <code class="docutils literal notranslate"><span class="pre">.run()</span></code> launches its own kernels under the hood, and the kernel boundary serializes against prior writes from host-launched kernels.</p>
+</section>
+</section>
+<section id="examples">
+<h2>Examples<a class="headerlink" href="#examples" title="Link to this heading">#</a></h2>
+<section id="sort-indices-by-per-element-key">
+<h3>Sort indices by per-element key<a class="headerlink" href="#sort-indices-by-per-element-key" title="Link to this heading">#</a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">N</span> <span class="o">=</span> <span class="mi">1000</span>
+<span class="n">keys</span>       <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="n">N</span><span class="p">,))</span>
+<span class="n">tmp_keys</span>   <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="n">N</span><span class="p">,))</span>
+<span class="n">indices</span>    <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="n">N</span><span class="p">,))</span>
+<span class="n">tmp_idx</span>    <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="n">N</span><span class="p">,))</span>
+
+<span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">init</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">N</span><span class="p">):</span>
+        <span class="n">keys</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">random</span><span class="p">()</span>
+        <span class="n">indices</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">i</span>
+
+<span class="n">init</span><span class="p">()</span>
+<span class="n">qd</span><span class="o">.</span><span class="n">algorithms</span><span class="o">.</span><span class="n">device_radix_sort</span><span class="p">(</span>
+    <span class="n">keys</span><span class="p">,</span> <span class="n">tmp_keys</span><span class="o">=</span><span class="n">tmp_keys</span><span class="p">,</span> <span class="n">values</span><span class="o">=</span><span class="n">indices</span><span class="p">,</span> <span class="n">tmp_values</span><span class="o">=</span><span class="n">tmp_idx</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="c1"># keys is now ascending; indices[k] is the original index of the k-th smallest key. (Stable: ties between equal keys preserve their input-order indices.)</span>
+</pre></div>
+</div>
+</section>
+<section id="compact-array-offsets-via-prefix-sum">
+<h3>Compact-array offsets via prefix sum<a class="headerlink" href="#compact-array-offsets-via-prefix-sum" title="Link to this heading">#</a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">N</span> <span class="o">=</span> <span class="mi">100_000</span>
+<span class="n">flags</span>  <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="n">N</span><span class="p">,))</span>   <span class="c1"># 0 or 1 per element</span>
+<span class="n">offsets</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="n">N</span><span class="p">,))</span>
+
+<span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">populate</span><span class="p">(</span><span class="n">data</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">NDArray</span><span class="p">[</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="mi">1</span><span class="p">],</span> <span class="n">threshold</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">N</span><span class="p">):</span>
+        <span class="n">flags</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1</span> <span class="k">if</span> <span class="n">data</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">&gt;</span> <span class="n">threshold</span> <span class="k">else</span> <span class="mi">0</span>
+
+<span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">copy_flags</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">N</span><span class="p">):</span>
+        <span class="n">offsets</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">flags</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+
+<span class="n">scan</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">algorithms</span><span class="o">.</span><span class="n">PrefixSumExecutor</span><span class="p">(</span><span class="n">N</span><span class="p">)</span>
+
+<span class="n">populate</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="mf">0.5</span><span class="p">)</span>
+<span class="n">copy_flags</span><span class="p">()</span>
+<span class="n">scan</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">offsets</span><span class="p">)</span>
+<span class="c1"># offsets[i] is now the 1-based output position of element i if it was selected.</span>
+</pre></div>
+</div>
+<p>The compact-output kernel reads <code class="docutils literal notranslate"><span class="pre">offsets[i]</span></code> (or <code class="docutils literal notranslate"><span class="pre">offsets[i]</span> <span class="pre">-</span> <span class="pre">flags[i]</span></code> for 0-based) to decide where to write surviving elements. This is the textbook scan-based select / compact pattern; the only Quadrants-specific note is the <code class="docutils literal notranslate"><span class="pre">i32</span></code>-only restriction.</p>
+</section>
+</section>
+<section id="related">
+<h2>Related<a class="headerlink" href="#related" title="Link to this heading">#</a></h2>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">qd.simt.block.*</span></code> - the block-scope reductions and shared-memory primitives that algorithm kernels build on.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">qd.simt.subgroup.*</span></code> - <code class="docutils literal notranslate"><span class="pre">inclusive_add</span></code> and friends, what the per-block scan stage of <code class="docutils literal notranslate"><span class="pre">PrefixSumExecutor</span></code> actually calls.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">qd.simt.grid.mem_fence()</span></code> - the grid-scope memory fence that decoupled-look-back scans (a more efficient alternative to Kogge-Stone) require.</p></li>
+<li><p><a class="reference internal" href="parallelization.html"><span class="std std-doc">parallelization</span></a> - broader synchronization story, including how <code class="docutils literal notranslate"><span class="pre">qd.algorithms</span></code> operations compose with hand-written kernels.</p></li>
+</ul>
+</section>
+</section>
+
+
+                </article>
+              
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+    <a class="left-prev"
+       href="tile.html"
+       title="previous page">
+      <i class="fa-solid fa-angle-left"></i>
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">previous</p>
+        <p class="prev-next-title">Register-resident tiles: <code class="docutils literal notranslate"><span class="pre">Tile16x16</span></code> and <code class="docutils literal notranslate"><span class="pre">Tile32x32</span></code></p>
+      </div>
+    </a>
+    <a class="right-next"
+       href="fastcache.html"
+       title="next page">
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">next</p>
+        <p class="prev-next-title">Fastcache</p>
+      </div>
+      <i class="fa-solid fa-angle-right"></i>
+    </a>
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+                <dialog id="pst-secondary-sidebar-modal"></dialog>
+                <div id="pst-secondary-sidebar" class="bd-sidebar-secondary bd-toc"><div class="sidebar-secondary-items sidebar-secondary__inner">
+
+
+  <div class="sidebar-secondary-item">
+<div
+    id="pst-page-navigation-heading-2"
+    class="page-toc tocsection onthispage">
+    <i class="fa-solid fa-list"></i> On this page
+  </div>
+  <nav id="pst-page-toc-nav" class="page-toc" aria-labelledby="pst-page-navigation-heading-2">
+    <ul class="pst-show_toc_level nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#what-s-available">What’s available</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#scratch-space">Scratch space</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#semantics">Semantics</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#qd-algorithms-device-reduce-add-min-max-arr-out"><code class="docutils literal notranslate"><span class="pre">qd.algorithms.device_reduce_{add,min,max}(arr,</span> <span class="pre">out)</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#qd-algorithms-device-exclusive-scan-add-min-max-arr-out"><code class="docutils literal notranslate"><span class="pre">qd.algorithms.device_exclusive_scan_{add,min,max}(arr,</span> <span class="pre">out)</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#qd-algorithms-device-select-arr-flags-out-num-out"><code class="docutils literal notranslate"><span class="pre">qd.algorithms.device_select(arr,</span> <span class="pre">flags,</span> <span class="pre">out,</span> <span class="pre">num_out)</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#qd-algorithms-device-radix-sort-keys-tmp-keys-values-none-tmp-values-none-end-bit-none"><code class="docutils literal notranslate"><span class="pre">qd.algorithms.device_radix_sort(keys,</span> <span class="pre">tmp_keys,</span> <span class="pre">values=None,</span> <span class="pre">tmp_values=None,</span> <span class="pre">end_bit=None)</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#qd-algorithms-device-reduce-by-key-add-keys-in-values-in-keys-out-values-out-num-runs"><code class="docutils literal notranslate"><span class="pre">qd.algorithms.device_reduce_by_key_add(keys_in,</span> <span class="pre">values_in,</span> <span class="pre">keys_out,</span> <span class="pre">values_out,</span> <span class="pre">num_runs)</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#qd-algorithms-parallel-sort-keys-values-none"><code class="docutils literal notranslate"><span class="pre">qd.algorithms.parallel_sort(keys,</span> <span class="pre">values=None)</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#qd-algorithms-prefixsumexecutor"><code class="docutils literal notranslate"><span class="pre">qd.algorithms.PrefixSumExecutor</span></code></a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#examples">Examples</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#sort-indices-by-per-element-key">Sort indices by per-element key</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#compact-array-offsets-via-prefix-sum">Compact-array offsets via prefix sum</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#related">Related</a></li>
+</ul>
+  </nav></div>
+
+  <div class="sidebar-secondary-item">
+
+  <div class="tocsection sourcelink">
+    <a href="../_sources/user_guide/algorithms.md.txt">
+      <i class="fa-solid fa-file-lines"></i> Show Source
+    </a>
+  </div>
+</div>
+
+</div></div>
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+          </footer>
+        
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script defer src="../_static/scripts/bootstrap.js?digest=0790524f97105ba85085"></script>
+<script defer src="../_static/scripts/pydata-sphinx-theme.js?digest=0790524f97105ba85085"></script>
+
+  <footer class="bd-footer">
+<div class="bd-footer__inner bd-page-width">
+  
+    <div class="footer-items__start">
+      
+        <div class="footer-item">
+
+  <p class="copyright">
+    
+      © Copyright 2025 Genesis AI Inc.
+      <br/>
+    
+  </p>
+</div>
+      
+        <div class="footer-item">
+
+  <p class="sphinx-version">
+    Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 8.1.3.
+    <br/>
+  </p>
+</div>
+      
+    </div>
+  
+  
+  
+    <div class="footer-items__end">
+      
+        <div class="footer-item">
+<p class="theme-version">
+  <!-- # L10n: Setting the PST URL as an argument as this does not need to be localized -->
+  Built with the <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a> 0.18.0.
+</p></div>
+      
+    </div>
+  
+</div>
+
+  </footer>
+  </body>
+</html>

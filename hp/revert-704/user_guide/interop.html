@@ -1,0 +1,920 @@
+
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="../" >
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Numpy and Torch interop &#8212; Quadrants 1.0.2 documentation</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "";
+  </script>
+  <!--
+    this give us a css class that will be invisible only if js is disabled
+  -->
+  <noscript>
+    <style>
+      .pst-js-only { display: none !important; }
+
+    </style>
+  </noscript>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="../_static/styles/theme.css?digest=0790524f97105ba85085" rel="stylesheet" />
+<link href="../_static/styles/pydata-sphinx-theme.css?digest=0790524f97105ba85085" rel="stylesheet" />
+
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=8f2a1f02" />
+    <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../_static/togglebutton.css?v=9c3e77be" />
+    <link rel="stylesheet" type="text/css" href="../_static/graphviz.css?v=4ae1632d" />
+    <link rel="stylesheet" type="text/css" href="../_static/sphinx-design.min.css?v=95c83b7e" />
+    <link rel="stylesheet" type="text/css" href="../_static/css/custom.css" />
+  
+  <!-- So that users can add custom icons -->
+  <script defer src="../_static/scripts/fontawesome.js?digest=0790524f97105ba85085"></script>
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=0790524f97105ba85085" />
+<link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=0790524f97105ba85085" />
+
+    <script src="../_static/documentation_options.js?v=1ed6394b"></script>
+    <script src="../_static/doctools.js?v=9bcbadda"></script>
+    <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../_static/copybutton.js?v=f281be69"></script>
+    <script>let toggleHintShow = 'Click to show';</script>
+    <script>let toggleHintHide = 'Click to hide';</script>
+    <script>let toggleOpenOnPrint = 'true';</script>
+    <script src="../_static/togglebutton.js?v=b8b12719"></script>
+    <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
+    <script src="../_static/design-tabs.js?v=f930bc37"></script>
+    <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'user_guide/interop';</script>
+    <script>DOCUMENTATION_OPTIONS.search_as_you_type = false;</script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Shared Metal command queue (PyTorch MPS)" href="metal_shared_queue.html" />
+    <link rel="prev" title="Parallelization" href="parallelization.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="docsearch:language" content="en"/>
+  <meta name="docsearch:version" content="1.0.2" />
+  
+    
+    <script src="../_static/searchtools.js"></script>
+    <script src="../_static/language_data.js"></script>
+    <script src="../searchindex.js"></script>
+  
+  </head>
+  <body data-default-mode="">
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+  
+  
+  
+  
+  <dialog id="pst-search-dialog">
+    
+<form class="bd-search d-flex align-items-center"
+      action="../search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         placeholder="Search the docs ..."
+         aria-label="Search the docs ..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form>
+  </dialog>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header id="pst-header" class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+<div class="bd-header__inner bd-page-width">
+  <button class="pst-navbar-icon sidebar-toggle primary-toggle" aria-label="Site navigation">
+    <span class="fa-solid fa-bars"></span>
+  </button>
+  
+  
+  <div class="col-lg-3 navbar-header-items__start">
+    
+      <div class="navbar-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="../index.html">
+  
+  
+  
+  
+  
+  
+    <p class="title logo__title">Quadrants 1.0.2 documentation</p>
+  
+</a></div>
+    
+  </div>
+  
+  <div class="col-lg-9 navbar-header-items">
+    
+    <div class="me-auto navbar-header-items__center">
+      
+        <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item current active">
+  <a class="nav-link nav-internal" href="index.html">
+    User guide
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../autoapi/index.html">
+    API Reference
+  </a>
+</li>
+
+  </ul>
+</nav></div>
+      
+    </div>
+    
+    
+    <div class="navbar-header-items__end">
+      
+        <div class="navbar-item navbar-persistent--container">
+          
+
+<button class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+        </div>
+      
+      
+        <div class="navbar-item">
+
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg fa-fw" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg fa-fw" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg fa-fw" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg fa-fw me-1"></i>System Settings</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg fa-fw me-1"></i>Light</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg fa-fw me-1"></i>Dark</button></li>
+  </ul>
+</div></div>
+      
+    </div>
+    
+  </div>
+  
+  
+    <div class="navbar-persistent--mobile">
+
+<button class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+    </div>
+  
+
+  
+    <button class="pst-navbar-icon sidebar-toggle secondary-toggle" aria-label="On this page">
+      <span class="fa-solid fa-outdent"></span>
+    </button>
+  
+</div>
+
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+      <dialog id="pst-primary-sidebar-modal"></dialog>
+      <div id="pst-primary-sidebar" class="bd-sidebar-primary bd-sidebar">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+      <div class="sidebar-header-items__center">
+        
+          
+          
+            <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item current active">
+  <a class="nav-link nav-internal" href="index.html">
+    User guide
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../autoapi/index.html">
+    API Reference
+  </a>
+</li>
+
+  </ul>
+</nav></div>
+          
+        
+      </div>
+    
+    
+    
+      <div class="sidebar-header-items__end">
+        
+          <div class="navbar-item">
+
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg fa-fw" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg fa-fw" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg fa-fw" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg fa-fw me-1"></i>System Settings</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg fa-fw me-1"></i>Light</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg fa-fw me-1"></i>Dark</button></li>
+  </ul>
+</div></div>
+        
+      </div>
+    
+  </div>
+  
+    <div class="sidebar-primary-items__start sidebar-primary__section">
+        <div class="sidebar-primary-item pst-sidebar-collapse"><button id="pst-collapse-sidebar-button" aria-expanded="true" aria-controls="pst-primary-sidebar"><svg class="pst-icon svg-inline--fa" role="img" aria-hidden="true" focusable="false" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
+    <path fill="currentColor" d="M3 15.5C2.36232 15.5 1.74874 15.2564 1.28478 14.8189C0.820828 14.3815 0.541576 13.7832 0.504167 13.1467L0.5 13L0.5 3C0.499965 2.36232 0.743605 1.74874 1.18107 1.28478C1.61854 0.820828 2.21676 0.541576 2.85333 0.504167L3 0.5L13 0.5C13.6377 0.499965 14.2513 0.743605 14.7152 1.18107C15.1792 1.61854 15.4584 2.21676 15.4958 2.85333L15.5 3L15.5 13C15.5 13.6377 15.2564 14.2513 14.8189 14.7152C14.3815 15.1792 13.7832 15.4584 13.1467 15.4958L13 15.5L3 15.5ZM3 13.8333L10.5 13.8333L10.5 2.16667L3 2.16667C2.79589 2.16669 2.59889 2.24163 2.44636 2.37726C2.29383 2.5129 2.19638 2.69979 2.1725 2.9025L2.16667 3L2.16667 13C2.16669 13.2041 2.24163 13.4011 2.37726 13.5536C2.5129 13.7062 2.69979 13.8036 2.9025 13.8275L3 13.8333ZM6.65583 10.325L6.5775 10.2558L4.91083 8.58917C4.76735 8.44567 4.68116 8.25476 4.66843 8.05223C4.65569 7.84971 4.71729 7.6495 4.84167 7.48917L4.91083 7.41083L6.5775 5.74417C6.72747 5.59471 6.9287 5.50794 7.14032 5.50148C7.35194 5.49502 7.55809 5.56935 7.7169 5.70937C7.8757 5.8494 7.97525 6.04463 7.99533 6.25539C8.01541 6.46616 7.95451 6.67667 7.825 6.84417L7.75583 6.9225L6.67917 8L7.75583 9.0775C7.89931 9.22099 7.98551 9.41191 7.99824 9.61443C8.01097 9.81695 7.94938 10.0172 7.825 10.1775L7.75583 10.2558C7.61234 10.3993 7.42142 10.4855 7.2189 10.4982C7.01638 10.511 6.81617 10.4494 6.65583 10.325Z"/>
+  </svg>
+  <span class="pst-collapse-sidebar-label">Collapse Sidebar</span>
+  <span class="pst-expand-sidebar-label">Expand Sidebar</span>
+</button></div>
+        <div class="sidebar-primary-item">
+
+<nav class="bd-docs-nav bd-links"
+     aria-label="Section Navigation">
+  <p class="bd-links__title" role="heading" aria-level="1">Section Navigation</p>
+  <div class="bd-toc-item navbar-nav"><p aria-level="2" class="caption" role="heading"><span class="caption-text">Getting started</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="getting_started.html">Getting started</a></li>
+<li class="toctree-l1"><a class="reference internal" href="supported_systems.html">Supported systems</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Core concepts</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="tensor_types.html">Tensor types</a></li>
+<li class="toctree-l1"><a class="reference internal" href="scalar_tensors.html">Scalar tensors</a></li>
+<li class="toctree-l1"><a class="reference internal" href="matrix_vector.html">Matrix and Vector</a></li>
+
+<li class="toctree-l1"><a class="reference internal" href="matrix_vector_per_thread.html">Per-thread matrix and vector operations</a></li>
+<li class="toctree-l1"><a class="reference internal" href="linalg_per_thread.html">Per-thread linear algebra</a></li>
+<li class="toctree-l1"><a class="reference internal" href="tensor.html">Tensors</a></li>
+<li class="toctree-l1"><a class="reference internal" href="compound_types.html">Compound types</a></li>
+<li class="toctree-l1"><a class="reference internal" href="buffer_view.html">BufferView</a></li>
+<li class="toctree-l1"><a class="reference internal" href="static.html">qd.static</a></li>
+<li class="toctree-l1"><a class="reference internal" href="sub_functions.html">Sub-functions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="parallelization.html">Parallelization</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Integration</span></p>
+<ul class="current nav bd-sidenav">
+<li class="toctree-l1 current active"><a class="current reference internal" href="#">Numpy and Torch interop</a></li>
+<li class="toctree-l1"><a class="reference internal" href="metal_shared_queue.html">Shared Metal command queue (PyTorch MPS)</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Autodiff</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="autodiff.html">Automatic differentiation</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">SIMT primitives</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="atomics.html">Atomics</a></li>
+<li class="toctree-l1"><a class="reference internal" href="block.html">Block primitives</a></li>
+<li class="toctree-l1"><a class="reference internal" href="grid.html">Grid primitives</a></li>
+<li class="toctree-l1"><a class="reference internal" href="math.html">Math</a></li>
+<li class="toctree-l1"><a class="reference internal" href="subgroup.html">Subgroup primitives</a></li>
+<li class="toctree-l1"><a class="reference internal" href="tile.html">Register-resident tiles: <code class="docutils literal notranslate"><span class="pre">Tile16x16</span></code> and <code class="docutils literal notranslate"><span class="pre">Tile32x32</span></code></a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Algorithms</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="algorithms.html">Algorithms</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Performance</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="fastcache.html">Fastcache</a></li>
+<li class="toctree-l1"><a class="reference internal" href="graph.html">Graph</a></li>
+<li class="toctree-l1"><a class="reference internal" href="streams.html">Streams</a></li>
+<li class="toctree-l1"><a class="reference internal" href="perf_dispatch.html">Performance Dispatch</a></li>
+<li class="toctree-l1"><a class="reference internal" href="init_options.html">qd.init options</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Testing</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="unit_testing.html">Unit testing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="kernel_coverage.html">Kernel code coverage</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Reference</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="unsupported_python.html">Python features in kernel scope</a></li>
+<li class="toctree-l1"><a class="reference internal" href="python_backend.html">Python backend</a></li>
+<li class="toctree-l1"><a class="reference internal" href="debug.html">Debug mode</a></li>
+<li class="toctree-l1"><a class="reference internal" href="quirks.html">Quirks</a></li>
+<li class="toctree-l1"><a class="reference internal" href="troubleshooting.html">Troubleshooting</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Contributing</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="contributing.html">Contributing to quadrants</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Internal</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="building_cudagraph_conditional_fatbin.html">Building the CUDA graph conditional fatbin</a></li>
+</ul>
+</div>
+</nav></div>
+    </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+      <div class="sidebar-primary-item">
+<div id="ethical-ad-placement"
+      class="flat"
+      data-ea-publisher="readthedocs"
+      data-ea-type="readthedocs-sidebar"
+      data-ea-manual="true">
+</div></div>
+  </div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item">
+
+<nav aria-label="Breadcrumb" class="d-print-none">
+  <ul class="bd-breadcrumbs">
+    
+    <li class="breadcrumb-item breadcrumb-home">
+      <a href="../index.html" class="nav-link" aria-label="Home">
+        <i class="fa-solid fa-home"></i>
+      </a>
+    </li>
+    
+    <li class="breadcrumb-item"><a href="index.html" class="nav-link">User guide</a></li>
+    
+    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">Numpy and Torch interop</span></li>
+  </ul>
+</nav>
+</div>
+      
+    </div>
+  
+  
+</div>
+</div>
+              
+              
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <section class="tex2jax_ignore mathjax_ignore" id="numpy-and-torch-interop">
+<h1>Numpy and Torch interop<a class="headerlink" href="#numpy-and-torch-interop" title="Link to this heading">#</a></h1>
+<p>Quadrants provides interop with both numpy and PyTorch. There are three mechanisms:</p>
+<ul class="simple">
+<li><p><strong>Copy-based</strong>: convert data between quadrants fields/ndarrays and numpy arrays or torch tensors</p></li>
+<li><p><strong>Zero-copy via DLPack</strong>: obtain a torch tensor or numpy array that aliases the underlying Quadrants memory</p></li>
+<li><p><strong>Direct pass-through</strong>: pass torch tensors directly into kernels as ndarray arguments (zero-copy)</p></li>
+</ul>
+<section id="copy-based-interop">
+<h2>Copy-based interop<a class="headerlink" href="#copy-based-interop" title="Link to this heading">#</a></h2>
+<section id="fields">
+<h3>Fields<a class="headerlink" href="#fields" title="Link to this heading">#</a></h3>
+<p>Fields support <code class="docutils literal notranslate"><span class="pre">to_numpy()</span></code>, <code class="docutils literal notranslate"><span class="pre">from_numpy()</span></code>, <code class="docutils literal notranslate"><span class="pre">to_torch()</span></code>, and <code class="docutils literal notranslate"><span class="pre">from_torch()</span></code>:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">quadrants</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">qd</span>
+
+<span class="n">qd</span><span class="o">.</span><span class="n">init</span><span class="p">(</span><span class="n">arch</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">gpu</span><span class="p">)</span>
+
+<span class="n">f</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">4</span><span class="p">,</span> <span class="mi">4</span><span class="p">))</span>
+
+<span class="c1"># numpy -&gt; field</span>
+<span class="n">arr</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">((</span><span class="mi">4</span><span class="p">,</span> <span class="mi">4</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span> <span class="o">*</span> <span class="mf">3.0</span>
+<span class="n">f</span><span class="o">.</span><span class="n">from_numpy</span><span class="p">(</span><span class="n">arr</span><span class="p">)</span>
+
+<span class="c1"># field -&gt; numpy</span>
+<span class="n">result</span> <span class="o">=</span> <span class="n">f</span><span class="o">.</span><span class="n">to_numpy</span><span class="p">()</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">result</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">])</span>  <span class="c1"># 3.0</span>
+</pre></div>
+</div>
+<p>With torch:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
+
+<span class="n">f</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">4</span><span class="p">,</span> <span class="mi">4</span><span class="p">))</span>
+
+<span class="c1"># torch -&gt; field</span>
+<span class="n">t</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span><span class="mi">4</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span> <span class="o">*</span> <span class="mf">5.0</span>
+<span class="n">f</span><span class="o">.</span><span class="n">from_torch</span><span class="p">(</span><span class="n">t</span><span class="p">)</span>
+
+<span class="c1"># field -&gt; torch</span>
+<span class="n">result</span> <span class="o">=</span> <span class="n">f</span><span class="o">.</span><span class="n">to_torch</span><span class="p">(</span><span class="n">device</span><span class="o">=</span><span class="s2">&quot;cpu&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">result</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">])</span>  <span class="c1"># 5.0</span>
+</pre></div>
+</div>
+</section>
+<section id="ndarrays">
+<h3>Ndarrays<a class="headerlink" href="#ndarrays" title="Link to this heading">#</a></h3>
+<p>Ndarrays support <code class="docutils literal notranslate"><span class="pre">to_numpy()</span></code> and <code class="docutils literal notranslate"><span class="pre">from_numpy()</span></code>:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">a</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">10</span><span class="p">,))</span>
+
+<span class="c1"># numpy -&gt; ndarray</span>
+<span class="n">arr</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mi">10</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">int32</span><span class="p">)</span>
+<span class="n">a</span><span class="o">.</span><span class="n">from_numpy</span><span class="p">(</span><span class="n">arr</span><span class="p">)</span>
+
+<span class="c1"># ndarray -&gt; numpy</span>
+<span class="n">result</span> <span class="o">=</span> <span class="n">a</span><span class="o">.</span><span class="n">to_numpy</span><span class="p">()</span>
+</pre></div>
+</div>
+</section>
+<section id="shape-requirements">
+<h3>Shape requirements<a class="headerlink" href="#shape-requirements" title="Link to this heading">#</a></h3>
+<p>The shape of the numpy array or torch tensor must match the shape of the field or ndarray exactly. For matrix and vector fields, the element dimensions are appended to the shape:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># A field of 3x2 matrices with shape (4,) has numpy shape (4, 3, 2)</span>
+<span class="n">m</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">Matrix</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">4</span><span class="p">,))</span>
+<span class="n">arr</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="mi">4</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">2</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
+<span class="n">m</span><span class="o">.</span><span class="n">from_numpy</span><span class="p">(</span><span class="n">arr</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="zero-copy-interop-via-dlpack">
+<h2>Zero-copy interop via DLPack<a class="headerlink" href="#zero-copy-interop-via-dlpack" title="Link to this heading">#</a></h2>
+<p>Quadrants’ zero-copy interop has been designed with <strong>PyTorch as the first-class user interface</strong>: support, defaults, and supported-dtype/backend matrices are driven by what PyTorch can consume cleanly via DLPack. NumPy is supported on CPU backends as a free side benefit of the same DLPack capsule. Several of the limitations below (e.g. the Apple Metal <code class="docutils literal notranslate"><span class="pre">torch</span> <span class="pre">&gt;=</span> <span class="pre">2.9.2</span></code> requirement, or the 0-dim <code class="docutils literal notranslate"><span class="pre">ScalarField</span></code> carve-out) are inherited from PyTorch’s current DLPack importer rather than from Quadrants itself.</p>
+<p><code class="docutils literal notranslate"><span class="pre">to_torch()</span></code> and <code class="docutils literal notranslate"><span class="pre">to_numpy()</span></code> accept a keyword-only <code class="docutils literal notranslate"><span class="pre">copy</span></code> argument that controls whether the returned tensor/array is an independent copy of the data or a zero-copy view that aliases the underlying Quadrants memory.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">f</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">1024</span><span class="p">,))</span>
+
+<span class="n">view</span>  <span class="o">=</span> <span class="n">f</span><span class="o">.</span><span class="n">to_torch</span><span class="p">(</span><span class="n">copy</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>  <span class="c1"># zero-copy view: aliases f&#39;s memory, or ValueError</span>
+<span class="n">auto</span>  <span class="o">=</span> <span class="n">f</span><span class="o">.</span><span class="n">to_torch</span><span class="p">(</span><span class="n">copy</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>   <span class="c1"># zero-copy if possible, otherwise copy</span>
+<span class="n">clone</span> <span class="o">=</span> <span class="n">f</span><span class="o">.</span><span class="n">to_torch</span><span class="p">(</span><span class="n">copy</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>   <span class="c1"># independent copy (default)</span>
+<span class="n">plain</span> <span class="o">=</span> <span class="n">f</span><span class="o">.</span><span class="n">to_torch</span><span class="p">()</span>            <span class="c1"># same as copy=True</span>
+</pre></div>
+</div>
+<p>When using <code class="docutils literal notranslate"><span class="pre">copy=False</span></code> or <code class="docutils literal notranslate"><span class="pre">copy=None</span></code> (when zero-copy succeeds), modifications via the view are visible to subsequent Quadrants kernel reads, and vice-versa. The view stays valid until the underlying storage is reallocated – typically on <code class="docutils literal notranslate"><span class="pre">qd.init()</span></code> or <code class="docutils literal notranslate"><span class="pre">qd.reset()</span></code>, after which a fresh call to <code class="docutils literal notranslate"><span class="pre">to_torch(copy=False)</span></code> / <code class="docutils literal notranslate"><span class="pre">to_numpy(copy=False)</span></code> returns a new view.</p>
+<section id="when-zero-copy-is-available">
+<h3>When zero-copy is available<a class="headerlink" href="#when-zero-copy-is-available" title="Link to this heading">#</a></h3>
+<p>Zero-copy uses <a class="reference external" href="https://github.com/dmlc/dlpack">DLPack</a> and requires:</p>
+<ul class="simple">
+<li><p>a backend with DLPack support: <code class="docutils literal notranslate"><span class="pre">cpu</span></code> (<code class="docutils literal notranslate"><span class="pre">x64</span></code>/<code class="docutils literal notranslate"><span class="pre">arm64</span></code>), <code class="docutils literal notranslate"><span class="pre">cuda</span></code>, <code class="docutils literal notranslate"><span class="pre">amdgpu</span></code>, or <code class="docutils literal notranslate"><span class="pre">metal</span></code>. Vulkan is not supported: Vulkan-backed DLPack tensors are not processed by many well-known scientific computing libraries (torch, numpy, etc.);</p></li>
+<li><p>a DLPack-supported dtype: <code class="docutils literal notranslate"><span class="pre">i32</span></code>, <code class="docutils literal notranslate"><span class="pre">i64</span></code>, <code class="docutils literal notranslate"><span class="pre">f32</span></code>, <code class="docutils literal notranslate"><span class="pre">f64</span></code>, <code class="docutils literal notranslate"><span class="pre">u1</span></code> (other dtypes such as <code class="docutils literal notranslate"><span class="pre">f16</span></code>, <code class="docutils literal notranslate"><span class="pre">u8</span></code>, <code class="docutils literal notranslate"><span class="pre">u16</span></code> fall back to the kernel-copy path);</p></li>
+<li><p>on Apple Metal, <code class="docutils literal notranslate"><span class="pre">torch</span> <span class="pre">&gt;=</span> <span class="pre">2.9.2</span></code> for fields (required for DLPack <code class="docutils literal notranslate"><span class="pre">bytes_offset</span></code> on MPS; see <a class="reference external" href="https://github.com/pytorch/pytorch/pull/168193">pytorch/pytorch#168193</a>);</p></li>
+<li><p>0-dim <code class="docutils literal notranslate"><span class="pre">ScalarField</span></code> instances are not zero-copyable on any backend (PyTorch DLPack <code class="docutils literal notranslate"><span class="pre">bytes_offset</span></code> limitation);</p></li>
+<li><p>members of an AOS <code class="docutils literal notranslate"><span class="pre">StructField</span></code> (the default <code class="docutils literal notranslate"><span class="pre">Struct.field(...,</span> <span class="pre">layout=Layout.AOS)</span></code>) are not zero-copyable yet (see <a class="reference internal" href="#struct-fields">Struct fields</a> below); members of an SOA <code class="docutils literal notranslate"><span class="pre">StructField</span></code> (<code class="docutils literal notranslate"><span class="pre">layout=Layout.SOA</span></code>) <strong>are</strong> zero-copyable individually.</p></li>
+</ul>
+<p>Zero-copy <code class="docutils literal notranslate"><span class="pre">to_numpy()</span></code> additionally requires a CPU backend, because numpy arrays cannot reference GPU memory. Note: <code class="docutils literal notranslate"><span class="pre">Field.to_numpy(copy=False)</span></code> and <code class="docutils literal notranslate"><span class="pre">MatrixField.to_numpy(copy=False)</span></code> currently require torch to be installed, because the C++ <code class="docutils literal notranslate"><span class="pre">field_to_dlpack</span></code> checks the torch version internally. <code class="docutils literal notranslate"><span class="pre">Ndarray.to_numpy(copy=False)</span></code> does not require torch.</p>
+<p>On <strong>NumPy &gt;= 2.1</strong>, <code class="docutils literal notranslate"><span class="pre">to_numpy(copy=False)</span></code> returns a <strong>writable</strong> array (via a DLPack v1 capsule). On NumPy 1.26–2.0, the returned array is <strong>read-only</strong> because those versions only consume DLPack v0 capsules, which lack writability metadata. If you need writable zero-copy numpy views, upgrade to NumPy &gt;= 2.1.</p>
+</section>
+<section id="semantics-of-copy">
+<h3>Semantics of <code class="docutils literal notranslate"><span class="pre">copy</span></code><a class="headerlink" href="#semantics-of-copy" title="Link to this heading">#</a></h3>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>Value</p></th>
+<th class="head"><p>Behaviour</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">True</span></code> (default)</p></td>
+<td><p>Independent copy via kernel.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">None</span></code></p></td>
+<td><p>Zero-copy view via DLPack when available, otherwise falls back to a copy silently.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">False</span></code></p></td>
+<td><p>Zero-copy view via DLPack, or <code class="docutils literal notranslate"><span class="pre">ValueError</span></code> if zero-copy is unsupported for this backend/dtype.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>The default <code class="docutils literal notranslate"><span class="pre">copy=True</span></code> always returns a buffer that is safe to mutate without affecting the field/ndarray. Use <code class="docutils literal notranslate"><span class="pre">copy=None</span></code> when you want zero-copy as a best-effort optimisation without having to handle exceptions — it gives you a view when possible and a safe copy otherwise.</p>
+</section>
+<section id="examples">
+<h3>Examples<a class="headerlink" href="#examples" title="Link to this heading">#</a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">quadrants</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">qd</span>
+
+<span class="n">qd</span><span class="o">.</span><span class="n">init</span><span class="p">(</span><span class="n">arch</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">cuda</span><span class="p">)</span>
+
+<span class="n">f</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">1024</span><span class="p">,))</span>
+<span class="n">f</span><span class="o">.</span><span class="n">fill</span><span class="p">(</span><span class="mf">1.0</span><span class="p">)</span>
+
+<span class="n">view</span> <span class="o">=</span> <span class="n">f</span><span class="o">.</span><span class="n">to_torch</span><span class="p">(</span><span class="n">copy</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+<span class="n">view</span> <span class="o">*=</span> <span class="mf">2.0</span>           <span class="c1"># mutates f&#39;s underlying memory directly</span>
+<span class="n">qd</span><span class="o">.</span><span class="n">sync</span><span class="p">()</span>             <span class="c1"># not strictly required; safe pattern</span>
+
+<span class="nb">print</span><span class="p">(</span><span class="n">f</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>           <span class="c1"># 2.0</span>
+</pre></div>
+</div>
+<p>Round-trip with NumPy on a CPU backend:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">qd</span><span class="o">.</span><span class="n">init</span><span class="p">(</span><span class="n">arch</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">cpu</span><span class="p">)</span>
+
+<span class="n">a</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">8</span><span class="p">,))</span>
+<span class="n">a</span><span class="o">.</span><span class="n">from_numpy</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mi">8</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">int32</span><span class="p">))</span>
+
+<span class="n">view</span> <span class="o">=</span> <span class="n">a</span><span class="o">.</span><span class="n">to_numpy</span><span class="p">(</span><span class="n">copy</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+<span class="n">view</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="mi">100</span>  <span class="c1"># Requires NumPy &gt;= 2.1 for the assignment to succeed</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">a</span><span class="o">.</span><span class="n">to_numpy</span><span class="p">()[</span><span class="mi">0</span><span class="p">])</span>   <span class="c1"># 100</span>
+</pre></div>
+</div>
+</section>
+<section id="caching">
+<h3>Caching<a class="headerlink" href="#caching" title="Link to this heading">#</a></h3>
+<p>Each call to <code class="docutils literal notranslate"><span class="pre">to_torch(copy=False)</span></code> builds a fresh DLPack capsule, but the returned tensor aliases the same underlying memory. Downstream frameworks (e.g. Genesis) may cache the returned view on the field object for hot-path reuse; Quadrants itself does not cache views internally.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">v1</span> <span class="o">=</span> <span class="n">f</span><span class="o">.</span><span class="n">to_torch</span><span class="p">(</span><span class="n">copy</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+<span class="n">v2</span> <span class="o">=</span> <span class="n">f</span><span class="o">.</span><span class="n">to_torch</span><span class="p">(</span><span class="n">copy</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+<span class="k">assert</span> <span class="n">v1</span><span class="o">.</span><span class="n">data_ptr</span><span class="p">()</span> <span class="o">==</span> <span class="n">v2</span><span class="o">.</span><span class="n">data_ptr</span><span class="p">()</span>   <span class="c1"># same underlying memory</span>
+</pre></div>
+</div>
+</section>
+<section id="apple-metal-synchronisation">
+<h3>Apple Metal: synchronisation<a class="headerlink" href="#apple-metal-synchronisation" title="Link to this heading">#</a></h3>
+<p>On Apple Metal, Quadrants and PyTorch MPS use separate Metal command queues. Every <code class="docutils literal notranslate"><span class="pre">to_torch()</span></code> / <code class="docutils literal notranslate"><span class="pre">to_numpy()</span></code> call runs <code class="docutils literal notranslate"><span class="pre">qd.sync()</span></code> internally to flush the Quadrants queue. Additionally, <code class="docutils literal notranslate"><span class="pre">copy=True</span></code> (the default) calls <code class="docutils literal notranslate"><span class="pre">torch.mps.synchronize()</span></code> after the kernel copy. This is necessary because, on Metal, Quadrants and Torch do not share the same compute streams. <code class="docutils literal notranslate"><span class="pre">copy=False</span></code> does <strong>not</strong> call <code class="docutils literal notranslate"><span class="pre">torch.mps.synchronize()</span></code>:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">qd</span><span class="o">.</span><span class="n">init</span><span class="p">(</span><span class="n">arch</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">metal</span><span class="p">)</span>
+<span class="n">f</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">64</span><span class="p">,))</span>
+
+<span class="n">run_kernel</span><span class="p">(</span><span class="n">f</span><span class="p">)</span>                       <span class="c1"># queues writes on the Quadrants Metal stream</span>
+<span class="n">view</span> <span class="o">=</span> <span class="n">f</span><span class="o">.</span><span class="n">to_torch</span><span class="p">(</span><span class="n">copy</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>       <span class="c1"># qd.sync() only</span>
+<span class="n">copy</span> <span class="o">=</span> <span class="n">f</span><span class="o">.</span><span class="n">to_torch</span><span class="p">(</span><span class="n">copy</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>        <span class="c1"># qd.sync() + torch.mps.synchronize()</span>
+</pre></div>
+</div>
+<p>The reverse direction (PyTorch writes to a zero-copy view, then a Quadrants kernel reads from the same field) is <strong>not</strong> automatically synchronised. Because Quadrants and PyTorch MPS submit work to separate Metal command queues, a kernel launched immediately after a torch write may execute before the torch write has actually committed to memory:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">qd</span><span class="o">.</span><span class="n">init</span><span class="p">(</span><span class="n">arch</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">metal</span><span class="p">)</span>
+<span class="n">f</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">64</span><span class="p">,))</span>
+
+<span class="n">view</span> <span class="o">=</span> <span class="n">f</span><span class="o">.</span><span class="n">to_torch</span><span class="p">(</span><span class="n">copy</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+<span class="n">view</span><span class="o">.</span><span class="n">zero_</span><span class="p">()</span>                     <span class="c1"># queued on the torch MPS stream</span>
+<span class="n">my_kernel</span><span class="p">(</span><span class="n">f</span><span class="p">)</span>                     <span class="c1"># may run BEFORE view.zero_() commits!</span>
+
+<span class="n">torch</span><span class="o">.</span><span class="n">mps</span><span class="o">.</span><span class="n">synchronize</span><span class="p">()</span>          <span class="c1"># required to flush the torch MPS stream first</span>
+<span class="n">my_kernel</span><span class="p">(</span><span class="n">f</span><span class="p">)</span>                     <span class="c1"># now safe</span>
+</pre></div>
+</div>
+<p>This is intentional: forcing a sync on every Quadrants kernel that touches a previously-zerocopied field would be very expensive in workloads that batch many torch ops and many kernels back-to-back. If you mutate fields from torch and then read them from a Quadrants kernel on Metal, call <code class="docutils literal notranslate"><span class="pre">torch.mps.synchronize()</span></code> once between the torch ops and the kernels.</p>
+<p><strong>Shared command queue.</strong> The synchronisation overhead above can be eliminated entirely by passing PyTorch MPS’s <code class="docutils literal notranslate"><span class="pre">MTLCommandQueue</span></code> to Quadrants at init time via <code class="docutils literal notranslate"><span class="pre">external_metal_command_queue</span></code>. Quadrants provides <code class="docutils literal notranslate"><span class="pre">quadrants.interop.get_mps_command_queue()</span></code> to extract the queue pointer at runtime. When both frameworks share the same queue, Metal guarantees command buffer ordering automatically. See <a class="reference internal" href="metal_shared_queue.html"><span class="std std-doc">Shared Metal command queue</span></a> for the setup guide.</p>
+</section>
+<section id="lifetime-caveats">
+<h3>Lifetime caveats<a class="headerlink" href="#lifetime-caveats" title="Link to this heading">#</a></h3>
+<p>A zero-copy view becomes invalid when the underlying Quadrants storage is freed. This happens on <code class="docutils literal notranslate"><span class="pre">qd.reset()</span></code> and <code class="docutils literal notranslate"><span class="pre">qd.init()</span></code>. Holding a <code class="docutils literal notranslate"><span class="pre">copy=False</span></code> tensor across either is undefined behaviour:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">view</span> <span class="o">=</span> <span class="n">f</span><span class="o">.</span><span class="n">to_torch</span><span class="p">(</span><span class="n">copy</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+<span class="n">qd</span><span class="o">.</span><span class="n">reset</span><span class="p">()</span>
+<span class="n">view</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>                 <span class="c1"># undefined: view aliases freed memory</span>
+</pre></div>
+</div>
+<p>The default <code class="docutils literal notranslate"><span class="pre">copy=True</span></code> produces an independent copy that is unaffected. Only <code class="docutils literal notranslate"><span class="pre">copy=False</span></code> views are affected by this caveat.</p>
+</section>
+<section id="struct-fields">
+<h3>Struct fields<a class="headerlink" href="#struct-fields" title="Link to this heading">#</a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">StructField.to_torch()</span></code> and <code class="docutils literal notranslate"><span class="pre">StructField.to_numpy()</span></code> return a dictionary mapping each member name to a tensor / array; the <code class="docutils literal notranslate"><span class="pre">copy</span></code> argument is propagated to each member, so zero-copy availability is decided per member. The relevant axis is the SNode layout chosen at construction:</p>
+<ul class="simple">
+<li><p><strong>AOS</strong> (default <code class="docutils literal notranslate"><span class="pre">Struct.field(...,</span> <span class="pre">layout=Layout.AOS)</span></code>): all members share the struct cell, e.g. <code class="docutils literal notranslate"><span class="pre">Struct.field({&quot;a&quot;:</span> <span class="pre">i32,</span> <span class="pre">&quot;b&quot;:</span> <span class="pre">f32},</span> <span class="pre">shape=(N,))</span></code> stores <code class="docutils literal notranslate"><span class="pre">[a0,</span> <span class="pre">b0,</span> <span class="pre">a1,</span> <span class="pre">b1,</span> <span class="pre">...]</span></code> in memory, with stride <code class="docutils literal notranslate"><span class="pre">sizeof(cell)</span></code> between consecutive <code class="docutils literal notranslate"><span class="pre">a</span></code>’s. Quadrants’ C++ DLPack export does not currently emit cell-stride-aware views for individual members (it computes contiguous strides at the member dtype size, which would interleave neighbouring members’ bytes), so AOS members fall back to a kernel copy and <code class="docutils literal notranslate"><span class="pre">copy=False</span></code> raises on each AOS member.</p></li>
+<li><p><strong>SOA</strong> (<code class="docutils literal notranslate"><span class="pre">Struct.field(...,</span> <span class="pre">layout=Layout.SOA)</span></code>): each member sits in its own dense SNode subtree with contiguous storage, so members are zero-copyable individually under the usual backend / dtype rules. <code class="docutils literal notranslate"><span class="pre">copy=False</span></code> succeeds and returns aliasing views.</p></li>
+</ul>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">S_aos</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">Struct</span><span class="o">.</span><span class="n">field</span><span class="p">({</span><span class="s2">&quot;pos&quot;</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="s2">&quot;vel&quot;</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">},</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">16</span><span class="p">,))</span>   <span class="c1"># AOS (default)</span>
+<span class="n">d_aos</span> <span class="o">=</span> <span class="n">S_aos</span><span class="o">.</span><span class="n">to_torch</span><span class="p">()</span>                                                <span class="c1"># dict of kernel copies</span>
+<span class="n">d_aos</span><span class="p">[</span><span class="s2">&quot;pos&quot;</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="mf">1.0</span>                                                   <span class="c1"># does NOT write back</span>
+
+<span class="n">S_soa</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">Struct</span><span class="o">.</span><span class="n">field</span><span class="p">({</span><span class="s2">&quot;pos&quot;</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="s2">&quot;vel&quot;</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">},</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">16</span><span class="p">,),</span>
+                        <span class="n">layout</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">Layout</span><span class="o">.</span><span class="n">SOA</span><span class="p">)</span>
+<span class="n">d_soa</span> <span class="o">=</span> <span class="n">S_soa</span><span class="o">.</span><span class="n">to_torch</span><span class="p">(</span><span class="n">copy</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>                                      <span class="c1"># dict of zero-copy views</span>
+<span class="n">d_soa</span><span class="p">[</span><span class="s2">&quot;pos&quot;</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="mf">1.0</span>                                                   <span class="c1"># writes through to S_soa.pos</span>
+</pre></div>
+</div>
+</section>
+<section id="raw-dlpack-export-with-to-dlpack">
+<h3>Raw DLPack export with <code class="docutils literal notranslate"><span class="pre">to_dlpack()</span></code><a class="headerlink" href="#raw-dlpack-export-with-to-dlpack" title="Link to this heading">#</a></h3>
+<p>All field and ndarray types expose a <code class="docutils literal notranslate"><span class="pre">to_dlpack()</span></code> method that returns a raw <a class="reference external" href="https://github.com/dmlc/dlpack">DLPack</a> <code class="docutils literal notranslate"><span class="pre">PyCapsule</span></code>. This is the low-level primitive that <code class="docutils literal notranslate"><span class="pre">to_torch(copy=False)</span></code> and <code class="docutils literal notranslate"><span class="pre">to_numpy(copy=False)</span></code> are built on; use it when you need to feed Quadrants data into a framework that speaks DLPack directly (e.g. JAX, CuPy, or a custom C extension).</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">qd</span><span class="o">.</span><span class="n">init</span><span class="p">(</span><span class="n">arch</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">cpu</span><span class="p">)</span>
+<span class="n">f</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">8</span><span class="p">,))</span>
+<span class="n">f</span><span class="o">.</span><span class="n">fill</span><span class="p">(</span><span class="mf">1.0</span><span class="p">)</span>
+
+<span class="n">capsule</span> <span class="o">=</span> <span class="n">f</span><span class="o">.</span><span class="n">to_dlpack</span><span class="p">()</span>                                   <span class="c1"># v0 capsule (&quot;dltensor&quot;)</span>
+<span class="n">t</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">utils</span><span class="o">.</span><span class="n">dlpack</span><span class="o">.</span><span class="n">from_dlpack</span><span class="p">(</span><span class="n">capsule</span><span class="p">)</span>                <span class="c1"># zero-copy torch tensor</span>
+</pre></div>
+</div>
+<p>For NumPy, prefer <code class="docutils literal notranslate"><span class="pre">to_numpy(copy=False)</span></code> which handles the DLPack protocol adapter internally. If you need a raw v1 capsule for another consumer, use <code class="docutils literal notranslate"><span class="pre">f.to_dlpack(versioned=True)</span></code>. Note that <code class="docutils literal notranslate"><span class="pre">np.from_dlpack</span></code> does not accept raw <code class="docutils literal notranslate"><span class="pre">PyCapsule</span></code> objects — it requires an object exposing <code class="docutils literal notranslate"><span class="pre">__dlpack__()</span></code> and <code class="docutils literal notranslate"><span class="pre">__dlpack_device__()</span></code>, which <code class="docutils literal notranslate"><span class="pre">to_numpy(copy=False)</span></code> provides via an internal adapter.</p>
+<p>The <code class="docutils literal notranslate"><span class="pre">versioned</span></code> parameter selects the DLPack protocol version:</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p><code class="docutils literal notranslate"><span class="pre">versioned</span></code></p></th>
+<th class="head"><p>Capsule type</p></th>
+<th class="head"><p>Capsule name</p></th>
+<th class="head"><p>Use case</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">False</span></code> (default)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">DLManagedTensor</span></code> (v0)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">&quot;dltensor&quot;</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">torch.utils.dlpack.from_dlpack</span></code>, CuPy, JAX, and other v0 consumers.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">True</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">DLManagedTensorVersioned</span></code> (v1)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">&quot;dltensor_versioned&quot;</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">np.from_dlpack</span></code> on NumPy &gt;= 2.1 (v0 capsules produce read-only arrays on NumPy &gt;= 2.0; v1 consumer support requires &gt;= 2.1).</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>The same backend, dtype, and layout restrictions that apply to <code class="docutils literal notranslate"><span class="pre">to_torch(copy=False)</span></code> / <code class="docutils literal notranslate"><span class="pre">to_numpy(copy=False)</span></code> apply here — <code class="docutils literal notranslate"><span class="pre">to_dlpack()</span></code> is the underlying mechanism. The caller is responsible for calling <code class="docutils literal notranslate"><span class="pre">qd.sync()</span></code> between modifying the field and consuming the capsule.</p>
+</section>
+</section>
+<section id="direct-torch-tensor-pass-through">
+<h2>Direct torch tensor pass-through<a class="headerlink" href="#direct-torch-tensor-pass-through" title="Link to this heading">#</a></h2>
+<p>Torch tensors can be passed directly into kernels where <code class="docutils literal notranslate"><span class="pre">qd.types.ndarray()</span></code> parameters are expected. The kernel reads from and writes to the torch tensor directly:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">quadrants</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">qd</span>
+
+<span class="n">qd</span><span class="o">.</span><span class="n">init</span><span class="p">(</span><span class="n">arch</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">gpu</span><span class="p">)</span>
+
+<span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">square</span><span class="p">(</span><span class="n">inp</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(),</span> <span class="n">out</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">ndarray</span><span class="p">())</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">32</span><span class="p">):</span>
+        <span class="n">out</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">inp</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">*</span> <span class="n">inp</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+
+<span class="n">x</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span><span class="mi">32</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span> <span class="o">*</span> <span class="mf">3.0</span>
+<span class="n">y</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="mi">32</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
+<span class="n">square</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">y</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>  <span class="c1"># 9.0</span>
+</pre></div>
+</div>
+<p>This also works with CUDA tensors when running on a CUDA backend:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">x</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span><span class="mi">32</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">float32</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="s2">&quot;cuda:0&quot;</span><span class="p">)</span> <span class="o">*</span> <span class="mf">3.0</span>
+<span class="n">y</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="mi">32</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">float32</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="s2">&quot;cuda:0&quot;</span><span class="p">)</span>
+<span class="n">square</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span>
+</pre></div>
+</div>
+<section id="integration-with-torch-autograd">
+<h3>Integration with torch.autograd<a class="headerlink" href="#integration-with-torch-autograd" title="Link to this heading">#</a></h3>
+<p>Since torch tensors can be passed directly into kernels, you can integrate Quadrants kernels into PyTorch’s autograd system by wrapping them in a <code class="docutils literal notranslate"><span class="pre">torch.autograd.Function</span></code>:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">forward_kernel</span><span class="p">(</span><span class="n">t</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(),</span> <span class="n">o</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">ndarray</span><span class="p">())</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">32</span><span class="p">):</span>
+        <span class="n">o</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">t</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">*</span> <span class="n">t</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+
+<span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">backward_kernel</span><span class="p">(</span><span class="n">t_grad</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(),</span> <span class="n">t</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(),</span> <span class="n">o_grad</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">ndarray</span><span class="p">())</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">32</span><span class="p">):</span>
+        <span class="n">t_grad</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">t</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">*</span> <span class="n">o_grad</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">Sqr</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">autograd</span><span class="o">.</span><span class="n">Function</span><span class="p">):</span>
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">forward</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">inp</span><span class="p">):</span>
+        <span class="n">outp</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">zeros_like</span><span class="p">(</span><span class="n">inp</span><span class="p">)</span>
+        <span class="n">ctx</span><span class="o">.</span><span class="n">save_for_backward</span><span class="p">(</span><span class="n">inp</span><span class="p">)</span>
+        <span class="n">forward_kernel</span><span class="p">(</span><span class="n">inp</span><span class="p">,</span> <span class="n">outp</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">outp</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">backward</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">outp_grad</span><span class="p">):</span>
+        <span class="n">outp_grad</span> <span class="o">=</span> <span class="n">outp_grad</span><span class="o">.</span><span class="n">contiguous</span><span class="p">()</span>
+        <span class="n">inp_grad</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">zeros_like</span><span class="p">(</span><span class="n">outp_grad</span><span class="p">)</span>
+        <span class="p">(</span><span class="n">inp</span><span class="p">,)</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">saved_tensors</span>
+        <span class="n">backward_kernel</span><span class="p">(</span><span class="n">inp_grad</span><span class="p">,</span> <span class="n">inp</span><span class="p">,</span> <span class="n">outp_grad</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">inp_grad</span>
+
+<span class="n">x</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">tensor</span><span class="p">([</span><span class="mf">2.0</span><span class="p">]</span> <span class="o">*</span> <span class="mi">32</span><span class="p">,</span> <span class="n">requires_grad</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="n">loss</span> <span class="o">=</span> <span class="n">Sqr</span><span class="o">.</span><span class="n">apply</span><span class="p">(</span><span class="n">x</span><span class="p">)</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span>
+<span class="n">loss</span><span class="o">.</span><span class="n">backward</span><span class="p">()</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">grad</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>  <span class="c1"># 4.0</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="summary">
+<h2>Summary<a class="headerlink" href="#summary" title="Link to this heading">#</a></h2>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>Method</p></th>
+<th class="head"><p>Copies data?</p></th>
+<th class="head"><p>Works with fields?</p></th>
+<th class="head"><p>Works with ndarrays?</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">to_numpy()</span></code> / <code class="docutils literal notranslate"><span class="pre">from_numpy()</span></code> (default)</p></td>
+<td><p>yes</p></td>
+<td><p>yes</p></td>
+<td><p>yes</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">to_torch()</span></code> / <code class="docutils literal notranslate"><span class="pre">from_torch()</span></code> (default)</p></td>
+<td><p>yes</p></td>
+<td><p>yes</p></td>
+<td><p>yes</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">to_numpy(copy=None)</span></code> / <code class="docutils literal notranslate"><span class="pre">to_torch(copy=None)</span></code></p></td>
+<td><p>no when possible, yes otherwise</p></td>
+<td><p>yes</p></td>
+<td><p>yes</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">to_numpy(copy=False)</span></code> / <code class="docutils literal notranslate"><span class="pre">to_torch(copy=False)</span></code></p></td>
+<td><p>no (DLPack view)</p></td>
+<td><p>yes</p></td>
+<td><p>yes</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">to_dlpack()</span></code></p></td>
+<td><p>no (raw capsule)</p></td>
+<td><p>yes</p></td>
+<td><p>yes</p></td>
+</tr>
+<tr class="row-odd"><td><p>Direct pass-through</p></td>
+<td><p>no</p></td>
+<td><p>no</p></td>
+<td><p>yes (as kernel arg)</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>The <code class="docutils literal notranslate"><span class="pre">copy</span></code> parameter is supported on <code class="docutils literal notranslate"><span class="pre">to_numpy()</span></code> and <code class="docutils literal notranslate"><span class="pre">to_torch()</span></code> for <code class="docutils literal notranslate"><span class="pre">ScalarField</span></code>, <code class="docutils literal notranslate"><span class="pre">MatrixField</span></code> (and <code class="docutils literal notranslate"><span class="pre">VectorField</span></code>), <code class="docutils literal notranslate"><span class="pre">StructField</span></code>, <code class="docutils literal notranslate"><span class="pre">qd.Tensor</span></code>, and all <code class="docutils literal notranslate"><span class="pre">Ndarray</span></code> types. See <a class="reference internal" href="#zero-copy-interop-via-dlpack">Zero-copy interop via DLPack</a> for the support matrix and lifetime rules.</p>
+</section>
+</section>
+
+
+                </article>
+              
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+    <a class="left-prev"
+       href="parallelization.html"
+       title="previous page">
+      <i class="fa-solid fa-angle-left"></i>
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">previous</p>
+        <p class="prev-next-title">Parallelization</p>
+      </div>
+    </a>
+    <a class="right-next"
+       href="metal_shared_queue.html"
+       title="next page">
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">next</p>
+        <p class="prev-next-title">Shared Metal command queue (PyTorch MPS)</p>
+      </div>
+      <i class="fa-solid fa-angle-right"></i>
+    </a>
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+                <dialog id="pst-secondary-sidebar-modal"></dialog>
+                <div id="pst-secondary-sidebar" class="bd-sidebar-secondary bd-toc"><div class="sidebar-secondary-items sidebar-secondary__inner">
+
+
+  <div class="sidebar-secondary-item">
+<div
+    id="pst-page-navigation-heading-2"
+    class="page-toc tocsection onthispage">
+    <i class="fa-solid fa-list"></i> On this page
+  </div>
+  <nav id="pst-page-toc-nav" class="page-toc" aria-labelledby="pst-page-navigation-heading-2">
+    <ul class="pst-show_toc_level nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#copy-based-interop">Copy-based interop</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#fields">Fields</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#ndarrays">Ndarrays</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#shape-requirements">Shape requirements</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#zero-copy-interop-via-dlpack">Zero-copy interop via DLPack</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#when-zero-copy-is-available">When zero-copy is available</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#semantics-of-copy">Semantics of <code class="docutils literal notranslate"><span class="pre">copy</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#examples">Examples</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#caching">Caching</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#apple-metal-synchronisation">Apple Metal: synchronisation</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#lifetime-caveats">Lifetime caveats</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#struct-fields">Struct fields</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#raw-dlpack-export-with-to-dlpack">Raw DLPack export with <code class="docutils literal notranslate"><span class="pre">to_dlpack()</span></code></a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#direct-torch-tensor-pass-through">Direct torch tensor pass-through</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#integration-with-torch-autograd">Integration with torch.autograd</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#summary">Summary</a></li>
+</ul>
+  </nav></div>
+
+  <div class="sidebar-secondary-item">
+
+  <div class="tocsection sourcelink">
+    <a href="../_sources/user_guide/interop.md.txt">
+      <i class="fa-solid fa-file-lines"></i> Show Source
+    </a>
+  </div>
+</div>
+
+</div></div>
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+          </footer>
+        
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script defer src="../_static/scripts/bootstrap.js?digest=0790524f97105ba85085"></script>
+<script defer src="../_static/scripts/pydata-sphinx-theme.js?digest=0790524f97105ba85085"></script>
+
+  <footer class="bd-footer">
+<div class="bd-footer__inner bd-page-width">
+  
+    <div class="footer-items__start">
+      
+        <div class="footer-item">
+
+  <p class="copyright">
+    
+      © Copyright 2025 Genesis AI Inc.
+      <br/>
+    
+  </p>
+</div>
+      
+        <div class="footer-item">
+
+  <p class="sphinx-version">
+    Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 8.1.3.
+    <br/>
+  </p>
+</div>
+      
+    </div>
+  
+  
+  
+    <div class="footer-items__end">
+      
+        <div class="footer-item">
+<p class="theme-version">
+  <!-- # L10n: Setting the PST URL as an argument as this does not need to be localized -->
+  Built with the <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a> 0.18.0.
+</p></div>
+      
+    </div>
+  
+</div>
+
+  </footer>
+  </body>
+</html>
