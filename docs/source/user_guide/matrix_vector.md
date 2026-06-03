@@ -124,7 +124,7 @@ The flag is consumed at class-definition time. `@qd.dataclass` expands the field
 | are storing the field in a smallish struct, register pressure is low, and the kernel works as-is        | `unpacked=False`                 |
 | only ever access the field as `obj.r[i]` with python-int / `qd.static`-resolved `i` (unrolled inner loops), the group is small relative to the per-thread register budget, *and* the packed version is spilling under register pressure | `unpacked=True`                  |
 
-`unpacked=True` is a targeted fix for a specific problem (the entire vector spilling as a unit when only some of its lanes are actually hot). If you're not measuring spills, default to plain `qd.types.vector(N, dtype)`.
+`unpacked=True` is a targeted fix for a specific problem: a packed vector is committed-to or spilled as a single unit, so the compiler has to find room for the whole group in registers or none of it. Splitting the field into per-slot storage lets the compiler keep as many slots in registers as actually fit and spill only the rest. If you're not measuring spills, default to plain `qd.types.vector(N, dtype)`.
 
 Roughly, on current NVIDIA GPUs, an SM gives each thread up to 255 32-bit registers shared with all live state in the kernel, so what counts as "small relative to the per-thread register budget" depends on what else is live. The pattern that motivates `unpacked=True` is high register pressure — e.g. several concurrent 32×32 tiles in a Cholesky + triangular solve — where the compiler gives up on the packed group as a whole and the whole vector ends up in local memory.
 
