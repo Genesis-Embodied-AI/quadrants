@@ -92,7 +92,7 @@ In-register key/value sort across the subgroup, one `(key, value)` pair per lane
 |----------------------------------------|------|--------|-------------------------|-----------------------------------------------------------------|
 | `subgroup.bitonic_sort_kv(key, value)` | yes  | yes    | yes                     | key & value: i32, u32, f32, f64, i64, u64 (independently typed) |
 
-Returns `(key, value)` - assign with `key, value = subgroup.bitonic_sort_kv(key, value)`.  Sorts ascending on `key`; ties on `key` break on ascending `value` (stable).  Tiled variant: `bitonic_sort_kv_tiled(key, value, log2_size)` runs the same sort independently on each `2**log2_size`-aligned tile - see [Tiled variants](#tiled-variants).  See [`bitonic_sort_kv`](#bitonic_sort_kvkey-value) for the short-input pattern (sentinel padding) and float NaN caveat. See [Bitonic key/value sort example](#bitonic-keyvalue-sort-example) for an example.
+Returns `(key, value)` - assign with `key, value = subgroup.bitonic_sort_kv(key, value)`.  Sorts ascending on the `(key, value)` lex tuple; ties on `key` break on ascending `value` (not a textbook-stable sort - equal-keyed lanes come back in ascending-`value` order, not in original-lane order).  Tiled variant: `bitonic_sort_kv_tiled(key, value, log2_size)` runs the same sort independently on each `2**log2_size`-aligned tile - see [Tiled variants](#tiled-variants).  See [`bitonic_sort_kv`](#bitonic_sort_kvkey-value) for the short-input pattern (sentinel padding), the textbook-stability caveat, and the float NaN behaviour. See [Bitonic key/value sort example](#bitonic-keyvalue-sort-example) for an example.
 
 ## Semantics
 
@@ -315,15 +315,19 @@ Per-lane exclusive scan across the entire subgroup, under the binary operator na
 
 ### `bitonic_sort_kv(key, value)`
 
-In-register stable bitonic key/value sort across the subgroup, one `(key, value)` pair per lane.  Returns `(key, value)` - the lex-smallest pair on lane 0, the next on lane 1, ..., the lex-largest on lane `group_size() - 1`.  Tiled variant: `bitonic_sort_kv_tiled(key, value, log2_size)` runs the same sort independently on each `2**log2_size`-aligned tile - see [Tiled variants](#tiled-variants).
+In-register ascending lex sort on `(key, value)` pairs across the subgroup, one `(key, value)` pair per lane.  Returns `(key, value)` - the lex-smallest pair on lane 0, the next on lane 1, ..., the lex-largest on lane `group_size() - 1`.  Tiled variant: `bitonic_sort_kv_tiled(key, value, log2_size)` runs the same sort independently on each `2**log2_size`-aligned tile - see [Tiled variants](#tiled-variants).
 
 - Sorts ascending on `key`; ties on `key` break on ascending `value` (the comparison is the lex compare `(key, value) < (key', value')`).
-- `key` and `value` are scalar values held one-per-lane.  Both must support `<` and `==`; the supported scalar dtypes are the union of what `subgroup.shuffle` accepts (`i32`, `u32`, `f32`, `f64`, `i64`, `u64`).  `key` and `value` do not have to share a dtype.
-- Implementation: classic 1-D bitonic sorting network.  For each outer `k_log2 in [1, log2_size]` and inner `j_log2 in [k_log2 - 1, 0]`, lane `i` exchanges with lane `i ^ (1 << j_log2)` via two `shuffle` ops (one each for partner key and partner value), then keeps min or max depending on whether `(i & (1 << j_log2)) == 0` agrees with `(i & (1 << k_log2)) == 0`.  Total cost is exactly `log2_size * (log2_size + 1)` `shuffle` ops plus the same number of lex compares + predicated assignments, all fully unrolled into the calling kernel's IR - 30 shuffles for `log2_size = 5` (wave32), 42 for `log2_size = 6` (wave64).
-- Decorated with `@qd.func` and inlined into the calling kernel - there is no kernel-launch overhead and no separate symbol to link.  The full-subgroup wrapper `bitonic_sort_kv(key, value)` is a plain Python function that forwards to `bitonic_sort_kv_tiled` with `log2_size = log2_group_size()`, so the generated IR is identical to a hand-written `bitonic_sort_kv_tiled` call.
-- AMDGPU note: the shuffles use the partner-XOR butterfly common to every other `_tiled` op in this module, so the wave64 cross-half handling (the `permlane64` + dual `ds_bpermute` lowering described in [AMDGPU wave64 cross-half lowering](#amdgpu-wave64-cross-half-lowering)) is inherited transparently.
-- Float NaN handling is implementation-defined: comparisons with NaN return false on most backends, so a NaN-keyed lane drifts to an arbitrary position within the sorted tile and the result loses its "sorted" guarantee.  Bit-cast the key to a same-width integer dtype if you need a portable NaN-respecting order.
-- Short-input pattern (sorting fewer than `2**log2_size` real elements): load real data into the low `n` lanes, initialise the high lanes with a sentinel `key` that compares greater than every real key (`+inf` for floats, `INT_MAX` / `UINT_MAX` for ints) and any safe `value`, then ignore the high lanes in the result.  The sort moves the sentinels to the high end of the tile, leaving the meaningful data contiguous starting at lane 0.
+- `key` and `value` should be scalar values.  Supported dtypes are `i32`, `u32`, `f32`, `f64`, `i64`, `u64`. The dtypes of `key` and `value` do not have to match.
+- Implementation: classic 1-D bitonic sorting network.
+
+#### Float NaN handling
+
+Float NaN handling is implementation-defined: comparisons with NaN return false on most backends, so a NaN-keyed lane drifts to an arbitrary position within the sorted tile and the result loses its "sorted" guarantee. Bit-cast the key to a same-width integer dtype if you need a portable NaN-respecting order.
+
+#### Short-input pattern
+
+When sorting fewer than `2**log2_size` real elements, load real data into the low `n` lanes, initialise the high lanes with a sentinel `key` that compares greater than every real key (`+inf` for floats, `INT_MAX` / `UINT_MAX` for ints) and any safe `value`, then ignore the high lanes in the result.
 
 ### `ballot_first_n(predicate, n)`
 

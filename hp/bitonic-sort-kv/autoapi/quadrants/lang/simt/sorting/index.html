@@ -372,10 +372,13 @@ implementation unit.  Public API is unchanged: everything defined here is re-exp
 <cite>quadrants.lang.simt.subgroup</cite>, so <cite>qd.simt.subgroup.bitonic_sort_kv(k, v)</cite> etc. work as if they lived in that module.</p>
 <p>Only one family lives here today:</p>
 <ul class="simple">
-<li><p><code class="docutils literal notranslate"><span class="pre">bitonic_sort_kv_tiled</span></code> – in-register stable bitonic key/value sort across <code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code> consecutive lanes, one
-<code class="docutils literal notranslate"><span class="pre">(key,</span> <span class="pre">value)</span></code> pair per lane.  Pure <code class="docutils literal notranslate"><span class="pre">shuffle</span></code> (no shared memory, no barriers within the sort), fully unrolled at
-compile time into the standard <code class="docutils literal notranslate"><span class="pre">log2_size</span> <span class="pre">*</span> <span class="pre">(log2_size</span> <span class="pre">+</span> <span class="pre">1)</span> <span class="pre">/</span> <span class="pre">2</span></code> compare-exchange stages.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">bitonic_sort_kv_tiled</span></code> – in-register ascending lex sort on <code class="docutils literal notranslate"><span class="pre">(key,</span> <span class="pre">value)</span></code> pairs across <code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code>
+consecutive lanes, one <code class="docutils literal notranslate"><span class="pre">(key,</span> <span class="pre">value)</span></code> pair per lane.  Pure <code class="docutils literal notranslate"><span class="pre">shuffle</span></code> (no shared memory, no barriers within the
+sort), fully unrolled at compile time into the standard <code class="docutils literal notranslate"><span class="pre">log2_size</span> <span class="pre">*</span> <span class="pre">(log2_size</span> <span class="pre">+</span> <span class="pre">1)</span> <span class="pre">/</span> <span class="pre">2</span></code> compare-exchange stages.</p></li>
 </ul>
+<p>Note this is <em>not</em> a stable sort in the textbook sense (preserve input lane order for equal keys): equal-keyed lanes
+come back ordered by <code class="docutils literal notranslate"><span class="pre">value</span></code>, not by their original lane id.  Callers that need lane-order stability should encode it
+into <code class="docutils literal notranslate"><span class="pre">value</span></code> themselves (e.g. pack <code class="docutils literal notranslate"><span class="pre">(payload,</span> <span class="pre">original_lane)</span></code>).</p>
 <p>The full-subgroup form <code class="docutils literal notranslate"><span class="pre">bitonic_sort_kv(key,</span> <span class="pre">value)</span></code> is a one-liner that picks <code class="docutils literal notranslate"><span class="pre">log2_size</span> <span class="pre">=</span> <span class="pre">log2_group_size()</span></code>,
 following the same convention as <code class="docutils literal notranslate"><span class="pre">reduce_add</span></code> / <code class="docutils literal notranslate"><span class="pre">reduce_all_add</span></code> / etc.</p>
 <section id="functions">
@@ -383,7 +386,7 @@ following the same convention as <code class="docutils literal notranslate"><spa
 <div class="pst-scrollable-table-container"><table class="autosummary longtable table autosummary">
 <tbody>
 <tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.simt.sorting.bitonic_sort_kv_tiled" title="quadrants.lang.simt.sorting.bitonic_sort_kv_tiled"><code class="xref py py-obj docutils literal notranslate"><span class="pre">bitonic_sort_kv_tiled</span></code></a>(key, value, log2_size)</p></td>
-<td><p>In-register stable bitonic key/value sort across <code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code> consecutive lanes.</p></td>
+<td><p>In-register ascending lex sort on <code class="docutils literal notranslate"><span class="pre">(key,</span> <span class="pre">value)</span></code> pairs across <code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code> consecutive lanes.</p></td>
 </tr>
 <tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.simt.sorting.bitonic_sort_kv" title="quadrants.lang.simt.sorting.bitonic_sort_kv"><code class="xref py py-obj docutils literal notranslate"><span class="pre">bitonic_sort_kv</span></code></a>(key, value)</p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">bitonic_sort_kv_tiled</span></code> across the entire subgroup -- the lex-smallest <code class="docutils literal notranslate"><span class="pre">2**log2_group_size()</span></code> pairs end up</p></td>
@@ -397,12 +400,17 @@ following the same convention as <code class="docutils literal notranslate"><spa
 <dl class="py function">
 <dt class="sig sig-object py" id="quadrants.lang.simt.sorting.bitonic_sort_kv_tiled">
 <span class="sig-prename descclassname"><span class="pre">quadrants.lang.simt.sorting.</span></span><span class="sig-name descname"><span class="pre">bitonic_sort_kv_tiled</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">key</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">value</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">log2_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">template</span><span class="p"><span class="pre">(</span></span><span class="p"><span class="pre">)</span></span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/quadrants/lang/simt/sorting.html#bitonic_sort_kv_tiled"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.simt.sorting.bitonic_sort_kv_tiled" title="Link to this definition">#</a></dt>
-<dd><p>In-register stable bitonic key/value sort across <code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code> consecutive lanes.</p>
-<p>Sorts <code class="docutils literal notranslate"><span class="pre">(key,</span> <span class="pre">value)</span></code> pairs ascending by <code class="docutils literal notranslate"><span class="pre">key</span></code>; ties on <code class="docutils literal notranslate"><span class="pre">key</span></code> are broken by ascending <code class="docutils literal notranslate"><span class="pre">value</span></code> (stable).  Each
-lane holds one pair on entry; on exit, lane <code class="docutils literal notranslate"><span class="pre">i</span></code> (within its <code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code>-aligned tile) holds the <code class="docutils literal notranslate"><span class="pre">i</span></code>-th
-smallest pair under that lex order.  Lanes in different tiles sort independently of each other; the result is
-broadcast-to-tile in the sense of [Tiled variants](#tiled-variants) – every lane in a tile has a valid sorted
-pair, just not the same one.</p>
+<dd><p>In-register ascending lex sort on <code class="docutils literal notranslate"><span class="pre">(key,</span> <span class="pre">value)</span></code> pairs across <code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code> consecutive lanes.</p>
+<p>Sorts <code class="docutils literal notranslate"><span class="pre">(key,</span> <span class="pre">value)</span></code> pairs by ascending <code class="docutils literal notranslate"><span class="pre">key</span></code>; ties on <code class="docutils literal notranslate"><span class="pre">key</span></code> break on ascending <code class="docutils literal notranslate"><span class="pre">value</span></code> (lex order on the
+<code class="docutils literal notranslate"><span class="pre">(key,</span> <span class="pre">value)</span></code> tuple).  Each lane holds one pair on entry; on exit, lane <code class="docutils literal notranslate"><span class="pre">i</span></code> (within its <code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code>-aligned
+tile) holds the <code class="docutils literal notranslate"><span class="pre">i</span></code>-th smallest pair under that lex order.  Lanes in different tiles sort independently of each
+other; the result is broadcast-to-tile in the sense of [Tiled variants](#tiled-variants) – every lane in a tile
+has a valid sorted pair, just not the same one.</p>
+<p>Not a textbook-stable sort: equal-keyed lanes come back in ascending-<code class="docutils literal notranslate"><span class="pre">value</span></code> order, <em>not</em> in their original lane
+order.  If you need lane-order stability (i.e. <code class="docutils literal notranslate"><span class="pre">value</span></code> treated as opaque payload), encode the lane id into
+<code class="docutils literal notranslate"><span class="pre">value</span></code> yourself before calling – e.g. pack <code class="docutils literal notranslate"><span class="pre">(payload,</span> <span class="pre">original_lane)</span></code> into a single value, or call from a
+context where <code class="docutils literal notranslate"><span class="pre">value</span></code> is unique by construction (the Genesis contact-sort case, where <code class="docutils literal notranslate"><span class="pre">value</span></code> is a contact
+index).</p>
 <p>Caller contract:</p>
 <ul class="simple">
 <li><p><code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code> must not exceed the active subgroup size on the target: up to 32 on CUDA / Metal /
@@ -414,9 +422,9 @@ predicated assignment.  For <code class="docutils literal notranslate"><span cla
 <li><p>Same uniform-CF + all-lanes-active contract as the rest of <code class="docutils literal notranslate"><span class="pre">qd.simt.subgroup</span></code>: every lane in the subgroup must
 execute every call to <code class="docutils literal notranslate"><span class="pre">bitonic_sort_kv_tiled</span></code> together.</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">key</span></code> and <code class="docutils literal notranslate"><span class="pre">value</span></code> are scalar values held one-per-lane.  <code class="docutils literal notranslate"><span class="pre">key</span></code> must support <code class="docutils literal notranslate"><span class="pre">&lt;</span></code> and <code class="docutils literal notranslate"><span class="pre">==</span></code>; <code class="docutils literal notranslate"><span class="pre">value</span></code>
-must support <code class="docutils literal notranslate"><span class="pre">&lt;</span></code> and <code class="docutils literal notranslate"><span class="pre">==</span></code> as well (the stability tiebreak compares values).  The supported scalar dtypes are
-the union of what <code class="docutils literal notranslate"><span class="pre">subgroup.shuffle</span></code> accepts for each (i32, u32, f32, f64, i64, u64).  <code class="docutils literal notranslate"><span class="pre">key</span></code> and <code class="docutils literal notranslate"><span class="pre">value</span></code>
-do not have to share a dtype.</p></li>
+must support <code class="docutils literal notranslate"><span class="pre">&lt;</span></code> and <code class="docutils literal notranslate"><span class="pre">==</span></code> as well (the lex tiebreak compares values).  The supported scalar dtypes are the
+union of what <code class="docutils literal notranslate"><span class="pre">subgroup.shuffle</span></code> accepts for each (i32, u32, f32, f64, i64, u64).  <code class="docutils literal notranslate"><span class="pre">key</span></code> and <code class="docutils literal notranslate"><span class="pre">value</span></code> do not
+have to share a dtype.</p></li>
 </ul>
 <p>Short-input pattern (sorting fewer than <code class="docutils literal notranslate"><span class="pre">2**log2_size</span></code> real elements):</p>
 <ol class="arabic simple">
