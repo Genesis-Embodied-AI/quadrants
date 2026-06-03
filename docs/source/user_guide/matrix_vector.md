@@ -116,7 +116,7 @@ The flag is consumed at class-definition time. `@qd.dataclass` expands the field
 
 ### What works on each layout
 
-| operation / property                                                                  | `unpacked=False` (default)                                                                                | `unpacked=True`                                                                                                                  |
+| operation / property                                                                  | packed                                                                                                    | unpacked                                                                                                                         |
 |---------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------|
 | `obj.r[i]` with python-int / `qd.static`-resolved `i`                                 | yes                                                                                                       | yes                                                                                                                              |
 | `obj.r[k]` with runtime `k`                                                           | yes                                                                                                       | no                                                                                                                               |
