@@ -323,7 +323,7 @@ In-register ascending lex sort on `(key, value)` pairs across the subgroup, one 
 
 #### Float NaN handling
 
-Float NaN handling is implementation-defined: comparisons with NaN return false on most backends, so a NaN-keyed lane drifts to an arbitrary position within the sorted tile and the result loses its "sorted" guarantee.  Bit-cast the key to a same-width integer dtype if you need a portable NaN-respecting order.
+Float NaN handling is implementation-defined: comparisons with NaN return false on most backends, so a NaN-keyed lane drifts to an arbitrary position within the sorted tile and the result loses its "sorted" guarantee. Bit-cast the key to a same-width integer dtype if you need a portable NaN-respecting order.
 
 #### Short-input pattern
 
