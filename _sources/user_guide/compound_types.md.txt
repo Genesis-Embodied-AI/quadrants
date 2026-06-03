@@ -253,6 +253,8 @@ class Particle:
 particles = Particle.field(shape=(N,), layout=qd.Layout.AOS)
 ```
 
+For larger statically-indexed groups that might spill into local memory, and that you want to allow partial spilling for, see the [packed vs unpacked vectors](matrix_vector.md#storage-layout-packed-vs-unpacked-vectors) section of the matrix and vector page.
+
 Methods can be added to a `@qd.dataclass` and may be decorated with `@qd.func` so they can be called from kernels via `instance.method(...)` syntax (the call is inlined at compile time, like any other `@qd.func`).
 
 ```python
