@@ -318,12 +318,16 @@ Per-lane exclusive scan across the entire subgroup, under the binary operator na
 In-register ascending lex sort on `(key, value)` pairs across the subgroup, one `(key, value)` pair per lane.  Returns `(key, value)` - the lex-smallest pair on lane 0, the next on lane 1, ..., the lex-largest on lane `group_size() - 1`.  Tiled variant: `bitonic_sort_kv_tiled(key, value, log2_size)` runs the same sort independently on each `2**log2_size`-aligned tile - see [Tiled variants](#tiled-variants).
 
 - Sorts ascending on `key`; ties on `key` break on ascending `value` (the comparison is the lex compare `(key, value) < (key', value')`).
-- **Not a textbook-stable sort.**  Equal-keyed lanes come back in ascending-`value` order, *not* in their original lane order.  If you need lane-order stability (i.e. `value` treated as opaque payload), encode the lane id into `value` yourself before calling - e.g. pack `(payload, original_lane)` into a single value, or call from a context where `value` is unique by construction.  For unique-`value` inputs the distinction is invisible.
-- `key` and `value` are scalar values.  Both must support `<` and `==`. Supported dtypes are `i32`, `u32`, `f32`, `f64`, `i64`, `u64`. The dtypes of `key` and `value` do not have to match.
+- `key` and `value` should be scalar values.  Supported dtypes are `i32`, `u32`, `f32`, `f64`, `i64`, `u64`. The dtypes of `key` and `value` do not have to match.
 - Implementation: classic 1-D bitonic sorting network.
-- AMDGPU note: the shuffles use the partner-XOR butterfly common to every other `_tiled` op in this module, so the wave64 cross-half handling (the `permlane64` + dual `ds_bpermute` lowering described in [AMDGPU wave64 cross-half lowering](#amdgpu-wave64-cross-half-lowering)) is inherited transparently.
-- Float NaN handling is implementation-defined: comparisons with NaN return false on most backends, so a NaN-keyed lane drifts to an arbitrary position within the sorted tile and the result loses its "sorted" guarantee.  Bit-cast the key to a same-width integer dtype if you need a portable NaN-respecting order.
-- Short-input pattern (sorting fewer than `2**log2_size` real elements): load real data into the low `n` lanes, initialise the high lanes with a sentinel `key` that compares greater than every real key (`+inf` for floats, `INT_MAX` / `UINT_MAX` for ints) and any safe `value`, then ignore the high lanes in the result.  The sort moves the sentinels to the high end of the tile, leaving the meaningful data contiguous starting at lane 0.
+
+#### Float NaN handling
+
+Float NaN handling is implementation-defined: comparisons with NaN return false on most backends, so a NaN-keyed lane drifts to an arbitrary position within the sorted tile and the result loses its "sorted" guarantee.  Bit-cast the key to a same-width integer dtype if you need a portable NaN-respecting order.
+
+#### Short-input pattern
+
+When sorting fewer than `2**log2_size` real elements, load real data into the low `n` lanes, initialise the high lanes with a sentinel `key` that compares greater than every real key (`+inf` for floats, `INT_MAX` / `UINT_MAX` for ints) and any safe `value`, then ignore the high lanes in the result.
 
 ### `ballot_first_n(predicate, n)`
 
