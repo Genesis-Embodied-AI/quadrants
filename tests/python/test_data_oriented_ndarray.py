@@ -341,8 +341,8 @@ def test_data_oriented_nested_ndarray_fastcache_cross_init(tmp_path, monkeypatch
     captured = []
 
     def launch_kernel(self, key, t_kernel, compiled_kernel_data, *args, qd_stream=None):
-        # Filter to the user kernel only; .to_numpy() launches a non-fastcache
-        # internal kernel that would otherwise drown the run-kernel data we care about.
+        # Filter to the user kernel only; .to_numpy() launches a non-fastcache internal kernel that would otherwise
+        # drown the run-kernel data we care about.
         if self.func.__name__ == "run":
             captured.append(compiled_kernel_data)
         return launch_kernel_orig(self, key, t_kernel, compiled_kernel_data, *args, qd_stream=qd_stream)
@@ -389,8 +389,8 @@ def test_data_oriented_ndarray_fastcache_dtype_key_distinct(tmp_path, monkeypatc
     captured = []
 
     def launch_kernel(self, key, t_kernel, compiled_kernel_data, *args, qd_stream=None):
-        # Filter to the user kernel only; .to_numpy() launches a non-fastcache
-        # internal kernel that would otherwise drown the run-kernel data we care about.
+        # Filter to the user kernel only; .to_numpy() launches a non-fastcache internal kernel that would otherwise
+        # drown the run-kernel data we care about.
         if self.func.__name__ == "run":
             captured.append(compiled_kernel_data)
         return launch_kernel_orig(self, key, t_kernel, compiled_kernel_data, *args, qd_stream=qd_stream)
@@ -637,8 +637,8 @@ def test_data_oriented_three_level_nesting():
 
 
 # ---------------------------------------------------------------------------
-# 15. Mutation on a nested ndarray: outer.inner.x reassigned between kernel calls. Verifies the
-#     Bug 2 stale-cache guard fires even when the ndarray lives several attribute hops deep.
+# 15. Mutation on a nested ndarray: outer.inner.x reassigned between kernel calls. Verifies the Bug 2 stale-cache
+#     guard fires even when the ndarray lives several attribute hops deep.
 # ---------------------------------------------------------------------------
 
 
@@ -674,8 +674,8 @@ def test_data_oriented_nested_ndarray_reassign():
 
 
 # ---------------------------------------------------------------------------
-# 16. Same data_oriented instance, two kernels sharing it. Verifies the launch-info per-kernel
-#     bookkeeping is independent (each kernel's compile sets up its own pre-declared ndarray args).
+# 16. Same data_oriented instance, two kernels sharing it. Verifies the launch-info per-kernel bookkeeping is
+#     independent (each kernel's compile sets up its own pre-declared ndarray args).
 # ---------------------------------------------------------------------------
 
 
@@ -742,9 +742,9 @@ def test_data_oriented_ndarray_via_func():
 
 
 # ---------------------------------------------------------------------------
-# 18. Reassign ndarray to a *different ndim* on the same data_oriented instance.
-#     Complementary to test 7 (different-dtype). Spec key must change so a 2D-specialised kernel is
-#     not reused for a 1D ndarray. Pins the Gap A fix from the dtype side.
+# 18. Reassign ndarray to a *different ndim* on the same data_oriented instance. Complementary to test 7 (different-
+#     dtype). Spec key must change so a 2D-specialised kernel is not reused for a 1D ndarray. Pins the Gap A fix from
+#     the dtype side.
 # ---------------------------------------------------------------------------
 
 
@@ -778,8 +778,8 @@ def test_data_oriented_ndarray_reassign_different_ndim():
 
 
 # ---------------------------------------------------------------------------
-# 19. Spec-key descent for nested data_oriented + ndarray reassign at the leaf. Confirms the
-#     recursive walker in ``_collect_struct_nd_descriptors`` reaches through nested data_oriented.
+# 19. Spec-key descent for nested data_oriented + ndarray reassign at the leaf. Confirms the recursive walker in
+#     ``_collect_struct_nd_descriptors`` reaches through nested data_oriented.
 # ---------------------------------------------------------------------------
 
 
