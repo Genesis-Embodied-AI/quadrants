@@ -98,3 +98,124 @@ large = qd.field(qd.f32, shape=(64, 64))
 ```
 
 The 144-element threshold matches the largest size officially supported by the per-thread linalg APIs (`qd.sym_eig` and `qd.make_spd` up to 12×12, `Matrix.inverse` up to 12×12) — those internal constructions stay below the warning threshold.
+
+## Storage layout: packed vs unpacked vectors
+
+`qd.types.vector(N, dtype)` accepts an optional `unpacked: bool = False` kwarg that controls how the vector is laid out in per-thread memory when used as a `@qd.dataclass` field. The kwarg does not affect the *value type* — the field still holds a vector — it only affects the storage layout.
+
+- `unpacked=False` (default): the field is one slot holding `N` packed scalars (a single `alloca` of `N` lanes). The compiler keeps the whole vector in registers, or, if registers are tight, spills the whole vector to "local" memory (which despite the name lives in off-chip DRAM and is slow). It is all-or-nothing per vector.
+- `unpacked=True`: the field is `N` independent scalar slots. The compiler can decide per slot whether to keep it in a register or spill it. Under register pressure this can be the difference between "most of the vector still lives in registers" and "the entire vector is in DRAM".
+
+```python
+@qd.dataclass
+class Tile:
+    r: qd.types.vector(32, qd.f32, unpacked=True)
+```
+
+The flag is consumed at class-definition time. `@qd.dataclass` expands the field into `N` synthetic scalar members `_r0.._r{N-1}`, and the AST transformer rewrites each `obj.r[i]` (for python-int / `qd.static`-resolved `i`) into a direct reference to the i-th synthetic member. The generated LLVM IR / PTX is byte-identical to declaring `N` named scalar fields by hand (`r0: qd.f32`, `r1: qd.f32`, ...), but the source keeps the indexed read/write syntax.
+
+### When to choose `unpacked=True` vs `unpacked=False`
+
+| If you...                                                                                                | Use                              |
+|----------------------------------------------------------------------------------------------------------|----------------------------------|
+| want vector arithmetic (`a + b`, `a.dot(b)`, `a.norm()`, swizzle, broadcast) at the use site             | `unpacked=False` (the default)   |
+| need to index with a *runtime* integer (`v[k]` where `k` isn't a python-int)                             | `unpacked=False`                 |
+| need to pass the vector across a `@qd.func` boundary, copy it into shared memory, or instantiate it as a kernel-local value | `unpacked=False`                 |
+| are storing the field in a smallish struct, register pressure is low, and the kernel works as-is        | `unpacked=False`                 |
+| only ever access the field as `obj.r[i]` with python-int / `qd.static`-resolved `i` (unrolled inner loops), the group is small relative to the per-thread register budget, *and* the packed version is spilling under register pressure | `unpacked=True`                  |
+
+`unpacked=True` is a targeted fix for a specific problem (the entire vector spilling as a unit when only some of its lanes are actually hot). If you're not measuring spills, default to plain `qd.types.vector(N, dtype)`.
+
+Roughly, on current NVIDIA GPUs, an SM gives each thread up to 255 32-bit registers shared with all live state in the kernel, so what counts as "small relative to the per-thread register budget" depends on what else is live. The pattern that motivates `unpacked=True` is high register pressure — e.g. several concurrent 32×32 tiles in a Cholesky + triangular solve — where LLVM's SROA + `mem2reg` bails out on a packed `alloca` and the whole vector ends up in local memory.
+
+See [How to check for spills](#how-to-check-for-spills) below for how to confirm a spill is actually happening before reaching for `unpacked=True`.
+
+### Constraints
+
+- **Only valid as a `@qd.dataclass` field annotation.** The `unpacked=True` flag is consumed by `@qd.dataclass`. Attempting to instantiate the type as a value (`T(...)`, `T.field(...)`, `T.ndarray(...)`), use it as a kernel-arg / `@qd.func` parameter type, or apply it on a `@dataclasses.dataclass` raises `QuadrantsSyntaxError`. If you need a value type, drop `unpacked=True`.
+- **Indexed access only.** The supported pattern is `obj.r[i]` for python-int / `qd.static`-resolved `i`. Operations that treat `obj.r` itself as a vector value — vector arithmetic, reductions, swizzle, runtime indexing, passing the field across a `@qd.func` boundary, copying into shared memory as a unit — are not supported on an unpacked field today, even though the value type is a vector. If you need any of those, use plain `qd.types.vector(N, dtype)`.
+- **Synthetic field-name collisions are rejected.** The expansion uses the convention `_{group_name}{i}` (e.g. `_r0`, `_r1`, ..., `_r31`). Declaring your own field with one of those names raises `QuadrantsSyntaxError` at class-decoration time.
+
+### Mixing with other fields
+
+`unpacked=True` fields compose with anything else allowed on `@qd.dataclass`: scalars, plain vectors, matrices, other unpacked vectors, nested dataclasses.
+
+```python
+@qd.dataclass
+class TwoTiles:
+    a: qd.types.vector(32, qd.f32, unpacked=True)
+    b: qd.types.vector(32, qd.f32, unpacked=True)
+    scale: qd.f32
+```
+
+The generated struct has 65 scalar members (`_a0..._a31`, `_b0..._b31`, `scale`).
+
+# Advanced
+
+## How the packed vs unpacked layout differs at the LLVM level
+
+A plain `qd.types.vector(N, dtype)` field on a `@qd.dataclass` lowers to a single `alloca` of `N` packed scalars. LLVM's SROA + `mem2reg` passes attempt to decompose that `alloca` into `N` per-slot SSA values so each can live in a register, but the decomposition is conservative: under high register pressure (e.g. two concurrent 32×32 tiles in a Cholesky + triangular solve), SROA bails out on the packed `alloca` and the whole vector spills to local memory as a unit. Each access then becomes a `ld.local` / `st.local`.
+
+`qd.types.vector(N, dtype, unpacked=True)` expands to `N` independent `alloca` instructions, one per slot, so `mem2reg` can promote each slot independently and the register allocator can spill only the slots it has to. That is exactly what the hand-rolled `r0..r{N-1}` form produces; the generated LLVM IR / PTX matches it byte-for-byte.
+
+## How to check for spills
+
+Quadrants compiles LLVM -> PTX directly via the LLVM NVPTX target — it does not invoke `nvcc` / `ptxas` at compile time, so the familiar `ptxas --verbose` "X bytes spill stores" output is not produced inline. To get that diagnostic you dump the PTX from Quadrants and run `ptxas -v` on it yourself. Three workflows, in order of usefulness:
+
+### 1. Dump PTX, run `ptxas -v` offline
+
+```python
+qd.init(
+    arch=qd.cuda,
+    print_kernel_asm=True,    # dump PTX to CWD as quadrants_kernel_nvptx_NNNN.ptx
+    offline_cache=False,      # bypass the kernel cache so the dump fires every time
+)
+```
+
+Run your kernel once. For each `quadrants_kernel_nvptx_NNNN.ptx` file in the working directory:
+
+```bash
+ptxas --verbose -arch=sm_86 quadrants_kernel_nvptx_0007.ptx -o /dev/null 2>&1 | grep -E "spill|stack"
+```
+
+Sample output:
+
+```
+ptxas info    : Used 64 registers, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 96 registers, 384 bytes stack frame, 256 bytes spill stores, 128 bytes spill loads
+```
+
+`spill stores` + `spill loads` > 0 means the register allocator gave up on something. `stack frame` > 0 indicates local memory in use (which is usually, but not always, spills — `qd.simt.shared_array` and explicitly addressed locals also count).
+
+Adjust `-arch=sm_XX` to match your GPU (`sm_86` = Ampere consumer / RTX 30, `sm_89` = Ada / RTX 40, `sm_90` = Hopper).
+
+### 2. Inspect the PTX directly for `ld.local` / `st.local`
+
+```bash
+grep -nE "ld\.local|st\.local" quadrants_kernel_nvptx_0007.ptx | head -20
+```
+
+Any matches that aren't from deliberate `qd.simt.shared_array` accesses (which show up as `ld.shared` / `st.shared`, not `.local`) are spill traffic.
+
+### 3. Runtime spill counters via Nsight Compute (most authoritative)
+
+```bash
+ncu --set full --section MemoryWorkloadAnalysis ./your_program
+```
+
+Look at the "Memory Workload Analysis -> Local Memory" section. This reports *actually executed* local-memory loads / stores, which catches issues `ptxas` doesn't (e.g. driver-stage JIT spills on a different GPU, hot-path-only spills that static analysis misses).
+
+### Also useful: post-optimisation LLVM IR
+
+```python
+qd.init(arch=qd.cuda, print_kernel_llvm_ir_optimized=True)
+```
+
+Dumps `quadrants_kernel_cuda_llvm_ir_optimized_NNNN.ll`. Look for `alloca` instructions that survived `mem2reg` — those will become PTX local memory.
+
+### Gotcha: the offline cache
+
+`print_kernel_asm` and `print_kernel_llvm_ir*` only fire on the first compile per kernel-key. If your kernel is already in the offline cache, the dump won't be regenerated. Either:
+
+- pass `offline_cache=False` to `qd.init` (cleanest), or
+- delete the cache (path is printed at `qd.init` time; typically under `~/.cache/quadrants/`).

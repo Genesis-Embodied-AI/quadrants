@@ -38,7 +38,7 @@ def vector(n=None, dtype=None, *, unpacked: bool = False):
         unpacked (bool): per-thread storage-layout marker. When ``True``, the type is only valid as a
             ``@qd.dataclass`` field annotation, where it expands into ``n`` independent scalar slots (one ``alloca``
             per slot) instead of one packed slot. The unpacked layout lets the optimiser promote slots to registers
-            independently and spill only the ones it has to. See :doc:`/user_guide/unpacked` for details.
+            independently and spill only the ones it has to. See :doc:`/user_guide/matrix_vector` for details.
 
     Returns:
         A vector type.

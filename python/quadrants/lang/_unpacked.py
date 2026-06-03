@@ -2,7 +2,7 @@
 """Per-thread unpacked-storage layout for ``@qd.dataclass`` fields.
 
 The user-facing surface is the ``unpacked=True`` kwarg on :func:`quadrants.types.vector` -- see
-:doc:`/user_guide/unpacked` and ``VectorType.__init__`` in ``lang/matrix.py``. This module contains the internal
+:doc:`/user_guide/matrix_vector` and ``VectorType.__init__`` in ``lang/matrix.py``. This module contains the internal
 machinery consumed by ``StructType.__init__`` and the AST transformer.
 
 Why an unpacked layout: under high register pressure (e.g. several concurrent 32x32 tiles in a Cholesky + triangular
