@@ -1,10 +1,8 @@
 import ast
-import dataclasses
 import json
 import os
 import pathlib
 import time
-import warnings
 from collections import defaultdict
 from dataclasses import _FIELDS  # type: ignore[reportAttributeAccessIssue]
 
@@ -37,7 +35,6 @@ from quadrants._lib.core.quadrants_python import (
 from quadrants._tensor_wrapper import _TENSOR_WRAPPER_TYPES
 from quadrants.lang import _kernel_impl_dataclass, impl, runtime_ops
 from quadrants.lang._fast_caching import src_hasher
-from quadrants.lang._template_mapper_hotpath import chain_has_mutable_container
 from quadrants.lang._wrap_inspect import FunctionSourceInfo, get_source_info_and_src
 from quadrants.lang.ast import (
     KernelSimplicityASTChecker,
@@ -54,7 +51,7 @@ from quadrants.lang.exception import (
 )
 from quadrants.lang.impl import Program
 from quadrants.lang.shell import _shell_pop_print
-from quadrants.lang.util import cook_dtype, is_data_oriented
+from quadrants.lang.util import cook_dtype
 from quadrants.types import (
     primitive_types,
     template,
@@ -388,28 +385,6 @@ class Kernel(FuncBase):
         if key in self.materialized_kernels:
             return
 
-        # Deprecation warning: passing a ``@dataclasses.dataclass`` instance through a ``qd.Template``-annotated kernel
-        # parameter was never an intentional Quadrants pattern. It works inadvertently because the template walker
-        # happens to handle dataclass-shaped objects, but the supported annotation for a ``@dataclasses.dataclass`` is
-        # the dataclass type itself (flat-by-fields path). We fire the warning here, after the ``materialized_kernels``
-        # cache-hit early return above, so it only runs on the first compile for each unique spec-key — zero cost on the
-        # steady-state launch hot path. Doubly-decorated objects (``@qd.data_oriented`` over ``@dataclasses.dataclass``)
-        # are excluded because that combination is a legitimate pattern routed through the data-oriented path.
-        for arg_meta, val in zip(self.arg_metas, py_args):
-            ann = arg_meta.annotation
-            if ann is not template and type(ann) is not template:
-                continue
-            if dataclasses.is_dataclass(val) and not isinstance(val, type) and not is_data_oriented(val):
-                warnings.warn(
-                    f"Kernel {self.func.__qualname__!r} parameter {arg_meta.name!r}: passing a "
-                    "@dataclasses.dataclass instance into a qd.Template-annotated kernel parameter was "
-                    "never intended to be supported, and only works inadvertently. Use the dataclass type "
-                    f"itself as the annotation instead (e.g. `def {self.func.__name__}({arg_meta.name}: "
-                    f"{type(val).__name__}, ...)`). In a future release this will become an error.",
-                    DeprecationWarning,
-                    stacklevel=4,
-                )
-
         if _kernel_coverage_enabled():
             from . import _kernel_coverage  # pylint: disable=import-outside-toplevel
 
@@ -490,27 +465,12 @@ class Kernel(FuncBase):
         # Stale-cache guard for mutable structs containing ndarrays. Frozen dataclass fields cannot be reassigned, so
         # id(struct) in args_hash is already sufficient. For mutable structs, ndarray attributes can change between
         # calls while the struct id stays the same, so we fold the live ndarray id(s) into the hash.
-        #
-        # The predicate must catch any "host container in which ndarray member references can be reassigned at
-        # runtime" case. Non-frozen dataclasses have ``__hash__ is None`` (Python sets it when ``eq=True,
-        # frozen=False``), so they hit the first arm. ``@qd.data_oriented`` classes inherit ``object.__hash__`` so the
-        # ``__hash__ is None`` check is False for them — we need a separate arm. Without it, ``state.x = other_nd`` on
-        # the same data_oriented instance would not invalidate the launch-context cache and the kernel would re-launch
-        # against the stale binding.
-        #
-        # Mutability must be checked across the *entire* attr-chain, not just the top-level arg. With a frozen outer
-        # container wrapping a mutable inner container that holds the ndarray (e.g. frozen dataclass -> data_oriented
-        # -> ndarray), id(outer) alone does not capture leaf rebinding because the inner container can still reassign
-        # ``.x``. So we OR-fold the mutability check across every parent along ``chain`` from the root down to (but
-        # excluding) the leaf attribute.
         if key != self._mutable_nd_cached_key:
             if self._struct_ndarray_launch_info_by_key:
                 struct_nd_info = self._struct_ndarray_launch_info_by_key.get(key)
                 if struct_nd_info:
                     self._mutable_nd_cached_val = [
-                        (idx, chain)
-                        for _, idx, chain in struct_nd_info
-                        if chain_has_mutable_container(args, idx, chain)
+                        (idx, chain) for _, idx, chain in struct_nd_info if type(args[idx]).__hash__ is None
                     ]
                 else:
                     self._mutable_nd_cached_val = []
@@ -735,7 +695,7 @@ class Kernel(FuncBase):
         # signature and are stored in ``self.mapper.arguments``). Whether a given position receives a Tensor wrapper
         # or a bare impl is determined by the caller's annotation pattern, which is stable across calls — a user who
         # passes ``qd.Tensor(impl)`` at position *i* will do so on every call, because the annotation (``qd.Tensor``,
-        # ``qd.Template``, ``qd.types.ndarray()``, or a dataclass type) doesn't change. The template mapper
+        # ``qd.template()``, ``qd.types.ndarray()``, or a dataclass type) doesn't change. The template mapper
         # enforces a fixed arg count (``len(args) == self.num_args``), so cached indices cannot go out of bounds.
         if _tensor_wrapper._any_tensor_constructed:  # pyright: ignore[reportOptionalMemberAccess]
             _indices = self._tensor_unwrap_indices

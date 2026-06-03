@@ -34,7 +34,7 @@ from quadrants.lang.exception import (
 from quadrants.lang.matrix import MatrixType
 from quadrants.lang.stream import stream_parallel
 from quadrants.lang.struct import StructType
-from quadrants.lang.util import is_data_oriented, to_quadrants_type
+from quadrants.lang.util import to_quadrants_type
 from quadrants.types import annotations, buffer_view_type, ndarray_type, primitive_types
 
 
@@ -149,21 +149,6 @@ class FunctionDefTransformer:
                         field.type,
                         this_arg_features[field_idx],
                     )
-                elif isinstance(field.type, type) and getattr(field.type, "_data_oriented", False):
-                    # ``@qd.data_oriented`` field type inside a typed-dataclass kernel arg. The two patterns are
-                    # semantically incompatible at this layer: dataclass kernel-arg recursion uses annotations to
-                    # flatten leaf fields into per-leaf kernel args at compile time, but data_oriented containers don't
-                    # carry per-attribute type annotations — they need a value-driven walk
-                    # (``_predeclare_struct_ndarrays``), which only fires for ``qd.template()`` / ``qd.Tensor``
-                    # annotations. Rather than silently miscompile, raise a clear error pointing users to the
-                    # recommended pattern.
-                    raise QuadrantsSyntaxError(
-                        f"Kernel arg {argument_name!r}: field {field.name!r} has @qd.data_oriented type "
-                        f"{field.type.__name__!r}, which cannot be flattened into a typed-dataclass kernel arg. "
-                        f"Use ``{argument_name}: qd.template()`` for the outer kernel arg annotation instead; "
-                        f"data_oriented contents (including nested ndarrays) are walked at kernel-compile time via "
-                        f"the template path."
-                    )
                 else:
                     result, obj = FunctionDefTransformer._decl_and_create_variable(
                         ctx,
@@ -241,7 +226,7 @@ class FunctionDefTransformer:
                         child = child._unwrap()
                     if isinstance(child, _ndarray.Ndarray):
                         _register_ndarray(child, arg_idx, (*path, field.name))
-                    elif (dataclasses.is_dataclass(child) and not isinstance(child, type)) or is_data_oriented(child):
+                    elif dataclasses.is_dataclass(child) and not isinstance(child, type):
                         _walk_obj(child, arg_idx, (*path, field.name))
             else:
                 for attr_name, attr_val in vars(obj).items():
@@ -249,10 +234,6 @@ class FunctionDefTransformer:
                         attr_val = attr_val._unwrap()
                     if isinstance(attr_val, _ndarray.Ndarray):
                         _register_ndarray(attr_val, arg_idx, (*path, attr_name))
-                    elif (dataclasses.is_dataclass(attr_val) and not isinstance(attr_val, type)) or is_data_oriented(
-                        attr_val
-                    ):
-                        _walk_obj(attr_val, arg_idx, (*path, attr_name))
 
         def _register_ndarray(nd, arg_idx, attr_chain):
             key = id(nd)
