@@ -2,7 +2,7 @@
 
 ## Good practice reminder
 
-* *testing*: Any new features or modified code should be tested. You have to run the test suite using `python tests/run_tests.py` which sets up the right test environment for `pytest`. CLI arguments are forwarded to `pytest`. Do not use `pytest` directly as it behaves differently. To see a per-file timing breakdown (useful for identifying slow test files), set `QD_FILE_TIMING=1` — e.g. `QD_FILE_TIMING=1 python tests/run_tests.py`. This is enabled by default in the Mac CI job and the results appear in the GitHub Actions job summary.
+* *testing*: Any new features or modified code should be tested. see [unit_testing.md](unit_testing.md)
 * *format/linter*: Before pushing any commits, ensure you set up `pre-commit` and run it using `pre-commit run -a`
 * No need to force push to keep a clean history as the merging is eventually done by squashing commits.
 

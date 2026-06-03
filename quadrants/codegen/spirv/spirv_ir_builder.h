@@ -470,6 +470,10 @@ class IRBuilder {
   Value alloca_variable(const SType &type);
   Value alloca_workgroup_array(const SType &type);
   Value load_variable(Value pointer, const SType &res_type);
+  // Volatile-load variant: emits `OpLoad` with the `Volatile` `MemoryAccess` mask, preventing the SPIR-V
+  // optimiser (and downstream MSL / GLSL translators via SPIRV-Cross) from forwarding, hoisting, or merging the
+  // load.  Used by `qd.volatile_load` to back spin-wait reads on Vulkan / Metal.
+  Value load_variable_volatile(Value pointer, const SType &res_type);
   void store_variable(Value pointer, Value value);
 
   // Register name to corresponding Value/VariablePointer

@@ -134,10 +134,12 @@ def _struct_nd_paths_for(arg: Any) -> list[tuple]:
     the result on the instance as ``_qd_nd_paths`` (via ``object.__setattr__`` so it works for frozen dataclasses
     and ``@qd.data_oriented`` containers alike); subsequent calls fetch it via instance ``__dict__`` lookup.
 
-    Per-instance caching is correctness-load-bearing: ``@qd.data_oriented`` classes can have different attribute
-    sets across instances of the same class (e.g. Genesis ``DataManager`` with vs without ``requires_grad``), so a
-    per-class cache populated from one instance can't be reused for another. ``__slots__`` classes without a
-    ``__dict__`` fall back to per-class caching (see ``_struct_nd_paths_cache``) and retain the legacy limitation.
+    Per-instance caching is correctness-load-bearing (this is the fix for Codex #3 on PR #704,
+    https://github.com/Genesis-Embodied-AI/quadrants/pull/704#discussion_r3253281957): ``@qd.data_oriented`` classes
+    can have different attribute sets across instances of the same class (e.g. Genesis ``DataManager`` with vs
+    without ``requires_grad``), and even within an instance's lifetime a ``qd.Tensor`` member can swap backends, so
+    a per-class cache populated from one instance can't safely be reused for another. ``__slots__`` classes without
+    a ``__dict__`` fall back to per-class caching (see ``_struct_nd_paths_cache``) and retain the legacy limitation.
 
     Limitation: the path list is recorded once per instance. If a new ndarray attribute is attached to an instance
     *after* its first kernel call (uncommon — Genesis containers declare all ndarrays in ``__init__``), it won't be
@@ -166,6 +168,30 @@ def _struct_nd_paths_for(arg: Any) -> list[tuple]:
         # under polymorphic-instance attribute structure, but Genesis data_oriented containers don't use slots.
         _struct_nd_paths_cache[cls] = paths
     return paths
+
+
+def chain_has_mutable_container(args, template_arg_idx, attr_chain) -> bool:
+    """Return True if any container along ``attr_chain`` from ``args[template_arg_idx]`` down to (but excluding) the
+    leaf ndarray attribute is mutable in a way that lets it rebind its child attribute. Such a parent makes
+    ``id(args[template_arg_idx])`` alone insufficient to uniquely identify the leaf, so the leaf id must be folded
+    into the launch-context cache key.
+
+    A container is "mutable" here iff:
+    - its type has ``__hash__ is None`` (Python sets this for non-frozen ``@dataclass(eq=True)`` types), or
+    - it is a ``@qd.data_oriented`` instance (these inherit ``object.__hash__`` so the ``__hash__ is None`` check
+      misses them; they support normal attribute assignment).
+
+    Walks all parents from the root down to ``attr_chain[:-1]`` — the final entry is the leaf itself, whose own
+    mutability does not affect rebinding by its parent. Returns on the first mutable parent.
+    """
+    cur = args[template_arg_idx]
+    if type(cur).__hash__ is None or is_data_oriented(cur):
+        return True
+    for attr_name in attr_chain[:-1]:
+        cur = getattr(cur, attr_name)
+        if type(cur).__hash__ is None or is_data_oriented(cur):
+            return True
+    return False
 
 
 def _collect_struct_nd_descriptors(arg: Any, out: list) -> None:

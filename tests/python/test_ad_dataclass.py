@@ -184,8 +184,8 @@ def test_ad_dataclass_tensor_field_backend_tape():
 
     Note: members must be annotated as ``qd.Tensor`` (not ``object``) when the value is a ``qd.tensor(...)`` wrapper.
     The typed-dataclass / template machinery uses the member annotation to decide whether to unwrap the wrapper into
-    its underlying impl before the kernel sees ``s.x[i]``. With ``object`` annotation the wrapper survives into
-    kernel scope and its host-side ``__getitem__`` asserts.
+    its underlying impl before the kernel sees ``s.x[i]``. With ``object`` annotation the wrapper survives into kernel
+    scope and its host-side ``__getitem__`` asserts.
     """
     N = 5
 

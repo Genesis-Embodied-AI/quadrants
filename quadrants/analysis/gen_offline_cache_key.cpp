@@ -168,6 +168,11 @@ class ASTSerializer : public IRVisitor, public ExpressionVisitor {
     emit(expr->high);
   }
 
+  void visit(VolatileLoadExpression *expr) override {
+    emit(ExprOpCode::VolatileLoadExpression);
+    emit(expr->src);
+  }
+
   void visit(LoopUniqueExpression *expr) override {
     emit(ExprOpCode::LoopUniqueExpression);
     emit(expr->input);

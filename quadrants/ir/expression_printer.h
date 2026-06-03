@@ -130,6 +130,12 @@ class ExpressionHumanFriendlyPrinter : public ExpressionPrinter {
     emit(']');
   }
 
+  void visit(VolatileLoadExpression *expr) override {
+    emit("volatile_load(");
+    expr->src->accept(this);
+    emit(')');
+  }
+
   void visit(RangeAssumptionExpression *expr) override {
     emit("assume_in_range({");
     expr->base->accept(this);

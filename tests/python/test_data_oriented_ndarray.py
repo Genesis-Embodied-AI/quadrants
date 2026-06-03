@@ -1384,3 +1384,37 @@ def test_data_oriented_nested_primitive_via_qd_func_distinguishes_cache_key(tmp_
     assert captured[-2] is not None and captured[-1] is not None, "both cfg.n values load distinct artifacts"
     np.testing.assert_array_equal(a.x.to_numpy()[:2], np.array([2, 3], dtype=np.int32))
     np.testing.assert_array_equal(b.x.to_numpy()[:3], np.array([3, 4, 5], dtype=np.int32))
+
+
+# ---------------------------------------------------------------------------
+# 23. @qd.data_oriented holding a qd.Tensor wrapper around an ndarray.
+#
+# Both ``_build_struct_nd_paths`` and ``_collect_struct_nd_descriptors`` in ``_template_mapper_hotpath.py`` have a
+# ``if type(v) in _TENSOR_WRAPPER_TYPES: v = v._unwrap()`` branch that the rest of the file doesn't exercise (every
+# other test attaches a bare ``qd.ndarray``). This test covers that unwrap path for the ndarray-backed wrapper: the
+# struct-walker should treat ``state.a`` as if it were a bare ndarray (paths cached on the class, shape descriptors
+# collected from the unwrapped impl).
+# ---------------------------------------------------------------------------
+
+
+@test_utils.test(arch=qd.cpu)
+def test_data_oriented_ndarray_wrapper():
+    N = 6
+
+    @qd.data_oriented
+    class State:
+        def __init__(self, a):
+            self.a = a
+
+    a = qd.tensor(qd.i32, shape=(N,), backend=qd.Backend.NDARRAY)
+    state = State(a=a)
+
+    @qd.kernel
+    def run(s: qd.Template):
+        for i in range(N):
+            s.a[i] = i + 1
+
+    run(state)
+    np.testing.assert_array_equal(a.to_numpy(), np.arange(1, N + 1))
+
+    run(state)

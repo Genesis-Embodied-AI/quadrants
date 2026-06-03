@@ -1,6 +1,6 @@
 # Subgroup primitives
 
-Subgroup operations let threads within the same subgroup (warp on NVIDIA, wave on AMD, subgroup on Vulkan / Metal) cooperate directly - exchanging register values, voting on predicates, scanning, and electing a leader - without going through shared memory or block barriers. They are the building block for fast in-warp data exchange and are used internally by `Tile16x16` (see [tile16](tile16.md)).
+Subgroup operations let threads within the same subgroup (warp on NVIDIA, wave on AMD, subgroup on Vulkan / Metal) cooperate directly - exchanging register values, voting on predicates, scanning, and electing a leader - without going through shared memory or block barriers. They are the building block for fast in-warp data exchange and are used internally by `Tile16x16` and `Tile32x32` (see [tile](tile.md)).
 
 Subgroup ops live under `qd.simt.subgroup` and are written so the same Python source compiles to the right vendor primitive on each backend. Calling a backend that has not implemented an op fails at trace or codegen time.
 
@@ -536,4 +536,4 @@ One subtlety worth knowing about (mostly for anyone reading the generated IR): t
 
 ## Related
 
-- [tile16](tile16.md) - `Tile16x16` builds on `subgroup.shuffle` to implement register-resident 16×16 matrix tiles.
+- [tile](tile.md) - `Tile16x16` and `Tile32x32` build on `subgroup.shuffle` to implement register-resident matrix tiles.
