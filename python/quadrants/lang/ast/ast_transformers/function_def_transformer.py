@@ -476,6 +476,12 @@ class FunctionDefTransformer:
 
         if ctx.is_kernel:
             FunctionDefTransformer._validate_stream_parallel_exclusivity(node.body, ctx.global_vars)
+            kernel = ctx.global_context.current_kernel
+            if kernel is not None:
+                # Reset before walking the body so re-materialisations (e.g. when a templated kernel is compiled
+                # with a different argument shape) start from an empty list. Mirrors how `graph_do_while_arg`
+                # gets overwritten unconditionally during AST traversal.
+                kernel.checkpoint_yield_on_args = []
 
         with ctx.variable_scope_guard():
             build_stmts(ctx, node.body)

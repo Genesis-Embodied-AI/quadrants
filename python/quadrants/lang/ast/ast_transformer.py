@@ -1363,6 +1363,42 @@ class ASTTransformer(Builder):
         return None
 
     @staticmethod
+    def _is_checkpoint_call(node: ast.expr) -> tuple[bool, str | None]:
+        """If *node* is a ``qd.checkpoint(...)`` call return ``(True, yield_on_arg_name)``; otherwise
+        ``(False, None)``. ``yield_on_arg_name`` is ``None`` when the user wrote
+        ``qd.checkpoint()`` with no ``yield_on`` kwarg.
+
+        Validates the call shape (no positional args, only ``yield_on=`` as a bare ``ast.Name``)
+        and raises ``QuadrantsSyntaxError`` for misuse so the user gets a clear message at the
+        ``with`` site rather than a vague "not stream_parallel" error later.
+        """
+        if not isinstance(node, ast.Call):
+            return False, None
+        func = node.func
+        is_checkpoint = (isinstance(func, ast.Attribute) and func.attr == "checkpoint") or (
+            isinstance(func, ast.Name) and func.id == "checkpoint"
+        )
+        if not is_checkpoint:
+            return False, None
+        if node.args:
+            raise QuadrantsSyntaxError(
+                "qd.checkpoint() takes no positional arguments; use qd.checkpoint(yield_on=flag) instead"
+            )
+        yield_on_name: str | None = None
+        for kw in node.keywords:
+            if kw.arg != "yield_on":
+                raise QuadrantsSyntaxError(
+                    f"qd.checkpoint() got unexpected keyword argument {kw.arg!r}; only 'yield_on' is supported"
+                )
+            if not isinstance(kw.value, ast.Name):
+                raise QuadrantsSyntaxError(
+                    "qd.checkpoint(yield_on=...) must be the bare name of a kernel parameter "
+                    "(e.g. `yield_on=overflow_flag`); expressions are not supported"
+                )
+            yield_on_name = kw.value.id
+        return True, yield_on_name
+
+    @staticmethod
     def build_While(ctx: ASTTransformerFuncContext, node: ast.While) -> None:
         if node.orelse:
             raise QuadrantsSyntaxError("'else' clause for 'while' not supported in Quadrants kernels")
@@ -1575,13 +1611,63 @@ class ASTTransformer(Builder):
             raise QuadrantsSyntaxError("'with ... as ...' is not supported in Quadrants kernels")
         if not isinstance(item.context_expr, ast.Call):
             raise QuadrantsSyntaxError("'with' in Quadrants kernels requires a call expression")
+
+        is_checkpoint, yield_on_name = ASTTransformer._is_checkpoint_call(item.context_expr)
+        if is_checkpoint:
+            return ASTTransformer._build_checkpoint_with(ctx, node, yield_on_name)
+
         if not FunctionDefTransformer._is_stream_parallel_with(node, ctx.global_vars):
-            raise QuadrantsSyntaxError("'with' in Quadrants kernels only supports qd.stream_parallel()")
+            raise QuadrantsSyntaxError(
+                "'with' in Quadrants kernels only supports qd.stream_parallel() or qd.checkpoint()"
+            )
         if not ctx.is_kernel:
             raise QuadrantsSyntaxError("qd.stream_parallel() can only be used inside @qd.kernel, not @qd.func")
         ctx.ast_builder.begin_stream_parallel()
         build_stmts(ctx, node.body)
         ctx.ast_builder.end_stream_parallel()
+        return None
+
+    @staticmethod
+    def _build_checkpoint_with(
+        ctx: ASTTransformerFuncContext,
+        node: ast.With,
+        yield_on_name: str | None,
+    ) -> None:
+        """Handles ``with qd.checkpoint(yield_on=arg):`` blocks.
+
+        Slice 1a: validates the use-site (kernel must be graph=True, no nesting, yield_on must be a kernel
+        parameter) and records the checkpoint's ``yield_on`` arg on the kernel object. Walks the body
+        transparently -- for-loops inside the ``with`` become normal top-level for-loops in the kernel's
+        frontend IR. The ``cp_id`` is assigned by declaration order (list index in
+        ``kernel.checkpoint_yield_on_args``).
+
+        Later slices wire ``cp_id`` through ForLoopConfig → OffloadedTask so the GraphManager can wrap
+        each checkpoint's body kernels in an IF conditional node and insert the yield-check kernel.
+        """
+        if not ctx.is_kernel:
+            raise QuadrantsSyntaxError("qd.checkpoint() can only be used inside @qd.kernel, not @qd.func")
+        kernel = ctx.global_context.current_kernel
+        if not kernel.use_graph:
+            raise QuadrantsSyntaxError("qd.checkpoint() requires @qd.kernel(graph=True)")
+        if getattr(ctx, "_in_checkpoint", False):
+            raise QuadrantsSyntaxError(
+                "qd.checkpoint() cannot be nested inside another qd.checkpoint(); checkpoints in the "
+                "same kernel must be flat siblings (a checkpoint inside qd.graph_do_while is fine)"
+            )
+        if yield_on_name is not None:
+            arg_names = [m.name for m in kernel.arg_metas]
+            if yield_on_name not in arg_names:
+                raise QuadrantsSyntaxError(
+                    f"qd.checkpoint(yield_on={yield_on_name!r}) does not match any parameter of kernel "
+                    f"{kernel.func.__name__!r}. Available parameters: {arg_names}"
+                )
+
+        kernel.checkpoint_yield_on_args.append(yield_on_name)
+        ctx._in_checkpoint = True
+        try:
+            build_stmts(ctx, node.body)
+        finally:
+            ctx._in_checkpoint = False
         return None
 
     @staticmethod

@@ -154,3 +154,42 @@ Note: the basic `graph=True` path (without `graph_do_while`) does **not** stall 
 Therefore on unsupported platforms, you might consider creating a second implementation, which works differently. e.g.:
 - fixed number of loop iterations, so no dependency on gpu data for kernel launch; combined perhaps with:
 - make each kernel 'short-circuit', exit quickly, if the task has already been completed; to avoid running the GPU more than necessary
+
+## Checkpoints with `qd.checkpoint` *(experimental)*
+
+> **Status:** AST surface and metadata tracking only (slice 1a). The runtime does not yet build per-checkpoint IF conditional nodes, insert yield-check kernels, or expose the host-side yield/resume loop. Until those slices land, every checkpoint body runs unconditionally — the construct is accepted but provides no runtime guarantees. Follow-up slices will add the device-side gating, the yield mechanism, and the `GraphStatus` host API; this section will be expanded as they land.
+
+`qd.checkpoint()` marks a section of a graph kernel as a *skippable, optionally yieldable stage*. The intended use is the qipc-style re-entrant Newton loop, where each iteration is divided into a handful of named stages (assemble, broadphase, line search, ...) and the host may need to grow a pre-allocated buffer when a stage detects overflow.
+
+```python
+@qd.kernel(graph=True)
+def step(
+    arr: qd.types.ndarray(qd.f32, ndim=1),
+    overflow_flag: qd.types.ndarray(qd.i32, ndim=0),
+    newton_cond: qd.types.ndarray(qd.i32, ndim=0),
+):
+    while qd.graph_do_while(newton_cond):
+        with qd.checkpoint():                       # cp_id 0: assemble
+            for i in range(arr.shape[0]):
+                # ...
+                pass
+        with qd.checkpoint(yield_on=overflow_flag): # cp_id 1: BVH (can yield)
+            for i in range(arr.shape[0]):
+                # ...
+                pass
+        with qd.checkpoint():                       # cp_id 2: line search
+            for i in range(arr.shape[0]):
+                # ...
+                pass
+```
+
+Each `with qd.checkpoint(...)` block gets a `cp_id` assigned by declaration order (0, 1, 2, ... flat across the whole kernel, independent of whether the checkpoint is inside or outside a `qd.graph_do_while`).
+
+If `yield_on` is supplied, it must name a 0-d `qd.i32` ndarray that is also a kernel parameter. The body may write a non-zero value into that ndarray to signal "the host needs to handle something" (typically: pre-allocated buffer too small). When the runtime side lands, the framework will detect this, exit the enclosing loop, and report the yielding `cp_id` to the host via the `GraphStatus` returned by the kernel call.
+
+### Restrictions (enforced at kernel compile time)
+
+- Must be used inside `@qd.kernel(graph=True)`.
+- `yield_on=` (when supplied) must be the bare name of a kernel parameter that is a 0-d `qd.types.ndarray(qd.i32, ndim=0)`.
+- Checkpoints cannot be nested inside other checkpoints. A checkpoint inside a `qd.graph_do_while` body is fine and is the expected pattern.
+- Cannot be combined with `qd.stream_parallel()` in the same kernel.

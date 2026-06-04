@@ -304,6 +304,12 @@ class Kernel(FuncBase):
         self.has_print = False
         self.use_graph: bool = False
         self.graph_do_while_arg: str | None = None
+        # Per-checkpoint metadata, one entry per `with qd.checkpoint(...)` block in declaration order. List index
+        # is the checkpoint's `cp_id` (0, 1, 2, ... flat across the kernel). Each entry is the name of the
+        # `yield_on=` kernel parameter, or `None` if the checkpoint has no `yield_on`. Populated by the AST
+        # transformer during frontend pass; empty means the kernel uses no checkpoints. Mirrors the
+        # `graph_do_while_arg` indirection but tracks one arg per checkpoint instead of one per kernel.
+        self.checkpoint_yield_on_args: list[str | None] = []
         self.quadrants_callable: QuadrantsCallable | None = None
         self.visited_functions: set[FunctionSourceInfo] = set()
         self.kernel_function_info: FunctionSourceInfo | None = None
