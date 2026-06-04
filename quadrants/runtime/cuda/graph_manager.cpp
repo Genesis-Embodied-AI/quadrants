@@ -1,8 +1,10 @@
 #include "quadrants/runtime/cuda/graph_manager.h"
+#include "quadrants/runtime/cuda/checkpoint_gate_fatbin.h"
 #include "quadrants/runtime/cuda/graph_do_while_cond_fatbin.h"
 #include "quadrants/runtime/cuda/cuda_utils.h"
 #include "quadrants/rhi/cuda/cuda_context.h"
 
+#include <cstdint>
 #include <vector>
 
 namespace quadrants::lang {
@@ -11,6 +13,7 @@ namespace cuda {
 CachedGraph::CachedGraph(std::size_t arg_buf_size,
                          std::size_t result_buf_size,
                          bool needs_counter_ptr_slot,
+                         bool needs_resume_point_slot,
                          LlvmRuntimeExecutor *executor)
     : arg_buffer_size(arg_buf_size), result_buffer_size(result_buf_size) {
   CUDADriver::get_instance().malloc((void **)&persistent_device_result_buffer,
@@ -22,6 +25,14 @@ CachedGraph::CachedGraph(std::size_t arg_buf_size,
 
   if (needs_counter_ptr_slot) {
     CUDADriver::get_instance().malloc(&counter_ptr_slot, sizeof(void *));
+  }
+
+  if (needs_resume_point_slot) {
+    // One int32 device scalar that the checkpoint gate kernels read every launch. Zero-init
+    // matches "no resume in progress" -- every gate sees `cp_id >= 0` and enables its body.
+    CUDADriver::get_instance().malloc(&resume_point_dev_ptr, sizeof(int32_t));
+    int32_t zero = 0;
+    CUDADriver::get_instance().memcpy_host_to_device(resume_point_dev_ptr, &zero, sizeof(int32_t));
   }
 
   persistent_ctx.runtime = executor->get_llvm_runtime();
@@ -43,6 +54,9 @@ CachedGraph::~CachedGraph() {
   if (counter_ptr_slot) {
     CUDADriver::get_instance().mem_free(counter_ptr_slot);
   }
+  if (resume_point_dev_ptr) {
+    CUDADriver::get_instance().mem_free(resume_point_dev_ptr);
+  }
 }
 
 CachedGraph::CachedGraph(CachedGraph &&other) noexcept
@@ -53,11 +67,14 @@ CachedGraph::CachedGraph(CachedGraph &&other) noexcept
       arg_buffer_size(other.arg_buffer_size),
       result_buffer_size(other.result_buffer_size),
       counter_ptr_slot(other.counter_ptr_slot),
+      resume_point_dev_ptr(other.resume_point_dev_ptr),
+      num_checkpoints(other.num_checkpoints),
       num_nodes(other.num_nodes) {
   other.graph_exec = nullptr;
   other.persistent_device_arg_buffer = nullptr;
   other.persistent_device_result_buffer = nullptr;
   other.counter_ptr_slot = nullptr;
+  other.resume_point_dev_ptr = nullptr;
 }
 
 CachedGraph &CachedGraph::operator=(CachedGraph &&other) noexcept {
@@ -71,6 +88,8 @@ CachedGraph &CachedGraph::operator=(CachedGraph &&other) noexcept {
   std::swap(arg_buffer_size, raii_guard.arg_buffer_size);
   std::swap(result_buffer_size, raii_guard.result_buffer_size);
   std::swap(counter_ptr_slot, raii_guard.counter_ptr_slot);
+  std::swap(resume_point_dev_ptr, raii_guard.resume_point_dev_ptr);
+  std::swap(num_checkpoints, raii_guard.num_checkpoints);
   std::swap(num_nodes, raii_guard.num_nodes);
   return *this;
 }
@@ -167,6 +186,43 @@ void GraphManager::ensure_condition_kernel_loaded() {
   QD_TRACE("Loaded graph_do_while condition kernel from pre-built fatbin");
 }
 
+// Loads the qd.checkpoint() IF-gate kernel from the pre-built fatbin (same shape and
+// SM-coverage policy as `ensure_condition_kernel_loaded`). The CUDA 12.4+ IF conditional
+// node mechanism is gated on SM 9.0+; on older devices we early-return and the caller
+// falls back to flattening checkpoints into unconditional top-level kernels (slice 1c
+// keeps the same behaviour-equivalent fallback as today's `graph_do_while` plus a clear
+// log so users know why they aren't seeing the IF path).
+void GraphManager::ensure_checkpoint_gate_kernel_loaded() {
+  if (gate_kernel_func_)
+    return;
+
+  int cc = CUDAContext::get_instance().get_compute_capability();
+  if (cc < 90) {
+    QD_INFO(
+        "CUDA graph IF conditional nodes (used by qd.checkpoint) require SM 9.0+, "
+        "but this device is SM {}. Falling back to flat scheduling (every checkpoint "
+        "body runs unconditionally); slice 4 will add an indirect-dispatch alternative.",
+        cc);
+    return;
+  }
+
+  auto &driver = CUDADriver::get_instance();
+
+  static_assert(kCheckpointGateKernelFatbinSize > 0,
+                "Checkpoint gate kernel fatbin is empty -- regenerate with "
+                "scripts/build_checkpoint_gate_fatbin.py");
+
+  uint32_t ret = driver.module_load_data.call(&gate_kernel_module_, kCheckpointGateKernelFatbin);
+  QD_ERROR_IF(ret != CUDA_SUCCESS,
+              "Failed to load qd.checkpoint gate kernel fatbin (CUDA error {}). This SM ({}) "
+              "may not be included in the fatbin -- regenerate with "
+              "scripts/build_checkpoint_gate_fatbin.py",
+              ret, cc);
+
+  driver.module_get_function(&gate_kernel_func_, gate_kernel_module_, "_qd_checkpoint_if_gate");
+  QD_TRACE("Loaded qd.checkpoint IF-gate kernel from pre-built fatbin");
+}
+
 void *GraphManager::add_kernel_node(void *graph,
                                     void *prev_node,
                                     void *func,
@@ -235,6 +291,14 @@ bool GraphManager::launch_cached_graph(CachedGraph &cached, LaunchContextBuilder
     CUDADriver::get_instance().memcpy_host_to_device(cached.counter_ptr_slot, &flag_ptr, sizeof(void *));
   }
 
+  if (cached.resume_point_dev_ptr) {
+    // Slice 1c: always reset resume_point to 0 before each launch so every checkpoint runs
+    // (no host-side `from_checkpoint=` API yet). Slice 2 will route this through the
+    // GraphStatus host API and only reset when not resuming.
+    int32_t zero = 0;
+    CUDADriver::get_instance().memcpy_host_to_device(cached.resume_point_dev_ptr, &zero, sizeof(int32_t));
+  }
+
   if (ctx.arg_buffer_size > 0) {
     CUDADriver::get_instance().memcpy_host_to_device(cached.persistent_device_arg_buffer, ctx.get_context().arg_buffer,
                                                      cached.arg_buffer_size);
@@ -243,6 +307,7 @@ bool GraphManager::launch_cached_graph(CachedGraph &cached, LaunchContextBuilder
   CUDADriver::get_instance().graph_launch(cached.graph_exec, stream);
   used_on_last_call_ = true;
   num_nodes_on_last_call_ = cached.num_nodes;
+  num_checkpoints_on_last_call_ = cached.num_checkpoints;
   return true;
 }
 
@@ -285,9 +350,42 @@ bool GraphManager::try_launch(int launch_id,
     return launch_cached_graph(it->second, ctx, use_graph_do_while);
   }
 
+  // Scan for qd.checkpoint() metadata once: any task with `checkpoint_id >= 0` opts the kernel
+  // into the IF-conditional path. We need this before constructing CachedGraph so the latter
+  // can allocate the `resume_point` scalar exactly when (and only when) it will be referenced.
+  bool has_checkpoints = false;
+  std::size_t num_distinct_checkpoints = 0;
+  {
+    int prev_cp = -1;
+    for (const auto &task : offloaded_tasks) {
+      if (task.checkpoint_id >= 0) {
+        has_checkpoints = true;
+        if (task.checkpoint_id != prev_cp) {
+          ++num_distinct_checkpoints;
+          prev_cp = task.checkpoint_id;
+        }
+      } else {
+        prev_cp = -1;
+      }
+    }
+  }
+
+  // Reject IF-conditional path pre-SM 9.0 -- match the graph_do_while pattern and let the
+  // non-graph kernel launcher run the tasks flat (every checkpoint body runs unconditionally,
+  // matching slice 1a's `with`-block semantics before slice 4 adds the indirect-dispatch
+  // alternative). Falling back here keeps the user's code running while losing the IF
+  // optimisation, instead of failing the launch.
+  if (has_checkpoints) {
+    ensure_checkpoint_gate_kernel_loaded();
+    if (!gate_kernel_func_) {
+      return false;
+    }
+  }
+
   CUDAContext::get_instance().make_current();
 
-  CachedGraph cached(ctx.arg_buffer_size, ctx.result_buffer_size, use_graph_do_while, executor);
+  CachedGraph cached(ctx.arg_buffer_size, ctx.result_buffer_size, use_graph_do_while, has_checkpoints, executor);
+  cached.num_checkpoints = num_distinct_checkpoints;
 
   if (cached.arg_buffer_size > 0) {
     CUDADriver::get_instance().memcpy_host_to_device(cached.persistent_device_arg_buffer, ctx.get_context().arg_buffer,
@@ -300,20 +398,24 @@ bool GraphManager::try_launch(int launch_id,
 
   // Target graph for kernel nodes. Without graph_do_while, work kernels go
   // directly into the top-level graph. With graph_do_while, they go into
-  // a body graph inside a conditional while node:
+  // a body graph inside a conditional while node. With qd.checkpoint() blocks, each
+  // contiguous run of same-cp_id tasks is further wrapped in an IF conditional node
+  // (gated by `resume_point`); tasks with cp_id == -1 stay siblings of the IF nodes.
   //
   //   Top-level graph
-  //     └── Conditional while node (repeats while flag != 0)
+  //     └── (Conditional while node when use_graph_do_while, repeats while flag != 0)
   //           └── Body graph
-  //                 ├── Work kernel 1
-  //                 ├── Work kernel 2
-  //                 └── Condition kernel (reads flag, calls
-  //                 cudaGraphSetConditional)
+  //                 ├── Non-checkpoint task A (cp_id = -1)
+  //                 ├── Gate kernel for cp 0   (sets handle_0 from cp_id >= *resume_point)
+  //                 ├── IF conditional node (handle_0)
+  //                 │     └── Body: cp_id=0 tasks B, C
+  //                 ├── Gate kernel for cp 1
+  //                 ├── IF conditional node (handle_1)
+  //                 │     └── Body: cp_id=1 task D
+  //                 └── Condition kernel (only when use_graph_do_while; reads counter)
   //
-  // The condition kernel must be the last node in the body graph. It reads the
-  // flag after the work kernels have updated it, so the loop-continue decision
-  // reflects this iteration's result. Putting it first would cause an extra
-  // iteration: the condition would see the flag from before the work ran.
+  // The condition kernel must remain the last node in the WHILE body so it observes the
+  // counter writes made inside this iteration's IF bodies.
   void *kernel_target_graph = graph;
   unsigned long long cond_handle = 0;
 
@@ -335,12 +437,77 @@ bool GraphManager::try_launch(int launch_id,
     kernel_target_graph = add_conditional_while_node(graph, &cond_handle);
   }
 
-  void *prev_node = nullptr;
+  // Walk offloaded_tasks once, opening an IF node every time `checkpoint_id` transitions to a
+  // non-negative value (and a different value than the previous task's). `prev_outer` tracks
+  // the dependency chain in `kernel_target_graph`; `prev_inner` tracks the chain inside the
+  // currently open IF body. We never re-enter a closed IF -- if the user writes
+  // `checkpoint(); something_else; checkpoint()` with the same cp_id, that's two separate
+  // contiguous runs and gets two IF nodes (which is what the user sees source-wise as well).
+  void *prev_outer = nullptr;
+  void *prev_inner = nullptr;
+  void *current_body_graph = nullptr;
+  int current_cp_id = -1;
+  std::size_t total_nodes = 0;
+
   for (const auto &task : offloaded_tasks) {
+    void *task_func = cuda_module->lookup_function(task.name);
     void *ctx_ptr = &cached.persistent_ctx;
-    prev_node = add_kernel_node(kernel_target_graph, prev_node, cuda_module->lookup_function(task.name),
-                                (unsigned int)task.grid_dim, (unsigned int)task.block_dim,
-                                (unsigned int)task.dynamic_shared_array_bytes, &ctx_ptr);
+    unsigned int grid = (unsigned int)task.grid_dim;
+    unsigned int block = (unsigned int)task.block_dim;
+    unsigned int smem = (unsigned int)task.dynamic_shared_array_bytes;
+
+    if (task.checkpoint_id != current_cp_id) {
+      // Close the previous IF body (no explicit close needed -- prev_outer already points at
+      // the IF node itself, so the next outer-chain insertion correctly depends on the IF
+      // completing). When entering a new checkpoint (transitioning from -1 or from a different
+      // cp_id), open a fresh IF wrapped around a gate kernel.
+      current_cp_id = task.checkpoint_id;
+      if (current_cp_id >= 0) {
+        // 1. Allocate a per-checkpoint conditional handle (default OFF so the body is skipped
+        //    unless the gate explicitly enables it; the gate always runs and is the source of
+        //    truth here -- the default only matters for slice 1d's yield path).
+        int32_t cp_id_val = current_cp_id;
+        unsigned long long if_handle = 0;
+        void *cu_ctx_local = CUDAContext::get_instance().get_context();
+        CUDADriver::get_instance().graph_conditional_handle_create(&if_handle, kernel_target_graph, cu_ctx_local,
+                                                                   /*defaultLaunchValue=*/0,
+                                                                   /*flags=CU_GRAPH_COND_ASSIGN_DEFAULT=*/1);
+        // 2. Gate kernel BEFORE the IF: writes (cp_id_val >= *resume_point) into the handle.
+        //    cp_id_val lives on this stack frame; safe because cuGraphAddKernelNode snapshots
+        //    each kernel param value at node-add time (per CUDA driver docs).
+        void *gate_args[3] = {&if_handle, &cp_id_val, &cached.resume_point_dev_ptr};
+        prev_outer = add_kernel_node(kernel_target_graph, prev_outer, gate_kernel_func_,
+                                     /*grid=*/1, /*block=*/1, /*smem=*/0, gate_args);
+        ++total_nodes;
+        // 3. IF conditional node depending on the gate.
+        GraphNodeParams cond_node_params{};
+        cond_node_params.type = 13;     // CU_GRAPH_NODE_TYPE_CONDITIONAL
+        cond_node_params.handle = if_handle;
+        cond_node_params.condType = 0;  // CU_GRAPH_COND_TYPE_IF
+        cond_node_params.size = 1;
+        cond_node_params.phGraph_out = nullptr;
+        cond_node_params.ctx = cu_ctx_local;
+        void *if_node = nullptr;
+        CUDADriver::get_instance().graph_add_node(&if_node, kernel_target_graph,
+                                                  prev_outer ? &prev_outer : nullptr, prev_outer ? 1 : 0,
+                                                  &cond_node_params);
+        void **body_graphs = (void **)cond_node_params.phGraph_out;
+        QD_ASSERT(body_graphs && body_graphs[0]);
+        current_body_graph = body_graphs[0];
+        prev_outer = if_node;
+        prev_inner = nullptr;
+        ++total_nodes;
+      }
+    }
+
+    if (current_cp_id < 0) {
+      // Non-checkpoint task: chain it directly into the outer (kernel_target_graph) chain.
+      prev_outer = add_kernel_node(kernel_target_graph, prev_outer, task_func, grid, block, smem, &ctx_ptr);
+    } else {
+      // Checkpoint task: chain into the currently open IF body.
+      prev_inner = add_kernel_node(current_body_graph, prev_inner, task_func, grid, block, smem, &ctx_ptr);
+    }
+    ++total_nodes;
   }
 
   if (use_graph_do_while) {
@@ -354,7 +521,8 @@ bool GraphManager::try_launch(int launch_id,
 
     void *cond_args[2] = {&cond_handle, &cached.counter_ptr_slot};
 
-    add_kernel_node(kernel_target_graph, prev_node, cond_kernel_func_, 1, 1, 0, cond_args);
+    add_kernel_node(kernel_target_graph, prev_outer, cond_kernel_func_, 1, 1, 0, cond_args);
+    ++total_nodes;
   }
 
   // --- Instantiate and launch ---
@@ -365,12 +533,13 @@ bool GraphManager::try_launch(int launch_id,
 
   CUDADriver::get_instance().graph_destroy(graph);
 
-  cached.num_nodes = offloaded_tasks.size();
+  cached.num_nodes = total_nodes;
 
-  QD_TRACE("CUDA graph created with {} kernel nodes for launch_id={}{}", cached.num_nodes, launch_id,
-           use_graph_do_while ? " (with graph_do_while)" : "");
+  QD_TRACE("CUDA graph created with {} nodes ({} checkpoints) for launch_id={}{}", cached.num_nodes,
+           cached.num_checkpoints, launch_id, use_graph_do_while ? " (with graph_do_while)" : "");
 
   num_nodes_on_last_call_ = cached.num_nodes;
+  num_checkpoints_on_last_call_ = cached.num_checkpoints;
   ++total_builds_;
   cache_.emplace(launch_id, std::move(cached));
   used_on_last_call_ = true;

@@ -23,8 +23,27 @@ import numpy as np
 import pytest
 
 import quadrants as qd
+from quadrants.lang import impl
 
 from tests import test_utils
+
+
+def _on_cuda():
+    return impl.current_cfg().arch == qd.cuda
+
+
+def _is_checkpoint_if_path_native():
+    """The CUDA-native IF-conditional path requires SM 9.0+ / CUDA 12.4+ (slice 1c).
+
+    On other devices/backends the kernel still runs through every checkpoint body, so the
+    behavioural tests pass everywhere, but the GraphManager-introspection assertions only
+    apply on the native path.
+    """
+    return _on_cuda() and qd.lang.impl.get_cuda_compute_capability() >= 90
+
+
+def _num_checkpoints_on_last_call():
+    return impl.get_runtime().prog.get_graph_num_checkpoints_on_last_call()
 
 
 @test_utils.test()
@@ -229,6 +248,84 @@ def test_checkpoint_unexpected_kwarg_raises():
     flag = qd.ndarray(qd.i32, shape=())
     with pytest.raises(qd.QuadrantsSyntaxError, match="unexpected keyword argument"):
         k(x, flag)
+
+
+@test_utils.test()
+def test_checkpoint_emits_if_nodes_on_cuda_native():
+    """Slice 1c: on CUDA SM 9.0+, the GraphManager wires one IF conditional node per checkpoint.
+
+    Builds a kernel with three checkpoints and asserts the introspection counter sees three
+    IF nodes. On non-CUDA / pre-SM-9.0 backends the kernel still runs but reports 0 since
+    the IF path isn't available; the behavioural correctness assertion (incremented N times)
+    still holds because the body kernels run unconditionally on those backends.
+    """
+    N = 8
+
+    @qd.kernel(graph=True)
+    def k(x: qd.types.ndarray(qd.i32, ndim=1), flag: qd.types.ndarray(qd.i32, ndim=0)):
+        with qd.checkpoint():
+            for i in range(x.shape[0]):
+                x[i] = x[i] + 1
+        with qd.checkpoint(yield_on=flag):
+            for i in range(x.shape[0]):
+                x[i] = x[i] + 1
+        with qd.checkpoint():
+            for i in range(x.shape[0]):
+                x[i] = x[i] + 1
+
+    x = qd.ndarray(qd.i32, shape=(N,))
+    flag = qd.ndarray(qd.i32, shape=())
+    x.from_numpy(np.zeros(N, dtype=np.int32))
+    flag.from_numpy(np.array(0, dtype=np.int32))
+
+    k(x, flag)
+    np.testing.assert_array_equal(x.to_numpy(), np.full(N, 3, dtype=np.int32))
+    if _is_checkpoint_if_path_native():
+        assert _num_checkpoints_on_last_call() == 3, (
+            f"expected 3 IF conditional nodes on the native path, "
+            f"got {_num_checkpoints_on_last_call()}"
+        )
+
+
+@test_utils.test()
+def test_checkpoint_emits_if_nodes_inside_graph_do_while():
+    """Slice 1c: IF conditional nodes nest correctly inside a graph_do_while body.
+
+    Two checkpoints per iteration, three iterations -- the IF nodes live inside the WHILE
+    body subgraph and get rebuilt fresh per loop iteration (CUDA semantics). Counter check
+    on the native path confirms the GraphManager doesn't accidentally hoist IFs to top level.
+    """
+    N = 4
+
+    @qd.kernel(graph=True)
+    def k(
+        x: qd.types.ndarray(qd.i32, ndim=1),
+        counter: qd.types.ndarray(qd.i32, ndim=0),
+        flag: qd.types.ndarray(qd.i32, ndim=0),
+    ):
+        while qd.graph_do_while(counter):
+            with qd.checkpoint():
+                for i in range(x.shape[0]):
+                    x[i] = x[i] + 1
+            with qd.checkpoint(yield_on=flag):
+                for i in range(1):
+                    counter[()] = counter[()] - 1
+
+    x = qd.ndarray(qd.i32, shape=(N,))
+    counter = qd.ndarray(qd.i32, shape=())
+    flag = qd.ndarray(qd.i32, shape=())
+    x.from_numpy(np.zeros(N, dtype=np.int32))
+    counter.from_numpy(np.array(3, dtype=np.int32))
+    flag.from_numpy(np.array(0, dtype=np.int32))
+
+    k(x, counter, flag)
+    np.testing.assert_array_equal(x.to_numpy(), np.full(N, 3, dtype=np.int32))
+    assert counter.to_numpy() == 0
+    if _is_checkpoint_if_path_native():
+        assert _num_checkpoints_on_last_call() == 2, (
+            f"expected 2 IF conditional nodes inside the WHILE body, "
+            f"got {_num_checkpoints_on_last_call()}"
+        )
 
 
 @test_utils.test()

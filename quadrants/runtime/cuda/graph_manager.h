@@ -63,11 +63,23 @@ struct CachedGraph {
   // slot, allowing the counter ndarray to change between calls without
   // rebuilding.
   void *counter_ptr_slot{nullptr};
+  // Framework-internal `resume_point` scalar (one int32 on device) read by every checkpoint
+  // gate kernel at launch time. `nullptr` when the kernel has no `qd.checkpoint()` blocks.
+  // Initialised to `0` so all checkpoints run on the first launch. Slice 1d's host-side
+  // `step.resume(from_checkpoint=cp)` will memcpy the resume cp_id into this slot before
+  // relaunching the same cached graph. Lives for the lifetime of the cached graph.
+  void *resume_point_dev_ptr{nullptr};
+  // Per-checkpoint count (number of distinct cp_ids in this kernel's offloaded_tasks).
+  // Stored here so test introspection can see whether the graph build actually emitted
+  // IF nodes -- slice 1c covers the build-time wiring before the user-visible host API
+  // arrives in slice 2. `0` for kernels without checkpoints.
+  std::size_t num_checkpoints{0};
   std::size_t num_nodes{0};
 
   CachedGraph(std::size_t arg_buffer_size,
               std::size_t result_buffer_size,
               bool needs_counter_ptr_slot,
+              bool needs_resume_point_slot,
               LlvmRuntimeExecutor *executor);
   ~CachedGraph();
   CachedGraph(const CachedGraph &) = delete;
@@ -107,6 +119,13 @@ class GraphManager {
   std::size_t total_builds() const {
     return total_builds_;
   }
+  // Number of `qd.checkpoint(...)` blocks (== IF conditional nodes emitted) for the most
+  // recent successful graph build / cached launch. `0` when the kernel has no checkpoints.
+  // Used by tests to confirm the GraphManager actually wired IF nodes instead of silently
+  // falling back to the flat top-level layout.
+  std::size_t num_checkpoints_on_last_call() const {
+    return num_checkpoints_on_last_call_;
+  }
 
  private:
   bool launch_cached_graph(CachedGraph &cached, LaunchContextBuilder &ctx, bool use_graph_do_while);
@@ -114,6 +133,7 @@ class GraphManager {
                                 const std::vector<std::pair<int, Callable::Parameter>> &parameters,
                                 LlvmRuntimeExecutor *executor);
   void ensure_condition_kernel_loaded();
+  void ensure_checkpoint_gate_kernel_loaded();
   void *add_conditional_while_node(void *graph, unsigned long long *cond_handle_out);
   void *add_kernel_node(void *graph,
                         void *prev_node,
@@ -128,11 +148,19 @@ class GraphManager {
   std::unordered_map<int, CachedGraph> cache_;
   bool used_on_last_call_{false};
   std::size_t num_nodes_on_last_call_{0};
+  std::size_t num_checkpoints_on_last_call_{0};
   std::size_t total_builds_{0};
 
   // JIT-compiled condition kernel for graph_do_while conditional nodes
   void *cond_kernel_module_{nullptr};  // CUmodule
   void *cond_kernel_func_{nullptr};    // CUfunction
+  // JIT-compiled gate kernel for qd.checkpoint() IF conditional nodes. Loaded lazily from the
+  // pre-built `checkpoint_gate_fatbin.h`. One shared kernel handles every checkpoint -- the
+  // per-checkpoint `cp_id` is passed as a literal argument (slice 1c). Pre-CUDA-12.4 / non-CUDA
+  // backends will use a separate per-checkpoint specialised gate kernel for indirect dispatch
+  // in slice 4/5.
+  void *gate_kernel_module_{nullptr};  // CUmodule
+  void *gate_kernel_func_{nullptr};    // CUfunction
 };
 
 }  // namespace cuda
