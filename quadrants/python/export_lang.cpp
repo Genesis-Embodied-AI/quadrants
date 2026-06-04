@@ -312,7 +312,9 @@ void export_lang(py::module &m) {
       .def("insert_snode_access_flag", &ASTBuilder::insert_snode_access_flag)
       .def("reset_snode_access_flag", &ASTBuilder::reset_snode_access_flag)
       .def("begin_stream_parallel", &ASTBuilder::begin_stream_parallel)
-      .def("end_stream_parallel", &ASTBuilder::end_stream_parallel);
+      .def("end_stream_parallel", &ASTBuilder::end_stream_parallel)
+      .def("begin_checkpoint", &ASTBuilder::begin_checkpoint)
+      .def("end_checkpoint", &ASTBuilder::end_checkpoint);
 
   auto device_capability_config =
       py::class_<DeviceCapabilityConfig>(m, "DeviceCapabilityConfig").def("get", &DeviceCapabilityConfig::get);

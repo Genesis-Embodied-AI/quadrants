@@ -1663,11 +1663,23 @@ class ASTTransformer(Builder):
                 )
 
         kernel.checkpoint_yield_on_args.append(yield_on_name)
+        # Hand control to the C++ ASTBuilder so that every for-loop emitted by `build_stmts`
+        # below is tagged with this checkpoint's `cp_id` on its `ForLoopConfig.checkpoint_id`.
+        # The C++ counter is the source of truth for cp_id; we cross-check it against the
+        # Python list index so a future refactor that misaligns the two surfaces immediately.
+        cpp_cp_id = ctx.ast_builder.begin_checkpoint()
+        py_cp_id = len(kernel.checkpoint_yield_on_args) - 1
+        assert cpp_cp_id == py_cp_id, (
+            f"C++ ASTBuilder.begin_checkpoint() returned cp_id={cpp_cp_id} but Python "
+            f"kernel.checkpoint_yield_on_args index expected {py_cp_id}; these counters "
+            f"must stay in lockstep so the GraphManager (slice 1c) can index yield_on by cp_id"
+        )
         ctx._in_checkpoint = True
         try:
             build_stmts(ctx, node.body)
         finally:
             ctx._in_checkpoint = False
+            ctx.ast_builder.end_checkpoint()
         return None
 
     @staticmethod
