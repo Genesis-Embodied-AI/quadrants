@@ -153,11 +153,18 @@ void KernelLauncher::launch_offloaded_tasks_with_do_while(LaunchContextBuilder &
   // The reset of `last_yield_cp_id_on_last_call_ = -1` at the top of the outer `launch_llvm_kernel`
   // doesn't apply here because we're already inside the per-launch loop body; we observe the
   // flag set by the preceding `launch_offloaded_tasks` call directly.
+  //
+  // Also mirror cond-with-yield's `*resume_point = 0` reset between iterations: a `resume(...,
+  // from_checkpoint=cp)` launch is meant to skip cp_ids < cp on the FIRST iteration only.
+  // Subsequent WHILE iterations during the same resume launch must run the full body. We
+  // clear `ctx.resume_from_checkpoint` after the first iteration so iter 2+ inside this
+  // launch see `resume_point=0` in `launch_offloaded_tasks`.
   do {
     launch_offloaded_tasks(ctx, launcher_ctx);
     if (last_yield_cp_id_on_last_call_ != -1) {
       break;
     }
+    ctx.resume_from_checkpoint = -1;
   } while (ctx.get_context().cpu_assert_failed == 0 && *static_cast<int32_t *>(ctx.graph_do_while_flag_dev_ptr) != 0);
 }
 
