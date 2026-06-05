@@ -50,9 +50,9 @@ from quadrants.lang.exception import (
     handle_exception_from_cpp,
 )
 # `GraphStatus` is the host-facing return type for kernels that contain
-# `qd.checkpoint(yield_on=...)`. Aliased to make the use site obvious and to avoid having to
-# re-export it from this module (the canonical export comes via `qd.lang.misc`).
-from quadrants.lang.misc import GraphStatus as _GraphStatus
+# `qd.checkpoint(yield_on=...)`. Imported from the dedicated `graph_status` module rather than
+# from `misc` to avoid a `kernel -> misc -> impl -> kernel` circular import.
+from quadrants.lang.graph_status import GraphStatus as _GraphStatus
 from quadrants.lang.impl import Program
 from quadrants.lang.shell import _shell_pop_print
 from quadrants.lang.util import cook_dtype

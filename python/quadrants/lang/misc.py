@@ -12,6 +12,7 @@ from quadrants._lib.core.quadrants_python import Extension
 from quadrants._lib.utils import get_os_name
 from quadrants.lang import impl, util
 from quadrants.lang.expr import Expr
+from quadrants.lang.graph_status import GraphStatus
 from quadrants.lang.impl import axes, get_runtime
 from quadrants.profiler.kernel_profiler import get_default_kernel_profiler
 from quadrants.types.primitive_types import f32, f64, i32, i64
@@ -718,45 +719,6 @@ def loop_config(
 
     if name is not None:
         get_runtime().compiling_callable.ast_builder().set_loop_name(name)
-
-
-class GraphStatus:
-    """Result returned by a graph kernel that contains ``qd.checkpoint(yield_on=...)`` blocks.
-
-    Returned from ``kernel(...)`` and ``kernel.resume(..., from_checkpoint=cp)`` whenever the
-    kernel was decorated with ``@qd.kernel(graph=True)`` and contains at least one checkpoint
-    that declared a ``yield_on=`` parameter. Read ``status.yielded`` to decide whether to keep
-    running the host loop, and ``status.checkpoint`` to find out which checkpoint asked the
-    host to handle something.
-
-    Canonical usage (mirrors the qipc re-entrant pattern; see ``graph.md``)::
-
-        status = step(arr, overflow_flag, newton_cond)
-        while status.yielded:
-            handle_overflow_for(status.checkpoint, ...)
-            status = step.resume(arr, overflow_flag, newton_cond,
-                                 from_checkpoint=status.checkpoint)
-
-    Attributes:
-        yielded: ``True`` iff one of the kernel's ``yield_on=`` checkpoints fired its flag on
-            the most recent launch. ``False`` means the kernel completed normally and the host
-            loop should exit.
-        checkpoint: ``cp_id`` of the checkpoint whose ``yield_on=`` flag was non-zero (or
-            ``None`` when ``yielded`` is ``False``). Pass it to ``kernel.resume(...,
-            from_checkpoint=cp)`` to skip every checkpoint with a lower ``cp_id`` on the next
-            launch.
-    """
-
-    __slots__ = ("yielded", "checkpoint")
-
-    def __init__(self, yielded: bool, checkpoint: int | None):
-        self.yielded = yielded
-        self.checkpoint = checkpoint
-
-    def __repr__(self) -> str:
-        if self.yielded:
-            return f"GraphStatus(yielded=True, checkpoint={self.checkpoint})"
-        return "GraphStatus(yielded=False)"
 
 
 @contextmanager
