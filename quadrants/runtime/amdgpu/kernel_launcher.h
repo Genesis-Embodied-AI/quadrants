@@ -45,6 +45,12 @@ class KernelLauncher : public LLVM::KernelLauncher {
   std::size_t get_graph_total_builds() const override {
     return graph_manager_.total_builds();
   }
+  // Slice 4: bridge to `GraphManager::last_yield_cp_id_on_last_call`. Without this override, the default in
+  // `program/kernel_launcher.h` returns -1 unconditionally and the Python `GraphStatus` always reports
+  // `yielded=False` on AMDGPU. Matches the equivalent override in `runtime/cuda/kernel_launcher.h`.
+  int get_graph_last_yield_cp_id_on_last_call() const override {
+    return graph_manager_.last_yield_cp_id_on_last_call();
+  }
 
  private:
   void launch_offloaded_tasks(LaunchContextBuilder &ctx,

@@ -46,10 +46,20 @@ struct CachedKernelArgs {
 };
 
 // Per-(launch_id) graph cache entry. Construction allocates the persistent device-side buffers that the cached graph
-// reads through; destruction frees them and the instantiated `hipGraphExec_t`.
+// reads through; destruction frees them and the instantiated `hipGraphExec_t`(s).
+//
+// Two layouts share one struct:
+//   - Plain (no `qd.checkpoint` in the source kernel): `graph_exec` holds the single instantiated graph; the
+//     `sub_*` fields below are empty. This is the path slice 4 leaves untouched.
+//   - Checkpoint (slice 4): `graph_exec` is `nullptr`; `sub_graph_execs[i]` holds the i-th batch (a contiguous
+//     run of offloaded tasks sharing the same `cp_id`), with `batch_cp_ids[i]` recording the cp_id (-1 for
+//     unconditional batches that run outside any `qd.checkpoint`). The launcher iterates batches in order and
+//     decides per batch whether to launch, mirroring the CPU slice 6 host-branch gating but with a HIP graph
+//     launch instead of a per-task kernel launch.
 struct CachedGraph {
   // hipGraphExec_t. The instantiated, launchable form of the captured HIP graph. Typed as void * since the driver is
-  // loaded dynamically.
+  // loaded dynamically. Populated only on the "plain" layout (see struct comment); `nullptr` on the checkpoint
+  // layout, where `sub_graph_execs` carries one exec per batch.
   void *graph_exec{nullptr};
   // Persistent device buffer that the host arg buffer is copied into before every graph launch. The graph kernel nodes
   // read from this address (baked in via the persistent `RuntimeContext`'s `arg_buffer` field below).
@@ -73,6 +83,15 @@ struct CachedGraph {
   std::size_t arg_buffer_size{0};
   std::size_t result_buffer_size{0};
   std::size_t num_nodes{0};
+
+  // Slice 4 checkpoint layout. Empty on the plain layout.
+  //
+  // sub_graph_execs[i]: hipGraphExec_t for the i-th contiguous batch of same-cp_id offloaded tasks (in source
+  //   declaration order). Released alongside `graph_exec` in the destructor.
+  // batch_cp_ids[i]: cp_id this batch carries, or -1 if the batch is outside every `qd.checkpoint` (always runs).
+  // Host-side reads `batch_cp_ids[i]` to decide whether to skip this sub-graph on the current launch.
+  std::vector<void *> sub_graph_execs;
+  std::vector<int32_t> batch_cp_ids;
 
   CachedGraph(std::size_t arg_buffer_size, std::size_t result_buffer_size, LlvmRuntimeExecutor *executor);
   ~CachedGraph();
@@ -112,9 +131,20 @@ class GraphManager {
   std::size_t total_builds() const {
     return total_builds_;
   }
+  // Slice 4: cp_id of the first checkpoint whose `yield_on=` flag was non-zero on the most recent launch, or `-1`
+  // if no yield was observed (or the launch was not a checkpoint kernel). Mirrors the CUDA GraphManager surface
+  // (`cuda::GraphManager::last_yield_cp_id_on_last_call`) so `Program::get_graph_last_yield_cp_id_on_last_call`
+  // can call straight through.
+  int last_yield_cp_id_on_last_call() const {
+    return last_yield_cp_id_on_last_call_;
+  }
 
  private:
   bool launch_cached_graph(CachedGraph &cached, LaunchContextBuilder &ctx);
+  // Slice 4: orchestrates the per-batch launch loop for checkpoint kernels. Mirrors the CPU launcher's
+  // `launch_offloaded_tasks` host-branch gating, but with HIP sub-graph launches and a D2H of the yield flag
+  // after each yielding checkpoint instead of single-task launches.
+  bool launch_cached_checkpoint_graph(CachedGraph &cached, LaunchContextBuilder &ctx);
   void resolve_ctx_ndarray_ptrs(LaunchContextBuilder &ctx,
                                 const std::vector<std::pair<int, Callable::Parameter>> &parameters,
                                 LlvmRuntimeExecutor *executor);
@@ -125,6 +155,13 @@ class GraphManager {
                         unsigned int block_dim,
                         unsigned int shared_mem,
                         CachedKernelArgs &kernel_args);
+  // Slice 4: builds one HIP graph + hipGraphExec_t over a contiguous run of offloaded tasks. Used during the
+  // sub-graph build path; returns the instantiated graph exec (graph object is destroyed before return).
+  void *build_subgraph_exec_for_tasks(const std::vector<OffloadedTask> &tasks,
+                                      std::size_t begin,
+                                      std::size_t end,
+                                      JITModule *amdgpu_module,
+                                      CachedKernelArgs &kernel_args);
 
   // Keyed by `launch_id`, which uniquely identifies a compiled kernel variant (each template specialization gets its
   // own launch_id).
@@ -132,6 +169,10 @@ class GraphManager {
   bool used_on_last_call_{false};
   std::size_t num_nodes_on_last_call_{0};
   std::size_t total_builds_{0};
+  // Slice 4: persistent across launches. Reset to `-1` at the start of every checkpoint-graph launch, then set by
+  // `launch_cached_checkpoint_graph` when a yield_on=` flag reads non-zero. Mirrors the CUDA GraphManager field
+  // of the same name.
+  int last_yield_cp_id_on_last_call_{-1};
 };
 
 }  // namespace amdgpu
