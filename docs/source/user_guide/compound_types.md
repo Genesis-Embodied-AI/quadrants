@@ -253,6 +253,8 @@ class Particle:
 particles = Particle.field(shape=(N,), layout=qd.Layout.AOS)
 ```
 
+For larger statically-indexed groups that might spill into local memory, and that you want to allow partial spilling for, see the [packed vs unpacked vectors](matrix_vector.md#storage-layout-packed-vs-unpacked-vectors) section of the matrix and vector page.
+
 Methods can be added to a `@qd.dataclass` and may be decorated with `@qd.func` so they can be called from kernels via `instance.method(...)` syntax (the call is inlined at compile time, like any other `@qd.func`).
 
 ```python
@@ -320,6 +322,6 @@ For `@qd.data_oriented` containers passed via `qd.Template`, reassigning an ndar
 
 - **`@qd.dataclass` cannot contain `qd.ndarray` or `qd.field` members.** See the [`@qd.dataclass`](#qddataclass-qdtypesstruct) section above for the full list of allowed member types. (The function-form factory `qd.types.struct(...)` has the same restrictions.)
 - **A typed-dataclass kernel-arg annotation cannot have a `@qd.data_oriented` member type** — errors clearly at compile time. Typed-dataclass kernel args are flattened from annotations, but `@qd.data_oriented` carries no per-member annotations, so its members can only be walked from the live instance, which only happens on the `qd.Template` path.
-- **Declare all ndarray members on a `@qd.data_oriented` class in `__init__`.** The template-mapper caches the set of ndarray-attribute paths reachable from the first instance walked, per class. Adding *new* ndarray attributes on later instances of the same class is safe — the per-instance weakref in the spec key disambiguates them, and the compile-time walker registers all reachable ndarrays. But:
-  - **Deleting an ndarray attribute** that was present on the first launch raises `AttributeError` on the next launch (the cached path still tries to `getattr` the missing attribute).
-  - **Reassigning a post-first-walk ndarray attribute** (one not present on the first instance walked, then added later and re-assigned) to one with a different `dtype` / `ndim` is *not* detected by the in-memory invalidation tracker. The stale compiled kernel is silently reused, leading to bit-reinterpretation of the new array's storage.
+- **Declare all ndarray members on a `@qd.data_oriented` class in `__init__`.** The template-mapper caches the set of ndarray-attribute paths reachable from each instance on its first kernel launch — *per instance*, not per class — so two instances of the same class can legitimately carry different ndarray attribute sets (e.g. an optional `*_adjoint_cache` member that's only allocated when `requires_grad=True`). But:
+  - **Deleting an ndarray attribute** that was present on an instance's first launch raises `AttributeError` on the next launch on that instance (the cached path still tries to `getattr` the missing attribute).
+  - **Adding a new ndarray attribute after first launch** on a given instance won't be tracked by the args-hash invalidator on that instance — reassigning the new attribute to a tensor of a different `dtype` / `ndim` after that point will silently reuse the originally compiled kernel.

@@ -1752,8 +1752,21 @@ class MatrixType(CompoundType):
 
 
 class VectorType(MatrixType):
-    def __init__(self, n, dtype):
+    def __init__(self, n, dtype, unpacked: bool = False):
         super().__init__(n, 1, 1, dtype)
+        # Per-thread storage-layout marker. When set, the type is only valid as a ``@qd.dataclass`` field annotation;
+        # ``__call__`` / ``field()`` / ``ndarray()`` refuse to instantiate, since the unpacked layout has no meaning
+        # outside of the @qd.dataclass field-expansion path. The flag itself is consumed by ``StructType.__init__``;
+        # this class is otherwise unaware of it.
+        self._is_unpacked = bool(unpacked)
+
+    def _reject_if_unpacked(self, what: str):
+        if self._is_unpacked:
+            raise QuadrantsSyntaxError(
+                f"cannot {what} a vector declared with unpacked=True; the unpacked layout is only honored on "
+                "``@qd.dataclass`` field annotations. Either drop ``unpacked=True`` or use the type in an annotation "
+                "like ``r: qd.types.vector(N, dtype, unpacked=True)`` on a class decorated with @qd.dataclass."
+            )
 
     def __call__(self, *args):
         """Return a vector matching the shape and dtype.
@@ -1777,6 +1790,7 @@ class VectorType(MatrixType):
                 >>> v = vec3(1)
 
         """
+        self._reject_if_unpacked("instantiate")
         if len(args) == 0:
             raise QuadrantsSyntaxError("Custom type instances need to be created with an initial value.")
         if len(args) == 1:
@@ -1824,14 +1838,17 @@ class VectorType(MatrixType):
         return make_matrix_with_shape(entries, [self.n], self.dtype)
 
     def field(self, **kwargs):
+        self._reject_if_unpacked("create a field of")
         return Vector.field(self.n, dtype=self.dtype, **kwargs)
 
     def ndarray(self, **kwargs):
+        self._reject_if_unpacked("create an ndarray of")
         return Vector.ndarray(self.n, dtype=self.dtype, **kwargs)
 
     def to_string(self):
         dtype_str = self.dtype.to_string() if self.dtype is not None else ""
-        return f"VectorType[{self.n}, {dtype_str}]"
+        suffix = ", unpacked=True" if self._is_unpacked else ""
+        return f"VectorType[{self.n}, {dtype_str}{suffix}]"
 
 
 class MatrixNdarray(Ndarray):

@@ -2882,9 +2882,9 @@ def test_dataclass_with_template_emits_deprecation_warning():
 @test_utils.test()
 def test_data_oriented_with_template_does_not_emit_deprecation_warning():
     """The canonical ``@qd.data_oriented`` + ``qd.Template`` path must NOT emit the deprecation warning. The
-    materialize-side check excludes ``@qd.data_oriented`` instances via ``is_data_oriented(val)`` because
-    doubly-decorated objects (``@qd.data_oriented`` over ``@dataclasses.dataclass``) are a legitimate pattern
-    routed through the data-oriented path."""
+    materialize-side check excludes ``@qd.data_oriented`` instances via ``is_data_oriented(val)`` because doubly-decorated
+    objects (``@qd.data_oriented`` over ``@dataclasses.dataclass``) are a legitimate pattern routed through the
+    data-oriented path."""
 
     @qd.data_oriented
     class Foo:

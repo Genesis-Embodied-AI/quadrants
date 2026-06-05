@@ -5,15 +5,14 @@ tensor types Quadrants exposes:
 
 * ``qd.ndarray`` — typed-dataclass annotation + ``qd.template()`` path; gradient via ``kernel.grad()``.
 * ``qd.field`` — ``qd.template()`` path; gradient via ``qd.ad.Tape``.
-* ``qd.tensor(backend=NDARRAY)`` — same path as ``qd.ndarray``; the dispatcher returns a wrapper
-  whose ndarray ``_impl`` is unwrapped by the dataclass-annotation infrastructure.
+* ``qd.tensor(backend=NDARRAY)`` — same path as ``qd.ndarray``; dispatcher returns a wrapper whose ndarray ``_impl``
+  is unwrapped by the dataclass-annotation infrastructure.
 * ``qd.tensor(backend=FIELD)`` — works when the dataclass member is annotated ``qd.Tensor`` (or ``qd.template()``).
   With ``object`` / no annotation the wrapper survives into kernel scope and host-side ``__getitem__`` asserts.
 * mixed — single dataclass holding both a ``qd.ndarray`` and a ``qd.field`` member.
 
-Pattern mirrors ``test_ad_ndarray.py`` (ndarray) and ``test_ad_basics.py`` (field). See
-``docs/source/user_guide/compound_types.md`` overview table — column "supports differentiation?" for
-``dataclasses.dataclass``.
+Pattern mirrors ``test_ad_ndarray.py`` (ndarray) and ``test_ad_basics.py`` (field). See the overview table in
+``docs/source/user_guide/compound_types.md`` — column "supports differentiation?" for ``dataclasses.dataclass``.
 """
 
 import dataclasses
@@ -222,8 +221,8 @@ def test_ad_dataclass_tensor_field_backend_tape():
 
 @test_utils.test(arch=archs_support_ndarray_ad, default_fp=qd.f64, require=qd.extension.adstack)
 def test_ad_dataclass_mixed_ndarray_and_tensor_ndarray_backend():
-    """Single dataclass holds one qd.ndarray member and one qd.tensor(NDARRAY) member; verify the
-    kernel can read/write both and that gradients flow through both."""
+    """Single dataclass holds one qd.ndarray member and one qd.tensor(NDARRAY) member; verify the kernel can read/write
+    both and that gradients flow through both."""
     N = 5
 
     @dataclasses.dataclass(frozen=True)
@@ -262,9 +261,9 @@ def test_ad_dataclass_mixed_ndarray_and_tensor_ndarray_backend():
 
 @test_utils.test(arch=archs_support_ndarray_ad, default_fp=qd.f64, require=qd.extension.adstack)
 def test_ad_dataclass_mixed_ndarray_and_field_in_same_class():
-    """Single dataclass holds both a qd.ndarray member and a qd.field member. The kernel reads
-    and writes both. Differentiation is checked through the ndarray path via ``kernel.grad()``
-    (the field is along for the ride; its grad allocation must coexist with ndarray grads)."""
+    """Single dataclass holds both a qd.ndarray member and a qd.field member. The kernel reads and writes both;
+    differentiation is checked through the ndarray path via ``kernel.grad()`` (the field is along for the ride; its
+    grad allocation must coexist with ndarray grads)."""
     N = 5
 
     @dataclasses.dataclass(frozen=True)

@@ -103,7 +103,21 @@ def expr_init(rhs):
     if isinstance(rhs, BufferView):
         return rhs
     if isinstance(rhs, Struct):
-        return Struct(rhs.to_dict(include_methods=True, include_ndim=True))
+        # Build the rewrap dict from ``__entries`` directly rather than via ``to_dict()``: ``to_dict()`` recursively
+        # flattens nested Structs to plain dicts, which then rebuild without their ``_qd_unpacked_groups`` tag. By
+        # keeping nested Struct instances intact, ``Struct.__init__`` calls ``expr_init`` on each entry, recursing here
+        # and preserving the tag on every nested level.
+        d = dict(rhs._Struct__entries)  # type: ignore[attr-defined]  # name-mangled access
+        if rhs._Struct__methods:  # type: ignore[attr-defined]
+            d["__struct_methods"] = rhs._Struct__methods  # type: ignore[attr-defined]
+        new_struct = Struct(d)
+        # Preserve unpacked-vector group metadata on this level (nested levels are handled by the recursion above).
+        # ``setattr`` (rather than attribute assignment) sidesteps pyright's ``reportAttributeAccessIssue``; ``Struct``
+        # doesn't statically declare this attribute -- it's a per-instance metadata tag.
+        groups = getattr(rhs, "_qd_unpacked_groups", None)
+        if groups is not None:
+            setattr(new_struct, "_qd_unpacked_groups", groups)
+        return new_struct
     if isinstance(rhs, list):
         return [expr_init(e) for e in rhs]
     if isinstance(rhs, tuple):
@@ -324,7 +338,15 @@ def subscript(ast_builder, value, *_indices, skip_reordered=False):
         if isinstance(value, StructField):
             entries = {k: subscript(ast_builder, v, *indices) for k, v in value._items}
             entries["__struct_methods"] = value.struct_methods
-            return _IntermediateStruct(entries)
+            struct = _IntermediateStruct(entries)
+            # Carry ``_qd_unpacked_groups`` from the originating ``StructType`` (attached to the ``StructField`` in
+            # ``StructType.field``) onto the per-index intermediate struct so the AST transformer recognises
+            # ``f[i].r[k]`` as an unpacked-vector group access. Nested StructFields contribute their own tags via the
+            # recursive ``subscript`` call above, so ``outer_field[i].inner.r[k]`` also works.
+            groups = getattr(value, "_qd_unpacked_groups", None)
+            if groups is not None:
+                setattr(struct, "_qd_unpacked_groups", groups)
+            return struct
         return Expr(ast_builder.expr_subscript(_var, indices_expr_group, dbg_info))
     if isinstance(value, AnyArray):
         assert indices_expr_group is not None
