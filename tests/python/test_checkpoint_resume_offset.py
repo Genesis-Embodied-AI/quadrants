@@ -12,9 +12,11 @@ The qipc test's nested-WHILE Scenario C is out of scope for now because Quadrant
 support nesting `qd.graph_do_while` (or putting a graph_do_while inside a `qd.checkpoint`); we
 revisit this once those primitives compose.
 
-All tests gate on the CUDA-native IF path (SM 9.0+) since slice 1d's yield mechanism is the
-only place these semantics are enforced today. On other backends every checkpoint body runs
-unconditionally, which would make the counter assertions fail spuriously.
+All tests gate on backends that implement the host-side yield/resume contract: CUDA
+native (slice 1d, IF + yield-check device kernels for SM 9.0+) and CPU/x64 (slice 6,
+host-branch gating + yield emulation in the CPU `KernelLauncher`). On other backends every
+checkpoint body runs unconditionally, which would make the counter assertions fail
+spuriously; those are gated out by `_supports_checkpoint_yield_resume()` below.
 
 Important: every checkpoint body must contain at least one top-level for-loop to materialise
 as a distinct offloaded task. A bare scalar assignment like `x[0] = x[0] + 1` collapses with
@@ -32,8 +34,15 @@ from quadrants.lang import impl
 from tests import test_utils
 
 
-def _is_checkpoint_if_path_native():
-    return impl.current_cfg().arch == qd.cuda and qd.lang.impl.get_cuda_compute_capability() >= 90
+def _supports_checkpoint_yield_resume():
+    # CUDA-native IF + yield-check device kernels (slice 1d): SM 9.0+ only. On older CUDA the
+    # conditional-node primitive isn't available so the gating falls back to "run everything".
+    if impl.current_cfg().arch == qd.cuda:
+        return qd.lang.impl.get_cuda_compute_capability() >= 90
+    # CPU/x64 host-branch gating + yield emulation in `KernelLauncher` (slice 6).
+    if impl.current_cfg().arch == qd.x64:
+        return True
+    return False
 
 
 N = 8
@@ -62,8 +71,8 @@ def test_resume_offset_sequential_this():
     Expected: counter A hit twice (yield launch + resume launch), B and C hit once each
     (resume launch only). Host loop sees one yield.
     """
-    if not _is_checkpoint_if_path_native():
-        pytest.skip("resume-offset semantics only validated on the CUDA-native IF path")
+    if not _supports_checkpoint_yield_resume():
+        pytest.skip("resume-offset semantics only validated on backends with checkpoint yield/resume support (CUDA SM 9.0+ or CPU)")
 
     @qd.kernel(graph=True)
     def step(
@@ -105,8 +114,8 @@ def test_resume_offset_sequential_next():
     Expected: A hit once (yield launch), B hit once (yield launch), C hit once (resume
     launch). Host loop sees one yield.
     """
-    if not _is_checkpoint_if_path_native():
-        pytest.skip("resume-offset semantics only validated on the CUDA-native IF path")
+    if not _supports_checkpoint_yield_resume():
+        pytest.skip("resume-offset semantics only validated on backends with checkpoint yield/resume support (CUDA SM 9.0+ or CPU)")
 
     @qd.kernel(graph=True)
     def step(
@@ -151,8 +160,8 @@ def test_resume_offset_loop_this():
     Expected: A hit 3x (yield iter + 2 full iters in resume), B hit 4x (yield iter + 3 full),
     C hit 3x (3 full iters in resume). Host loop sees one yield.
     """
-    if not _is_checkpoint_if_path_native():
-        pytest.skip("resume-offset semantics only validated on the CUDA-native IF path")
+    if not _supports_checkpoint_yield_resume():
+        pytest.skip("resume-offset semantics only validated on backends with checkpoint yield/resume support (CUDA SM 9.0+ or CPU)")
 
     # Note: every "logical statement" inside a checkpoint body must live in its own top-level
     # `for` loop so the offloader emits it as a range_for task tagged with the surrounding
@@ -214,8 +223,8 @@ def test_resume_offset_loop_next():
     Expected: A hit 1+0+1+1 = 3, B hit 3, C hit 3. counter goes 3 -> 2 (iter 1) -> 2 (resume
     iter 1, skipped) -> 1 (iter 2) -> 0 (iter 3). Host loop sees one yield.
     """
-    if not _is_checkpoint_if_path_native():
-        pytest.skip("resume-offset semantics only validated on the CUDA-native IF path")
+    if not _supports_checkpoint_yield_resume():
+        pytest.skip("resume-offset semantics only validated on backends with checkpoint yield/resume support (CUDA SM 9.0+ or CPU)")
 
     # See `_loop_this` comment about why the counter decrement uses `for _ in range(1):`.
     @qd.kernel(graph=True)

@@ -42,6 +42,22 @@ def _is_checkpoint_if_path_native():
     return _on_cuda() and qd.lang.impl.get_cuda_compute_capability() >= 90
 
 
+def _supports_checkpoint_yield_resume():
+    """Backends that implement the checkpoint yield/resume host contract.
+
+    Wider than `_is_checkpoint_if_path_native()`: also includes the CPU/x64 path, where the
+    `KernelLauncher` emulates `resume_point` / `yield_signal` in host-side gating (slice 6).
+    Use this predicate for tests of the behavioural yield/resume + `kernel.resume(...)` API;
+    use `_is_checkpoint_if_path_native()` only for graph-introspection counters that exist
+    on CUDA alone.
+    """
+    if _is_checkpoint_if_path_native():
+        return True
+    if impl.current_cfg().arch == qd.x64:
+        return True
+    return False
+
+
 def _num_checkpoints_on_last_call():
     return impl.get_runtime().prog.get_graph_num_checkpoints_on_last_call()
 
@@ -368,8 +384,8 @@ def test_checkpoint_yields_when_flag_is_set():
     skipped. The third checkpoint must therefore NOT run on the native path. (On non-native
     backends every body runs unconditionally, so we skip the resume-skip assertion there.)
     """
-    if not _is_checkpoint_if_path_native():
-        pytest.skip("yield semantics only enforced on the CUDA-native IF path (slice 1d)")
+    if not _supports_checkpoint_yield_resume():
+        pytest.skip("yield semantics require the CUDA-native IF path (slice 1d) or CPU host-branch gating (slice 6)")
     N = 8
 
     @qd.kernel(graph=True)
@@ -409,8 +425,8 @@ def test_checkpoint_yield_first_wins_subsequent_skipped():
     skipped. This matches the slice 1d design (`perso_hugh/doc/qipc/reentrant.md` section 5.2):
     first yielder wins, everything past the yield point is shipped to the host as-not-run.
     """
-    if not _is_checkpoint_if_path_native():
-        pytest.skip("yield ordering only enforced on the CUDA-native IF path (slice 1d)")
+    if not _supports_checkpoint_yield_resume():
+        pytest.skip("yield ordering requires the CUDA-native IF path (slice 1d) or CPU host-branch gating (slice 6)")
     N = 4
 
     @qd.kernel(graph=True)
@@ -453,8 +469,8 @@ def test_checkpoint_yield_resets_between_launches():
     launch so the second launch doesn't immediately yield again. Same cached graph for both
     launches.
     """
-    if not _is_checkpoint_if_path_native():
-        pytest.skip("yield reset semantics only meaningful on the CUDA-native IF path (slice 1d)")
+    if not _supports_checkpoint_yield_resume():
+        pytest.skip("yield reset semantics require the CUDA-native IF path (slice 1d) or CPU host-branch gating (slice 6)")
     N = 4
 
     @qd.kernel(graph=True)
@@ -488,8 +504,8 @@ def test_checkpoint_yield_exits_graph_do_while_early():
     `resume_point == INT_MAX`, skip every checkpoint, never decrement the counter, and spin
     forever. The cond-with-yield variant checks `yield_signal != -1` and exits the WHILE.
     """
-    if not _is_checkpoint_if_path_native():
-        pytest.skip("WHILE early-exit only enforced on the CUDA-native IF path (slice 1d)")
+    if not _supports_checkpoint_yield_resume():
+        pytest.skip("WHILE early-exit requires the CUDA-native IF path (slice 1d) or CPU host-branch gating (slice 6)")
     N = 4
 
     @qd.kernel(graph=True)
@@ -552,8 +568,8 @@ def test_checkpoint_returns_graph_status():
 @test_utils.test()
 def test_checkpoint_graph_status_reports_yield():
     """Slice 2: a yielding launch returns `GraphStatus(yielded=True, checkpoint=cp_id)`."""
-    if not _is_checkpoint_if_path_native():
-        pytest.skip("GraphStatus yield reporting requires the CUDA-native IF path (slice 1d)")
+    if not _supports_checkpoint_yield_resume():
+        pytest.skip("GraphStatus yield reporting requires the CUDA-native IF path (slice 1d) or CPU host-branch gating (slice 6)")
     N = 4
 
     @qd.kernel(graph=True)
@@ -584,8 +600,8 @@ def test_checkpoint_resume_runs_only_from_checkpoint():
     should skip cp 0 and run cp 1 + cp 2. With no `yield_on=` flags fired, the resume call
     returns `GraphStatus(yielded=False, checkpoint=None)`.
     """
-    if not _is_checkpoint_if_path_native():
-        pytest.skip("from_checkpoint= requires the CUDA-native IF path (slice 1d)")
+    if not _supports_checkpoint_yield_resume():
+        pytest.skip("from_checkpoint= requires the CUDA-native IF path (slice 1d) or CPU host-branch gating (slice 6)")
     N = 4
 
     @qd.kernel(graph=True)
@@ -625,8 +641,8 @@ def test_checkpoint_canonical_yield_resume_loop():
     Kernel runs three checkpoints; cp 1 always yields once. The host loop catches the yield,
     resumes from cp 1, and the second launch completes cleanly.
     """
-    if not _is_checkpoint_if_path_native():
-        pytest.skip("yield/resume loop requires the CUDA-native IF path (slice 1d)")
+    if not _supports_checkpoint_yield_resume():
+        pytest.skip("yield/resume loop requires the CUDA-native IF path (slice 1d) or CPU host-branch gating (slice 6)")
     N = 4
 
     @qd.kernel(graph=True)

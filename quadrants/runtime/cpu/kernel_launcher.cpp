@@ -229,9 +229,25 @@ void KernelLauncher::launch_llvm_kernel(Handle handle, LaunchContextBuilder &ctx
       ctx.checkpoint_yield_on_dev_ptrs[cp] = data_ptr_it->second;
     }
   }
-  // Reset the cross-launch yield bookkeeping. `launch_offloaded_tasks` may set this; the next
-  // `launch_llvm_kernel` call (or `kernel.resume(...)`) starts clean here.
-  last_yield_cp_id_on_last_call_ = -1;
+  // Reset the cross-launch yield bookkeeping ONLY when this launch belongs to a kernel that
+  // can yield. Mirrors the CUDA path, where `GraphManager::launch_cached_graph` is the only
+  // place that touches `last_yield_cp_id_on_last_call_`; non-graph aux launches (e.g. the
+  // implicit `to_numpy()` LLVM kernel triggered by user code between a yielding launch and
+  // the host-side `GraphStatus.yielded` check) must not clobber the value.
+  //
+  // The "kernel can yield" predicate is "at least one cp has a resolved `yield_on=` arg id".
+  // Kernels with no checkpoints, or with checkpoints that all opted out of `yield_on=`, leave
+  // the previous value alone.
+  bool kernel_can_yield = false;
+  for (int arg_id : ctx.checkpoint_yield_on_arg_ids) {
+    if (arg_id >= 0) {
+      kernel_can_yield = true;
+      break;
+    }
+  }
+  if (kernel_can_yield) {
+    last_yield_cp_id_on_last_call_ = -1;
+  }
   if (ctx.graph_do_while_arg_id >= 0) {
     QD_ASSERT(ctx.graph_do_while_flag_dev_ptr);
     launch_offloaded_tasks_with_do_while(ctx, launcher_ctx);
