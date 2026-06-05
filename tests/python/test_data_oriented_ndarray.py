@@ -507,8 +507,8 @@ def test_data_oriented_ndarray_pure():
 
 
 # ---------------------------------------------------------------------------
-# 11. Counter-test: confirm a dataclass-of-NDArray works (sanity check that the existing supported route still
-# works; if this fails, the test environment itself is broken, not the data_oriented path).
+# 11. Counter-test: confirm a dataclass-of-NDArray works (sanity check that the existing supported route still works;
+# if this fails, the test environment itself is broken, not the data_oriented path).
 # ---------------------------------------------------------------------------
 
 
@@ -533,8 +533,8 @@ def test_dataclass_ndarray_sanity():
 
 
 # ---------------------------------------------------------------------------
-# 12. data_oriented holding a (frozen) dataclass that holds an ndarray. Exercises the ``else`` branch of
-# ``_walk_obj`` recursing through a dataclass child — added by the Bug 1 fix.
+# 12. data_oriented holding a (frozen) dataclass that holds an ndarray. Exercises the ``else`` branch of ``_walk_obj``
+# recursing through a dataclass child — added by the Bug 1 fix.
 # ---------------------------------------------------------------------------
 
 
@@ -718,8 +718,8 @@ def test_frozen_outer_mutable_inner_ndarray_reassign():
 
 
 # ---------------------------------------------------------------------------
-# 16. Same data_oriented instance, two kernels sharing it. Verifies the launch-info per-kernel bookkeeping is
-# independent (each kernel's compile sets up its own pre-declared ndarray args).
+# 16. Same data_oriented instance, two kernels sharing it. Verifies the launch-info per-kernel bookkeeping is independent
+# (each kernel's compile sets up its own pre-declared ndarray args).
 # ---------------------------------------------------------------------------
 
 
@@ -954,3 +954,39 @@ def test_data_oriented_ndarray_wrapper():
     np.testing.assert_array_equal(a.to_numpy(), np.arange(1, N + 1))
 
     run(state)
+
+
+# ---------------------------------------------------------------------------
+# 24. Cycle-detection regression: a ``@qd.data_oriented`` container with an attribute-graph back-edge
+# (``sim.solver.sim is sim``) must not blow the Python stack when walked by either the launch-time hotpath
+# ``_build_struct_nd_paths`` or the compile-time ``function_def_transformer._walk_obj``. Pre-fix this recursed
+# indefinitely; both walkers now carry a ``seen`` set keyed by ``id(obj)``.
+# ---------------------------------------------------------------------------
+
+
+@test_utils.test(arch=qd.cpu)
+def test_data_oriented_attribute_cycle_does_not_recurse_infinitely():
+    N = 4
+
+    @qd.data_oriented
+    class Solver:
+        def __init__(self, sim):
+            self.sim = sim
+            self.a = qd.ndarray(qd.i32, shape=(N,))
+
+    @qd.data_oriented
+    class Sim:
+        def __init__(self):
+            self.solver = Solver(self)
+
+    sim = Sim()
+    assert sim.solver.sim is sim
+
+    @qd.kernel
+    def run(s: qd.Template):
+        for i in range(N):
+            s.solver.a[i] = i + 7
+
+    run(sim)
+    np.testing.assert_array_equal(sim.solver.a.to_numpy(), np.arange(N) + 7)
+    run(sim)

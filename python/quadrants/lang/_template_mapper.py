@@ -20,9 +20,9 @@ from ._template_mapper_hotpath import (
 # (when the per-call walk is a no-op — covers the common case of typed-dataclass args, non-data_oriented composite
 # args, primitives, and data_oriented classes with no ndarray members). One dict lookup per template-slot arg per
 # call, ~30 ns, replacing the previous unconditional ``is_data_oriented(arg)`` + ``type(arg).__dict__.get`` chain
-# that cost ~15% FPS on small-step CPU benches (anymal_zero CPU bs=0).
-_arg_nd_paths_or_none: dict[type, "list[tuple] | None"] = {}
-_UNCLASSIFIED = object()
+# that cost ~15% FPS on small-step CPU benches (anymal_zero CPU bs=0). Missing-key (``KeyError``) signals first
+# sighting and triggers ``_classify_for_args_hash``; cached ``None`` short-circuits the walk for known-no-op types.
+_arg_nd_paths_or_none: "dict[type, list[tuple] | None]" = {}
 
 
 def _classify_for_args_hash(arg: Any) -> "list[tuple] | None":
@@ -116,8 +116,9 @@ class TemplateMapper:
         for i in self.template_slot_locations:
             arg = args[i]
             cls = type(arg)
-            paths = _arg_nd_paths_or_none.get(cls, _UNCLASSIFIED)
-            if paths is _UNCLASSIFIED:
+            try:
+                paths = _arg_nd_paths_or_none[cls]
+            except KeyError:
                 paths = _classify_for_args_hash(arg)
                 _arg_nd_paths_or_none[cls] = paths
             if paths is None:

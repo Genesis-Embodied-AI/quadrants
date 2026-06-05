@@ -1,7 +1,6 @@
 """Spot tests for the nesting compatibility matrix in compound_types.md.
 
-These are not part of the main fix's test surface; they exist to empirically verify the table claims
-in the user-facing doc.
+These exist to empirically verify the table claims in the user-facing doc; not part of the main fix's test surface.
 """
 
 import dataclasses
