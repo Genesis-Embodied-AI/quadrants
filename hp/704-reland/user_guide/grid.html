@@ -1,0 +1,693 @@
+
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="../" >
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Grid primitives &#8212; Quadrants 1.0.1 documentation</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "";
+  </script>
+  <!--
+    this give us a css class that will be invisible only if js is disabled
+  -->
+  <noscript>
+    <style>
+      .pst-js-only { display: none !important; }
+
+    </style>
+  </noscript>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="../_static/styles/theme.css?digest=0790524f97105ba85085" rel="stylesheet" />
+<link href="../_static/styles/pydata-sphinx-theme.css?digest=0790524f97105ba85085" rel="stylesheet" />
+
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=8f2a1f02" />
+    <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../_static/togglebutton.css?v=9c3e77be" />
+    <link rel="stylesheet" type="text/css" href="../_static/graphviz.css?v=4ae1632d" />
+    <link rel="stylesheet" type="text/css" href="../_static/sphinx-design.min.css?v=95c83b7e" />
+    <link rel="stylesheet" type="text/css" href="../_static/css/custom.css" />
+  
+  <!-- So that users can add custom icons -->
+  <script defer src="../_static/scripts/fontawesome.js?digest=0790524f97105ba85085"></script>
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=0790524f97105ba85085" />
+<link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=0790524f97105ba85085" />
+
+    <script src="../_static/documentation_options.js?v=292eb321"></script>
+    <script src="../_static/doctools.js?v=9bcbadda"></script>
+    <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../_static/copybutton.js?v=f281be69"></script>
+    <script>let toggleHintShow = 'Click to show';</script>
+    <script>let toggleHintHide = 'Click to hide';</script>
+    <script>let toggleOpenOnPrint = 'true';</script>
+    <script src="../_static/togglebutton.js?v=b8b12719"></script>
+    <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
+    <script src="../_static/design-tabs.js?v=f930bc37"></script>
+    <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'user_guide/grid';</script>
+    <script>DOCUMENTATION_OPTIONS.search_as_you_type = false;</script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Math" href="math.html" />
+    <link rel="prev" title="Block primitives" href="block.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="docsearch:language" content="en"/>
+  <meta name="docsearch:version" content="1.0.1" />
+  
+    
+    <script src="../_static/searchtools.js"></script>
+    <script src="../_static/language_data.js"></script>
+    <script src="../searchindex.js"></script>
+  
+  </head>
+  <body data-default-mode="">
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+  
+  
+  
+  
+  <dialog id="pst-search-dialog">
+    
+<form class="bd-search d-flex align-items-center"
+      action="../search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         placeholder="Search the docs ..."
+         aria-label="Search the docs ..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form>
+  </dialog>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header id="pst-header" class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+<div class="bd-header__inner bd-page-width">
+  <button class="pst-navbar-icon sidebar-toggle primary-toggle" aria-label="Site navigation">
+    <span class="fa-solid fa-bars"></span>
+  </button>
+  
+  
+  <div class="col-lg-3 navbar-header-items__start">
+    
+      <div class="navbar-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="../index.html">
+  
+  
+  
+  
+  
+  
+    <p class="title logo__title">Quadrants 1.0.1 documentation</p>
+  
+</a></div>
+    
+  </div>
+  
+  <div class="col-lg-9 navbar-header-items">
+    
+    <div class="me-auto navbar-header-items__center">
+      
+        <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item current active">
+  <a class="nav-link nav-internal" href="index.html">
+    User guide
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../autoapi/index.html">
+    API Reference
+  </a>
+</li>
+
+  </ul>
+</nav></div>
+      
+    </div>
+    
+    
+    <div class="navbar-header-items__end">
+      
+        <div class="navbar-item navbar-persistent--container">
+          
+
+<button class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+        </div>
+      
+      
+        <div class="navbar-item">
+
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg fa-fw" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg fa-fw" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg fa-fw" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg fa-fw me-1"></i>System Settings</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg fa-fw me-1"></i>Light</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg fa-fw me-1"></i>Dark</button></li>
+  </ul>
+</div></div>
+      
+    </div>
+    
+  </div>
+  
+  
+    <div class="navbar-persistent--mobile">
+
+<button class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+    </div>
+  
+
+  
+    <button class="pst-navbar-icon sidebar-toggle secondary-toggle" aria-label="On this page">
+      <span class="fa-solid fa-outdent"></span>
+    </button>
+  
+</div>
+
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+      <dialog id="pst-primary-sidebar-modal"></dialog>
+      <div id="pst-primary-sidebar" class="bd-sidebar-primary bd-sidebar">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+      <div class="sidebar-header-items__center">
+        
+          
+          
+            <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item current active">
+  <a class="nav-link nav-internal" href="index.html">
+    User guide
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../autoapi/index.html">
+    API Reference
+  </a>
+</li>
+
+  </ul>
+</nav></div>
+          
+        
+      </div>
+    
+    
+    
+      <div class="sidebar-header-items__end">
+        
+          <div class="navbar-item">
+
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg fa-fw" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg fa-fw" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg fa-fw" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg fa-fw me-1"></i>System Settings</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg fa-fw me-1"></i>Light</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg fa-fw me-1"></i>Dark</button></li>
+  </ul>
+</div></div>
+        
+      </div>
+    
+  </div>
+  
+    <div class="sidebar-primary-items__start sidebar-primary__section">
+        <div class="sidebar-primary-item pst-sidebar-collapse"><button id="pst-collapse-sidebar-button" aria-expanded="true" aria-controls="pst-primary-sidebar"><svg class="pst-icon svg-inline--fa" role="img" aria-hidden="true" focusable="false" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
+    <path fill="currentColor" d="M3 15.5C2.36232 15.5 1.74874 15.2564 1.28478 14.8189C0.820828 14.3815 0.541576 13.7832 0.504167 13.1467L0.5 13L0.5 3C0.499965 2.36232 0.743605 1.74874 1.18107 1.28478C1.61854 0.820828 2.21676 0.541576 2.85333 0.504167L3 0.5L13 0.5C13.6377 0.499965 14.2513 0.743605 14.7152 1.18107C15.1792 1.61854 15.4584 2.21676 15.4958 2.85333L15.5 3L15.5 13C15.5 13.6377 15.2564 14.2513 14.8189 14.7152C14.3815 15.1792 13.7832 15.4584 13.1467 15.4958L13 15.5L3 15.5ZM3 13.8333L10.5 13.8333L10.5 2.16667L3 2.16667C2.79589 2.16669 2.59889 2.24163 2.44636 2.37726C2.29383 2.5129 2.19638 2.69979 2.1725 2.9025L2.16667 3L2.16667 13C2.16669 13.2041 2.24163 13.4011 2.37726 13.5536C2.5129 13.7062 2.69979 13.8036 2.9025 13.8275L3 13.8333ZM6.65583 10.325L6.5775 10.2558L4.91083 8.58917C4.76735 8.44567 4.68116 8.25476 4.66843 8.05223C4.65569 7.84971 4.71729 7.6495 4.84167 7.48917L4.91083 7.41083L6.5775 5.74417C6.72747 5.59471 6.9287 5.50794 7.14032 5.50148C7.35194 5.49502 7.55809 5.56935 7.7169 5.70937C7.8757 5.8494 7.97525 6.04463 7.99533 6.25539C8.01541 6.46616 7.95451 6.67667 7.825 6.84417L7.75583 6.9225L6.67917 8L7.75583 9.0775C7.89931 9.22099 7.98551 9.41191 7.99824 9.61443C8.01097 9.81695 7.94938 10.0172 7.825 10.1775L7.75583 10.2558C7.61234 10.3993 7.42142 10.4855 7.2189 10.4982C7.01638 10.511 6.81617 10.4494 6.65583 10.325Z"/>
+  </svg>
+  <span class="pst-collapse-sidebar-label">Collapse Sidebar</span>
+  <span class="pst-expand-sidebar-label">Expand Sidebar</span>
+</button></div>
+        <div class="sidebar-primary-item">
+
+<nav class="bd-docs-nav bd-links"
+     aria-label="Section Navigation">
+  <p class="bd-links__title" role="heading" aria-level="1">Section Navigation</p>
+  <div class="bd-toc-item navbar-nav"><p aria-level="2" class="caption" role="heading"><span class="caption-text">Getting started</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="getting_started.html">Getting started</a></li>
+<li class="toctree-l1"><a class="reference internal" href="supported_systems.html">Supported systems</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Core concepts</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="tensor_types.html">Tensor types</a></li>
+<li class="toctree-l1"><a class="reference internal" href="scalar_tensors.html">Scalar tensors</a></li>
+<li class="toctree-l1"><a class="reference internal" href="matrix_vector.html">Matrix and Vector</a></li>
+
+<li class="toctree-l1"><a class="reference internal" href="matrix_vector_per_thread.html">Per-thread matrix and vector operations</a></li>
+<li class="toctree-l1"><a class="reference internal" href="linalg_per_thread.html">Per-thread linear algebra</a></li>
+<li class="toctree-l1"><a class="reference internal" href="tensor.html">Tensors</a></li>
+<li class="toctree-l1"><a class="reference internal" href="compound_types.html">Compound types</a></li>
+<li class="toctree-l1"><a class="reference internal" href="buffer_view.html">BufferView</a></li>
+<li class="toctree-l1"><a class="reference internal" href="static.html">qd.static</a></li>
+<li class="toctree-l1"><a class="reference internal" href="sub_functions.html">Sub-functions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="parallelization.html">Parallelization</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Integration</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="interop.html">Numpy and Torch interop</a></li>
+<li class="toctree-l1"><a class="reference internal" href="metal_shared_queue.html">Shared Metal command queue (PyTorch MPS)</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Autodiff</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="autodiff.html">Automatic differentiation</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">SIMT primitives</span></p>
+<ul class="current nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="atomics.html">Atomics</a></li>
+<li class="toctree-l1"><a class="reference internal" href="block.html">Block primitives</a></li>
+<li class="toctree-l1 current active"><a class="current reference internal" href="#">Grid primitives</a></li>
+<li class="toctree-l1"><a class="reference internal" href="math.html">Math</a></li>
+<li class="toctree-l1"><a class="reference internal" href="subgroup.html">Subgroup primitives</a></li>
+<li class="toctree-l1"><a class="reference internal" href="tile.html">Register-resident tiles: <code class="docutils literal notranslate"><span class="pre">Tile16x16</span></code> and <code class="docutils literal notranslate"><span class="pre">Tile32x32</span></code></a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Algorithms</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="algorithms.html">Algorithms</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Performance</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="fastcache.html">Fastcache</a></li>
+<li class="toctree-l1"><a class="reference internal" href="graph.html">Graph</a></li>
+<li class="toctree-l1"><a class="reference internal" href="streams.html">Streams</a></li>
+<li class="toctree-l1"><a class="reference internal" href="perf_dispatch.html">Performance Dispatch</a></li>
+<li class="toctree-l1"><a class="reference internal" href="init_options.html">qd.init options</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Testing</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="unit_testing.html">Unit testing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="kernel_coverage.html">Kernel code coverage</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Reference</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="unsupported_python.html">Python features in kernel scope</a></li>
+<li class="toctree-l1"><a class="reference internal" href="python_backend.html">Python backend</a></li>
+<li class="toctree-l1"><a class="reference internal" href="debug.html">Debug mode</a></li>
+<li class="toctree-l1"><a class="reference internal" href="quirks.html">Quirks</a></li>
+<li class="toctree-l1"><a class="reference internal" href="troubleshooting.html">Troubleshooting</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Contributing</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="contributing.html">Contributing to quadrants</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Internal</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="building_cudagraph_conditional_fatbin.html">Building the CUDA graph conditional fatbin</a></li>
+</ul>
+</div>
+</nav></div>
+    </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+      <div class="sidebar-primary-item">
+<div id="ethical-ad-placement"
+      class="flat"
+      data-ea-publisher="readthedocs"
+      data-ea-type="readthedocs-sidebar"
+      data-ea-manual="true">
+</div></div>
+  </div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item">
+
+<nav aria-label="Breadcrumb" class="d-print-none">
+  <ul class="bd-breadcrumbs">
+    
+    <li class="breadcrumb-item breadcrumb-home">
+      <a href="../index.html" class="nav-link" aria-label="Home">
+        <i class="fa-solid fa-home"></i>
+      </a>
+    </li>
+    
+    <li class="breadcrumb-item"><a href="index.html" class="nav-link">User guide</a></li>
+    
+    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">Grid primitives</span></li>
+  </ul>
+</nav>
+</div>
+      
+    </div>
+  
+  
+</div>
+</div>
+              
+              
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <section class="tex2jax_ignore mathjax_ignore" id="grid-primitives">
+<h1>Grid primitives<a class="headerlink" href="#grid-primitives" title="Link to this heading">#</a></h1>
+<p>Grid-level primitives operate across <strong>all blocks of a single kernel launch</strong> — i.e. the entire device for the duration of one kernel. They sit one tier above block-scope primitives and one tier below “finish the kernel and launch a new one” (the only fully cross-block thread synchronization Quadrants offers).</p>
+<p>Grid ops live under <code class="docutils literal notranslate"><span class="pre">qd.simt.grid</span></code>. The namespace currently contains a single op, the device-scope memory fence:</p>
+<section id="what-s-available">
+<h2>What’s available<a class="headerlink" href="#what-s-available" title="Link to this heading">#</a></h2>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>Op</p></th>
+<th class="head"><p>CUDA</p></th>
+<th class="head"><p>AMDGPU</p></th>
+<th class="head"><p>Vulkan</p></th>
+<th class="head"><p>Metal</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">qd.simt.grid.mem_fence()</span></code></p></td>
+<td><p>yes</p></td>
+<td><p>yes</p></td>
+<td><p>yes</p></td>
+<td><p>yes*</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>* On Metal, <code class="docutils literal notranslate"><span class="pre">grid.mem_fence()</span></code> lowers (via MoltenVK / SPIRV-Cross → MSL) to <code class="docutils literal notranslate"><span class="pre">atomic_thread_fence(metal::memory_scope_device)</span></code>. Per the Metal Shading Language specification, that builtin only synchronizes <em>atomic</em> and <em>relaxed-atomic</em> memory accesses across the device, not plain (non-atomic) loads / stores. So a Metal-portable cross-workgroup producer-consumer pattern needs the produced value itself to be published through an atomic op (e.g. <code class="docutils literal notranslate"><span class="pre">qd.atomic_or(a[i],</span> <span class="pre">1)</span></code>); CUDA, AMDGPU, and native Vulkan (Linux / Windows) order non-atomic stores around <code class="docutils literal notranslate"><span class="pre">grid.mem_fence()</span></code> strictly. The same caveat applies to <strong>Vulkan on macOS</strong>, since on macOS Vulkan is really MoltenVK lowering SPIR-V to MSL — treat <code class="docutils literal notranslate"><span class="pre">qd.vulkan</span></code> on Darwin the same as <code class="docutils literal notranslate"><span class="pre">qd.metal</span></code> for <code class="docutils literal notranslate"><span class="pre">grid.mem_fence()</span></code> purposes. Empirically validate any other pattern, or split into two kernel launches.</p>
+<p>Per-backend lowering:</p>
+<ul class="simple">
+<li><p><strong>CUDA</strong>: <code class="docutils literal notranslate"><span class="pre">__threadfence()</span></code> (NVVM intrinsic <code class="docutils literal notranslate"><span class="pre">nvvm_membar_gl</span></code>).</p></li>
+<li><p><strong>AMDGPU</strong>: an LLVM IR <code class="docutils literal notranslate"><span class="pre">fence</span> <span class="pre">syncscope(&quot;agent&quot;)</span> <span class="pre">acq_rel</span></code> synthesized in <code class="docutils literal notranslate"><span class="pre">llvm_context.cpp::patch_fence</span></code> after the bitcode is retargeted to AMDGCN. (We can’t use <code class="docutils literal notranslate"><span class="pre">__builtin_amdgcn_fence</span></code> directly because the runtime stubs are compiled host-side.)</p></li>
+<li><p><strong>Vulkan</strong>: SPIR-V <code class="docutils literal notranslate"><span class="pre">OpMemoryBarrier(ScopeDevice,</span> <span class="pre">AcquireRelease</span> <span class="pre">|</span> <span class="pre">UniformMemory)</span></code> emitted by <code class="docutils literal notranslate"><span class="pre">spirv_codegen.cpp</span></code> for the <code class="docutils literal notranslate"><span class="pre">gridMemoryBarrier</span></code> internal op.</p></li>
+<li><p><strong>Metal</strong>: same SPIR-V op as Vulkan; MoltenVK / SPIRV-Cross translates it to MSL <code class="docutils literal notranslate"><span class="pre">atomic_thread_fence(memory_scope_device)</span></code>. Available since MSL 2.0 (macOS 10.13+ / iOS 11+).</p></li>
+</ul>
+<section id="naming-and-deprecated-alias">
+<h3>Naming and deprecated alias<a class="headerlink" href="#naming-and-deprecated-alias" title="Link to this heading">#</a></h3>
+<p>The op was previously named <code class="docutils literal notranslate"><span class="pre">qd.simt.grid.memfence()</span></code> (no underscore). It is still callable under that name as a deprecated alias that emits <code class="docutils literal notranslate"><span class="pre">DeprecationWarning</span></code> on first use; new code should use <code class="docutils literal notranslate"><span class="pre">qd.simt.grid.mem_fence()</span></code>. The alias will be removed in a future release.</p>
+</section>
+</section>
+<section id="barrier-vs-fence-at-grid-scope">
+<h2>Barrier vs fence at grid scope<a class="headerlink" href="#barrier-vs-fence-at-grid-scope" title="Link to this heading">#</a></h2>
+<p>There is no <code class="docutils literal notranslate"><span class="pre">grid.sync()</span></code> — Quadrants does not expose a thread-converging barrier across blocks within a single kernel launch. The reasons are practical: CUDA cooperative groups need launch-time opt-in, AMDGPU and SPIR-V either lack a comparable primitive or expose it only under non-portable extensions, and the latency of an in-kernel grid barrier is comparable to a kernel relaunch on most hardware.</p>
+<p>What Quadrants does provide at grid scope is a pure <strong>memory fence</strong>:</p>
+<ul class="simple">
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">qd.simt.grid.mem_fence()</span></code></strong> orders memory operations issued by the calling thread so that prior writes are visible to other threads <strong>anywhere in the grid</strong> (across blocks) before any subsequent read in the calling thread can be reordered ahead of the fence. It does <strong>not</strong> synchronize threads.</p></li>
+<li><p>For full thread synchronization across the grid, finish the current kernel and launch a new one — the implicit kernel-end barrier is the canonical cross-block synchronization in Quadrants.</p></li>
+</ul>
+</section>
+<section id="semantics">
+<h2>Semantics<a class="headerlink" href="#semantics" title="Link to this heading">#</a></h2>
+<section id="qd-simt-grid-mem-fence">
+<h3><code class="docutils literal notranslate"><span class="pre">qd.simt.grid.mem_fence()</span></code><a class="headerlink" href="#qd-simt-grid-mem-fence" title="Link to this heading">#</a></h3>
+<p>A device-scope memory fence. Lowering on each backend is described in “Per-backend lowering” above. No convergence requirement on any backend — safe to call from divergent control flow (e.g. inside <code class="docutils literal notranslate"><span class="pre">if</span> <span class="pre">tid</span> <span class="pre">==</span> <span class="pre">0</span></code>).</p>
+<p>Use this when one block (or one thread per block) needs to publish data to global memory and have the publication be visible to other blocks <strong>without</strong> waiting at a kernel boundary. The canonical use case is the decoupled-look-back pattern in Onesweep-style device scans:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">lookback_scan</span><span class="p">(</span><span class="o">...</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="n">bid</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">simt</span><span class="o">.</span><span class="n">block</span><span class="o">.</span><span class="n">global_thread_idx</span><span class="p">()</span> <span class="o">//</span> <span class="n">BLOCK_SIZE</span>
+    <span class="n">tid</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">simt</span><span class="o">.</span><span class="n">block</span><span class="o">.</span><span class="n">global_thread_idx</span><span class="p">()</span> <span class="o">%</span>  <span class="n">BLOCK_SIZE</span>
+
+    <span class="n">block_sum</span> <span class="o">=</span> <span class="o">...</span>
+
+    <span class="k">if</span> <span class="n">tid</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="n">partials</span><span class="p">[</span><span class="n">bid</span><span class="p">]</span> <span class="o">=</span> <span class="n">block_sum</span>
+        <span class="n">qd</span><span class="o">.</span><span class="n">simt</span><span class="o">.</span><span class="n">grid</span><span class="o">.</span><span class="n">mem_fence</span><span class="p">()</span>
+        <span class="n">flags</span><span class="p">[</span><span class="n">bid</span><span class="p">]</span> <span class="o">=</span> <span class="n">STATE_AGGREGATE</span>
+
+    <span class="k">if</span> <span class="n">tid</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="n">prev</span> <span class="o">=</span> <span class="n">bid</span> <span class="o">-</span> <span class="mi">1</span>
+        <span class="k">while</span> <span class="n">prev</span> <span class="o">&gt;=</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="k">while</span> <span class="n">flags</span><span class="p">[</span><span class="n">prev</span><span class="p">]</span> <span class="o">==</span> <span class="n">STATE_INVALID</span><span class="p">:</span>
+                <span class="n">qd</span><span class="o">.</span><span class="n">simt</span><span class="o">.</span><span class="n">grid</span><span class="o">.</span><span class="n">mem_fence</span><span class="p">()</span>
+            <span class="n">qd</span><span class="o">.</span><span class="n">simt</span><span class="o">.</span><span class="n">grid</span><span class="o">.</span><span class="n">mem_fence</span><span class="p">()</span>
+            <span class="n">block_sum</span> <span class="o">+=</span> <span class="n">partials</span><span class="p">[</span><span class="n">prev</span><span class="p">]</span>
+            <span class="o">...</span>
+</pre></div>
+</div>
+<p>The three <code class="docutils literal notranslate"><span class="pre">grid.mem_fence()</span></code> calls are doing different jobs:</p>
+<ol class="arabic simple">
+<li><p>The first orders the publication: any block reading <code class="docutils literal notranslate"><span class="pre">flags[bid]</span> <span class="pre">==</span> <span class="pre">STATE_AGGREGATE</span></code> is guaranteed to also see the published <code class="docutils literal notranslate"><span class="pre">partials[bid]</span></code>.</p></li>
+<li><p>The second is <strong>inside</strong> the spin-wait, and is what forces each iteration to actually re-fetch <code class="docutils literal notranslate"><span class="pre">flags[prev]</span></code> from global memory (see “Spin-wait gotcha” below).</p></li>
+<li><p>The third is the symmetric reader-side fence: after observing the predecessor’s flag, the reader needs to refresh its view of <code class="docutils literal notranslate"><span class="pre">partials[prev]</span></code> (the scope of which is already global, but the fence pins down the ordering).</p></li>
+</ol>
+<p>The fence does not require thread convergence, which is why it appears inside <code class="docutils literal notranslate"><span class="pre">if</span> <span class="pre">tid</span> <span class="pre">==</span> <span class="pre">0</span></code> without deadlocking — <code class="docutils literal notranslate"><span class="pre">qd.simt.block.sync()</span></code> would deadlock there; <code class="docutils literal notranslate"><span class="pre">grid.mem_fence()</span></code> is safe.</p>
+<blockquote>
+<div><p><strong>Metal / Vulkan-on-macOS portability:</strong> the example as written above relies on the producer’s plain (non-atomic) store <code class="docutils literal notranslate"><span class="pre">flags[bid]</span> <span class="pre">=</span> <span class="pre">STATE_AGGREGATE</span></code> becoming visible to other workgroups once <code class="docutils literal notranslate"><span class="pre">grid.mem_fence()</span></code> retires. CUDA, AMDGPU, and native Vulkan honor this strictly; Metal (and therefore Vulkan-on-macOS) does <strong>not</strong> — <code class="docutils literal notranslate"><span class="pre">atomic_thread_fence(memory_scope_device)</span></code> only orders atomic accesses across the device. To make this idiom Metal-portable, publish through an atomic store (<code class="docutils literal notranslate"><span class="pre">qd.atomic_or(flags[bid],</span> <span class="pre">STATE_AGGREGATE)</span></code>) or split the producer and consumer phases into separate kernel launches.</p>
+</div></blockquote>
+<section id="spin-wait-gotcha">
+<h4>Spin-wait gotcha<a class="headerlink" href="#spin-wait-gotcha" title="Link to this heading">#</a></h4>
+<p>Quadrants ndarray reads compile to plain LLVM loads with no ordering or volatility. A naive spin-wait</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">while</span> <span class="n">flags</span><span class="p">[</span><span class="n">prev</span><span class="p">]</span> <span class="o">==</span> <span class="n">STATE_INVALID</span><span class="p">:</span>
+    <span class="k">pass</span>
+</pre></div>
+</div>
+<p>is therefore unsafe: LLVM’s loop-invariant-code-motion will hoist the load out of the loop (the loop body has no aliasing writes), so once the first read sees <code class="docutils literal notranslate"><span class="pre">STATE_INVALID</span></code> the loop never observes the producer’s update — it spins forever. Three correct approaches, in order of preference:</p>
+<ul>
+<li><p><strong>Volatile load</strong> (recommended; cross-backend, cheapest):</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">while</span> <span class="n">qd</span><span class="o">.</span><span class="n">volatile_load</span><span class="p">(</span><span class="n">flags</span><span class="p">[</span><span class="n">prev</span><span class="p">])</span> <span class="o">==</span> <span class="n">STATE_INVALID</span><span class="p">:</span>
+    <span class="k">pass</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">qd.volatile_load</span></code> lowers to LLVM <code class="docutils literal notranslate"><span class="pre">load</span> <span class="pre">volatile</span></code> on CUDA / AMDGPU and to <code class="docutils literal notranslate"><span class="pre">OpLoad</span></code> with the SPIR-V <code class="docutils literal notranslate"><span class="pre">Volatile</span></code> <code class="docutils literal notranslate"><span class="pre">MemoryAccess</span></code> mask on Vulkan / Metal — the optimiser is forbidden from hoisting / merging the load on every backend, with no per-iteration cache-flush or atomic-RMW overhead. See <a class="reference internal" href="atomics.html"><span class="std std-doc">atomics</span></a> for the full primitive description, including the producer-side pairing requirements (atomic store, or plain store + fence on non-Metal backends).</p>
+</li>
+<li><p><strong>Fence inside the loop body</strong> (used in the example above; legacy approach):</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">while</span> <span class="n">flags</span><span class="p">[</span><span class="n">prev</span><span class="p">]</span> <span class="o">==</span> <span class="n">STATE_INVALID</span><span class="p">:</span>
+    <span class="n">qd</span><span class="o">.</span><span class="n">simt</span><span class="o">.</span><span class="n">grid</span><span class="o">.</span><span class="n">mem_fence</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>The fence has compiler-visible global side effects, which prevents LICM from hoisting the <code class="docutils literal notranslate"><span class="pre">flags[prev]</span></code> load across it; each iteration is forced to re-fetch from global memory. Cost: one fence per spin iteration (an order of magnitude more than a volatile load). Works on CUDA, AMDGPU, and native Vulkan; <strong>does not work on Metal / Vulkan-on-macOS</strong> (the producer’s plain store may never become visible — see the portability note above). Prefer <code class="docutils literal notranslate"><span class="pre">qd.volatile_load</span></code> for new code.</p>
+</li>
+<li><p><strong>Atomic load via <code class="docutils literal notranslate"><span class="pre">atomic_or</span></code> with zero</strong> (legacy approach):</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">while</span> <span class="n">qd</span><span class="o">.</span><span class="n">atomic_or</span><span class="p">(</span><span class="n">flags</span><span class="p">[</span><span class="n">prev</span><span class="p">],</span> <span class="mi">0</span><span class="p">)</span> <span class="o">==</span> <span class="n">STATE_INVALID</span><span class="p">:</span>
+    <span class="k">pass</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">qd.atomic_or(x,</span> <span class="pre">0)</span></code> is an atomic op that returns the current value without modifying it, which forces a real memory access on every iteration and additionally pins down ordering. Cheaper than a per-iteration full grid fence but still pays the atomic-RMW hardware cost (and contention with concurrent stores on the same cell). Was previously the only Metal-portable approach; <code class="docutils literal notranslate"><span class="pre">qd.volatile_load</span></code> now covers Metal too and is preferred for new code. Useful as a paired idiom with an atomic <em>store</em> on the producer side (<code class="docutils literal notranslate"><span class="pre">qd.atomic_or(flags[bid],</span> <span class="pre">STATE_AGGREGATE)</span></code>) when the producer also wants atomic-store semantics.</p>
+</li>
+</ul>
+</section>
+</section>
+</section>
+<section id="performance-and-portability-notes">
+<h2>Performance and portability notes<a class="headerlink" href="#performance-and-portability-notes" title="Link to this heading">#</a></h2>
+<ul class="simple">
+<li><p><strong>GPU-portable.</strong> All four GPU backends implement <code class="docutils literal notranslate"><span class="pre">grid.mem_fence()</span></code> natively (see “Per-backend lowering”). The one residual portability gap is Metal / Vulkan-on-macOS only ordering <em>atomic</em> memory accesses across the device — patterns relying on plain stores becoming visible across workgroups must publish through atomics on those targets.</p></li>
+<li><p><strong>Cost scales with the global-cache invalidation domain.</strong> A grid fence drains the L2 (and on some GPUs the L1) caches of all SMs / CUs touching the address. On A100 / H100 the cost is on the order of tens to low hundreds of nanoseconds per call; AMDGPU <code class="docutils literal notranslate"><span class="pre">acq_rel</span></code> agent fences and Vulkan <code class="docutils literal notranslate"><span class="pre">OpMemoryBarrier(ScopeDevice)</span></code> are in the same ballpark on contemporary hardware. In tight loops, prefer batching multiple cross-block updates per fence.</p></li>
+<li><p><strong>Pair with the right ordering of memory ops.</strong> The fence orders the <em>calling thread</em>’s memory ops; readers in other blocks need their own fence (or an atomic load) to refresh their view. The producer-fence + consumer-fence pattern is the canonical idiom.</p></li>
+<li><p><strong>Not a substitute for atomics on contended locations.</strong> A fence orders writes but does not serialize them. If multiple blocks write to the same location, you need an atomic regardless of how the fence is placed.</p></li>
+</ul>
+</section>
+<section id="related">
+<h2>Related<a class="headerlink" href="#related" title="Link to this heading">#</a></h2>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">qd.simt.block.*</span></code> — the block-scope counterpart, including <code class="docutils literal notranslate"><span class="pre">qd.simt.block.mem_fence()</span></code> (block-scope fence) and <code class="docutils literal notranslate"><span class="pre">qd.simt.block.sync()</span></code> (block-scope barrier).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">qd.simt.subgroup.*</span></code> — subgroup-scope barriers, fences, shuffles, and reductions.</p></li>
+<li><p><a class="reference internal" href="parallelization.html"><span class="std std-doc">parallelization</span></a> — the broader synchronization story; explains how grid-scope fences fit relative to atomics, block barriers, and the kernel boundary.</p></li>
+</ul>
+</section>
+</section>
+
+
+                </article>
+              
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+    <a class="left-prev"
+       href="block.html"
+       title="previous page">
+      <i class="fa-solid fa-angle-left"></i>
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">previous</p>
+        <p class="prev-next-title">Block primitives</p>
+      </div>
+    </a>
+    <a class="right-next"
+       href="math.html"
+       title="next page">
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">next</p>
+        <p class="prev-next-title">Math</p>
+      </div>
+      <i class="fa-solid fa-angle-right"></i>
+    </a>
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+                <dialog id="pst-secondary-sidebar-modal"></dialog>
+                <div id="pst-secondary-sidebar" class="bd-sidebar-secondary bd-toc"><div class="sidebar-secondary-items sidebar-secondary__inner">
+
+
+  <div class="sidebar-secondary-item">
+<div
+    id="pst-page-navigation-heading-2"
+    class="page-toc tocsection onthispage">
+    <i class="fa-solid fa-list"></i> On this page
+  </div>
+  <nav id="pst-page-toc-nav" class="page-toc" aria-labelledby="pst-page-navigation-heading-2">
+    <ul class="pst-show_toc_level nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#what-s-available">What’s available</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#naming-and-deprecated-alias">Naming and deprecated alias</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#barrier-vs-fence-at-grid-scope">Barrier vs fence at grid scope</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#semantics">Semantics</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#qd-simt-grid-mem-fence"><code class="docutils literal notranslate"><span class="pre">qd.simt.grid.mem_fence()</span></code></a><ul class="nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#spin-wait-gotcha">Spin-wait gotcha</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#performance-and-portability-notes">Performance and portability notes</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#related">Related</a></li>
+</ul>
+  </nav></div>
+
+  <div class="sidebar-secondary-item">
+
+  <div class="tocsection sourcelink">
+    <a href="../_sources/user_guide/grid.md.txt">
+      <i class="fa-solid fa-file-lines"></i> Show Source
+    </a>
+  </div>
+</div>
+
+</div></div>
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+          </footer>
+        
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script defer src="../_static/scripts/bootstrap.js?digest=0790524f97105ba85085"></script>
+<script defer src="../_static/scripts/pydata-sphinx-theme.js?digest=0790524f97105ba85085"></script>
+
+  <footer class="bd-footer">
+<div class="bd-footer__inner bd-page-width">
+  
+    <div class="footer-items__start">
+      
+        <div class="footer-item">
+
+  <p class="copyright">
+    
+      © Copyright 2025 Genesis AI Inc.
+      <br/>
+    
+  </p>
+</div>
+      
+        <div class="footer-item">
+
+  <p class="sphinx-version">
+    Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 8.1.3.
+    <br/>
+  </p>
+</div>
+      
+    </div>
+  
+  
+  
+    <div class="footer-items__end">
+      
+        <div class="footer-item">
+<p class="theme-version">
+  <!-- # L10n: Setting the PST URL as an argument as this does not need to be localized -->
+  Built with the <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a> 0.18.0.
+</p></div>
+      
+    </div>
+  
+</div>
+
+  </footer>
+  </body>
+</html>
