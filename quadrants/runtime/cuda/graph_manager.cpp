@@ -729,11 +729,8 @@ bool GraphManager::try_launch(int launch_id,
     ++total_nodes;
   }
 
-  // --- Instantiate and launch ---
+  // --- Instantiate ---
   CUDADriver::get_instance().graph_instantiate(&cached.graph_exec, graph, nullptr, nullptr, 0);
-
-  auto *stream = CUDAContext::get_instance().get_stream();
-  CUDADriver::get_instance().graph_launch(cached.graph_exec, stream);
 
   CUDADriver::get_instance().graph_destroy(graph);
 
@@ -742,12 +739,13 @@ bool GraphManager::try_launch(int launch_id,
   QD_TRACE("CUDA graph created with {} nodes ({} checkpoints) for launch_id={}{}", cached.num_nodes,
            cached.num_checkpoints, launch_id, use_graph_do_while ? " (with graph_do_while)" : "");
 
-  num_nodes_on_last_call_ = cached.num_nodes;
-  num_checkpoints_on_last_call_ = cached.num_checkpoints;
   ++total_builds_;
-  cache_.emplace(launch_id, std::move(cached));
-  used_on_last_call_ = true;
-  return true;
+  auto [cache_it, _inserted] = cache_.emplace(launch_id, std::move(cached));
+  // First launch goes through the same code path as every subsequent launch so the
+  // yield_signal read-back (and any other per-launch bookkeeping) doesn't have to be
+  // duplicated. Slightly redundant memcpys for arg buffer / counter slot, but those happen
+  // once per graph build and are well under a microsecond each.
+  return launch_cached_graph(cache_it->second, ctx, use_graph_do_while);
 }
 
 }  // namespace cuda
