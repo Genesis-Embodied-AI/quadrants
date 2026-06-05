@@ -72,14 +72,28 @@ _composite_mutable_types = {list, dict, set}
 _primitive_types = {int, float, bool}
 
 
-# Per-class cache: ``type(arg) -> list[tuple[str, ...]]`` of attribute paths whose values are ``Ndarray`` instances at
-# first observation. Populated lazily by ``_struct_nd_paths_for`` on the first call with each new data_oriented (or
-# nested dataclass) class. Empty list means "this class holds no ndarrays anywhere", in which case subsequent calls
-# pay only a dict-lookup per arg. Non-empty list short-circuits the full ``vars()`` recursion and just resolves each
-# cached path via ``getattr`` chains. Critical for the genesis field-backend hot path: the ``@qd.data_oriented``
-# Solver is passed as ``self`` to most kernels and holds dozens of attributes, so a full per-call ``vars()`` walk
-# costs >100ns per kernel and trashed FPS until this cache was added.
+# Per-instance ndarray-path cache, stored OFF-instance in a module-level ``id(arg) -> list[paths]`` dict and cleaned
+# up via ``weakref.finalize``. We can't stash it on ``arg.__dict__`` because the fastcache args walker iterates
+# every key in ``__dict__`` and rejects any unsupported type (``list`` isn't whitelisted) — that disabled the L1
+# cache for ~10 Genesis kernels and broke the ``test_static`` / ``test_num_envs`` / ``test_ndarray_no_compile``
+# subprocess tests.
+#
+# Per-instance (not per-class) caching is correctness-load-bearing: ``@qd.data_oriented`` and ``qd.Tensor``
+# containers can have polymorphic attribute structures across instances of the same class — Genesis ``DataManager``
+# only allocates ``*_adjoint_cache`` ndarrays when ``requires_grad=True``, and a ``qd.Tensor`` field can wrap an
+# ``Ndarray`` on one instance and a ``MatrixField`` on another. A per-class cache populated from the first-walked
+# instance reused those paths on a sibling and crashed ``_collect_struct_nd_descriptors`` (reading ``element_type``
+# off a ``MatrixField``) — affecting ~60 Genesis tests under the ndarray backend.
+#
+# ``_struct_nd_paths_cache`` (per-class) remains as a fallback for objects that don't support ``weakref.finalize``
+# (e.g. ``__slots__`` classes without ``__weakref__``). Genesis containers all support weakrefs so the fast path
+# below is what runs in practice.
 _struct_nd_paths_cache: dict[type, list[tuple]] = {}
+_struct_nd_paths_instance_cache: dict[int, list[tuple]] = {}
+
+
+def _drop_instance_paths(arg_id: int) -> None:
+    _struct_nd_paths_instance_cache.pop(arg_id, None)
 
 
 def _build_struct_nd_paths(obj: Any, prefix: tuple, out: list, _seen: set | None = None) -> None:
@@ -117,29 +131,31 @@ def _build_struct_nd_paths(obj: Any, prefix: tuple, out: list, _seen: set | None
 
 def _struct_nd_paths_for(arg: Any) -> list[tuple]:
     """Return the cached attribute paths (each a tuple of attr-name strings) at which ``Ndarray`` instances are
-    reachable from ``arg`` of type ``type(arg)``. First call for a class walks ``arg`` once via
-    ``_build_struct_nd_paths``; subsequent calls are dict-lookups.
+    reachable from ``arg``. First call for an *instance* walks ``arg`` once via ``_build_struct_nd_paths`` and
+    caches the path list in ``_struct_nd_paths_instance_cache`` keyed by ``id(arg)``; ``weakref.finalize`` evicts
+    the entry when ``arg`` is garbage-collected. Subsequent calls are a dict lookup keyed by ``id(arg)``.
 
-    Trades freshness for speed: assumes the *set* of ndarray-holding attribute paths is stable across instances of
-    the same class. The genesis Solver and similar ``@qd.data_oriented`` containers satisfy this — their ndarray
-    members are declared in ``__init__`` and not added later. If you need to add an ndarray attribute after the first
-    kernel launch on an instance of a given class, the new attribute won't be tracked. Call ``invalidate_struct_nd_
-    paths_for`` (below) or restart the program.
-
-    FIXME (Codex #3 on PR #704, https://github.com/Genesis-Embodied-AI/quadrants/pull/704#discussion_r3253281957):
-    the cache is keyed by ``type(arg)`` only. If two instances of the same class have *polymorphic attribute
-    structure* — e.g. instance A has ``.x`` as a ``qd.ndarray``-backed ``qd.Tensor`` while instance B has the same
-    ``.x`` as a field-backed ``qd.Tensor`` — the paths discovered from the first-walked instance are reused for the
-    second. ``_collect_struct_nd_descriptors`` then unconditionally reads ndarray-only attrs (``element_type``,
-    ``grad``, ``_qd_layout``) on what is now a ``ScalarField``, raising before the kernel can run. The fix is the
-    per-instance walk implemented on top of this branch in PR #705; this branch ships the class-level cache as-is.
+    Per-instance (not per-class) caching is correctness-load-bearing — see the module-level comment on
+    ``_struct_nd_paths_instance_cache``. Objects that don't support ``weakref.finalize`` (e.g. ``__slots__`` classes
+    without ``__weakref__``) fall back to the legacy per-class cache; Genesis containers all support weakrefs so
+    the per-instance branch is the one that runs in practice.
     """
+    arg_id = id(arg)
+    paths = _struct_nd_paths_instance_cache.get(arg_id)
+    if paths is not None:
+        return paths
     cls = type(arg)
     paths = _struct_nd_paths_cache.get(cls)
-    if paths is None:
-        paths = []
-        _build_struct_nd_paths(arg, (), paths)
+    if paths is not None:
+        return paths
+    paths = []
+    _build_struct_nd_paths(arg, (), paths)
+    try:
+        weakref.finalize(arg, _drop_instance_paths, arg_id)
+    except TypeError:
         _struct_nd_paths_cache[cls] = paths
+    else:
+        _struct_nd_paths_instance_cache[arg_id] = paths
     return paths
 
 
@@ -172,10 +188,11 @@ def _collect_struct_nd_descriptors(arg: Any, out: list) -> None:
     reachable from ``arg``. Used by the template-mapper to refine the spec key for ``@qd.data_oriented`` args holding
     ndarrays — see the data_oriented branch in ``_extract_arg``.
 
-    FIXME (Codex #3 on PR #704): when a polymorphic instance reuses a cached path that pointed to an ``Ndarray`` on
-    the first-walked instance, ``v`` here can be a ``ScalarField`` and the ``v.element_type`` / ``v.grad`` /
-    ``v._qd_layout`` reads will raise. See ``_struct_nd_paths_for`` above for details. Fixed in PR #705 via the
-    per-instance walk redesign.
+    The path cache is per-instance (see ``_struct_nd_paths_for``) so polymorphic-instance attribute structure is
+    handled correctly. Within a single instance's lifetime, a cached path's leaf may still cease to be an ``Ndarray``
+    (e.g. a ``qd.Tensor`` member swapped from an ``Ndarray``-backed impl to a ``MatrixField``-backed one); when that
+    happens we silently skip the descriptor — the spec key still includes ``weakref(arg)`` so cache discrimination
+    remains correct.
     """
     for chain in _struct_nd_paths_for(arg):
         v = arg
@@ -183,9 +200,14 @@ def _collect_struct_nd_descriptors(arg: Any, out: list) -> None:
             v = getattr(v, a)
         if type(v) in _TENSOR_WRAPPER_TYPES:
             v = v._unwrap()
+        if not isinstance(v, Ndarray):
+            continue
+        shape = v.shape
+        if shape is None:
+            continue
         type_id = id(v.element_type)
         element_type = type_id if type_id in primitive_types.type_ids else v.element_type
-        out.append((".".join(chain), element_type, len(v.shape), v.grad is not None, v._qd_layout))
+        out.append((".".join(chain), element_type, len(shape), v.grad is not None, v._qd_layout))
 
 
 def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: AnnotationType, arg_name: str) -> Any:
