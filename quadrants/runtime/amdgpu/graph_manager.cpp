@@ -509,9 +509,13 @@ bool GraphManager::try_launch(int launch_id,
     cached.yield_check_cp_id_storage.push_back(current_cp_id);
     cached.yield_check_kernel_args.emplace_back();
     auto &kargs = cached.yield_check_kernel_args.back();
-    initialize_yield_check_kernel_args(
-        kargs, &cached.checkpoint_yield_on_ptr_slots[current_cp_id], &cached.yield_check_cp_id_storage.back(),
-        cached.yield_signal_dev_ptr, cached.resume_point_dev_ptr);
+    // The kernel expects `int32_t **yield_on_ptr_slot` to be a *device* pointer to a device-side slot that holds the
+    // user's `yield_on=` ndarray address. `checkpoint_yield_on_ptr_slots[cp]` already IS that device pointer (it was
+    // returned by `AMDGPUDriver::malloc` above), so we pass it directly -- NOT `&...slots[cp]`, which would be the
+    // host address of the std::vector element and would null-deref on the GPU.
+    initialize_yield_check_kernel_args(kargs, cached.checkpoint_yield_on_ptr_slots[current_cp_id],
+                                       &cached.yield_check_cp_id_storage.back(), cached.yield_signal_dev_ptr,
+                                       cached.resume_point_dev_ptr);
     prev_node = add_kernel_node(graph, prev_node, yield_check_kernel_func_, /*grid=*/1, /*block=*/1, /*smem=*/0, kargs);
     ++total_nodes;
   };
