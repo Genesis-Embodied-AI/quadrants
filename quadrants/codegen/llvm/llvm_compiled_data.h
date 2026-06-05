@@ -118,6 +118,12 @@ class OffloadedTask {
   int grid_dim{0};
   int dynamic_shared_array_bytes{0};
   int stream_parallel_group_id{0};
+  // Nested qd.kernel-as-subgraph (C2). When `is_launch_child` is true this task does not correspond to a generated
+  // device function; instead the runtime embeds the `child_call_index`-th child kernel as a subgraph (CUDA/HIP) or
+  // launches it sequentially (other backends) at this position in the parent's task stream. The parent supplies one
+  // compiled-child descriptor per index at launch time.
+  bool is_launch_child{false};
+  int child_call_index{-1};
   AdStackSizingInfo ad_stack{};
 
   // Snode IDs this task writes to (read-modify-write counts as a write). Computed at codegen time
@@ -155,6 +161,8 @@ class OffloadedTask {
             grid_dim,
             dynamic_shared_array_bytes,
             stream_parallel_group_id,
+            is_launch_child,
+            child_call_index,
             ad_stack,
             snode_writes,
             arr_writes,

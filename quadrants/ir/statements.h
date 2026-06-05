@@ -1352,6 +1352,11 @@ class OffloadedStmt : public Stmt {
   TaskType task_type;
   Arch device;
   SNode *snode{nullptr};
+  // launch_child only: index of this child call within the parent kernel (source order, 0-based). At launch time the
+  // parent supplies one compiled-child descriptor per index; the runtime embeds the child as a subgraph here.
+  // `child_kernel_name` is carried for diagnostics/printing only.
+  int child_call_index{-1};
+  std::string child_kernel_name;
   std::size_t begin_offset{0};
   std::size_t end_offset{0};
   bool const_begin{false};
@@ -1406,7 +1411,7 @@ class OffloadedStmt : public Stmt {
   static std::string task_type_name(TaskType tt);
 
   bool has_body() const {
-    return task_type != TaskType::listgen && task_type != TaskType::gc;
+    return task_type != TaskType::listgen && task_type != TaskType::gc && task_type != TaskType::launch_child;
   }
 
   Callable *get_callable() const override {
@@ -1425,6 +1430,7 @@ class OffloadedStmt : public Stmt {
                      task_type,
                      device,
                      snode,
+                     child_call_index,
                      begin_offset,
                      end_offset,
                      const_begin,
