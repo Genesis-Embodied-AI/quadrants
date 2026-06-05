@@ -40,14 +40,13 @@ order by an in-place twiddle (first top-level ``for``) and restored by the inver
 participation); histogram ``atomic_add`` and the scatter store are gated on ``i < N`` so sentinels never pollute the
 histogram or write past the output.
 
-**Scratch.** The sort needs ``device_radix_sort_scratch_slots(N)`` ``u32`` slots (tile histograms + scan partials;
-``u32`` regardless of key width, so 8-byte-key sorts have the same footprint as 4-byte ones). Pass a correctly-sized
-caller-owned ``scratch=`` buffer (the graph / multi-stream path), or leave it ``None`` to use the module-level shared
-scratch (grow it via ``quadrants._scratch.set_scratch_bytes(...)``). Either way a too-small buffer raises
+**Scratch.** The sort needs a **caller-owned** 1-D ``u32`` ``scratch`` buffer of
+``device_radix_sort_scratch_slots(N)`` slots (tile histograms + scan partials; ``u32`` regardless of key width, so
+8-byte-key sorts have the same footprint as 4-byte ones). There is **no** module-level shared-scratch fallback - the
+caller always owns the buffer (graph- / multi-stream-safe, no global state). A too-small buffer raises
 :class:`InsufficientScratchError` *before* any in-place key mutation, so the caller's ``keys`` stay recoverable.
 """
 
-from quadrants._scratch import get_scratch_u32, scratch_capacity_u32
 from quadrants.lang.impl import static
 from quadrants.lang.kernel_impl import func as _func
 from quadrants.lang.kernel_impl import kernel
@@ -59,7 +58,7 @@ from quadrants.types import ndarray as ndarray_ann
 from quadrants.types.annotations import template
 from quadrants.types.primitive_types import f32, f64, i32, i64, u32, u64
 
-from ._reduce import BLOCK_DIM
+from ._reduce import BLOCK_DIM, InsufficientScratchError
 
 RADIX_BITS = 8
 """Bits per digit. Matches the ``block.radix_rank_match_atomic_or`` constraint that ``block_dim == 1 << radix_bits``;
@@ -80,30 +79,6 @@ def _key_width_bits(dtype) -> int:
     if dtype in _SUPPORTED_KEY_DTYPES_64:
         return 64
     raise NotImplementedError(f"device_radix_sort key dtype {dtype} not supported")
-
-
-class InsufficientScratchError(RuntimeError):
-    """Raised by :func:`device_radix_sort` when the supplied ``scratch`` (caller-owned or shared) is too small.
-
-    Subclasses ``RuntimeError`` so existing ``except RuntimeError`` / ``pytest.raises(RuntimeError)`` call sites keep
-    working, while exposing the required size programmatically: ``err.required_slots`` (and ``err.required_bytes``) is
-    the minimum the caller must allocate for the given ``N``, equal to ``device_radix_sort_scratch_slots(N)``. This is
-    the "try and fail with the size" path; ``device_radix_sort_scratch_slots`` is the "ask first" path.
-    """
-
-    def __init__(self, n: int, required_slots: int, provided_slots: int):
-        self.n = n
-        self.required_slots = required_slots
-        self.provided_slots = provided_slots
-        self.required_bytes = required_slots * 4
-        self.provided_bytes = provided_slots * 4
-        super().__init__(
-            f"device_radix_sort on N={n} needs >= {required_slots} u32 scratch slots ({required_slots * 4} bytes, "
-            f"including all levels of the scan staircase), but the supplied scratch holds only {provided_slots} slots "
-            f"({provided_slots * 4} bytes). Allocate a 1-D u32 scratch of at least "
-            f"device_radix_sort_scratch_slots(N)={required_slots} slots (e.g. qd.field(qd.u32, shape={required_slots})), "
-            f"or grow the shared scratch via quadrants._scratch.set_scratch_bytes(...)."
-        )
 
 
 # --- Per-phase device bodies (one tile per block; grid sized to the work) ---------------
@@ -450,7 +425,16 @@ def _validate(keys, tmp_keys, values, tmp_values, scratch, end_bit):
         raise TypeError(f"device_radix_sort dtype mismatch: keys={keys.dtype}, tmp_keys={tmp_keys.dtype}")
     if keys is tmp_keys:
         raise ValueError("device_radix_sort requires keys and tmp_keys to be distinct buffers")
-    if scratch is not None and scratch.dtype != u32:
+    if scratch is None:
+        raise TypeError(
+            "device_radix_sort requires a caller-provided scratch buffer (there is no shared-scratch fallback); "
+            "allocate a 1-D u32 scratch of device_radix_sort_scratch_slots(N) slots"
+        )
+    if not hasattr(scratch, "shape") or len(scratch.shape) != 1:
+        raise TypeError(
+            f"device_radix_sort scratch must be a 1-D u32 tensor; got shape {getattr(scratch, 'shape', None)}"
+        )
+    if scratch.dtype != u32:
         raise TypeError(
             f"device_radix_sort scratch must have dtype u32 (tile histograms are u32 regardless of key width); "
             f"got {scratch.dtype}"
@@ -497,9 +481,10 @@ def device_radix_sort(
         tmp_values: required iff ``values`` is given; same shape/dtype as ``values``, distinct buffer.
         end_bit: number of low key bits to sort (positive even multiple of ``RADIX_BITS = 8``, ``<=`` key width).
             Defaults to the full key width. Pass a smaller value if the high bits are known to be zero (saves passes).
-        scratch: optional caller-owned 1-D ``u32`` workspace sized via :func:`device_radix_sort_scratch_slots`. If
-            ``None`` (default), the module-level shared scratch is used (grow via ``_scratch.set_scratch_bytes``). A
-            too-small buffer raises :class:`InsufficientScratchError` *before* any in-place key mutation.
+        scratch: **required** caller-owned 1-D ``u32`` workspace sized via :func:`device_radix_sort_scratch_slots`
+            (or :func:`fused_radix_sort_scratch_slots` for an explicit ``log256_max_n``). There is no module-level
+            shared-scratch fallback. A too-small buffer raises :class:`InsufficientScratchError` *before* any in-place
+            key mutation, so the caller's ``keys`` stay recoverable.
         n: optional 0-d ``i32`` ndarray (``shape=()``) holding the element count on-device - the graph / device-``N``
             path. If ``None``, the count is ``keys.shape[0]`` and a 0-d ndarray is allocated and filled with it.
         log256_max_n: compile-time scan depth ``D``; the kernel handles any element count ``<= 256**D`` (a captured
@@ -534,16 +519,11 @@ def device_radix_sort(
     values_arg = values if has_values else keys
     tmp_values_arg = tmp_values if has_values else tmp_keys
 
-    # Up-front scratch check (the full staircase footprint), against the caller buffer or the shared scratch. Done
-    # before the kernel launches its first (twiddle) offload, so a short buffer leaves the caller's keys untouched.
+    # Up-front scratch check (the full staircase footprint) against the caller buffer. Done before the kernel
+    # launches its first (twiddle) offload, so a short buffer leaves the caller's keys untouched.
     needed = fused_radix_sort_scratch_slots(capacity_n, log256_max_n)
-    if scratch is None:
-        scratch = get_scratch_u32()
-        cap = scratch_capacity_u32()
-    else:
-        cap = scratch.shape[0]
-    if needed > cap:
-        raise InsufficientScratchError(capacity_n, needed, cap)
+    if needed > scratch.shape[0]:
+        raise InsufficientScratchError("device_radix_sort", capacity_n, needed, scratch.shape[0])
 
     if n is None:
         # 0-d i32 ndarray matching the kernel's ``N`` annotation (read torch-style as ``N[()]``). The device-N graph

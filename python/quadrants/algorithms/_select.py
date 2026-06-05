@@ -26,21 +26,21 @@ This is why ``device_select`` works on any element dtype Quadrants supports for 
 (``i32`` / ``u32`` / ``f32`` / ``i64`` / ``u64`` / ``f64``) and structs (libuipc ``Vector{2,3,4}i``,
 ``LinearBVHAABB``, etc.).
 
-Constraints (first land): ``N`` must fit comfortably within the configured scratch budget - the indices + partials
-together must not exceed ``scratch_capacity_u32()``. For the default 5 MB budget that's
-``N + ceil(N / 256) + ... <= ~1.3M``, which covers qipc's hot path (``N = 1M``) out of the box. Raise the budget via
-``_scratch.set_scratch_bytes(...)`` before any algorithm runs to unlock larger inputs.
+**Scratch.** ``device_select`` needs a **caller-owned** 1-D ``u32`` scratch buffer of
+:func:`device_select_scratch_slots` ``(N)`` slots (the per-element indices ``scratch[0:N]`` plus the scan partials
+above them). ``u32`` regardless of the element dtype (the scan operates on flags-as-counts). There is no
+module-level shared scratch - the caller always owns the buffer; a too-small buffer raises
+:class:`InsufficientScratchError`.
 """
 
-from quadrants._scratch import get_scratch_u32, scratch_capacity_u32
 from quadrants.lang.kernel_impl import kernel
 from quadrants.lang.ops import bit_cast
 from quadrants.lang.simt.reductions import _bin_add
 from quadrants.types.annotations import template
-from quadrants.types.primitive_types import i32
+from quadrants.types.primitive_types import i32, u32
 
-from ._reduce import BLOCK_DIM, _identity_bits, _reduce_pass
-from ._scan import _exclusive_scan_inplace_u32, _scan_pass3
+from ._reduce import BLOCK_DIM, _identity_bits, _reduce_pass, _validate_caller_scratch
+from ._scan import _exclusive_scan_inplace_u32, _scan_pass3, _scan_total_scratch_slots
 
 
 @kernel
@@ -87,7 +87,24 @@ def _select_count(
         num_out[0] = last_idx + last_inc
 
 
-def device_select(arr, flags, out, num_out):
+def device_select_scratch_slots(n: int) -> int:
+    """Number of ``u32`` scratch slots :func:`device_select` needs to compact a length-``n`` input.
+
+    Pure host-side arithmetic, dtype-independent (the scan operates on flags-as-counts, which are always ``u32``).
+    Layout: ``scratch[0:n]`` holds the per-element write indices, ``scratch[n:]`` the scan partials (plus any deeper
+    recursion levels). Allocate up front::
+
+        scratch = qd.field(qd.u32, shape=max(qd.algorithms.device_select_scratch_slots(N), 1))
+
+    Returns ``0`` for ``n <= 0``.
+    """
+    if n <= 0:
+        return 0
+    B0 = (n + BLOCK_DIM - 1) // BLOCK_DIM
+    return _scan_total_scratch_slots(B0, partials_cursor=n + B0)
+
+
+def device_select(arr, flags, out, num_out, scratch):
     """Stream-compact ``arr`` by ``flags``: copy ``arr[i]`` to a dense prefix of ``out`` for every ``i`` where
     ``flags[i] == 1``, in stable input order. Write the count of selected elements to ``num_out[0]``.
 
@@ -105,6 +122,8 @@ def device_select(arr, flags, out, num_out):
         out: 1-D tensor with the same dtype as ``arr``. Must hold at least ``N`` elements (so a
             worst-case-everyone-selected run fits); only the prefix ``out[0 : num_out[0]]`` is meaningful on return.
         num_out: 1-element ``i32`` tensor receiving the selected count.
+        scratch: caller-owned 1-D ``u32`` workspace of :func:`device_select_scratch_slots` ``(N)`` slots. There is no
+            module-level shared scratch; a too-small buffer raises :class:`InsufficientScratchError`.
 
     Same async / no-implicit-sync contract as ``device_reduce_*`` and ``device_exclusive_scan_*``: ``num_out`` is a
     tensor, not a Python scalar - call ``num_out.to_numpy()[0]`` explicitly to get the count host-side.
@@ -137,17 +156,10 @@ def device_select(arr, flags, out, num_out):
         return
 
     # Scratch layout: scratch[0:N] = indices, scratch[N : N + B0] = level-0 partials, then deeper levels above.
-    scratch = get_scratch_u32()
-    cap = scratch_capacity_u32()
+    _validate_caller_scratch("device_select", N, scratch, device_select_scratch_slots(N), u32)
     B0 = (N + BLOCK_DIM - 1) // BLOCK_DIM
     indices_off = 0
     partials_off = N
-    if partials_off + B0 > cap:
-        raise RuntimeError(
-            f"device_select on N={N} needs >= {partials_off + B0} u32 scratch slots, "
-            f"but only {cap} are configured. Call _scratch.set_scratch_bytes(...) "
-            f"before any algorithm runs."
-        )
 
     identity_bits = _identity_bits(0, i32)
     op = _bin_add
@@ -196,4 +208,4 @@ def device_select(arr, flags, out, num_out):
     _select_count(flags, scratch, indices_off, N, num_out)
 
 
-__all__ = ["device_select"]
+__all__ = ["device_select", "device_select_scratch_slots"]
