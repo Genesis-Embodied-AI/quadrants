@@ -49,13 +49,33 @@ struct GraphNodeParams {
 };
 static_assert(sizeof(GraphNodeParams) == 256, "GraphNodeParams layout must match CUgraphNodeParams (256 bytes)");
 
+// Everything try_launch needs to embed a child qd.kernel as a subgraph: the child's own (already-populated) launch
+// context, plus the child's compiled artifacts looked up from the launcher's per-handle Context by child launch_id.
+// Assembled in the CUDA KernelLauncher and passed into try_launch, indexed by OffloadedTask::child_call_index.
+struct ChildLaunchInfo {
+  LaunchContextBuilder *child_ctx{nullptr};
+  JITModule *child_module{nullptr};
+  const std::vector<std::pair<int, Callable::Parameter>> *child_parameters{nullptr};
+  const std::vector<OffloadedTask> *child_tasks{nullptr};
+};
+
 struct CachedGraph {
+  // Per-child persistent device state for an embedded child subgraph (the D1 data model: each child gets its own
+  // arg buffer + RuntimeContext). Lives in `children` below, whose heap buffer is preserved across the CachedGraph
+  // move into `cache_`, so `&persistent_ctx` stays stable for the lifetime of the instantiated graph_exec.
+  struct ChildGraphState {
+    char *persistent_device_arg_buffer{nullptr};
+    RuntimeContext persistent_ctx{};
+    std::size_t arg_buffer_size{0};
+  };
+
   // CUgraphExec handle (typed as void* since driver API is loaded dynamically).
   // This is the instantiated, launchable form of the captured CUDA graph.
   void *graph_exec{nullptr};
   char *persistent_device_arg_buffer{nullptr};
   char *persistent_device_result_buffer{nullptr};
   RuntimeContext persistent_ctx{};
+  std::vector<ChildGraphState> children;
   std::size_t arg_buffer_size{0};
   std::size_t result_buffer_size{0};
   // Device-side pointer slot for graph_do_while indirection. Holds the address
@@ -88,7 +108,8 @@ class GraphManager {
                   JITModule *cuda_module,
                   const std::vector<std::pair<int, Callable::Parameter>> &parameters,
                   const std::vector<OffloadedTask> &offloaded_tasks,
-                  LlvmRuntimeExecutor *executor);
+                  LlvmRuntimeExecutor *executor,
+                  const std::vector<ChildLaunchInfo> &child_infos);
 
   // cache_size and used_on_last_call used for tests
   void mark_not_used() {
@@ -109,10 +130,24 @@ class GraphManager {
   }
 
  private:
-  bool launch_cached_graph(CachedGraph &cached, LaunchContextBuilder &ctx, bool use_graph_do_while);
+  bool launch_cached_graph(CachedGraph &cached,
+                           LaunchContextBuilder &ctx,
+                           bool use_graph_do_while,
+                           const std::vector<ChildLaunchInfo> &child_infos,
+                           LlvmRuntimeExecutor *executor);
   void resolve_ctx_ndarray_ptrs(LaunchContextBuilder &ctx,
                                 const std::vector<std::pair<int, Callable::Parameter>> &parameters,
                                 LlvmRuntimeExecutor *executor);
+  // Refresh a child's persistent device arg buffer from its launch context (resolve ndarray handles -> device
+  // pointers, then upload). Run on every launch (build and cached replay) so a child sees the parent call's current
+  // ndarray data pointers, mirroring how the parent arg buffer is re-uploaded in launch_cached_graph.
+  void refresh_child_arg_buffer(const ChildLaunchInfo &info,
+                                CachedGraph::ChildGraphState &state,
+                                LlvmRuntimeExecutor *executor);
+  // Build a standalone CUgraph for an embedded child kernel (one kernel node per child task, chained), using the
+  // child's persistent RuntimeContext. The returned graph is owned by the caller (embedded via add_child_graph_node
+  // then destroyed after the parent graph is instantiated).
+  void *build_child_subgraph(const ChildLaunchInfo &info, CachedGraph::ChildGraphState &state);
   void ensure_condition_kernel_loaded();
   void *add_conditional_while_node(void *graph, unsigned long long *cond_handle_out);
   void *add_kernel_node(void *graph,

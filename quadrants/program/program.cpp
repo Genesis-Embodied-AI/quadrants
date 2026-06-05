@@ -166,6 +166,10 @@ CompileResult Program::compile_kernel(const CompileConfig &compile_config,
   return compile_result;
 }
 
+int Program::register_kernel(const CompiledKernelData &compiled_kernel_data) {
+  return program_impl_->get_kernel_launcher().ensure_registered(compiled_kernel_data);
+}
+
 void Program::launch_kernel(const CompiledKernelData &compiled_kernel_data, LaunchContextBuilder &ctx) {
   // Diagnose-snapshot capture strategy depends on when the overflow check fires relative to ctx lifetime:
   //   - SPIR-V backends poll the overflow flag at `synchronize()` time, by which point the launch ctx is

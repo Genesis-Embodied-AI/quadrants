@@ -272,8 +272,29 @@ void KernelLauncher::launch_llvm_kernel(Handle handle, LaunchContextBuilder &ctx
 
   if (ctx.use_graph) {
     auto &lctx = contexts_[handle.get_launch_id()];
+    // Assemble per-child launch info for any nested qd.kernel-as-subgraph calls recorded on this launch context.
+    // Each child was registered (via Program::register_kernel) before this launch, so its compiled artifacts live in
+    // `contexts_[child_launch_id]`. Index by child_call_index so try_launch can match each launch_child task.
+    std::vector<cuda::ChildLaunchInfo> child_infos;
+    if (!ctx.child_launches.empty()) {
+      std::size_t max_index = 0;
+      for (const auto &cl : ctx.child_launches) {
+        max_index = std::max(max_index, (std::size_t)cl.child_call_index + 1);
+      }
+      child_infos.resize(max_index);
+      for (const auto &cl : ctx.child_launches) {
+        QD_ASSERT(cl.child_launch_id >= 0 && (std::size_t)cl.child_launch_id < contexts_.size());
+        auto &child_ctx = contexts_[cl.child_launch_id];
+        cuda::ChildLaunchInfo info;
+        info.child_ctx = cl.child_ctx;
+        info.child_module = child_ctx.jit_module;
+        info.child_parameters = child_ctx.parameters;
+        info.child_tasks = &child_ctx.offloaded_tasks;
+        child_infos[cl.child_call_index] = info;
+      }
+    }
     if (graph_manager_.try_launch(handle.get_launch_id(), ctx, lctx.jit_module, *lctx.parameters, lctx.offloaded_tasks,
-                                  get_runtime_executor())) {
+                                  get_runtime_executor(), child_infos)) {
       return;
     }
   }

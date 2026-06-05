@@ -412,6 +412,7 @@ void export_lang(py::module &m) {
       .def("get_graphics_device", [](Program *program) { return program->get_graphics_device(); })
       .def("compile_kernel", &Program::compile_kernel, py::return_value_policy::reference)
       .def("launch_kernel", &Program::launch_kernel)
+      .def("register_kernel", &Program::register_kernel)
       .def("get_device_caps", &Program::get_device_caps)
       .def("subgroup_size", &Program::subgroup_size)
       .def("get_graph_cache_size", &Program::get_graph_cache_size)
@@ -569,6 +570,7 @@ void export_lang(py::module &m) {
       .def("get_struct_ret_int", &LaunchContextBuilder::get_struct_ret_int)
       .def("get_struct_ret_uint", &LaunchContextBuilder::get_struct_ret_uint)
       .def("get_struct_ret_float", &LaunchContextBuilder::get_struct_ret_float)
+      .def("add_child_launch", &LaunchContextBuilder::add_child_launch, py::keep_alive<1, 4>())
       .def_readwrite("use_graph", &LaunchContextBuilder::use_graph)
       .def_readwrite("graph_do_while_arg_id", &LaunchContextBuilder::graph_do_while_arg_id);
 

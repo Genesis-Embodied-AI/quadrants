@@ -146,6 +146,10 @@ class QD_DLL_EXPORT Program {
 
   void launch_kernel(const CompiledKernelData &compiled_kernel_data, LaunchContextBuilder &ctx);
 
+  // Register a child kernel's compiled data without launching it; returns its launch_id so a graph=True parent can
+  // embed it as a subgraph. See KernelLauncher::ensure_registered.
+  int register_kernel(const CompiledKernelData &compiled_kernel_data);
+
   std::size_t get_graph_cache_size() {
     return program_impl_->get_kernel_launcher().get_graph_cache_size();
   }

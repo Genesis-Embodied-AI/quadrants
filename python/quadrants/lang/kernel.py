@@ -311,6 +311,12 @@ class Kernel(FuncBase):
         # a parent parameter index ("param", i) or a literal ("const", value). Indexed by ChildLaunchStmt /
         # OffloadedTask.child_call_index at launch time. Reset at the start of every trace (ASTGenerator.__call__).
         self._child_calls: list[tuple] = []
+        # Per-specialization snapshot of `_child_calls`, captured at materialize time. `_child_calls` itself is
+        # transient (reset every trace), so launch reads the calls for the specific key it is launching here.
+        self._child_calls_by_key: dict[CompiledKernelKeyType, list[tuple]] = {}
+        # Keeps child launch contexts alive across a parent launch (also pinned C++-side via keep_alive on
+        # add_child_launch). Rebuilt each parent launch.
+        self._child_launch_ctx_keepalive: list = []
         self.quadrants_callable: QuadrantsCallable | None = None
         self.visited_functions: set[FunctionSourceInfo] = set()
         self.kernel_function_info: FunctionSourceInfo | None = None
@@ -443,6 +449,9 @@ class Kernel(FuncBase):
                     self._struct_ndarray_launch_info_by_key[key] = getattr(
                         ctx.global_context, "struct_ndarray_launch_info", []
                     )
+                    # Snapshot the nested child-kernel calls recorded during this trace for this specialization. The
+                    # `_pass == 1` trace is the final (post-pruning) one, so `_child_calls` is fully populated here.
+                    self._child_calls_by_key[key] = list(self._child_calls)
                 else:
                     for used_parameters in pruning.used_vars_by_func_id.values():
                         new_used_parameters = set()
@@ -460,9 +469,56 @@ class Kernel(FuncBase):
                     ]
                 runtime._current_global_context = None
 
+    def _attach_child_launches(self, parent_launch_ctx, parent_args, parent_key) -> None:
+        """Prepare and register each nested qd.kernel call so the runtime can embed it as a subgraph.
+
+        For every recorded child call (in source order), resolve the child's arguments from the parent's arguments
+        (pass-through parameters or literal constants), build the child's launch context (`dry_run`), register the
+        child's compiled kernel to obtain its launch_id, and record both on the parent launch context. The runtime
+        graph manager then embeds each child as a child-graph node (CUDA/HIP) at the matching launch_child task.
+        """
+        child_calls = self._child_calls_by_key.get(parent_key, [])
+        if not child_calls:
+            return
+        prog = impl.get_runtime().prog
+        config = impl.current_cfg()
+        self._child_launch_ctx_keepalive = []
+        for child_call_index, (child_kernel, arg_sources) in enumerate(child_calls):
+            child_args = tuple(
+                parent_args[payload] if kind == "param" else payload for (kind, payload) in arg_sources
+            )
+            # Mirror the per-call preamble that Kernel.__call__ normally runs before compiling/launching: the child is
+            # dispatched here rather than through its own __call__, so set the same state ensure_compiled relies on.
+            child_kernel.raise_on_templated_floats = config.raise_on_templated_floats
+            child_args = child_kernel.fuse_args(
+                is_func=False, is_pyfunc=False, py_args=child_args, kwargs={}, global_context=None
+            )
+            child_key = child_kernel.ensure_compiled(*child_args)
+            child_t_kernel = child_kernel.materialized_kernels[child_key]
+            child_ckd = child_kernel.compiled_kernel_data_by_key.get(child_key, None)
+            child_launch_ctx = child_kernel.launch_kernel(
+                child_key, child_t_kernel, child_ckd, *child_args, dry_run=True
+            )
+            if child_ckd is None:
+                assert child_kernel._last_compiled_kernel_data is not None
+                child_ckd = child_kernel._last_compiled_kernel_data
+                child_kernel.compiled_kernel_data_by_key[child_key] = child_ckd
+            child_launch_id = prog.register_kernel(child_ckd)
+            self._child_launch_ctx_keepalive.append(child_launch_ctx)
+            parent_launch_ctx.add_child_launch(child_call_index, child_launch_id, child_launch_ctx)
+
     def launch_kernel(
-        self, key, t_kernel: KernelCxx, compiled_kernel_data: CompiledKernelData | None, *args, qd_stream=None
+        self,
+        key,
+        t_kernel: KernelCxx,
+        compiled_kernel_data: CompiledKernelData | None,
+        *args,
+        qd_stream=None,
+        dry_run: bool = False,
     ) -> Any:
+        # dry_run: build (and cache) the populated launch context and ensure the kernel is compiled, but do not launch.
+        # Used to prepare a child kernel that a graph=True parent will embed as a subgraph; the returned launch context
+        # carries the child's resolved arguments. `self._last_compiled_kernel_data` holds the compiled data afterward.
         assert len(args) == len(self.arg_metas), f"{len(self.arg_metas)} arguments needed but {len(args)} provided"
 
         callbacks: list[Callable[[], None]] = []
@@ -575,7 +631,12 @@ class Kernel(FuncBase):
                     )
                     self.src_ll_cache_observations.cache_stored = True
             self._last_compiled_kernel_data = compiled_kernel_data
+            if dry_run:
+                # Child preparation: context built and kernel compiled; the parent will register + embed it.
+                return launch_ctx
             launch_ctx.use_graph = self.use_graph and _GRAPH_ENABLED
+            if launch_ctx.use_graph and self._child_calls_by_key.get(key):
+                self._attach_child_launches(launch_ctx, args, key)
             if self.use_graph and qd_stream is not None:
                 raise RuntimeError(
                     "qd_stream is not compatible with graph=True kernels. "

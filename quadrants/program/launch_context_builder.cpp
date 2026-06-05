@@ -162,6 +162,10 @@ void LaunchContextBuilder::set_ndarray_ptrs(int arg_id, uint64 data_ptr, uint64 
   }
 }
 
+void LaunchContextBuilder::add_child_launch(int child_call_index, int child_launch_id, LaunchContextBuilder *child_ctx) {
+  child_launches.push_back(ChildLaunch{child_call_index, child_launch_id, child_ctx});
+}
+
 void LaunchContextBuilder::set_host_accessible_ndarray_ptrs(int arg_id, uint64 data_ptr, uint64 grad_ptr) {
   // Host-accessible variant used by the CPU kernel launcher. `set_ndarray_ptrs` alone only writes the
   // resolved pointer into the kernel-visible arg buffer; it leaves the `array_ptrs` map holding whatever the

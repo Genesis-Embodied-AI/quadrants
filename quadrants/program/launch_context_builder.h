@@ -83,6 +83,13 @@ class LaunchContextBuilder {
   template <typename T>
   void set_struct_arg(const std::vector<int> &arg_indices, T v);
 
+  // Record a nested qd.kernel-as-subgraph call to embed when this (graph=True) kernel launches. `child_launch_id`
+  // identifies the child's registered compiled kernel (from Program::register_kernel); `child_ctx` is the child's
+  // fully-populated launch context (its arguments resolved from the parent call). Indexed by `child_call_index`,
+  // matching the launch_child OffloadedTask emitted into this kernel's task stream. The caller must keep `child_ctx`
+  // alive until launch.
+  void add_child_launch(int child_call_index, int child_launch_id, LaunchContextBuilder *child_ctx);
+
   void set_ndarray_ptrs(int arg_id, uint64 data_ptr, uint64 grad_ptr);
   // Same as `set_ndarray_ptrs`, but also mirrors the resolved host pointer into `array_ptrs` so the adstack
   // size-expression evaluator can dereference it. Call only from launchers where `data_ptr`/`grad_ptr` is a
@@ -160,6 +167,16 @@ class LaunchContextBuilder {
   bool use_graph{false};
   int graph_do_while_arg_id{-1};
   void *graph_do_while_flag_dev_ptr{nullptr};
+
+  // Nested qd.kernel-as-subgraph calls recorded for this launch (populated by add_child_launch). Empty for kernels
+  // with no child calls. The runtime (CUDA/HIP graph manager) embeds each as a child-graph node; other backends
+  // launch them sequentially.
+  struct ChildLaunch {
+    int child_call_index{-1};
+    int child_launch_id{-1};
+    LaunchContextBuilder *child_ctx{nullptr};
+  };
+  std::vector<ChildLaunch> child_launches;
 
   // Note that I've tried to group `array_runtime_size` and
   // `is_device_allocations` into a small struct. However, it caused some test

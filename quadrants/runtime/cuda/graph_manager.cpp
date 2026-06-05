@@ -43,6 +43,11 @@ CachedGraph::~CachedGraph() {
   if (counter_ptr_slot) {
     CUDADriver::get_instance().mem_free(counter_ptr_slot);
   }
+  for (auto &child : children) {
+    if (child.persistent_device_arg_buffer) {
+      CUDADriver::get_instance().mem_free(child.persistent_device_arg_buffer);
+    }
+  }
 }
 
 CachedGraph::CachedGraph(CachedGraph &&other) noexcept
@@ -50,6 +55,7 @@ CachedGraph::CachedGraph(CachedGraph &&other) noexcept
       persistent_device_arg_buffer(other.persistent_device_arg_buffer),
       persistent_device_result_buffer(other.persistent_device_result_buffer),
       persistent_ctx(other.persistent_ctx),
+      children(std::move(other.children)),
       arg_buffer_size(other.arg_buffer_size),
       result_buffer_size(other.result_buffer_size),
       counter_ptr_slot(other.counter_ptr_slot),
@@ -58,6 +64,7 @@ CachedGraph::CachedGraph(CachedGraph &&other) noexcept
   other.persistent_device_arg_buffer = nullptr;
   other.persistent_device_result_buffer = nullptr;
   other.counter_ptr_slot = nullptr;
+  // `other.children` is left empty by the vector move, so its destructor frees nothing (no double free).
 }
 
 CachedGraph &CachedGraph::operator=(CachedGraph &&other) noexcept {
@@ -68,6 +75,7 @@ CachedGraph &CachedGraph::operator=(CachedGraph &&other) noexcept {
   std::swap(persistent_device_arg_buffer, raii_guard.persistent_device_arg_buffer);
   std::swap(persistent_device_result_buffer, raii_guard.persistent_device_result_buffer);
   std::swap(persistent_ctx, raii_guard.persistent_ctx);
+  std::swap(children, raii_guard.children);
   std::swap(arg_buffer_size, raii_guard.arg_buffer_size);
   std::swap(result_buffer_size, raii_guard.result_buffer_size);
   std::swap(counter_ptr_slot, raii_guard.counter_ptr_slot);
@@ -205,6 +213,36 @@ void *GraphManager::add_child_graph_node(void *graph, void *prev_node, void *chi
   return node;
 }
 
+void GraphManager::refresh_child_arg_buffer(const ChildLaunchInfo &info,
+                                            CachedGraph::ChildGraphState &state,
+                                            LlvmRuntimeExecutor *executor) {
+  // Resolve the child's ndarray handles to device pointers in its own arg buffer, then upload to the child's
+  // persistent device buffer. The child kernels read this through `state.persistent_ctx.arg_buffer`. Re-run every
+  // launch so a realloc of any forwarded ndarray (new device pointer) is reflected in the embedded subgraph.
+  resolve_ctx_ndarray_ptrs(*info.child_ctx, *info.child_parameters, executor);
+  if (state.arg_buffer_size > 0) {
+    CUDADriver::get_instance().memcpy_host_to_device(state.persistent_device_arg_buffer,
+                                                     info.child_ctx->get_context().arg_buffer, state.arg_buffer_size);
+  }
+}
+
+void *GraphManager::build_child_subgraph(const ChildLaunchInfo &info, CachedGraph::ChildGraphState &state) {
+  void *child_graph = nullptr;
+  CUDADriver::get_instance().graph_create(&child_graph, 0);
+  void *prev_node = nullptr;
+  for (const auto &task : *info.child_tasks) {
+    QD_ERROR_IF(task.is_launch_child,
+                "Nested qd.kernel subgraph calls more than one level deep are not yet supported "
+                "(child task '{}' itself launches a child).",
+                task.name);
+    void *ctx_ptr = &state.persistent_ctx;
+    prev_node = add_kernel_node(child_graph, prev_node, info.child_module->lookup_function(task.name),
+                                (unsigned int)task.grid_dim, (unsigned int)task.block_dim,
+                                (unsigned int)task.dynamic_shared_array_bytes, &ctx_ptr);
+  }
+  return child_graph;
+}
+
 void *GraphManager::add_conditional_while_node(void *graph, unsigned long long *cond_handle_out) {
   ensure_condition_kernel_loaded();
   QD_ASSERT(cond_kernel_func_);
@@ -234,7 +272,11 @@ void *GraphManager::add_conditional_while_node(void *graph, unsigned long long *
   return body_graphs[0];
 }
 
-bool GraphManager::launch_cached_graph(CachedGraph &cached, LaunchContextBuilder &ctx, bool use_graph_do_while) {
+bool GraphManager::launch_cached_graph(CachedGraph &cached,
+                                       LaunchContextBuilder &ctx,
+                                       bool use_graph_do_while,
+                                       const std::vector<ChildLaunchInfo> &child_infos,
+                                       LlvmRuntimeExecutor *executor) {
   // TODO: these two memcpy_host_to_device calls could be async
   // (cuMemcpyHtoDAsync) on the launch stream for better CPU-GPU overlap.
   if (use_graph_do_while && cached.counter_ptr_slot) {
@@ -245,6 +287,13 @@ bool GraphManager::launch_cached_graph(CachedGraph &cached, LaunchContextBuilder
   if (ctx.arg_buffer_size > 0) {
     CUDADriver::get_instance().memcpy_host_to_device(cached.persistent_device_arg_buffer, ctx.get_context().arg_buffer,
                                                      cached.arg_buffer_size);
+  }
+  // Refresh each embedded child's arg buffer so its ndarray data pointers track this call's arguments. The graph
+  // topology (kernel nodes / child-graph nodes) is unchanged; only the device-side arg bytes are re-uploaded.
+  for (std::size_t i = 0; i < child_infos.size() && i < cached.children.size(); i++) {
+    if (child_infos[i].child_ctx != nullptr) {
+      refresh_child_arg_buffer(child_infos[i], cached.children[i], executor);
+    }
   }
   auto *stream = CUDAContext::get_instance().get_stream();
   CUDADriver::get_instance().graph_launch(cached.graph_exec, stream);
@@ -258,7 +307,8 @@ bool GraphManager::try_launch(int launch_id,
                               JITModule *cuda_module,
                               const std::vector<std::pair<int, Callable::Parameter>> &parameters,
                               const std::vector<OffloadedTask> &offloaded_tasks,
-                              LlvmRuntimeExecutor *executor) {
+                              LlvmRuntimeExecutor *executor,
+                              const std::vector<ChildLaunchInfo> &child_infos) {
   if (offloaded_tasks.empty()) {
     return false;
   }
@@ -289,7 +339,7 @@ bool GraphManager::try_launch(int launch_id,
 
   auto it = cache_.find(launch_id);
   if (it != cache_.end()) {
-    return launch_cached_graph(it->second, ctx, use_graph_do_while);
+    return launch_cached_graph(it->second, ctx, use_graph_do_while, child_infos, executor);
   }
 
   CUDAContext::get_instance().make_current();
@@ -299,6 +349,30 @@ bool GraphManager::try_launch(int launch_id,
   if (cached.arg_buffer_size > 0) {
     CUDADriver::get_instance().memcpy_host_to_device(cached.persistent_device_arg_buffer, ctx.get_context().arg_buffer,
                                                      cached.arg_buffer_size);
+  }
+
+  // Allocate one persistent device arg buffer + RuntimeContext per embedded child. `children` is sized to the full
+  // child-call list and never resized after this point, so `&children[i].persistent_ctx` (baked into the child
+  // subgraph's kernel nodes) stays valid for the cached graph_exec's lifetime (the vector's heap buffer survives the
+  // CachedGraph move into `cache_`). The child shares the parent's result buffer: graph kernels never return values.
+  if (!child_infos.empty()) {
+    cached.children.resize(child_infos.size());
+    for (std::size_t i = 0; i < child_infos.size(); i++) {
+      const auto &info = child_infos[i];
+      if (info.child_ctx == nullptr) {
+        continue;
+      }
+      auto &state = cached.children[i];
+      state.arg_buffer_size = info.child_ctx->arg_buffer_size;
+      if (state.arg_buffer_size > 0) {
+        CUDADriver::get_instance().malloc((void **)&state.persistent_device_arg_buffer, state.arg_buffer_size);
+      }
+      state.persistent_ctx.runtime = executor->get_llvm_runtime();
+      state.persistent_ctx.arg_buffer = state.persistent_device_arg_buffer;
+      state.persistent_ctx.result_buffer = (uint64 *)cached.persistent_device_result_buffer;
+      state.persistent_ctx.cpu_thread_id = 0;
+      refresh_child_arg_buffer(info, state, executor);
+    }
   }
 
   // --- Build CUDA graph ---
@@ -342,8 +416,22 @@ bool GraphManager::try_launch(int launch_id,
     kernel_target_graph = add_conditional_while_node(graph, &cond_handle);
   }
 
+  std::vector<void *> child_graphs;  // owned standalone child graphs; destroyed after parent instantiation
   void *prev_node = nullptr;
   for (const auto &task : offloaded_tasks) {
+    if (task.is_launch_child) {
+      // Embed the child as a single child-graph node (C2 composition). Build the child's standalone graph from its
+      // own tasks + persistent RuntimeContext, then splice it in after prev_node so it executes at this position.
+      QD_ERROR_IF(task.child_call_index < 0 || (std::size_t)task.child_call_index >= child_infos.size() ||
+                      child_infos[task.child_call_index].child_ctx == nullptr,
+                  "launch_child task references child_call_index {} but no child launch info was provided",
+                  task.child_call_index);
+      const auto &info = child_infos[task.child_call_index];
+      void *child_graph = build_child_subgraph(info, cached.children[task.child_call_index]);
+      child_graphs.push_back(child_graph);
+      prev_node = add_child_graph_node(kernel_target_graph, prev_node, child_graph);
+      continue;
+    }
     void *ctx_ptr = &cached.persistent_ctx;
     prev_node = add_kernel_node(kernel_target_graph, prev_node, cuda_module->lookup_function(task.name),
                                 (unsigned int)task.grid_dim, (unsigned int)task.block_dim,
@@ -371,6 +459,11 @@ bool GraphManager::try_launch(int launch_id,
   CUDADriver::get_instance().graph_launch(cached.graph_exec, stream);
 
   CUDADriver::get_instance().graph_destroy(graph);
+  // The standalone child graphs were deep-copied into the parent graph by add_child_graph_node, and the parent graph
+  // was deep-copied into graph_exec by graph_instantiate; the originals are no longer referenced.
+  for (void *child_graph : child_graphs) {
+    CUDADriver::get_instance().graph_destroy(child_graph);
+  }
 
   cached.num_nodes = offloaded_tasks.size();
 

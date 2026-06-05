@@ -16,6 +16,7 @@ class KernelLauncher : public lang::KernelLauncher {
   explicit KernelLauncher(Config config);
 
   void launch_kernel(const lang::CompiledKernelData &compiled_kernel_data, LaunchContextBuilder &ctx) override;
+  int ensure_registered(const lang::CompiledKernelData &compiled_kernel_data) override;
 
   virtual void launch_llvm_kernel(Handle handle, LaunchContextBuilder &ctx) = 0;
   virtual Handle register_llvm_kernel(const LLVM::CompiledKernelData &compiled) = 0;

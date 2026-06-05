@@ -13,5 +13,13 @@ void KernelLauncher::launch_kernel(const lang::CompiledKernelData &compiled_kern
   launch_llvm_kernel(handle, ctx);
 }
 
+int KernelLauncher::ensure_registered(const lang::CompiledKernelData &compiled_kernel_data) {
+  QD_ASSERT(arch_uses_llvm(compiled_kernel_data.arch()));
+  const auto &llvm_ckd = dynamic_cast<const LLVM::CompiledKernelData &>(compiled_kernel_data);
+  // Idempotent: register_llvm_kernel returns the existing handle if this compiled kernel was already registered.
+  auto handle = register_llvm_kernel(llvm_ckd);
+  return handle.get_launch_id();
+}
+
 }  // namespace LLVM
 }  // namespace quadrants::lang
