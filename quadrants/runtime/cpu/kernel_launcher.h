@@ -29,6 +29,11 @@ class KernelLauncher : public LLVM::KernelLauncher {
     std::vector<std::vector<int>> snode_writes_per_task;
     std::vector<std::vector<int>> arr_writes_per_task;
     std::vector<std::vector<int>> arr_reads_per_task;
+    // Per-task nested-child markers (parallel to `task_funcs`). For a launch_child task, `task_funcs[i]` is null and
+    // `child_call_index_per_task[i]` selects the embedded child to launch sequentially at that position (CPU has no
+    // graph; nested qd.kernel calls fall back to an in-order recursive launch). Non-child tasks store -1.
+    std::vector<char> is_launch_child_per_task;
+    std::vector<int> child_call_index_per_task;
     const std::vector<std::pair<int, Callable::Parameter>> *parameters;
     // arg_ids of the array-typed entries in `parameters`, precomputed at register time.
     std::vector<int> array_arg_ids;
@@ -41,14 +46,11 @@ class KernelLauncher : public LLVM::KernelLauncher {
   Handle register_llvm_kernel(const LLVM::CompiledKernelData &compiled) override;
 
  private:
-  void launch_offloaded_tasks(LaunchContextBuilder &ctx,
-                              const std::vector<TaskFunc> &task_funcs,
-                              const std::vector<AdStackSizingInfo> &ad_stacks,
-                              const std::vector<std::size_t> &num_threads_per_task);
-  void launch_offloaded_tasks_with_do_while(LaunchContextBuilder &ctx,
-                                            const std::vector<TaskFunc> &task_funcs,
-                                            const std::vector<AdStackSizingInfo> &ad_stacks,
-                                            const std::vector<std::size_t> &num_threads_per_task);
+  void launch_offloaded_tasks(LaunchContextBuilder &ctx, const Context &launcher_ctx);
+  void launch_offloaded_tasks_with_do_while(LaunchContextBuilder &ctx, const Context &launcher_ctx);
+  // Sequentially launch the embedded child selected by `child_call_index` (looked up in `ctx.child_launches`). Used
+  // for the CPU nested qd.kernel fallback in place of a subgraph.
+  void launch_child(LaunchContextBuilder &ctx, int child_call_index);
 
   // `std::deque` so references to existing entries survive an `emplace_back` from a nested launch.
   std::deque<Context> contexts_;

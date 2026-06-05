@@ -7,10 +7,10 @@
 namespace quadrants::lang {
 namespace cpu {
 
-void KernelLauncher::launch_offloaded_tasks(LaunchContextBuilder &ctx,
-                                            const std::vector<TaskFunc> &task_funcs,
-                                            const std::vector<AdStackSizingInfo> &ad_stacks,
-                                            const std::vector<std::size_t> &num_threads_per_task) {
+void KernelLauncher::launch_offloaded_tasks(LaunchContextBuilder &ctx, const Context &launcher_ctx) {
+  const std::vector<TaskFunc> &task_funcs = launcher_ctx.task_funcs;
+  const std::vector<AdStackSizingInfo> &ad_stacks = launcher_ctx.ad_stacks;
+  const std::vector<std::size_t> &num_threads_per_task = launcher_ctx.num_threads_per_task;
   auto *executor = get_runtime_executor();
   ctx.get_context().cpu_assert_failed = 0;
   // Two gates govern the per-launch adstack publish work, both opt-in by the kernel's IR shape. Forward-only kernels
@@ -40,6 +40,14 @@ void KernelLauncher::launch_offloaded_tasks(LaunchContextBuilder &ctx,
     executor->dispatch_max_reducers_for_tasks(ad_stacks, &ctx, /*device_runtime_context_ptr=*/nullptr);
   }
   for (size_t i = 0; i < task_funcs.size(); ++i) {
+    if (launcher_ctx.is_launch_child_per_task[i]) {
+      // Nested qd.kernel fallback: launch the embedded child kernel in source-order position. The child runs as its
+      // own full launch (its arguments were resolved from the parent call into `child_ctx`).
+      launch_child(ctx, launcher_ctx.child_call_index_per_task[i]);
+      if (ctx.get_context().cpu_assert_failed)
+        break;
+      continue;
+    }
     if (!ad_stacks[i].allocas.empty()) {
       executor->publish_adstack_metadata(ad_stacks[i], num_threads_per_task[i], &ctx);
       if (ad_stacks[i].bound_expr.has_value()) {
@@ -94,13 +102,24 @@ void KernelLauncher::launch_offloaded_tasks(LaunchContextBuilder &ctx,
   }
 }
 
-void KernelLauncher::launch_offloaded_tasks_with_do_while(LaunchContextBuilder &ctx,
-                                                          const std::vector<TaskFunc> &task_funcs,
-                                                          const std::vector<AdStackSizingInfo> &ad_stacks,
-                                                          const std::vector<std::size_t> &num_threads_per_task) {
+void KernelLauncher::launch_offloaded_tasks_with_do_while(LaunchContextBuilder &ctx, const Context &launcher_ctx) {
   do {
-    launch_offloaded_tasks(ctx, task_funcs, ad_stacks, num_threads_per_task);
+    launch_offloaded_tasks(ctx, launcher_ctx);
   } while (ctx.get_context().cpu_assert_failed == 0 && *static_cast<int32_t *>(ctx.graph_do_while_flag_dev_ptr) != 0);
+}
+
+void KernelLauncher::launch_child(LaunchContextBuilder &ctx, int child_call_index) {
+  for (const auto &cl : ctx.child_launches) {
+    if (cl.child_call_index == child_call_index) {
+      QD_ASSERT(cl.child_ctx != nullptr && cl.child_launch_id >= 0);
+      Handle child_handle;
+      child_handle.set_launch_id(cl.child_launch_id);
+      // Recursive launch into this same launcher; `contexts_` is a deque so the parent's entry stays valid.
+      launch_llvm_kernel(child_handle, *cl.child_ctx);
+      return;
+    }
+  }
+  QD_ERROR("launch_child task references child_call_index {} but no child launch info was provided", child_call_index);
 }
 
 void KernelLauncher::launch_llvm_kernel(Handle handle, LaunchContextBuilder &ctx) {
@@ -150,10 +169,9 @@ void KernelLauncher::launch_llvm_kernel(Handle handle, LaunchContextBuilder &ctx
 
   if (ctx.graph_do_while_arg_id >= 0) {
     QD_ASSERT(ctx.graph_do_while_flag_dev_ptr);
-    launch_offloaded_tasks_with_do_while(ctx, launcher_ctx.task_funcs, launcher_ctx.ad_stacks,
-                                         launcher_ctx.num_threads_per_task);
+    launch_offloaded_tasks_with_do_while(ctx, launcher_ctx);
   } else {
-    launch_offloaded_tasks(ctx, launcher_ctx.task_funcs, launcher_ctx.ad_stacks, launcher_ctx.num_threads_per_task);
+    launch_offloaded_tasks(ctx, launcher_ctx);
   }
 }
 
@@ -177,13 +195,30 @@ KernelLauncher::Handle KernelLauncher::register_llvm_kernel(const LLVM::Compiled
     std::vector<std::vector<int>> snode_writes_per_task;
     std::vector<std::vector<int>> arr_writes_per_task;
     std::vector<std::vector<int>> arr_reads_per_task;
+    std::vector<char> is_launch_child_per_task;
+    std::vector<int> child_call_index_per_task;
     task_funcs.reserve(data.tasks.size());
     ad_stacks.reserve(data.tasks.size());
     num_threads_per_task.reserve(data.tasks.size());
     snode_writes_per_task.reserve(data.tasks.size());
     arr_writes_per_task.reserve(data.tasks.size());
     arr_reads_per_task.reserve(data.tasks.size());
+    is_launch_child_per_task.reserve(data.tasks.size());
+    child_call_index_per_task.reserve(data.tasks.size());
     for (auto &task : data.tasks) {
+      if (task.is_launch_child) {
+        // Nested qd.kernel marker: no device function. Keep the parallel vectors aligned; the launch loop runs the
+        // embedded child sequentially at this position instead of calling a task function.
+        task_funcs.push_back(nullptr);
+        ad_stacks.push_back(task.ad_stack);
+        num_threads_per_task.push_back(1);
+        snode_writes_per_task.push_back({});
+        arr_writes_per_task.push_back({});
+        arr_reads_per_task.push_back({});
+        is_launch_child_per_task.push_back(1);
+        child_call_index_per_task.push_back(task.child_call_index);
+        continue;
+      }
       auto *func_ptr = jit_module->lookup_function(task.name);
       QD_ASSERT_INFO(func_ptr, "Offloaded datum function {} not found", task.name);
       task_funcs.push_back((TaskFunc)(func_ptr));
@@ -196,6 +231,8 @@ KernelLauncher::Handle KernelLauncher::register_llvm_kernel(const LLVM::Compiled
       snode_writes_per_task.push_back(task.snode_writes);
       arr_writes_per_task.push_back(task.arr_writes);
       arr_reads_per_task.push_back(task.arr_reads);
+      is_launch_child_per_task.push_back(0);
+      child_call_index_per_task.push_back(-1);
     }
 
     // Populate ctx
@@ -206,6 +243,8 @@ KernelLauncher::Handle KernelLauncher::register_llvm_kernel(const LLVM::Compiled
     ctx.snode_writes_per_task = std::move(snode_writes_per_task);
     ctx.arr_writes_per_task = std::move(arr_writes_per_task);
     ctx.arr_reads_per_task = std::move(arr_reads_per_task);
+    ctx.is_launch_child_per_task = std::move(is_launch_child_per_task);
+    ctx.child_call_index_per_task = std::move(child_call_index_per_task);
 
     // Precompute the array-typed parameter `arg_id`s so `launch_llvm_kernel` does not have to walk the
     // full parameters list and re-check `is_array` on every invocation.
