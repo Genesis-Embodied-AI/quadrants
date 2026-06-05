@@ -847,33 +847,18 @@ def test_device_radix_sort_already_sorted():
     np.testing.assert_array_equal(keys.to_numpy(), host)
 
 
-# --- Fused single-kernel radix sort (M1: keys-only u32) ---------------------------------
-
-
-@pytest.mark.parametrize("N", _RADIX_SORT_SIZES)
-@test_utils.test(arch=qd.gpu)
-def test_device_radix_sort_fused_keys_u32(N):
-    """The fused single-kernel sort matches numpy.sort for u32 keys across the size sweep (incl. multi-level scan
-    sizes 65536 / 200_000 that drive the staircase past one recursion level)."""
-    rng = np.random.default_rng(seed=1234)
-    host = _gen_keys(rng, qd.u32, N)
-
-    keys = qd.field(qd.u32, shape=N)
-    tmp = qd.field(qd.u32, shape=N)
-    _fill_field(keys, host)
-
-    slots = qd.algorithms.fused_radix_sort_scratch_slots(N, qd.algorithms._radix_sort_fused._min_log256_for_n(N))
-    scratch = qd.field(qd.u32, shape=max(slots, 1))
-
-    qd.algorithms.device_radix_sort_fused(keys, tmp, scratch)
-    np.testing.assert_array_equal(keys.to_numpy(), np.sort(host, kind="stable"), err_msg=f"fused u32 sort(N={N})")
+# --- Fused-kernel specifics: over-specified scan depth (the graph path fixes ``log256_max_n`` ahead of time so one
+# captured topology serves a range of N). The dtype x size matrix (incl. key-value) is covered by
+# ``test_device_radix_sort_keys_only`` / ``_key_value`` above - now backed by this fused kernel - and the
+# caller-scratch tests further below. -------------------------------------------------------------------------------
 
 
 @pytest.mark.parametrize("N", [7, 257, 1025, 65536])
 @test_utils.test(arch=qd.gpu)
-def test_device_radix_sort_fused_overspecified_depth(N):
+def test_device_radix_sort_overspecified_depth(N):
     """An over-specified ``log256_max_n`` (deeper than the minimal depth for N) must still sort correctly - the
-    forced extra staircase levels operate on length-1 buffers and act as identity no-ops."""
+    forced extra staircase levels operate on length-1 buffers and act as identity no-ops. Also covers sizing scratch
+    via ``fused_radix_sort_scratch_slots(N, D)`` for an explicit depth ``D``."""
     D = 3  # 256**3 = 16_777_216 >= every N here, so depth is intentionally deeper than needed
     rng = np.random.default_rng(seed=99)
     host = _gen_keys(rng, qd.u32, N)
@@ -885,75 +870,8 @@ def test_device_radix_sort_fused_overspecified_depth(N):
     slots = qd.algorithms.fused_radix_sort_scratch_slots(N, D)
     scratch = qd.field(qd.u32, shape=max(slots, 1))
 
-    qd.algorithms.device_radix_sort_fused(keys, tmp, scratch, log256_max_n=D)
-    np.testing.assert_array_equal(keys.to_numpy(), np.sort(host, kind="stable"), err_msg=f"fused u32 sort(N={N}, D={D})")
-
-
-@test_utils.test(arch=qd.gpu)
-def test_device_radix_sort_fused_insufficient_scratch():
-    """Too-small scratch raises InsufficientScratchError before mutating keys, exposing the required slot count."""
-    N = 1025
-    keys = qd.field(qd.u32, shape=N)
-    tmp = qd.field(qd.u32, shape=N)
-    host = np.random.default_rng(0).integers(0, 2**32, size=N, dtype=np.uint32)
-    _fill_field(keys, host)
-
-    needed = qd.algorithms.fused_radix_sort_scratch_slots(N, qd.algorithms._radix_sort_fused._min_log256_for_n(N))
-    scratch = qd.field(qd.u32, shape=needed - 1)
-    with pytest.raises(qd.algorithms.InsufficientScratchError):
-        qd.algorithms.device_radix_sort_fused(keys, tmp, scratch)
-    # Keys untouched by the rejected call.
-    np.testing.assert_array_equal(keys.to_numpy(), host)
-
-
-@pytest.mark.parametrize("N", _RADIX_SORT_SIZES)
-@pytest.mark.parametrize("dtype", _RADIX_KEY_DTYPES)
-@test_utils.test(arch=qd.gpu)
-def test_device_radix_sort_fused_keys_all_dtypes(dtype, N):
-    """The fused sort matches numpy.sort for every supported key dtype: u32/i32/f32 (4 passes) and u64/i64/f64
-    (8 passes), with the in-kernel twiddle/untwiddle for signed + float."""
-    _skip_if_dtype_unsupported(dtype)
-    rng = np.random.default_rng(seed=1234)
-    host = _gen_keys(rng, dtype, N)
-
-    keys = qd.field(dtype, shape=N)
-    tmp = qd.field(dtype, shape=N)
-    _fill_field(keys, host)
-
-    slots = qd.algorithms.fused_radix_sort_scratch_slots(N, qd.algorithms._radix_sort_fused._min_log256_for_n(N))
-    scratch = qd.field(qd.u32, shape=max(slots, 1))
-
-    qd.algorithms.device_radix_sort_fused(keys, tmp, scratch)
-    np.testing.assert_array_equal(keys.to_numpy(), np.sort(host, kind="stable"), err_msg=f"fused {dtype} sort(N={N})")
-
-
-@pytest.mark.parametrize("N", _RADIX_SORT_SIZES)
-@pytest.mark.parametrize("dtype", _RADIX_KEY_DTYPES)
-@test_utils.test(arch=qd.gpu)
-def test_device_radix_sort_fused_key_value(dtype, N):
-    """Fused key-value sort: i32 values permute in lock-step with the keys; stable (matches argsort)."""
-    _skip_if_dtype_unsupported(dtype)
-    rng = np.random.default_rng(seed=1234)
-    host = _gen_keys(rng, dtype, N)
-
-    keys = qd.field(dtype, shape=N)
-    tmp_keys = qd.field(dtype, shape=N)
-    values = qd.field(qd.i32, shape=N)
-    tmp_values = qd.field(qd.i32, shape=N)
-    _fill_field(keys, host)
-    _fill_field(values, np.arange(N, dtype=np.int32))
-
-    slots = qd.algorithms.fused_radix_sort_scratch_slots(N, qd.algorithms._radix_sort_fused._min_log256_for_n(N))
-    scratch = qd.field(qd.u32, shape=max(slots, 1))
-
-    qd.algorithms.device_radix_sort_fused(keys, tmp_keys, scratch, values=values, tmp_values=tmp_values)
-
-    got_keys = keys.to_numpy()
-    got_values = values.to_numpy()
-    want_idx = np.argsort(host, kind="stable")
-    want_keys = host[want_idx]
-    np.testing.assert_array_equal(got_keys, want_keys, err_msg=f"fused {dtype} keys(N={N})")
-    np.testing.assert_array_equal(got_values, want_idx.astype(np.int32), err_msg=f"fused {dtype} values(N={N})")
+    qd.algorithms.device_radix_sort(keys, tmp_keys=tmp, scratch=scratch, log256_max_n=D)
+    np.testing.assert_array_equal(keys.to_numpy(), np.sort(host, kind="stable"), err_msg=f"u32 sort(N={N}, D={D})")
 
 
 @test_utils.test(arch=qd.gpu)
