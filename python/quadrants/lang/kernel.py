@@ -217,6 +217,8 @@ class ASTGenerator:
         ctx = self.ctx
         pruning = ctx.global_context.pruning
         self.runtime.inside_kernel = True
+        # Reset nested child-kernel records for this trace; build_Call repopulates them in source order.
+        self.current_kernel._child_calls = []
         assert self.runtime._compiling_callable is None
         self.runtime._compiling_callable = kernel_cxx
         try:
@@ -304,6 +306,11 @@ class Kernel(FuncBase):
         self.has_print = False
         self.use_graph: bool = False
         self.graph_do_while_arg: str | None = None
+        # Nested qd.kernel-as-subgraph: child kernel calls recorded during the most recent trace of this (graph=True)
+        # parent, in source order. Each entry is (child_kernel, arg_sources) where arg_sources maps each child arg to
+        # a parent parameter index ("param", i) or a literal ("const", value). Indexed by ChildLaunchStmt /
+        # OffloadedTask.child_call_index at launch time. Reset at the start of every trace (ASTGenerator.__call__).
+        self._child_calls: list[tuple] = []
         self.quadrants_callable: QuadrantsCallable | None = None
         self.visited_functions: set[FunctionSourceInfo] = set()
         self.kernel_function_info: FunctionSourceInfo | None = None

@@ -36,6 +36,49 @@ from ..._quadrants_callable import BoundQuadrantsCallable, QuadrantsCallable
 
 class CallTransformer:
     @staticmethod
+    def _resolve_child_kernel(func):
+        """If *func* is a ``@qd.kernel`` wrapper, return the underlying ``Kernel`` (the child), else ``None``."""
+        if type(func) in (QuadrantsCallable, BoundQuadrantsCallable) and getattr(func, "_is_wrapped_kernel", False):
+            return getattr(func, "_primal", None)
+        return None
+
+    @staticmethod
+    def _build_child_launch(ctx: ASTTransformerFuncContext, node, child_kernel):
+        """Record a nested child-kernel call on the parent and emit a launch_child marker into the parent IR.
+
+        v1 contract (pass-through): each argument must be a parameter of the parent kernel or a literal constant, so
+        the child's launch context can be reconstructed from the parent's runtime arguments at launch time. The child
+        is embedded as a subgraph (CUDA/HIP) or launched sequentially (other backends) at this position.
+        """
+        parent = ctx.global_context.current_kernel
+        if parent is None or not getattr(parent, "use_graph", False):
+            raise QuadrantsSyntaxError(
+                "Calling a @qd.kernel from inside another kernel is only supported when the calling kernel is "
+                "decorated with @qd.kernel(graph=True); the child kernel is then embedded as a subgraph."
+            )
+        if node.keywords:
+            raise QuadrantsSyntaxError(
+                "Keyword arguments are not yet supported for nested qd.kernel (subgraph) calls; pass arguments "
+                "positionally."
+            )
+        parent_param_names = [m.name for m in parent.arg_metas]
+        arg_sources: list[tuple] = []
+        for a in node.args:
+            if isinstance(a, ast.Name) and a.id in parent_param_names:
+                arg_sources.append(("param", parent_param_names.index(a.id)))
+            elif isinstance(a, ast.Constant):
+                arg_sources.append(("const", a.value))
+            else:
+                raise QuadrantsSyntaxError(
+                    "Arguments to a nested qd.kernel (subgraph) call must currently be a parameter of the parent "
+                    f"kernel or a literal constant (got `{ast.unparse(a)}`)."
+                )
+        index = len(parent._child_calls)
+        parent._child_calls.append((child_kernel, arg_sources))
+        ctx.ast_builder.insert_child_launch(index, child_kernel.func.__name__)
+        return None
+
+    @staticmethod
     def _build_call_if_is_builtin(ctx: ASTTransformerFuncContext, node, args, keywords):
         from quadrants.lang import matrix_ops  # pylint: disable=C0415
 
@@ -282,6 +325,16 @@ class CallTransformer:
             build_stmts(ctx, node.keywords)
         func = node.func.ptr
         func_type = type(func)
+
+        # Nested qd.kernel-as-subgraph: a @qd.kernel called from inside a graph=True parent kernel is not launched
+        # eagerly. It is recorded on the parent and a launch_child marker is inserted so the child is embedded as a
+        # subgraph at this position in the parent's graph. Handle this before the qd.func pruning path below, whose
+        # `func.wrapper.func_id` lookup does not apply to kernel wrappers. `node.args` are already built above, so the
+        # parent parameters used as child arguments are correctly recorded as "used" by pruning.
+        child_kernel = CallTransformer._resolve_child_kernel(func)
+        if child_kernel is not None:
+            node.ptr = CallTransformer._build_child_launch(ctx, node, child_kernel)
+            return node.ptr
 
         is_func_base_wrapper = func_type in {QuadrantsCallable, BoundQuadrantsCallable}
         pruning = ctx.global_context.pruning

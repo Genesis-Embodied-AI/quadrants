@@ -32,6 +32,9 @@ CompiledKernelData::Err CompiledKernelData::check() const {
     return Err::kCompiledKernelDataBroken;
   }
   for (const auto &t : tasks) {
+    if (t.is_launch_child) {
+      continue;  // launch_child marker tasks have no device function
+    }
     if (compiled_data.module->getFunction(t.name) == nullptr) {
       return Err::kCompiledKernelDataBroken;
     }

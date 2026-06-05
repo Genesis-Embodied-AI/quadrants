@@ -354,6 +354,8 @@ std::string OffloadedStmt::task_type_name(TaskType tt) {
 std::unique_ptr<Stmt> OffloadedStmt::clone() const {
   auto new_stmt = std::make_unique<OffloadedStmt>(task_type, device, kernel_);
   new_stmt->snode = snode;
+  new_stmt->child_call_index = child_call_index;
+  new_stmt->child_kernel_name = child_kernel_name;
   new_stmt->begin_offset = begin_offset;
   new_stmt->end_offset = end_offset;
   new_stmt->const_begin = const_begin;

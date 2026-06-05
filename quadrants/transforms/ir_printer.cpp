@@ -656,6 +656,9 @@ class IRPrinter : public IRVisitor {
             stmt->snode->get_node_type_name_hinted());
     } else if (stmt->task_type == OffloadedTaskType::gc) {
       print("{} = offloaded garbage collect {}", stmt->name(), stmt->snode->get_node_type_name_hinted());
+    } else if (stmt->task_type == OffloadedTaskType::launch_child) {
+      print("{} = offloaded launch_child \"{}\" (call #{})", stmt->name(), stmt->child_kernel_name,
+            stmt->child_call_index);
     } else {
       print("{} = offloaded {} ", stmt->name(), details);
       if (stmt->tls_prologue) {
