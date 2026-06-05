@@ -523,6 +523,190 @@ def test_checkpoint_yield_exits_graph_do_while_early():
 
 
 @test_utils.test()
+def test_checkpoint_returns_graph_status():
+    """Slice 2: kernels with `yield_on=` checkpoints return a `GraphStatus` from every launch.
+
+    No yield this launch -> `status.yielded` is False, `status.checkpoint` is None.
+    """
+    N = 4
+
+    @qd.kernel(graph=True)
+    def k(x: qd.types.ndarray(qd.i32, ndim=1), flag: qd.types.ndarray(qd.i32, ndim=0)):
+        with qd.checkpoint(yield_on=flag):
+            for i in range(x.shape[0]):
+                x[i] = x[i] + 1
+
+    x = qd.ndarray(qd.i32, shape=(N,))
+    flag = qd.ndarray(qd.i32, shape=())
+    x.from_numpy(np.zeros(N, dtype=np.int32))
+    flag.from_numpy(np.array(0, dtype=np.int32))
+
+    status = k(x, flag)
+    assert isinstance(status, qd.GraphStatus)
+    if _is_checkpoint_if_path_native():
+        assert status.yielded is False
+        assert status.checkpoint is None
+    np.testing.assert_array_equal(x.to_numpy(), np.ones(N, dtype=np.int32))
+
+
+@test_utils.test()
+def test_checkpoint_graph_status_reports_yield():
+    """Slice 2: a yielding launch returns `GraphStatus(yielded=True, checkpoint=cp_id)`."""
+    if not _is_checkpoint_if_path_native():
+        pytest.skip("GraphStatus yield reporting requires the CUDA-native IF path (slice 1d)")
+    N = 4
+
+    @qd.kernel(graph=True)
+    def k(x: qd.types.ndarray(qd.i32, ndim=1), flag: qd.types.ndarray(qd.i32, ndim=0)):
+        with qd.checkpoint():
+            for i in range(x.shape[0]):
+                x[i] = x[i] + 1
+        with qd.checkpoint(yield_on=flag):
+            for i in range(x.shape[0]):
+                x[i] = x[i] + 10
+
+    x = qd.ndarray(qd.i32, shape=(N,))
+    flag = qd.ndarray(qd.i32, shape=())
+    x.from_numpy(np.zeros(N, dtype=np.int32))
+    flag.from_numpy(np.array(1, dtype=np.int32))
+
+    status = k(x, flag)
+    assert isinstance(status, qd.GraphStatus)
+    assert status.yielded is True
+    assert status.checkpoint == 1
+
+
+@test_utils.test()
+def test_checkpoint_resume_runs_only_from_checkpoint():
+    """Slice 2: `kernel.resume(..., from_checkpoint=cp)` skips every checkpoint with cp_id < cp.
+
+    Three checkpoints, each adds a distinct increment to x. Calling `resume(from_checkpoint=1)`
+    should skip cp 0 and run cp 1 + cp 2. With no `yield_on=` flags fired, the resume call
+    returns `GraphStatus(yielded=False, checkpoint=None)`.
+    """
+    if not _is_checkpoint_if_path_native():
+        pytest.skip("from_checkpoint= requires the CUDA-native IF path (slice 1d)")
+    N = 4
+
+    @qd.kernel(graph=True)
+    def k(x: qd.types.ndarray(qd.i32, ndim=1), flag: qd.types.ndarray(qd.i32, ndim=0)):
+        with qd.checkpoint():
+            for i in range(x.shape[0]):
+                x[i] = x[i] + 1
+        with qd.checkpoint(yield_on=flag):
+            for i in range(x.shape[0]):
+                x[i] = x[i] + 10
+        with qd.checkpoint():
+            for i in range(x.shape[0]):
+                x[i] = x[i] + 100
+
+    x = qd.ndarray(qd.i32, shape=(N,))
+    flag = qd.ndarray(qd.i32, shape=())
+    x.from_numpy(np.zeros(N, dtype=np.int32))
+    flag.from_numpy(np.array(0, dtype=np.int32))
+
+    # Prime the cached graph with a fresh call first so resume hits a built graph.
+    status = k(x, flag)
+    assert status.yielded is False
+    # After the priming call: x == 111.
+    np.testing.assert_array_equal(x.to_numpy(), np.full(N, 111, dtype=np.int32))
+
+    x.from_numpy(np.zeros(N, dtype=np.int32))
+    status2 = k.resume(x, flag, from_checkpoint=1)
+    assert isinstance(status2, qd.GraphStatus)
+    assert status2.yielded is False
+    np.testing.assert_array_equal(x.to_numpy(), np.full(N, 110, dtype=np.int32))
+
+
+@test_utils.test()
+def test_checkpoint_canonical_yield_resume_loop():
+    """Slice 2: the canonical qipc-style yield/resume loop from the design doc.
+
+    Kernel runs three checkpoints; cp 1 always yields once. The host loop catches the yield,
+    resumes from cp 1, and the second launch completes cleanly.
+    """
+    if not _is_checkpoint_if_path_native():
+        pytest.skip("yield/resume loop requires the CUDA-native IF path (slice 1d)")
+    N = 4
+
+    @qd.kernel(graph=True)
+    def step(x: qd.types.ndarray(qd.i32, ndim=1), flag: qd.types.ndarray(qd.i32, ndim=0)):
+        with qd.checkpoint():
+            for i in range(x.shape[0]):
+                x[i] = x[i] + 1
+        with qd.checkpoint(yield_on=flag):
+            for i in range(x.shape[0]):
+                x[i] = x[i] + 10
+        with qd.checkpoint():
+            for i in range(x.shape[0]):
+                x[i] = x[i] + 100
+
+    x = qd.ndarray(qd.i32, shape=(N,))
+    flag = qd.ndarray(qd.i32, shape=())
+    x.from_numpy(np.zeros(N, dtype=np.int32))
+    flag.from_numpy(np.array(1, dtype=np.int32))
+
+    status = step(x, flag)
+    yields_seen = 0
+    while status.yielded:
+        # In real qipc-style code the host would grow a buffer here; in this test we just
+        # decline to re-yield on the resume launch.
+        yields_seen += 1
+        assert flag.to_numpy() == 0, "yield-check kernel should have cleared the flag"
+        status = step.resume(x, flag, from_checkpoint=status.checkpoint)
+    assert yields_seen == 1
+    # First launch: cp 0 (+1), cp 1 (+10, yields). Resume: cp 1 (+10), cp 2 (+100). Total: 121.
+    np.testing.assert_array_equal(x.to_numpy(), np.full(N, 121, dtype=np.int32))
+
+
+@test_utils.test()
+def test_checkpoint_resume_invalid_args_raise():
+    """Slice 2: misuse of `kernel.resume(from_checkpoint=...)` should fail fast."""
+
+    @qd.kernel(graph=True)
+    def k(x: qd.types.ndarray(qd.i32, ndim=1), flag: qd.types.ndarray(qd.i32, ndim=0)):
+        with qd.checkpoint(yield_on=flag):
+            for i in range(x.shape[0]):
+                x[i] = x[i] + 1
+
+    @qd.kernel(graph=True)
+    def k_no_yield(x: qd.types.ndarray(qd.i32, ndim=1)):
+        for i in range(x.shape[0]):
+            x[i] = x[i] + 1
+
+    x = qd.ndarray(qd.i32, shape=(4,))
+    flag = qd.ndarray(qd.i32, shape=())
+    with pytest.raises(RuntimeError, match="non-negative integer"):
+        k.resume(x, flag, from_checkpoint=-1)
+    with pytest.raises(RuntimeError, match="non-negative integer"):
+        k.resume(x, flag, from_checkpoint="zero")  # type: ignore[arg-type]
+    with pytest.raises(RuntimeError, match="from_checkpoint.* is only valid for kernels"):
+        k_no_yield.resume(x, from_checkpoint=0)
+
+
+@test_utils.test()
+def test_checkpoint_non_yield_kernel_returns_none():
+    """Kernels with `qd.checkpoint()` but no `yield_on=` keep returning None (no GraphStatus).
+
+    The host-side `GraphStatus` surface is opt-in via `yield_on=` so existing graph kernels
+    that just want skippable stages don't change return type out from under their callers.
+    """
+    N = 4
+
+    @qd.kernel(graph=True)
+    def k(x: qd.types.ndarray(qd.i32, ndim=1)):
+        with qd.checkpoint():
+            for i in range(x.shape[0]):
+                x[i] = x[i] + 1
+
+    x = qd.ndarray(qd.i32, shape=(N,))
+    x.from_numpy(np.zeros(N, dtype=np.int32))
+    ret = k(x)
+    assert ret is None
+    np.testing.assert_array_equal(x.to_numpy(), np.ones(N, dtype=np.int32))
+
+
+@test_utils.test()
 def test_checkpoint_yield_on_must_be_bare_name():
     """yield_on= must be a bare parameter name -- expressions / attributes are not supported.
 
