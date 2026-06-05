@@ -45,17 +45,33 @@ def _is_checkpoint_if_path_native():
 def _supports_checkpoint_yield_resume():
     """Backends that implement the checkpoint yield/resume host contract.
 
-    Wider than `_is_checkpoint_if_path_native()`: also includes the CPU/x64 path, where the
-    `KernelLauncher` emulates `resume_point` / `yield_signal` in host-side gating (slice 6).
-    Use this predicate for tests of the behavioural yield/resume + `kernel.resume(...)` API;
-    use `_is_checkpoint_if_path_native()` only for graph-introspection counters that exist
-    on CUDA alone.
+    Wider than `_is_checkpoint_if_path_native()`: also includes the CPU/x64 path (slice 6)
+    and the AMDGPU host-orchestrated sub-graph path (slice 4). Use this predicate for tests
+    of the behavioural yield/resume + `kernel.resume(...)` API; use
+    `_is_checkpoint_if_path_native()` only for graph-introspection counters that exist on
+    CUDA alone.
     """
     if _is_checkpoint_if_path_native():
         return True
     if impl.current_cfg().arch == qd.x64:
         return True
+    if impl.current_cfg().arch == qd.amdgpu:
+        return True
     return False
+
+
+def _supports_checkpoint_yield_resume_in_while_loop():
+    """Strict subset of `_supports_checkpoint_yield_resume`: backends where yield/resume also
+    works inside a `qd.graph_do_while` body.
+
+    AMDGPU's slice 4 sub-graph orchestration only kicks in when there is no `graph_do_while`
+    arg; with one, the kernel takes the streaming-launcher path which does not yet emulate
+    the WHILE early-exit / per-iteration resume_point reset. The WHILE-specific tests gate
+    on this stricter predicate so AMDGPU sequential resume-offset tests still run.
+    """
+    if impl.current_cfg().arch == qd.amdgpu:
+        return False
+    return _supports_checkpoint_yield_resume()
 
 
 def _num_checkpoints_on_last_call():
@@ -504,8 +520,8 @@ def test_checkpoint_yield_exits_graph_do_while_early():
     `resume_point == INT_MAX`, skip every checkpoint, never decrement the counter, and spin
     forever. The cond-with-yield variant checks `yield_signal != -1` and exits the WHILE.
     """
-    if not _supports_checkpoint_yield_resume():
-        pytest.skip("WHILE early-exit requires the CUDA-native IF path (slice 1d) or CPU host-branch gating (slice 6)")
+    if not _supports_checkpoint_yield_resume_in_while_loop():
+        pytest.skip("WHILE early-exit not yet covered on this backend (e.g. AMDGPU slice 4 streaming-launcher fallback)")
     N = 4
 
     @qd.kernel(graph=True)

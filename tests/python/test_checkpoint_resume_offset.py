@@ -42,7 +42,23 @@ def _supports_checkpoint_yield_resume():
     # CPU/x64 host-branch gating + yield emulation in `KernelLauncher` (slice 6).
     if impl.current_cfg().arch == qd.x64:
         return True
+    # AMDGPU host-orchestrated sub-graph gating in `GraphManager::launch_cached_checkpoint_graph`
+    # (slice 4). Today this only covers the non-`graph_do_while` path; the loop tests below skip
+    # accordingly via the AMDGPU-specific gate in `_supports_checkpoint_yield_resume_in_while_loop`.
+    if impl.current_cfg().arch == qd.amdgpu:
+        return True
     return False
+
+
+def _supports_checkpoint_yield_resume_in_while_loop():
+    # `graph_do_while + qd.checkpoint(yield_on=...)` requires the kernel to be inside the HIP /
+    # CUDA graph the cond-with-yield kernel watches. AMDGPU's slice 4 falls back to the streaming
+    # launcher (no HIP graph) whenever `graph_do_while_arg_id >= 0`, so the WHILE-body's
+    # checkpoints currently all run unconditionally. The "while" subset of the resume-offset tests
+    # gates on this stricter predicate; the sequential subset uses the wider one above.
+    if impl.current_cfg().arch == qd.amdgpu:
+        return False
+    return _supports_checkpoint_yield_resume()
 
 
 N = 8
@@ -160,8 +176,8 @@ def test_resume_offset_loop_this():
     Expected: A hit 3x (yield iter + 2 full iters in resume), B hit 4x (yield iter + 3 full),
     C hit 3x (3 full iters in resume). Host loop sees one yield.
     """
-    if not _supports_checkpoint_yield_resume():
-        pytest.skip("resume-offset semantics only validated on backends with checkpoint yield/resume support (CUDA SM 9.0+ or CPU)")
+    if not _supports_checkpoint_yield_resume_in_while_loop():
+        pytest.skip("WHILE+yield/resume semantics not yet covered on this backend (e.g. AMDGPU slice 4 streaming-launcher fallback)")
 
     # Note: every "logical statement" inside a checkpoint body must live in its own top-level
     # `for` loop so the offloader emits it as a range_for task tagged with the surrounding
@@ -223,8 +239,8 @@ def test_resume_offset_loop_next():
     Expected: A hit 1+0+1+1 = 3, B hit 3, C hit 3. counter goes 3 -> 2 (iter 1) -> 2 (resume
     iter 1, skipped) -> 1 (iter 2) -> 0 (iter 3). Host loop sees one yield.
     """
-    if not _supports_checkpoint_yield_resume():
-        pytest.skip("resume-offset semantics only validated on backends with checkpoint yield/resume support (CUDA SM 9.0+ or CPU)")
+    if not _supports_checkpoint_yield_resume_in_while_loop():
+        pytest.skip("WHILE+yield/resume semantics not yet covered on this backend (e.g. AMDGPU slice 4 streaming-launcher fallback)")
 
     # See `_loop_this` comment about why the counter decrement uses `for _ in range(1):`.
     @qd.kernel(graph=True)
