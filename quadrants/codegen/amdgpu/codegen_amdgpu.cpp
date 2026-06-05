@@ -366,6 +366,11 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
     QD_ASSERT(current_offload == nullptr);
     current_offload = stmt;
     using Type = OffloadedStmt::TaskType;
+    if (stmt->task_type == Type::launch_child) {
+      emit_launch_child_task(stmt);
+      current_offload = nullptr;
+      return;
+    }
     if (stmt->task_type == Type::gc) {
       emit_amdgpu_gc(stmt);
     } else {

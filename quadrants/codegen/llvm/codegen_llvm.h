@@ -398,6 +398,10 @@ class TaskCodeGenLLVM : public IRVisitor, public LLVMModuleBuilder {
 
   void finalize_offloaded_task_function();
 
+  // Emit a body-less OffloadedTask descriptor for a launch_child task (nested qd.kernel-as-subgraph). No device
+  // function is generated; the runtime embeds/launches the child by `child_call_index` at this position.
+  void emit_launch_child_task(OffloadedStmt *stmt);
+
   FunctionCreationGuard get_function_creation_guard(std::vector<llvm::Type *> argument_types,
                                                     const std::string &func_name = "function_body");
 

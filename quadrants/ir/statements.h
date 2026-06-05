@@ -1623,6 +1623,26 @@ class ClearListStmt : public Stmt {
 // Checks if the task represented by |stmt| contains a single ClearListStmt.
 bool is_clear_list_task(const OffloadedStmt *stmt);
 
+// Marks a nested qd.kernel-as-subgraph call inside a graph=True parent kernel. Carries no operands: the child is a
+// separately-compiled kernel that the runtime embeds as a subgraph (CUDA/HIP child-graph node) or launches
+// sequentially at this point in the parent's task stream. `child_call_index` is the 0-based source-order index of
+// this call within the parent; the parent supplies one compiled-child descriptor per index at launch time.
+// `has_global_side_effect()` is true (default) so it is never dead-code eliminated, and the CFG treats it as an
+// opaque barrier (it may read/write any of the child's array args).
+class ChildLaunchStmt : public Stmt {
+ public:
+  int child_call_index;
+  std::string child_kernel_name;
+
+  ChildLaunchStmt(int child_call_index, const std::string &child_kernel_name)
+      : child_call_index(child_call_index), child_kernel_name(child_kernel_name) {
+    QD_STMT_REG_FIELDS;
+  }
+
+  QD_STMT_DEF_FIELDS(ret_type, child_call_index, child_kernel_name);
+  QD_DEFINE_ACCEPT_AND_CLONE
+};
+
 class InternalFuncStmt : public Stmt {
  public:
   std::string func_name;

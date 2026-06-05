@@ -149,6 +149,11 @@ class TaskCodeGenCPU : public TaskCodeGenLLVM {
     if (stmt->bls_size > 0)
       create_bls_buffer(stmt);
     using Type = OffloadedStmt::TaskType;
+    if (stmt->task_type == Type::launch_child) {
+      emit_launch_child_task(stmt);
+      current_offload = nullptr;
+      return;
+    }
     auto offloaded_task_name = init_offloaded_task_function(stmt);
     if (compile_config.kernel_profiler && arch_is_cpu(compile_config.arch)) {
       call("LLVMRuntime_profiler_start", get_runtime(), builder->CreateGlobalStringPtr(offloaded_task_name));

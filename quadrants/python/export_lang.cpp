@@ -296,6 +296,7 @@ void export_lang(py::module &m) {
       .def("insert_break_stmt", &ASTBuilder::insert_break_stmt)
       .def("insert_continue_stmt", &ASTBuilder::insert_continue_stmt)
       .def("insert_expr_stmt", &ASTBuilder::insert_expr_stmt)
+      .def("insert_child_launch", &ASTBuilder::insert_child_launch)
       .def("insert_thread_idx_expr", &ASTBuilder::insert_thread_idx_expr)
       .def("insert_patch_idx_expr", &ASTBuilder::insert_patch_idx_expr)
       .def("expand_exprs", &ASTBuilder::expand_exprs)

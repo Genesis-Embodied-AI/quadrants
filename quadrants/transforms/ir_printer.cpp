@@ -697,6 +697,11 @@ class IRPrinter : public IRVisitor {
     dbg_info_printer_(stmt);
   }
 
+  void visit(ChildLaunchStmt *stmt) override {
+    print("{} launch_child \"{}\" (call #{})", stmt->name(), stmt->child_kernel_name, stmt->child_call_index);
+    dbg_info_printer_(stmt);
+  }
+
   void visit(LoopIndexStmt *stmt) override {
     print("{}{} = loop {} index {}", stmt->type_hint(), stmt->name(), stmt->loop->name(), stmt->index);
     dbg_info_printer_(stmt);

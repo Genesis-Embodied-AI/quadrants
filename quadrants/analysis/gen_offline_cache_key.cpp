@@ -27,6 +27,9 @@ enum class StmtOpCode : std::uint8_t {
 #define PER_STATEMENT(x) x,
 #include "quadrants/inc/frontend_statements.inc.h"
 #undef PER_STATEMENT
+  // Mid-level statement that the AST builder may insert directly into the frontend block (nested
+  // qd.kernel-as-subgraph). Listed explicitly since it is not part of frontend_statements.inc.h.
+  ChildLaunchStmt,
 };
 
 enum class ForLoopType : std::uint8_t { StructForOnSNode, StructForOnExternalTensor, MeshFor, RangeFor };
@@ -219,6 +222,12 @@ class ASTSerializer : public IRVisitor, public ExpressionVisitor {
     emit(StmtOpCode::FrontendFuncCallStmt);
     emit(expr->func);
     emit(expr->args.exprs);
+  }
+
+  void visit(ChildLaunchStmt *stmt) override {
+    emit(StmtOpCode::ChildLaunchStmt);
+    emit(stmt->child_call_index);
+    emit(stmt->child_kernel_name);
   }
 
   void visit(MeshPatchIndexExpression *expr) override {

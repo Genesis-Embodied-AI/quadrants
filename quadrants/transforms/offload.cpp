@@ -152,6 +152,16 @@ class Offloader {
         offloaded->minor_relation_types = std::move(st->minor_relation_types);
         offloaded->mem_access_opt = st->mem_access_opt;
         root_block->insert(std::move(offloaded));
+      } else if (auto cl = stmt->cast<ChildLaunchStmt>()) {
+        // Nested qd.kernel-as-subgraph: flush any pending serial work, then emit a body-less launch_child task that
+        // marks where the child subgraph is embedded in the parent's task stream.
+        assemble_serial_statements();
+        auto offloaded = Stmt::make_typed<OffloadedStmt>(OffloadedStmt::TaskType::launch_child, arch, kernel);
+        offloaded->grid_dim = 1;
+        offloaded->block_dim = 1;
+        offloaded->child_call_index = cl->child_call_index;
+        offloaded->child_kernel_name = cl->child_kernel_name;
+        root_block->insert(std::move(offloaded));
       } else {
         pending_serial_statements->body->insert(std::move(stmt));
       }

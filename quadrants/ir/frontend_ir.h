@@ -963,6 +963,9 @@ class ASTBuilder {
   void begin_frontend_if(const Expr &cond, const DebugInfo &dbg_info = DebugInfo());
   void begin_frontend_if_true();
   void begin_frontend_if_false();
+  // Insert a nested qd.kernel-as-subgraph call marker into the current (graph=True parent) block. The actual child
+  // launch context is supplied by the parent at launch time, keyed by `child_call_index`.
+  void insert_child_launch(int child_call_index, const std::string &child_kernel_name);
   void insert_external_func_call(std::size_t func_addr,
                                  std::string source,
                                  std::string filename,

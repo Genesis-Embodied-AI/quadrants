@@ -1548,6 +1548,10 @@ void ASTBuilder::insert_expr_stmt(const Expr &val) {
   this->insert(Stmt::make<FrontendExprStmt>(val));
 }
 
+void ASTBuilder::insert_child_launch(int child_call_index, const std::string &child_kernel_name) {
+  this->insert(Stmt::make<ChildLaunchStmt>(child_call_index, child_kernel_name));
+}
+
 void ASTBuilder::insert_snode_activate(SNode *snode, const ExprGroup &expr_group, const DebugInfo &dbg_info) {
   ExprGroup expanded_group;
   expanded_group.exprs = this->expand_exprs(expr_group.exprs);

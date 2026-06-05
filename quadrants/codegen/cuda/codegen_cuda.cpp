@@ -623,6 +623,11 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
     QD_ASSERT(current_offload == nullptr);
     current_offload = stmt;
     using Type = OffloadedStmt::TaskType;
+    if (stmt->task_type == Type::launch_child) {
+      emit_launch_child_task(stmt);
+      current_offload = nullptr;
+      return;
+    }
     if (stmt->task_type == Type::gc) {
       // gc has 3 kernels, so we treat it specially
       emit_cuda_gc(stmt);

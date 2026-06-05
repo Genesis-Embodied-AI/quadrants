@@ -233,6 +233,11 @@ Stmt *CFGNode::get_store_forwarding_data(Stmt *var, int position) const {
       // if there's a third-stmt that "may" have stored a "different value" to
       // the "same dest_addr", then we can't forward the stored data.
       for (int i = last_def_position + 1; i < position; i++) {
+        // A nested child-kernel launch is an opaque barrier: it may overwrite the loaded address, so never forward
+        // a store across it.
+        if (block->statements[i]->is<ChildLaunchStmt>()) {
+          return nullptr;
+        }
         if (!irpass::analysis::same_value(result, irpass::analysis::get_store_data(block->statements[i].get()))) {
           if (may_contain_address(block->statements[i].get(), var)) {
             return nullptr;
@@ -338,6 +343,10 @@ Stmt *CFGNode::get_store_forwarding_data(Stmt *var, int position) const {
     // if there's a third-stmt that "may" have stored a "different value" to
     // the "same dest_addr", then we can't forward the stored data.
     for (int i = last_def_position; i < position; i++) {
+      // See the intra-block scan above: never forward across a nested child-kernel launch.
+      if (block->statements[i]->is<ChildLaunchStmt>()) {
+        return nullptr;
+      }
       if (!irpass::analysis::same_value(result, irpass::analysis::get_store_data(block->statements[i].get()))) {
         if (may_contain_address(block->statements[i].get(), var)) {
           return nullptr;
@@ -680,7 +689,9 @@ bool CFGNode::dead_store_elimination(bool after_lower_access) {
   // Reverse order traversal, starting from the last IR to the first IR
   for (int i = end_location - 1; i >= begin_location; i--) {
     auto stmt = block->statements[i].get();
-    if (stmt->is<FuncCallStmt>()) {
+    if (stmt->is<FuncCallStmt>() || stmt->is<ChildLaunchStmt>()) {
+      // Opaque barrier: a function call / nested child-kernel launch may read/write any global memory, so it kills
+      // all dead-store and store-to-load reasoning that would otherwise cross it.
       killed_in_this_node.clear();
       live_load_in_this_node.clear();
       continue;

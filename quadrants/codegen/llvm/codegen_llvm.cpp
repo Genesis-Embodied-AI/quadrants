@@ -2029,6 +2029,20 @@ std::string TaskCodeGenLLVM::init_offloaded_task_function(OffloadedStmt *stmt, s
   return task_kernel_name;
 }
 
+void TaskCodeGenLLVM::emit_launch_child_task(OffloadedStmt *stmt) {
+  // A launch_child task has no device function. It marks where the parent embeds the `child_call_index`-th child
+  // kernel as a subgraph (CUDA/HIP) or launches it sequentially (other backends). Record a marker OffloadedTask so
+  // the position survives into the runtime task stream; grid/block dims are nominal (never dispatched directly).
+  current_task = std::make_unique<OffloadedTask>(
+      fmt::format("{}_{}_launch_child_{}", kernel_name, task_codegen_id, stmt->child_call_index));
+  current_task->is_launch_child = true;
+  current_task->child_call_index = stmt->child_call_index;
+  current_task->grid_dim = 1;
+  current_task->block_dim = 1;
+  offloaded_tasks.push_back(*current_task);
+  current_task = nullptr;
+}
+
 void TaskCodeGenLLVM::finalize_offloaded_task_function() {
   if (!returned) {
     builder->CreateBr(final_block);
@@ -3196,12 +3210,16 @@ LLVMCompiledTask TaskCodeGenLLVM::run_compilation() {
   if (compile_config.arch == Arch::cuda) {
     // CUDA specific metadata
     for (const auto &task : offloaded_tasks) {
+      if (task.is_launch_child)
+        continue;  // launch_child tasks have no device function
       llvm::Function *func = module->getFunction(task.name);
       QD_ASSERT(func);
       tlctx->mark_function_as_cuda_kernel(func, task.block_dim);
     }
   } else if (compile_config.arch == Arch::amdgpu) {
     for (const auto &task : offloaded_tasks) {
+      if (task.is_launch_child)
+        continue;  // launch_child tasks have no device function
       llvm::Function *func = module->getFunction(task.name);
       QD_ASSERT(func);
       tlctx->mark_function_as_amdgpu_kernel(func);
