@@ -15,7 +15,7 @@ Three properties make the fused form graph-friendly:
    unrolled to exactly ``D - 1`` reduce levels + 1 base scan + ``D - 1`` downsweep levels. Extra levels (when ``N`` is
    smaller than ``256**D``) operate on length-1 buffers and are harmless no-ops that still produce the correct scan
    (reduce of 1 -> 1, base scan of 1 -> identity, downsweep applies an identity prefix).
-2. **Device-resident ``N`` + fixed (~core-count) grid.** ``N`` is read from a scalar ``qd.Tensor`` with ``N[()]``, not
+2. **Device-resident ``N`` + fixed (~core-count) grid.** ``N`` is read from a 0-d ``i32`` ndarray with ``N[()]``, not
    taken as a host int; ``num_blocks`` / ``hist_len`` are derived on-device. Because those sizes reach the per-phase
    loop bounds as ``Expr``s (dynamic, not compile-time constant), the CUDA codegen leaves each offload's grid at the
    *saturating* value (``num_SMs * max_blocks_per_SM * 2``) and the runtime grid-stride loop walks the actual range.
@@ -41,6 +41,7 @@ from quadrants.lang.misc import loop_config
 from quadrants.lang.ops import atomic_add, bit_cast
 from quadrants.lang.simt import block as _block
 from quadrants.lang.simt.reductions import _bin_add
+from quadrants.types import ndarray as ndarray_ann
 from quadrants.types.annotations import template
 from quadrants.types.primitive_types import i32, u32
 
@@ -193,14 +194,15 @@ def _fused_radix_sort_keys_u32(
     keys: template(),
     tmp_keys: template(),
     scratch: template(),
-    N: template(),
+    N: ndarray_ann(dtype=i32, ndim=0),
     NUM_PASSES: template(),
     LOG256_MAX_N: template(),
 ):
     """Whole keys-only u32 LSB radix sort as one kernel.
 
-    ``N`` is a **scalar ``qd.Tensor``** (``shape=()``) holding the element count in device memory (the "golden source"
-    of ``N`` in a qipc-style solver is a device atomic counter, not a host int). It is read once with ``N[()]`` and all
+    ``N`` is a **0-d ``i32`` ndarray** holding the element count in device memory (the "golden source" of ``N`` in a
+    qipc-style solver is a device atomic counter, not a host int). An ndarray (not a field) so it reads torch-style with
+    ``N[()]`` and can be passed alongside the field ``template()`` buffers. It is read once and all
     derived sizes (``num_blocks``, ``hist_len``) are computed **on-device** - no host-precomputed launch params. Because
     those sizes flow into the per-phase loop bounds as ``Expr``s, every offload runs on the saturating (~core-count)
     grid + runtime grid-stride, so the launch topology is fixed by ``LOG256_MAX_N`` / ``NUM_PASSES`` alone (graph-safe).
@@ -213,15 +215,18 @@ def _fused_radix_sort_keys_u32(
     hist_len = num_blocks * RADIX_DIGITS
     for p in static(range(NUM_PASSES)):
         bit_start = p * RADIX_BITS
+        # Static ping-pong: choose src/dst at compile time (``p`` is a static index) by branching the field-argument
+        # helper calls. Aliasing a field to a local (``src = keys``) is traced as a runtime assign and rejected, so we
+        # pass ``keys`` / ``tmp_keys`` straight into the calls in each ``static`` branch instead.
         if static(p % 2 == 0):
-            src = keys
-            dst = tmp_keys
+            _fused_hist(keys, scratch, n, num_blocks, bit_start)
         else:
-            src = tmp_keys
-            dst = keys
-        _fused_hist(src, scratch, n, num_blocks, bit_start)
+            _fused_hist(tmp_keys, scratch, n, num_blocks, bit_start)
         _emit_scan_staircase(scratch, 0, hist_len, LOG256_MAX_N - 1)
-        _fused_scatter(src, dst, scratch, n, num_blocks, bit_start)
+        if static(p % 2 == 0):
+            _fused_scatter(keys, tmp_keys, scratch, n, num_blocks, bit_start)
+        else:
+            _fused_scatter(tmp_keys, keys, scratch, n, num_blocks, bit_start)
 
 
 def _min_log256_for_n(n: int) -> int:
@@ -268,17 +273,17 @@ def device_radix_sort_fused(keys, tmp_keys, scratch, n=None, *, log256_max_n: in
     """Fused single-kernel keys-only ``u32`` ascending radix sort (M1; see module docstring for scope).
 
     The graph-capturable unit is the kernel :func:`_fused_radix_sort_keys_u32`, which reads its element count from a
-    **scalar ``qd.Tensor``** in device memory. This eager wrapper just supplies that scalar: pass ``n`` as a scalar
-    ``qd.Tensor`` to use a device-resident count directly (the qipc path), or omit it and the count is taken from
-    ``keys.shape[0]`` and materialized into a fresh scalar tensor.
+    **0-d ``i32`` ndarray** in device memory. This eager wrapper just supplies that scalar: pass ``n`` as a 0-d
+    ndarray to use a device-resident count directly (the qipc path), or omit it and the count is taken from
+    ``keys.shape[0]`` and materialized into a fresh 0-d ndarray.
 
     Args:
         keys: 1-D ``u32`` tensor, sorted in place.
         tmp_keys: 1-D ``u32`` ping-pong workspace, distinct from ``keys``, same shape.
         scratch: 1-D ``u32`` workspace sized via :func:`fused_radix_sort_scratch_slots`. Raises
             :class:`InsufficientScratchError` if too small.
-        n: optional scalar ``qd.Tensor`` (``shape=()``) holding the element count on-device. If ``None``, the count is
-            ``keys.shape[0]`` and a scalar tensor is allocated and filled with it.
+        n: optional 0-d ``i32`` ndarray (``shape=()``) holding the element count on-device. If ``None``, the count is
+            ``keys.shape[0]`` and a 0-d ndarray is allocated and filled with it.
         log256_max_n: compile-time scan depth ``D``. The kernel handles any element count ``<= 256**D``; a captured
             graph for a given ``D`` is reusable across all such counts. Defaults to the minimal depth for
             ``keys.shape[0]`` (``ceil(log256 N)``).
@@ -322,7 +327,9 @@ def device_radix_sort_fused(keys, tmp_keys, scratch, n=None, *, log256_max_n: in
         raise InsufficientScratchError(capacity_n, needed, cap)
 
     if n is None:
-        n = qd.tensor(i32, ())
+        # 0-d i32 ndarray matching the kernel's ``N`` annotation (read torch-style as ``N[()]``). The device-N graph
+        # path supplies its own scalar ndarray.
+        n = qd.ndarray(i32, shape=())
         n.fill(capacity_n)
 
     _fused_radix_sort_keys_u32(keys, tmp_keys, scratch, n, num_passes, log256_max_n)
