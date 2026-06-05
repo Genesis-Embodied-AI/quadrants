@@ -198,6 +198,13 @@ void *GraphManager::add_kernel_node(void *graph,
   return node;
 }
 
+void *GraphManager::add_child_graph_node(void *graph, void *prev_node, void *child_graph) {
+  void *node = nullptr;
+  CUDADriver::get_instance().graph_add_child_graph_node(&node, graph, prev_node ? &prev_node : nullptr,
+                                                        prev_node ? 1 : 0, child_graph);
+  return node;
+}
+
 void *GraphManager::add_conditional_while_node(void *graph, unsigned long long *cond_handle_out) {
   ensure_condition_kernel_loaded();
   QD_ASSERT(cond_kernel_func_);

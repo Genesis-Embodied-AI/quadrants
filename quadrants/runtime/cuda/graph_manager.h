@@ -122,6 +122,9 @@ class GraphManager {
                         unsigned int block_dim,
                         unsigned int shared_mem,
                         void **kernel_params);
+  // Embeds an already-built child graph as a single child-graph node, optionally chained after prev_node. This is
+  // the C2 ("child-graph node") composition primitive used for nested qd.kernel-as-subgraph calls.
+  void *add_child_graph_node(void *graph, void *prev_node, void *child_graph);
 
   // Keyed by launch_id, which uniquely identifies a compiled kernel variant
   // (each template specialization gets its own launch_id).
