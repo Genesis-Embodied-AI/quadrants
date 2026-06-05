@@ -10,7 +10,7 @@ Both features run on every backend. They are *hardware accelerated* on CUDA (via
 | --- | --- | --- | --- | --- | --- | --- |
 | `graph=True` | hardware accelerated | hardware accelerated | hardware accelerated | runs (no acceleration) | runs (no acceleration) | runs (no acceleration) |
 | `graph_do_while` | hardware accelerated | host fallback | host fallback | host fallback | host fallback | host fallback |
-| [nested `qd.kernel`](#calling-another-qdkernel-nested-subgraphs) | hardware accelerated | hardware accelerated | *in progress* | *in progress* | *in progress* | *in progress* |
+| [nested `qd.kernel`](#calling-another-qdkernel-nested-subgraphs) | hardware accelerated | hardware accelerated | *in progress* | *in progress* | *in progress* | sequential fallback |
 
 AMDGPU `graph_do_while` falls back to the host-side loop because HIP does not currently expose conditional / while graph nodes (as of ROCm 7.2).
 
@@ -108,7 +108,7 @@ The child does not need `graph=True` — only the outermost (parent) kernel does
 
 Different ndarrays can be passed across calls just like for a plain `graph=True` kernel: the cached parent graph is replayed and each embedded child's argument pointers are refreshed to match the current call (no rebuild).
 
-> Currently hardware-accelerated on CUDA. AMDGPU (HIP child-graph nodes) and the sequential fallback for Metal / Vulkan / CPU are in progress.
+> Currently hardware-accelerated on CUDA (the child is embedded as a child-graph node) and supported on CPU via an in-order sequential launch of the child. On Metal, Vulkan, and AMDGPU a nested call currently raises a clear "not yet supported" error; the AMDGPU HIP child-graph node and the Metal/Vulkan sequential fallback are in progress.
 
 
 ## GPU-side iteration with `graph_do_while`
