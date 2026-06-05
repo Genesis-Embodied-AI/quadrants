@@ -154,6 +154,12 @@ def test_resume_offset_loop_this():
     if not _is_checkpoint_if_path_native():
         pytest.skip("resume-offset semantics only validated on the CUDA-native IF path")
 
+    # Note: every "logical statement" inside a checkpoint body must live in its own top-level
+    # `for` loop so the offloader emits it as a range_for task tagged with the surrounding
+    # checkpoint_id. Bare scalar assignments fall into the offloader's pending serial bucket
+    # which loses checkpoint_id (defaults to -1 = "no checkpoint" = "always runs"). See the
+    # module docstring; using `for i in range(1):` is the established workaround (mirrors
+    # existing slice 1d tests like `test_checkpoint_yield_exits_graph_do_while_early`).
     @qd.kernel(graph=True)
     def step(
         a: qd.types.ndarray(qd.i32, ndim=1),
@@ -169,12 +175,11 @@ def test_resume_offset_loop_this():
             with qd.checkpoint(yield_on=flag):  # cp 1
                 for i in range(b.shape[0]):
                     b[i] = b[i] + 1
-            with qd.checkpoint():  # cp 2: decrement counter in same checkpoint so a yielded
-                # iteration does NOT advance the loop counter (matches qipc's check_iter
-                # sequencing where the iter++ happens after the yield-bearing work).
+            with qd.checkpoint():  # cp 2: c+=1 and decrement-the-counter, in separate range_fors
                 for i in range(c.shape[0]):
                     c[i] = c[i] + 1
-                counter[()] = counter[()] - 1
+                for _ in range(1):
+                    counter[()] = counter[()] - 1
 
     a, b, c, flag = _make_buffers()
     counter = qd.ndarray(qd.i32, shape=())
@@ -212,6 +217,7 @@ def test_resume_offset_loop_next():
     if not _is_checkpoint_if_path_native():
         pytest.skip("resume-offset semantics only validated on the CUDA-native IF path")
 
+    # See `_loop_this` comment about why the counter decrement uses `for _ in range(1):`.
     @qd.kernel(graph=True)
     def step(
         a: qd.types.ndarray(qd.i32, ndim=1),
@@ -230,7 +236,8 @@ def test_resume_offset_loop_next():
             with qd.checkpoint(yield_on=flag):  # cp 2
                 for i in range(c.shape[0]):
                     c[i] = c[i] + 1
-                counter[()] = counter[()] - 1
+                for _ in range(1):
+                    counter[()] = counter[()] - 1
 
     a, b, c, flag = _make_buffers()
     counter = qd.ndarray(qd.i32, shape=())

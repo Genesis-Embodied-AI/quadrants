@@ -221,3 +221,17 @@ Kernels with `qd.checkpoint()` but no `yield_on=` keep their previous return con
 - `yield_on=` (when supplied) must be the bare name of a kernel parameter that is a 0-d `qd.types.ndarray(qd.i32, ndim=0)`.
 - Checkpoints cannot be nested inside other checkpoints. A checkpoint inside a `qd.graph_do_while` body is fine and is the expected pattern.
 - Cannot be combined with `qd.stream_parallel()` in the same kernel.
+
+### Authoring tip: every statement inside a checkpoint must live in a top-level `for` loop
+
+The graph builder routes work into a checkpoint's IF body based on whether the statement was lowered to a `range_for` task with the matching `checkpoint_id`. Bare scalar statements (e.g. `counter[()] -= 1`) fall into the offloader's pending-serial bucket, which currently loses the surrounding `checkpoint_id` and emits the work as a `serial` task with `checkpoint_id == -1`. Tasks with `cp_id == -1` run unconditionally, outside every IF gate — meaning a yielding checkpoint won't actually skip them on subsequent checkpoints in the same launch.
+
+The established workaround (used throughout the test suite) is to wrap such statements in a one-iteration `for` loop:
+
+```python
+with qd.checkpoint(yield_on=overflow_flag):
+    for _ in range(1):
+        counter[()] = counter[()] - 1
+```
+
+This forces the offloader to emit a `range_for` task that picks up the surrounding `checkpoint_id`. The runtime cost of an extra 1-iteration loop is negligible compared to the kernel-launch overhead the rest of the graph saves; the proper fix (propagating `checkpoint_id` through the serial bucket) is tracked separately.
