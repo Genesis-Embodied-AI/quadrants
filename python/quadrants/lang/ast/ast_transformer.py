@@ -18,6 +18,7 @@ from quadrants.lang import exception, expr, impl, matrix, mesh
 from quadrants.lang import ops as qd_ops
 from quadrants.lang._dataclass_util import create_flat_name
 from quadrants.lang._ndrange import _Ndrange
+from quadrants.lang._unpacked import _UnpackedVectorRef
 from quadrants.lang.ast.ast_transformer_utils import (
     ASTTransformerFuncContext,
     Builder,
@@ -311,6 +312,17 @@ class ASTTransformer(Builder):
     def build_Subscript(ctx: ASTTransformerFuncContext, node: ast.Subscript):
         build_stmt(ctx, node.value)
         build_stmt(ctx, node.slice)
+        # Unpacked-vector group subscript: rewrite ``obj.{group}[k]`` to a direct reference to the synthetic scalar
+        # field ``_{group}{k}`` when ``k`` is a python-int. The resolution lives entirely at AST-build time so the
+        # runtime IR/PTX is byte-identical to the named-field form. Runtime indices are not supported here -- the user
+        # must spell the cascade explicitly.
+        if isinstance(node.value.ptr, _UnpackedVectorRef):
+            slice_val = node.slice.ptr
+            node.ptr = node.value.ptr._qd_field_for(slice_val)
+            node.violates_pure = node.value.violates_pure
+            if node.violates_pure:
+                node.violates_pure_reason = node.value.violates_pure_reason
+            return node.ptr
         if not ASTTransformer.is_tuple(node.slice):
             node.slice.ptr = [node.slice.ptr]
         # Tensors layout: a layout-tagged Ndarray or Field with a non-identity ``_qd_layout`` has its canonical indices
@@ -780,6 +792,16 @@ class ASTTransformer(Builder):
                 node.ptr = node.ptr._unwrap()
             node.ptr = ASTTransformer._promote_ndarray_if_declared(ctx, node.ptr)
         else:
+            # Unpacked-vector group access on a ``@qd.dataclass`` Struct expression. Returns a transient
+            # ``_UnpackedVectorRef`` that ``build_Subscript`` (or its assignment-LHS sibling) resolves to a direct field
+            # reference. The lookup is by-name on ``_qd_unpacked_groups``, which ``StructType.__call__`` attaches to
+            # every Struct instance whose type declared at least one vector field with ``unpacked=True``. Tested in
+            # ``test_unpacked.py``.
+            groups = getattr(node.value.ptr, "_qd_unpacked_groups", None)
+            if groups and node.attr in groups:
+                count, dtype, naming_fn = groups[node.attr]
+                node.ptr = _UnpackedVectorRef(node.value.ptr, node.attr, count, dtype, naming_fn)
+                return node.ptr
             node.ptr = getattr(node.value.ptr, node.attr)
             # ``qd.Tensor`` wrappers reached via attribute access on a ``@qd.data_oriented`` struct field at AST-build
             # time. The IR layer downstream (``build_Subscript`` -> ``impl.subscript``) only knows about ``Ndarray`` /

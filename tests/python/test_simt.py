@@ -3991,3 +3991,201 @@ def test_subgroup_reduce_add_absolute():
     # ``reduce_add_tiled`` returns the full sum in lane 0 of each tile; for log2_size = log2_group_size() the tile
     # is the whole subgroup, so we only check lane 0.  (The other lanes' values are implementation-defined.)
     assert dst[0] == expected, f"reduce_add lane 0: got {dst[0]}, expected {expected}"
+
+
+# --------------------------------------------------------------------------------------------------------------------
+# Bitonic key/value sort tests.  ``subgroup.bitonic_sort_kv_tiled`` is a register-resident sort over ``2**log2_size``
+# consecutive lanes, one ``(key, value)`` pair per lane.  The compare is a lex compare on ``(key, value)``: ties on
+# the key break on ascending value (this is NOT a textbook stable sort -- see the primitive's docstring).  We exercise:
+#
+# 1. Full-warp sort, scrambled keys -- locks the "sorted ascending on key" contract across the standard
+#    ``log2_size = 5`` schedule (15 compare-exchange stages).
+# 2. Lex tiebreak on duplicate keys -- the test feeds each key twice with two distinct values and asserts the result
+#    is sorted by ``(key, value)`` lex order rather than just by key.
+# 3. Sentinel-padded short-input pattern -- the documented way to sort fewer than ``2**log2_size`` real elements;
+#    high-lane sentinel keys (``INT_MAX``) drift to the tail and the real prefix ends up sorted at the head.
+# 4. Multiple independent tiles per subgroup (``log2_size = 3``) -- ``group_size() / 8`` tiles sort independently.
+# 5. f32 keys -- exercises the f32 shuffle path (Genesis's only call site uses f32 keys + i32 values).
+# 6. AMDGPU wave64 ``log2_size = 6`` -- one full wave64 sort, exercises the cross-half shuffle step at offset 32.
+# --------------------------------------------------------------------------------------------------------------------
+
+
+def _check_sort_kv(N, log2_size, keys_py, vals_py, key_dtype, val_dtype):
+    """Run ``bitonic_sort_kv_tiled`` over ``N`` lanes (single block_dim), then verify each ``2**log2_size``-aligned
+    tile is sorted lex-ascending on ``(key, value)``.  Returns the device-side result arrays for any caller-specific
+    extra asserts."""
+    assert len(keys_py) == N and len(vals_py) == N
+    assert N % (1 << log2_size) == 0, "N must be a multiple of the tile size"
+    keys = qd.field(dtype=key_dtype, shape=N)
+    vals = qd.field(dtype=val_dtype, shape=N)
+    out_keys = qd.field(dtype=key_dtype, shape=N)
+    out_vals = qd.field(dtype=val_dtype, shape=N)
+
+    @qd.kernel
+    def k():
+        qd.loop_config(block_dim=N)
+        for i in range(N):
+            sk, sv = subgroup.bitonic_sort_kv_tiled(keys[i], vals[i], log2_size)
+            out_keys[i] = sk
+            out_vals[i] = sv
+
+    for i in range(N):
+        keys[i] = keys_py[i]
+        vals[i] = vals_py[i]
+
+    k()
+
+    tile = 1 << log2_size
+    for g in range(N // tile):
+        base = g * tile
+        # Expected: lex-ascending sort of (key, value) in this tile.
+        expected = sorted(
+            [(keys_py[base + i], vals_py[base + i]) for i in range(tile)],
+            key=lambda kv: (kv[0], kv[1]),
+        )
+        for i, (ek, ev) in enumerate(expected):
+            gk = out_keys[base + i]
+            gv = out_vals[base + i]
+            assert gk == ek, f"tile {g} lane {i} (global {base + i}): key got {gk}, expected {ek}"
+            assert gv == ev, f"tile {g} lane {i} (global {base + i}): value got {gv}, expected {ev}"
+    return out_keys, out_vals
+
+
+@test_utils.test(arch=qd.gpu)
+def test_subgroup_bitonic_sort_kv_tiled_log2_size_5_i32():
+    """Full-warp (wave32) i32 key + i32 value sort with scrambled inputs."""
+    N = 64  # two independent subgroups on wave32, one on wave64
+    # Pseudo-random permutation of [0, 32) for each tile.  Picked so both tiles have the same key set but in different
+    # order -- catches any accidental cross-tile leakage.
+    keys_py = [((i * 13 + 7) % 32) for i in range(N)]
+    vals_py = [i for i in range(N)]
+    _check_sort_kv(N, log2_size=5, keys_py=keys_py, vals_py=vals_py, key_dtype=qd.i32, val_dtype=qd.i32)
+
+
+@test_utils.test(arch=qd.gpu)
+def test_subgroup_bitonic_sort_kv_tiled_lex_tiebreak_on_duplicate_keys():
+    """Lex-tiebreak check: every key appears twice, with two distinct values.  The sort orders equal-keyed pairs by
+    ascending ``value`` (the documented lex tiebreak); this is *not* a textbook-stable sort, but the lex order is
+    deterministic and observable here because we choose ``value``s that disambiguate.  See ``bitonic_sort_kv_tiled``'s
+    docstring for the textbook-stability caveat."""
+    N = 32
+    # Keys 0..15 each appear twice.  We deliberately do NOT put the two copies adjacent -- the first copy gets value
+    # ``key * 2`` and the second gets value ``key * 2 + 1``, so a lex sort on (key, value) puts them in that order
+    # regardless of their input lane positions.  Then we scramble the lane positions.
+    pairs = []
+    for k in range(16):
+        pairs.append((k, k * 2))
+        pairs.append((k, k * 2 + 1))
+    # Scramble the order without disturbing the (key, value) pairing.
+    order = [(i * 11 + 5) % N for i in range(N)]
+    keys_py = [pairs[order[i]][0] for i in range(N)]
+    vals_py = [pairs[order[i]][1] for i in range(N)]
+    _check_sort_kv(N, log2_size=5, keys_py=keys_py, vals_py=vals_py, key_dtype=qd.i32, val_dtype=qd.i32)
+
+
+@test_utils.test(arch=qd.gpu)
+def test_subgroup_bitonic_sort_kv_tiled_sentinel_padded_short_input():
+    """Short-input pattern: only the first ``n`` lanes carry real data; the remaining lanes pad with ``INT_MAX`` as a
+    sentinel key (any real key compares less).  After the sort, lanes ``[0, n)`` must hold the sorted real data and
+    lanes ``[n, group_size)`` must still carry the sentinel."""
+    N = 32
+    n = 11  # arbitrary < group_size
+    SENTINEL = 2**31 - 1
+    real_keys = [(i * 7 + 13) % 100 for i in range(n)]
+    real_vals = [i + 1000 for i in range(n)]  # offset so they're distinguishable from any padding value
+    keys_py = real_keys + [SENTINEL] * (N - n)
+    vals_py = real_vals + [-1] * (N - n)
+    out_keys, out_vals = _check_sort_kv(
+        N, log2_size=5, keys_py=keys_py, vals_py=vals_py, key_dtype=qd.i32, val_dtype=qd.i32
+    )
+    # Extra check: the first n lanes must hold real values (not sentinels), and the rest must hold sentinels.
+    for i in range(n):
+        assert out_keys[i] != SENTINEL, f"lane {i}: real-data prefix has sentinel key"
+        assert out_vals[i] >= 1000, f"lane {i}: real-data prefix has padding value {out_vals[i]}"
+    for i in range(n, N):
+        assert out_keys[i] == SENTINEL, f"lane {i}: sentinel tail has non-sentinel key {out_keys[i]}"
+
+
+@test_utils.test(arch=qd.gpu)
+def test_subgroup_bitonic_sort_kv_tiled_multiple_tiles_per_subgroup():
+    """``log2_size = 3`` (tile = 8 lanes): N / 8 independent 8-element sorts within each subgroup.  Verifies the
+    tiling really is per-tile -- a single subgroup runs 4 (wave32) or 8 (wave64) independent sorts, none of which can
+    see across to the others."""
+    N = 32
+    # Each tile gets a different scrambled permutation so cross-tile leakage would produce visibly wrong results.
+    keys_py = [((i * 17 + (i // 8) * 3) % 64) for i in range(N)]
+    vals_py = [i for i in range(N)]
+    _check_sort_kv(N, log2_size=3, keys_py=keys_py, vals_py=vals_py, key_dtype=qd.i32, val_dtype=qd.i32)
+
+
+@test_utils.test(arch=qd.gpu)
+def test_subgroup_bitonic_sort_kv_tiled_f32_key_i32_value():
+    """f32 key + i32 value -- the exact dtype combination used by Genesis's contact-pruning bitonic sort.  Exercises
+    the f32 shuffle path through the lex compare."""
+    N = 32
+    # Spread keys across negative and positive floats with a couple of duplicates to stress the lex tiebreak.
+    keys_py = [float((i * 11 + 5) % 64) - 32.0 for i in range(N)]
+    keys_py[5] = keys_py[19] = 7.5  # force one explicit duplicate
+    vals_py = [i for i in range(N)]
+    _check_sort_kv(N, log2_size=5, keys_py=keys_py, vals_py=vals_py, key_dtype=qd.f32, val_dtype=qd.i32)
+
+
+@test_utils.test(arch=qd.amdgpu)
+def test_subgroup_bitonic_sort_kv_tiled_log2_size_6():
+    """``log2_size = 6`` bitonic sort over a wave64 AMDGPU subgroup.  Exercises the cross-half shuffle step at
+    ``j_mask = 32`` that on RDNA pre-fix silently wrapped within SIMD32; the cross-half lowering described in
+    `AMDGPU wave64 cross-half lowering` makes this work."""
+    N = 64
+    keys_py = [((i * 13 + 7) % 64) for i in range(N)]
+    vals_py = [i for i in range(N)]
+    _check_sort_kv(N, log2_size=6, keys_py=keys_py, vals_py=vals_py, key_dtype=qd.i32, val_dtype=qd.i32)
+
+
+@test_utils.test(arch=qd.gpu)
+def test_subgroup_bitonic_sort_kv_full_subgroup_matches_tiled():
+    """The bare ``bitonic_sort_kv(k, v)`` wrapper must produce the same result as ``bitonic_sort_kv_tiled(k, v,
+    log2_group_size())``.  Verifies the convention shared with ``reduce_add`` / ``reduce_all_add`` / etc. -- the
+    full-subgroup form is a thin Python wrapper that forwards to the ``_tiled`` form with the resolved log2_size."""
+    block_dim = subgroup.group_size()
+    keys = qd.field(dtype=qd.i32, shape=block_dim)
+    vals = qd.field(dtype=qd.i32, shape=block_dim)
+    out_keys_full = qd.field(dtype=qd.i32, shape=block_dim)
+    out_vals_full = qd.field(dtype=qd.i32, shape=block_dim)
+    out_keys_tiled = qd.field(dtype=qd.i32, shape=block_dim)
+    out_vals_tiled = qd.field(dtype=qd.i32, shape=block_dim)
+
+    @qd.kernel
+    def k_full():
+        qd.loop_config(block_dim=block_dim)
+        for i in range(block_dim):
+            sk, sv = subgroup.bitonic_sort_kv(keys[i], vals[i])
+            out_keys_full[i] = sk
+            out_vals_full[i] = sv
+
+    @qd.kernel
+    def k_tiled():
+        qd.loop_config(block_dim=block_dim)
+        for i in range(block_dim):
+            sk, sv = subgroup.bitonic_sort_kv_tiled(keys[i], vals[i], subgroup.log2_group_size())
+            out_keys_tiled[i] = sk
+            out_vals_tiled[i] = sv
+
+    for i in range(block_dim):
+        keys[i] = (i * 13 + 7) % 128
+        vals[i] = i
+
+    k_full()
+    k_tiled()
+
+    for i in range(block_dim):
+        assert (
+            out_keys_full[i] == out_keys_tiled[i]
+        ), f"lane {i}: full key {out_keys_full[i]} vs tiled {out_keys_tiled[i]}"
+        assert (
+            out_vals_full[i] == out_vals_tiled[i]
+        ), f"lane {i}: full val {out_vals_full[i]} vs tiled {out_vals_tiled[i]}"
+    # Plus the actual sortedness check on the full result.
+    sorted_expected = sorted([((i * 13 + 7) % 128, i) for i in range(block_dim)], key=lambda kv: (kv[0], kv[1]))
+    for i, (ek, ev) in enumerate(sorted_expected):
+        assert out_keys_full[i] == ek, f"lane {i}: key {out_keys_full[i]} vs expected {ek}"
+        assert out_vals_full[i] == ev, f"lane {i}: val {out_vals_full[i]} vs expected {ev}"

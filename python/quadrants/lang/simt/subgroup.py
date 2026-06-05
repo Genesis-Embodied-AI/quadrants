@@ -390,17 +390,19 @@ def all_equal(value):
     return all_equal_tiled(value, log2_group_size())
 
 
-# Pull in the reduce / scan / segmented-reduce APIs that live in ``quadrants.lang.simt.reductions``.  The import
-# has to happen *after* the primitives ``reductions`` depends on (``ballot``, ``invocation_id``, ``shuffle``,
-# ``shuffle_up``, ``shuffle_down``, ``log2_group_size``) are defined, so this back-import sits at the bottom of
-# the module body.  Side effect: every name in ``reductions.__all__`` becomes accessible as
-# ``qd.simt.subgroup.X``, preserving the historical public API.
+# Pull in the reduce / scan / segmented-reduce APIs that live in ``quadrants.lang.simt.reductions`` and the sorting
+# APIs that live in ``quadrants.lang.simt.sorting``.  Both back-imports have to happen *after* the primitives they
+# depend on (``ballot``, ``invocation_id``, ``shuffle``, ``shuffle_up``, ``shuffle_down``, ``log2_group_size``) are
+# defined, so they sit at the bottom of the module body.  Side effect: every name in ``reductions.__all__`` /
+# ``sorting.__all__`` becomes accessible as ``qd.simt.subgroup.X``, preserving the convention that every
+# subgroup-scope op lives in a single namespace from the user's perspective.
 #
 # WARNING: reordering definitions above this line -- in particular moving any of ``ballot`` / ``invocation_id`` /
-# ``shuffle`` / ``shuffle_up`` / ``shuffle_down`` / ``log2_group_size`` below this back-import -- will silently
-# break the circular import (``reductions`` would see only a partially-populated ``subgroup`` module).  Keep this
-# line at the bottom of the module body, after every name ``reductions`` consumes.
+# ``shuffle`` / ``shuffle_up`` / ``shuffle_down`` / ``log2_group_size`` below these back-imports -- will silently
+# break the circular import (the back-imported modules would see only a partially-populated ``subgroup`` module).
+# Keep these lines at the bottom of the module body, after every name they consume.
 from quadrants.lang.simt.reductions import *  # noqa: E402, F401  pylint: disable=wrong-import-position,wildcard-import
+from quadrants.lang.simt.sorting import *  # noqa: E402, F401  pylint: disable=wrong-import-position,wildcard-import
 
 __all__ = [
     "sync",
@@ -476,4 +478,6 @@ __all__ = [
     "exclusive_and",
     "exclusive_or",
     "exclusive_xor",
+    "bitonic_sort_kv_tiled",
+    "bitonic_sort_kv",
 ]

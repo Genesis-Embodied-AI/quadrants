@@ -29,12 +29,16 @@ def matrix(n=None, m=None, dtype=None):
     return quadrants.lang.matrix.MatrixType(n, m, 2, dtype)  # type: ignore
 
 
-def vector(n=None, dtype=None):
+def vector(n=None, dtype=None, *, unpacked: bool = False):
     """Creates a vector type with given shape and data type.
 
     Args:
         n (int): dimension of the vector.
         dtype (:mod:`~quadrants.types.primitive_types`): vector data type.
+        unpacked (bool): per-thread storage-layout marker. When ``True``, the type is only valid as a
+            ``@qd.dataclass`` field annotation, where it expands into ``n`` independent scalar slots (one ``alloca``
+            per slot) instead of one packed slot. The unpacked layout lets the optimiser promote slots to registers
+            independently and spill only the ones it has to. See :doc:`/user_guide/matrix_vector` for details.
 
     Returns:
         A vector type.
@@ -44,7 +48,7 @@ def vector(n=None, dtype=None):
         >>> vec3 = qd.types.vector(3, qd.f32)  # 3d vector type
         >>> v = vec3([1., 2., 3.])  # an instance of this type
     """
-    return quadrants.lang.matrix.VectorType(n, dtype)  # type: ignore
+    return quadrants.lang.matrix.VectorType(n, dtype, unpacked=unpacked)  # type: ignore
 
 
 def struct(**kwargs):
