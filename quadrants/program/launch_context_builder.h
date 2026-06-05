@@ -170,6 +170,11 @@ class LaunchContextBuilder {
   // convention as `checkpoint_yield_on_arg_ids`; `nullptr` for checkpoints without yield.
   // Read by the GraphManager when wiring up the yield-check kernel for each checkpoint.
   std::vector<void *> checkpoint_yield_on_dev_ptrs;
+  // Value to memcpy into the device-side `resume_point` slot before launch. `-1` means "fresh
+  // launch -- reset to 0 so every checkpoint runs"; any other non-negative integer means
+  // "resume from this cp_id, skipping cp_ids < value". Set by `Kernel.resume()`'s Python
+  // plumbing; defaults to -1 so non-resume launches behave as they always have.
+  int resume_from_checkpoint{-1};
 
   // Note that I've tried to group `array_runtime_size` and
   // `is_device_allocations` into a small struct. However, it caused some test

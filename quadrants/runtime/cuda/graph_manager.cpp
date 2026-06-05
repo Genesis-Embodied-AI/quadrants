@@ -377,12 +377,13 @@ bool GraphManager::launch_cached_graph(CachedGraph &cached, LaunchContextBuilder
   }
 
   if (cached.resume_point_dev_ptr) {
-    // Slice 1d: always reset resume_point to 0 before each launch so every checkpoint runs.
-    // The on-yield kernel bumps this to INT_MAX during a launch; the reset here ensures the
-    // next launch starts clean. Slice 2 will route this through the `GraphStatus` host API
-    // and only reset when not resuming from a checkpoint.
-    int32_t zero = 0;
-    CUDADriver::get_instance().memcpy_host_to_device(cached.resume_point_dev_ptr, &zero, sizeof(int32_t));
+    // Slice 2: honour `ctx.resume_from_checkpoint`. -1 (the default) is the fresh-launch
+    // convention -- set the device slot to 0 so every checkpoint runs. Any non-negative value
+    // is the cp_id supplied by `kernel.resume(..., from_checkpoint=cp)` and gates skip every
+    // cp_id strictly below it. The yield-check kernel may bump this to INT_MAX mid-launch;
+    // the reset here ensures the next launch starts from a clean baseline.
+    int32_t rp = (ctx.resume_from_checkpoint < 0) ? 0 : ctx.resume_from_checkpoint;
+    CUDADriver::get_instance().memcpy_host_to_device(cached.resume_point_dev_ptr, &rp, sizeof(int32_t));
   }
 
   if (cached.yield_signal_dev_ptr) {

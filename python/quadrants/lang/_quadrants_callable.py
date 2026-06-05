@@ -95,6 +95,32 @@ class QuadrantsCallable:
     def __call__(self, *args, **kwargs):
         return self.wrapper.__call__(*args, **kwargs)
 
+    def resume(self, *args, from_checkpoint: int, **kwargs):
+        """Re-launches the kernel, skipping every ``qd.checkpoint`` with ``cp_id < from_checkpoint``.
+
+        Use only on kernels decorated with ``@qd.kernel(graph=True)`` that contain at least
+        one ``qd.checkpoint(yield_on=...)`` block. The host loop pattern is::
+
+            status = step(arr, overflow_flag, newton_cond)
+            while status.yielded:
+                handle_overflow_for(status.checkpoint, ...)
+                status = step.resume(arr, overflow_flag, newton_cond,
+                                     from_checkpoint=status.checkpoint)
+
+        Returns the same ``GraphStatus`` shape as the plain call.
+
+        Raises ``RuntimeError`` if invoked on a kernel without any ``yield_on=`` checkpoint
+        (there is no resume_point slot to write to, so the call would be a no-op).
+        """
+        if not isinstance(from_checkpoint, int) or from_checkpoint < 0:
+            raise RuntimeError(
+                f"from_checkpoint= must be a non-negative integer (typically `status.checkpoint` "
+                f"from the previous launch's GraphStatus); got {from_checkpoint!r}."
+            )
+        # Smuggle the resume cookie past the AST-mapped kwargs path; `Kernel.__call__` pops it
+        # before anything else looks at kwargs.
+        return self.wrapper.__call__(*args, _qd_from_checkpoint=from_checkpoint, **kwargs)
+
     def __get__(self, instance, owner):
         if instance is None:
             return self
@@ -124,3 +150,7 @@ class BoundQuadrantsCallable:
     def grad(self, *args, **kwargs) -> "Kernel":
         assert self.quadrants_callable._adjoint is not None
         return self.quadrants_callable._adjoint(self.instance, *args, **kwargs)
+
+    def resume(self, *args, from_checkpoint: int, **kwargs):
+        """Bound-method form of `QuadrantsCallable.resume` (see that docstring)."""
+        return self.quadrants_callable.resume(self.instance, *args, from_checkpoint=from_checkpoint, **kwargs)
