@@ -7,12 +7,28 @@
 namespace quadrants::lang {
 namespace cpu {
 
-void KernelLauncher::launch_offloaded_tasks(LaunchContextBuilder &ctx,
-                                            const std::vector<TaskFunc> &task_funcs,
-                                            const std::vector<AdStackSizingInfo> &ad_stacks,
-                                            const std::vector<std::size_t> &num_threads_per_task) {
+void KernelLauncher::launch_offloaded_tasks(LaunchContextBuilder &ctx, const Context &launcher_ctx) {
+  const auto &task_funcs = launcher_ctx.task_funcs;
+  const auto &ad_stacks = launcher_ctx.ad_stacks;
+  const auto &num_threads_per_task = launcher_ctx.num_threads_per_task;
+  const auto &checkpoint_id_per_task = launcher_ctx.checkpoint_id_per_task;
+  const auto &is_last_task_of_yielding_checkpoint = launcher_ctx.is_last_task_of_yielding_checkpoint;
   auto *executor = get_runtime_executor();
   ctx.get_context().cpu_assert_failed = 0;
+  // Slice 6 host-branch state. CPU has no device-side resume_point / yield_signal scalars;
+  // the launcher emulates them locally and gates each task accordingly. Both reset per launch.
+  //
+  // resume_point: when the user calls `kernel.resume(..., from_checkpoint=cp)` the Python
+  // plumbing sets `ctx.resume_from_checkpoint = cp`; we copy that here so tasks with
+  // `cp_id < resume_point` get skipped on this launch. `-1` (default) means "fresh launch --
+  // every checkpoint runs".
+  //
+  // yield_signal: stays `-1` until the first yield-bearing checkpoint observes a non-zero
+  // `yield_on` flag (in declaration order, matching qipc's "first yielder wins"). After that
+  // every subsequent task with `cp_id >= 0` is skipped, the user's flag is cleared, and the
+  // launcher records `last_yield_cp_id_on_last_call_` for `GraphStatus`.
+  int32_t resume_point = (ctx.resume_from_checkpoint < 0) ? 0 : ctx.resume_from_checkpoint;
+  int32_t yield_signal = -1;
   // Two gates govern the per-launch adstack publish work, both opt-in by the kernel's IR shape. Forward-only kernels
   // skip both gates and pay zero adstack overhead; reverse-mode kernels without a captured `bound_expr` skip the
   // lazy-claim block, paying the per-task `publish_adstack_metadata` only. See the matching comment in
@@ -40,6 +56,19 @@ void KernelLauncher::launch_offloaded_tasks(LaunchContextBuilder &ctx,
     executor->dispatch_max_reducers_for_tasks(ad_stacks, &ctx, /*device_runtime_context_ptr=*/nullptr);
   }
   for (size_t i = 0; i < task_funcs.size(); ++i) {
+    // Host-branch gating (slice 6). Mirrors the CUDA-native gate kernel's `cp_id >= resume_point`
+    // check plus the yield-check kernel's "skip every subsequent checkpoint task after first
+    // yield". Tasks outside any checkpoint (cp_id < 0) always run, matching the existing
+    // unconditional-task semantics from before slice 6.
+    int32_t cp_id = i < checkpoint_id_per_task.size() ? checkpoint_id_per_task[i] : -1;
+    if (cp_id >= 0) {
+      if (cp_id < resume_point) {
+        continue;
+      }
+      if (yield_signal != -1) {
+        continue;
+      }
+    }
     if (!ad_stacks[i].allocas.empty()) {
       executor->publish_adstack_metadata(ad_stacks[i], num_threads_per_task[i], &ctx);
       if (ad_stacks[i].bound_expr.has_value()) {
@@ -91,15 +120,44 @@ void KernelLauncher::launch_offloaded_tasks(LaunchContextBuilder &ctx,
     task_funcs[i](&ctx.get_context());
     if (ctx.get_context().cpu_assert_failed)
       break;
+    // Slice 6 yield observation: when we just ran the last task of a yield-bearing checkpoint
+    // body, peek at the user's `yield_on` flag (already a host pointer because every
+    // ndarray-backed kernel parameter is host-resident on CPU). A non-zero value here is the
+    // CPU equivalent of the device-side yield-check kernel firing.
+    if (cp_id >= 0 && i < is_last_task_of_yielding_checkpoint.size() &&
+        is_last_task_of_yielding_checkpoint[i] &&
+        (std::size_t)cp_id < ctx.checkpoint_yield_on_dev_ptrs.size() &&
+        ctx.checkpoint_yield_on_dev_ptrs[cp_id]) {
+      int32_t *flag = static_cast<int32_t *>(ctx.checkpoint_yield_on_dev_ptrs[cp_id]);
+      if (*flag != 0) {
+        // First yielder wins (matches the atomicCAS semantics on the device side). Since this
+        // loop is single-threaded we just check `yield_signal == -1`.
+        if (yield_signal == -1) {
+          yield_signal = cp_id;
+          last_yield_cp_id_on_last_call_ = cp_id;
+        }
+        // Clear the user's flag so the next launch starts from a clean slate without the host
+        // having to remember to reset it -- matches the device-side yield-check kernel.
+        *flag = 0;
+      }
+    }
   }
 }
 
-void KernelLauncher::launch_offloaded_tasks_with_do_while(LaunchContextBuilder &ctx,
-                                                          const std::vector<TaskFunc> &task_funcs,
-                                                          const std::vector<AdStackSizingInfo> &ad_stacks,
-                                                          const std::vector<std::size_t> &num_threads_per_task) {
+void KernelLauncher::launch_offloaded_tasks_with_do_while(LaunchContextBuilder &ctx, const Context &launcher_ctx) {
+  // Slice 6: emulate the cond-with-yield kernel's "exit on yield" behaviour. Without this the
+  // host loop would re-enter, see `last_yield_cp_id_on_last_call_ != -1` in the gates of the
+  // next iter, skip every checkpoint, never decrement the user's WHILE counter, and spin
+  // forever -- the exact failure mode the cond-with-yield kernel was added to prevent on CUDA.
+  //
+  // The reset of `last_yield_cp_id_on_last_call_ = -1` at the top of the outer `launch_llvm_kernel`
+  // doesn't apply here because we're already inside the per-launch loop body; we observe the
+  // flag set by the preceding `launch_offloaded_tasks` call directly.
   do {
-    launch_offloaded_tasks(ctx, task_funcs, ad_stacks, num_threads_per_task);
+    launch_offloaded_tasks(ctx, launcher_ctx);
+    if (last_yield_cp_id_on_last_call_ != -1) {
+      break;
+    }
   } while (ctx.get_context().cpu_assert_failed == 0 && *static_cast<int32_t *>(ctx.graph_do_while_flag_dev_ptr) != 0);
 }
 
@@ -148,12 +206,30 @@ void KernelLauncher::launch_llvm_kernel(Handle handle, LaunchContextBuilder &ctx
   bump_writes_for_kernel_llvm(executor->get_program(), &ctx, launcher_ctx.snode_writes_per_task,
                               launcher_ctx.arr_writes_per_task, launcher_ctx.arr_reads_per_task);
 
+  // Slice 6: resolve per-checkpoint `yield_on=` ndarray host pointers into
+  // `ctx.checkpoint_yield_on_dev_ptrs` so the host-branch gating in `launch_offloaded_tasks`
+  // can read the flag after each yield-bearing checkpoint body. Mirrors
+  // `cuda::GraphManager::resolve_ctx_ndarray_ptrs` but uses the already-resolved host pointers
+  // from the array_arg_ids walk above instead of separately translating DeviceAllocation handles.
+  ctx.checkpoint_yield_on_dev_ptrs.assign(ctx.checkpoint_yield_on_arg_ids.size(), nullptr);
+  for (std::size_t cp = 0; cp < ctx.checkpoint_yield_on_arg_ids.size(); ++cp) {
+    int arg_id = ctx.checkpoint_yield_on_arg_ids[cp];
+    if (arg_id < 0) {
+      continue;
+    }
+    auto data_ptr_it = ctx.array_ptrs.find({arg_id, TypeFactory::DATA_PTR_POS_IN_NDARRAY});
+    if (data_ptr_it != ctx.array_ptrs.end()) {
+      ctx.checkpoint_yield_on_dev_ptrs[cp] = data_ptr_it->second;
+    }
+  }
+  // Reset the cross-launch yield bookkeeping. `launch_offloaded_tasks` may set this; the next
+  // `launch_llvm_kernel` call (or `kernel.resume(...)`) starts clean here.
+  last_yield_cp_id_on_last_call_ = -1;
   if (ctx.graph_do_while_arg_id >= 0) {
     QD_ASSERT(ctx.graph_do_while_flag_dev_ptr);
-    launch_offloaded_tasks_with_do_while(ctx, launcher_ctx.task_funcs, launcher_ctx.ad_stacks,
-                                         launcher_ctx.num_threads_per_task);
+    launch_offloaded_tasks_with_do_while(ctx, launcher_ctx);
   } else {
-    launch_offloaded_tasks(ctx, launcher_ctx.task_funcs, launcher_ctx.ad_stacks, launcher_ctx.num_threads_per_task);
+    launch_offloaded_tasks(ctx, launcher_ctx);
   }
 }
 
@@ -172,12 +248,14 @@ KernelLauncher::Handle KernelLauncher::register_llvm_kernel(const LLVM::Compiled
     auto *jit_module = executor->create_jit_module(std::move(data.module));
 
     std::vector<TaskFunc> task_funcs;
+    std::vector<int32_t> checkpoint_id_per_task;
     std::vector<AdStackSizingInfo> ad_stacks;
     std::vector<std::size_t> num_threads_per_task;
     std::vector<std::vector<int>> snode_writes_per_task;
     std::vector<std::vector<int>> arr_writes_per_task;
     std::vector<std::vector<int>> arr_reads_per_task;
     task_funcs.reserve(data.tasks.size());
+    checkpoint_id_per_task.reserve(data.tasks.size());
     ad_stacks.reserve(data.tasks.size());
     num_threads_per_task.reserve(data.tasks.size());
     snode_writes_per_task.reserve(data.tasks.size());
@@ -187,6 +265,10 @@ KernelLauncher::Handle KernelLauncher::register_llvm_kernel(const LLVM::Compiled
       auto *func_ptr = jit_module->lookup_function(task.name);
       QD_ASSERT_INFO(func_ptr, "Offloaded datum function {} not found", task.name);
       task_funcs.push_back((TaskFunc)(func_ptr));
+      // Slice 6: keep the per-task cp_id alongside the function pointer so the launcher's
+      // host-branch gating can decide whether to skip the task on a given launch (based on
+      // `ctx.resume_from_checkpoint` and the running `yield_signal`).
+      checkpoint_id_per_task.push_back(task.checkpoint_id);
       // CPU never takes the dynamic_gpu_range_for branch - see `AdStackSizingInfo` - so the precomputed
       // `static_num_threads` (set by `codegen_cpu.cpp` to `num_cpu_threads` for non-serial tasks and to 1
       // for serial tasks) is the exact bound, and the launcher never has to resolve anything at dispatch
@@ -201,11 +283,33 @@ KernelLauncher::Handle KernelLauncher::register_llvm_kernel(const LLVM::Compiled
     // Populate ctx
     ctx.parameters = &compiled.get_internal_data().args;
     ctx.task_funcs = std::move(task_funcs);
+    ctx.checkpoint_id_per_task = std::move(checkpoint_id_per_task);
     ctx.ad_stacks = std::move(ad_stacks);
     ctx.num_threads_per_task = std::move(num_threads_per_task);
     ctx.snode_writes_per_task = std::move(snode_writes_per_task);
     ctx.arr_writes_per_task = std::move(arr_writes_per_task);
     ctx.arr_reads_per_task = std::move(arr_reads_per_task);
+    // Slice 6: mark, for each task, whether it is the last task in a contiguous run of the
+    // same checkpoint_id where that checkpoint has a `yield_on=` parameter. The launcher reads
+    // the user's yield_on flag only at these task boundaries, so a multi-task checkpoint body
+    // pays the flag-deref exactly once (not once per task).
+    //
+    // Note: which checkpoint_ids actually have `yield_on=` is per-LAUNCH state (depends on
+    // which kernel signature got bound), not per-REGISTER state. We can't resolve that at
+    // register time. So we mark every "last task in a same-cp_id run" optimistically; the
+    // launcher then gates the read on `ctx.checkpoint_yield_on_dev_ptrs[cp_id] != nullptr`,
+    // making the per-launch yield_on= set authoritative.
+    ctx.is_last_task_of_yielding_checkpoint.assign(ctx.task_funcs.size(), false);
+    for (std::size_t i = 0; i < ctx.task_funcs.size(); ++i) {
+      int32_t cp_id = ctx.checkpoint_id_per_task[i];
+      if (cp_id < 0) {
+        continue;
+      }
+      bool is_last_in_run = (i + 1 == ctx.task_funcs.size()) || ctx.checkpoint_id_per_task[i + 1] != cp_id;
+      if (is_last_in_run) {
+        ctx.is_last_task_of_yielding_checkpoint[i] = true;
+      }
+    }
 
     // Precompute the array-typed parameter `arg_id`s so `launch_llvm_kernel` does not have to walk the
     // full parameters list and re-check `is_array` on every invocation.
