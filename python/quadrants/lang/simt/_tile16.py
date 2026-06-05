@@ -4,7 +4,8 @@
 Register-resident 16x16 tile operations.
 
 Each tile is a 16x16 matrix distributed across 16 threads in a subgroup, one row per thread, with each row stored
-in 16 scalar registers (r0-r15).  Cross-thread communication uses subgroup shuffles -- no shared memory needed.
+in 16 scalar registers held in an unpacked vector field (``self.r``).  Cross-thread communication uses subgroup
+shuffles -- no shared memory needed.
 
 The thread's lane index (tid) is obtained internally via ``subgroup.invocation_id()``, so callers never need to
 pass it.  See docs/source/user_guide/tile.md for usage documentation.
@@ -40,8 +41,6 @@ if _TYPE_CHECKING:
         def _store3d(
             self, arr: Any, batch: Any, row_start: Any, row_end: Any, col_start: Any, col_end: Any
         ) -> None: ...  # noqa: E704
-        def _get_col(self, k: Any) -> Any: ...  # noqa: E704
-        def _set_col(self, k: Any, val: Any) -> None: ...  # noqa: E704
         def _ger_sub(self, a: Any, b: Any) -> None: ...  # noqa: E704
         def _trsm(self, L: "_Tile16x16Proto") -> None: ...  # noqa: E704
         def __isub__(self, other: Any) -> "_Tile16x16Proto": ...  # noqa: E704
@@ -50,14 +49,6 @@ if _TYPE_CHECKING:
 
 
 _TILE = 16
-
-# Field-name lookup table for direct register access in qd.static-unrolled loops. Used via ``self._r(k)`` (defined
-# below) which is just ``getattr(self, _REGS[k])``. With a python-int ``k`` (which is what ``qd.static(range(_TILE))``
-# binds inside its body) this collapses to a single field-reference AST node, vs. the _TILE-way ``if k == 0: val =
-# self.r0; if k == 1: ...`` cascade emitted by a dynamic ``_get_col(k)`` call. Empirically this cuts cold-compile time
-# significantly on hot Cholesky paths because every such call site avoids re-emitting (and later folding) _TILE
-# conditional nodes per use.
-_REGS = tuple(f"r{i}" for i in range(_TILE))
 
 
 class _OuterProduct:
@@ -210,25 +201,10 @@ def _make_tile16x16(dtype=None) -> "type[_Tile16x16Proto]":
 
 def _make_tile16x16_class(dtype):
     class _Tile16x16:
-        """A 16x16 tile distributed one row per subgroup thread, held in 16 scalar registers.  All fields default to
-        0.0 when omitted: ``Tile16x16()`` creates a zero tile."""
+        """A 16x16 tile distributed one row per subgroup thread, with each row held in 16 scalar registers via an
+        unpacked vector field.  ``Tile16x16()`` creates a zero tile."""
 
-        r0: dtype
-        r1: dtype
-        r2: dtype
-        r3: dtype
-        r4: dtype
-        r5: dtype
-        r6: dtype
-        r7: dtype
-        r8: dtype
-        r9: dtype
-        r10: dtype
-        r11: dtype
-        r12: dtype
-        r13: dtype
-        r14: dtype
-        r15: dtype
+        r: qd.types.vector(_TILE, dtype, unpacked=True)
 
         @qd.func
         def _load(self, arr: qd.template(), row_start, row_stop, col_start, col_stop):
@@ -245,43 +221,9 @@ def _make_tile16x16_class(dtype):
                 arr_col_stop = arr.shape[1]
                 if arr_col_stop < col_stop:
                     col_stop = arr_col_stop
-                # Inline cascade: with j a python-int from qd.static, only the matching branch is emitted into the AST.
-                # Avoids the _TILE-way duplication that calling _set_col(j) through the @qd.func boundary would force.
                 for j in qd.static(range(_TILE)):
                     if col_start + j < col_stop:
-                        val = arr[row, col_start + j]
-                        if j == 0:
-                            self.r0 = val
-                        if j == 1:
-                            self.r1 = val
-                        if j == 2:
-                            self.r2 = val
-                        if j == 3:
-                            self.r3 = val
-                        if j == 4:
-                            self.r4 = val
-                        if j == 5:
-                            self.r5 = val
-                        if j == 6:
-                            self.r6 = val
-                        if j == 7:
-                            self.r7 = val
-                        if j == 8:
-                            self.r8 = val
-                        if j == 9:
-                            self.r9 = val
-                        if j == 10:
-                            self.r10 = val
-                        if j == 11:
-                            self.r11 = val
-                        if j == 12:
-                            self.r12 = val
-                        if j == 13:
-                            self.r13 = val
-                        if j == 14:
-                            self.r14 = val
-                        if j == 15:
-                            self.r15 = val
+                        self.r[j] = arr[row, col_start + j]
 
         @qd.func
         def _load3d(self, arr: qd.template(), batch, row_start, row_stop, col_start, col_stop):
@@ -300,39 +242,7 @@ def _make_tile16x16_class(dtype):
                     col_stop = arr_col_stop
                 for j in qd.static(range(_TILE)):
                     if col_start + j < col_stop:
-                        val = arr[batch, row, col_start + j]
-                        if j == 0:
-                            self.r0 = val
-                        if j == 1:
-                            self.r1 = val
-                        if j == 2:
-                            self.r2 = val
-                        if j == 3:
-                            self.r3 = val
-                        if j == 4:
-                            self.r4 = val
-                        if j == 5:
-                            self.r5 = val
-                        if j == 6:
-                            self.r6 = val
-                        if j == 7:
-                            self.r7 = val
-                        if j == 8:
-                            self.r8 = val
-                        if j == 9:
-                            self.r9 = val
-                        if j == 10:
-                            self.r10 = val
-                        if j == 11:
-                            self.r11 = val
-                        if j == 12:
-                            self.r12 = val
-                        if j == 13:
-                            self.r13 = val
-                        if j == 14:
-                            self.r14 = val
-                        if j == 15:
-                            self.r15 = val
+                        self.r[j] = arr[batch, row, col_start + j]
 
         @qd.func
         def _store(self, arr: qd.template(), row_start, row_stop, col_start, col_stop):
@@ -351,7 +261,7 @@ def _make_tile16x16_class(dtype):
                     col_stop = arr_col_stop
                 for j in qd.static(range(_TILE)):
                     if col_start + j < col_stop:
-                        arr[row, col_start + j] = self._r(j)
+                        arr[row, col_start + j] = self.r[j]
 
         @qd.func
         def _store3d(self, arr: qd.template(), batch, row_start, row_stop, col_start, col_stop):
@@ -370,7 +280,7 @@ def _make_tile16x16_class(dtype):
                     col_stop = arr_col_stop
                 for j in qd.static(range(_TILE)):
                     if col_start + j < col_stop:
-                        arr[batch, row, col_start + j] = self._r(j)
+                        arr[batch, row, col_start + j] = self.r[j]
 
         @qd.func
         def eye_(self):
@@ -378,152 +288,14 @@ def _make_tile16x16_class(dtype):
             others to 0.0."""
             tid = qd.simt.subgroup.invocation_id()
             for j in qd.static(range(_TILE)):
-                val = 1.0 if tid == j else 0.0
-                if j == 0:
-                    self.r0 = val
-                if j == 1:
-                    self.r1 = val
-                if j == 2:
-                    self.r2 = val
-                if j == 3:
-                    self.r3 = val
-                if j == 4:
-                    self.r4 = val
-                if j == 5:
-                    self.r5 = val
-                if j == 6:
-                    self.r6 = val
-                if j == 7:
-                    self.r7 = val
-                if j == 8:
-                    self.r8 = val
-                if j == 9:
-                    self.r9 = val
-                if j == 10:
-                    self.r10 = val
-                if j == 11:
-                    self.r11 = val
-                if j == 12:
-                    self.r12 = val
-                if j == 13:
-                    self.r13 = val
-                if j == 14:
-                    self.r14 = val
-                if j == 15:
-                    self.r15 = val
-
-        @qd.func
-        def _get_col(self, k):
-            """Return the value of register (column) k."""
-            val = qd.cast(0.0, dtype)
-            if k == 0:
-                val = self.r0
-            if k == 1:
-                val = self.r1
-            if k == 2:
-                val = self.r2
-            if k == 3:
-                val = self.r3
-            if k == 4:
-                val = self.r4
-            if k == 5:
-                val = self.r5
-            if k == 6:
-                val = self.r6
-            if k == 7:
-                val = self.r7
-            if k == 8:
-                val = self.r8
-            if k == 9:
-                val = self.r9
-            if k == 10:
-                val = self.r10
-            if k == 11:
-                val = self.r11
-            if k == 12:
-                val = self.r12
-            if k == 13:
-                val = self.r13
-            if k == 14:
-                val = self.r14
-            if k == 15:
-                val = self.r15
-            return val
-
-        @qd.func
-        def _set_col(self, k, val):
-            """Set register (column) k to val."""
-            if k == 0:
-                self.r0 = val
-            if k == 1:
-                self.r1 = val
-            if k == 2:
-                self.r2 = val
-            if k == 3:
-                self.r3 = val
-            if k == 4:
-                self.r4 = val
-            if k == 5:
-                self.r5 = val
-            if k == 6:
-                self.r6 = val
-            if k == 7:
-                self.r7 = val
-            if k == 8:
-                self.r8 = val
-            if k == 9:
-                self.r9 = val
-            if k == 10:
-                self.r10 = val
-            if k == 11:
-                self.r11 = val
-            if k == 12:
-                self.r12 = val
-            if k == 13:
-                self.r13 = val
-            if k == 14:
-                self.r14 = val
-            if k == 15:
-                self.r15 = val
+                self.r[j] = 1.0 if tid == j else 0.0
 
         @qd.func
         def _ger_sub(self, a, b):
             """General rank-1 subtract in-place: self -= a @ b^T."""
             for j in qd.static(range(_TILE)):
                 bc = qd.simt.subgroup.shuffle(b, qd.u32(j))
-                val = self._r(j) - a * bc
-                if j == 0:
-                    self.r0 = val
-                if j == 1:
-                    self.r1 = val
-                if j == 2:
-                    self.r2 = val
-                if j == 3:
-                    self.r3 = val
-                if j == 4:
-                    self.r4 = val
-                if j == 5:
-                    self.r5 = val
-                if j == 6:
-                    self.r6 = val
-                if j == 7:
-                    self.r7 = val
-                if j == 8:
-                    self.r8 = val
-                if j == 9:
-                    self.r9 = val
-                if j == 10:
-                    self.r10 = val
-                if j == 11:
-                    self.r11 = val
-                if j == 12:
-                    self.r12 = val
-                if j == 13:
-                    self.r13 = val
-                if j == 14:
-                    self.r14 = val
-                if j == 15:
-                    self.r15 = val
+                self.r[j] = self.r[j] - a * bc
 
         @qd.func
         def cholesky_(self, eps):
@@ -532,52 +304,19 @@ def _make_tile16x16_class(dtype):
             On return, the lower triangle holds L such that A = L @ L^T.  Diagonal clamped to
             sqrt(max(value, eps)) for numerical stability.
             """
-            # ``k`` and ``j`` are wrapped in qd.static so the ``if k > j`` predicates fold at compile time and register
-            # access on the outer ``k`` and inner ``j`` collapses to a single field reference via ``self._r(<py_int>)``
-            # (a thin getattr wrapper) rather than a _TILE-deep register-indexing cascade. Writes use an inline
-            # ``if k == N: self.rN = ...`` chain (setattr is rejected by the quadrants AST builder) which the AST
-            # transformer folds at build time when ``k`` is a python int. The per-lane row-norm used for the diagonal
-            # update is carried in ``my_norm_sq``, so each diagonal step is O(1) rather than O(k). The off-diagonal
-            # ``dot`` is split into two interleaved partial sums (``dot0`` / ``dot1``) so the back-to-back FMA
-            # dependency chain is cut in half, exposing more instruction-level parallelism.
+            # ``k`` and ``j`` are wrapped in qd.static so the ``if k > j`` predicate folds at compile time and the
+            # ``self.r[k]`` / ``self.r[j]`` accesses resolve to a single unpacked-register slot per use (no runtime
+            # cascade).  The per-lane row-norm used for the diagonal update is carried in ``my_norm_sq``, so each
+            # diagonal step is O(1) rather than O(k).  The off-diagonal ``dot`` is split into two interleaved partial
+            # sums (``dot0`` / ``dot1``) so the back-to-back FMA dependency chain is cut in half, exposing more
+            # instruction-level parallelism.
             tid = qd.i32(qd.simt.subgroup.invocation_id())
             my_norm_sq = qd.cast(0.0, dtype)
             for k in qd.static(range(_TILE)):
                 diag_val = qd.cast(0.0, dtype)
                 if tid == k:
-                    diag_val = qd.sqrt(qd.max(self._r(k) - my_norm_sq, eps))
-                    if k == 0:
-                        self.r0 = diag_val
-                    if k == 1:
-                        self.r1 = diag_val
-                    if k == 2:
-                        self.r2 = diag_val
-                    if k == 3:
-                        self.r3 = diag_val
-                    if k == 4:
-                        self.r4 = diag_val
-                    if k == 5:
-                        self.r5 = diag_val
-                    if k == 6:
-                        self.r6 = diag_val
-                    if k == 7:
-                        self.r7 = diag_val
-                    if k == 8:
-                        self.r8 = diag_val
-                    if k == 9:
-                        self.r9 = diag_val
-                    if k == 10:
-                        self.r10 = diag_val
-                    if k == 11:
-                        self.r11 = diag_val
-                    if k == 12:
-                        self.r12 = diag_val
-                    if k == 13:
-                        self.r13 = diag_val
-                    if k == 14:
-                        self.r14 = diag_val
-                    if k == 15:
-                        self.r15 = diag_val
+                    diag_val = qd.sqrt(qd.max(self.r[k] - my_norm_sq, eps))
+                    self.r[k] = diag_val
 
                 diag_k = qd.simt.subgroup.shuffle(diag_val, qd.u32(k))
 
@@ -585,7 +324,7 @@ def _make_tile16x16_class(dtype):
                 dot1 = qd.cast(0.0, dtype)
                 for j in qd.static(range(_TILE)):
                     if k > j:
-                        my_col = self._r(j)
+                        my_col = self.r[j]
                         Lkj = qd.simt.subgroup.shuffle(my_col, qd.u32(k))
                         if j % 2 == 0:
                             dot0 += Lkj * my_col  # type: ignore[reportOperatorIssue]
@@ -595,39 +334,8 @@ def _make_tile16x16_class(dtype):
 
                 new_val = qd.cast(0.0, dtype)
                 if tid > k:  # type: ignore[reportOperatorIssue]
-                    new_val = (self._r(k) - dot) / diag_k  # type: ignore[reportOperatorIssue]
-                    if k == 0:
-                        self.r0 = new_val
-                    if k == 1:
-                        self.r1 = new_val
-                    if k == 2:
-                        self.r2 = new_val
-                    if k == 3:
-                        self.r3 = new_val
-                    if k == 4:
-                        self.r4 = new_val
-                    if k == 5:
-                        self.r5 = new_val
-                    if k == 6:
-                        self.r6 = new_val
-                    if k == 7:
-                        self.r7 = new_val
-                    if k == 8:
-                        self.r8 = new_val
-                    if k == 9:
-                        self.r9 = new_val
-                    if k == 10:
-                        self.r10 = new_val
-                    if k == 11:
-                        self.r11 = new_val
-                    if k == 12:
-                        self.r12 = new_val
-                    if k == 13:
-                        self.r13 = new_val
-                    if k == 14:
-                        self.r14 = new_val
-                    if k == 15:
-                        self.r15 = new_val
+                    new_val = (self.r[k] - dot) / diag_k  # type: ignore[reportOperatorIssue]
+                    self.r[k] = new_val
                 if tid > k:  # type: ignore[reportOperatorIssue]
                     my_norm_sq += new_val * new_val
 
@@ -638,16 +346,15 @@ def _make_tile16x16_class(dtype):
             L is a Tile16x16 holding the lower-triangular Cholesky factor (from cholesky_).  On return, self holds
             the solution X.
             """
-            for c in range(_TILE):
+            for c in qd.static(range(_TILE)):
                 dot = qd.cast(0.0, dtype)
-                for j in range(_TILE):
+                for j in qd.static(range(_TILE)):
                     if c > j:
-                        Lkj = qd.simt.subgroup.shuffle(L._get_col(j), qd.u32(c))
-                        dot += self._get_col(j) * Lkj  # type: ignore[reportOperatorIssue]
+                        Lkj = qd.simt.subgroup.shuffle(L.r[j], qd.u32(c))
+                        dot += self.r[j] * Lkj  # type: ignore[reportOperatorIssue]
 
-                diag_c = qd.simt.subgroup.shuffle(L._get_col(c), qd.u32(c))
-                new_val = (self._get_col(c) - dot) / diag_c  # type: ignore[reportOperatorIssue]
-                self._set_col(c, new_val)
+                diag_c = qd.simt.subgroup.shuffle(L.r[c], qd.u32(c))
+                self.r[c] = (self.r[c] - dot) / diag_c  # type: ignore[reportOperatorIssue]
 
         def solve_triangular_(self, B: Any, lower: bool = True) -> None:
             """Triangular solve: X @ self^T = B, storing result X in B in-place.
@@ -658,13 +365,6 @@ def _make_tile16x16_class(dtype):
             if not lower:
                 raise TypeError("Tile16x16.solve_triangular_: only lower=True is supported")
             B._trsm(self)
-
-        def _r(self, k):
-            """Direct field read by python-int index. Used at qd.static-unrolled call sites to bypass the _TILE-way
-            ``_get_col(k)`` cascade: with ``k`` a python int (from ``qd.static(range(_TILE))``),
-            ``getattr(self, _REGS[k])`` is evaluated by the AST transformer at build time and returns a single
-            field-reference expression."""
-            return getattr(self, _REGS[k])
 
         @qd.func
         def _resolve_vec2d(self, arr: qd.template(), row_start, row_stop, col):
