@@ -434,14 +434,14 @@
 <p>The launcher sets up the test-only env vars (kernel offline cache, watchdog, xdist worker count, etc.) and forwards any unrecognised flags to pytest. Calling <code class="docutils literal notranslate"><span class="pre">pytest</span></code> directly skips that setup and behaves differently.</p>
 <p>Common one-liners:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="c1"># run one file</span>
-<span class="n">python</span> <span class="n">tests</span><span class="o">/</span><span class="n">run_tests</span><span class="o">.</span><span class="n">py</span> <span class="n">test_tile16</span>
+<span class="n">python</span> <span class="n">tests</span><span class="o">/</span><span class="n">run_tests</span><span class="o">.</span><span class="n">py</span> <span class="n">test_tile</span>
 
 <span class="c1"># run one test (any pytest -k expression)</span>
-<span class="n">python</span> <span class="n">tests</span><span class="o">/</span><span class="n">run_tests</span><span class="o">.</span><span class="n">py</span> <span class="o">-</span><span class="n">k</span> <span class="n">test_tile16_cholesky</span>
+<span class="n">python</span> <span class="n">tests</span><span class="o">/</span><span class="n">run_tests</span><span class="o">.</span><span class="n">py</span> <span class="o">-</span><span class="n">k</span> <span class="n">test_cholesky</span>
 
 <span class="c1"># run on a specific backend (or comma-separated list)</span>
 <span class="n">python</span> <span class="n">tests</span><span class="o">/</span><span class="n">run_tests</span><span class="o">.</span><span class="n">py</span> <span class="o">--</span><span class="n">arch</span> <span class="n">cuda</span>
-<span class="n">python</span> <span class="n">tests</span><span class="o">/</span><span class="n">run_tests</span><span class="o">.</span><span class="n">py</span> <span class="o">--</span><span class="n">arch</span> <span class="n">metal</span> <span class="o">-</span><span class="n">k</span> <span class="n">tile16</span>
+<span class="n">python</span> <span class="n">tests</span><span class="o">/</span><span class="n">run_tests</span><span class="o">.</span><span class="n">py</span> <span class="o">--</span><span class="n">arch</span> <span class="n">metal</span> <span class="o">-</span><span class="n">k</span> <span class="n">tile</span>
 
 <span class="c1"># same, via env var (handy for CI)</span>
 <span class="n">QD_WANTED_ARCHS</span><span class="o">=</span><span class="n">metal</span><span class="p">,</span><span class="n">vulkan</span> <span class="n">python</span> <span class="n">tests</span><span class="o">/</span><span class="n">run_tests</span><span class="o">.</span><span class="n">py</span>
