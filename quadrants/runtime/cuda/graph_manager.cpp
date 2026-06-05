@@ -719,9 +719,13 @@ bool GraphManager::try_launch(int launch_id,
       // Use the cond-with-yield variant so a yield inside the WHILE body exits the loop
       // immediately. Without this the body would re-enter, see resume_point==INT_MAX in
       // every gate, skip every checkpoint, never decrement the counter, and spin forever.
+      // The kernel also resets `resume_point` to 0 on continue, so a `resume(from_checkpoint=
+      // cp)` call only skips checkpoints on its first iteration -- subsequent iterations run
+      // the full WHILE body. Matches qipc's `YieldResume::This/Next` semantics.
       ensure_cond_with_yield_kernel_loaded();
       QD_ASSERT(cond_with_yield_kernel_func_);
-      void *cond_args[3] = {&cond_handle, &cached.counter_ptr_slot, &cached.yield_signal_dev_ptr};
+      void *cond_args[4] = {&cond_handle, &cached.counter_ptr_slot, &cached.yield_signal_dev_ptr,
+                            &cached.resume_point_dev_ptr};
       add_kernel_node(kernel_target_graph, prev_outer, cond_with_yield_kernel_func_, 1, 1, 0, cond_args);
     } else {
       void *cond_args[2] = {&cond_handle, &cached.counter_ptr_slot};
