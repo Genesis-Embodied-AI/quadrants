@@ -235,6 +235,19 @@ bool KernelLauncher::on_amdgpu_device(void *ptr) {
 void KernelLauncher::launch_llvm_kernel(Handle handle, LaunchContextBuilder &ctx) {
   QD_ASSERT(handle.get_launch_id() < contexts_.size());
 
+  // Nested qd.kernel-as-subgraph is not yet wired on AMDGPU. Fail with a clear message instead of falling through to
+  // a per-task `amdgpu_module->launch(task.name, ...)` that cannot resolve the body-less launch_child marker. The HIP
+  // child-graph-node embed (hardware path) and a host-side sequential fallback are the remaining work here; both need
+  // verification on AMD hardware (amdcloud).
+  {
+    const auto &lctx = contexts_[handle.get_launch_id()];
+    for (const auto &task : lctx.offloaded_tasks) {
+      QD_ERROR_IF(task.is_launch_child,
+                  "Calling a @qd.kernel from inside a graph=True kernel (nested subgraph) is not yet supported on the "
+                  "AMDGPU backend. It currently works on CUDA and CPU.");
+    }
+  }
+
   // HIP graph fast path. Used when the kernel was declared `@qd.kernel(graph=True)` AND there is no `graph_do_while`
   // arg. The `graph_do_while` case falls through to the regular streaming launch below, which handles it via
   // `launch_offloaded_tasks_with_do_while` (host-side loop + DtoH of the counter ndarray each iteration). HIP exposes

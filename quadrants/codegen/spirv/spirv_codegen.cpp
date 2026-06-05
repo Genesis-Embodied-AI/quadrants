@@ -194,6 +194,13 @@ TaskCodegen::Result TaskCodegen::run() {
     generate_range_for_kernel(task_ir_);
   } else if (task_ir_->task_type == OffloadedTaskType::struct_for) {
     generate_struct_for_kernel(task_ir_);
+  } else if (task_ir_->task_type == OffloadedTaskType::launch_child) {
+    // Nested qd.kernel-as-subgraph: not yet wired for the Metal/Vulkan (SPIR-V/gfx) backends. The CUDA backend
+    // embeds a child-graph node and the CPU backend launches the child sequentially; the gfx runtime needs an
+    // equivalent sequential fallback in its launch path before this can be supported.
+    QD_ERROR(
+        "Calling a @qd.kernel from inside a graph=True kernel (nested subgraph) is not yet supported on the "
+        "Metal/Vulkan backend. It currently works on CUDA and CPU.");
   } else {
     QD_ERROR("Unsupported offload type={} on SPIR-V codegen", task_ir_->task_name());
   }
