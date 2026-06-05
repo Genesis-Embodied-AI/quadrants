@@ -154,6 +154,45 @@ def test_subgraph_changed_args():
 
 
 @test_utils.test()
+def test_subgraph_changed_shape():
+    """Relaunching with a differently-shaped array refreshes the child's shape, not just its pointer.
+
+    The child's range-for (`for i in a`) gets its trip count from the ndarray shape carried in the child's
+    arg buffer. If that shape were baked at first build instead of refreshed (or rebuilt) per launch, a larger
+    second array would only have its first `n1` elements doubled.
+    """
+
+    @qd.kernel
+    def child_double(a: qd.types.NDArray[qd.i32, 1]):
+        for i in a:
+            a[i] = a[i] * 2
+
+    @qd.kernel(graph=True)
+    def parent(a: qd.types.NDArray[qd.i32, 1]):
+        child_double(a)
+
+    a1 = qd.ndarray(qd.i32, (16,))
+    a1.fill(3)
+    parent(a1)
+    assert np.all(a1.to_numpy() == 6)
+
+    # Larger array through the same cached parent: every element must be doubled, proving the trip count tracks
+    # the current shape rather than the 16 elements seen on the first launch.
+    a2 = qd.ndarray(qd.i32, (128,))
+    a2.fill(4)
+    parent(a2)
+    assert np.all(a2.to_numpy() == 8), "child range-for did not cover the full reshaped array"
+
+    # Smaller array too, to rule out a stale-larger-trip-count reading past the end.
+    a3 = qd.ndarray(qd.i32, (8,))
+    a3.fill(5)
+    parent(a3)
+    assert np.all(a3.to_numpy() == 10)
+    # First (still-live) array is untouched by the later launches.
+    assert np.all(a1.to_numpy() == 6)
+
+
+@test_utils.test()
 def test_subgraph_inside_graph_do_while():
     """A child call wrapped in graph_do_while is embedded inside the conditional while-body graph.
 
