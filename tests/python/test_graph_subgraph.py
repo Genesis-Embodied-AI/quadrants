@@ -26,6 +26,10 @@ def _num_offloaded_tasks():
     return impl.get_runtime().prog.get_num_offloaded_tasks_on_last_call()
 
 
+def _is_graph_do_while_natively_supported():
+    return impl.current_cfg().arch == qd.cuda and qd.lang.impl.get_cuda_compute_capability() >= 90
+
+
 @test_utils.test()
 def test_subgraph_single_child():
     """A graph=True parent that just calls one child embeds the child as a single child-graph node."""
@@ -147,6 +151,41 @@ def test_subgraph_changed_args():
     assert np.all(a2.to_numpy() == 14)
     # First array is untouched by the second launch.
     assert np.all(a1.to_numpy() == 4)
+
+
+@test_utils.test()
+def test_subgraph_inside_graph_do_while():
+    """A child call wrapped in graph_do_while is embedded inside the conditional while-body graph.
+
+    Only exercised where the hardware conditional-node path is available (CUDA SM 9.0+); the host-fallback
+    do-while path for nested children is not yet supported.
+    """
+    if not _is_graph_do_while_natively_supported():
+        pytest.skip("graph_do_while + nested child requires the hardware conditional-node path (CUDA SM 9.0+)")
+
+    n = 16
+
+    @qd.kernel
+    def child_inc(x: qd.types.NDArray[qd.i32, 1]):
+        for i in x:
+            x[i] = x[i] + 1
+
+    @qd.kernel(graph=True)
+    def solve(x: qd.types.NDArray[qd.i32, 1], counter: qd.types.NDArray[qd.i32, 1]):
+        while qd.graph_do_while(counter):
+            child_inc(x)
+            for i in range(1):
+                counter[i] = counter[i] - 1
+
+    x = qd.ndarray(qd.i32, (n,))
+    x.fill(0)
+    counter = qd.ndarray(qd.i32, (1,))
+    counter.from_numpy(np.array([10], dtype=np.int32))
+    solve(x, counter)
+    used = _graph_used()
+    assert np.all(x.to_numpy() == 10)
+    assert counter.to_numpy()[0] == 0
+    assert used is True
 
 
 @test_utils.test()
