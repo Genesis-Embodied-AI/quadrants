@@ -157,7 +157,7 @@ Therefore on unsupported platforms, you might consider creating a second impleme
 
 ## Checkpoints with `qd.checkpoint` *(experimental)*
 
-> **Status:** Device-side mechanism implemented (slices 1a–1d). On CUDA SM 9.0+ each checkpoint is wrapped in a CUDA-graph IF conditional node (`qd.checkpoint`) plus an inline yield-check kernel (`yield_on=`). On other backends (and on pre-Hopper CUDA) every checkpoint body runs unconditionally — the parser accepts the construct but doesn't yet enforce the gating; that arrives in the indirect-dispatch slices (4–6). The host-side `GraphStatus` / `step.resume(from_checkpoint=…)` API is still upcoming (slice 2); until then a yield manifests as "every checkpoint after the yielding one is skipped on this launch, and the user's `yield_on` ndarray is reset to 0 so the next launch starts clean".
+> **Status:** Full CUDA SM 9.0+ path implemented (slices 1a–2). Each checkpoint compiles to a CUDA-graph IF conditional node; `yield_on=` checkpoints additionally inject a yield-check kernel and the host-side `GraphStatus` / `kernel.resume(from_checkpoint=…)` API drives the re-entrant loop. On other GPU backends (and pre-Hopper CUDA) the parser still accepts the construct but every body currently runs unconditionally — the indirect-dispatch lowering arrives in slices 4–6 (AMDGPU, Metal/Vulkan, CPU).
 
 `qd.checkpoint()` marks a section of a graph kernel as a *skippable, optionally yieldable stage*. The intended use is the qipc-style re-entrant Newton loop, where each iteration is divided into a handful of named stages (assemble, broadphase, line search, ...) and the host may need to grow a pre-allocated buffer when a stage detects overflow.
 
@@ -185,7 +185,7 @@ def step(
 
 Each `with qd.checkpoint(...)` block gets a `cp_id` assigned by declaration order (0, 1, 2, ... flat across the whole kernel, independent of whether the checkpoint is inside or outside a `qd.graph_do_while`).
 
-### Yield mechanism (CUDA SM 9.0+, slice 1d)
+### Yield mechanism (CUDA SM 9.0+)
 
 If `yield_on=foo` is supplied, the body may write a non-zero value into the `foo` ndarray to signal "the host needs to handle something" (typically: pre-allocated buffer too small). At the end of the checkpoint body the framework injects a small yield-check kernel that:
 
@@ -196,7 +196,24 @@ If `yield_on=foo` is supplied, the body may write a non-zero value into the `foo
 
 Combined with `qd.graph_do_while`, the framework also injects a yield-aware condition kernel that exits the `WHILE` loop as soon as a yield has been observed — without it the loop body would re-enter, see "post-yield" state in every gate, skip every checkpoint, never decrement the counter, and spin forever.
 
-Until the host-side `GraphStatus` API arrives (slice 2), the only way to read `yield_signal` from Python is the internal `prog.get_graph_last_yield_cp_id_on_last_call()` introspection (returns the yielding `cp_id`, or `-1` if no checkpoint yielded). End-user-visible "yielded → call `step.resume(from_checkpoint=…)`" semantics arrive with slice 2.
+### Host-side yield / resume loop
+
+Kernels with at least one `yield_on=` checkpoint return a `qd.GraphStatus` from every launch (and from `kernel.resume(...)`). The status carries two fields:
+
+- `status.yielded` — `True` iff some `yield_on=` flag was non-zero during this launch.
+- `status.checkpoint` — `cp_id` of the first (in declaration order) checkpoint that fired its flag, or `None` when `yielded` is `False`.
+
+Resume by calling `kernel.resume(..., from_checkpoint=status.checkpoint)`. Every `qd.checkpoint` with `cp_id < from_checkpoint` is skipped on the resume launch; the rest run normally. The canonical host loop looks like:
+
+```python
+status = step(arr, overflow_flag, newton_cond)
+while status.yielded:
+    handle_overflow_for(status.checkpoint, ...)
+    status = step.resume(arr, overflow_flag, newton_cond,
+                         from_checkpoint=status.checkpoint)
+```
+
+Kernels with `qd.checkpoint()` but no `yield_on=` keep their previous return contract (typically `None`) — the `GraphStatus` surface is opt-in via `yield_on=`.
 
 ### Restrictions (enforced at kernel compile time)
 
