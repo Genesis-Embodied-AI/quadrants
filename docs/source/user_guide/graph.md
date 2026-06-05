@@ -10,7 +10,7 @@ Both features run on every backend. They are *hardware accelerated* on CUDA (via
 | --- | --- | --- | --- | --- | --- | --- |
 | `graph=True` | hardware accelerated | hardware accelerated | hardware accelerated | runs (no acceleration) | runs (no acceleration) | runs (no acceleration) |
 | `graph_do_while` | hardware accelerated | host fallback | host fallback | host fallback | host fallback | host fallback |
-| [nested `qd.kernel`](#calling-another-qdkernel-nested-subgraphs) | hardware accelerated | hardware accelerated | hardware accelerated | *in progress* | *in progress* | sequential fallback |
+| [nested `qd.kernel`](#calling-another-qdkernel-nested-subgraphs) | hardware accelerated | hardware accelerated | hardware accelerated | sequential fallback | sequential fallback | sequential fallback |
 
 AMDGPU `graph_do_while` falls back to the host-side loop because HIP does not currently expose conditional / while graph nodes (as of ROCm 7.2).
 
@@ -108,7 +108,7 @@ The child does not need `graph=True` — only the outermost (parent) kernel does
 
 Different ndarrays can be passed across calls just like for a plain `graph=True` kernel: the cached parent graph is replayed and each embedded child's argument pointers are refreshed to match the current call (no rebuild).
 
-> Currently hardware-accelerated on CUDA and AMDGPU (the child is embedded as a CUDA / HIP child-graph node) and supported on CPU via an in-order sequential launch of the child. On Metal and Vulkan a nested call currently raises a clear "not yet supported" error; the Metal/Vulkan sequential fallback is in progress. Nested calls inside a `graph_do_while` are supported on CUDA SM 9.0+ (hardware conditional nodes); they are not yet supported on AMDGPU, where `graph_do_while` runs through a host-side fallback loop.
+> Currently hardware-accelerated on CUDA and AMDGPU (the child is embedded as a CUDA / HIP child-graph node). On Metal, Vulkan, and CPU the child is run via an in-order sequential launch at the call site (same observable result, no graph acceleration). Nested calls inside a `graph_do_while` are supported on CUDA SM 9.0+ (hardware conditional nodes); they are not yet supported where `graph_do_while` runs through a host-side fallback loop (AMDGPU, Metal, Vulkan, CPU).
 
 
 ## GPU-side iteration with `graph_do_while`
