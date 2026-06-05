@@ -367,6 +367,95 @@ class QD_DLL_EXPORT GfxRuntime {
   // every `launch_kernel` call that has any `checkpoint_yield_on_arg_ids[cp] >= 0`; updated when the
   // post-checkpoint readback observes a non-zero `yield_on=` flag.
   int last_yield_cp_id_on_last_call_{-1};
+
+  // GPU-side checkpoint gating (Vulkan / Metal). Lazily-built generic gate + yield-check pipelines
+  // (one per `GfxRuntime`, shared across every yielding-capable kernel). The gate shader is
+  // `quadrants/codegen/spirv/checkpoint_gate_shader.{h,cpp}`; the yield-check shader is
+  // `quadrants/codegen/spirv/checkpoint_yield_check_shader.{h,cpp}`. Both are vanilla compute
+  // shaders (no capability requirements beyond `OpAtomicCompareExchange`, universal across the
+  // Quadrants-supported Vulkan / Metal feature set). See `runtime/gfx/checkpoint_launch.cpp` for
+  // the orchestration that uses them.
+  std::unique_ptr<Pipeline> checkpoint_gate_pipeline_{nullptr};
+  std::unique_ptr<Pipeline> checkpoint_yield_check_pipeline_{nullptr};
+
+  // Per-kernel-handle cached gating state. Indexed by `KernelHandle::get_launch_id()` (same
+  // indexing as `ti_kernels_`), allocated lazily on the first checkpoint-bearing launch of each
+  // handle and reused across every subsequent launch of that handle. Entries for non-checkpoint
+  // kernels (or pre-allocation slots for not-yet-launched handles) are left default-constructed
+  // (`per_cp.empty()`); the launcher tests `state.per_cp.empty()` as the fast-path guard.
+  //
+  // Lifecycle: never freed during a `GfxRuntime`'s lifetime - the device allocations live in the
+  // `DeviceAllocationGuard`s here, which match the lifetime of the `GfxRuntime` (the kernel
+  // handles themselves never get reissued, so the per-handle entry stays valid as long as the
+  // handle is callable). `qd.reset()` tears the whole runtime down and reclaims everything.
+  struct CheckpointPerCpState {
+    // cp_id this entry describes. Matches the index into `CheckpointHandleState::per_cp` for
+    // every yielding-capable handle (per-cp entries are dense, indexed 0..max_cp_id).
+    int32_t cp_id{-1};
+    // Per-checkpoint params SSBO. Layout matches `spirv::CheckpointGateParams` followed by the
+    // active-dim u32 triples (one per body kernel in the checkpoint, plus one extra triple for
+    // the yield-check shader's grid dim when this checkpoint has `yield_on=`). Written once at
+    // first launch; the gate shader reads from it and the contents never change across launches.
+    std::unique_ptr<DeviceAllocationGuard> gate_params;
+    // Per-checkpoint out-dims SSBO. Holds N+(yielding?1:0) u32 triples; written by the gate
+    // shader each launch with either the active dim or `(0, 0, 0)`; consumed by each body
+    // kernel's (and the yield-check shader's) `CommandList::dispatch_indirect` at offset
+    // `12 * slot_idx`. Allocated with `AllocUsage::Storage | AllocUsage::Indirect` so the same
+    // buffer can be both written as an SSBO and read as an indirect-dispatch source.
+    std::unique_ptr<DeviceAllocationGuard> out_dims;
+    // Per-yielding-checkpoint yield-check params SSBO (4 bytes, holds cp_id). Allocated only
+    // when `yield_on=` was supplied for this checkpoint; null otherwise.
+    std::unique_ptr<DeviceAllocationGuard> yield_check_params;
+    // Body-kernel task indices that belong to this checkpoint, in original task order. The
+    // launcher walks these to bind + dispatch_indirect each body kernel; offset `12 * i` in
+    // `out_dims` gives the i-th body kernel's dim3 slot. The yield-check shader, when present,
+    // reads from the trailing slot at offset `12 * body_tasks.size()`.
+    std::vector<int> body_task_indices;
+  };
+
+  struct CheckpointHandleState {
+    // Per-launch control buffer: `[resume_point: i32, yield_signal: i32]`. Allocated with
+    // `host_write=true, host_read=true` so the launcher can `upload_data` the initial
+    // `(resume_point, -1)` at launch start and `readback_data` the final `yield_signal` at
+    // launch end without going through a separate staging buffer. Shared across all per-cp
+    // states; the gate and yield-check shaders both read / write it.
+    std::unique_ptr<DeviceAllocationGuard> control;
+    // Dense per-cp entries: `per_cp[i]` describes checkpoint id `i`. Sparse cp_ids (a kernel
+    // with checkpoints 0 and 2 but no 1) are not produced by the AST transformer (cp_ids are
+    // dense by construction in `quadrants/python/quadrants/lang/transformer.py`), so the dense
+    // layout is correct; `per_cp[i].cp_id == i` always when the entry is populated.
+    std::vector<CheckpointPerCpState> per_cp;
+  };
+
+  // Per-handle cached gating state. Resized to `ti_kernels_.size()` lazily; entries for handles
+  // that have never launched a checkpoint-bearing kernel have `per_cp.empty()` and skip the GPU-
+  // side gating path entirely (no buffers allocated).
+  std::vector<CheckpointHandleState> checkpoint_handle_states_;
+
+  // First-launch setup for the per-handle gating state. Builds the generic gate + yield-check
+  // pipelines (idempotent across handles) and populates `state.per_cp` based on the kernel's
+  // task list. Body-kernel active dims are baked into `state.per_cp[cp].gate_params` on this
+  // call; subsequent launches reuse the same buffers without re-uploading.
+  //
+  // Returns true if the kernel has any cp_id >= 0 tasks (i.e. the launcher should use the GPU-
+  // side gating path); false otherwise (no checkpoints, run the standard direct-dispatch path).
+  bool ensure_checkpoint_state_for_handle(KernelHandle handle,
+                                          const std::vector<quadrants::lang::spirv::TaskAttributes> &task_attribs,
+                                          const std::vector<int> &checkpoint_yield_on_arg_ids,
+                                          const std::vector<int> &per_task_group_x);
+
+  // Record a gate-shader dispatch into `cmdlist` for one checkpoint. Implementation in
+  // `checkpoint_launch.cpp`. Called from `launch_kernel` immediately before the first body task of
+  // each checkpoint. Caller must `memory_barrier()` afterwards before the body tasks dispatch
+  // indirect off the gate's out_dims output.
+  void dispatch_checkpoint_gate(CommandList *cmdlist, const CheckpointHandleState &state, int cp_id);
+
+  // Record a yield-check-shader dispatch into `cmdlist` for one yielding checkpoint. Implementation
+  // in `checkpoint_launch.cpp`. Called from `launch_kernel` immediately after the last body task of
+  // each yielding checkpoint. Indirect-dispatched off the trailing out_dims slot so a skipped
+  // checkpoint also skips its yield-check.
+  void dispatch_checkpoint_yield_check(CommandList *cmdlist, const CheckpointHandleState &state, int cp_id,
+                                       DeviceAllocation yield_on_devalloc);
 };
 
 GfxRuntime::RegisterParams run_codegen(Kernel *kernel,
