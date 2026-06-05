@@ -166,6 +166,10 @@ class QD_DLL_EXPORT Program {
     return program_impl_->get_kernel_launcher().get_graph_num_checkpoints_on_last_call();
   }
 
+  int get_graph_last_yield_cp_id_on_last_call() {
+    return program_impl_->get_kernel_launcher().get_graph_last_yield_cp_id_on_last_call();
+  }
+
   std::size_t get_graph_total_builds() {
     return program_impl_->get_kernel_launcher().get_graph_total_builds();
   }

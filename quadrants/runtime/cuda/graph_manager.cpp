@@ -1,9 +1,11 @@
 #include "quadrants/runtime/cuda/graph_manager.h"
 #include "quadrants/runtime/cuda/checkpoint_gate_fatbin.h"
+#include "quadrants/runtime/cuda/checkpoint_yield_check_fatbin.h"
 #include "quadrants/runtime/cuda/graph_do_while_cond_fatbin.h"
 #include "quadrants/runtime/cuda/cuda_utils.h"
 #include "quadrants/rhi/cuda/cuda_context.h"
 
+#include <climits>
 #include <cstdint>
 #include <vector>
 
@@ -14,6 +16,7 @@ CachedGraph::CachedGraph(std::size_t arg_buf_size,
                          std::size_t result_buf_size,
                          bool needs_counter_ptr_slot,
                          bool needs_resume_point_slot,
+                         bool needs_yield_signal_slot,
                          LlvmRuntimeExecutor *executor)
     : arg_buffer_size(arg_buf_size), result_buffer_size(result_buf_size) {
   CUDADriver::get_instance().malloc((void **)&persistent_device_result_buffer,
@@ -33,6 +36,15 @@ CachedGraph::CachedGraph(std::size_t arg_buf_size,
     CUDADriver::get_instance().malloc(&resume_point_dev_ptr, sizeof(int32_t));
     int32_t zero = 0;
     CUDADriver::get_instance().memcpy_host_to_device(resume_point_dev_ptr, &zero, sizeof(int32_t));
+  }
+
+  if (needs_yield_signal_slot) {
+    // Single int32 yield_signal device scalar. -1 means "no checkpoint has yielded this
+    // launch". The yield-check kernel atomically CASes the first yielding cp_id in;
+    // `launch_cached_graph` resets it to -1 before every launch and copies it back after.
+    CUDADriver::get_instance().malloc(&yield_signal_dev_ptr, sizeof(int32_t));
+    int32_t neg_one = -1;
+    CUDADriver::get_instance().memcpy_host_to_device(yield_signal_dev_ptr, &neg_one, sizeof(int32_t));
   }
 
   persistent_ctx.runtime = executor->get_llvm_runtime();
@@ -57,6 +69,14 @@ CachedGraph::~CachedGraph() {
   if (resume_point_dev_ptr) {
     CUDADriver::get_instance().mem_free(resume_point_dev_ptr);
   }
+  if (yield_signal_dev_ptr) {
+    CUDADriver::get_instance().mem_free(yield_signal_dev_ptr);
+  }
+  for (void *slot : checkpoint_yield_on_ptr_slots) {
+    if (slot) {
+      CUDADriver::get_instance().mem_free(slot);
+    }
+  }
 }
 
 CachedGraph::CachedGraph(CachedGraph &&other) noexcept
@@ -68,6 +88,8 @@ CachedGraph::CachedGraph(CachedGraph &&other) noexcept
       result_buffer_size(other.result_buffer_size),
       counter_ptr_slot(other.counter_ptr_slot),
       resume_point_dev_ptr(other.resume_point_dev_ptr),
+      yield_signal_dev_ptr(other.yield_signal_dev_ptr),
+      checkpoint_yield_on_ptr_slots(std::move(other.checkpoint_yield_on_ptr_slots)),
       num_checkpoints(other.num_checkpoints),
       num_nodes(other.num_nodes) {
   other.graph_exec = nullptr;
@@ -75,6 +97,8 @@ CachedGraph::CachedGraph(CachedGraph &&other) noexcept
   other.persistent_device_result_buffer = nullptr;
   other.counter_ptr_slot = nullptr;
   other.resume_point_dev_ptr = nullptr;
+  other.yield_signal_dev_ptr = nullptr;
+  other.checkpoint_yield_on_ptr_slots.clear();
 }
 
 CachedGraph &CachedGraph::operator=(CachedGraph &&other) noexcept {
@@ -89,6 +113,8 @@ CachedGraph &CachedGraph::operator=(CachedGraph &&other) noexcept {
   std::swap(result_buffer_size, raii_guard.result_buffer_size);
   std::swap(counter_ptr_slot, raii_guard.counter_ptr_slot);
   std::swap(resume_point_dev_ptr, raii_guard.resume_point_dev_ptr);
+  std::swap(yield_signal_dev_ptr, raii_guard.yield_signal_dev_ptr);
+  std::swap(checkpoint_yield_on_ptr_slots, raii_guard.checkpoint_yield_on_ptr_slots);
   std::swap(num_checkpoints, raii_guard.num_checkpoints);
   std::swap(num_nodes, raii_guard.num_nodes);
   return *this;
@@ -200,6 +226,21 @@ void GraphManager::ensure_condition_kernel_loaded() {
   QD_TRACE("Loaded graph_do_while condition kernel from pre-built fatbin");
 }
 
+// Loads the cond-with-yield variant from the same module the plain condition kernel lives in
+// (both are emitted by `build_condition_kernel_fatbin.py`). Looked up lazily because most
+// `qd.graph_do_while` kernels don't contain `qd.checkpoint(yield_on=...)` and don't need it.
+// Returns silently when the base module isn't loaded yet -- callers are expected to call
+// `ensure_condition_kernel_loaded()` immediately before, mirroring the existing pattern.
+void GraphManager::ensure_cond_with_yield_kernel_loaded() {
+  if (cond_with_yield_kernel_func_)
+    return;
+  if (!cond_kernel_module_)
+    return;
+  CUDADriver::get_instance().module_get_function(&cond_with_yield_kernel_func_, cond_kernel_module_,
+                                                 "_qd_graph_do_while_cond_with_yield");
+  QD_TRACE("Loaded graph_do_while cond-with-yield kernel from pre-built fatbin");
+}
+
 // Loads the qd.checkpoint() IF-gate kernel from the pre-built fatbin (same shape and
 // SM-coverage policy as `ensure_condition_kernel_loaded`). The CUDA 12.4+ IF conditional
 // node mechanism is gated on SM 9.0+; on older devices we early-return and the caller
@@ -235,6 +276,35 @@ void GraphManager::ensure_checkpoint_gate_kernel_loaded() {
 
   driver.module_get_function(&gate_kernel_func_, gate_kernel_module_, "_qd_checkpoint_if_gate");
   QD_TRACE("Loaded qd.checkpoint IF-gate kernel from pre-built fatbin");
+}
+
+// Loads the yield-check kernel from its pre-built fatbin. Mirrors the gate-kernel loader: same
+// SM 9.0+ requirement (it lives inside the IF body, which already needs conditional nodes),
+// same lazy-load pattern, separate fatbin so kernels without `yield_on=` don't pay for it.
+void GraphManager::ensure_checkpoint_yield_check_kernel_loaded() {
+  if (yield_check_kernel_func_)
+    return;
+
+  int cc = CUDAContext::get_instance().get_compute_capability();
+  if (cc < 90) {
+    return;  // Already logged by ensure_checkpoint_gate_kernel_loaded(); silently skip.
+  }
+
+  auto &driver = CUDADriver::get_instance();
+
+  static_assert(kCheckpointYieldCheckKernelFatbinSize > 0,
+                "Checkpoint yield-check kernel fatbin is empty -- regenerate with "
+                "scripts/build_checkpoint_yield_check_fatbin.py");
+
+  uint32_t ret = driver.module_load_data.call(&yield_check_kernel_module_, kCheckpointYieldCheckKernelFatbin);
+  QD_ERROR_IF(ret != CUDA_SUCCESS,
+              "Failed to load qd.checkpoint yield-check kernel fatbin (CUDA error {}). This SM "
+              "({}) may not be included in the fatbin -- regenerate with "
+              "scripts/build_checkpoint_yield_check_fatbin.py",
+              ret, cc);
+
+  driver.module_get_function(&yield_check_kernel_func_, yield_check_kernel_module_, "_qd_checkpoint_yield_check");
+  QD_TRACE("Loaded qd.checkpoint yield-check kernel from pre-built fatbin");
 }
 
 void *GraphManager::add_kernel_node(void *graph,
@@ -298,19 +368,42 @@ void *GraphManager::add_conditional_while_node(void *graph, unsigned long long *
 }
 
 bool GraphManager::launch_cached_graph(CachedGraph &cached, LaunchContextBuilder &ctx, bool use_graph_do_while) {
-  // TODO: these two memcpy_host_to_device calls could be async
-  // (cuMemcpyHtoDAsync) on the launch stream for better CPU-GPU overlap.
+  // TODO: these memcpy_host_to_device calls could be async (cuMemcpyHtoDAsync) on the launch
+  // stream for better CPU-GPU overlap. All are tiny (<= 8 bytes), so synchronous is fine for
+  // now.
   if (use_graph_do_while && cached.counter_ptr_slot) {
     void *flag_ptr = ctx.graph_do_while_flag_dev_ptr;
     CUDADriver::get_instance().memcpy_host_to_device(cached.counter_ptr_slot, &flag_ptr, sizeof(void *));
   }
 
   if (cached.resume_point_dev_ptr) {
-    // Slice 1c: always reset resume_point to 0 before each launch so every checkpoint runs
-    // (no host-side `from_checkpoint=` API yet). Slice 2 will route this through the
-    // GraphStatus host API and only reset when not resuming.
+    // Slice 1d: always reset resume_point to 0 before each launch so every checkpoint runs.
+    // The on-yield kernel bumps this to INT_MAX during a launch; the reset here ensures the
+    // next launch starts clean. Slice 2 will route this through the `GraphStatus` host API
+    // and only reset when not resuming from a checkpoint.
     int32_t zero = 0;
     CUDADriver::get_instance().memcpy_host_to_device(cached.resume_point_dev_ptr, &zero, sizeof(int32_t));
+  }
+
+  if (cached.yield_signal_dev_ptr) {
+    // Slice 1d: reset yield_signal to -1 before each launch so the yield-check kernel sees a
+    // clean "no yield yet this launch" state. The first cp_id whose yield_on fires will CAS
+    // its value in; later yields are no-ops thanks to atomicCAS semantics.
+    int32_t neg_one = -1;
+    CUDADriver::get_instance().memcpy_host_to_device(cached.yield_signal_dev_ptr, &neg_one, sizeof(int32_t));
+  }
+
+  // For each `qd.checkpoint(yield_on=foo)` with a resolved device pointer this launch, refresh
+  // the persistent indirection slot. Re-runs are cheap and unconditional so a user can pass a
+  // different ndarray each call without invalidating the cached graph (same trick as
+  // `counter_ptr_slot` for graph_do_while).
+  for (std::size_t cp = 0;
+       cp < cached.checkpoint_yield_on_ptr_slots.size() && cp < ctx.checkpoint_yield_on_dev_ptrs.size(); ++cp) {
+    void *slot = cached.checkpoint_yield_on_ptr_slots[cp];
+    void *user_ptr = ctx.checkpoint_yield_on_dev_ptrs[cp];
+    if (slot && user_ptr) {
+      CUDADriver::get_instance().memcpy_host_to_device(slot, &user_ptr, sizeof(void *));
+    }
   }
 
   if (ctx.arg_buffer_size > 0) {
@@ -319,6 +412,19 @@ bool GraphManager::launch_cached_graph(CachedGraph &cached, LaunchContextBuilder
   }
   auto *stream = CUDAContext::get_instance().get_stream();
   CUDADriver::get_instance().graph_launch(cached.graph_exec, stream);
+
+  // Capture the post-launch yield_signal so introspection (and slice 2's GraphStatus) can see
+  // which cp_id yielded. The sync is heavy-handed but matches the rest of the launch path,
+  // which has been sync-by-default since `qd.kernel(graph=True)` shipped; slice 2 will move
+  // it onto the launch stream once `GraphStatus` requires async semantics.
+  last_yield_cp_id_on_last_call_ = -1;
+  if (cached.yield_signal_dev_ptr) {
+    CUDADriver::get_instance().stream_synchronize(stream);
+    int32_t signal = -1;
+    CUDADriver::get_instance().memcpy_device_to_host(&signal, cached.yield_signal_dev_ptr, sizeof(int32_t));
+    last_yield_cp_id_on_last_call_ = signal;
+  }
+
   used_on_last_call_ = true;
   num_nodes_on_last_call_ = cached.num_nodes;
   num_checkpoints_on_last_call_ = cached.num_checkpoints;
@@ -366,9 +472,11 @@ bool GraphManager::try_launch(int launch_id,
 
   // Scan for qd.checkpoint() metadata once: any task with `checkpoint_id >= 0` opts the kernel
   // into the IF-conditional path. We need this before constructing CachedGraph so the latter
-  // can allocate the `resume_point` scalar exactly when (and only when) it will be referenced.
+  // can allocate the `resume_point` and `yield_signal` scalars exactly when (and only when)
+  // they will be referenced.
   bool has_checkpoints = false;
   std::size_t num_distinct_checkpoints = 0;
+  int max_cp_id = -1;
   {
     int prev_cp = -1;
     for (const auto &task : offloaded_tasks) {
@@ -378,9 +486,25 @@ bool GraphManager::try_launch(int launch_id,
           ++num_distinct_checkpoints;
           prev_cp = task.checkpoint_id;
         }
+        if (task.checkpoint_id > max_cp_id) {
+          max_cp_id = task.checkpoint_id;
+        }
       } else {
         prev_cp = -1;
       }
+    }
+  }
+
+  // Determine which checkpoints actually have a resolved `yield_on=` ndarray this launch.
+  // Only those need a per-cp persistent slot + a yield-check kernel inside the IF body. If
+  // every cp has a null dev_ptr, treat this graph as yield-free even if the kernel declared
+  // yield_on= for some cp (covers the case where the user passes the same kernel without a
+  // ready ndarray -- though `set_args` should reject that earlier; this is defence in depth).
+  bool has_yield = false;
+  for (void *p : ctx.checkpoint_yield_on_dev_ptrs) {
+    if (p) {
+      has_yield = true;
+      break;
     }
   }
 
@@ -394,12 +518,38 @@ bool GraphManager::try_launch(int launch_id,
     if (!gate_kernel_func_) {
       return false;
     }
+    if (has_yield) {
+      ensure_checkpoint_yield_check_kernel_loaded();
+      if (!yield_check_kernel_func_) {
+        return false;
+      }
+    }
   }
 
   CUDAContext::get_instance().make_current();
 
-  CachedGraph cached(ctx.arg_buffer_size, ctx.result_buffer_size, use_graph_do_while, has_checkpoints, executor);
+  CachedGraph cached(ctx.arg_buffer_size, ctx.result_buffer_size, use_graph_do_while, has_checkpoints, has_yield,
+                     executor);
   cached.num_checkpoints = num_distinct_checkpoints;
+
+  // Pre-size the per-checkpoint ptr-slot table to (max_cp_id + 1) so we can index by cp_id
+  // directly. Slots for checkpoints without `yield_on=` stay `nullptr` and are skipped at
+  // launch time. Only allocate when this graph actually has yield-bearing checkpoints --
+  // otherwise the table stays empty and `launch_cached_graph`'s memcpy loop iterates zero
+  // times.
+  if (has_yield && max_cp_id >= 0) {
+    cached.checkpoint_yield_on_ptr_slots.assign((std::size_t)max_cp_id + 1, nullptr);
+    for (std::size_t cp = 0; cp < ctx.checkpoint_yield_on_dev_ptrs.size() && (int)cp <= max_cp_id; ++cp) {
+      if (ctx.checkpoint_yield_on_dev_ptrs[cp]) {
+        void *slot = nullptr;
+        CUDADriver::get_instance().malloc(&slot, sizeof(void *));
+        // Initial pointer write -- subsequent launches re-memcpy via launch_cached_graph.
+        void *user_ptr = ctx.checkpoint_yield_on_dev_ptrs[cp];
+        CUDADriver::get_instance().memcpy_host_to_device(slot, &user_ptr, sizeof(void *));
+        cached.checkpoint_yield_on_ptr_slots[cp] = slot;
+      }
+    }
+  }
 
   if (cached.arg_buffer_size > 0) {
     CUDADriver::get_instance().memcpy_host_to_device(cached.persistent_device_arg_buffer, ctx.get_context().arg_buffer,
@@ -461,6 +611,12 @@ bool GraphManager::try_launch(int launch_id,
   void *prev_inner = nullptr;
   void *current_body_graph = nullptr;
   int current_cp_id = -1;
+  // cp_id_val is read by reference by the gate kernel at every IF body's start. cuGraphAddKernelNode
+  // copies the *pointers* in `kernelParams`, not the values they point at, so we must keep each
+  // cp_id alive for the lifetime of the graph build. Store them in this vector (stable address
+  // because we reserve up front).
+  std::vector<int32_t> cp_id_storage;
+  cp_id_storage.reserve(num_distinct_checkpoints + 1);
   std::size_t total_nodes = 0;
 
   for (const auto &task : offloaded_tasks) {
@@ -471,24 +627,33 @@ bool GraphManager::try_launch(int launch_id,
     unsigned int smem = (unsigned int)task.dynamic_shared_array_bytes;
 
     if (task.checkpoint_id != current_cp_id) {
-      // Close the previous IF body (no explicit close needed -- prev_outer already points at
-      // the IF node itself, so the next outer-chain insertion correctly depends on the IF
-      // completing). When entering a new checkpoint (transitioning from -1 or from a different
-      // cp_id), open a fresh IF wrapped around a gate kernel.
+      // Close the previous IF body. Before we open the next one, if the previous checkpoint
+      // had a `yield_on=` ptr slot, append a yield-check kernel as the last node inside its IF
+      // body so it observes the body's writes to the user's yield_on ndarray. Sequencing is
+      // handled by `prev_inner` -- the yield-check depends on the last body node.
+      if (current_cp_id >= 0 && current_body_graph &&
+          (std::size_t)current_cp_id < cached.checkpoint_yield_on_ptr_slots.size() &&
+          cached.checkpoint_yield_on_ptr_slots[current_cp_id]) {
+        void *yield_args[4] = {&cached.checkpoint_yield_on_ptr_slots[current_cp_id], &cp_id_storage.back(),
+                               &cached.yield_signal_dev_ptr, &cached.resume_point_dev_ptr};
+        prev_inner = add_kernel_node(current_body_graph, prev_inner, yield_check_kernel_func_,
+                                     /*grid=*/1, /*block=*/1, /*smem=*/0, yield_args);
+        ++total_nodes;
+      }
+
       current_cp_id = task.checkpoint_id;
       if (current_cp_id >= 0) {
         // 1. Allocate a per-checkpoint conditional handle (default OFF so the body is skipped
         //    unless the gate explicitly enables it; the gate always runs and is the source of
         //    truth here -- the default only matters for slice 1d's yield path).
-        int32_t cp_id_val = current_cp_id;
+        cp_id_storage.push_back(current_cp_id);
+        int32_t &cp_id_val = cp_id_storage.back();
         unsigned long long if_handle = 0;
         void *cu_ctx_local = CUDAContext::get_instance().get_context();
         CUDADriver::get_instance().graph_conditional_handle_create(&if_handle, kernel_target_graph, cu_ctx_local,
                                                                    /*defaultLaunchValue=*/0,
                                                                    /*flags=CU_GRAPH_COND_ASSIGN_DEFAULT=*/1);
         // 2. Gate kernel BEFORE the IF: writes (cp_id_val >= *resume_point) into the handle.
-        //    cp_id_val lives on this stack frame; safe because cuGraphAddKernelNode snapshots
-        //    each kernel param value at node-add time (per CUDA driver docs).
         void *gate_args[3] = {&if_handle, &cp_id_val, &cached.resume_point_dev_ptr};
         prev_outer = add_kernel_node(kernel_target_graph, prev_outer, gate_kernel_func_,
                                      /*grid=*/1, /*block=*/1, /*smem=*/0, gate_args);
@@ -511,6 +676,9 @@ bool GraphManager::try_launch(int launch_id,
         prev_outer = if_node;
         prev_inner = nullptr;
         ++total_nodes;
+      } else {
+        current_body_graph = nullptr;
+        prev_inner = nullptr;
       }
     }
 
@@ -524,6 +692,19 @@ bool GraphManager::try_launch(int launch_id,
     ++total_nodes;
   }
 
+  // Flush the trailing checkpoint's yield-check kernel if the loop ended inside one (the
+  // transition logic above only fires when cp_id *changes*, so a kernel whose last task is in
+  // a checkpoint wouldn't otherwise get its yield-check appended).
+  if (current_cp_id >= 0 && current_body_graph &&
+      (std::size_t)current_cp_id < cached.checkpoint_yield_on_ptr_slots.size() &&
+      cached.checkpoint_yield_on_ptr_slots[current_cp_id]) {
+    void *yield_args[4] = {&cached.checkpoint_yield_on_ptr_slots[current_cp_id], &cp_id_storage.back(),
+                           &cached.yield_signal_dev_ptr, &cached.resume_point_dev_ptr};
+    add_kernel_node(current_body_graph, prev_inner, yield_check_kernel_func_,
+                    /*grid=*/1, /*block=*/1, /*smem=*/0, yield_args);
+    ++total_nodes;
+  }
+
   if (use_graph_do_while) {
     QD_ASSERT(ctx.graph_do_while_flag_dev_ptr);
 
@@ -533,9 +714,18 @@ bool GraphManager::try_launch(int launch_id,
     void *flag_ptr = ctx.graph_do_while_flag_dev_ptr;
     CUDADriver::get_instance().memcpy_host_to_device(cached.counter_ptr_slot, &flag_ptr, sizeof(void *));
 
-    void *cond_args[2] = {&cond_handle, &cached.counter_ptr_slot};
-
-    add_kernel_node(kernel_target_graph, prev_outer, cond_kernel_func_, 1, 1, 0, cond_args);
+    if (has_yield) {
+      // Use the cond-with-yield variant so a yield inside the WHILE body exits the loop
+      // immediately. Without this the body would re-enter, see resume_point==INT_MAX in
+      // every gate, skip every checkpoint, never decrement the counter, and spin forever.
+      ensure_cond_with_yield_kernel_loaded();
+      QD_ASSERT(cond_with_yield_kernel_func_);
+      void *cond_args[3] = {&cond_handle, &cached.counter_ptr_slot, &cached.yield_signal_dev_ptr};
+      add_kernel_node(kernel_target_graph, prev_outer, cond_with_yield_kernel_func_, 1, 1, 0, cond_args);
+    } else {
+      void *cond_args[2] = {&cond_handle, &cached.counter_ptr_slot};
+      add_kernel_node(kernel_target_graph, prev_outer, cond_kernel_func_, 1, 1, 0, cond_args);
+    }
     ++total_nodes;
   }
 

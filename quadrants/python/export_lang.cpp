@@ -420,6 +420,7 @@ void export_lang(py::module &m) {
       .def("get_num_offloaded_tasks_on_last_call", &Program::get_num_offloaded_tasks_on_last_call)
       .def("get_graph_num_nodes_on_last_call", &Program::get_graph_num_nodes_on_last_call)
       .def("get_graph_num_checkpoints_on_last_call", &Program::get_graph_num_checkpoints_on_last_call)
+      .def("get_graph_last_yield_cp_id_on_last_call", &Program::get_graph_last_yield_cp_id_on_last_call)
       .def("get_graph_total_builds", &Program::get_graph_total_builds)
       // Test-only introspection on the max-reducer dispatch counter. Leading underscore signals "internal, not part of
       // the public Python API"; quadrants tests reach these via `impl.get_runtime().prog`. They are intentionally not
