@@ -46,7 +46,11 @@ from quadrants.lang.exception import QuadrantsRuntimeTypeError
 from quadrants.lang.expr import Expr
 from quadrants.lang.matrix import MatrixType
 from quadrants.lang.snode import SNode
-from quadrants.lang.util import is_data_oriented, is_dataclass_instance, to_quadrants_type
+from quadrants.lang.util import (
+    is_data_oriented,
+    is_dataclass_instance,
+    to_quadrants_type,
+)
 from quadrants.types import (
     buffer_view_type,
     ndarray_type,

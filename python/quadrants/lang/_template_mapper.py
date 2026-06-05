@@ -15,7 +15,6 @@ from ._template_mapper_hotpath import (
     _struct_nd_paths_for,
 )
 
-
 # Per-``type(arg)`` precomputed dispatch for the args_hash ndarray-id walk in ``TemplateMapper.lookup``. Each entry
 # is either the cached attribute path list (when the class is data_oriented and actually holds ndarrays) or ``None``
 # (when the per-call walk is a no-op — covers the common case of typed-dataclass args, non-data_oriented composite

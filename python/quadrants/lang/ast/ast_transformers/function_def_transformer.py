@@ -34,7 +34,11 @@ from quadrants.lang.exception import (
 from quadrants.lang.matrix import MatrixType
 from quadrants.lang.stream import stream_parallel
 from quadrants.lang.struct import StructType
-from quadrants.lang.util import is_data_oriented, is_dataclass_instance, to_quadrants_type
+from quadrants.lang.util import (
+    is_data_oriented,
+    is_dataclass_instance,
+    to_quadrants_type,
+)
 from quadrants.types import annotations, buffer_view_type, ndarray_type, primitive_types
 
 
