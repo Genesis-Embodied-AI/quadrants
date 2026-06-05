@@ -10,8 +10,8 @@ Both features run on every backend. They are *hardware accelerated* on CUDA (via
 | --- | --- | --- | --- | --- | --- | --- |
 | `graph=True` | hardware accelerated | hardware accelerated | hardware accelerated | runs (no acceleration) | runs (no acceleration) | runs (no acceleration) |
 | `graph_do_while` | hardware accelerated | host fallback | host fallback | host fallback | host fallback | host fallback |
-| `qd.checkpoint` skip (IF gate) | hardware accelerated | runs unconditionally | runs unconditionally | runs unconditionally | runs unconditionally | runs unconditionally |
-| `qd.checkpoint(yield_on=…)` + `kernel.resume()` | implemented | not yet (slices 4–6) | not yet (slices 4–6) | not yet (slices 4–6) | not yet (slices 4–6) | not yet (slices 4–6) |
+| `qd.checkpoint` skip (IF gate) | hardware accelerated | runs unconditionally | runs unconditionally | runs unconditionally | runs unconditionally | host-branch gating |
+| `qd.checkpoint(yield_on=…)` + `kernel.resume()` | implemented | not yet (slices 4–5) | not yet (slices 4–5) | not yet (slices 4–5) | not yet (slices 4–5) | implemented (host-branch gating) |
 
 AMDGPU `graph_do_while` falls back to the host-side loop because HIP does not currently expose conditional / while graph nodes (as of ROCm 7.2).
 
@@ -159,7 +159,7 @@ Therefore on unsupported platforms, you might consider creating a second impleme
 
 ## Checkpoints with `qd.checkpoint` *(experimental)*
 
-> **Status:** Full CUDA SM 9.0+ path implemented (slices 1a–2). Each checkpoint compiles to a CUDA-graph IF conditional node; `yield_on=` checkpoints additionally inject a yield-check kernel and the host-side `GraphStatus` / `kernel.resume(from_checkpoint=…)` API drives the re-entrant loop. On other GPU backends (and pre-Hopper CUDA) the parser still accepts the construct but every body currently runs unconditionally — the indirect-dispatch lowering arrives in slices 4–6 (AMDGPU, Metal/Vulkan, CPU).
+> **Status:** Full CUDA SM 9.0+ path implemented (slices 1a–2). Each checkpoint compiles to a CUDA-graph IF conditional node; `yield_on=` checkpoints additionally inject a yield-check kernel and the host-side `GraphStatus` / `kernel.resume(from_checkpoint=…)` API drives the re-entrant loop. CPU/x64 emulates the same contract via host-branch gating inside `KernelLauncher` (slice 6) — same Python API, same semantics, no device IF nodes involved. On the remaining GPU backends (AMDGPU, Metal, Vulkan, and pre-Hopper CUDA) the parser still accepts the construct but every body currently runs unconditionally; the indirect-dispatch lowering for those backends arrives in slices 4–5.
 
 `qd.checkpoint()` marks a section of a graph kernel as a *skippable, optionally yieldable stage*. The intended use is the qipc-style re-entrant Newton loop, where each iteration is divided into a handful of named stages (assemble, broadphase, line search, ...) and the host may need to grow a pre-allocated buffer when a stage detects overflow.
 
@@ -187,20 +187,22 @@ def step(
 
 Each `with qd.checkpoint(...)` block gets a `cp_id` assigned by declaration order (0, 1, 2, ... flat across the whole kernel, independent of whether the checkpoint is inside or outside a `qd.graph_do_while`).
 
-### Yield mechanism (CUDA SM 9.0+)
+### Yield mechanism (CUDA SM 9.0+ and CPU/x64)
 
-If `yield_on=foo` is supplied, the body may write a non-zero value into the `foo` ndarray to signal "the host needs to handle something" (typically: pre-allocated buffer too small). At the end of the checkpoint body the framework injects a small yield-check kernel that:
+If `yield_on=foo` is supplied, the body may write a non-zero value into the `foo` ndarray to signal "the host needs to handle something" (typically: pre-allocated buffer too small). At the end of the checkpoint body the framework injects a small yield-check step that:
 
 1. Reads `*foo` and skips out early if it's `0`.
 2. Atomically claims `yield_signal` with this checkpoint's `cp_id` (first yielder in declaration order wins).
-3. Disables every later checkpoint in the same launch (subsequent gate kernels see "I'm past the yield point" and short-circuit their IF bodies).
+3. Disables every later checkpoint in the same launch (subsequent gate steps see "I'm past the yield point" and short-circuit their IF bodies).
 4. Resets `*foo` to `0` so the next launch starts clean without host intervention.
 
-Combined with `qd.graph_do_while`, the framework also injects a yield-aware condition kernel that exits the `WHILE` loop as soon as a yield has been observed — without it the loop body would re-enter, see "post-yield" state in every gate, skip every checkpoint, never decrement the counter, and spin forever.
+Combined with `qd.graph_do_while`, the framework also handles WHILE early-exit: as soon as a yield has been observed, the loop terminates. Without that the loop body would re-enter, see "post-yield" state in every gate, skip every checkpoint, never decrement the counter, and spin forever.
+
+On CUDA the yield-check step and WHILE early-exit are tiny device kernels appended to each checkpoint's IF body and to the loop's condition kernel respectively. On CPU/x64 the same logic is implemented in `KernelLauncher` as host-branch gating: same per-launch lifecycle (`yield_signal` and `resume_point` reset on the first yield-capable launch), same first-yielder-wins semantics, same `*flag = 0` reset, same WHILE early-exit and per-iteration `resume_point` reset. The public Python API is identical; only the backend lowering differs.
 
 ### Host-side yield / resume loop
 
-Kernels with at least one `yield_on=` checkpoint return a `qd.GraphStatus` from every launch (and from `kernel.resume(...)`). The status carries two fields:
+Kernels with at least one `yield_on=` checkpoint return a `qd.GraphStatus` from every launch (and from `kernel.resume(...)`). This is true on every backend that implements the gate (CUDA SM 9.0+ via IF nodes, CPU via host-branch gating); on backends listed in the support table as "not yet" the launch still returns a `GraphStatus` but `yielded` is always `False` because the bodies all run unconditionally, so the host loop simply terminates after one pass. The status carries two fields:
 
 - `status.yielded` — `True` iff some `yield_on=` flag was non-zero during this launch.
 - `status.checkpoint` — `cp_id` of the first (in declaration order) checkpoint that fired its flag, or `None` when `yielded` is `False`.
@@ -226,7 +228,7 @@ Kernels with `qd.checkpoint()` but no `yield_on=` keep their previous return con
 
 ### Authoring tip: every statement inside a checkpoint must live in a top-level `for` loop
 
-The graph builder routes work into a checkpoint's IF body based on whether the statement was lowered to a `range_for` task with the matching `checkpoint_id`. Bare scalar statements (e.g. `counter[()] -= 1`) fall into the offloader's pending-serial bucket, which currently loses the surrounding `checkpoint_id` and emits the work as a `serial` task with `checkpoint_id == -1`. Tasks with `cp_id == -1` run unconditionally, outside every IF gate — meaning a yielding checkpoint won't actually skip them on subsequent checkpoints in the same launch.
+The checkpoint gate (a CUDA-graph IF node on CUDA, or host-branch gating on CPU) routes work into a checkpoint's body based on whether the statement was lowered to a `range_for` task with the matching `checkpoint_id`. Bare scalar statements (e.g. `counter[()] -= 1`) fall into the offloader's pending-serial bucket, which currently loses the surrounding `checkpoint_id` and emits the work as a `serial` task with `checkpoint_id == -1`. Tasks with `cp_id == -1` run unconditionally, outside every checkpoint gate — meaning a yielding checkpoint won't actually skip them on subsequent checkpoints in the same launch.
 
 The established workaround (used throughout the test suite) is to wrap such statements in a one-iteration `for` loop:
 
@@ -237,3 +239,9 @@ with qd.checkpoint(yield_on=overflow_flag):
 ```
 
 This forces the offloader to emit a `range_for` task that picks up the surrounding `checkpoint_id`. The runtime cost of an extra 1-iteration loop is negligible compared to the kernel-launch overhead the rest of the graph saves; the proper fix (propagating `checkpoint_id` through the serial bucket) is tracked separately.
+
+### Backend coverage notes
+
+- **CUDA SM 9.0+**: full path — every checkpoint becomes a CUDA-graph IF conditional node; yielding checkpoints additionally append a yield-check kernel and (inside `qd.graph_do_while`) a yield-aware condition kernel for early exit.
+- **CUDA < SM 9.0, AMDGPU, Metal, Vulkan**: parser accepts `qd.checkpoint`, but every body runs unconditionally and the kernel's `GraphStatus.yielded` is always `False`. Treat `yield_on=` flags as advisory rather than authoritative on these backends. Indirect-dispatch lowering for these backends is tracked under slices 4–5.
+- **CPU/x64**: full host-branch gating — same Python contract as CUDA-native, but implemented in `KernelLauncher` rather than as device-side IF nodes. There is no graph object on CPU, so there is also no graph-build cost, and a yielding launch simply stops executing further checkpoint tasks. Useful for prototyping and for unit-testing yield/resume host loops without a GPU.
