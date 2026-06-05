@@ -10,6 +10,7 @@ Both features run on every backend. They are *hardware accelerated* on CUDA (via
 | --- | --- | --- | --- | --- | --- | --- |
 | `graph=True` | hardware accelerated | hardware accelerated | hardware accelerated | runs (no acceleration) | runs (no acceleration) | runs (no acceleration) |
 | `graph_do_while` | hardware accelerated | host fallback | host fallback | host fallback | host fallback | host fallback |
+| [nested `qd.kernel`](#calling-another-qdkernel-nested-subgraphs) | hardware accelerated | hardware accelerated | *in progress* | *in progress* | *in progress* | *in progress* |
 
 AMDGPU `graph_do_while` falls back to the host-side loop because HIP does not currently expose conditional / while graph nodes (as of ROCm 7.2).
 
@@ -67,6 +68,47 @@ my_kernel(x2, y2)  # replays graph with new array pointers
 ### Fields as arguments
 
 When different fields are passed as template arguments, each unique combination of fields produces a separately compiled kernel with its own graph cache entry. There is no interference between them.
+
+
+## Calling another `qd.kernel` (nested subgraphs)
+
+From inside a `graph=True` kernel you can call another `@qd.kernel` as if it were an ordinary function. The child kernel is **embedded as a subgraph** (a child-graph node) inside the parent's graph at the call site — it is not launched separately, so there is no extra launch overhead:
+
+```python
+@qd.kernel
+def child(a: qd.types.ndarray(qd.f32, ndim=1)):
+    for i in range(a.shape[0]):
+        a[i] = a[i] * 2.0
+
+@qd.kernel(graph=True)
+def parent(a: qd.types.ndarray(qd.f32, ndim=1)):
+    for i in range(a.shape[0]):     # parent's own work
+        a[i] = a[i] + 1.0
+    child(a)                        # embedded as a subgraph here
+    for i in range(a.shape[0]):     # more parent work, runs after the child
+        a[i] = a[i] + 1.0
+```
+
+Child calls execute in source order, interleaved with the parent's own top-level for-loops. You can call several children, and the same child more than once; each call becomes its own child-graph node.
+
+```python
+parent(a)   # builds the parent graph, embedding `child` as a child-graph node
+parent(a)   # replays the cached graph (child included)
+```
+
+The child does not need `graph=True` — only the outermost (parent) kernel does. The child runs with its own arguments resolved from the parent call.
+
+### Restrictions
+
+- **The parent must be `graph=True`.** Calling a `qd.kernel` from a plain (non-graph) kernel raises an error. (Calling a `qd.func` from any kernel works as before and is unrelated to this feature.)
+- **Arguments are pass-through (v1).** Each argument to a child call must be one of the parent's own parameters or a literal constant. Computed/derived arguments are not yet supported.
+- **Positional arguments only** for child calls (no keyword arguments yet).
+- **One level deep (v1).** A child embedded as a subgraph cannot itself call further child kernels yet.
+- The same per-graph restrictions apply to the child as to any graph kernel: no struct return values, device-resident ndarrays only, no autodiff stack.
+
+Different ndarrays can be passed across calls just like for a plain `graph=True` kernel: the cached parent graph is replayed and each embedded child's argument pointers are refreshed to match the current call (no rebuild).
+
+> Currently hardware-accelerated on CUDA. AMDGPU (HIP child-graph nodes) and the sequential fallback for Metal / Vulkan / CPU are in progress.
 
 
 ## GPU-side iteration with `graph_do_while`
