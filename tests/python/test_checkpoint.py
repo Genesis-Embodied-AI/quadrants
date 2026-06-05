@@ -53,7 +53,10 @@ def _supports_checkpoint_yield_resume():
     """
     if _is_checkpoint_if_path_native():
         return True
-    if impl.current_cfg().arch == qd.x64:
+    # CPU backend: same `runtime/cpu/kernel_launcher.cpp` host-branch gating runs on both x64 and
+    # arm64 (the launcher is arch-agnostic; only the LLVM codegen target differs). Apple Silicon
+    # surfaces as `qd.arm64`; Linux x86 as `qd.x64`. Both go through the slice 6 path.
+    if impl.current_cfg().arch in (qd.x64, qd.arm64):
         return True
     if impl.current_cfg().arch == qd.amdgpu:
         return True

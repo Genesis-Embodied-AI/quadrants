@@ -39,8 +39,10 @@ def _supports_checkpoint_yield_resume():
     # conditional-node primitive isn't available so the gating falls back to "run everything".
     if impl.current_cfg().arch == qd.cuda:
         return qd.lang.impl.get_cuda_compute_capability() >= 90
-    # CPU/x64 host-branch gating + yield emulation in `KernelLauncher` (slice 6).
-    if impl.current_cfg().arch == qd.x64:
+    # CPU host-branch gating + yield emulation in `runtime/cpu/kernel_launcher.cpp` (slice 6). The
+    # launcher is arch-agnostic; same code path covers Linux x86 (`qd.x64`) and Apple Silicon
+    # (`qd.arm64`).
+    if impl.current_cfg().arch in (qd.x64, qd.arm64):
         return True
     # AMDGPU host-orchestrated sub-graph gating in `GraphManager::launch_cached_checkpoint_graph`
     # (slice 4); also covers WHILE via the streaming launcher's port of the same gating.
