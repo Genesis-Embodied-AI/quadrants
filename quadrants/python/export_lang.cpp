@@ -572,7 +572,8 @@ void export_lang(py::module &m) {
       .def("get_struct_ret_uint", &LaunchContextBuilder::get_struct_ret_uint)
       .def("get_struct_ret_float", &LaunchContextBuilder::get_struct_ret_float)
       .def_readwrite("use_graph", &LaunchContextBuilder::use_graph)
-      .def_readwrite("graph_do_while_arg_id", &LaunchContextBuilder::graph_do_while_arg_id);
+      .def_readwrite("graph_do_while_arg_id", &LaunchContextBuilder::graph_do_while_arg_id)
+      .def_readwrite("checkpoint_yield_on_arg_ids", &LaunchContextBuilder::checkpoint_yield_on_arg_ids);
 
   py::class_<Function>(m, "Function")
       .def("insert_scalar_param", &Function::insert_scalar_param)

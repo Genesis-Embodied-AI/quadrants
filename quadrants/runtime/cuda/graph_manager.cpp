@@ -104,6 +104,11 @@ CachedGraph &CachedGraph::operator=(CachedGraph &&other) noexcept {
 void GraphManager::resolve_ctx_ndarray_ptrs(LaunchContextBuilder &ctx,
                                             const std::vector<std::pair<int, Callable::Parameter>> &parameters,
                                             LlvmRuntimeExecutor *executor) {
+  // Pre-size the per-checkpoint yield_on device-pointer table so the GraphManager can index it
+  // by cp_id even when some checkpoints have no yield_on (their slot stays nullptr). Sized
+  // exactly once per launch from the matching arg-id table populated in Python `Kernel.__call__`.
+  ctx.checkpoint_yield_on_dev_ptrs.assign(ctx.checkpoint_yield_on_arg_ids.size(), nullptr);
+
   for (int i = 0; i < (int)parameters.size(); i++) {
     const auto &kv = parameters[i];
     const auto &arg_id = kv.first;
@@ -146,6 +151,15 @@ void GraphManager::resolve_ctx_ndarray_ptrs(LaunchContextBuilder &ctx,
         ctx.set_ndarray_ptrs(arg_id, (uint64)resolved_data, (uint64) nullptr);
         if (arg_id == ctx.graph_do_while_arg_id) {
           ctx.graph_do_while_flag_dev_ptr = resolved_data;
+        }
+        // Mirror the graph_do_while resolution for every `qd.checkpoint(yield_on=foo)` --
+        // walk the per-cp_id arg-id table and stash the device pointer where the GraphManager
+        // build path can find it. Same-arg shared between checkpoints is fine; we just
+        // assign the same pointer to multiple slots.
+        for (std::size_t cp = 0; cp < ctx.checkpoint_yield_on_arg_ids.size(); ++cp) {
+          if (ctx.checkpoint_yield_on_arg_ids[cp] == arg_id) {
+            ctx.checkpoint_yield_on_dev_ptrs[cp] = resolved_data;
+          }
         }
       }
     }

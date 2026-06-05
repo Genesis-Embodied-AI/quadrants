@@ -494,6 +494,13 @@ class Kernel(FuncBase):
             is_launch_ctx_cacheable = True
             template_num = 0
             i_out = 0
+            # Fresh per-launch table for `qd.checkpoint(yield_on=...)` arg resolution. Each entry
+            # defaults to -1 ("no yield_on"); the arg-iteration loop below fills in the C++ arg
+            # id when it visits the named parameter. Sized to the kernel's checkpoint count once
+            # per launch so changes to the checkpoint set (only possible via re-AST-walk) reset
+            # the table cleanly.
+            if self.checkpoint_yield_on_args:
+                self._checkpoint_yield_on_cpp_arg_ids = [-1] * len(self.checkpoint_yield_on_args)
             for i_in, val in enumerate(args):
                 needed_ = self.arg_metas[i_in].annotation
                 if needed_ is template or type(needed_) is template:
@@ -509,6 +516,10 @@ class Kernel(FuncBase):
                     continue
                 if self.graph_do_while_arg is not None and self.arg_metas[i_in].name == self.graph_do_while_arg:
                     self._graph_do_while_cpp_arg_id = i_out - template_num
+                if self.checkpoint_yield_on_args:
+                    for cp_idx, yield_name in enumerate(self.checkpoint_yield_on_args):
+                        if yield_name is not None and self.arg_metas[i_in].name == yield_name:
+                            self._checkpoint_yield_on_cpp_arg_ids[cp_idx] = i_out - template_num
                 num_args_, is_launch_ctx_cacheable_ = self._recursive_set_args(
                     self.used_py_dataclass_parameters_by_key_enforcing[key],
                     self.arg_metas[i_in].name,
@@ -582,6 +593,8 @@ class Kernel(FuncBase):
                 )
             if self.graph_do_while_arg is not None and hasattr(self, "_graph_do_while_cpp_arg_id"):
                 launch_ctx.graph_do_while_arg_id = self._graph_do_while_cpp_arg_id
+            if self.checkpoint_yield_on_args and hasattr(self, "_checkpoint_yield_on_cpp_arg_ids"):
+                launch_ctx.checkpoint_yield_on_arg_ids = self._checkpoint_yield_on_cpp_arg_ids
             stream_handle = qd_stream.handle if qd_stream is not None else 0
             if stream_handle:
                 prog.set_current_cuda_stream(stream_handle)
