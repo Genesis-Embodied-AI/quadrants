@@ -668,6 +668,31 @@ my_struct.b[37] 5
 </pre></div>
 </div>
 </section>
+<section id="stable-members-true-required-for-full-launch-speed">
+<h3><code class="docutils literal notranslate"><span class="pre">stable_members=True</span></code> (required for full launch speed)<a class="headerlink" href="#stable-members-true-required-for-full-launch-speed" title="Link to this heading">#</a></h3>
+<p>By default, every kernel launch on a <code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code> instance walks the instance’s ndarray-typed members to detect reassignment — if any member now points at a different <code class="docutils literal notranslate"><span class="pre">qd.ndarray</span></code> than at compile time (different dtype / ndim / layout), the cached compiled kernel is invalidated and a fresh one is compiled. This safety check adds ~1–2 µs per launch per ndarray member.</p>
+<p>For a Genesis-style container with dozens of ndarray attrs called thousands of times per simulation step, those microseconds dominate. <strong>If your <code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code> class allocates its ndarray members once in <code class="docutils literal notranslate"><span class="pre">__init__</span></code> and never reassigns them</strong>, declare it stable:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">data_oriented</span><span class="p">(</span><span class="n">stable_members</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">Simulation</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">n</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">x</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="n">n</span><span class="p">,))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">v</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="n">n</span><span class="p">,))</span>
+
+    <span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">step</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="o">...</span>
+</pre></div>
+</div>
+<p>Equivalent class-level form:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">data_oriented</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">Simulation</span><span class="p">:</span>
+    <span class="n">_qd_stable_members</span> <span class="o">=</span> <span class="kc">True</span>
+    <span class="o">...</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">stable_members=True</span></code> is required to hit full launch throughput on Genesis-scale containers — without it, the per-call reassignment walk caps kernel dispatch at a few hundred kHz regardless of how cheap the kernel body is.</p>
+<p><strong>Violating the promise is undefined behaviour.</strong> If you reassign an ndarray member after the first launch with a different dtype / ndim / layout, the previously-compiled kernel is silently reused on the new array’s storage. Bit-reinterprets, wrong shapes, segfaults are all possible. If your ndarray members might genuinely change shape between calls, do not set this flag.</p>
+</section>
 <section id="fastcache">
 <h3>Fastcache<a class="headerlink" href="#fastcache" title="Link to this heading">#</a></h3>
 <p><code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel(fastcache=True)</span></code> is supported on methods of <code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code> classes, but is disabled for fields; see <a class="reference internal" href="fastcache.html#compound-type-cache-keying"><span class="std std-ref">Appendix — compound-type cache keying</span></a> for more information.</p>
@@ -890,6 +915,7 @@ my_struct.b[37] 5
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#qd-data-oriented">qd.data_oriented</a><ul class="nav section-nav flex-column">
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#primitive-members">Primitive members</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#tensor-members">Tensor members</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#stable-members-true-required-for-full-launch-speed"><code class="docutils literal notranslate"><span class="pre">stable_members=True</span></code> (required for full launch speed)</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#fastcache">Fastcache</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id1">Under the hood</a></li>
 </ul>

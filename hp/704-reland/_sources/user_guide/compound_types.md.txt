@@ -213,6 +213,37 @@ state = State(100)
 state.step()
 ```
 
+### `stable_members=True` (required for full launch speed)
+
+By default, every kernel launch on a `@qd.data_oriented` instance walks the instance's ndarray-typed members to detect reassignment — if any member now points at a different `qd.ndarray` than at compile time (different dtype / ndim / layout), the cached compiled kernel is invalidated and a fresh one is compiled. This safety check adds ~1–2 µs per launch per ndarray member.
+
+For a Genesis-style container with dozens of ndarray attrs called thousands of times per simulation step, those microseconds dominate. **If your `@qd.data_oriented` class allocates its ndarray members once in `__init__` and never reassigns them**, declare it stable:
+
+```python
+@qd.data_oriented(stable_members=True)
+class Simulation:
+    def __init__(self, n):
+        self.x = qd.ndarray(qd.f32, shape=(n,))
+        self.v = qd.ndarray(qd.f32, shape=(n,))
+
+    @qd.kernel
+    def step(self):
+        ...
+```
+
+Equivalent class-level form:
+
+```python
+@qd.data_oriented
+class Simulation:
+    _qd_stable_members = True
+    ...
+```
+
+`stable_members=True` is required to hit full launch throughput on Genesis-scale containers — without it, the per-call reassignment walk caps kernel dispatch at a few hundred kHz regardless of how cheap the kernel body is.
+
+**Violating the promise is undefined behaviour.** If you reassign an ndarray member after the first launch with a different dtype / ndim / layout, the previously-compiled kernel is silently reused on the new array's storage. Bit-reinterprets, wrong shapes, segfaults are all possible. If your ndarray members might genuinely change shape between calls, do not set this flag.
+
 ### Fastcache
 
 `@qd.kernel(fastcache=True)` is supported on methods of `@qd.data_oriented` classes, but is disabled for fields; see [Appendix — compound-type cache keying](fastcache.md#compound-type-cache-keying) for more information.
