@@ -36,6 +36,12 @@ void KernelLauncher::launch_kernel(const lang::CompiledKernelData &compiled_kern
   }
 }
 
+int KernelLauncher::ensure_registered(const lang::CompiledKernelData &compiled_kernel_data) {
+  // Register (idempotently) without launching and return the gfx launch_id, so a parent kernel's nested call can
+  // recurse into this child via GfxRuntime::launch_child_kernel. The id indexes GfxRuntime::ti_kernels_.
+  return register_kernel(compiled_kernel_data).get_launch_id();
+}
+
 KernelLauncher::Handle KernelLauncher::register_kernel(const lang::CompiledKernelData &compiled_kernel_data) {
   if (!compiled_kernel_data.get_handle()) {
     const auto *spirv_compiled = dynamic_cast<const spirv::CompiledKernelData *>(&compiled_kernel_data);

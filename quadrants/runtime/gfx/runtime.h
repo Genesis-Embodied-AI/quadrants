@@ -116,6 +116,10 @@ class QD_DLL_EXPORT GfxRuntime {
 
   void launch_kernel(KernelHandle handle, LaunchContextBuilder &host_ctx);
 
+  // Realize a nested qd.kernel call (a `launch_child` marker task in the parent's task stream) as an in-order
+  // recursive launch of the child kernel. Used by the gfx sequential fallback for nested subgraphs (gfx has no graph).
+  void launch_child_kernel(int child_call_index, LaunchContextBuilder &parent_ctx);
+
   void buffer_copy(DevicePtr dst, DevicePtr src, size_t size);
 
   void synchronize();

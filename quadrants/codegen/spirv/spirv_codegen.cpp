@@ -139,6 +139,23 @@ struct Result {
 };
 
 TaskCodegen::Result TaskCodegen::run() {
+  if (task_ir_->task_type == OffloadedTaskType::launch_child) {
+    // Nested qd.kernel call (subgraph) on the gfx backends. No SPIR-V is generated: the gfx runtime has no graph, so
+    // the call is realized as an in-order recursive launch of the child kernel (sequential fallback). Emit a marker
+    // TaskAttributes carrying the child_call_index and return an empty SPIR-V blob; KernelCodegen keeps the 1:1
+    // task<->source mapping by pairing this with an empty source, and the runtime recurses instead of dispatching a
+    // pipeline for this slot. The OffloadedStmt has no body, so this must short-circuit before the adstack analysis /
+    // header emission below, which assume a normal task body.
+    Result res;
+    task_attribs_.name = task_name_;
+    task_attribs_.task_type = OffloadedTaskType::launch_child;
+    task_attribs_.advisory_total_num_threads = 0;
+    task_attribs_.advisory_num_threads_per_group = 1;
+    task_attribs_.child_call_index = task_ir_->child_call_index;
+    res.task_attribs = std::move(task_attribs_);
+    return res;
+  }
+
   ir_->init_header();
   kernel_function_ = ir_->new_function();  // void main();
   ir_->debug_name(spv::OpName, kernel_function_, "main");
@@ -194,13 +211,6 @@ TaskCodegen::Result TaskCodegen::run() {
     generate_range_for_kernel(task_ir_);
   } else if (task_ir_->task_type == OffloadedTaskType::struct_for) {
     generate_struct_for_kernel(task_ir_);
-  } else if (task_ir_->task_type == OffloadedTaskType::launch_child) {
-    // Nested qd.kernel-as-subgraph: not yet wired for the Metal/Vulkan (SPIR-V/gfx) backends. The CUDA backend
-    // embeds a child-graph node and the CPU backend launches the child sequentially; the gfx runtime needs an
-    // equivalent sequential fallback in its launch path before this can be supported.
-    QD_ERROR(
-        "Calling a @qd.kernel from inside a graph=True kernel (nested subgraph) is not yet supported on the "
-        "Metal/Vulkan backend. It currently works on CUDA and CPU.");
   } else {
     QD_ERROR("Unsupported offload type={} on SPIR-V codegen", task_ir_->task_name());
   }
@@ -3342,6 +3352,16 @@ void KernelCodegen::run(QuadrantsKernelAttributes &kernel_attribs,
 
     TaskCodegen cgen(tp);
     auto task_res = cgen.run();
+
+    if (tp.task_ir->task_type == OffloadedTaskType::launch_child) {
+      // No SPIR-V to optimize / disassemble for a nested-call marker task. Push an empty source to keep
+      // `tasks_attribs` and `task_spirv_source_codes` index-aligned (the runtime pairs them 1:1 and treats the empty
+      // slot as "recurse into the child kernel" rather than "dispatch a pipeline").
+      kernel_attribs.tasks_attribs.push_back(std::move(task_res.task_attribs));
+      generated_spirv.push_back({});
+      continue;
+    }
+
     const std::string &spirv_dump_basename = task_res.task_attribs.name;
 
     std::filesystem::path ir_dump_dir = params_.compile_config->debug_dump_path;

@@ -294,6 +294,12 @@ CompiledQuadrantsKernel::CompiledQuadrantsKernel(const Params &ti_params)
   QD_ASSERT(task_attribs.size() == spirv_bins.size());
 
   for (int i = 0; i < task_attribs.size(); ++i) {
+    if (task_attribs[i].task_type == OffloadedTaskType::launch_child) {
+      // Nested qd.kernel marker task: no SPIR-V / pipeline. The runtime recurses into the child kernel for this slot
+      // instead of dispatching a pipeline. Keep `pipelines_` index-aligned with `task_attribs` via a null placeholder.
+      pipelines_.push_back(nullptr);
+      continue;
+    }
     PipelineSourceDesc source_desc{PipelineSourceType::spirv_binary, (void *)spirv_bins[i].data(),
                                    spirv_bins[i].size() * sizeof(uint32_t)};
     auto [vp, res] =
@@ -401,6 +407,28 @@ GfxRuntime::KernelHandle GfxRuntime::register_quadrants_kernel(GfxRuntime::Regis
   res.set_launch_id(ti_kernels_.size());
   ti_kernels_.push_back(std::make_unique<CompiledQuadrantsKernel>(params));
   return res;
+}
+
+void GfxRuntime::launch_child_kernel(int child_call_index, LaunchContextBuilder &parent_ctx) {
+  // Resolve the nested call recorded by the Python launch path (`Kernel._attach_child_launches`) into the child's
+  // registered gfx kernel + its own launch context, then launch it recursively. The recursion records the child's
+  // dispatches onto the same `current_cmdlist_` (sequential, in source order) and stages the child's args via the
+  // child's LaunchContextBuilder, which forwards the same device ndarray allocations the parent passed in.
+  const LaunchContextBuilder::ChildLaunch *match = nullptr;
+  for (const auto &cl : parent_ctx.child_launches) {
+    if (cl.child_call_index == child_call_index) {
+      match = &cl;
+      break;
+    }
+  }
+  QD_ERROR_IF(match == nullptr || match->child_ctx == nullptr || match->child_launch_id < 0,
+              "Nested qd.kernel call (child_call_index={}) has no registered child launch. This usually means a child "
+              "kernel itself calls another qd.kernel; nested subgraph calls more than one level deep are not yet "
+              "supported on the Metal/Vulkan backend.",
+              child_call_index);
+  KernelHandle child_handle;
+  child_handle.set_launch_id(match->child_launch_id);
+  launch_kernel(child_handle, *match->child_ctx);
 }
 
 void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_ctx) {
@@ -584,6 +612,15 @@ void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_c
 
   for (int i = 0; i < task_attribs.size(); ++i) {
     const auto &attribs = task_attribs[i];
+    if (attribs.task_type == OffloadedTaskType::launch_child) {
+      // Nested qd.kernel call: gfx has no graph, so realize it as an in-order recursive launch of the child kernel.
+      // The child's dispatches are recorded onto the same `current_cmdlist_` at this position, preserving source order
+      // with the parent's surrounding tasks; the child's arg buffers are kept alive in `ctx_buffers_` until the next
+      // synchronize(), exactly like the parent's. This is the sequential fallback for the gfx backends.
+      launch_child_kernel(attribs.child_call_index, host_ctx);
+      ensure_current_cmdlist();
+      continue;
+    }
     auto vp = ti_kernel->get_pipeline(i);
 
     // Cap `advisory_total_num_threads` to the ACTUAL iteration count when the codegen was able to extract the range end

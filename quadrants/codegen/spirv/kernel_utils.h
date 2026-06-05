@@ -145,6 +145,12 @@ struct TaskAttributes {
 
   OffloadedTaskType task_type;
 
+  // Only valid when |task_type| is launch_child: index into the parent launch context's `child_launches` list
+  // identifying which nested qd.kernel call this marker task stands for. -1 for every other task type. The gfx
+  // runtime turns a launch_child task into a recursive launch of that child kernel (sequential fallback; gfx has no
+  // graph), instead of dispatching a pipeline for this slot.
+  int child_call_index{-1};
+
   struct RangeForAttributes {
     // |begin| has different meanings depending on |const_begin|:
     // * true : It is the left boundary of the loop known at compile time.
@@ -257,6 +263,7 @@ struct TaskAttributes {
             advisory_total_num_threads,
             advisory_num_threads_per_group,
             task_type,
+            child_call_index,
             buffer_binds,
             range_for_attribs,
             ad_stack,
