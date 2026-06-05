@@ -10,6 +10,8 @@ Both features run on every backend. They are *hardware accelerated* on CUDA (via
 | --- | --- | --- | --- | --- | --- | --- |
 | `graph=True` | hardware accelerated | hardware accelerated | hardware accelerated | runs (no acceleration) | runs (no acceleration) | runs (no acceleration) |
 | `graph_do_while` | hardware accelerated | host fallback | host fallback | host fallback | host fallback | host fallback |
+| `qd.checkpoint` skip (IF gate) | hardware accelerated | runs unconditionally | runs unconditionally | runs unconditionally | runs unconditionally | runs unconditionally |
+| `qd.checkpoint(yield_on=…)` + `kernel.resume()` | implemented | not yet (slices 4–6) | not yet (slices 4–6) | not yet (slices 4–6) | not yet (slices 4–6) | not yet (slices 4–6) |
 
 AMDGPU `graph_do_while` falls back to the host-side loop because HIP does not currently expose conditional / while graph nodes (as of ROCm 7.2).
 
