@@ -235,16 +235,17 @@ bool KernelLauncher::on_amdgpu_device(void *ptr) {
 void KernelLauncher::launch_llvm_kernel(Handle handle, LaunchContextBuilder &ctx) {
   QD_ASSERT(handle.get_launch_id() < contexts_.size());
 
-  // Nested qd.kernel-as-subgraph is not yet wired on AMDGPU. Fail with a clear message instead of falling through to
-  // a per-task `amdgpu_module->launch(task.name, ...)` that cannot resolve the body-less launch_child marker. The HIP
-  // child-graph-node embed (hardware path) and a host-side sequential fallback are the remaining work here; both need
-  // verification on AMD hardware (amdcloud).
-  {
+  // Nested qd.kernel calls inside a `graph_do_while` are not yet supported on AMDGPU. HIP has no conditional / while
+  // graph nodes, so `graph_do_while` runs through the host-side fallback loop below (`launch_offloaded_tasks_with_do_
+  // while`), which dispatches each task via `amdgpu_module->launch(task.name, ...)` and cannot resolve the body-less
+  // launch_child marker. Outside `graph_do_while`, child calls are embedded as HIP child-graph nodes by the graph
+  // fast path. (CUDA has the same limitation on its pre-SM-9.0 host-fallback path.)
+  if (ctx.graph_do_while_arg_id >= 0) {
     const auto &lctx = contexts_[handle.get_launch_id()];
     for (const auto &task : lctx.offloaded_tasks) {
       QD_ERROR_IF(task.is_launch_child,
-                  "Calling a @qd.kernel from inside a graph=True kernel (nested subgraph) is not yet supported on the "
-                  "AMDGPU backend. It currently works on CUDA and CPU.");
+                  "Calling a @qd.kernel from inside a graph_do_while loop is not yet supported on the AMDGPU backend "
+                  "(HIP has no conditional graph nodes, so graph_do_while uses a host-side fallback loop).");
     }
   }
 
@@ -256,8 +257,30 @@ void KernelLauncher::launch_llvm_kernel(Handle handle, LaunchContextBuilder &ctx
   // because `graph_launch` enqueues a single op on the active stream and there are no recursive launches to reorder.
   if (ctx.use_graph && ctx.graph_do_while_arg_id < 0) {
     auto &lctx = contexts_[handle.get_launch_id()];
+    // Assemble per-child launch info for any nested qd.kernel-as-subgraph calls recorded on this launch context. Each
+    // child was registered (via Program::register_kernel) before this launch, so its compiled artifacts live in
+    // `contexts_[child_launch_id]`. Index by child_call_index so try_launch can match each launch_child task. Mirrors
+    // the CUDA launcher.
+    std::vector<amdgpu::ChildLaunchInfo> child_infos;
+    if (!ctx.child_launches.empty()) {
+      std::size_t max_index = 0;
+      for (const auto &cl : ctx.child_launches) {
+        max_index = std::max(max_index, (std::size_t)cl.child_call_index + 1);
+      }
+      child_infos.resize(max_index);
+      for (const auto &cl : ctx.child_launches) {
+        QD_ASSERT(cl.child_launch_id >= 0 && (std::size_t)cl.child_launch_id < contexts_.size());
+        auto &child_ctx = contexts_[cl.child_launch_id];
+        amdgpu::ChildLaunchInfo info;
+        info.child_ctx = cl.child_ctx;
+        info.child_module = child_ctx.jit_module;
+        info.child_parameters = child_ctx.parameters;
+        info.child_tasks = &child_ctx.offloaded_tasks;
+        child_infos[cl.child_call_index] = info;
+      }
+    }
     if (graph_manager_.try_launch(handle.get_launch_id(), ctx, lctx.jit_module, *lctx.parameters, lctx.offloaded_tasks,
-                                  get_runtime_executor())) {
+                                  get_runtime_executor(), child_infos)) {
       return;
     }
   }

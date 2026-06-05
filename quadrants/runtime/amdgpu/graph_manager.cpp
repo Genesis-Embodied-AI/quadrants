@@ -52,6 +52,14 @@ CachedGraph::~CachedGraph() {
   if (device_runtime_ctx) {
     AMDGPUDriver::get_instance().mem_free(device_runtime_ctx);
   }
+  for (auto &child : children) {
+    if (child.persistent_device_arg_buffer) {
+      AMDGPUDriver::get_instance().mem_free(child.persistent_device_arg_buffer);
+    }
+    if (child.device_runtime_ctx) {
+      AMDGPUDriver::get_instance().mem_free(child.device_runtime_ctx);
+    }
+  }
 }
 
 CachedGraph::CachedGraph(CachedGraph &&other) noexcept
@@ -61,11 +69,15 @@ CachedGraph::CachedGraph(CachedGraph &&other) noexcept
       persistent_ctx(other.persistent_ctx),
       device_runtime_ctx(other.device_runtime_ctx),
       kernel_args(other.kernel_args),
+      children(std::move(other.children)),
       arg_buffer_size(other.arg_buffer_size),
       result_buffer_size(other.result_buffer_size),
       num_nodes(other.num_nodes) {
   // The moved-from object must not free our resources at destruction time. Rebind `kernel_args.extra_config` so it
-  // points at *our* members after the move, not the moved-from object's (which is about to be destroyed).
+  // points at *our* members after the move, not the moved-from object's (which is about to be destroyed). The child
+  // `kernel_args.extra_config` self-pointers need no rebinding: `std::move` on the vector transfers the heap buffer
+  // so each ChildGraphState keeps its address. `other.children` is left empty by the vector move, so the moved-from
+  // destructor frees no child buffers (no double free).
   kernel_args.extra_config[1] = &kernel_args.packed_runtime_ctx_ptr;
   kernel_args.extra_config[3] = &kernel_args.pack_size;
   other.graph_exec = nullptr;
@@ -90,6 +102,9 @@ CachedGraph &CachedGraph::operator=(CachedGraph &&other) noexcept {
   kernel_args.extra_config[3] = &kernel_args.pack_size;
   raii_guard.kernel_args.extra_config[1] = &raii_guard.kernel_args.packed_runtime_ctx_ptr;
   raii_guard.kernel_args.extra_config[3] = &raii_guard.kernel_args.pack_size;
+  // std::swap on the vectors exchanges their heap buffers, so each ChildGraphState keeps its address and the per-child
+  // `kernel_args.extra_config` self-pointers stay valid without rebinding.
+  std::swap(children, raii_guard.children);
   std::swap(arg_buffer_size, raii_guard.arg_buffer_size);
   std::swap(result_buffer_size, raii_guard.result_buffer_size);
   std::swap(num_nodes, raii_guard.num_nodes);
@@ -184,13 +199,64 @@ void *GraphManager::add_kernel_node(void *graph,
   return node;
 }
 
-bool GraphManager::launch_cached_graph(CachedGraph &cached, LaunchContextBuilder &ctx) {
+void *GraphManager::add_child_graph_node(void *graph, void *prev_node, void *child_graph) {
+  void *node = nullptr;
+  AMDGPUDriver::get_instance().graph_add_child_graph_node(&node, graph, prev_node ? &prev_node : nullptr,
+                                                          prev_node ? 1 : 0, child_graph);
+  return node;
+}
+
+void GraphManager::refresh_child_arg_buffer(const ChildLaunchInfo &info,
+                                            CachedGraph::ChildGraphState &state,
+                                            LlvmRuntimeExecutor *executor,
+                                            void *stream) {
+  // Resolve the child's ndarray handles to device pointers in its own (host-side) arg buffer, then upload to the
+  // child's persistent device buffer. The child kernel nodes read this through `state.persistent_ctx.arg_buffer`
+  // (baked into `state.device_runtime_ctx`). Re-run every launch so a realloc of any forwarded ndarray (new device
+  // pointer) is reflected in the embedded subgraph without rebuilding it.
+  resolve_ctx_ndarray_ptrs(*info.child_ctx, *info.child_parameters, executor);
+  if (state.arg_buffer_size > 0) {
+    AMDGPUDriver::get_instance().memcpy_host_to_device_async(
+        state.persistent_device_arg_buffer, info.child_ctx->get_context().arg_buffer, state.arg_buffer_size, stream);
+  }
+}
+
+void *GraphManager::build_child_subgraph(const ChildLaunchInfo &info, CachedGraph::ChildGraphState &state) {
+  void *child_graph = nullptr;
+  AMDGPUDriver::get_instance().graph_create(&child_graph, 0);
+  void *prev_node = nullptr;
+  for (const auto &task : *info.child_tasks) {
+    QD_ERROR_IF(task.is_launch_child,
+                "Nested qd.kernel subgraph calls more than one level deep are not yet supported "
+                "(child task '{}' itself launches a child).",
+                task.name);
+    // Every child kernel node shares the child's own CachedKernelArgs (its device RuntimeContext pointer), just as the
+    // parent's nodes share `cached.kernel_args`. See graph_manager.h for the per-child D1 rationale.
+    prev_node = add_kernel_node(child_graph, prev_node, info.child_module->lookup_function(task.name),
+                                (unsigned int)task.grid_dim, (unsigned int)task.block_dim,
+                                (unsigned int)task.dynamic_shared_array_bytes, state.kernel_args);
+  }
+  return child_graph;
+}
+
+bool GraphManager::launch_cached_graph(CachedGraph &cached,
+                                       LaunchContextBuilder &ctx,
+                                       const std::vector<ChildLaunchInfo> &child_infos,
+                                       LlvmRuntimeExecutor *executor) {
   auto *stream = AMDGPUContext::get_instance().get_stream();
   if (ctx.arg_buffer_size > 0) {
     // Async HtoD on the launch stream: the subsequent `graph_launch` is queued on the same stream,
     // so the kernel nodes are ordered after the arg-buffer upload without a host-side barrier.
     AMDGPUDriver::get_instance().memcpy_host_to_device_async(
         cached.persistent_device_arg_buffer, ctx.get_context().arg_buffer, cached.arg_buffer_size, stream);
+  }
+  // Refresh each embedded child's arg buffer (async on the same launch stream) so its ndarray data pointers track this
+  // call's arguments. The graph topology (kernel / child-graph nodes) is unchanged; only the device-side arg bytes are
+  // re-uploaded, ordered before `graph_launch` by same-stream queueing.
+  for (std::size_t i = 0; i < child_infos.size() && i < cached.children.size(); i++) {
+    if (child_infos[i].child_ctx != nullptr) {
+      refresh_child_arg_buffer(child_infos[i], cached.children[i], executor, stream);
+    }
   }
   AMDGPUDriver::get_instance().graph_launch(cached.graph_exec, stream);
   used_on_last_call_ = true;
@@ -203,7 +269,8 @@ bool GraphManager::try_launch(int launch_id,
                               JITModule *amdgpu_module,
                               const std::vector<std::pair<int, Callable::Parameter>> &parameters,
                               const std::vector<OffloadedTask> &offloaded_tasks,
-                              LlvmRuntimeExecutor *executor) {
+                              LlvmRuntimeExecutor *executor,
+                              const std::vector<ChildLaunchInfo> &child_infos) {
   if (offloaded_tasks.empty()) {
     return false;
   }
@@ -227,7 +294,7 @@ bool GraphManager::try_launch(int launch_id,
 
   auto it = cache_.find(launch_id);
   if (it != cache_.end()) {
-    return launch_cached_graph(it->second, ctx);
+    return launch_cached_graph(it->second, ctx, child_infos, executor);
   }
 
   AMDGPUContext::get_instance().make_current();
@@ -243,6 +310,44 @@ bool GraphManager::try_launch(int launch_id,
   // buffers above; none of its fields change between graph launches so one copy is sufficient.
   AMDGPUDriver::get_instance().memcpy_host_to_device_async(cached.device_runtime_ctx, &cached.persistent_ctx,
                                                            sizeof(RuntimeContext), stream_for_setup);
+
+  // Allocate one persistent device arg buffer + device RuntimeContext + kernel-arg packing per embedded child (D1).
+  // `children` is sized once here and never resized after, so each ChildGraphState's address (and thus its
+  // `kernel_args.extra_config` self-pointers) stays stable for the cached graph_exec's lifetime (the vector's heap
+  // buffer survives the CachedGraph move into `cache_`). Children share the parent's result buffer: graph kernels
+  // never return values.
+  if (!child_infos.empty()) {
+    cached.children.resize(child_infos.size());
+    for (std::size_t i = 0; i < child_infos.size(); i++) {
+      const auto &info = child_infos[i];
+      if (info.child_ctx == nullptr) {
+        continue;
+      }
+      auto &state = cached.children[i];
+      state.arg_buffer_size = info.child_ctx->arg_buffer_size;
+      if (state.arg_buffer_size > 0) {
+        AMDGPUDriver::get_instance().malloc(reinterpret_cast<void **>(&state.persistent_device_arg_buffer),
+                                            state.arg_buffer_size);
+      }
+      AMDGPUDriver::get_instance().malloc(&state.device_runtime_ctx, sizeof(RuntimeContext));
+      state.persistent_ctx.runtime = executor->get_llvm_runtime();
+      state.persistent_ctx.arg_buffer = state.persistent_device_arg_buffer;
+      state.persistent_ctx.result_buffer = reinterpret_cast<uint64 *>(cached.persistent_device_result_buffer);
+      state.persistent_ctx.cpu_thread_id = 0;
+      // Pack the child's device RuntimeContext pointer into its own extra-config (HIP `extra` byte-buffer convention),
+      // mirroring the parent CachedGraph constructor.
+      state.kernel_args.packed_runtime_ctx_ptr = state.device_runtime_ctx;
+      state.kernel_args.pack_size = sizeof(void *);
+      state.kernel_args.extra_config[0] = reinterpret_cast<void *>(0x01);  // HIP_LAUNCH_PARAM_BUFFER_POINTER
+      state.kernel_args.extra_config[1] = &state.kernel_args.packed_runtime_ctx_ptr;
+      state.kernel_args.extra_config[2] = reinterpret_cast<void *>(0x02);  // HIP_LAUNCH_PARAM_BUFFER_SIZE
+      state.kernel_args.extra_config[3] = &state.kernel_args.pack_size;
+      state.kernel_args.extra_config[4] = reinterpret_cast<void *>(0x03);  // HIP_LAUNCH_PARAM_END
+      refresh_child_arg_buffer(info, state, executor, stream_for_setup);
+      AMDGPUDriver::get_instance().memcpy_host_to_device_async(state.device_runtime_ctx, &state.persistent_ctx,
+                                                              sizeof(RuntimeContext), stream_for_setup);
+    }
+  }
   AMDGPUDriver::get_instance().stream_synchronize(stream_for_setup);
 
   void *graph = nullptr;
@@ -250,9 +355,22 @@ bool GraphManager::try_launch(int launch_id,
 
   // Each kernel node receives the device-side RuntimeContext pointer via the shared `cached.kernel_args` extra-config
   // (see graph_manager.h for why all nodes share one). Stream-parallel groups (`stream_parallel_group_id != 0`) are
-  // silently serialized inside the graph, matching the CUDA implementation.
+  // silently serialized inside the graph, matching the CUDA implementation. `launch_child` tasks are embedded as
+  // child-graph nodes instead of kernel nodes.
+  std::vector<void *> child_graphs;  // owned standalone child graphs; destroyed after parent instantiation
   void *prev_node = nullptr;
   for (const auto &task : offloaded_tasks) {
+    if (task.is_launch_child) {
+      QD_ERROR_IF(task.child_call_index < 0 || (std::size_t)task.child_call_index >= child_infos.size() ||
+                      child_infos[task.child_call_index].child_ctx == nullptr,
+                  "launch_child task references child_call_index {} but no child launch info was provided",
+                  task.child_call_index);
+      const auto &info = child_infos[task.child_call_index];
+      void *child_graph = build_child_subgraph(info, cached.children[task.child_call_index]);
+      child_graphs.push_back(child_graph);
+      prev_node = add_child_graph_node(graph, prev_node, child_graph);
+      continue;
+    }
     void *func = amdgpu_module->lookup_function(task.name);
     prev_node = add_kernel_node(graph, prev_node, func, (unsigned int)task.grid_dim, (unsigned int)task.block_dim,
                                 (unsigned int)task.dynamic_shared_array_bytes, cached.kernel_args);
@@ -264,6 +382,11 @@ bool GraphManager::try_launch(int launch_id,
   AMDGPUDriver::get_instance().graph_launch(cached.graph_exec, stream);
 
   AMDGPUDriver::get_instance().graph_destroy(graph);
+  // The standalone child graphs were deep-copied into the parent graph by add_child_graph_node, and the parent graph
+  // was deep-copied into graph_exec by graph_instantiate; the originals are no longer referenced.
+  for (void *child_graph : child_graphs) {
+    AMDGPUDriver::get_instance().graph_destroy(child_graph);
+  }
 
   cached.num_nodes = offloaded_tasks.size();
   QD_TRACE("HIP graph created with {} kernel nodes for launch_id={}", cached.num_nodes, launch_id);

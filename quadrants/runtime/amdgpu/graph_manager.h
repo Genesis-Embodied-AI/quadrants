@@ -45,9 +45,34 @@ struct CachedKernelArgs {
   void *extra_config[5]{};
 };
 
+// Everything `try_launch` needs to embed a child qd.kernel as a HIP subgraph: the child's own (already-populated)
+// launch context plus the child's compiled artifacts looked up from the launcher's per-handle Context by child
+// launch_id. Assembled in the AMDGPU KernelLauncher and passed into `try_launch`, indexed by
+// `OffloadedTask::child_call_index`. Mirrors `cuda::ChildLaunchInfo`.
+struct ChildLaunchInfo {
+  LaunchContextBuilder *child_ctx{nullptr};
+  JITModule *child_module{nullptr};
+  const std::vector<std::pair<int, Callable::Parameter>> *child_parameters{nullptr};
+  const std::vector<OffloadedTask> *child_tasks{nullptr};
+};
+
 // Per-(launch_id) graph cache entry. Construction allocates the persistent device-side buffers that the cached graph
 // reads through; destruction frees them and the instantiated `hipGraphExec_t`.
 struct CachedGraph {
+  // Per-child persistent device state for an embedded child subgraph (the D1 data model: each child gets its own arg
+  // buffer + device-resident RuntimeContext + kernel-arg packing). Unlike CUDA, AMDGPU kernels dereference the
+  // RuntimeContext pointer on the GPU, so each child stages its own `device_runtime_ctx` and passes it through the
+  // HIP `extra` byte-buffer convention via its own `CachedKernelArgs`. Lives in `children` below, whose heap buffer
+  // is preserved across the CachedGraph move into `cache_`, so the `kernel_args.extra_config` self-pointers and the
+  // baked `device_runtime_ctx` stay valid for the instantiated graph_exec's lifetime.
+  struct ChildGraphState {
+    char *persistent_device_arg_buffer{nullptr};
+    void *device_runtime_ctx{nullptr};
+    RuntimeContext persistent_ctx{};
+    CachedKernelArgs kernel_args;
+    std::size_t arg_buffer_size{0};
+  };
+
   // hipGraphExec_t. The instantiated, launchable form of the captured HIP graph. Typed as void * since the driver is
   // loaded dynamically.
   void *graph_exec{nullptr};
@@ -70,6 +95,8 @@ struct CachedGraph {
   // for the cached graph's lifetime. All kernel nodes in this graph share the same packed args (the device
   // RuntimeContext pointer).
   CachedKernelArgs kernel_args;
+  // Embedded child subgraphs (one entry per parent child-call). Empty for kernels with no nested calls.
+  std::vector<ChildGraphState> children;
   std::size_t arg_buffer_size{0};
   std::size_t result_buffer_size{0};
   std::size_t num_nodes{0};
@@ -92,7 +119,8 @@ class GraphManager {
                   JITModule *amdgpu_module,
                   const std::vector<std::pair<int, Callable::Parameter>> &parameters,
                   const std::vector<OffloadedTask> &offloaded_tasks,
-                  LlvmRuntimeExecutor *executor);
+                  LlvmRuntimeExecutor *executor,
+                  const std::vector<ChildLaunchInfo> &child_infos);
 
   // Reset the per-call flags. Called by the launcher when the graph path is skipped, so the test-facing accessors
   // below report the absence of a cache hit on the most recent launch.
@@ -114,10 +142,24 @@ class GraphManager {
   }
 
  private:
-  bool launch_cached_graph(CachedGraph &cached, LaunchContextBuilder &ctx);
+  bool launch_cached_graph(CachedGraph &cached,
+                           LaunchContextBuilder &ctx,
+                           const std::vector<ChildLaunchInfo> &child_infos,
+                           LlvmRuntimeExecutor *executor);
   void resolve_ctx_ndarray_ptrs(LaunchContextBuilder &ctx,
                                 const std::vector<std::pair<int, Callable::Parameter>> &parameters,
                                 LlvmRuntimeExecutor *executor);
+  // Refresh a child's persistent device arg buffer from its launch context (resolve ndarray handles -> device
+  // pointers, then async-upload on `stream`). Run on every launch (build and cached replay) so the embedded child
+  // sees the parent call's current ndarray data pointers, mirroring how the parent arg buffer is re-uploaded.
+  void refresh_child_arg_buffer(const ChildLaunchInfo &info,
+                                CachedGraph::ChildGraphState &state,
+                                LlvmRuntimeExecutor *executor,
+                                void *stream);
+  // Build a standalone HIP graph for an embedded child kernel (one kernel node per child task, chained), using the
+  // child's persistent device RuntimeContext via its own CachedKernelArgs. The returned graph is owned by the caller
+  // (embedded via add_child_graph_node, then destroyed after the parent graph is instantiated).
+  void *build_child_subgraph(const ChildLaunchInfo &info, CachedGraph::ChildGraphState &state);
   void *add_kernel_node(void *graph,
                         void *prev_node,
                         void *func,
@@ -125,6 +167,9 @@ class GraphManager {
                         unsigned int block_dim,
                         unsigned int shared_mem,
                         CachedKernelArgs &kernel_args);
+  // Embeds an already-built child graph as a single child-graph node, optionally chained after prev_node. The C2
+  // ("child-graph node") composition primitive for nested qd.kernel-as-subgraph calls.
+  void *add_child_graph_node(void *graph, void *prev_node, void *child_graph);
 
   // Keyed by `launch_id`, which uniquely identifies a compiled kernel variant (each template specialization gets its
   // own launch_id).

@@ -79,6 +79,13 @@ PER_AMDGPU_FUNCTION(graph_add_kernel_node,
                     const void *,
                     std::size_t,
                     const void *);
+PER_AMDGPU_FUNCTION(graph_add_child_graph_node,
+                    hipGraphAddChildGraphNode,
+                    void **,
+                    void *,
+                    const void *,
+                    std::size_t,
+                    void *);
 PER_AMDGPU_FUNCTION(graph_instantiate, hipGraphInstantiate, void **, void *, void *, char *, std::size_t);
 PER_AMDGPU_FUNCTION(graph_launch, hipGraphLaunch, void *, void *);
 PER_AMDGPU_FUNCTION(graph_destroy, hipGraphDestroy, void *);
