@@ -57,6 +57,10 @@ def _supports_checkpoint_yield_resume():
         return True
     if impl.current_cfg().arch == qd.amdgpu:
         return True
+    # GFX backends (Vulkan, Metal): per-task host gating + readback yield-check in `GfxRuntime`
+    # (slice 4 cont.); see `runtime/gfx/runtime.cpp`'s task loop.
+    if impl.current_cfg().arch in (qd.vulkan, qd.metal):
+        return True
     return False
 
 

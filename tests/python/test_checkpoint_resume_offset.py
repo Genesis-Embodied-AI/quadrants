@@ -43,9 +43,12 @@ def _supports_checkpoint_yield_resume():
     if impl.current_cfg().arch == qd.x64:
         return True
     # AMDGPU host-orchestrated sub-graph gating in `GraphManager::launch_cached_checkpoint_graph`
-    # (slice 4). Today this only covers the non-`graph_do_while` path; the loop tests below skip
-    # accordingly via the AMDGPU-specific gate in `_supports_checkpoint_yield_resume_in_while_loop`.
+    # (slice 4); also covers WHILE via the streaming launcher's port of the same gating.
     if impl.current_cfg().arch == qd.amdgpu:
+        return True
+    # Vulkan / Metal share the GFX runtime, which gates per-task at `launch_kernel` time and reads
+    # the user's `yield_on=` flag through `readback_data` between dispatches (slice 4 cont.).
+    if impl.current_cfg().arch in (qd.vulkan, qd.metal):
         return True
     return False
 

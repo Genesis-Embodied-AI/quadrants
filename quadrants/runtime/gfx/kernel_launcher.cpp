@@ -16,9 +16,19 @@ void KernelLauncher::launch_offloaded_tasks_with_do_while(Handle handle, LaunchC
   DeviceAllocation alloc = *(static_cast<DeviceAllocation *>(it->second));
   DevicePtr dev_ptr = alloc.get_ptr(0);
 
+  // Slice 4 (Vulkan / Metal): mirror the CPU / AMDGPU `launch_offloaded_tasks_with_do_while` semantics
+  //   - Break on yield. Without this the loop body re-enters, sees `resume_from_checkpoint` still set
+  //     (or the just-cleared yield_signal again hot inside `launch_kernel`), skips every checkpoint
+  //     in the next iter, never decrements the user's counter, and spins forever.
+  //   - Clear `ctx.resume_from_checkpoint` after iter 1 so subsequent iters in this launch replay
+  //     the full body. `from_checkpoint=cp` applies only to the first iter of a resume launch.
   int32_t flag_val;
   do {
     config_.gfx_runtime_->launch_kernel(handle, ctx);
+    if (config_.gfx_runtime_->last_yield_cp_id_on_last_call() != -1) {
+      break;
+    }
+    ctx.resume_from_checkpoint = -1;
     config_.gfx_runtime_->synchronize();
     void *host_ptr = &flag_val;
     size_t sz = sizeof(int32_t);

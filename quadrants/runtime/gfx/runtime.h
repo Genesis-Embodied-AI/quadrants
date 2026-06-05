@@ -116,6 +116,15 @@ class QD_DLL_EXPORT GfxRuntime {
 
   void launch_kernel(KernelHandle handle, LaunchContextBuilder &host_ctx);
 
+  // Slice 4 (Vulkan / Metal): cp_id of the first checkpoint whose `yield_on=` flag was non-zero on the
+  // most recent `launch_kernel` call, or `-1` if no yield was observed / the launched kernel has no
+  // yielding checkpoints. Mirrors the AMDGPU `GraphManager::last_yield_cp_id_on_last_call()` /
+  // CUDA-side surface so `Program::get_graph_last_yield_cp_id_on_last_call` can route through the GFX
+  // launcher uniformly.
+  int last_yield_cp_id_on_last_call() const {
+    return last_yield_cp_id_on_last_call_;
+  }
+
   void buffer_copy(DevicePtr dst, DevicePtr src, size_t size);
 
   void synchronize();
@@ -353,6 +362,11 @@ class QD_DLL_EXPORT GfxRuntime {
   // ndarray_in_use_ to track this so that we can free memory allocated for
   // ndarray whenever it's safe to do so.
   std::unordered_set<DeviceAllocationId> ndarrays_in_use_;
+
+  // Slice 4: see the public `last_yield_cp_id_on_last_call()` accessor. Reset to -1 at the start of
+  // every `launch_kernel` call that has any `checkpoint_yield_on_arg_ids[cp] >= 0`; updated when the
+  // post-checkpoint readback observes a non-zero `yield_on=` flag.
+  int last_yield_cp_id_on_last_call_{-1};
 };
 
 GfxRuntime::RegisterParams run_codegen(Kernel *kernel,

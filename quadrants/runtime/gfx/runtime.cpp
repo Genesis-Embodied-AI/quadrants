@@ -582,8 +582,53 @@ void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_c
 
   ensure_current_cmdlist();
 
+  // Slice 4 (Vulkan / Metal): host-branch gating state for the task loop. Same shape as the CPU /
+  // AMDGPU streaming launchers:
+  //   resume_point  -- skips cp_ids strictly below it on this launch (only first iter of a resume).
+  //   yield_signal  -- -1 == "no yield yet", otherwise the cp_id that first observed a non-zero
+  //                    `yield_on=` flag. Once set, subsequent cp_id>=0 tasks are skipped to mirror
+  //                    the device-side first-yielder-wins atomic-CAS semantics CUDA / AMDGPU use.
+  //   kernel_can_yield -- mirrors the CPU launcher; only reset `last_yield_cp_id_on_last_call_` for
+  //                     kernels with at least one yielding checkpoint, so aux launches don't clobber
+  //                     the field the Python `GraphStatus` API reads.
+  // The per-cp yield-flag device allocation is resolved by matching `checkpoint_yield_on_arg_ids[cp]`
+  // against `any_arrays` (which was populated earlier in this function from the ndarray arg loop).
+  // Reads back the int32 flag through `device_->readback_data` (the same API the WHILE loop uses for
+  // its counter) and clears it back to 0 with `upload_data` so the next launch starts fresh.
+  int32_t resume_point = (host_ctx.resume_from_checkpoint < 0) ? 0 : host_ctx.resume_from_checkpoint;
+  int32_t yield_signal = -1;
+  bool kernel_can_yield = false;
+  for (int aid : host_ctx.checkpoint_yield_on_arg_ids) {
+    if (aid >= 0) {
+      kernel_can_yield = true;
+      break;
+    }
+  }
+  if (kernel_can_yield) {
+    last_yield_cp_id_on_last_call_ = -1;
+  }
+  std::vector<DeviceAllocation> yield_on_devallocs(host_ctx.checkpoint_yield_on_arg_ids.size(), kDeviceNullAllocation);
+  for (std::size_t cp = 0; cp < host_ctx.checkpoint_yield_on_arg_ids.size(); ++cp) {
+    int arg_id = host_ctx.checkpoint_yield_on_arg_ids[cp];
+    if (arg_id < 0) {
+      continue;
+    }
+    auto it = any_arrays.find(arg_id);
+    if (it != any_arrays.end()) {
+      yield_on_devallocs[cp] = it->second;
+    }
+  }
+
   for (int i = 0; i < task_attribs.size(); ++i) {
     const auto &attribs = task_attribs[i];
+    // Slice 4 gate. Tasks with cp_id < 0 (work outside any `qd.checkpoint`) always run; cp_id >= 0
+    // tasks are skipped when they sit below `resume_point` on this launch or after a yield has been
+    // observed earlier in the loop.
+    if (attribs.checkpoint_id >= 0) {
+      if (attribs.checkpoint_id < resume_point || yield_signal != -1) {
+        continue;
+      }
+    }
     auto vp = ti_kernel->get_pipeline(i);
 
     // Cap `advisory_total_num_threads` to the ACTUAL iteration count when the codegen was able to extract the range end
@@ -976,6 +1021,42 @@ void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_c
 
     QD_ERROR_IF(status != RhiResult::success, "Dispatch error : RhiResult({})", status);
     current_cmdlist_->memory_barrier();
+
+    // Slice 4 yield observation. After the LAST task in a contiguous run of same-cp_id tasks, peek
+    // at the user's `yield_on=` flag. We submit + wait-idle here to make the dispatch above visible;
+    // pinned-host yield flags would avoid the stall but are out of scope per `reentrant.md` §10.
+    // First-yielder-wins is local to this launch (`yield_signal == -1` guard) and matches the
+    // device-side atomic-CAS contract on CUDA / AMDGPU's HIP-graph path.
+    bool is_last_in_run =
+        (i + 1 == (int)task_attribs.size()) || task_attribs[i + 1].checkpoint_id != attribs.checkpoint_id;
+    int cp = attribs.checkpoint_id;
+    if (cp >= 0 && is_last_in_run && (std::size_t)cp < yield_on_devallocs.size() &&
+        yield_on_devallocs[cp].alloc_id != kDeviceNullAllocation.alloc_id) {
+      current_cmdlist_->buffer_barrier(yield_on_devallocs[cp]);
+      flush();
+      device_->wait_idle();
+      int32_t flag_val = 0;
+      DevicePtr dp = yield_on_devallocs[cp].get_ptr(0);
+      void *host_ptr = &flag_val;
+      size_t sz = sizeof(int32_t);
+      auto rr = device_->readback_data(&dp, &host_ptr, &sz, 1);
+      QD_ERROR_IF(rr != RhiResult::success, "GfxRuntime slice-4 yield-flag readback failed: RhiResult({})",
+                  (int)rr);
+      if (flag_val != 0 && yield_signal == -1) {
+        yield_signal = cp;
+        last_yield_cp_id_on_last_call_ = cp;
+        // Clear flag back to 0 on device so the next launch starts clean. Same direction as the
+        // CPU/CUDA/AMDGPU device-side yield-check kernels do at the end of their reset path.
+        int32_t zero = 0;
+        const void *zero_ptr = &zero;
+        auto wr = device_->upload_data(&dp, &zero_ptr, &sz, 1);
+        QD_ERROR_IF(wr != RhiResult::success, "GfxRuntime slice-4 yield-flag clear failed: RhiResult({})",
+                    (int)wr);
+      }
+      // The flush above reset current_cmdlist_ to a not-yet-open state on backends that null it
+      // out at flush. Re-open so subsequent tasks in this loop have a cmdlist to dispatch into.
+      ensure_current_cmdlist();
+    }
   }
 
   // Keep context buffers used in this dispatch
