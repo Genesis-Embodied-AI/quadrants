@@ -1,22 +1,22 @@
 """Tests for qd.checkpoint -- yield/resume stage primitive for graph kernels.
 
-These tests cover *slice 1a* of the qd.checkpoint implementation: Python API surface plus AST
-recognition only. The runtime does not yet build per-checkpoint IF conditional nodes, insert
-yield-check kernels, or expose a host-side yield/resume loop -- so the kernels here run
-through every checkpoint body unconditionally, exactly like a non-checkpointed kernel. The
-tests therefore verify:
+These tests cover slices 1a–1d of the qd.checkpoint implementation:
 
-  - The ``qd.checkpoint`` symbol is importable and usable as a context manager outside of
-    kernels (no-op behaviour).
-  - A graph kernel with ``with qd.checkpoint():`` blocks parses successfully and runs every
-    body kernel.
-  - The kernel object records one entry per ``with`` block in
-    ``kernel.checkpoint_yield_on_args`` (the ``cp_id``-indexed yield_on metadata that later
-    slices will plumb through to the IR / runtime).
-  - Misuse at AST time raises ``QuadrantsSyntaxError`` with the documented messages.
+  - *Slice 1a*: Python API surface plus AST recognition. ``qd.checkpoint`` is importable, usable
+    as a no-op context manager outside kernels, and parses successfully inside graph kernels.
+    Compile-time misuse raises ``QuadrantsSyntaxError``.
+  - *Slice 1b*: ``checkpoint_id`` plumbing through the IR (covered by the integration tests
+    below, since the IR threading is invisible at the Python boundary).
+  - *Slice 1c*: On CUDA SM 9.0+, the GraphManager wires one IF conditional node per checkpoint;
+    introspection via ``prog.get_graph_num_checkpoints_on_last_call()`` confirms the IF path.
+  - *Slice 1d*: ``yield_on=`` injects a yield-check kernel; on yield the framework atomically
+    records the first yielding cp_id, disables every later checkpoint in the launch, clears the
+    user's flag, and (inside ``qd.graph_do_while``) exits the WHILE early.
 
-Later slices add separate test files / test cases for the runtime mechanism, the yield-check
-kernel, the host-side status-object loop, and per-backend fallbacks.
+On non-CUDA / pre-SM-9.0 backends the construct is accepted and every body still runs
+unconditionally; the introspection-based assertions guard themselves behind
+``_is_checkpoint_if_path_native``. The host-side ``GraphStatus`` / ``step.resume(...)`` API
+arrives in slice 2.
 """
 
 import numpy as np

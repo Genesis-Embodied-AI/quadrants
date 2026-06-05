@@ -157,7 +157,7 @@ Therefore on unsupported platforms, you might consider creating a second impleme
 
 ## Checkpoints with `qd.checkpoint` *(experimental)*
 
-> **Status:** AST surface and metadata tracking only (slice 1a). The runtime does not yet build per-checkpoint IF conditional nodes, insert yield-check kernels, or expose the host-side yield/resume loop. Until those slices land, every checkpoint body runs unconditionally — the construct is accepted but provides no runtime guarantees. Follow-up slices will add the device-side gating, the yield mechanism, and the `GraphStatus` host API; this section will be expanded as they land.
+> **Status:** Device-side mechanism implemented (slices 1a–1d). On CUDA SM 9.0+ each checkpoint is wrapped in a CUDA-graph IF conditional node (`qd.checkpoint`) plus an inline yield-check kernel (`yield_on=`). On other backends (and on pre-Hopper CUDA) every checkpoint body runs unconditionally — the parser accepts the construct but doesn't yet enforce the gating; that arrives in the indirect-dispatch slices (4–6). The host-side `GraphStatus` / `step.resume(from_checkpoint=…)` API is still upcoming (slice 2); until then a yield manifests as "every checkpoint after the yielding one is skipped on this launch, and the user's `yield_on` ndarray is reset to 0 so the next launch starts clean".
 
 `qd.checkpoint()` marks a section of a graph kernel as a *skippable, optionally yieldable stage*. The intended use is the qipc-style re-entrant Newton loop, where each iteration is divided into a handful of named stages (assemble, broadphase, line search, ...) and the host may need to grow a pre-allocated buffer when a stage detects overflow.
 
@@ -185,7 +185,18 @@ def step(
 
 Each `with qd.checkpoint(...)` block gets a `cp_id` assigned by declaration order (0, 1, 2, ... flat across the whole kernel, independent of whether the checkpoint is inside or outside a `qd.graph_do_while`).
 
-If `yield_on` is supplied, it must name a 0-d `qd.i32` ndarray that is also a kernel parameter. The body may write a non-zero value into that ndarray to signal "the host needs to handle something" (typically: pre-allocated buffer too small). When the runtime side lands, the framework will detect this, exit the enclosing loop, and report the yielding `cp_id` to the host via the `GraphStatus` returned by the kernel call.
+### Yield mechanism (CUDA SM 9.0+, slice 1d)
+
+If `yield_on=foo` is supplied, the body may write a non-zero value into the `foo` ndarray to signal "the host needs to handle something" (typically: pre-allocated buffer too small). At the end of the checkpoint body the framework injects a small yield-check kernel that:
+
+1. Reads `*foo` and skips out early if it's `0`.
+2. Atomically claims `yield_signal` with this checkpoint's `cp_id` (first yielder in declaration order wins).
+3. Disables every later checkpoint in the same launch (subsequent gate kernels see "I'm past the yield point" and short-circuit their IF bodies).
+4. Resets `*foo` to `0` so the next launch starts clean without host intervention.
+
+Combined with `qd.graph_do_while`, the framework also injects a yield-aware condition kernel that exits the `WHILE` loop as soon as a yield has been observed — without it the loop body would re-enter, see "post-yield" state in every gate, skip every checkpoint, never decrement the counter, and spin forever.
+
+Until the host-side `GraphStatus` API arrives (slice 2), the only way to read `yield_signal` from Python is the internal `prog.get_graph_last_yield_cp_id_on_last_call()` introspection (returns the yielding `cp_id`, or `-1` if no checkpoint yielded). End-user-visible "yielded → call `step.resume(from_checkpoint=…)`" semantics arrive with slice 2.
 
 ### Restrictions (enforced at kernel compile time)
 
