@@ -46,7 +46,7 @@ from quadrants.lang.exception import QuadrantsRuntimeTypeError
 from quadrants.lang.expr import Expr
 from quadrants.lang.matrix import MatrixType
 from quadrants.lang.snode import SNode
-from quadrants.lang.util import is_data_oriented, to_quadrants_type
+from quadrants.lang.util import is_data_oriented, is_dataclass_instance, to_quadrants_type
 from quadrants.types import (
     buffer_view_type,
     ndarray_type,
@@ -82,8 +82,18 @@ _primitive_types = {int, float, bool}
 _struct_nd_paths_cache: dict[type, list[tuple]] = {}
 
 
-def _build_struct_nd_paths(obj: Any, prefix: tuple, out: list) -> None:
-    if dataclasses.is_dataclass(obj) and not isinstance(obj, type):
+def _build_struct_nd_paths(obj: Any, prefix: tuple, out: list, _seen: set | None = None) -> None:
+    # Cycle protection: real Genesis containers form attribute graphs with shared references and back-pointers (e.g.
+    # ``sim.rigid_solver.sim is sim``). Without ``_seen`` this recurses infinitely on the back-edge and blows the
+    # Python stack on first launch. Tracked by ``id(obj)`` so we don't accidentally rely on ``__hash__`` for arbitrary
+    # user types — and so primitives like equal-but-distinct dataclass instances are still walked independently.
+    if _seen is None:
+        _seen = set()
+    obj_id = id(obj)
+    if obj_id in _seen:
+        return
+    _seen.add(obj_id)
+    if is_dataclass_instance(obj):
         children = ((f.name, getattr(obj, f.name)) for f in dataclasses.fields(obj))
     else:
         # ``NamedTuple`` (decorated as ``@qd.data_oriented``) has no instance ``__dict__`` — fall back to ``_asdict()``
@@ -101,8 +111,8 @@ def _build_struct_nd_paths(obj: Any, prefix: tuple, out: list) -> None:
         v_type = type(v)
         if issubclass(v_type, Ndarray):
             out.append(chain)
-        elif is_data_oriented(v) or (dataclasses.is_dataclass(v) and not isinstance(v, type)):
-            _build_struct_nd_paths(v, chain, out)
+        elif is_data_oriented(v) or is_dataclass_instance(v):
+            _build_struct_nd_paths(v, chain, out, _seen)
 
 
 def _struct_nd_paths_for(arg: Any) -> list[tuple]:
