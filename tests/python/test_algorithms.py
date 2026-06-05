@@ -906,6 +906,56 @@ def test_device_radix_sort_fused_insufficient_scratch():
     np.testing.assert_array_equal(keys.to_numpy(), host)
 
 
+@pytest.mark.parametrize("N", _RADIX_SORT_SIZES)
+@pytest.mark.parametrize("dtype", _RADIX_KEY_DTYPES)
+@test_utils.test(arch=qd.gpu)
+def test_device_radix_sort_fused_keys_all_dtypes(dtype, N):
+    """The fused sort matches numpy.sort for every supported key dtype: u32/i32/f32 (4 passes) and u64/i64/f64
+    (8 passes), with the in-kernel twiddle/untwiddle for signed + float."""
+    _skip_if_dtype_unsupported(dtype)
+    rng = np.random.default_rng(seed=1234)
+    host = _gen_keys(rng, dtype, N)
+
+    keys = qd.field(dtype, shape=N)
+    tmp = qd.field(dtype, shape=N)
+    _fill_field(keys, host)
+
+    slots = qd.algorithms.fused_radix_sort_scratch_slots(N, qd.algorithms._radix_sort_fused._min_log256_for_n(N))
+    scratch = qd.field(qd.u32, shape=max(slots, 1))
+
+    qd.algorithms.device_radix_sort_fused(keys, tmp, scratch)
+    np.testing.assert_array_equal(keys.to_numpy(), np.sort(host, kind="stable"), err_msg=f"fused {dtype} sort(N={N})")
+
+
+@pytest.mark.parametrize("N", _RADIX_SORT_SIZES)
+@pytest.mark.parametrize("dtype", _RADIX_KEY_DTYPES)
+@test_utils.test(arch=qd.gpu)
+def test_device_radix_sort_fused_key_value(dtype, N):
+    """Fused key-value sort: i32 values permute in lock-step with the keys; stable (matches argsort)."""
+    _skip_if_dtype_unsupported(dtype)
+    rng = np.random.default_rng(seed=1234)
+    host = _gen_keys(rng, dtype, N)
+
+    keys = qd.field(dtype, shape=N)
+    tmp_keys = qd.field(dtype, shape=N)
+    values = qd.field(qd.i32, shape=N)
+    tmp_values = qd.field(qd.i32, shape=N)
+    _fill_field(keys, host)
+    _fill_field(values, np.arange(N, dtype=np.int32))
+
+    slots = qd.algorithms.fused_radix_sort_scratch_slots(N, qd.algorithms._radix_sort_fused._min_log256_for_n(N))
+    scratch = qd.field(qd.u32, shape=max(slots, 1))
+
+    qd.algorithms.device_radix_sort_fused(keys, tmp_keys, scratch, values=values, tmp_values=tmp_values)
+
+    got_keys = keys.to_numpy()
+    got_values = values.to_numpy()
+    want_idx = np.argsort(host, kind="stable")
+    want_keys = host[want_idx]
+    np.testing.assert_array_equal(got_keys, want_keys, err_msg=f"fused {dtype} keys(N={N})")
+    np.testing.assert_array_equal(got_values, want_idx.astype(np.int32), err_msg=f"fused {dtype} values(N={N})")
+
+
 @test_utils.test(arch=qd.gpu)
 def test_device_radix_sort_reverse_sorted():
     """Worst-case-for-comparison-sort input is just normal work for radix."""
