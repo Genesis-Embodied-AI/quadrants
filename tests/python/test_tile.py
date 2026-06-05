@@ -8,12 +8,11 @@ import scipy.linalg
 
 import quadrants as qd
 from quadrants.lang.exception import QuadrantsSyntaxError
-from quadrants.lang.simt._tile16 import (
-    _make_tile16x16,
+from quadrants.lang.simt._tile import (
+    _make_tile,
     _TileSliceProxy,
     _VecSliceProxy,
 )
-from quadrants.lang.simt._tile32 import _make_tile32x32
 
 from tests import test_utils
 
@@ -25,15 +24,20 @@ _EPS_VALS = {qd.f32: 1e-6, qd.f64: 1e-14}
 
 
 # --- Parametrize over tile size ----------------------------------------------------------------
+import functools as _functools  # noqa: E402
 import types as _types  # noqa: E402
 
 _TILE_PARAMS = [
     pytest.param(
-        _types.SimpleNamespace(proxy=qd.simt.Tile16x16, make=_make_tile16x16, size=16, m_size=40, name="tile16"),
+        _types.SimpleNamespace(
+            proxy=qd.simt.Tile16x16, make=_functools.partial(_make_tile, 16), size=16, m_size=40, name="tile16"
+        ),
         id="tile16",
     ),
     pytest.param(
-        _types.SimpleNamespace(proxy=qd.simt.Tile32x32, make=_make_tile32x32, size=32, m_size=80, name="tile32"),
+        _types.SimpleNamespace(
+            proxy=qd.simt.Tile32x32, make=_functools.partial(_make_tile, 32), size=32, m_size=80, name="tile32"
+        ),
         id="tile32",
     ),
 ]
@@ -421,7 +425,7 @@ def test_store_partial_cols_untouched(TILE, make_tile, tdim, m_size, tensor_type
 
 
 def test_make_caching(TILE, make_tile, tdim, m_size):
-    """_make_tile16x16 must return the same object for the same dtype."""
+    """_make_tile must return the same object for the same (N, dtype)."""
     a = make_tile(qd.f32)
     b = make_tile(qd.f32)
     assert a is b
