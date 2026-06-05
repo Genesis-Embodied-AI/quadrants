@@ -399,17 +399,18 @@ def test_checkpoint_yields_when_flag_is_set():
 
 
 @test_utils.test()
-def test_checkpoint_yield_race_first_wins():
-    """Slice 1d: when two checkpoints both fire yield_on in the same launch, the lower cp_id wins.
+def test_checkpoint_yield_first_wins_subsequent_skipped():
+    """Slice 1d: when an earlier checkpoint yields, every later checkpoint in the same launch is skipped.
 
-    Because the gate kernels run in source order and `atomicCAS(yield_signal, -1, cp_id)` only
-    succeeds for the first writer, the first checkpoint to fire is the one whose cp_id ends up
-    in `yield_signal`. The second checkpoint still runs its body (gate already enabled before
-    the first yield took effect), but its yield-check kernel's CAS is a no-op and -- crucially
-    -- everything that comes *after* the second checkpoint is skipped.
+    Three checkpoints: cp 0 and cp 1 both have `yield_on=` set to non-zero before launch. cp 0
+    fires first, its yield-check kernel atomically writes cp_id=0 to `yield_signal` and bumps
+    `resume_point` to INT_MAX. cp 1's gate kernel then reads INT_MAX, disables the IF (so cp 1's
+    body never runs, its flag stays at 1, and its yield-check never fires). cp 2 is likewise
+    skipped. This matches the slice 1d design (`perso_hugh/doc/qipc/reentrant.md` section 5.2):
+    first yielder wins, everything past the yield point is shipped to the host as-not-run.
     """
     if not _is_checkpoint_if_path_native():
-        pytest.skip("yield-race semantics only enforced on the CUDA-native IF path (slice 1d)")
+        pytest.skip("yield ordering only enforced on the CUDA-native IF path (slice 1d)")
     N = 4
 
     @qd.kernel(graph=True)
@@ -436,13 +437,11 @@ def test_checkpoint_yield_race_first_wins():
     flag_b.from_numpy(np.array(1, dtype=np.int32))
 
     k(x, flag_a, flag_b)
-    # Both flagged checkpoints run (they were enabled before either yield-check fired); cp_id
-    # 0's yield CAS wins, cp_id 1's CAS is a no-op but its yield-check still bumps resume_point
-    # to INT_MAX so cp_id 2 is skipped.
-    np.testing.assert_array_equal(x.to_numpy(), np.full(N, 11, dtype=np.int32))
+    np.testing.assert_array_equal(x.to_numpy(), np.ones(N, dtype=np.int32))
     assert _last_yield_cp_id_on_last_call() == 0
+    # cp 0's yield-check cleared its own flag; cp 1's yield-check never ran so its flag stays.
     assert flag_a.to_numpy() == 0
-    assert flag_b.to_numpy() == 0
+    assert flag_b.to_numpy() == 1
 
 
 @test_utils.test()
