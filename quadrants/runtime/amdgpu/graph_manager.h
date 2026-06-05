@@ -138,6 +138,13 @@ class GraphManager {
   int last_yield_cp_id_on_last_call() const {
     return last_yield_cp_id_on_last_call_;
   }
+  // Slice 4: writable setter so the streaming `KernelLauncher` (which handles `graph_do_while + checkpoint`
+  // kernels that fall through the graph-path eligibility check above) can record yields into the same field
+  // the graph path uses. The override in `kernel_launcher.h` reads it through `last_yield_cp_id_on_last_call()`
+  // either way, so the Python `GraphStatus` surface stays uniform across both code paths.
+  void set_last_yield_cp_id_on_last_call(int cp_id) {
+    last_yield_cp_id_on_last_call_ = cp_id;
+  }
 
  private:
   bool launch_cached_graph(CachedGraph &cached, LaunchContextBuilder &ctx);

@@ -137,15 +137,62 @@ void KernelLauncher::launch_offloaded_tasks(LaunchContextBuilder &ctx,
     return effective_grid_dim;
   };
 
+  // Slice 4: host-branch gating for the streaming path. Used by `graph_do_while + checkpoint` kernels which
+  // fall through the graph-fast-path eligibility check; for plain checkpoint kernels the sub-graph
+  // orchestration in `GraphManager::launch_cached_checkpoint_graph` is what runs. Same semantics on both:
+  // `resume_point` skips cp_ids < it on this launch; `yield_signal` flips from -1 to the first observed
+  // yielding cp_id and stops subsequent checkpoint bodies for the rest of the launch.
+  int32_t resume_point = (ctx.resume_from_checkpoint < 0) ? 0 : ctx.resume_from_checkpoint;
+  int32_t yield_signal = -1;
+  // Only reset the cross-launch yield bookkeeping for kernels that can actually yield. Mirrors the CPU
+  // launcher gating in `runtime/cpu/kernel_launcher.cpp`; non-yield-capable launches (incl. recursive
+  // aux launches like the snode-reader path) leave the previously recorded yield untouched.
+  bool kernel_can_yield = false;
+  for (int aid : ctx.checkpoint_yield_on_arg_ids) {
+    if (aid >= 0) {
+      kernel_can_yield = true;
+      break;
+    }
+  }
+  if (kernel_can_yield) {
+    graph_manager_.set_last_yield_cp_id_on_last_call(-1);
+  }
+  int32_t zero = 0;
   auto *active_stream = AMDGPUContext::get_instance().get_stream();
   for (size_t i = 0; i < offloaded_tasks.size();) {
     const auto &task = offloaded_tasks[i];
+    // Slice 4 host-branch gate. Tasks with cp_id < 0 (work outside any checkpoint) always run.
+    if (task.checkpoint_id >= 0) {
+      if (task.checkpoint_id < resume_point || yield_signal != -1) {
+        ++i;
+        continue;
+      }
+    }
     if (task.stream_parallel_group_id == 0) {
       int effective_grid_dim = prepare_task(i, task);
       QD_TRACE("Launching kernel {}<<<{}, {}>>>", task.name, effective_grid_dim, task.block_dim);
       amdgpu_module->launch(task.name, effective_grid_dim, task.block_dim, task.dynamic_shared_array_bytes,
                             {(void *)&context_pointer}, {arg_size});
-      i++;
+      // After the last task of a yielding checkpoint body, peek at the user's `yield_on` flag and update
+      // the launcher's yield state. D2H sync is acceptable here: this is the host-loop path that already
+      // pays a per-iter `graph_do_while_flag` D2H, and pinned host memory is out of scope for slice 4.
+      bool is_last_in_run =
+          (i + 1 == offloaded_tasks.size()) || offloaded_tasks[i + 1].checkpoint_id != task.checkpoint_id;
+      int32_t cp_id = task.checkpoint_id;
+      if (cp_id >= 0 && is_last_in_run && (std::size_t)cp_id < ctx.checkpoint_yield_on_dev_ptrs.size() &&
+          ctx.checkpoint_yield_on_dev_ptrs[cp_id] != nullptr) {
+        AMDGPUDriver::get_instance().stream_synchronize(active_stream);
+        int32_t flag_val = 0;
+        AMDGPUDriver::get_instance().memcpy_device_to_host(&flag_val, ctx.checkpoint_yield_on_dev_ptrs[cp_id],
+                                                           sizeof(int32_t));
+        if (flag_val != 0 && yield_signal == -1) {
+          yield_signal = cp_id;
+          graph_manager_.set_last_yield_cp_id_on_last_call(cp_id);
+          AMDGPUDriver::get_instance().memcpy_host_to_device_async(ctx.checkpoint_yield_on_dev_ptrs[cp_id], &zero,
+                                                                   sizeof(int32_t), active_stream);
+        }
+      }
+      ++i;
     } else {
       size_t group_start = i;
       while (i < offloaded_tasks.size() && offloaded_tasks[i].stream_parallel_group_id != 0) {
@@ -218,9 +265,18 @@ void KernelLauncher::launch_offloaded_tasks_with_do_while(LaunchContextBuilder &
                                                           const std::vector<OffloadedTask> &offloaded_tasks,
                                                           void *context_pointer,
                                                           int arg_size) {
+  // Slice 4: mirror the CPU `launch_offloaded_tasks_with_do_while`'s checkpoint-aware additions.
+  //   - Break on yield. Without this the loop body would re-enter, see `yield_signal != -1` in the gate,
+  //     skip every checkpoint, never decrement the user's counter, and spin forever.
+  //   - Clear `ctx.resume_from_checkpoint` after the first iter so subsequent iters of this launch
+  //     replay the full body. `from_checkpoint=cp` applies only to the FIRST iter of a resume launch.
   int32_t counter_val;
   do {
     launch_offloaded_tasks(ctx, amdgpu_module, offloaded_tasks, context_pointer, arg_size);
+    if (graph_manager_.last_yield_cp_id_on_last_call() != -1) {
+      break;
+    }
+    ctx.resume_from_checkpoint = -1;
     counter_val = 0;
     auto *stream = AMDGPUContext::get_instance().get_stream();
     AMDGPUDriver::get_instance().stream_synchronize(stream);
@@ -307,6 +363,11 @@ void KernelLauncher::launch_llvm_kernel(Handle handle, LaunchContextBuilder &ctx
   }
   device_result_buffer = static_cast<char *>(persistent_result_buffer_dev_ptr_);
 
+  // Slice 4: shape the per-cp yield-flag table to match the per-cp arg-id table the Python frontend just
+  // pushed into `ctx`. Same indexing convention as the `cuda` / `amdgpu::GraphManager` paths -- non-yielding
+  // checkpoints stay at `nullptr`. Populated in the per-parameter loop below by matching `arg_id`.
+  ctx.checkpoint_yield_on_dev_ptrs.assign(ctx.checkpoint_yield_on_arg_ids.size(), nullptr);
+
   for (int i = 0; i < (int)parameters.size(); i++) {
     const auto &kv = parameters[i];
     const auto &arg_id = kv.first;
@@ -349,6 +410,14 @@ void KernelLauncher::launch_llvm_kernel(Handle handle, LaunchContextBuilder &ctx
         if (arg_id == ctx.graph_do_while_arg_id) {
           ctx.graph_do_while_flag_dev_ptr = device_ptrs[data_ptr_idx];
         }
+        // Slice 4: route this ndarray's device pointer into the per-cp yield-flag table for every
+        // checkpoint that named it as its `yield_on=`. Same scan + same convention as the graph_manager
+        // resolver; here we mirror it on the streaming-launch path used for `graph_do_while + checkpoint`.
+        for (std::size_t cp = 0; cp < ctx.checkpoint_yield_on_arg_ids.size(); ++cp) {
+          if (ctx.checkpoint_yield_on_arg_ids[cp] == arg_id) {
+            ctx.checkpoint_yield_on_dev_ptrs[cp] = device_ptrs[data_ptr_idx];
+          }
+        }
       } else if (arr_sz > 0) {  // why use arr_sz constrain?
         // Ndarray
         DeviceAllocation *ptr = static_cast<DeviceAllocation *>(data_ptr);
@@ -365,6 +434,12 @@ void KernelLauncher::launch_llvm_kernel(Handle handle, LaunchContextBuilder &ctx
         ctx.set_ndarray_ptrs(arg_id, (uint64)device_ptrs[data_ptr_idx], (uint64)device_ptrs[grad_ptr_idx]);
         if (arg_id == ctx.graph_do_while_arg_id) {
           ctx.graph_do_while_flag_dev_ptr = device_ptrs[data_ptr_idx];
+        }
+        // See the matching cp_id scan above for the kNone branch.
+        for (std::size_t cp = 0; cp < ctx.checkpoint_yield_on_arg_ids.size(); ++cp) {
+          if (ctx.checkpoint_yield_on_arg_ids[cp] == arg_id) {
+            ctx.checkpoint_yield_on_dev_ptrs[cp] = device_ptrs[data_ptr_idx];
+          }
         }
       }
     }

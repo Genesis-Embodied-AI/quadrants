@@ -64,13 +64,12 @@ def _supports_checkpoint_yield_resume_in_while_loop():
     """Strict subset of `_supports_checkpoint_yield_resume`: backends where yield/resume also
     works inside a `qd.graph_do_while` body.
 
-    AMDGPU's slice 4 sub-graph orchestration only kicks in when there is no `graph_do_while`
-    arg; with one, the kernel takes the streaming-launcher path which does not yet emulate
-    the WHILE early-exit / per-iteration resume_point reset. The WHILE-specific tests gate
-    on this stricter predicate so AMDGPU sequential resume-offset tests still run.
+    On AMDGPU these kernels fall through to the streaming launcher (HIP 7.2 has neither
+    conditional graph nodes nor indirect dispatch); slice 4 ports the CPU launcher's
+    host-branch gating + per-iter resume_point reset to that streaming path, so the AMDGPU
+    answer is now the same as the wider predicate above. CUDA SM 9.0+ uses the native IF /
+    yield-check device kernels (slice 1d). On other backends the body runs unconditionally.
     """
-    if impl.current_cfg().arch == qd.amdgpu:
-        return False
     return _supports_checkpoint_yield_resume()
 
 

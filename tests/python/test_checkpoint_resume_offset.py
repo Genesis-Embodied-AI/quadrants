@@ -51,13 +51,11 @@ def _supports_checkpoint_yield_resume():
 
 
 def _supports_checkpoint_yield_resume_in_while_loop():
-    # `graph_do_while + qd.checkpoint(yield_on=...)` requires the kernel to be inside the HIP /
-    # CUDA graph the cond-with-yield kernel watches. AMDGPU's slice 4 falls back to the streaming
-    # launcher (no HIP graph) whenever `graph_do_while_arg_id >= 0`, so the WHILE-body's
-    # checkpoints currently all run unconditionally. The "while" subset of the resume-offset tests
-    # gates on this stricter predicate; the sequential subset uses the wider one above.
-    if impl.current_cfg().arch == qd.amdgpu:
-        return False
+    # `graph_do_while + qd.checkpoint(yield_on=...)` semantics. On AMDGPU these kernels fall through
+    # to the streaming launcher (HIP has no conditional graph nodes / indirect dispatch as of ROCm
+    # 7.2); the streaming launcher implements the same host-branch gating + per-iter resume_point
+    # reset that the CPU launcher does (slice 4 / slice 6 share the contract). So as of slice 4 the
+    # AMDGPU answer is the same as the wider predicate above.
     return _supports_checkpoint_yield_resume()
 
 
