@@ -24,7 +24,13 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 SRC = REPO_ROOT / "quadrants" / "runtime" / "cuda" / "checkpoint_yield_check.cu"
 OUT_HEADER = REPO_ROOT / "quadrants" / "runtime" / "cuda" / "checkpoint_yield_check_fatbin.h"
 
-SM_VERSIONS = [90, 100, 120]
+# Targets cover both pre-Hopper (Turing / Ampere / Ada Lovelace) and Hopper+ (Blackwell). The yield-check
+# kernel itself only uses `atomicCAS` and direct pointer writes (no device runtime calls), so it builds
+# fine on every SM here. Pre-Hopper coverage is required because the qd.checkpoint pre-Hopper CUDA path
+# (codegen prologue + flat graph) still wires the yield-check kernel as a regular kernel node, just
+# inline after each yielding checkpoint's last body kernel instead of inside an IF conditional body.
+# Hopper+ coverage is unchanged from before.
+SM_VERSIONS = [75, 80, 86, 89, 90, 100, 120]
 SM_TARGETS = [f"-gencode=arch=compute_{v},code=sm_{v}" for v in SM_VERSIONS]
 
 

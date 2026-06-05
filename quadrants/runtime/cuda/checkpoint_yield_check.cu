@@ -1,10 +1,14 @@
-// Yield-check kernel for `qd.checkpoint(yield_on=...)` blocks (CUDA 12.4+ native path).
+// Yield-check kernel for `qd.checkpoint(yield_on=...)` blocks.
 //
-// Inserted by the GraphManager at the end of each `with qd.checkpoint(yield_on=foo):` body
-// (inside the same IF conditional subgraph as the body kernels, so it only runs when the
-// checkpoint actually executes).
+// Inserted by the GraphManager at the end of each `with qd.checkpoint(yield_on=foo):` body. On
+// SM 9.0+ the node lives inside the same IF conditional subgraph as the body kernels, so the
+// conditional gate already prevents it from running when the checkpoint is skipped. On
+// pre-Hopper (CUDA without conditional graph nodes) the node lives in the top-level flat
+// graph and runs unconditionally; the explicit self-gate at the top of this kernel matches
+// the SM 9.0+ semantics by reading `*resume_point` / `*yield_signal` and early-returning when
+// this checkpoint should be skipped, identical to the codegen-emitted body-kernel prologue.
 //
-// Semantics on launch:
+// Semantics on launch (when not skipped):
 //   1. Read `*yield_on` (the user-side ndarray pointed to via the indirection slot).
 //   2. If non-zero, the checkpoint body asked the host to handle something this iteration:
 //        a. atomicCAS `yield_signal` from -1 to this cp_id -- the first checkpoint in
@@ -32,6 +36,16 @@ extern "C" __global__ void _qd_checkpoint_yield_check(int32_t **yield_on_ptr_slo
                                                       int32_t cp_id,
                                                       int32_t *yield_signal,
                                                       int32_t *resume_point) {
+  // Self-gate: identical predicate to the codegen-emitted body-kernel prologue. On SM 9.0+
+  // the surrounding IF conditional makes this dead code in the common path; on pre-Hopper
+  // (flat-graph path) this is the only thing preventing a skipped checkpoint's yield-check
+  // from clearing the user's yield_on flag.
+  if (*resume_point > cp_id) {
+    return;
+  }
+  if (*yield_signal != -1) {
+    return;
+  }
   int32_t *yield_on = *yield_on_ptr_slot;
   if (*yield_on != 0) {
     atomicCAS(yield_signal, -1, cp_id);

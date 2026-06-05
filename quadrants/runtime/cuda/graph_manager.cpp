@@ -51,6 +51,14 @@ CachedGraph::CachedGraph(std::size_t arg_buf_size,
   persistent_ctx.arg_buffer = persistent_device_arg_buffer;
   persistent_ctx.result_buffer = (uint64 *)persistent_device_result_buffer;
   persistent_ctx.cpu_thread_id = 0;
+  // GPU-side checkpoint gating: publish the device-side resume_point / yield_signal pointers to the
+  // RuntimeContext slots that the codegen-emitted body-kernel prologue reads. Null-pointers stay null
+  // for kernels without checkpoints (the prologue is never emitted, so the read never happens; we
+  // still write nullptr defensively to keep the runtime struct fully initialised). On SM 9.0+ the
+  // conditional gate prevents the body kernel from launching when skip is needed, so the prologue
+  // is dead code in the common path; on pre-Hopper CUDA the prologue is the gating mechanism.
+  persistent_ctx.checkpoint_resume_point_ptr = reinterpret_cast<int32_t *>(resume_point_dev_ptr);
+  persistent_ctx.checkpoint_yield_signal_ptr = reinterpret_cast<int32_t *>(yield_signal_dev_ptr);
 }
 
 CachedGraph::~CachedGraph() {
@@ -253,11 +261,13 @@ void GraphManager::ensure_checkpoint_gate_kernel_loaded() {
 
   int cc = CUDAContext::get_instance().get_compute_capability();
   if (cc < 90) {
-    QD_INFO(
-        "CUDA graph IF conditional nodes (used by qd.checkpoint) require SM 9.0+, "
-        "but this device is SM {}. Falling back to flat scheduling (every checkpoint "
-        "body runs unconditionally); slice 4 will add an indirect-dispatch alternative.",
-        cc);
+    // Pre-Hopper CUDA has no conditional-graph-node API (12.4+ only), so the IF-gate kernel is
+    // never used there. The pre-Hopper path instead relies on the codegen-emitted body-kernel
+    // prologue (see `codegen_cuda.cpp::emit_checkpoint_gate_prologue`) for GPU-side gating: every
+    // body kernel still launches as a graph node, but reads `RuntimeContext::checkpoint_*_ptr`
+    // and self-early-returns when its cp_id is below `*resume_point` or `*yield_signal != -1`.
+    // We early-return silently here; the gate-kernel `func` stays nullptr and the caller's
+    // pre-Hopper graph-build path branches on that.
     return;
   }
 
@@ -285,12 +295,14 @@ void GraphManager::ensure_checkpoint_yield_check_kernel_loaded() {
   if (yield_check_kernel_func_)
     return;
 
-  int cc = CUDAContext::get_instance().get_compute_capability();
-  if (cc < 90) {
-    return;  // Already logged by ensure_checkpoint_gate_kernel_loaded(); silently skip.
-  }
+  // The yield-check kernel is needed on BOTH SM 9.0+ (where it lives inside an IF conditional
+  // body) AND pre-Hopper (where it sits inline after each yielding checkpoint's last body
+  // kernel in the flat graph). The pre-built fatbin built by
+  // `scripts/build_checkpoint_yield_check_fatbin.py` targets a broad SM range; check at load
+  // time which SMs it actually covers.
 
   auto &driver = CUDADriver::get_instance();
+  int cc = CUDAContext::get_instance().get_compute_capability();
 
   static_assert(kCheckpointYieldCheckKernelFatbinSize > 0,
                 "Checkpoint yield-check kernel fatbin is empty -- regenerate with "
@@ -509,15 +521,30 @@ bool GraphManager::try_launch(int launch_id,
     }
   }
 
-  // Reject IF-conditional path pre-SM 9.0 -- match the graph_do_while pattern and let the
-  // non-graph kernel launcher run the tasks flat (every checkpoint body runs unconditionally,
-  // matching slice 1a's `with`-block semantics before slice 4 adds the indirect-dispatch
-  // alternative). Falling back here keeps the user's code running while losing the IF
-  // optimisation, instead of failing the launch.
+  // On SM 9.0+ the checkpoint gating uses CUDA 12.4+ conditional-graph-node IF bodies driven
+  // by the gate kernel; on pre-Hopper (SM < 90) the gate kernel is not available (conditional
+  // graph nodes need SM 9.0+) and we instead build a flat graph where every body kernel still
+  // launches as a node but reads the codegen-emitted prologue and self-early-returns when its
+  // cp_id is skipped or another checkpoint has yielded. Both paths still need the yield-check
+  // kernel when `has_yield` is true -- the yield-check kernel uses only atomicCAS and direct
+  // pointer writes (no device-runtime calls), so its fatbin targets every SM we support.
+  bool use_pre_hopper_flat_graph = false;
   if (has_checkpoints) {
     ensure_checkpoint_gate_kernel_loaded();
     if (!gate_kernel_func_) {
-      return false;
+      // Pre-Hopper CUDA: gate kernel intentionally not loaded. Switch to the flat-graph path
+      // (codegen prologue gates each body kernel from inside). This path requires the
+      // yield-check kernel too when `has_yield` is set, and that fatbin does cover pre-Hopper.
+      use_pre_hopper_flat_graph = true;
+    } else if (std::getenv("QD_CUDA_FORCE_FLAT_CHECKPOINT_GRAPH") != nullptr) {
+      // Debug / test knob: force the pre-Hopper flat-graph path even on SM 9.0+. Lets the
+      // checkpoint-prologue + flat-graph path be exercised on Hopper+ hardware (the only kind
+      // most CI runners and dev boxes have) without waiting for a pre-Hopper machine. The
+      // gate kernel is loaded but ignored; the flat-graph branch in the build loop below
+      // chains every body kernel into kernel_target_graph and relies on the codegen-emitted
+      // prologue for gating, identical to the pre-Hopper code path.
+      use_pre_hopper_flat_graph = true;
+      QD_TRACE("QD_CUDA_FORCE_FLAT_CHECKPOINT_GRAPH=1 set; using pre-Hopper flat-graph path on SM 9.0+");
     }
     if (has_yield) {
       ensure_checkpoint_yield_check_kernel_loaded();
@@ -620,6 +647,34 @@ bool GraphManager::try_launch(int launch_id,
   cp_id_storage.reserve(num_distinct_checkpoints + 1);
   std::size_t total_nodes = 0;
 
+  // Helper: emit the yield-check kernel for the just-closed checkpoint. On SM 9.0+ the node
+  // lives inside the closed IF body so it observes the body's writes to the user's yield_on
+  // ndarray; the node depends on `prev_inner`. On pre-Hopper (flat-graph path) it lives in
+  // the top-level graph chain and depends on `prev_outer`. In both cases the kernel atomic-
+  // CASes the first yielding cp_id into `yield_signal` and bumps `resume_point` to INT_MAX,
+  // which the codegen prologue / SM 9.0+ gate kernel reads to skip every subsequent
+  // checkpoint in the same launch.
+  auto emit_yield_check_for_closed_cp = [&]() {
+    if (current_cp_id < 0)
+      return;
+    if ((std::size_t)current_cp_id >= cached.checkpoint_yield_on_ptr_slots.size())
+      return;
+    if (!cached.checkpoint_yield_on_ptr_slots[current_cp_id])
+      return;
+    QD_ASSERT(!cp_id_storage.empty());
+    void *yield_args[4] = {&cached.checkpoint_yield_on_ptr_slots[current_cp_id], &cp_id_storage.back(),
+                           &cached.yield_signal_dev_ptr, &cached.resume_point_dev_ptr};
+    if (use_pre_hopper_flat_graph) {
+      prev_outer = add_kernel_node(kernel_target_graph, prev_outer, yield_check_kernel_func_,
+                                   /*grid=*/1, /*block=*/1, /*smem=*/0, yield_args);
+    } else {
+      QD_ASSERT(current_body_graph);
+      prev_inner = add_kernel_node(current_body_graph, prev_inner, yield_check_kernel_func_,
+                                   /*grid=*/1, /*block=*/1, /*smem=*/0, yield_args);
+    }
+    ++total_nodes;
+  };
+
   for (const auto &task : offloaded_tasks) {
     void *task_func = cuda_module->lookup_function(task.name);
     void *ctx_ptr = &cached.persistent_ctx;
@@ -628,66 +683,66 @@ bool GraphManager::try_launch(int launch_id,
     unsigned int smem = (unsigned int)task.dynamic_shared_array_bytes;
 
     if (task.checkpoint_id != current_cp_id) {
-      // Close the previous IF body. Before we open the next one, if the previous checkpoint
-      // had a `yield_on=` ptr slot, append a yield-check kernel as the last node inside its IF
-      // body so it observes the body's writes to the user's yield_on ndarray. Sequencing is
-      // handled by `prev_inner` -- the yield-check depends on the last body node.
-      if (current_cp_id >= 0 && current_body_graph &&
-          (std::size_t)current_cp_id < cached.checkpoint_yield_on_ptr_slots.size() &&
-          cached.checkpoint_yield_on_ptr_slots[current_cp_id]) {
-        void *yield_args[4] = {&cached.checkpoint_yield_on_ptr_slots[current_cp_id], &cp_id_storage.back(),
-                               &cached.yield_signal_dev_ptr, &cached.resume_point_dev_ptr};
-        prev_inner = add_kernel_node(current_body_graph, prev_inner, yield_check_kernel_func_,
-                                     /*grid=*/1, /*block=*/1, /*smem=*/0, yield_args);
-        ++total_nodes;
-      }
+      // Close the previous checkpoint (yield-check kernel if it had `yield_on=`), then open
+      // the next one. Closing happens identically on SM 9.0+ and pre-Hopper; opening differs
+      // because pre-Hopper has no conditional-graph-node API to wrap the body.
+      emit_yield_check_for_closed_cp();
 
       current_cp_id = task.checkpoint_id;
       if (current_cp_id >= 0) {
-        // 1. Allocate a per-checkpoint conditional handle (default OFF so the body is skipped
-        //    unless the gate explicitly enables it; the gate always runs and is the source of
-        //    truth here -- the default only matters for slice 1d's yield path).
         cp_id_storage.push_back(current_cp_id);
-        int32_t &cp_id_val = cp_id_storage.back();
-        unsigned long long if_handle = 0;
-        void *cu_ctx_local = CUDAContext::get_instance().get_context();
-        CUDADriver::get_instance().graph_conditional_handle_create(&if_handle, kernel_target_graph, cu_ctx_local,
-                                                                   /*defaultLaunchValue=*/0,
-                                                                   /*flags=CU_GRAPH_COND_ASSIGN_DEFAULT=*/1);
-        // 2. Gate kernel BEFORE the IF: writes (cp_id_val >= *resume_point) into the handle.
-        void *gate_args[3] = {&if_handle, &cp_id_val, &cached.resume_point_dev_ptr};
-        prev_outer = add_kernel_node(kernel_target_graph, prev_outer, gate_kernel_func_,
-                                     /*grid=*/1, /*block=*/1, /*smem=*/0, gate_args);
-        ++total_nodes;
-        // 3. IF conditional node depending on the gate.
-        GraphNodeParams cond_node_params{};
-        cond_node_params.type = 13;     // CU_GRAPH_NODE_TYPE_CONDITIONAL
-        cond_node_params.handle = if_handle;
-        cond_node_params.condType = 0;  // CU_GRAPH_COND_TYPE_IF
-        cond_node_params.size = 1;
-        cond_node_params.phGraph_out = nullptr;
-        cond_node_params.ctx = cu_ctx_local;
-        void *if_node = nullptr;
-        CUDADriver::get_instance().graph_add_node(&if_node, kernel_target_graph,
-                                                  prev_outer ? &prev_outer : nullptr, prev_outer ? 1 : 0,
-                                                  &cond_node_params);
-        void **body_graphs = (void **)cond_node_params.phGraph_out;
-        QD_ASSERT(body_graphs && body_graphs[0]);
-        current_body_graph = body_graphs[0];
-        prev_outer = if_node;
-        prev_inner = nullptr;
-        ++total_nodes;
+        if (use_pre_hopper_flat_graph) {
+          // Pre-Hopper: no conditional node; body kernels chain directly into kernel_target_
+          // graph via prev_outer and self-gate via the codegen prologue. Nothing to emit on
+          // checkpoint open.
+          current_body_graph = nullptr;
+          prev_inner = nullptr;
+        } else {
+          // 1. Allocate a per-checkpoint conditional handle (default OFF so the body is
+          //    skipped unless the gate explicitly enables it; the gate always runs and is the
+          //    source of truth here -- the default only matters for the yield path).
+          int32_t &cp_id_val = cp_id_storage.back();
+          unsigned long long if_handle = 0;
+          void *cu_ctx_local = CUDAContext::get_instance().get_context();
+          CUDADriver::get_instance().graph_conditional_handle_create(&if_handle, kernel_target_graph, cu_ctx_local,
+                                                                     /*defaultLaunchValue=*/0,
+                                                                     /*flags=CU_GRAPH_COND_ASSIGN_DEFAULT=*/1);
+          // 2. Gate kernel BEFORE the IF: writes (cp_id_val >= *resume_point) into the handle.
+          void *gate_args[3] = {&if_handle, &cp_id_val, &cached.resume_point_dev_ptr};
+          prev_outer = add_kernel_node(kernel_target_graph, prev_outer, gate_kernel_func_,
+                                       /*grid=*/1, /*block=*/1, /*smem=*/0, gate_args);
+          ++total_nodes;
+          // 3. IF conditional node depending on the gate.
+          GraphNodeParams cond_node_params{};
+          cond_node_params.type = 13;     // CU_GRAPH_NODE_TYPE_CONDITIONAL
+          cond_node_params.handle = if_handle;
+          cond_node_params.condType = 0;  // CU_GRAPH_COND_TYPE_IF
+          cond_node_params.size = 1;
+          cond_node_params.phGraph_out = nullptr;
+          cond_node_params.ctx = cu_ctx_local;
+          void *if_node = nullptr;
+          CUDADriver::get_instance().graph_add_node(&if_node, kernel_target_graph,
+                                                    prev_outer ? &prev_outer : nullptr, prev_outer ? 1 : 0,
+                                                    &cond_node_params);
+          void **body_graphs = (void **)cond_node_params.phGraph_out;
+          QD_ASSERT(body_graphs && body_graphs[0]);
+          current_body_graph = body_graphs[0];
+          prev_outer = if_node;
+          prev_inner = nullptr;
+          ++total_nodes;
+        }
       } else {
         current_body_graph = nullptr;
         prev_inner = nullptr;
       }
     }
 
-    if (current_cp_id < 0) {
-      // Non-checkpoint task: chain it directly into the outer (kernel_target_graph) chain.
+    if (current_cp_id < 0 || use_pre_hopper_flat_graph) {
+      // Non-checkpoint task on either path, or any task on pre-Hopper: chain into
+      // kernel_target_graph. On pre-Hopper the codegen prologue gates the body kernel.
       prev_outer = add_kernel_node(kernel_target_graph, prev_outer, task_func, grid, block, smem, &ctx_ptr);
     } else {
-      // Checkpoint task: chain into the currently open IF body.
+      // SM 9.0+ checkpoint task: chain into the currently open IF body.
       prev_inner = add_kernel_node(current_body_graph, prev_inner, task_func, grid, block, smem, &ctx_ptr);
     }
     ++total_nodes;
@@ -696,15 +751,7 @@ bool GraphManager::try_launch(int launch_id,
   // Flush the trailing checkpoint's yield-check kernel if the loop ended inside one (the
   // transition logic above only fires when cp_id *changes*, so a kernel whose last task is in
   // a checkpoint wouldn't otherwise get its yield-check appended).
-  if (current_cp_id >= 0 && current_body_graph &&
-      (std::size_t)current_cp_id < cached.checkpoint_yield_on_ptr_slots.size() &&
-      cached.checkpoint_yield_on_ptr_slots[current_cp_id]) {
-    void *yield_args[4] = {&cached.checkpoint_yield_on_ptr_slots[current_cp_id], &cp_id_storage.back(),
-                           &cached.yield_signal_dev_ptr, &cached.resume_point_dev_ptr};
-    add_kernel_node(current_body_graph, prev_inner, yield_check_kernel_func_,
-                    /*grid=*/1, /*block=*/1, /*smem=*/0, yield_args);
-    ++total_nodes;
-  }
+  emit_yield_check_for_closed_cp();
 
   if (use_graph_do_while) {
     QD_ASSERT(ctx.graph_do_while_flag_dev_ptr);
