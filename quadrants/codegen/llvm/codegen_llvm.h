@@ -396,6 +396,24 @@ class TaskCodeGenLLVM : public IRVisitor, public LLVMModuleBuilder {
 
   std::string init_offloaded_task_function(OffloadedStmt *stmt, std::string suffix = "");
 
+  // GPU-side `qd.checkpoint` gating prologue. Emits an LLVM-IR early-return at the top of
+  // `func_body_bb` (set up by `init_offloaded_task_function`) that reads
+  // `RuntimeContext::checkpoint_resume_point_ptr` / `checkpoint_yield_signal_ptr` and jumps
+  // to `final_block` whenever the checkpoint should be skipped.
+  //
+  // Used by the GPU backends as the gating mechanism on backends without conditional-graph
+  // node support: pre-Hopper CUDA (no CUDA 12.4+ conditional nodes) and AMDGPU / HIP (no
+  // HIP equivalent of conditional nodes or indirect dispatch in HIP 7.2). On CUDA SM 9.0+
+  // the conditional-graph-node gate prevents the body kernel from launching when the
+  // checkpoint should be skipped, so the prologue is dead code in the common path but kept
+  // for correctness on overlapping-gate races. Not emitted by CPU codegen (the host launcher
+  // does branch gating before launch) or by the GFX (Vulkan / Metal) codegen path (those use
+  // indirect-dispatch gating via SPIR-V gate shaders that don't go through RuntimeContext).
+  //
+  // `cp_id` is the literal checkpoint id this task belongs to (-1 for non-checkpoint tasks,
+  // in which case callers should not invoke this method).
+  void emit_checkpoint_gate_prologue(int cp_id);
+
   void finalize_offloaded_task_function();
 
   FunctionCreationGuard get_function_creation_guard(std::vector<llvm::Type *> argument_types,
