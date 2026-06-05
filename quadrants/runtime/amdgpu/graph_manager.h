@@ -171,6 +171,14 @@ class GraphManager {
     last_yield_cp_id_on_last_call_ = cp_id;
   }
 
+  // Lazy-load + return the pre-built AMDGPU yield-check kernel function. Public so the streaming launcher
+  // (`runtime/amdgpu/kernel_launcher.cpp`) can launch the same kernel inline for graph_do_while + checkpoint
+  // kernels that fall through the graph-fast-path. Returns nullptr if the bundle doesn't cover the current arch.
+  void *ensure_and_get_checkpoint_yield_check_kernel() {
+    ensure_checkpoint_yield_check_kernel_loaded();
+    return yield_check_kernel_func_;
+  }
+
  private:
   bool launch_cached_graph(CachedGraph &cached, LaunchContextBuilder &ctx);
   void resolve_ctx_ndarray_ptrs(LaunchContextBuilder &ctx,
