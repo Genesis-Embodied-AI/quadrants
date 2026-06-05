@@ -226,12 +226,15 @@ def _exclusive_scan_inplace_u32(scratch, off: int, n: int, identity_bits: int, o
 
     B = (n + BLOCK_DIM - 1) // BLOCK_DIM
     partials_off = partials_cursor
-    if partials_off + B > scratch_capacity_u32():
+    # Capacity comes from the buffer we were handed (``scratch.shape[0]``), not the module-level shared scratch, so
+    # this backstop is correct whether ``scratch`` is the shared field or a caller-owned buffer (e.g. from
+    # ``device_radix_sort(..., scratch=...)``). For the shared field, shape[0] == scratch_capacity_u32().
+    if partials_off + B > scratch.shape[0]:
         raise RuntimeError(
             f"device exclusive scan ran out of scratch at recursion level "
             f"n={n}, B={B}, partials_off={partials_off}, capacity="
-            f"{scratch_capacity_u32()}. Call _scratch.set_scratch_bytes(...) "
-            f"before any algorithm runs."
+            f"{scratch.shape[0]}. Allocate a larger scratch (or call _scratch.set_scratch_bytes(...) "
+            f"before any algorithm runs for the shared scratch)."
         )
 
     _reduce_pass(
@@ -280,11 +283,13 @@ def _exclusive_scan_inplace_u64(scratch, off: int, n: int, identity_bits: int, o
 
     B = (n + BLOCK_DIM - 1) // BLOCK_DIM
     partials_off = partials_cursor
-    if partials_off + B > scratch_capacity_u64():
+    # Capacity from the handed-in buffer; see note in ``_exclusive_scan_inplace_u32``.
+    if partials_off + B > scratch.shape[0]:
         raise RuntimeError(
             f"device exclusive scan ran out of u64 scratch at recursion level n={n}, B={B}, "
-            f"partials_off={partials_off}, capacity={scratch_capacity_u64()}. "
-            f"Call _scratch.set_scratch_bytes(...) before any algorithm runs."
+            f"partials_off={partials_off}, capacity={scratch.shape[0]}. "
+            f"Allocate a larger scratch (or call _scratch.set_scratch_bytes(...) before any algorithm runs "
+            f"for the shared scratch)."
         )
 
     _reduce_pass_u64(

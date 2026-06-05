@@ -146,7 +146,7 @@ Algorithm: the textbook scan-based compaction.
 
 Scratch footprint: ~`N` u32 slots (one write index per input element). The default 5 MB scratch covers `N` up to ~1.3M (qipc's hot path lands here out of the box); bump the budget per [Scratch space](#scratch-space) for larger inputs.
 
-### `qd.algorithms.device_radix_sort(keys, tmp_keys, values=None, tmp_values=None, end_bit=None)`
+### `qd.algorithms.device_radix_sort(keys, tmp_keys, values=None, tmp_values=None, end_bit=None, scratch=None)`
 
 Ascending in-place radix sort over a 1-D tensor of 32-bit or 64-bit scalar keys (`u32` / `i32` / `f32` / `u64` / `i64` / `f64`), with optional lock-step permutation of an `values` tensor (key-value sort).
 
@@ -179,6 +179,7 @@ Arguments:
 - `values`: optional 1-D tensor of any supported scalar dtype (the value dtype is independent of the key dtype), same shape as `keys`. If provided, permuted in lock-step with the keys.
 - `tmp_values`: required iff `values` is provided. Same shape & dtype as `values`, distinct buffer. Same workspace semantics as `tmp_keys`.
 - `end_bit`: number of low bits of the key to consider. Defaults to the full key width (32 for 4-byte keys, 64 for 8-byte keys). Must be a positive multiple of `8` (the radix-digit width). An even number of digit passes is required so the result lands back in `keys`; with the default `end_bit` this is automatic. Pass a smaller value when the high bits are known to be zero (e.g. `end_bit=16` for keys with values `< 2**16`) to save passes.
+- `scratch`: optional caller-owned 1-D `qd.u32` tensor used as the per-pass tile-histogram + scan workspace. Size it with `qd.algorithms.device_radix_sort_scratch_slots(N)` (the footprint is dtype-independent — tile histograms are `u32` regardless of key width). Passing your own buffer avoids the module-level shared scratch (no global state; safe across concurrent streams). When `None` (default), the shared scratch is used (grown via `quadrants._scratch.set_scratch_bytes(...)`). If the buffer is too small, the sort raises `qd.algorithms.InsufficientScratchError` **before** any in-place key mutation, with the required size on `err.required_slots` — so a failed call never corrupts `keys` and the caller can resize and retry.
 
 Constraints:
 
@@ -196,7 +197,16 @@ Implementation:
 - After each pass we swap `keys` ↔ `tmp_keys`. Four passes is even, so the sorted keys end up back in `keys`.
 - Signed-integer (`i32` / `i64`) and floating-point (`f32` / `f64`) keys are mapped to a sortable unsigned representation (`u32` / `u64`) before the first pass and mapped back after the last pass via in-place "twiddle" kernels (signed: XOR sign bit; float: flip sign bit on positives, flip all bits on negatives - the standard sortable-key transform). `u32` / `u64` keys are sorted directly with no twiddle.
 
-Scratch footprint: `num_blocks * 256 + ...` u32 slots per pass (re-used across passes), where `num_blocks = ceil(N / 256)`. The default 5 MB scratch covers `N` up to ~1.3M (qipc's hot path lands here out of the box); bump the budget per [Scratch space](#scratch-space) for larger inputs.
+Scratch footprint: `num_blocks * 256 + ...` u32 slots per pass (re-used across passes), where `num_blocks = ceil(N / 256)`. Call `qd.algorithms.device_radix_sort_scratch_slots(N)` to get the exact slot count (pure host arithmetic, no device round-trip — the size depends only on `N`). With the default shared scratch, the 5 MB budget covers `N` up to ~1.3M (qipc's hot path lands here out of the box); bump the budget per [Scratch space](#scratch-space) or pass your own `scratch=` buffer for larger inputs:
+
+```python
+N = 5_000_000
+keys     = qd.field(qd.f32, shape=N)
+tmp_keys = qd.field(qd.f32, shape=N)
+scratch  = qd.field(qd.u32, shape=qd.algorithms.device_radix_sort_scratch_slots(N))
+# ... fill keys ...
+qd.algorithms.device_radix_sort(keys, tmp_keys=tmp_keys, scratch=scratch)
+```
 
 ### `qd.algorithms.device_reduce_by_key_add(keys_in, values_in, keys_out, values_out, num_runs)`
 

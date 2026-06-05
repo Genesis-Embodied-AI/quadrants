@@ -90,6 +90,69 @@ with ``BLOCK_DIM = 256`` this is the only legal value."""
 RADIX_DIGITS = 1 << RADIX_BITS  # 256
 
 
+class InsufficientScratchError(RuntimeError):
+    """Raised by ``device_radix_sort`` when the caller-supplied ``scratch`` buffer is too small.
+
+    Subclasses ``RuntimeError`` so existing ``except RuntimeError`` / ``pytest.raises(RuntimeError)`` call sites keep
+    working, while exposing the required size programmatically: ``err.required_slots`` (and ``err.required_bytes``) is
+    the minimum the caller must allocate for the given ``N``, equal to ``device_radix_sort_scratch_slots(N)``. This is
+    the "try and fail with the size" path; ``device_radix_sort_scratch_slots`` is the "ask first" path.
+    """
+
+    def __init__(self, n: int, required_slots: int, provided_slots: int):
+        self.n = n
+        self.required_slots = required_slots
+        self.provided_slots = provided_slots
+        self.required_bytes = required_slots * 4
+        self.provided_bytes = provided_slots * 4
+        super().__init__(
+            f"device_radix_sort on N={n} needs >= {required_slots} u32 scratch slots ({required_slots * 4} bytes, "
+            f"including all levels of the in-place scan recursion), but the supplied scratch holds only "
+            f"{provided_slots} slots ({provided_slots * 4} bytes). Allocate a 1-D u32 scratch of at least "
+            f"device_radix_sort_scratch_slots(N)={required_slots} slots (e.g. qd.field(qd.u32, shape={required_slots}))."
+        )
+
+
+def device_radix_sort_scratch_slots(n: int) -> int:
+    """Number of ``u32`` scratch slots :func:`device_radix_sort` needs to sort a length-``n`` input.
+
+    Pure host-side arithmetic - no device round-trip - because the footprint is a closed-form function of ``n`` (and
+    ``BLOCK_DIM`` / ``RADIX_DIGITS``), independent of the key / value dtype (tile histograms are ``u32`` regardless of
+    key width). Use this to size a caller-supplied ``scratch`` buffer up front:
+
+    ``scratch = qd.field(qd.u32, shape=qd.algorithms.device_radix_sort_scratch_slots(N))``
+
+    Returns ``0`` for ``n <= 1`` (the sort returns early without touching scratch). Multiply by 4 for the byte size.
+    """
+    if n <= 1:
+        return 0
+    num_blocks = (n + BLOCK_DIM - 1) // BLOCK_DIM
+    hist_len = num_blocks * RADIX_DIGITS
+    return _scan_total_scratch_slots(hist_len, partials_cursor=hist_len)
+
+
+def _validate_scratch(scratch, n: int) -> int:
+    """Validate a caller-supplied ``scratch`` buffer and return its slot capacity.
+
+    The buffer must be a 1-D ``u32`` tensor (histograms are ``u32`` regardless of key width). Raises
+    :class:`InsufficientScratchError` - *before* any in-place key mutation - if it is too small for ``n``.
+    """
+    if not hasattr(scratch, "shape") or len(scratch.shape) != 1:
+        raise TypeError(
+            f"device_radix_sort scratch must be a 1-D u32 tensor; got shape {getattr(scratch, 'shape', None)}"
+        )
+    if scratch.dtype != u32:
+        raise TypeError(
+            f"device_radix_sort scratch must have dtype u32 (tile histograms are u32 regardless of key width); "
+            f"got {scratch.dtype}"
+        )
+    cap = scratch.shape[0]
+    needed = device_radix_sort_scratch_slots(n)
+    if needed > cap:
+        raise InsufficientScratchError(n, needed, cap)
+    return cap
+
+
 @kernel
 def _twiddle_pass(keys: template(), N: i32, dtype: template(), do_twiddle: template()):
     """In-place transform between caller-dtype keys and "sortable u32" keys.
@@ -391,7 +454,7 @@ def _validate_inputs(keys, tmp_keys, values, tmp_values, end_bit):
 
 
 def device_radix_sort(
-    keys, tmp_keys, values=None, tmp_values=None, end_bit=None
+    keys, tmp_keys, values=None, tmp_values=None, end_bit=None, scratch=None
 ):  # pylint: disable=too-many-locals,too-many-branches,too-many-statements
     """Sort ``keys`` ascending on the device using LSB radix sort.
 
@@ -409,6 +472,11 @@ def device_radix_sort(
             for 8-byte keys). Must be a non-zero multiple of ``RADIX_BITS = 8`` so that an even number of digit
             passes leaves the result in ``keys``. Pass a smaller value if the high bits are known to be zero (saves
             passes).
+        scratch: optional caller-owned 1-D ``u32`` tensor used as the per-pass tile-histogram + scan workspace. Size
+            it with ``device_radix_sort_scratch_slots(N)`` (the footprint is dtype-independent - histograms are
+            ``u32`` regardless of key width). If too small, raises :class:`InsufficientScratchError` *before* any
+            in-place key mutation, with the required size on ``err.required_slots``. When ``None`` (default), the
+            module-level shared scratch is used and grown via ``quadrants._scratch.set_scratch_bytes(...)``.
 
     Sort order matches ``numpy.sort`` for ascending sort (signed-int two's-complement, IEEE-754 floats with negatives
     ordered before positives, NaN handling matches numpy).
@@ -417,10 +485,13 @@ def device_radix_sort(
     ``Field(u32)`` scratch. The first land is classical histogram-scan-scatter LSB; a single-pass decoupled-lookback
     variant (Onesweep) is a perf follow-up if profiling shows sort in the top of qipc's frame budget.
 
-    **Scratch budget**: requires ``ceil(N / BLOCK_DIM) * RADIX_DIGITS + ...`` u32 slots in the shared scratch (see
-    module docstring on ``_radix_sort.py`` for the exact formula). The histograms are u32 regardless of key width,
-    so 8-byte-key sorts have the same scratch footprint as 4-byte ones (the key dtype only affects digit extraction
-    and scatter). The default 5 MB scratch caps ``N`` at ~1.3M; raise the budget via ``set_scratch_bytes`` for larger.
+    **Scratch budget**: requires ``device_radix_sort_scratch_slots(N)`` u32 slots (``ceil(N / BLOCK_DIM) *
+    RADIX_DIGITS`` for the tile histograms plus the in-place scan's recursive partials; see module docstring for the
+    exact formula). The histograms are u32 regardless of key width, so 8-byte-key sorts have the same scratch
+    footprint as 4-byte ones (the key dtype only affects digit extraction and scatter). Pass ``scratch=`` a
+    correctly-sized u32 tensor to own the buffer, or leave it ``None`` to use the shared scratch (default 5 MB caps
+    ``N`` at ~1.3M; raise via ``set_scratch_bytes``). Either way a too-small buffer raises
+    :class:`InsufficientScratchError` before any in-place key mutation.
     """
     if end_bit is None:
         end_bit = _key_width_bits(keys.dtype) if keys.dtype in _SUPPORTED_KEY_DTYPES else 32
@@ -441,22 +512,24 @@ def device_radix_sort(
     num_blocks = (N + BLOCK_DIM - 1) // BLOCK_DIM
     hist_len = num_blocks * RADIX_DIGITS  # u32 slots for the per-pass tile_histograms
 
-    scratch = get_scratch_u32()
-    cap = scratch_capacity_u32()
     # Scratch layout: scratch[0 : hist_len] = current pass's tile_histograms. The in-place scan over
     # scratch[0 : hist_len] sub-allocates partials from scratch[hist_len : ...] for *all* of its recursive levels.
-    # We must account for the full recursive footprint up front (via ``_scan_total_scratch_slots``): otherwise we
-    # accept budgets that pass a single-level estimate but blow up mid-recursion, and ``_twiddle_pass`` below will
-    # have already mutated the user's keys in place by the time the recursive ``RuntimeError`` fires - leaving the
-    # caller with corrupted ``keys`` and no recovery path.
-    needed = _scan_total_scratch_slots(hist_len, partials_cursor=hist_len)
-    if needed > cap:
-        raise RuntimeError(
-            f"device_radix_sort on N={N} needs >= {needed} u32 scratch slots "
-            f"({needed * 4} bytes, including all levels of the in-place scan recursion), but only {cap} are "
-            f"configured ({cap * 4} bytes). Call quadrants._scratch.set_scratch_bytes(...) before any algorithm "
-            f"runs to raise the cap. For N=1M expect to need ~5 MB; for N=10M ~50 MB."
-        )
+    # We must account for the full recursive footprint up front (via ``device_radix_sort_scratch_slots``): otherwise
+    # we accept budgets that pass a single-level estimate but blow up mid-recursion, and ``_twiddle_pass`` below
+    # will have already mutated the user's keys in place by the time the recursive error fires - leaving the caller
+    # with corrupted ``keys`` and no recovery path. Both the caller-supplied and the shared-fallback paths run this
+    # check before the first twiddle for that reason.
+    if scratch is None:
+        # Backward-compatible fallback: use the module-level shared scratch. Callers wanting to own the buffer (no
+        # global state, multi-stream safety) pass ``scratch=`` a 1-D u32 tensor sized via
+        # ``device_radix_sort_scratch_slots(N)``.
+        scratch = get_scratch_u32()
+        cap = scratch_capacity_u32()
+        needed = device_radix_sort_scratch_slots(N)
+        if needed > cap:
+            raise InsufficientScratchError(N, needed, cap)
+    else:
+        _validate_scratch(scratch, N)
 
     # Pre-twiddle keys (in-place) for signed-int / float. Unsigned-int path is a no-op.
     if key_dtype in (i32, f32):
@@ -503,4 +576,4 @@ def device_radix_sort(
         _twiddle_pass_u64(keys, N, key_dtype, False)
 
 
-__all__ = ["device_radix_sort"]
+__all__ = ["InsufficientScratchError", "device_radix_sort", "device_radix_sort_scratch_slots"]

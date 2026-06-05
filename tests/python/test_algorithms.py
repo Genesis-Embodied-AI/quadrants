@@ -847,6 +847,65 @@ def test_device_radix_sort_already_sorted():
     np.testing.assert_array_equal(keys.to_numpy(), host)
 
 
+# --- Fused single-kernel radix sort (M1: keys-only u32) ---------------------------------
+
+
+@pytest.mark.parametrize("N", _RADIX_SORT_SIZES)
+@test_utils.test(arch=qd.gpu)
+def test_device_radix_sort_fused_keys_u32(N):
+    """The fused single-kernel sort matches numpy.sort for u32 keys across the size sweep (incl. multi-level scan
+    sizes 65536 / 200_000 that drive the staircase past one recursion level)."""
+    rng = np.random.default_rng(seed=1234)
+    host = _gen_keys(rng, qd.u32, N)
+
+    keys = qd.field(qd.u32, shape=N)
+    tmp = qd.field(qd.u32, shape=N)
+    _fill_field(keys, host)
+
+    slots = qd.algorithms.fused_radix_sort_scratch_slots(N, qd.algorithms._radix_sort_fused._min_log256_for_n(N))
+    scratch = qd.field(qd.u32, shape=max(slots, 1))
+
+    qd.algorithms.device_radix_sort_fused(keys, tmp, scratch)
+    np.testing.assert_array_equal(keys.to_numpy(), np.sort(host, kind="stable"), err_msg=f"fused u32 sort(N={N})")
+
+
+@pytest.mark.parametrize("N", [7, 257, 1025, 65536])
+@test_utils.test(arch=qd.gpu)
+def test_device_radix_sort_fused_overspecified_depth(N):
+    """An over-specified ``log256_max_n`` (deeper than the minimal depth for N) must still sort correctly - the
+    forced extra staircase levels operate on length-1 buffers and act as identity no-ops."""
+    D = 3  # 256**3 = 16_777_216 >= every N here, so depth is intentionally deeper than needed
+    rng = np.random.default_rng(seed=99)
+    host = _gen_keys(rng, qd.u32, N)
+
+    keys = qd.field(qd.u32, shape=N)
+    tmp = qd.field(qd.u32, shape=N)
+    _fill_field(keys, host)
+
+    slots = qd.algorithms.fused_radix_sort_scratch_slots(N, D)
+    scratch = qd.field(qd.u32, shape=max(slots, 1))
+
+    qd.algorithms.device_radix_sort_fused(keys, tmp, scratch, log256_max_n=D)
+    np.testing.assert_array_equal(keys.to_numpy(), np.sort(host, kind="stable"), err_msg=f"fused u32 sort(N={N}, D={D})")
+
+
+@test_utils.test(arch=qd.gpu)
+def test_device_radix_sort_fused_insufficient_scratch():
+    """Too-small scratch raises InsufficientScratchError before mutating keys, exposing the required slot count."""
+    N = 1025
+    keys = qd.field(qd.u32, shape=N)
+    tmp = qd.field(qd.u32, shape=N)
+    host = np.random.default_rng(0).integers(0, 2**32, size=N, dtype=np.uint32)
+    _fill_field(keys, host)
+
+    needed = qd.algorithms.fused_radix_sort_scratch_slots(N, qd.algorithms._radix_sort_fused._min_log256_for_n(N))
+    scratch = qd.field(qd.u32, shape=needed - 1)
+    with pytest.raises(qd.algorithms.InsufficientScratchError):
+        qd.algorithms.device_radix_sort_fused(keys, tmp, scratch)
+    # Keys untouched by the rejected call.
+    np.testing.assert_array_equal(keys.to_numpy(), host)
+
+
 @test_utils.test(arch=qd.gpu)
 def test_device_radix_sort_reverse_sorted():
     """Worst-case-for-comparison-sort input is just normal work for radix."""
@@ -1315,6 +1374,104 @@ def test_device_radix_sort_recursive_scratch_check_keys_unchanged():
 
     # The crucial assertion: keys are still the user's original bit pattern, not XOR'd by twiddle.
     np.testing.assert_array_equal(keys.to_numpy(), host)
+
+
+@test_utils.test(arch=qd.gpu)
+def test_device_radix_sort_caller_scratch():
+    """Caller-owned ``scratch`` buffer (sized via ``device_radix_sort_scratch_slots``) sorts identically to the
+    shared-scratch path, without consulting the module-level scratch."""
+    N = 100_000
+    rng = np.random.default_rng(seed=7)
+    host = rng.integers(-(2**31), 2**31 - 1, size=N, dtype=np.int32)
+    keys = qd.field(qd.i32, shape=N)
+    tmp = qd.field(qd.i32, shape=N)
+    scratch = qd.field(qd.u32, shape=qd.algorithms.device_radix_sort_scratch_slots(N))
+    _fill_field(keys, host)
+
+    qd.algorithms.device_radix_sort(keys, tmp_keys=tmp, scratch=scratch)
+    np.testing.assert_array_equal(keys.to_numpy(), np.sort(host, kind="stable"))
+
+
+@test_utils.test(arch=qd.gpu)
+def test_device_radix_sort_caller_scratch_key_value():
+    """Caller-scratch key-value sort permutes values in lock-step (u64 key + i32 value, the libuipc shape)."""
+    _skip_if_dtype_unsupported(qd.u64)
+    N = 100_000
+    rng = np.random.default_rng(seed=8)
+    host = (rng.integers(0, 2**63, size=N, dtype=np.uint64) * np.uint64(2)).astype(np.uint64)
+    keys = qd.field(qd.u64, shape=N)
+    tmp_keys = qd.field(qd.u64, shape=N)
+    values = qd.field(qd.i32, shape=N)
+    tmp_values = qd.field(qd.i32, shape=N)
+    scratch = qd.field(qd.u32, shape=qd.algorithms.device_radix_sort_scratch_slots(N))
+    _fill_field(keys, host)
+    _fill_field(values, np.arange(N, dtype=np.int32))
+
+    qd.algorithms.device_radix_sort(
+        keys, tmp_keys=tmp_keys, values=values, tmp_values=tmp_values, scratch=scratch
+    )
+    want_idx = np.argsort(host, kind="stable")
+    np.testing.assert_array_equal(keys.to_numpy(), host[want_idx])
+    np.testing.assert_array_equal(values.to_numpy(), want_idx.astype(np.int32))
+
+
+@test_utils.test(arch=qd.gpu)
+def test_device_radix_sort_scratch_slots_query():
+    """``device_radix_sort_scratch_slots`` returns 0 for N<=1 and the full recursive scan footprint otherwise; a
+    buffer of exactly that size sorts successfully."""
+    from quadrants.algorithms._radix_sort import BLOCK_DIM, RADIX_DIGITS
+    from quadrants.algorithms._scan import _scan_total_scratch_slots
+
+    assert qd.algorithms.device_radix_sort_scratch_slots(0) == 0
+    assert qd.algorithms.device_radix_sort_scratch_slots(1) == 0
+
+    N = 100_000
+    num_blocks = (N + BLOCK_DIM - 1) // BLOCK_DIM
+    hist_len = num_blocks * RADIX_DIGITS
+    needed = qd.algorithms.device_radix_sort_scratch_slots(N)
+    assert needed == _scan_total_scratch_slots(hist_len, partials_cursor=hist_len)
+
+    rng = np.random.default_rng(seed=9)
+    host = rng.integers(-(2**31), 2**31 - 1, size=N, dtype=np.int32)
+    keys = qd.field(qd.i32, shape=N)
+    tmp = qd.field(qd.i32, shape=N)
+    scratch = qd.field(qd.u32, shape=needed)  # exactly enough
+    _fill_field(keys, host)
+
+    qd.algorithms.device_radix_sort(keys, tmp_keys=tmp, scratch=scratch)
+    np.testing.assert_array_equal(keys.to_numpy(), np.sort(host, kind="stable"))
+
+
+@test_utils.test(arch=qd.gpu)
+def test_device_radix_sort_insufficient_caller_scratch():
+    """A too-small caller ``scratch`` raises ``InsufficientScratchError`` (a ``RuntimeError`` subclass) carrying the
+    required size, *before* any in-place twiddle - so the caller's keys are untouched and recoverable."""
+    N = 100_000
+    needed = qd.algorithms.device_radix_sort_scratch_slots(N)
+    rng = np.random.default_rng(seed=10)
+    host = rng.integers(-(2**30), 2**30, size=N, dtype=np.int32)  # signed -> would hit the in-place twiddle
+    keys = qd.field(qd.i32, shape=N)
+    tmp = qd.field(qd.i32, shape=N)
+    scratch = qd.field(qd.u32, shape=needed - 1)  # one slot short
+    _fill_field(keys, host)
+
+    with pytest.raises(qd.algorithms.InsufficientScratchError) as excinfo:
+        qd.algorithms.device_radix_sort(keys, tmp_keys=tmp, scratch=scratch)
+    assert excinfo.value.required_slots == needed
+    assert excinfo.value.provided_slots == needed - 1
+    assert isinstance(excinfo.value, RuntimeError)
+    np.testing.assert_array_equal(keys.to_numpy(), host)  # no twiddle ran
+
+
+@test_utils.test(arch=qd.gpu)
+def test_device_radix_sort_rejects_non_u32_scratch():
+    """A caller ``scratch`` of the wrong dtype is rejected (tile histograms are u32 regardless of key width)."""
+    N = 1000
+    keys = qd.field(qd.i32, shape=N)
+    tmp = qd.field(qd.i32, shape=N)
+    bad_scratch = qd.field(qd.i32, shape=qd.algorithms.device_radix_sort_scratch_slots(N))
+    with pytest.raises(TypeError, match="u32"):
+        qd.algorithms.device_radix_sort(keys, tmp_keys=tmp, scratch=bad_scratch)
 
 
 @test_utils.test(arch=qd.gpu)
