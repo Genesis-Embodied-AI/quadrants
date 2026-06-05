@@ -46,6 +46,10 @@ def _num_checkpoints_on_last_call():
     return impl.get_runtime().prog.get_graph_num_checkpoints_on_last_call()
 
 
+def _last_yield_cp_id_on_last_call():
+    return impl.get_runtime().prog.get_graph_last_yield_cp_id_on_last_call()
+
+
 @test_utils.test()
 def test_checkpoint_is_no_op_outside_kernels():
     """At Python runtime (outside kernels) qd.checkpoint must be a usable no-op context manager.
@@ -326,6 +330,197 @@ def test_checkpoint_emits_if_nodes_inside_graph_do_while():
             f"expected 2 IF conditional nodes inside the WHILE body, "
             f"got {_num_checkpoints_on_last_call()}"
         )
+
+
+@test_utils.test()
+def test_checkpoint_no_yield_when_flag_is_zero():
+    """Slice 1d: with all yield_on flags == 0 the kernel completes normally and reports no yield.
+
+    Sanity check that the yield-check kernel doesn't fire spurious yields and that
+    `get_graph_last_yield_cp_id_on_last_call()` returns -1 on the native path when no
+    checkpoint requested a yield.
+    """
+    N = 8
+
+    @qd.kernel(graph=True)
+    def k(x: qd.types.ndarray(qd.i32, ndim=1), flag: qd.types.ndarray(qd.i32, ndim=0)):
+        with qd.checkpoint(yield_on=flag):
+            for i in range(x.shape[0]):
+                x[i] = x[i] + 1
+
+    x = qd.ndarray(qd.i32, shape=(N,))
+    flag = qd.ndarray(qd.i32, shape=())
+    x.from_numpy(np.zeros(N, dtype=np.int32))
+    flag.from_numpy(np.array(0, dtype=np.int32))
+
+    k(x, flag)
+    np.testing.assert_array_equal(x.to_numpy(), np.ones(N, dtype=np.int32))
+    if _is_checkpoint_if_path_native():
+        assert _last_yield_cp_id_on_last_call() == -1
+
+
+@test_utils.test()
+def test_checkpoint_yields_when_flag_is_set():
+    """Slice 1d: a non-zero yield_on flag fires the yield-check kernel.
+
+    Pre-set the flag before launch. The yield-check kernel inside the IF body atomically
+    records cp_id into `yield_signal`, then bumps `resume_point` so every later checkpoint is
+    skipped. The third checkpoint must therefore NOT run on the native path. (On non-native
+    backends every body runs unconditionally, so we skip the resume-skip assertion there.)
+    """
+    if not _is_checkpoint_if_path_native():
+        pytest.skip("yield semantics only enforced on the CUDA-native IF path (slice 1d)")
+    N = 8
+
+    @qd.kernel(graph=True)
+    def k(x: qd.types.ndarray(qd.i32, ndim=1), flag: qd.types.ndarray(qd.i32, ndim=0)):
+        with qd.checkpoint():
+            for i in range(x.shape[0]):
+                x[i] = x[i] + 1
+        with qd.checkpoint(yield_on=flag):
+            for i in range(x.shape[0]):
+                x[i] = x[i] + 10
+        with qd.checkpoint():
+            for i in range(x.shape[0]):
+                x[i] = x[i] + 100
+
+    x = qd.ndarray(qd.i32, shape=(N,))
+    flag = qd.ndarray(qd.i32, shape=())
+    x.from_numpy(np.zeros(N, dtype=np.int32))
+    flag.from_numpy(np.array(1, dtype=np.int32))
+
+    k(x, flag)
+    # cp 0 ran (+1), cp 1 ran (+10) and signalled a yield, cp 2 was skipped.
+    np.testing.assert_array_equal(x.to_numpy(), np.full(N, 11, dtype=np.int32))
+    assert _last_yield_cp_id_on_last_call() == 1
+    # The yield-check kernel must reset the user's flag to 0 so a follow-up call doesn't
+    # immediately yield again. Matches docs/source/user_guide/graph.md "yield mechanism".
+    assert flag.to_numpy() == 0
+
+
+@test_utils.test()
+def test_checkpoint_yield_race_first_wins():
+    """Slice 1d: when two checkpoints both fire yield_on in the same launch, the lower cp_id wins.
+
+    Because the gate kernels run in source order and `atomicCAS(yield_signal, -1, cp_id)` only
+    succeeds for the first writer, the first checkpoint to fire is the one whose cp_id ends up
+    in `yield_signal`. The second checkpoint still runs its body (gate already enabled before
+    the first yield took effect), but its yield-check kernel's CAS is a no-op and -- crucially
+    -- everything that comes *after* the second checkpoint is skipped.
+    """
+    if not _is_checkpoint_if_path_native():
+        pytest.skip("yield-race semantics only enforced on the CUDA-native IF path (slice 1d)")
+    N = 4
+
+    @qd.kernel(graph=True)
+    def k(
+        x: qd.types.ndarray(qd.i32, ndim=1),
+        flag_a: qd.types.ndarray(qd.i32, ndim=0),
+        flag_b: qd.types.ndarray(qd.i32, ndim=0),
+    ):
+        with qd.checkpoint(yield_on=flag_a):
+            for i in range(x.shape[0]):
+                x[i] = x[i] + 1
+        with qd.checkpoint(yield_on=flag_b):
+            for i in range(x.shape[0]):
+                x[i] = x[i] + 10
+        with qd.checkpoint():
+            for i in range(x.shape[0]):
+                x[i] = x[i] + 100
+
+    x = qd.ndarray(qd.i32, shape=(N,))
+    flag_a = qd.ndarray(qd.i32, shape=())
+    flag_b = qd.ndarray(qd.i32, shape=())
+    x.from_numpy(np.zeros(N, dtype=np.int32))
+    flag_a.from_numpy(np.array(1, dtype=np.int32))
+    flag_b.from_numpy(np.array(1, dtype=np.int32))
+
+    k(x, flag_a, flag_b)
+    # Both flagged checkpoints run (they were enabled before either yield-check fired); cp_id
+    # 0's yield CAS wins, cp_id 1's CAS is a no-op but its yield-check still bumps resume_point
+    # to INT_MAX so cp_id 2 is skipped.
+    np.testing.assert_array_equal(x.to_numpy(), np.full(N, 11, dtype=np.int32))
+    assert _last_yield_cp_id_on_last_call() == 0
+    assert flag_a.to_numpy() == 0
+    assert flag_b.to_numpy() == 0
+
+
+@test_utils.test()
+def test_checkpoint_yield_resets_between_launches():
+    """Slice 1d: a kernel that yielded once must run cleanly on the next launch when the flag is reset.
+
+    Verifies the per-launch reset path: yield_signal goes back to -1, resume_point goes back
+    to 0, the user's yield_on ndarray was cleared by the yield-check kernel during the first
+    launch so the second launch doesn't immediately yield again. Same cached graph for both
+    launches.
+    """
+    if not _is_checkpoint_if_path_native():
+        pytest.skip("yield reset semantics only meaningful on the CUDA-native IF path (slice 1d)")
+    N = 4
+
+    @qd.kernel(graph=True)
+    def k(x: qd.types.ndarray(qd.i32, ndim=1), flag: qd.types.ndarray(qd.i32, ndim=0)):
+        with qd.checkpoint(yield_on=flag):
+            for i in range(x.shape[0]):
+                x[i] = x[i] + 1
+        with qd.checkpoint():
+            for i in range(x.shape[0]):
+                x[i] = x[i] + 10
+
+    x = qd.ndarray(qd.i32, shape=(N,))
+    flag = qd.ndarray(qd.i32, shape=())
+    x.from_numpy(np.zeros(N, dtype=np.int32))
+    flag.from_numpy(np.array(1, dtype=np.int32))
+    k(x, flag)
+    np.testing.assert_array_equal(x.to_numpy(), np.full(N, 1, dtype=np.int32))
+    assert _last_yield_cp_id_on_last_call() == 0
+    # Second launch: flag has been cleared by the yield-check kernel; both bodies should run.
+    x.from_numpy(np.zeros(N, dtype=np.int32))
+    k(x, flag)
+    np.testing.assert_array_equal(x.to_numpy(), np.full(N, 11, dtype=np.int32))
+    assert _last_yield_cp_id_on_last_call() == -1
+
+
+@test_utils.test()
+def test_checkpoint_yield_exits_graph_do_while_early():
+    """Slice 1d: a yield inside a graph_do_while body terminates the WHILE loop immediately.
+
+    Without the cond-with-yield kernel, the body would re-enter on the next iteration with
+    `resume_point == INT_MAX`, skip every checkpoint, never decrement the counter, and spin
+    forever. The cond-with-yield variant checks `yield_signal != -1` and exits the WHILE.
+    """
+    if not _is_checkpoint_if_path_native():
+        pytest.skip("WHILE early-exit only enforced on the CUDA-native IF path (slice 1d)")
+    N = 4
+
+    @qd.kernel(graph=True)
+    def k(
+        x: qd.types.ndarray(qd.i32, ndim=1),
+        counter: qd.types.ndarray(qd.i32, ndim=0),
+        flag: qd.types.ndarray(qd.i32, ndim=0),
+    ):
+        while qd.graph_do_while(counter):
+            with qd.checkpoint(yield_on=flag):
+                for i in range(x.shape[0]):
+                    x[i] = x[i] + 1
+            with qd.checkpoint():
+                for i in range(1):
+                    counter[()] = counter[()] - 1
+
+    x = qd.ndarray(qd.i32, shape=(N,))
+    counter = qd.ndarray(qd.i32, shape=())
+    flag = qd.ndarray(qd.i32, shape=())
+    x.from_numpy(np.zeros(N, dtype=np.int32))
+    counter.from_numpy(np.array(100, dtype=np.int32))
+    flag.from_numpy(np.array(1, dtype=np.int32))
+
+    k(x, counter, flag)
+    # x[i] incremented once (cp 0 ran with flag set, yielded), counter NOT decremented (cp 1
+    # was skipped because resume_point bumped to INT_MAX), then the WHILE exited because
+    # yield_signal != -1.
+    np.testing.assert_array_equal(x.to_numpy(), np.ones(N, dtype=np.int32))
+    assert counter.to_numpy() == 100
+    assert _last_yield_cp_id_on_last_call() == 0
 
 
 @test_utils.test()
