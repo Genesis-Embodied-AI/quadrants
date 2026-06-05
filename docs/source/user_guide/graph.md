@@ -10,10 +10,10 @@ Both features run on every backend. They are *hardware accelerated* on CUDA (via
 | --- | --- | --- | --- | --- | --- | --- |
 | `graph=True` | hardware accelerated | hardware accelerated | hardware accelerated | runs (no acceleration) | runs (no acceleration) | runs (no acceleration) |
 | `graph_do_while` | hardware accelerated | host fallback | host fallback | host fallback | host fallback | host fallback |
-| `qd.checkpoint` skip (IF gate) | hardware accelerated | runs unconditionally | runs unconditionally | runs unconditionally | runs unconditionally | host-branch gating |
-| `qd.checkpoint(yield_on=…)` + `kernel.resume()` | implemented | not yet (slices 4–5) | not yet (slices 4–5) | not yet (slices 4–5) | not yet (slices 4–5) | implemented (host-branch gating) |
+| `qd.checkpoint` skip (IF gate) | hardware accelerated | runs unconditionally | host-orchestrated sub-graph | host gating | host gating | host-branch gating |
+| `qd.checkpoint(yield_on=…)` + `kernel.resume()` | implemented | not yet | implemented (host-orchestrated) | implemented (host gating) | implemented (host gating) | implemented (host-branch gating) |
 
-AMDGPU `graph_do_while` falls back to the host-side loop because HIP does not currently expose conditional / while graph nodes (as of ROCm 7.2).
+AMDGPU `graph_do_while` falls back to the host-side loop because HIP does not currently expose conditional / while graph nodes (as of ROCm 7.2). The same HIP-7.2 constraint also rules out indirect-dispatch graph nodes, so `qd.checkpoint` on AMDGPU is implemented by splitting the kernel into one HIP graph per contiguous run of same-`cp_id` tasks and having the host decide which sub-graphs to launch per call (see "Backend coverage notes" below).
 
 ## Basic usage
 
@@ -159,7 +159,13 @@ Therefore on unsupported platforms, you might consider creating a second impleme
 
 ## Checkpoints with `qd.checkpoint` *(experimental)*
 
-> **Status:** Full CUDA SM 9.0+ path implemented (slices 1a–2). Each checkpoint compiles to a CUDA-graph IF conditional node; `yield_on=` checkpoints additionally inject a yield-check kernel and the host-side `GraphStatus` / `kernel.resume(from_checkpoint=…)` API drives the re-entrant loop. CPU/x64 emulates the same contract via host-branch gating inside `KernelLauncher` (slice 6) — same Python API, same semantics, no device IF nodes involved. On the remaining GPU backends (AMDGPU, Metal, Vulkan, and pre-Hopper CUDA) the parser still accepts the construct but every body currently runs unconditionally; the indirect-dispatch lowering for those backends arrives in slices 4–5.
+> **Status:** Implemented end-to-end on every supported backend except pre-Hopper CUDA. The Python contract (`qd.checkpoint`, `GraphStatus`, `kernel.resume(from_checkpoint=…)`) is identical everywhere; only the backend lowering differs:
+>
+> - **CUDA SM 9.0+** (slices 1a–2): each checkpoint becomes a CUDA-graph IF conditional node; `yield_on=` checkpoints append a tiny device-side yield-check kernel and the WHILE-with-yield condition kernel reads `yield_signal` for early exit.
+> - **CPU/x64** (slice 6): host-branch gating inside `KernelLauncher`; the host walks tasks in order and skips those whose `cp_id` sits below `resume_point` or follows a yield observed earlier in the launch.
+> - **AMDGPU** (slice 4): host-orchestrated sub-graphs. The cached HIP graph is split into one sub-graph per contiguous run of same-`cp_id` tasks, and the launcher launches only the eligible sub-graphs per call (HIP 7.2 has no conditional-node / indirect-dispatch API). `graph_do_while + checkpoint` falls through the same streaming launcher the host loop uses, with the gating logic ported to the per-task loop.
+> - **Vulkan / Metal** (slice 5): host gating inside `GfxRuntime::launch_kernel`. The runtime already records and submits a fresh command list per launch, so eligible vs. skipped tasks are decided at host-loop time before pipeline bind + dispatch are recorded; yield observation is a flush + wait_idle + `Device::readback_data` after the last task of each yielding checkpoint.
+> - **CUDA < SM 9.0**: parser still accepts the construct but every body currently runs unconditionally; `GraphStatus.yielded` is always `False`. Treat `yield_on=` as advisory rather than authoritative here.
 
 `qd.checkpoint()` marks a section of a graph kernel as a *skippable, optionally yieldable stage*. The intended use is the qipc-style re-entrant Newton loop, where each iteration is divided into a handful of named stages (assemble, broadphase, line search, ...) and the host may need to grow a pre-allocated buffer when a stage detects overflow.
 
@@ -187,7 +193,7 @@ def step(
 
 Each `with qd.checkpoint(...)` block gets a `cp_id` assigned by declaration order (0, 1, 2, ... flat across the whole kernel, independent of whether the checkpoint is inside or outside a `qd.graph_do_while`).
 
-### Yield mechanism (CUDA SM 9.0+ and CPU/x64)
+### Yield mechanism (CUDA SM 9.0+, CPU/x64, AMDGPU, Vulkan, Metal)
 
 If `yield_on=foo` is supplied, the body may write a non-zero value into the `foo` ndarray to signal "the host needs to handle something" (typically: pre-allocated buffer too small). At the end of the checkpoint body the framework injects a small yield-check step that:
 
@@ -198,11 +204,11 @@ If `yield_on=foo` is supplied, the body may write a non-zero value into the `foo
 
 Combined with `qd.graph_do_while`, the framework also handles WHILE early-exit: as soon as a yield has been observed, the loop terminates. Without that the loop body would re-enter, see "post-yield" state in every gate, skip every checkpoint, never decrement the counter, and spin forever.
 
-On CUDA the yield-check step and WHILE early-exit are tiny device kernels appended to each checkpoint's IF body and to the loop's condition kernel respectively. On CPU/x64 the same logic is implemented in `KernelLauncher` as host-branch gating: same per-launch lifecycle (`yield_signal` and `resume_point` reset on the first yield-capable launch), same first-yielder-wins semantics, same `*flag = 0` reset, same WHILE early-exit and per-iteration `resume_point` reset. The public Python API is identical; only the backend lowering differs.
+On CUDA the yield-check step and WHILE early-exit are tiny device kernels appended to each checkpoint's IF body and to the loop's condition kernel respectively. On every other backend the same logic is implemented in the host launcher (`KernelLauncher` for CPU + AMDGPU streaming, `GraphManager::launch_cached_checkpoint_graph` for AMDGPU sub-graph mode, `GfxRuntime::launch_kernel` for Vulkan / Metal): same per-launch lifecycle (`yield_signal` and `resume_point` reset on the first yield-capable launch), same first-yielder-wins semantics, same `*flag = 0` reset, same WHILE early-exit and per-iteration `resume_point` reset. The host-side paths read the `yield_on=` flag through a backend-appropriate D2H (`hipMemcpyDtoH` on AMDGPU, `Device::readback_data` on Vulkan / Metal, a plain pointer read on CPU); pinned-host yield flags are a future enhancement to remove the read-back stall.
 
 ### Host-side yield / resume loop
 
-Kernels with at least one `yield_on=` checkpoint return a `qd.GraphStatus` from every launch (and from `kernel.resume(...)`). This is true on every backend that implements the gate (CUDA SM 9.0+ via IF nodes, CPU via host-branch gating); on backends listed in the support table as "not yet" the launch still returns a `GraphStatus` but `yielded` is always `False` because the bodies all run unconditionally, so the host loop simply terminates after one pass. The status carries two fields:
+Kernels with at least one `yield_on=` checkpoint return a `qd.GraphStatus` from every launch (and from `kernel.resume(...)`). This is true on every backend that implements the gate (CUDA SM 9.0+ via IF nodes, AMDGPU via host-orchestrated sub-graphs or streaming gating, Vulkan / Metal via per-task host gating in `GfxRuntime`, CPU via host-branch gating). On backends listed in the support table as "not yet" (only pre-Hopper CUDA at present), the launch still returns a `GraphStatus` but `yielded` is always `False` because the bodies all run unconditionally, so the host loop simply terminates after one pass. The status carries two fields:
 
 - `status.yielded` — `True` iff some `yield_on=` flag was non-zero during this launch.
 - `status.checkpoint` — `cp_id` of the first (in declaration order) checkpoint that fired its flag, or `None` when `yielded` is `False`.
@@ -228,7 +234,7 @@ Kernels with `qd.checkpoint()` but no `yield_on=` keep their previous return con
 
 ### Authoring tip: every statement inside a checkpoint must live in a top-level `for` loop
 
-The checkpoint gate (a CUDA-graph IF node on CUDA, or host-branch gating on CPU) routes work into a checkpoint's body based on whether the statement was lowered to a `range_for` task with the matching `checkpoint_id`. Bare scalar statements (e.g. `counter[()] -= 1`) fall into the offloader's pending-serial bucket, which currently loses the surrounding `checkpoint_id` and emits the work as a `serial` task with `checkpoint_id == -1`. Tasks with `cp_id == -1` run unconditionally, outside every checkpoint gate — meaning a yielding checkpoint won't actually skip them on subsequent checkpoints in the same launch.
+The checkpoint gate (a CUDA-graph IF node on CUDA, host-orchestrated sub-graph selection on AMDGPU, host task-loop gating on Vulkan / Metal / CPU) routes work into a checkpoint's body based on whether the statement was lowered to a `range_for` task with the matching `checkpoint_id`. Bare scalar statements (e.g. `counter[()] -= 1`) fall into the offloader's pending-serial bucket, which currently loses the surrounding `checkpoint_id` and emits the work as a `serial` task with `checkpoint_id == -1`. Tasks with `cp_id == -1` run unconditionally, outside every checkpoint gate — meaning a yielding checkpoint won't actually skip them on subsequent checkpoints in the same launch.
 
 The established workaround (used throughout the test suite) is to wrap such statements in a one-iteration `for` loop:
 
@@ -243,5 +249,7 @@ This forces the offloader to emit a `range_for` task that picks up the surroundi
 ### Backend coverage notes
 
 - **CUDA SM 9.0+**: full path — every checkpoint becomes a CUDA-graph IF conditional node; yielding checkpoints additionally append a yield-check kernel and (inside `qd.graph_do_while`) a yield-aware condition kernel for early exit.
-- **CUDA < SM 9.0, AMDGPU, Metal, Vulkan**: parser accepts `qd.checkpoint`, but every body runs unconditionally and the kernel's `GraphStatus.yielded` is always `False`. Treat `yield_on=` flags as advisory rather than authoritative on these backends. Indirect-dispatch lowering for these backends is tracked under slices 4–5.
-- **CPU/x64**: full host-branch gating — same Python contract as CUDA-native, but implemented in `KernelLauncher` rather than as device-side IF nodes. There is no graph object on CPU, so there is also no graph-build cost, and a yielding launch simply stops executing further checkpoint tasks. Useful for prototyping and for unit-testing yield/resume host loops without a GPU.
+- **AMDGPU**: same Python contract; lowering is host-orchestrated sub-graphs. The cached HIP graph is split into one sub-graph per contiguous run of same-`cp_id` tasks (one per checkpoint, plus one for the cp_id=-1 unconditional batches). The launcher iterates batches in order and launches only the eligible ones (`cp_id >= resume_point` and no yield observed earlier in the launch). For yielding checkpoints, after launching the sub-graph the host stream-syncs, reads the `yield_on=` flag with `hipMemcpyDtoH`, and clears the flag back to 0 so the next launch starts fresh. `graph_do_while + checkpoint` falls through the streaming launcher (HIP 7.2 has no conditional graph nodes), which carries the same gating contract task-by-task.
+- **Vulkan / Metal**: same Python contract; lowering is per-task host gating in `GfxRuntime::launch_kernel`. There is no pre-recorded compute graph on these backends, so eligible vs. skipped tasks are decided host-side at the task loop and skipped tasks are not bound / dispatched at all. Yield observation does `flush + wait_idle + Device::readback_data` after the last task of each yielding checkpoint, which costs a sync per yielding-checkpoint per launch; pinned-host yield flags would remove that stall and stay a future enhancement.
+- **CPU/x64**: full host-branch gating — same Python contract, implemented in `KernelLauncher` rather than as device-side IF nodes. There is no graph object on CPU, so there is also no graph-build cost, and a yielding launch simply stops executing further checkpoint tasks. Useful for prototyping and for unit-testing yield/resume host loops without a GPU.
+- **CUDA < SM 9.0**: parser accepts `qd.checkpoint`, but every body runs unconditionally and the kernel's `GraphStatus.yielded` is always `False`. Treat `yield_on=` flags as advisory rather than authoritative here.
