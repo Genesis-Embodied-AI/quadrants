@@ -223,6 +223,7 @@ class LowerAST : public IRVisitor {
       new_for->loop_name = stmt->loop_name;
       new_for->index_offsets = offsets;
       new_for->stream_parallel_group_id = stmt->stream_parallel_group_id;
+      new_for->checkpoint_id = stmt->checkpoint_id;
       VecStatement new_statements;
       for (int i = 0; i < (int)stmt->loop_var_ids.size(); i++) {
         Stmt *loop_index = new_statements.push_back<LoopIndexStmt>(new_for.get(), snode->physical_index_position[i]);
@@ -258,6 +259,7 @@ class LowerAST : public IRVisitor {
                                                       /*range_hint=*/fmt::format("arg ({})", fmt::join(arg_id, ", ")),
                                                       /*loop_name=*/stmt->loop_name);
       new_for->stream_parallel_group_id = stmt->stream_parallel_group_id;
+      new_for->checkpoint_id = stmt->checkpoint_id;
       VecStatement new_statements;
       Stmt *loop_index = new_statements.push_back<LoopIndexStmt>(new_for.get(), 0);
       for (int i = (int)shape.size() - 1; i >= 0; i--) {
@@ -292,6 +294,7 @@ class LowerAST : public IRVisitor {
                                                         stmt->strictly_serialized, /*range_hint=*/"",
                                                         /*loop_name=*/stmt->loop_name);
         new_for->stream_parallel_group_id = stmt->stream_parallel_group_id;
+        new_for->checkpoint_id = stmt->checkpoint_id;
         new_for->body->insert(std::make_unique<LoopIndexStmt>(new_for.get(), 0), 0);
         new_for->body->local_var_to_stmt[stmt->loop_var_ids[0]] = new_for->body->statements[0].get();
         fctx.push_back(std::move(new_for));

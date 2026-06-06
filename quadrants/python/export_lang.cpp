@@ -312,7 +312,9 @@ void export_lang(py::module &m) {
       .def("insert_snode_access_flag", &ASTBuilder::insert_snode_access_flag)
       .def("reset_snode_access_flag", &ASTBuilder::reset_snode_access_flag)
       .def("begin_stream_parallel", &ASTBuilder::begin_stream_parallel)
-      .def("end_stream_parallel", &ASTBuilder::end_stream_parallel);
+      .def("end_stream_parallel", &ASTBuilder::end_stream_parallel)
+      .def("begin_checkpoint", &ASTBuilder::begin_checkpoint)
+      .def("end_checkpoint", &ASTBuilder::end_checkpoint);
 
   auto device_capability_config =
       py::class_<DeviceCapabilityConfig>(m, "DeviceCapabilityConfig").def("get", &DeviceCapabilityConfig::get);
@@ -417,6 +419,8 @@ void export_lang(py::module &m) {
       .def("get_graph_cache_used_on_last_call", &Program::get_graph_cache_used_on_last_call)
       .def("get_num_offloaded_tasks_on_last_call", &Program::get_num_offloaded_tasks_on_last_call)
       .def("get_graph_num_nodes_on_last_call", &Program::get_graph_num_nodes_on_last_call)
+      .def("get_graph_num_checkpoints_on_last_call", &Program::get_graph_num_checkpoints_on_last_call)
+      .def("get_graph_last_yield_cp_id_on_last_call", &Program::get_graph_last_yield_cp_id_on_last_call)
       .def("get_graph_total_builds", &Program::get_graph_total_builds)
       // Test-only introspection on the max-reducer dispatch counter. Leading underscore signals "internal, not part of
       // the public Python API"; quadrants tests reach these via `impl.get_runtime().prog`. They are intentionally not
@@ -569,7 +573,9 @@ void export_lang(py::module &m) {
       .def("get_struct_ret_uint", &LaunchContextBuilder::get_struct_ret_uint)
       .def("get_struct_ret_float", &LaunchContextBuilder::get_struct_ret_float)
       .def_readwrite("use_graph", &LaunchContextBuilder::use_graph)
-      .def_readwrite("graph_do_while_arg_id", &LaunchContextBuilder::graph_do_while_arg_id);
+      .def_readwrite("graph_do_while_arg_id", &LaunchContextBuilder::graph_do_while_arg_id)
+      .def_readwrite("checkpoint_yield_on_arg_ids", &LaunchContextBuilder::checkpoint_yield_on_arg_ids)
+      .def_readwrite("resume_from_checkpoint", &LaunchContextBuilder::resume_from_checkpoint);
 
   py::class_<Function>(m, "Function")
       .def("insert_scalar_param", &Function::insert_scalar_param)
