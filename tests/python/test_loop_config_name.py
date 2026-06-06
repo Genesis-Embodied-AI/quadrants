@@ -84,6 +84,54 @@ def test_loop_config_name_serialize_ir_dump(tmp_path: pathlib.Path, monkeypatch:
     assert combined.count("loop_name=serial_sum") == 1
 
 
+@test_utils.test(offline_cache=False)
+def test_loop_config_name_nested_loop_warns(capfd: pytest.CaptureFixture[str]):
+    # A `name` on a loop nested inside another for-loop is silently dropped (only top-level loops
+    # become separately named kernels), so quadrants should warn about it.
+    n = 16
+    a = qd.ndarray(qd.i32, shape=(n,))
+
+    @qd.kernel
+    def nested(a: qd.types.ndarray(dtype=qd.i32, ndim=1)):
+        for _ in range(2):
+            qd.loop_config(name="nested_inner")
+            for i in range(n):
+                a[i] = a[i] + 1
+
+    capfd.readouterr()
+    nested(a)
+    qd.sync()
+
+    combined = "".join(capfd.readouterr())
+    assert "nested_inner" in combined, combined
+    assert "nested inside another for-loop" in combined, combined
+
+
+@test_utils.test(offline_cache=False)
+def test_loop_config_name_top_level_does_not_warn(capfd: pytest.CaptureFixture[str]):
+    # Names on top-level loops and on loops unrolled via `qd.static` are honored, so they must NOT
+    # trigger the nested-loop warning.
+    n = 16
+    a = qd.ndarray(qd.i32, shape=(n,))
+
+    @qd.kernel
+    def top_and_static(a: qd.types.ndarray(dtype=qd.i32, ndim=1)):
+        qd.loop_config(name="top_loop")
+        for i in range(n):
+            a[i] = a[i] + 1
+        for _ in qd.static(range(2)):
+            qd.loop_config(name="static_loop")
+            for i in range(n):
+                a[i] = a[i] + 1
+
+    capfd.readouterr()
+    top_and_static(a)
+    qd.sync()
+
+    combined = "".join(capfd.readouterr())
+    assert "nested inside another for-loop" not in combined, combined
+
+
 @test_utils.test(arch=[qd.cuda], offline_cache=False)
 def test_loop_config_name_cuda_ptx_dump(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("QD_DUMP_IR", "1")
