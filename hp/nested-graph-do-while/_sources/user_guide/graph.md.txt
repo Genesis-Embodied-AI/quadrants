@@ -132,6 +132,8 @@ def converge(x: qd.types.ndarray(qd.f32, ndim=1),
 
 `graph_do_while` has **do-while** semantics: the kernel body always executes at least once before the condition is checked. This matches the behavior of CUDA conditional while nodes. The flag value must be >= 1 at launch time. Passing 0 with a kernel that decrements the counter will cause an infinite loop.
 
+> **Reset the flag outside the loop body, never inside it.** The counter / `keep_going` flag must reach a terminating value *as a result of the loop body*. If you (re)set the flag to a non-zero value **inside** the `while qd.graph_do_while(...)` body — e.g. `for _ in range(1): counter[()] = N` placed within the loop — it is re-applied on every iteration and the loop never terminates. Do the reset before the loop (a run-once top-level `for`, see [Loop-carried state](#loop-carried-state)) or on the host between launches (`counter.fill(N)`).
+
 ### ndarray vs field
 
 The parameter used by `graph_do_while` MUST be an ndarray.
@@ -192,6 +194,43 @@ This restriction keeps each offloaded task tagged with the exact loop level it b
 and `graph_do_while` loops may otherwise be freely ordered, mixed, and nested. A `graph_do_while`
 `while`-loop may only appear at the kernel top level or directly inside another `graph_do_while` body —
 it cannot be placed inside a `for`-loop.
+
+### Loop-carried state
+
+A common pattern is an iterative solver that initializes some working state once, refines it across
+iterations, then reads the result back. Be deliberate about **where** each piece lives, because only
+statements *inside* the `while qd.graph_do_while(...)` body repeat:
+
+- **One-time init / writeback** belong at the kernel top level (a top-level `for`-loop runs exactly
+  once — see [Nested loops and mixing with for-loops](#nested-loops-and-mixing-with-for-loops)), or in
+  a separate non-`graph` kernel.
+- **Per-iteration work** belongs inside the `while` body.
+- **Loop-carried state** (a value that iteration `k+1` reads from iteration `k`) just works: it is held
+  in global memory and nothing outside the loop body resets it between iterations.
+
+```python
+@qd.kernel(graph=True)
+def newton(q_iter: qd.types.ndarray(qd.f32, ndim=1),
+           q:      qd.types.ndarray(qd.f32, ndim=1),
+           ncond:  qd.types.ndarray(qd.i32, ndim=0)):
+    # One-time seed: top-level for-loop, runs exactly once.
+    for i in range(q.shape[0]):
+        q_iter[i] = q[i]
+    # Iterative refinement: repeats while ncond != 0. q_iter carries between iterations.
+    while qd.graph_do_while(ncond):
+        # ... update q_iter from its previous-iteration value ...
+        for _ in range(1):
+            ncond[()] = ncond[()] - 1
+    # One-time writeback: top-level for-loop, runs exactly once.
+    for i in range(q.shape[0]):
+        q[i] = q_iter[i]
+```
+
+If you would rather keep the `graph=True` kernel focused on just the loop, the equivalent **seed /
+iterate / writeback** split works too — move the init and writeback into their own non-`graph`
+`@qd.kernel` functions and call them around the iterate kernel on the host. Either structure is fine;
+the only hard rule is that the do-while flag must not be reset inside the loop body (see
+[Do-while semantics](#do-while-semantics)).
 
 ### Restrictions
 

@@ -575,6 +575,9 @@
 <section id="do-while-semantics">
 <h3>Do-while semantics<a class="headerlink" href="#do-while-semantics" title="Link to this heading">#</a></h3>
 <p><code class="docutils literal notranslate"><span class="pre">graph_do_while</span></code> has <strong>do-while</strong> semantics: the kernel body always executes at least once before the condition is checked. This matches the behavior of CUDA conditional while nodes. The flag value must be &gt;= 1 at launch time. Passing 0 with a kernel that decrements the counter will cause an infinite loop.</p>
+<blockquote>
+<div><p><strong>Reset the flag outside the loop body, never inside it.</strong> The counter / <code class="docutils literal notranslate"><span class="pre">keep_going</span></code> flag must reach a terminating value <em>as a result of the loop body</em>. If you (re)set the flag to a non-zero value <strong>inside</strong> the <code class="docutils literal notranslate"><span class="pre">while</span> <span class="pre">qd.graph_do_while(...)</span></code> body — e.g. <code class="docutils literal notranslate"><span class="pre">for</span> <span class="pre">_</span> <span class="pre">in</span> <span class="pre">range(1):</span> <span class="pre">counter[()]</span> <span class="pre">=</span> <span class="pre">N</span></code> placed within the loop — it is re-applied on every iteration and the loop never terminates. Do the reset before the loop (a run-once top-level <code class="docutils literal notranslate"><span class="pre">for</span></code>, see <a class="reference internal" href="#loop-carried-state">Loop-carried state</a>) or on the host between launches (<code class="docutils literal notranslate"><span class="pre">counter.fill(N)</span></code>).</p>
+</div></blockquote>
 </section>
 <section id="ndarray-vs-field">
 <h3>ndarray vs field<a class="headerlink" href="#ndarray-vs-field" title="Link to this heading">#</a></h3>
@@ -632,6 +635,42 @@ body and inside each <code class="docutils literal notranslate"><span class="pre
 and <code class="docutils literal notranslate"><span class="pre">graph_do_while</span></code> loops may otherwise be freely ordered, mixed, and nested. A <code class="docutils literal notranslate"><span class="pre">graph_do_while</span></code>
 <code class="docutils literal notranslate"><span class="pre">while</span></code>-loop may only appear at the kernel top level or directly inside another <code class="docutils literal notranslate"><span class="pre">graph_do_while</span></code> body —
 it cannot be placed inside a <code class="docutils literal notranslate"><span class="pre">for</span></code>-loop.</p>
+</section>
+<section id="loop-carried-state">
+<h3>Loop-carried state<a class="headerlink" href="#loop-carried-state" title="Link to this heading">#</a></h3>
+<p>A common pattern is an iterative solver that initializes some working state once, refines it across
+iterations, then reads the result back. Be deliberate about <strong>where</strong> each piece lives, because only
+statements <em>inside</em> the <code class="docutils literal notranslate"><span class="pre">while</span> <span class="pre">qd.graph_do_while(...)</span></code> body repeat:</p>
+<ul class="simple">
+<li><p><strong>One-time init / writeback</strong> belong at the kernel top level (a top-level <code class="docutils literal notranslate"><span class="pre">for</span></code>-loop runs exactly
+once — see <a class="reference internal" href="#nested-loops-and-mixing-with-for-loops">Nested loops and mixing with for-loops</a>), or in
+a separate non-<code class="docutils literal notranslate"><span class="pre">graph</span></code> kernel.</p></li>
+<li><p><strong>Per-iteration work</strong> belongs inside the <code class="docutils literal notranslate"><span class="pre">while</span></code> body.</p></li>
+<li><p><strong>Loop-carried state</strong> (a value that iteration <code class="docutils literal notranslate"><span class="pre">k+1</span></code> reads from iteration <code class="docutils literal notranslate"><span class="pre">k</span></code>) just works: it is held
+in global memory and nothing outside the loop body resets it between iterations.</p></li>
+</ul>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span><span class="p">(</span><span class="n">graph</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">newton</span><span class="p">(</span><span class="n">q_iter</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">ndim</span><span class="o">=</span><span class="mi">1</span><span class="p">),</span>
+           <span class="n">q</span><span class="p">:</span>      <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">ndim</span><span class="o">=</span><span class="mi">1</span><span class="p">),</span>
+           <span class="n">ncond</span><span class="p">:</span>  <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">,</span> <span class="n">ndim</span><span class="o">=</span><span class="mi">0</span><span class="p">)):</span>
+    <span class="c1"># One-time seed: top-level for-loop, runs exactly once.</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">q</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>
+        <span class="n">q_iter</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">q</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+    <span class="c1"># Iterative refinement: repeats while ncond != 0. q_iter carries between iterations.</span>
+    <span class="k">while</span> <span class="n">qd</span><span class="o">.</span><span class="n">graph_do_while</span><span class="p">(</span><span class="n">ncond</span><span class="p">):</span>
+        <span class="c1"># ... update q_iter from its previous-iteration value ...</span>
+        <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">):</span>
+            <span class="n">ncond</span><span class="p">[()]</span> <span class="o">=</span> <span class="n">ncond</span><span class="p">[()]</span> <span class="o">-</span> <span class="mi">1</span>
+    <span class="c1"># One-time writeback: top-level for-loop, runs exactly once.</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">q</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>
+        <span class="n">q</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">q_iter</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+</pre></div>
+</div>
+<p>If you would rather keep the <code class="docutils literal notranslate"><span class="pre">graph=True</span></code> kernel focused on just the loop, the equivalent <strong>seed /
+iterate / writeback</strong> split works too — move the init and writeback into their own non-<code class="docutils literal notranslate"><span class="pre">graph</span></code>
+<code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel</span></code> functions and call them around the iterate kernel on the host. Either structure is fine;
+the only hard rule is that the do-while flag must not be reset inside the loop body (see
+<a class="reference internal" href="#do-while-semantics">Do-while semantics</a>).</p>
 </section>
 <section id="id1">
 <h3>Restrictions<a class="headerlink" href="#id1" title="Link to this heading">#</a></h3>
@@ -720,6 +759,7 @@ between several) replays the cached graph without rebuilding it.</p></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#ndarray-vs-field">ndarray vs field</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#nested-loops-and-mixing-with-for-loops">Nested loops and mixing with for-loops</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#kernel-structure-restriction">Kernel structure restriction</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#loop-carried-state">Loop-carried state</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id1">Restrictions</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#caveats">Caveats</a></li>
 </ul>

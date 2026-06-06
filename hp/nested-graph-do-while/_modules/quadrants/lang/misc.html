@@ -1167,6 +1167,25 @@
 <span class="sd">    conditional while node. On older CUDA GPUs and non-CUDA backends</span>
 <span class="sd">    it falls back to a host-side do-while loop.</span>
 
+<span class="sd">    Only statements **inside** the ``while qd.graph_do_while(...):`` block</span>
+<span class="sd">    repeat. A top-level ``for``-loop placed before or after the block runs</span>
+<span class="sd">    exactly once, so one-time init / writeback can live in the same kernel</span>
+<span class="sd">    (or in separate non-graph kernels). Loop-carried state held in global</span>
+<span class="sd">    memory carries normally between iterations because nothing outside the</span>
+<span class="sd">    loop body resets it.</span>
+
+<span class="sd">    .. warning::</span>
+<span class="sd">        Reset the condition flag **outside** the loop body, never inside it.</span>
+<span class="sd">        A reset such as ``for _ in range(1): counter[()] = N`` placed within</span>
+<span class="sd">        the ``while`` block is re-applied every iteration and the loop never</span>
+<span class="sd">        terminates. Reset it before the loop (a run-once top-level ``for``)</span>
+<span class="sd">        or on the host between launches (``counter.fill(N)``). See</span>
+<span class="sd">        ``docs/source/user_guide/graph.md`` for the loop-carried-state idiom.</span>
+
+<span class="sd">    A kernel that uses ``qd.graph_do_while`` may contain only ``for``-loops</span>
+<span class="sd">    and ``qd.graph_do_while`` ``while``-loops at each top level; bare</span>
+<span class="sd">    statements are rejected at compile time with a ``QuadrantsSyntaxError``.</span>
+
 <span class="sd">    This function should not be called directly at runtime; it is</span>
 <span class="sd">    recognised and transformed during AST compilation.</span>
 <span class="sd">    Requires ``@qd.kernel(graph=True)``.</span>
