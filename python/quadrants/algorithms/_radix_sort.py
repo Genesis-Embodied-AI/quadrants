@@ -341,9 +341,12 @@ def radix_sort_func(
     Call it at the **top level** of your own ``@qd.kernel`` (e.g. :func:`radix_sort` below, or a qipc ``graph=True``
     parent that chains it with other phases). Each phase helper's single top-level ``for`` stays its own offloaded GPU
     launch, so the inter-phase grid-wide synchronization survives and every phase is captured as a node in the parent's
-    graph. **Must not be called from inside a *runtime* ``for`` / ``if`` / ``while``** in the caller - that would demote
-    the phase loops out of top-level position, collapse the per-phase barriers and corrupt the sort. Compile-time
-    ``static`` loops (like the pass loop here) are fine.
+    graph. **A ``while qd.graph_do_while(...):`` body counts as top level** - the loops directly inside it still lower as
+    separate offloaded launches with grid-wide barriers between them, so calling this func directly in a
+    ``graph_do_while`` body is supported and re-sorts correctly every iteration (verified for ``N`` spanning many
+    blocks). What you **must not** do is nest the call inside *ordinary* runtime control flow - another ``for``, an
+    ``if``, or a plain ``while`` - which demotes the phase loops out of top-level position, collapses the per-phase
+    grid-wide barriers and corrupts the sort. Compile-time ``static`` loops (like the pass loop here) are also fine.
 
     Compile-time params: ``KEY_DTYPE`` (the key element dtype, one of ``{u32, i32, f32, u64, i64, f64}``), ``HAS_VALUES``
     (whether ``values`` / ``tmp_values`` are real buffers or placeholders), ``END_BIT`` (low key bits to sort - positive
