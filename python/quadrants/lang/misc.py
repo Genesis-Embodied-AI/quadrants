@@ -734,12 +734,13 @@ def graph_do_while(condition) -> bool:
         **The entire kernel body is the loop body.** ``qd.graph_do_while`` is a
         kernel-level marker, not a Python control-flow scope: the AST transformer
         flattens every top-level statement of the kernel into a single IR, and
-        the runtime wraps that whole IR in the conditional WHILE. Any ``for``
-        loop, ``qd.checkpoint`` block, or array write you place **textually
-        outside** the ``while qd.graph_do_while(...):`` block (before *or* after
-        it) still **re-executes on every iteration**. Loop-carried state that
-        you seed in a pre-loop ``for`` will therefore be reset every iteration
-        and cannot evolve across iterations.
+        the runtime wraps that whole IR in the conditional WHILE. Anything you
+        place **textually outside** the ``while qd.graph_do_while(...):`` block
+        (before *or* after it) would re-execute on every iteration -- so the AST
+        transformer **rejects** any kernel using ``qd.graph_do_while`` whose
+        body contains anything other than the ``while`` statement at the top
+        level (modulo a docstring). You will see a ``QuadrantsSyntaxError`` at
+        compile time pointing to the seed / iterate / writeback idiom below.
 
         The canonical idiom for loop-carried state is to do the pre-loop init
         and post-loop writeback in **separate, non-graph** ``@qd.kernel``

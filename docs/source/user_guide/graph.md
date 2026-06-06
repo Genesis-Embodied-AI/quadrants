@@ -199,7 +199,7 @@ Why this works:
 
 A frame-constant value that you compute from inputs at the top of every iteration (e.g. `q_tilde = bodies.q + g * dt**2`) *can* live in a pre-loop kernel block — it'll re-execute every iteration, but it reads stable inputs and produces the same value each time, so it's wasted work but not a correctness bug. Prefer hoisting it into a `seed`-style kernel anyway.
 
-> **Heads up (future change):** we plan to make the AST transformer **reject** kernels that put any offloaded-task-producing statement outside the `while qd.graph_do_while(...):` block, with an error message pointing to the seed/writeback idiom. Adopt the idiom now and your kernels won't need to change.
+> **Enforced at compile time.** The AST transformer rejects any kernel that uses `qd.graph_do_while` and contains anything other than the `while qd.graph_do_while(...):` statement at the top level (modulo a docstring). The error message hands you the seed / iterate / writeback idiom inline. If you previously had pre/post-loop code in the same kernel, split it into separate non-graph kernels as shown above.
 
 ### ndarray vs field
 

@@ -504,6 +504,7 @@ class FunctionDefTransformer:
 
         if ctx.is_kernel:
             FunctionDefTransformer._validate_stream_parallel_exclusivity(node.body, ctx.global_vars)
+            FunctionDefTransformer._validate_graph_do_while_exclusivity(node.body, node.name, ctx.global_vars)
 
         with ctx.variable_scope_guard():
             build_stmts(ctx, node.body)
@@ -547,6 +548,83 @@ class FunctionDefTransformer:
             and isinstance(target.value, ast.Name)
             and target.value.id.startswith("_qd_cov")
         )
+
+    @staticmethod
+    def _is_graph_do_while_while(stmt: ast.stmt, global_vars: dict[str, Any]) -> bool:
+        """Return True if *stmt* is a top-level ``while qd.graph_do_while(...):`` block."""
+        if not isinstance(stmt, ast.While):
+            return False
+        test = stmt.test
+        if not isinstance(test, ast.Call):
+            return False
+        func_node = test.func
+        # NB: `quadrants.lang.misc` cannot be imported at module load time here (`misc` itself
+        # transitively imports `lang.impl`, which imports this module -> circular). Defer the import.
+        try:
+            from quadrants.lang.misc import graph_do_while as _gdw_symbol
+        except ImportError:
+            _gdw_symbol = None
+        if _gdw_symbol is not None and ASTResolver.resolve_to(func_node, _gdw_symbol, global_vars):
+            return True
+        resolved = ASTResolver.resolve_value(func_node, global_vars)
+        if resolved is not None:
+            return getattr(resolved, "__name__", None) == "graph_do_while" and getattr(
+                resolved, "__module__", ""
+            ).startswith("quadrants")
+        if isinstance(func_node, ast.Attribute) and func_node.attr == "graph_do_while":
+            return True
+        if isinstance(func_node, ast.Name) and func_node.id == "graph_do_while":
+            return True
+        return False
+
+    @staticmethod
+    def _validate_graph_do_while_exclusivity(
+        body: list[ast.stmt], kernel_name: str, global_vars: dict[str, Any]
+    ) -> None:
+        """Reject statements outside the ``while qd.graph_do_while(...):`` block.
+
+        See ``perso_hugh/doc/qipc/graph_do_while_loop_body_strict.md`` for the design.
+        Rule: in a kernel that contains a top-level ``while qd.graph_do_while(...):``,
+        the kernel body must contain only that ``while`` statement (modulo docstring
+        and coverage probes). Catches the E25 footgun where pre-/post-loop code
+        silently re-executes every iteration because the runtime wraps the whole
+        flat task list in the conditional WHILE.
+        """
+        if not any(FunctionDefTransformer._is_graph_do_while_while(s, global_vars) for s in body):
+            return
+        for i, stmt in enumerate(body):
+            if FunctionDefTransformer._is_docstring(stmt, i):
+                continue
+            if FunctionDefTransformer._is_coverage_probe(stmt):
+                continue
+            if FunctionDefTransformer._is_graph_do_while_while(stmt, global_vars):
+                continue
+            stmt_desc = f"{type(stmt).__name__}"
+            lineno = getattr(stmt, "lineno", None)
+            loc = f" at line {lineno}" if lineno is not None else ""
+            if isinstance(stmt, ast.With) and stmt.items:
+                ctx_expr = stmt.items[0].context_expr
+                if isinstance(ctx_expr, ast.Call) and isinstance(ctx_expr.func, ast.Attribute):
+                    stmt_desc += f"(with {ast.dump(ctx_expr.func)})"
+            raise QuadrantsSyntaxError(
+                f"kernel '{kernel_name}' uses qd.graph_do_while, so its body must contain only "
+                f"the 'while qd.graph_do_while(...):' statement at the top level. Found a "
+                f"top-level '{stmt_desc}'{loc} (statement index {i}) that would re-execute on "
+                f"every iteration -- if you intend it to run once, move it to a separate non-graph "
+                f"@qd.kernel.\n\n"
+                f"The canonical idiom is three kernels:\n\n"
+                f"  @qd.kernel                         # no graph=True -- runs once\n"
+                f"  def seed(<loop-carried...>):\n"
+                f"      ...\n\n"
+                f"  @qd.kernel(graph=True)\n"
+                f"  def iterate(<loop-carried...>, cond):\n"
+                f"      while qd.graph_do_while(cond):\n"
+                f"          ...\n\n"
+                f"  @qd.kernel                         # no graph=True -- runs once\n"
+                f"  def writeback(...):\n"
+                f"      ...\n\n"
+                f"See docs/source/user_guide/graph.md for the full pattern."
+            )
 
     @staticmethod
     def _validate_stream_parallel_exclusivity(body: list[ast.stmt], global_vars: dict[str, Any]) -> None:

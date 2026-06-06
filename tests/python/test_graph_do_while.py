@@ -335,6 +335,156 @@ def test_graph_do_while_without_graph_raises():
 
 
 @test_utils.test()
+def test_graph_do_while_preloop_for_rejected():
+    """A top-level for-loop *before* the gdw block must be rejected at compile time.
+
+    See ``perso_hugh/doc/qipc/graph_do_while_loop_body_strict.md``. The runtime
+    would silently re-execute the pre-loop for every iteration (the E25 footgun);
+    the AST refuses it instead.
+    """
+
+    @qd.kernel(graph=True)
+    def k(
+        x: qd.types.ndarray(qd.i32, ndim=1),
+        c: qd.types.ndarray(qd.i32, ndim=0),
+    ):
+        for i in range(x.shape[0]):
+            x[i] = 0
+        while qd.graph_do_while(c):
+            for i in range(x.shape[0]):
+                x[i] = x[i] + 1
+            for i in range(1):
+                c[()] = c[()] - 1
+
+    x = qd.ndarray(qd.i32, shape=(4,))
+    c = qd.ndarray(qd.i32, shape=())
+    c.from_numpy(np.array(1, dtype=np.int32))
+    with pytest.raises(qd.QuadrantsSyntaxError, match=r"uses qd\.graph_do_while.*top-level 'For'"):
+        k(x, c)
+
+
+@test_utils.test()
+def test_graph_do_while_postloop_for_rejected():
+    """A top-level for-loop *after* the gdw block must be rejected the same way."""
+
+    @qd.kernel(graph=True)
+    def k(
+        x: qd.types.ndarray(qd.i32, ndim=1),
+        c: qd.types.ndarray(qd.i32, ndim=0),
+    ):
+        while qd.graph_do_while(c):
+            for i in range(x.shape[0]):
+                x[i] = x[i] + 1
+            for i in range(1):
+                c[()] = c[()] - 1
+        for i in range(x.shape[0]):
+            x[i] = x[i] * 2
+
+    x = qd.ndarray(qd.i32, shape=(4,))
+    c = qd.ndarray(qd.i32, shape=())
+    c.from_numpy(np.array(1, dtype=np.int32))
+    with pytest.raises(qd.QuadrantsSyntaxError, match=r"uses qd\.graph_do_while.*top-level 'For'"):
+        k(x, c)
+
+
+@test_utils.test()
+def test_graph_do_while_bare_stmt_rejected():
+    """A bare top-level assignment alongside the gdw block must be rejected."""
+
+    @qd.kernel(graph=True)
+    def k(
+        x: qd.types.ndarray(qd.i32, ndim=1),
+        c: qd.types.ndarray(qd.i32, ndim=0),
+    ):
+        c[()] = 1
+        while qd.graph_do_while(c):
+            for i in range(x.shape[0]):
+                x[i] = x[i] + 1
+            for i in range(1):
+                c[()] = c[()] - 1
+
+    x = qd.ndarray(qd.i32, shape=(4,))
+    c = qd.ndarray(qd.i32, shape=())
+    c.from_numpy(np.array(1, dtype=np.int32))
+    with pytest.raises(qd.QuadrantsSyntaxError, match=r"uses qd\.graph_do_while"):
+        k(x, c)
+
+
+@test_utils.test()
+def test_graph_do_while_error_includes_seed_writeback_idiom():
+    """The rejection error must hand the user the canonical idiom inline."""
+
+    @qd.kernel(graph=True)
+    def k(
+        x: qd.types.ndarray(qd.i32, ndim=1),
+        c: qd.types.ndarray(qd.i32, ndim=0),
+    ):
+        for i in range(x.shape[0]):
+            x[i] = 0
+        while qd.graph_do_while(c):
+            for i in range(1):
+                c[()] = c[()] - 1
+
+    x = qd.ndarray(qd.i32, shape=(4,))
+    c = qd.ndarray(qd.i32, shape=())
+    c.from_numpy(np.array(1, dtype=np.int32))
+    with pytest.raises(qd.QuadrantsSyntaxError) as exc_info:
+        k(x, c)
+    msg = str(exc_info.value)
+    assert "seed" in msg, msg
+    assert "writeback" in msg, msg
+    assert "iterate" in msg, msg
+    assert "while qd.graph_do_while(cond):" in msg, msg
+
+
+@test_utils.test()
+def test_graph_do_while_docstring_alongside_while_is_ok():
+    """A bare docstring + a single gdw block is still acceptable."""
+    N = 8
+
+    @qd.kernel(graph=True)
+    def k(
+        x: qd.types.ndarray(qd.i32, ndim=1),
+        c: qd.types.ndarray(qd.i32, ndim=0),
+    ):
+        """A perfectly fine kernel."""
+        while qd.graph_do_while(c):
+            for i in range(x.shape[0]):
+                x[i] = x[i] + 1
+            for i in range(1):
+                c[()] = c[()] - 1
+
+    x = qd.ndarray(qd.i32, shape=(N,))
+    c = qd.ndarray(qd.i32, shape=())
+    x.from_numpy(np.zeros(N, dtype=np.int32))
+    c.from_numpy(np.array(3, dtype=np.int32))
+    k(x, c)
+    assert c.to_numpy() == 0
+    np.testing.assert_array_equal(x.to_numpy(), np.full(N, 3, dtype=np.int32))
+
+
+@test_utils.test()
+def test_graph_do_while_kernel_without_gdw_is_unconstrained():
+    """The rule must only fire when the kernel actually uses qd.graph_do_while.
+
+    A graph kernel that mixes a pre-loop for-loop with a plain Python ``while``
+    (not gdw) must compile -- the rule is gdw-specific.
+    """
+    N = 8
+
+    @qd.kernel(graph=True)
+    def k(x: qd.types.ndarray(qd.i32, ndim=1)):
+        for i in range(x.shape[0]):
+            x[i] = 0
+        for i in range(x.shape[0]):
+            x[i] = x[i] + 1
+
+    x = qd.ndarray(qd.i32, shape=(N,))
+    k(x)
+    np.testing.assert_array_equal(x.to_numpy(), np.full(N, 1, dtype=np.int32))
+
+
+@test_utils.test()
 def test_graph_do_while_nonexistent_arg_raises():
     """Using a variable name that isn't a kernel parameter should raise."""
 
