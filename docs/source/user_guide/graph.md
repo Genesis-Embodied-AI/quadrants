@@ -129,6 +129,78 @@ def converge(x: qd.types.ndarray(qd.f32, ndim=1),
 
 `graph_do_while` has **do-while** semantics: the kernel body always executes at least once before the condition is checked. This matches the behavior of CUDA conditional while nodes. The flag value must be >= 1 at launch time. Passing 0 with a kernel that decrements the counter will cause an infinite loop.
 
+### The entire kernel body is the loop body
+
+This is the single biggest gotcha in `graph_do_while`. Read it carefully — it will save you debugging time.
+
+`while qd.graph_do_while(flag):` is **not** a Python control-flow scope. The Quadrants AST transformer flattens every top-level statement of the kernel into a single IR (offloaded tasks), and the runtime then wraps **that entire IR** in the conditional WHILE node. The runtime has no concept of "tasks that came before the `while`" or "tasks that came after the `while`" — there is just one flat task list, and *all of it* is the loop body.
+
+Concretely:
+
+```python
+@qd.kernel(graph=True)
+def looks_innocent(x: qd.types.ndarray(qd.f32, ndim=1),
+                   c:  qd.types.ndarray(qd.i32, ndim=0)):
+    for i in range(x.shape[0]):       # <-- INSIDE the loop! re-executes every iter
+        x[i] = 0.0                    #     (resets x[i] to 0 before every body)
+    while qd.graph_do_while(c):
+        for i in range(x.shape[0]):
+            x[i] = x[i] + 1.0
+        for i in range(1):
+            c[()] = c[()] - 1
+    for i in range(x.shape[0]):       # <-- ALSO inside the loop! re-executes every iter
+        x[i] = x[i] * 2.0
+```
+
+After this kernel returns, `x` is **not** "zero-init'd, incremented N times, then doubled once". Every iteration runs *all four* `for` blocks in source order. The pre-loop `for` zeros `x` back to 0 at the top of every iteration; the in-loop `for` then sets it to 1; the post-loop `for` doubles it to 2. After N iterations the loop terminates and you see `x == 2.0` everywhere, not `x == N * 2`.
+
+This applies to **anything** that becomes an offloaded task: top-level `for` loops, direct array writes, `qd.checkpoint` blocks (on the [hp/graph-checkpoint branch](https://github.com/Genesis-Embodied-AI/quadrants/tree/hp/graph-checkpoint)), and so on. Variable assignments that don't lower to an offloaded task (compile-time constants, type hints) are unaffected.
+
+#### The loop-carried-state idiom
+
+Move the pre-loop init and post-loop writeback into **separate, non-graph** `@qd.kernel` functions, and let the `graph=True` kernel contain **only** the `while qd.graph_do_while(...):` block:
+
+```python
+@qd.kernel  # no graph=True -- runs once per frame
+def seed(q_iter: qd.types.ndarray(qd.f32, ndim=1),
+         q:      qd.types.ndarray(qd.f32, ndim=1)):
+    for i in range(q.shape[0]):
+        q_iter[i] = q[i]
+
+@qd.kernel(graph=True)
+def newton(q_iter: qd.types.ndarray(qd.f32, ndim=1),
+           ncond:  qd.types.ndarray(qd.i32, ndim=0),
+           # ...
+          ):
+    while qd.graph_do_while(ncond):
+        # ... iterative work that updates q_iter; reads q_iter from
+        # the previous iter (it carries because nothing outside this
+        # `while` block resets it) ...
+        pass
+
+@qd.kernel  # no graph=True -- runs once per frame
+def writeback(q:      qd.types.ndarray(qd.f32, ndim=1),
+              q_iter: qd.types.ndarray(qd.f32, ndim=1)):
+    for i in range(q.shape[0]):
+        q[i] = q_iter[i]
+
+# Per-frame, on the host:
+ncond.fill(1)        # reset the do-while flag here, not in a pre-loop kernel block
+seed(q_iter, q)      # one-shot init -- runs exactly once
+newton(q_iter, ncond)
+writeback(q, q_iter) # one-shot writeback -- runs exactly once
+```
+
+Why this works:
+- `seed` and `writeback` are *separate kernel launches* (no `graph=True`), so they run exactly once per frame, not once per Newton iteration.
+- `newton` is `graph=True` and contains only the `while qd.graph_do_while(...):` block, so the runtime wraps only the iterative work in the conditional WHILE.
+- `q_iter` is only mutated *inside* the loop body, so its value at the start of iteration `k+1` is whatever the last task of iteration `k` left in global memory — it carries normally.
+- The do-while flag (`ncond` here) is reset on the **host** between frames (`ncond.fill(1)`), not inside the kernel. If you reset it inside a pre-loop kernel block, that reset will re-execute every iteration and you'll get an infinite loop.
+
+A frame-constant value that you compute from inputs at the top of every iteration (e.g. `q_tilde = bodies.q + g * dt**2`) *can* live in a pre-loop kernel block — it'll re-execute every iteration, but it reads stable inputs and produces the same value each time, so it's wasted work but not a correctness bug. Prefer hoisting it into a `seed`-style kernel anyway.
+
+> **Heads up (future change):** we plan to make the AST transformer **reject** kernels that put any offloaded-task-producing statement outside the `while qd.graph_do_while(...):` block, with an error message pointing to the seed/writeback idiom. Adopt the idiom now and your kernels won't need to change.
+
 ### ndarray vs field
 
 The parameter used by `graph_do_while` MUST be an ndarray.

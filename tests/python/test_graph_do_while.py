@@ -170,6 +170,115 @@ def test_graph_do_while_multiple_loops():
 
 
 @test_utils.test()
+def test_graph_do_while_statements_outside_loop_reexecute_every_iter():
+    """Pin the current 'whole kernel is the loop body' semantics.
+
+    ``while qd.graph_do_while(...)`` is a kernel-level marker, not a Python
+    control-flow scope: the AST transformer flattens the whole kernel into a
+    single IR and the runtime wraps that *whole* IR in the conditional WHILE.
+    So any offloaded task you write textually *outside* the ``while`` block
+    (before or after) ALSO re-executes every iteration.
+
+    Today this is observable, surprising, and documented as a footgun (see
+    ``docs/source/user_guide/graph.md``). This test pins the behaviour so a
+    future change can't silently flip it; once the planned AST tightening
+    lands, the kernel below will be rejected at compile time and this test
+    should be updated to assert that rejection instead.
+    """
+    N = 16
+
+    @qd.kernel(graph=True)
+    def looks_innocent(
+        x: qd.types.ndarray(qd.i32, ndim=1),
+        c: qd.types.ndarray(qd.i32, ndim=0),
+    ):
+        for i in range(x.shape[0]):
+            x[i] = 0
+        while qd.graph_do_while(c):
+            for i in range(x.shape[0]):
+                x[i] = x[i] + 1
+            for i in range(1):
+                c[()] = c[()] - 1
+        for i in range(x.shape[0]):
+            x[i] = x[i] * 2
+
+    x = qd.ndarray(qd.i32, shape=(N,))
+    c = qd.ndarray(qd.i32, shape=())
+    x.from_numpy(np.zeros(N, dtype=np.int32))
+    c.from_numpy(np.array(5, dtype=np.int32))
+
+    looks_innocent(x, c)
+
+    assert c.to_numpy() == 0
+    np.testing.assert_array_equal(
+        x.to_numpy(),
+        np.full(N, 2, dtype=np.int32),
+        err_msg=(
+            "footgun semantics broken: every iteration of graph_do_while must "
+            "re-execute the pre-loop reset (x=0) and post-loop double (x*=2). "
+            "Expected x==2 (one iter's worth, doubled) on every element after "
+            "the loop terminates, NOT 5 or 10."
+        ),
+    )
+
+
+@test_utils.test()
+def test_graph_do_while_canonical_seed_writeback_idiom():
+    """Document the canonical loop-carried-state idiom.
+
+    The pattern: seed and writeback live in *separate non-graph* kernels so
+    they run exactly once per frame, while the ``graph=True`` kernel contains
+    only the ``while qd.graph_do_while(...)`` block. State carries normally
+    because nothing outside the loop body resets it.
+
+    This is the pattern users should reach for when they're tempted to put
+    pre/post-loop code in the same kernel as the do-while loop -- see
+    ``docs/source/user_guide/graph.md`` and the docstring of
+    ``qd.graph_do_while``.
+    """
+    N = 8
+
+    @qd.kernel  # no graph -- runs once per call
+    def seed(q_iter: qd.types.ndarray(qd.i32, ndim=1), q: qd.types.ndarray(qd.i32, ndim=1)):
+        for i in range(q.shape[0]):
+            q_iter[i] = q[i]
+
+    @qd.kernel(graph=True)
+    def iterate(
+        q_iter: qd.types.ndarray(qd.i32, ndim=1),
+        c: qd.types.ndarray(qd.i32, ndim=0),
+    ):
+        while qd.graph_do_while(c):
+            for i in range(q_iter.shape[0]):
+                q_iter[i] = q_iter[i] + 1
+            for i in range(1):
+                c[()] = c[()] - 1
+
+    @qd.kernel  # no graph -- runs once per call
+    def writeback(q: qd.types.ndarray(qd.i32, ndim=1), q_iter: qd.types.ndarray(qd.i32, ndim=1)):
+        for i in range(q.shape[0]):
+            q[i] = q_iter[i]
+
+    q = qd.ndarray(qd.i32, shape=(N,))
+    q_iter = qd.ndarray(qd.i32, shape=(N,))
+    c = qd.ndarray(qd.i32, shape=())
+
+    q.from_numpy(np.full(N, 100, dtype=np.int32))
+    c.from_numpy(np.array(4, dtype=np.int32))
+
+    seed(q_iter, q)
+    iterate(q_iter, c)
+    writeback(q, q_iter)
+
+    assert c.to_numpy() == 0
+    np.testing.assert_array_equal(
+        q.to_numpy(),
+        np.full(N, 104, dtype=np.int32),
+        err_msg="seed/iterate/writeback idiom must produce q == initial + iterations.",
+    )
+
+
+@test_utils.test()
 def test_graph_do_while_swap_counter_ndarray():
     """Swapping the counter ndarray between calls should work correctly.
 

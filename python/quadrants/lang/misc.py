@@ -730,6 +730,40 @@ def graph_do_while(condition) -> bool:
     conditional while node. On older CUDA GPUs and non-CUDA backends
     it falls back to a host-side do-while loop.
 
+    .. warning::
+        **The entire kernel body is the loop body.** ``qd.graph_do_while`` is a
+        kernel-level marker, not a Python control-flow scope: the AST transformer
+        flattens every top-level statement of the kernel into a single IR, and
+        the runtime wraps that whole IR in the conditional WHILE. Any ``for``
+        loop, ``qd.checkpoint`` block, or array write you place **textually
+        outside** the ``while qd.graph_do_while(...):`` block (before *or* after
+        it) still **re-executes on every iteration**. Loop-carried state that
+        you seed in a pre-loop ``for`` will therefore be reset every iteration
+        and cannot evolve across iterations.
+
+        The canonical idiom for loop-carried state is to do the pre-loop init
+        and post-loop writeback in **separate, non-graph** ``@qd.kernel``
+        functions, and let the ``graph=True`` kernel contain *only* the
+        ``while qd.graph_do_while(...):`` block::
+
+            @qd.kernel  # no graph=True -- runs once
+            def seed(q_iter, q):
+                for i in range(q.shape[0]):
+                    q_iter[i] = q[i]
+
+            @qd.kernel(graph=True)
+            def newton(q_iter, ncond, ...):
+                while qd.graph_do_while(ncond):
+                    # ... iterative work that updates q_iter ...
+                    pass
+
+            @qd.kernel  # no graph=True -- runs once
+            def writeback(q, q_iter):
+                for i in range(q.shape[0]):
+                    q[i] = q_iter[i]
+
+        See ``docs/source/user_guide/graph.md`` for the full pattern.
+
     This function should not be called directly at runtime; it is
     recognised and transformed during AST compilation.
     Requires ``@qd.kernel(graph=True)``.
