@@ -1,36 +1,37 @@
 # Algorithms
 
-Device-wide algorithms are primitives that consume and produce whole arrays, executed as one or more kernel launches under the hood. They sit one tier above block and subgroup primitives: they *use* `block.reduce`, `block.exclusive_scan`, `block.radix_rank_match_atomic_or`, and `subgroup` reductions internally, and rely on the kernel-launch boundary (plus `atomic_add` in a few places) for cross-block synchronization rather than any in-kernel grid-scope barrier. The user calls them from host (Python) code, not from inside a kernel.
+Device-wide algorithms are primitives that consume and produce whole arrays, executed as one or more kernel launches under the hood. They sit one tier above block and subgroup primitives: they *use* `block.reduce`, `block.exclusive_scan`, `block.radix_rank_match_atomic_or`, and `subgroup` reductions internally, and rely on the kernel-launch boundary (plus `atomic_add` in a few places) for cross-block synchronization rather than any in-kernel grid-scope barrier. Most are called from host (Python) code, not from inside a kernel; the LSB radix sort is the exception - it ships as both a host-launchable `@qd.kernel` (`radix_sort`) and a composable `@qd.func` (`radix_sort_func`) you can call at the top level of your own kernel.
 
 ## What's available
 
 | Op                                                          | What it does                                                       | CUDA | AMDGPU | Vulkan | Metal |
 |-------------------------------------------------------------|--------------------------------------------------------------------|------|--------|--------|-------|
-| `qd.algorithms.device_reduce_{add,min,max}(arr, out, scratch)`         | `out[0] = sum/min/max(arr)` (two-or-more-pass tree reduction; identity derived from `arr.dtype` for min / max) | yes  | yes\*  | yes    | yes\* |
-| `qd.algorithms.device_exclusive_scan_{add,min,max}(arr, out, scratch)` | `out[i] = sum/min/max(arr[0:i])` (three-pass Blelloch-style scan; 32-bit + 64-bit scalars; identity derived from `arr.dtype` for min / max) | yes  | yes\*  | yes    | yes\* |
-| `qd.algorithms.device_select(arr, flags, out, num_out, scratch)`     | Stream compaction: copy `arr[i]` to a dense prefix of `out` for every `flags[i] == 1` (`flags` must be exactly 0/1). | yes  | yes\*  | yes    | yes\* |
-| `qd.algorithms.device_radix_sort(keys, tmp_keys, values=None, tmp_values=None, end_bit=None, scratch=...)` | LSB radix sort for 32-bit or 64-bit scalar keys (optional key-value). | yes  | yes\*  | yes    | yes\* |
-| `qd.algorithms.device_reduce_by_key_add(keys_in, values_in, keys_out, values_out, num_runs, scratch)` | Collapse each consecutive run of equal keys into `(key, sum_of_values)`. | yes  | yes\*  | yes    | yes\* |
-| `qd.algorithms.parallel_sort`                               | Odd-even merge sort (in-place, key or key-value). **Deprecated**: prefer `device_radix_sort`. | yes  | yes\*  | yes    | yes\* |
-| `qd.algorithms.PrefixSumExecutor`                           | Inclusive in-place prefix sum (i32 only). **Deprecated**: prefer `device_exclusive_scan_add`. | yes  | no     | yes    | no    |
+| `qd.algorithms.reduce_{add,min,max}(arr, out, scratch)`         | `out[0] = sum/min/max(arr)` (two-or-more-pass tree reduction; identity derived from `arr.dtype` for min / max) | yes  | yes\*  | yes    | yes\* |
+| `qd.algorithms.exclusive_scan_{add,min,max}(arr, out, scratch)` | `out[i] = sum/min/max(arr[0:i])` (three-pass Blelloch-style scan; 32-bit + 64-bit scalars; identity derived from `arr.dtype` for min / max) | yes  | yes\*  | yes    | yes\* |
+| `qd.algorithms.select(arr, flags, out, num_out, scratch)`     | Stream compaction: copy `arr[i]` to a dense prefix of `out` for every `flags[i] == 1` (`flags` must be exactly 0/1). | yes  | yes\*  | yes    | yes\* |
+| `qd.algorithms.radix_sort(keys, tmp_keys, values, tmp_values, scratch, N, HAS_VALUES, END_BIT, LOG256_MAX_N)` | LSB radix sort (32-bit / 64-bit scalar keys, optional key-value) as a host-launchable `@qd.kernel`. | yes  | yes\*  | yes    | yes\* |
+| `qd.algorithms.radix_sort_func(keys, tmp_keys, values, tmp_values, scratch, N, KEY_DTYPE, HAS_VALUES, END_BIT, LOG256_MAX_N)` | Same sort as a `@qd.func`, to compose at the top level of your own kernel. | yes  | yes\*  | yes    | yes\* |
+| `qd.algorithms.reduce_by_key_add(keys_in, values_in, keys_out, values_out, num_runs, scratch)` | Collapse each consecutive run of equal keys into `(key, sum_of_values)`. | yes  | yes\*  | yes    | yes\* |
+| `qd.algorithms.parallel_sort`                               | Odd-even merge sort (in-place, key or key-value). **Deprecated**: prefer `radix_sort`. | yes  | yes\*  | yes    | yes\* |
+| `qd.algorithms.PrefixSumExecutor`                           | Inclusive in-place prefix sum (i32 only). **Deprecated**: prefer `exclusive_scan_add`. | yes  | no     | yes    | no    |
 
-\* `device_reduce_*`, `device_exclusive_scan_*`, `device_select`, `device_radix_sort`, `device_reduce_by_key_add`, and `parallel_sort` run anywhere a Quadrants kernel runs; portability is inherited from the underlying block / subgroup primitives.
+\* `reduce_*`, `exclusive_scan_*`, `select`, `radix_sort` / `radix_sort_func`, `reduce_by_key_add`, and `parallel_sort` run anywhere a Quadrants kernel runs; portability is inherited from the underlying block / subgroup primitives.
 
 ## Scratch space
 
-Every device-wide algorithm in this module decomposes into "per-block partial → cross-block combine → finalize" passes (tree reduction, three-pass Blelloch scan, four-pass radix sort, scan-then-scatter compaction). The per-block partials need somewhere to live between kernel launches - that buffer is called **scratch**, and **the caller owns it**. Every algorithm takes a mandatory `scratch` argument; there is no module-level shared scratch and no implicit allocation. Caller-owned scratch is graph- and multi-stream-safe (no global state shared across concurrent calls) and makes the allocation explicit at the call site, matching the caller-supplied-`out` contract of the rest of the API.
+Every device-wide algorithm in this module decomposes into "per-block partial → cross-block combine → finalize" passes (tree reduction, three-pass Blelloch scan, four-pass radix sort, scan-then-scatter compaction). The per-block partials need somewhere to live between kernel launches - that buffer is called **scratch**, and **the caller owns it**. Every algorithm takes a mandatory `scratch` argument.
 
-**Ask first, then allocate.** Each algorithm ships a companion `*_scratch_slots(N)` function - pure host-side arithmetic, no device round-trip - that returns the minimum number of slots needed for a length-`N` input. Allocate at least that many; allocating more is fine.
+**Ask first, then allocate.** Each algorithm ships a companion `*_scratch_slots(N)` function - branch-free integer arithmetic, no device round-trip - that returns the minimum number of slots needed for a length-`N` input. Allocate at least that many; allocating more is fine. These functions are **host- and kernel-callable**: pass a Python `int` to size an allocation up front, or call the same function inside a `@qd.kernel` on a device-read `N` to recompute the requirement on-device and validate it against `scratch.shape[0]` (e.g. raise an overflow flag for a yield-and-realloc loop) without ever reading `N` back to the host. `radix_sort_scratch_slots(N, log256_max_n)` is host- and kernel-callable when you pass the compile-time `log256_max_n` (the scan depth `D` the sort is compiled for); called as `radix_sort_scratch_slots(N)` (depth omitted) it auto-picks the minimal depth from `N` and is host-only.
 
 | Algorithm | Sizing function | Scratch dtype |
 |-----------|-----------------|---------------|
-| `device_reduce_{add,min,max}` | `device_reduce_scratch_slots(N)` | `u32` (4-byte `arr`) / `u64` (8-byte `arr`) |
-| `device_exclusive_scan_{add,min,max}` | `device_exclusive_scan_scratch_slots(N)` | `u32` (4-byte `arr`) / `u64` (8-byte `arr`) |
-| `device_select` | `device_select_scratch_slots(N)` | `u32` (always) |
-| `device_reduce_by_key_add` | `device_reduce_by_key_scratch_slots(N)` | `u32` (always) |
-| `device_radix_sort` | `device_radix_sort_scratch_slots(N)` | `u32` (always, regardless of key width) |
+| `reduce_{add,min,max}` | `reduce_scratch_slots(N)` | `u32` (4-byte `arr`) / `u64` (8-byte `arr`) |
+| `exclusive_scan_{add,min,max}` | `exclusive_scan_scratch_slots(N)` | `u32` (4-byte `arr`) / `u64` (8-byte `arr`) |
+| `select` | `select_scratch_slots(N)` | `u32` (always) |
+| `reduce_by_key_add` | `reduce_by_key_scratch_slots(N)` | `u32` (always) |
+| `radix_sort` / `radix_sort_func` | `radix_sort_scratch_slots(N[, log256_max_n])` | `u32` (always, regardless of key width) |
 
-The slot count is **dtype-width-independent** (it is a count, not a byte count). For the 4-byte / 8-byte algorithms (`reduce`, `scan`) you allocate the *same number of slots* but in a `u32` buffer for 4-byte element dtypes and a `u64` buffer for 8-byte ones - the partials are `bit_cast` to / from the element dtype. `device_select`, `device_reduce_by_key_add`, and `device_radix_sort` always use `u32` scratch (they stage counts / indices / tile histograms, which are `u32` regardless of the element / key dtype).
+The slot count is **dtype-width-independent** (it is a count, not a byte count). For the 4-byte / 8-byte algorithms (`reduce`, `scan`) you allocate the *same number of slots* but in a `u32` buffer for 4-byte element dtypes and a `u64` buffer for 8-byte ones - the partials are `bit_cast` to / from the element dtype. `select`, `reduce_by_key_add`, and the radix sort always use `u32` scratch (they stage counts / indices / tile histograms, which are `u32` regardless of the element / key dtype).
 
 ```python
 import quadrants as qd
@@ -38,33 +39,33 @@ import quadrants as qd
 N = 1_000_000
 
 # 4-byte reduce: u32 scratch.
-scratch = qd.field(qd.u32, shape=max(qd.algorithms.device_reduce_scratch_slots(N), 1))
-qd.algorithms.device_reduce_add(inp_i32, out=out_i32, scratch=scratch)
+scratch = qd.Tensor(qd.ndarray(qd.u32, shape=max(qd.algorithms.reduce_scratch_slots(N), 1)))
+qd.algorithms.reduce_add(inp_i32, out=out_i32, scratch=scratch)
 
 # 8-byte reduce: same slot count, u64 buffer.
-scratch64 = qd.field(qd.u64, shape=max(qd.algorithms.device_reduce_scratch_slots(N), 1))
-qd.algorithms.device_reduce_add(inp_f64, out=out_f64, scratch=scratch64)
+scratch64 = qd.Tensor(qd.ndarray(qd.u64, shape=max(qd.algorithms.reduce_scratch_slots(N), 1)))
+qd.algorithms.reduce_add(inp_f64, out=out_f64, scratch=scratch64)
 ```
 
-Several sizing functions return `0` for the trivial / single-tile case (e.g. `device_reduce_scratch_slots(N)` for `N <= 1`, `device_exclusive_scan_scratch_slots(N)` for `N <= 256`); wrap the count in `max(..., 1)` so the `qd.field` allocation stays legal, since the algorithm won't touch the buffer in those cases anyway.
+Several sizing functions return `0` for the trivial / single-tile case (e.g. `reduce_scratch_slots(N)` for `N <= 1`, `exclusive_scan_scratch_slots(N)` for `N <= 256`); wrap the count in `max(..., 1)` so the `qd.Tensor` allocation stays legal, since the algorithm won't touch the buffer in those cases anyway.
 
-**Too-small buffer.** If the supplied `scratch` is smaller than `*_scratch_slots(N)`, the call raises `qd.algorithms.InsufficientScratchError` (a `RuntimeError` subclass) **before** launching anything, so a failed call never corrupts the caller's inputs (radix sort additionally refuses before any in-place key twiddle). The exception carries the sizes programmatically:
+**Too-small buffer.** The host-launched algorithms (`reduce_*`, `exclusive_scan_*`, `select`, `reduce_by_key_add`) validate the supplied `scratch` against `*_scratch_slots(N)` and raise `qd.algorithms.InsufficientScratchError` (a `RuntimeError` subclass) **before** launching anything, so a failed call never corrupts the caller's inputs. The exception carries the sizes programmatically:
 
 ```python
 try:
-    qd.algorithms.device_radix_sort(keys, tmp_keys=tmp, scratch=scratch)
+    qd.algorithms.reduce_add(arr, out=out, scratch=scratch)
 except qd.algorithms.InsufficientScratchError as err:
-    scratch = qd.field(qd.u32, shape=err.required_slots)   # err.required_bytes / err.provided_slots also available
-    qd.algorithms.device_radix_sort(keys, tmp_keys=tmp, scratch=scratch)
+    scratch = qd.Tensor(qd.ndarray(qd.u32, shape=err.required_slots))   # err.required_bytes / err.provided_slots also available
+    qd.algorithms.reduce_add(arr, out=out, scratch=scratch)
 ```
 
-This is the "try and fail with the size" path; `*_scratch_slots` is the "ask first" path. Either is fine; pick whichever fits your control flow.
+This is the "try and fail with the size" path; `*_scratch_slots` is the "ask first" path. Either is fine; pick whichever fits your control flow. The radix sort is the exception: `radix_sort` / `radix_sort_func` are launched directly as device code (a host-side scratch check would force a `N` device-to-host read that defeats graph capture), so they do **no** such check - size `scratch` correctly up front with `radix_sort_scratch_slots`.
 
 The per-algorithm sections below restate the sizing function and footprint for each op.
 
 ## Semantics
 
-### `qd.algorithms.device_reduce_{add,min,max}(arr, out, scratch)`
+### `qd.algorithms.reduce_{add,min,max}(arr, out, scratch)`
 
 Device-wide tree reduction over a 1-D tensor: `out[0]` holds `sum(arr)` / `min(arr)` / `max(arr)`. The monoid identity is derived from `arr.dtype` automatically (`0` for `add`; largest representable value for `min` - `+inf` for floats, `INT{32,64}_MAX` for signed ints, `UINT{32,64}_MAX` for unsigned; smallest representable value for `max` - `-inf` for floats, `INT{32,64}_MIN` for signed ints, `0` for unsigned), mirroring the `block.reduce_min` / `subgroup.reduce_min` typed wrappers which don't take an identity for the same reason.
 
@@ -73,10 +74,10 @@ import quadrants as qd
 
 inp = qd.field(qd.f32, shape=N)
 out = qd.field(qd.f32, shape=1)
-scratch = qd.field(qd.u32, shape=max(qd.algorithms.device_reduce_scratch_slots(N), 1))
+scratch = qd.Tensor(qd.ndarray(qd.u32, shape=max(qd.algorithms.reduce_scratch_slots(N), 1)))
 # ... fill inp ...
 
-qd.algorithms.device_reduce_add(inp, out=out, scratch=scratch)
+qd.algorithms.reduce_add(inp, out=out, scratch=scratch)
 total = float(out.to_numpy()[0])   # explicit device->host hop
 ```
 
@@ -84,13 +85,13 @@ Arguments:
 
 - `arr`: 1-D input tensor. Pass a `qd.field`, `qd.ndarray`, or `qd.Tensor` wrapper around either - the kernels are polymorphic via the `qd.Tensor` annotation.
 - `out`: 1-element tensor with the same dtype as `arr`. Caller-supplied so the call is fully asynchronous - there is no implicit device→host sync. To get a Python scalar, do `out.to_numpy()[0]` explicitly after the call. This makes the host hop visible at the call site rather than hidden inside the algorithm.
-- `scratch`: caller-owned 1-D workspace of `device_reduce_scratch_slots(N)` slots, `u32` for 4-byte `arr` dtypes and `u64` for 8-byte ones. See [Scratch space](#scratch-space).
+- `scratch`: caller-owned 1-D workspace of `reduce_scratch_slots(N)` slots, `u32` for 4-byte `arr` dtypes and `u64` for 8-byte ones. See [Scratch space](#scratch-space).
 
 Constraints:
 
 - **Dtypes:** scalar `qd.i32`, `qd.u32`, `qd.f32`, `qd.i64`, `qd.u64`, `qd.f64`. Narrower / wider scalar dtypes (e.g. `qd.i16`, `qd.f16`) and struct dtypes raise `NotImplementedError`. 4-byte dtypes stage through a `u32` scratch and 8-byte dtypes through a `u64` scratch; see [Scratch space](#scratch-space) for the mechanics.
 - **Shape:** `arr` must be 1-D; `out.shape` must be `(1,)`. Both must share the same dtype.
-- **f32 / f64 non-associativity:** `device_reduce_add` on a floating-point dtype is not bitwise-reproducible across `N` changes, nor bitwise-equal to host `numpy.sum`. Tests tolerate a small relative error rather than asserting bitwise.
+- **f32 / f64 non-associativity:** `reduce_add` on a floating-point dtype is not bitwise-reproducible across `N` changes, nor bitwise-equal to host `numpy.sum`. Tests tolerate a small relative error rather than asserting bitwise.
 
 Implementation:
 
@@ -98,9 +99,9 @@ Implementation:
 - Per-block partials are written to the caller's `scratch` buffer (u32 for 4-byte dtypes, u64 for 8-byte dtypes; see [Scratch space](#scratch-space)).
 - The last pass writes the final value to `out[0]` directly. The kernel launches are pipelined back-to-back; correctness relies on the kernel-boundary serialization that Quadrants provides between host-launched kernels.
 
-Scratch footprint: `device_reduce_scratch_slots(N)` ≈ `ceil(N / BLOCK_DIM)` slots, where `BLOCK_DIM = 256` (`N = 1G` is ~4M slots). See [Scratch space](#scratch-space).
+Scratch footprint: `reduce_scratch_slots(N)` ≈ `ceil(N / BLOCK_DIM)` slots, where `BLOCK_DIM = 256` (`N = 1G` is ~4M slots). See [Scratch space](#scratch-space).
 
-### `qd.algorithms.device_exclusive_scan_{add,min,max}(arr, out, scratch)`
+### `qd.algorithms.exclusive_scan_{add,min,max}(arr, out, scratch)`
 
 Device-wide exclusive prefix scan over a 1-D tensor: `out[i]` holds the reduction (`sum` / `min` / `max`) of `arr[0:i]`. `out[0]` is always the monoid identity, which is derived from `arr.dtype` automatically (`0` for `add`; largest representable value for `min` - `+inf` for floats, `INT{32,64}_MAX` for signed ints, `UINT{32,64}_MAX` for unsigned; smallest representable value for `max` - `-inf` for floats, `INT{32,64}_MIN` for signed ints, `0` for unsigned), mirroring the `block.exclusive_min` / `subgroup.exclusive_min_tiled` typed wrappers.
 
@@ -110,17 +111,17 @@ import quadrants as qd
 N = 1_000_000
 inp = qd.field(qd.f32, shape=N)
 out = qd.field(qd.f32, shape=N)
-scratch = qd.field(qd.u32, shape=max(qd.algorithms.device_exclusive_scan_scratch_slots(N), 1))
+scratch = qd.Tensor(qd.ndarray(qd.u32, shape=max(qd.algorithms.exclusive_scan_scratch_slots(N), 1)))
 # ... fill inp ...
 
-qd.algorithms.device_exclusive_scan_add(inp, out=out, scratch=scratch)
+qd.algorithms.exclusive_scan_add(inp, out=out, scratch=scratch)
 # out[0] == 0.0; out[i] == sum(inp[0:i]) for i > 0.
 ```
 
 Arguments:
 
 - `arr` / `out`: 1-D input / output tensors, same shape and dtype; `out` must be a distinct buffer (see constraints).
-- `scratch`: caller-owned 1-D workspace of `device_exclusive_scan_scratch_slots(N)` slots, `u32` for 4-byte `arr` dtypes and `u64` for 8-byte ones. See [Scratch space](#scratch-space).
+- `scratch`: caller-owned 1-D workspace of `exclusive_scan_scratch_slots(N)` slots, `u32` for 4-byte `arr` dtypes and `u64` for 8-byte ones. See [Scratch space](#scratch-space).
 
 Constraints:
 
@@ -135,9 +136,9 @@ Implementation:
   1. **Pass 1** - per-block tile reduce into the caller's `scratch` (one slot per block).
   2. **Pass 2** - exclusive-scan the partials buffer in place. For `N ≤ BLOCK_DIM²` (= 65536) a single block does this. For larger `N`, the driver recurses: another tile-reduce on the partials, a recursive scan, then a downsweep that applies the higher-level prefixes.
   3. **Pass 3** - per-block tile scan + add the block prefix from scratch. Each block re-reads its tile from `arr`, runs `block.exclusive_scan` to get per-thread tile prefixes, and adds its `block_prefix` from the scanned partials.
-- `BLOCK_DIM = 256`. Total scratch usage at `N = 1M` is `device_exclusive_scan_scratch_slots(N)` = `4096 + 16 = 4112` slots (~16 KB for 4-byte dtypes, ~32 KB for 8-byte). See [Scratch space](#scratch-space).
+- `BLOCK_DIM = 256`. Total scratch usage at `N = 1M` is `exclusive_scan_scratch_slots(N)` = `4096 + 16 = 4112` slots (~16 KB for 4-byte dtypes, ~32 KB for 8-byte). See [Scratch space](#scratch-space).
 
-### `qd.algorithms.device_select(arr, flags, out, num_out, scratch)`
+### `qd.algorithms.select(arr, flags, out, num_out, scratch)`
 
 Stream compaction. Copy every `arr[i]` whose corresponding `flags[i]` is `1` into a dense prefix of `out`, in stable input order, and write the count of selected elements to `num_out[0]`. Flags must be exactly `0` or `1` - see the constraints below.
 
@@ -149,11 +150,11 @@ inp     = qd.field(qd.f32, shape=N)
 flags   = qd.field(qd.i32, shape=N)         # caller fills with 0 / 1
 out     = qd.field(qd.f32, shape=N)         # large enough for worst case
 num_out = qd.field(qd.i32, shape=1)
-scratch = qd.field(qd.u32, shape=max(qd.algorithms.device_select_scratch_slots(N), 1))
+scratch = qd.Tensor(qd.ndarray(qd.u32, shape=max(qd.algorithms.select_scratch_slots(N), 1)))
 
 # ... fill inp + flags via a separate kernel ...
 
-qd.algorithms.device_select(inp, flags, out=out, num_out=num_out, scratch=scratch)
+qd.algorithms.select(inp, flags, out=out, num_out=num_out, scratch=scratch)
 
 # Only out[0 : count] is meaningful; copy out the count host-side explicitly:
 count = int(num_out.to_numpy()[0])
@@ -166,19 +167,24 @@ Constraints:
 - **`flags`:** 1-D `qd.i32` tensor with the same shape as `arr`. **Every entry must be exactly `0` or `1`** (`1` selects). The algorithm prefix-sums `flags` directly as counts, so non-0/1 values produce wrong indices and a wrong `num_out` count - the caller is responsible for normalization, no implicit normalization pass is performed. `flags` is caller-built - populate it with a kernel applying whatever predicate you want, writing exactly `1` for selected and `0` otherwise.
 - **`out`:** 1-D tensor, same dtype as `arr`, with `len(out) >= len(arr)` so the worst-case all-selected run is safe. Only `out[0 : num_out[0]]` carries meaningful data on return; the tail is left untouched (whatever was in `out` before the call remains).
 - **`num_out`:** 1-element `qd.i32` tensor. Same explicit-host-hop rule: do `int(num_out.to_numpy()[0])` after the call to get the count as a Python scalar.
-- **`scratch`:** caller-owned 1-D `qd.u32` tensor of `device_select_scratch_slots(N)` slots (always `u32`, regardless of `arr.dtype`). See [Scratch space](#scratch-space).
+- **`scratch`:** caller-owned 1-D `qd.u32` tensor of `select_scratch_slots(N)` slots (always `u32`, regardless of `arr.dtype`). See [Scratch space](#scratch-space).
 
 Algorithm: the textbook scan-based compaction.
 
-1. **Exclusive scan of `flags`** into the caller's `u32` scratch, producing per-element write indices. Same three-pass internals as `device_exclusive_scan_add`.
+1. **Exclusive scan of `flags`** into the caller's `u32` scratch, producing per-element write indices. Same three-pass internals as `exclusive_scan_add`.
 2. **Scatter:** one parallel kernel reads each `(arr[i], flags[i], indices[i])` and, if the flag is set, writes `out[indices[i]] = arr[i]`. No races by construction of the exclusive scan over 0 / 1 flags.
 3. **Count tail:** one-thread kernel computes `indices[N-1] + flags[N-1]` and stores it in `num_out[0]`.
 
-Scratch footprint: `device_select_scratch_slots(N)` ≈ `N` u32 slots (one write index per input element). See [Scratch space](#scratch-space).
+Scratch footprint: `select_scratch_slots(N)` ≈ `N` u32 slots (one write index per input element). See [Scratch space](#scratch-space).
 
-### `qd.algorithms.device_radix_sort(keys, tmp_keys, values=None, tmp_values=None, end_bit=None, scratch=...)`
+### `qd.algorithms.radix_sort(...)` / `radix_sort_func(...)`
 
-Ascending in-place radix sort over a 1-D tensor of 32-bit or 64-bit scalar keys (`u32` / `i32` / `f32` / `u64` / `i64` / `f64`), with optional lock-step permutation of an `values` tensor (key-value sort).
+Ascending in-place LSB radix sort over a 1-D tensor of 32-bit or 64-bit scalar keys (`u32` / `i32` / `f32` / `u64` / `i64` / `f64`), with optional lock-step permutation of a `values` tensor (key-value sort). It ships as two callables that share one body:
+
+- `radix_sort(keys, tmp_keys, values, tmp_values, scratch, N, HAS_VALUES, END_BIT, LOG256_MAX_N)` - a `@qd.kernel`, launched from the host.
+- `radix_sort_func(keys, tmp_keys, values, tmp_values, scratch, N, KEY_DTYPE, HAS_VALUES, END_BIT, LOG256_MAX_N)` - a `@qd.func`, called at the **top level** of your own `@qd.kernel` (the qipc path) so the sort composes with your other phases into one compiled kernel / captured graph. The kernel simply wraps the func, deriving `KEY_DTYPE` from its `keys` argument.
+
+Unlike the other algorithms there is no host Python wrapper: both are device code. `N` is passed as a 0-d `i32` ndarray (the count lives **on-device**, so one captured graph replays for any count `<= 256 ** LOG256_MAX_N`), the compile-time flags (`HAS_VALUES`, `END_BIT`, `LOG256_MAX_N`) are passed explicitly, and **for a keys-only sort you pass `keys` / `tmp_keys` again in the `values` / `tmp_values` slots** as placeholders (every value access is `HAS_VALUES`-guarded). There is **no** host-side validation or scratch-sufficiency check.
 
 ```python
 import quadrants as qd
@@ -186,36 +192,60 @@ import quadrants as qd
 N = 100_000
 keys     = qd.field(qd.f32, shape=N)
 tmp_keys = qd.field(qd.f32, shape=N)   # workspace; contents on return are garbage
-scratch  = qd.field(qd.u32, shape=max(qd.algorithms.device_radix_sort_scratch_slots(N), 1))
 # ... fill keys ...
 
-qd.algorithms.device_radix_sort(keys, tmp_keys=tmp_keys, scratch=scratch)
+D = 1                                  # scan depth: smallest D with 256**D >= N
+while 256 ** D < N:
+    D += 1
+scratch = qd.Tensor(qd.ndarray(qd.u32, shape=max(qd.algorithms.radix_sort_scratch_slots(N, D), 1)))
+nd = qd.ndarray(qd.i32, shape=())      # device-resident element count
+nd.fill(N)
+
+# Keys-only: keys / tmp_keys double as the value placeholders, HAS_VALUES=False, END_BIT=32 (f32 width).
+qd.algorithms.radix_sort(keys, tmp_keys, keys, tmp_keys, scratch, nd, False, 32, D)
 # keys is now ascending; tmp_keys holds intermediate state.
 
 # Key-value sort:
 values     = qd.field(qd.i32, shape=N)
 tmp_values = qd.field(qd.i32, shape=N)
 # ... fill values (e.g. with original indices) ...
-
-qd.algorithms.device_radix_sort(
-    keys, tmp_keys=tmp_keys, values=values, tmp_values=tmp_values, scratch=scratch,
-)
+qd.algorithms.radix_sort(keys, tmp_keys, values, tmp_values, scratch, nd, True, 32, D)
 # keys ascending; values permuted so values[k] corresponds to keys[k].
+```
+
+Composing the func inside your own kernel (qipc-style; `KEY_DTYPE` is the key element dtype you already know):
+
+```python
+from quadrants.types import ndarray as ndarray_ann
+
+@qd.kernel
+def my_pipeline(
+    keys: ndarray_ann(dtype=qd.u32, ndim=1),
+    tmp:  ndarray_ann(dtype=qd.u32, ndim=1),
+    scratch: ndarray_ann(dtype=qd.u32, ndim=1),
+    n: ndarray_ann(dtype=qd.i32, ndim=0),
+):
+    # ... other top-level phases ...
+    qd.algorithms.radix_sort_func(keys, tmp, keys, tmp, scratch, n, qd.u32, False, 32, D)
+    # ... more top-level phases ...
 ```
 
 Arguments:
 
-- `keys`: 1-D tensor. Sorted **in place**. Pass `qd.field`, `qd.ndarray`, or `qd.Tensor`.
+- `keys`: 1-D tensor. Sorted **in place**. For `radix_sort`, pass `qd.field`, `qd.ndarray`, or `qd.Tensor`.
 - `tmp_keys`: ping-pong workspace, same shape & dtype as `keys`, distinct buffer. Contents on return are intermediate and should be considered garbage.
-- `values`: optional 1-D tensor of any supported scalar dtype (the value dtype is independent of the key dtype), same shape as `keys`. If provided, permuted in lock-step with the keys.
-- `tmp_values`: required iff `values` is provided. Same shape & dtype as `values`, distinct buffer. Same workspace semantics as `tmp_keys`.
-- `end_bit`: number of low bits of the key to consider. Defaults to the full key width (32 for 4-byte keys, 64 for 8-byte keys). Must be a positive multiple of `8` (the radix-digit width). An even number of digit passes is required so the result lands back in `keys`; with the default `end_bit` this is automatic. Pass a smaller value when the high bits are known to be zero (e.g. `end_bit=16` for keys with values `< 2**16`) to save passes.
-- `scratch`: required caller-owned 1-D `qd.u32` tensor used as the per-pass tile-histogram + scan workspace. Size it with `qd.algorithms.device_radix_sort_scratch_slots(N)` (the footprint is dtype-independent — tile histograms are `u32` regardless of key width). If the buffer is too small, the sort raises `qd.algorithms.InsufficientScratchError` **before** any in-place key mutation, with the required size on `err.required_slots` — so a failed call never corrupts `keys` and the caller can resize and retry. See [Scratch space](#scratch-space).
+- `values`, `tmp_values`: the key-value buffers (any supported scalar dtype, independent of the key dtype, same shape as `keys`, distinct from each other). For a keys-only sort pass `keys` / `tmp_keys` here as placeholders and set `HAS_VALUES=False`.
+- `scratch`: required caller-owned 1-D `qd.u32` tensor used as the per-pass tile-histogram + scan workspace. Size it with `qd.algorithms.radix_sort_scratch_slots(N, LOG256_MAX_N)` (the footprint is dtype-independent — tile histograms are `u32` regardless of key width). See [Scratch space](#scratch-space).
+- `N`: 0-d `i32` ndarray (`shape=()`) holding the element count **on-device**.
+- `KEY_DTYPE` (`radix_sort_func` only): the key element dtype (one of the supported set). The `radix_sort` kernel derives this from `keys` for you; the func takes it explicitly because an `ndarray` kernel argument exposes no `.dtype` inside the kernel.
+- `HAS_VALUES`: compile-time bool — whether `values` / `tmp_values` are real buffers (`True`) or placeholders (`False`).
+- `END_BIT`: compile-time number of low key bits to sort. Use the full key width (32 for 4-byte keys, 64 for 8-byte). Must be a positive multiple of `8` that yields an even number of digit passes so the result lands back in `keys`. Pass a smaller value when the high bits are known to be zero (e.g. `16` for keys `< 2**16`) to save passes.
+- `LOG256_MAX_N`: compile-time scan depth `D`; the emitted sort handles any element count `<= 256**D`, so a graph captured for a given `D` is reusable across all such counts. Size `scratch` with the same `D`.
 
 Constraints:
 
-- **Dtypes:** `keys.dtype` and `values.dtype` are each independently one of `{qd.u32, qd.i32, qd.f32, qd.u64, qd.i64, qd.f64}`. Narrower scalar dtypes (`qd.i16`, `qd.f16`, ...) and struct dtypes raise `NotImplementedError`. 8-byte keys run 8 digit passes per sort; 4-byte keys run 4. Scratch footprint is the same for both widths (the per-tile histograms are `u32` regardless).
-- **Aliasing:** `keys` and `tmp_keys` must be distinct buffers; same for `values` / `tmp_values`. Calling with the same buffer raises `ValueError`.
+- **Dtypes:** the key dtype and value dtype are each independently one of `{qd.u32, qd.i32, qd.f32, qd.u64, qd.i64, qd.f64}`. Narrower scalar dtypes (`qd.i16`, `qd.f16`, ...) and struct dtypes raise `NotImplementedError` at compile time. 8-byte keys run 8 digit passes per sort; 4-byte keys run 4. Scratch footprint is the same for both widths (the per-tile histograms are `u32` regardless).
+- **Aliasing:** `keys` and `tmp_keys` must be distinct buffers; same for real `values` / `tmp_values`. (No host check enforces this — passing the same buffer corrupts the sort.)
 - **Stability:** stable sort - equal keys keep their original input order in the output.
 - **NaN handling (f32):** matches `numpy.sort` (NaNs land at the end). NaNs are not tested separately and should not be relied on for ordering invariants beyond `numpy.sort`.
 
@@ -228,20 +258,11 @@ Implementation:
 - After each pass we swap `keys` ↔ `tmp_keys`. Four passes is even, so the sorted keys end up back in `keys`.
 - Signed-integer (`i32` / `i64`) and floating-point (`f32` / `f64`) keys are mapped to a sortable unsigned representation (`u32` / `u64`) before the first pass and mapped back after the last pass via in-place "twiddle" kernels (signed: XOR sign bit; float: flip sign bit on positives, flip all bits on negatives - the standard sortable-key transform). `u32` / `u64` keys are sorted directly with no twiddle.
 
-Scratch footprint: `num_blocks * 256 + ...` u32 slots per pass (re-used across passes), where `num_blocks = ceil(N / 256)`. Call `qd.algorithms.device_radix_sort_scratch_slots(N)` to get the exact slot count (pure host arithmetic, no device round-trip — the size depends only on `N`). See [Scratch space](#scratch-space):
+Scratch footprint: `num_blocks * 256 + ...` u32 slots (where `num_blocks = ceil(N / 256)`), plus the scan staircase. Call `qd.algorithms.radix_sort_scratch_slots(N, LOG256_MAX_N)` to get the exact slot count (pure host arithmetic, no device round-trip). See [Scratch space](#scratch-space).
 
-```python
-N = 5_000_000
-keys     = qd.field(qd.f32, shape=N)
-tmp_keys = qd.field(qd.f32, shape=N)
-scratch  = qd.field(qd.u32, shape=qd.algorithms.device_radix_sort_scratch_slots(N))
-# ... fill keys ...
-qd.algorithms.device_radix_sort(keys, tmp_keys=tmp_keys, scratch=scratch)
-```
+### `qd.algorithms.reduce_by_key_add(keys_in, values_in, keys_out, values_out, num_runs, scratch)`
 
-### `qd.algorithms.device_reduce_by_key_add(keys_in, values_in, keys_out, values_out, num_runs, scratch)`
-
-Collapse every **consecutive run of equal keys** into a single output entry `(unique_key, sum_of_values_in_run)`. Keys that compare equal but are separated by other keys form separate runs. For a global per-key sum, sort by key first (e.g. with `qd.algorithms.device_radix_sort`) and then reduce-by-key.
+Collapse every **consecutive run of equal keys** into a single output entry `(unique_key, sum_of_values_in_run)`. Keys that compare equal but are separated by other keys form separate runs. For a global per-key sum, sort by key first (e.g. with `qd.algorithms.radix_sort`) and then reduce-by-key.
 
 ```python
 import quadrants as qd
@@ -252,11 +273,11 @@ values_in  = qd.field(qd.f32, shape=N)
 keys_out   = qd.field(qd.i32, shape=N)       # capacity = N (worst case: all unique)
 values_out = qd.field(qd.f32, shape=N)
 num_runs   = qd.field(qd.i32, shape=1)
-scratch    = qd.field(qd.u32, shape=max(qd.algorithms.device_reduce_by_key_scratch_slots(N), 1))
+scratch    = qd.Tensor(qd.ndarray(qd.u32, shape=max(qd.algorithms.reduce_by_key_scratch_slots(N), 1)))
 
 # ... fill keys_in + values_in ...
 
-qd.algorithms.device_reduce_by_key_add(
+qd.algorithms.reduce_by_key_add(
     keys_in, values_in, keys_out=keys_out, values_out=values_out, num_runs=num_runs,
     scratch=scratch,
 )
@@ -273,7 +294,7 @@ Arguments:
 - `keys_out`: 1-D tensor of the same dtype as `keys_in`, with `len(keys_out) >= len(keys_in)` so the worst-case-all-unique run is safe. Only `keys_out[0 : num_runs[0]]` carries meaningful data on return; the tail is untouched.
 - `values_out`: 1-D tensor of the same dtype as `values_in`, same length requirement. The first `num_runs[0]` slots are overwritten; the tail past that prefix is left untouched.
 - `num_runs`: 1-element `qd.i32` tensor receiving the number of runs. Same explicit-host-hop rule: do `int(num_runs.to_numpy()[0])` after the call to get the count as a Python scalar.
-- `scratch`: caller-owned 1-D `qd.u32` tensor of `device_reduce_by_key_scratch_slots(N)` slots (always `u32`, regardless of key / value dtype). See [Scratch space](#scratch-space).
+- `scratch`: caller-owned 1-D `qd.u32` tensor of `reduce_by_key_scratch_slots(N)` slots (always `u32`, regardless of key / value dtype). See [Scratch space](#scratch-space).
 
 Constraints:
 
@@ -285,16 +306,16 @@ Constraints:
 Algorithm: scan + scatter + atomic_add - no segmented-scan primitive needed.
 
 1. **Head-flag pass.** `head_flags[i] = 1` if `i == 0` or `keys[i] != keys[i-1]`, else `0`. Written to the caller's `u32` scratch (bit-cast from `i32`).
-2. **In-place exclusive scan** of `head_flags` (using the same three-pass internals as `device_exclusive_scan_add`). After this, `scratch[i] = sum(head_flags[0:i])`.
+2. **In-place exclusive scan** of `head_flags` (using the same three-pass internals as `exclusive_scan_add`). After this, `scratch[i] = sum(head_flags[0:i])`.
 3. **Zero-init `values_out[0:N]`.** The scatter uses `atomic_add`; slots must start at the additive identity `0`.
 4. **Scatter.** For each `i`, recompute `head_flag(i)` from `keys[i]` / `keys[i-1]`, derive the run index `pos = scratch[i] + head_flag(i) - 1` (inclusive scan minus 1), and write `keys_out[pos] = keys[i]` + `atomic_add(values_out[pos], values[i])`.
 5. **Count.** `num_runs[0] = scratch[N-1] + head_flag(N-1)`.
 
-Scratch footprint: `device_reduce_by_key_scratch_slots(N)` ≈ `1.004 * N` u32 slots. See [Scratch space](#scratch-space).
+Scratch footprint: `reduce_by_key_scratch_slots(N)` ≈ `1.004 * N` u32 slots. See [Scratch space](#scratch-space).
 
 ### `qd.algorithms.parallel_sort(keys, values=None)`
 
-> **Deprecated.** New code should call `qd.algorithms.device_radix_sort(keys, tmp_keys, values=..., tmp_values=...)` instead. `device_radix_sort` is asymptotically `O(N log_radix N)` rather than `O(N log^2 N)`, is **stable** (odd-even merge sort is not), supports 32-bit and 64-bit scalar keys across CUDA / AMDGPU / Vulkan / Metal, and accepts `qd.field`, `qd.ndarray`, and `qd.Tensor` (`parallel_sort` is field-only). The only thing `parallel_sort` is competitive on is very small N (~4K and below); even there the radix path is comparable on modern hardware. To migrate, allocate a `tmp_keys` field of the same shape and dtype as `keys`, then call `device_radix_sort`. `parallel_sort` is kept for one release cycle for backward compat and will be removed thereafter.
+> **Deprecated.** New code should call the LSB radix sort `qd.algorithms.radix_sort` (a `@qd.kernel`) or `qd.algorithms.radix_sort_func` (a `@qd.func`) instead. The radix sort is asymptotically `O(N log_radix N)` rather than `O(N log^2 N)`, is **stable** (odd-even merge sort is not), supports 32-bit and 64-bit scalar keys across CUDA / AMDGPU / Vulkan / Metal, and accepts `qd.field`, `qd.ndarray`, and `qd.Tensor` (`parallel_sort` is field-only). The only thing `parallel_sort` is competitive on is very small N (~4K and below); even there the radix path is comparable on modern hardware. To migrate, allocate `tmp_keys` of the same shape and dtype as `keys` plus a `u32` `scratch` buffer, then call `radix_sort` (see its section above for the full signature). `parallel_sort` is kept for one release cycle for backward compat and will be removed thereafter.
 
 In-place sort. Reorders `keys` ascending; if `values` is provided, applies the same permutation to `values` (key-value sort). Both arguments must be 1-D `qd.field` - `parallel_sort` reaches into `snode.ptr.offset` internally, so `ndarray` is **not** supported and will fail at compile time with an `AttributeError`.
 
@@ -319,7 +340,7 @@ qd.algorithms.parallel_sort(keys, vals)
 
 ### `qd.algorithms.PrefixSumExecutor`
 
-> **Deprecated.** New code should call `qd.algorithms.device_exclusive_scan_add(arr, out)` instead. `PrefixSumExecutor` is **inclusive**-only, **`i32`**-only, and **CUDA / Vulkan**-only; the new functional API covers `{i32, u32, f32, i64, u64, f64}` on every supported backend and runs the exclusive variant directly. To migrate from inclusive in-place to exclusive out-of-place, drop the `Executor` wrapper, allocate a distinct `out` field, and post-process if you actually need the inclusive form (`inclusive[i] = exclusive[i] + arr[i]`). `PrefixSumExecutor` is kept for one release cycle for backward compat and will be removed in a future release.
+> **Deprecated.** New code should call `qd.algorithms.exclusive_scan_add(arr, out)` instead. `PrefixSumExecutor` is **inclusive**-only, **`i32`**-only, and **CUDA / Vulkan**-only; the new functional API covers `{i32, u32, f32, i64, u64, f64}` on every supported backend and runs the exclusive variant directly. To migrate from inclusive in-place to exclusive out-of-place, drop the `Executor` wrapper, allocate a distinct `out` field, and post-process if you actually need the inclusive form (`inclusive[i] = exclusive[i] + arr[i]`). `PrefixSumExecutor` is kept for one release cycle for backward compat and will be removed in a future release.
 
 Inclusive in-place prefix sum (scan) over a 1-D `i32` field. Construct once with the array length, then call `.run(field)` to scan.
 
@@ -368,9 +389,13 @@ def init() -> None:
         indices[i] = i
 
 init()
-qd.algorithms.device_radix_sort(
-    keys, tmp_keys=tmp_keys, values=indices, tmp_values=tmp_idx,
-)
+D = 1
+while 256 ** D < N:
+    D += 1
+scratch = qd.field(qd.u32, shape=max(qd.algorithms.radix_sort_scratch_slots(N, D), 1))
+nd = qd.ndarray(qd.i32, shape=())
+nd.fill(N)
+qd.algorithms.radix_sort(keys, tmp_keys, indices, tmp_idx, scratch, nd, True, 32, D)
 # keys is now ascending; indices[k] is the original index of the k-th smallest key. (Stable: ties between equal keys preserve their input-order indices.)
 ```
 
