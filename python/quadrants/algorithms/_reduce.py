@@ -1,7 +1,7 @@
 # type: ignore
 """Device-wide reduce primitives.
 
-Implements ``qd.algorithms.device_reduce_{add,min,max}`` on top of the block-tier ``block.reduce_{add,min,max}``
+Implements ``qd.algorithms.reduce_{add,min,max}`` on top of the block-tier ``block.reduce_{add,min,max}``
 primitives. See the design doc at ``perso_hugh/doc/qipc/qipc_device_algos_design.md`` for the algorithmic rationale.
 
 Layout (host driver builds a recursion plan, kernels are the per-pass workers):
@@ -17,8 +17,8 @@ Layout (host driver builds a recursion plan, kernels are the per-pass workers):
 A single generic kernel handles every pass; ``src_is_u32`` and ``dst_is_u32`` are compile-time template flags
 selecting between the bit_cast and direct-read / direct-write paths.
 
-**Scratch.** ``device_reduce_*`` needs a **caller-owned** scratch buffer sized via
-:func:`device_reduce_scratch_slots` (``~N / BLOCK_DIM`` slots; the per-block partials live there between launches).
+**Scratch.** ``reduce_*`` needs a **caller-owned** scratch buffer sized via
+:func:`reduce_scratch_slots` (``~N / BLOCK_DIM`` slots; the per-block partials live there between launches).
 The dtype is ``u32`` for 4-byte element types and ``u64`` for 8-byte ones (the partials are ``bit_cast`` to / from
 the element dtype). There is no module-level shared scratch - the caller always owns the buffer (graph- /
 multi-stream-safe, no global state); a too-small buffer raises :class:`InsufficientScratchError`.
@@ -54,6 +54,46 @@ Chosen as a portable default: a multiple of every supported subgroup size (32 on
 AMDGPU), and small enough to fit comfortably in shared memory budgets across backends. Re-tune (128 / 512) once
 benchmarks land per the design doc's open questions.
 """
+
+_MAX_SCRATCH_LEVELS = 8
+"""Upper bound on the reduce/scan recursion depth that the ``*_scratch_slots`` sizing arithmetic ever unrolls.
+
+Each level divides the live element count by ``BLOCK_DIM`` (256), so ``_MAX_SCRATCH_LEVELS = 8`` covers ``256 ** 8 ==
+2 ** 64`` elements - past any addressable buffer. :func:`_level_partials_slots` loops a fixed ``range`` of this many
+levels (so it is valid both host-side and inside a compiled kernel); once the count bottoms out each remaining level
+contributes 0, so a generous bound costs nothing in the returned slot count.
+"""
+
+
+def _level_partials_slots(n, start_cursor=0):
+    """Scratch slots consumed by the per-level partials of a reduce/scan over ``n`` elements, counting from
+    ``start_cursor``.
+
+    Host- **and** kernel-callable: the body is branch-free integer arithmetic over a fixed
+    ``range(_MAX_SCRATCH_LEVELS)`` loop that unrolls at compile time, so ``n`` / ``start_cursor`` may be Python ``int``
+    s (host sizing) **or** device-read ``Expr`` s (kernel validation). Called inside a kernel this lets a launch
+    recompute the requirement from the actual device-``N`` and check it against ``scratch.shape[0]`` on-device.
+
+    Each level turns the live count into ``t = ceil(t / BLOCK_DIM)`` partials and contributes them to scratch only
+    while ``t > 1`` (equivalently ``prev > BLOCK_DIM``, since ``ceil(m / BLOCK_DIM) > 1`` iff ``m > BLOCK_DIM`` - the
+    final single-tile pass writes straight to the output instead). ``t > 1`` is used as a ``0``/``1`` multiplier
+    rather than a Python ``if`` (a Python ``bool`` multiplies like an ``int``; an ``Expr`` comparison like a device
+    value), so the same code compiles in either context. Once ``t`` bottoms out at ``1`` every remaining iteration
+    adds 0, making the fixed trip count exact rather than an over-estimate.
+
+    **Single-reference on purpose.** Each iteration references the previous ``t`` exactly once (the ``ceil`` divide).
+    When a plain function is inlined into a kernel its operand expressions are duplicated by value rather than shared,
+    so a form that referenced the running count several times per level (e.g. gating *and* advancing off the same
+    value) would blow the unrolled expression up ~``3 ** _MAX_SCRATCH_LEVELS`` and stall kernel compilation. The
+    ``t = ceil(t / BLOCK_DIM)`` chain keeps that growth linear.
+    """
+    cursor = start_cursor
+    t = n
+    for _ in range(_MAX_SCRATCH_LEVELS):
+        t = (t + BLOCK_DIM - 1) // BLOCK_DIM
+        cursor = cursor + t * (t > 1)
+    return cursor
+
 
 _SUPPORTED_DTYPES_4B = (i32, u32, f32)
 _SUPPORTED_DTYPES_8B = (i64, u64, f64)
@@ -314,24 +354,26 @@ def _plan_levels(N: int):
     return sizes, dst_offsets, cumul
 
 
-def device_reduce_scratch_slots(n: int) -> int:
-    """Number of scratch slots :func:`device_reduce_add` / ``_min`` / ``_max`` need to reduce a length-``n`` input.
+def reduce_scratch_slots(n: int) -> int:
+    """Number of scratch slots :func:`reduce_add` / ``_min`` / ``_max`` need to reduce a length-``n`` input.
 
-    Pure host-side arithmetic. The count is **dtype-width-independent** (it is a slot count, not a byte count): a
-    4-byte reduce stages through a ``u32`` scratch and an 8-byte reduce through a ``u64`` scratch, both of this many
-    slots. Allocate the matching-width buffer up front::
+    Host- **and** kernel-callable (branch-free integer arithmetic over an unrolled fixed loop, no device round-trip;
+    see :func:`_level_partials_slots`): pass a Python ``int`` to size an allocation up front, or call it inside a
+    kernel on a device-read ``N`` to validate against ``scratch.shape[0]`` on-device. The count is
+    **dtype-width-independent** (it is a slot count, not a byte count): a 4-byte reduce stages through a ``u32``
+    scratch and an 8-byte reduce through a ``u64`` scratch, both of this many slots. Allocate the matching-width
+    buffer up front::
 
-        slots = qd.algorithms.device_reduce_scratch_slots(N)
-        scratch = qd.field(qd.u32, shape=slots)   # u64 for i64 / u64 / f64 inputs
+        slots = qd.algorithms.reduce_scratch_slots(N)
+        scratch = qd.Tensor(qd.ndarray(qd.u32, shape=slots))   # u64 for i64 / u64 / f64 inputs
 
     Returns ``0`` for ``n <= 1`` (the reduce returns the trivial answer without touching scratch).
     """
-    _, _, total_scratch = _plan_levels(n)
-    return total_scratch
+    return _level_partials_slots(n)
 
 
-def _device_reduce(arr, *, out, op, identity_value, scratch):
-    """Internal driver shared by ``device_reduce_{add,min,max}``.
+def _reduce(arr, *, out, op, identity_value, scratch):
+    """Internal driver shared by ``reduce_{add,min,max}``.
 
     Dispatches on ``arr.dtype`` width: 4-byte dtypes go through the ``Field(u32)`` scratch and ``_reduce_pass``;
     8-byte dtypes go through the ``Field(u64)`` scratch and ``_reduce_pass_u64``. Everything else (control flow,
@@ -354,7 +396,7 @@ def _device_reduce(arr, *, out, op, identity_value, scratch):
     N = arr.shape[0]
     sizes, dst_offsets, total_scratch = _plan_levels(N)
 
-    _validate_caller_scratch("device_reduce", N, scratch, total_scratch, _scratch_dtype_for_width(width))
+    _validate_caller_scratch("reduce", N, scratch, total_scratch, _scratch_dtype_for_width(width))
 
     num_passes = len(sizes) - 1
     identity_bits = _identity_bits(identity_value, dtype)
@@ -362,7 +404,7 @@ def _device_reduce(arr, *, out, op, identity_value, scratch):
     if num_passes == 0:
         # Trivially short input (N == 0 or N == 1): no reduce kernel needed. N == 0: write `identity` to out[0];
         # N == 1: out[0] = arr[0].
-        _device_reduce_trivial(arr, out=out, identity_bits=identity_bits)
+        _reduce_trivial(arr, out=out, identity_bits=identity_bits)
         return
 
     pass_kernel = _reduce_pass if width == 4 else _reduce_pass_u64
@@ -415,17 +457,17 @@ def _trivial_write_identity(out: template(), identity_bits: u32, dtype: template
         out[0] = bit_cast(identity_bits, dtype)
 
 
-def _device_reduce_trivial(arr, *, out, identity_bits):
+def _reduce_trivial(arr, *, out, identity_bits):
     N = arr.shape[0]
     if N == 0:
         _trivial_write_identity(out, identity_bits, out.dtype)
     elif N == 1:
         _trivial_write_arr(arr, out)
     else:
-        raise AssertionError(f"_device_reduce_trivial called with N={N}")
+        raise AssertionError(f"_reduce_trivial called with N={N}")
 
 
-def device_reduce_add(arr, out, scratch):
+def reduce_add(arr, out, scratch):
     """Compute ``out[0] = sum(arr)`` on the device.
 
     Args:
@@ -434,7 +476,7 @@ def device_reduce_add(arr, out, scratch):
         out: 1-element tensor of the same dtype as ``arr``. Caller-supplied so the call is fully asynchronous - no
             implicit device-to-host sync. To get a Python scalar, do ``out.to_numpy()[0]`` explicitly after this
             call.
-        scratch: caller-owned 1-D workspace of :func:`device_reduce_scratch_slots` ``(N)`` slots, ``u32`` for 4-byte
+        scratch: caller-owned 1-D workspace of :func:`reduce_scratch_slots` ``(N)`` slots, ``u32`` for 4-byte
             ``arr`` dtypes and ``u64`` for 8-byte ones. There is no module-level shared scratch; a too-small buffer
             raises :class:`InsufficientScratchError`.
 
@@ -442,37 +484,37 @@ def device_reduce_add(arr, out, scratch):
     ``perso_hugh/doc/qipc/qipc_device_algos_design.md`` for the recursion plan and the ``bit_cast``-into-scratch
     scheme.
     """
-    _device_reduce(arr, out=out, op=_bin_add, identity_value=0, scratch=scratch)
+    _reduce(arr, out=out, op=_bin_add, identity_value=0, scratch=scratch)
 
 
-def device_reduce_min(arr, out, scratch):
+def reduce_min(arr, out, scratch):
     """Compute ``out[0] = min(arr)`` on the device.
 
     Args:
-        arr: see ``device_reduce_add`` (any of ``{i32, u32, f32, i64, u64, f64}``).
-        out: see ``device_reduce_add``.
-        scratch: see ``device_reduce_add``.
+        arr: see ``reduce_add`` (any of ``{i32, u32, f32, i64, u64, f64}``).
+        out: see ``reduce_add``.
+        scratch: see ``reduce_add``.
 
     The monoid identity is derived from ``arr.dtype`` automatically (the largest representable value:
     ``+inf`` for ``f32`` / ``f64``, ``INT32_MAX`` / ``INT64_MAX`` for signed ints, ``UINT32_MAX`` / ``UINT64_MAX``
     for unsigned). Mirrors the ``block.reduce_min`` / ``subgroup.reduce_min`` contract: the typed reduce
     primitives do not take an identity argument because (op, dtype) fixes it.
     """
-    _device_reduce(arr, out=out, op=_bin_min, identity_value=_min_identity(arr.dtype), scratch=scratch)
+    _reduce(arr, out=out, op=_bin_min, identity_value=_min_identity(arr.dtype), scratch=scratch)
 
 
-def device_reduce_max(arr, out, scratch):
-    """Compute ``out[0] = max(arr)`` on the device. Mirror of :func:`device_reduce_min` with ``max`` and the
+def reduce_max(arr, out, scratch):
+    """Compute ``out[0] = max(arr)`` on the device. Mirror of :func:`reduce_min` with ``max`` and the
     dtype's *negative* extremum (``-inf`` for floats, ``INT32_MIN`` / ``INT64_MIN`` for signed ints, ``0`` for
     unsigned ints), again derived from ``arr.dtype`` automatically.
     """
-    _device_reduce(arr, out=out, op=_bin_max, identity_value=_max_identity(arr.dtype), scratch=scratch)
+    _reduce(arr, out=out, op=_bin_max, identity_value=_max_identity(arr.dtype), scratch=scratch)
 
 
 __all__ = [
     "InsufficientScratchError",
-    "device_reduce_add",
-    "device_reduce_max",
-    "device_reduce_min",
-    "device_reduce_scratch_slots",
+    "reduce_add",
+    "reduce_max",
+    "reduce_min",
+    "reduce_scratch_slots",
 ]

@@ -1,13 +1,13 @@
 # type: ignore
 """Device-wide reduce-by-key.
 
-Implements ``qd.algorithms.device_reduce_by_key_add`` on top of the existing device exclusive scan internals and a
-**caller-owned** ``u32`` scratch buffer (sized via :func:`device_reduce_by_key_scratch_slots`).
+Implements ``qd.algorithms.reduce_by_key_add`` on top of the existing device exclusive scan internals and a
+**caller-owned** ``u32`` scratch buffer (sized via :func:`reduce_by_key_scratch_slots`).
 
 Reduce-by-key takes two parallel 1-D tensors - ``keys`` and ``values`` - and collapses every **consecutive run of
 equal keys** into a single output entry ``(unique_key, sum_of_values_in_run)``. Keys that are equal but separated by
 other keys are treated as separate runs. To compute a global per-key sum, sort by key first (e.g. via
-``qd.algorithms.device_radix_sort``) and then reduce-by-key.
+``qd.algorithms.radix_sort``) and then reduce-by-key.
 
 Algorithm (scan + scatter; no segmented-scan primitive needed):
 
@@ -33,7 +33,7 @@ Algorithm (scan + scatter; no segmented-scan primitive needed):
 This first-land scope supports only the ``add`` reduction. ``min`` / ``max`` variants would need ``atomic_min`` /
 ``atomic_max``, which have spottier cross-backend support for ``f32`` - defer to a follow-up gated on real qipc usage.
 
-**Scratch.** A **caller-owned** 1-D ``u32`` buffer of :func:`device_reduce_by_key_scratch_slots` ``(N)`` slots
+**Scratch.** A **caller-owned** 1-D ``u32`` buffer of :func:`reduce_by_key_scratch_slots` ``(N)`` slots
 (``positions = scratch[0:N]`` plus the scan partials above them, ≈ ``1.004 * N``). There is no module-level shared
 scratch - the caller always owns the buffer; a too-small buffer raises :class:`InsufficientScratchError`.
 """
@@ -139,75 +139,76 @@ def _rbk_count(keys_in: template(), positions: template(), positions_off: i32, N
 
 def _validate_inputs(keys_in, values_in, keys_out, values_out, num_runs):
     if not hasattr(keys_in, "shape") or len(keys_in.shape) != 1:
-        raise TypeError(f"device_reduce_by_key_add expects 1-D keys_in; got shape {getattr(keys_in, 'shape', None)}")
+        raise TypeError(f"reduce_by_key_add expects 1-D keys_in; got shape {getattr(keys_in, 'shape', None)}")
     if not hasattr(values_in, "shape") or values_in.shape != keys_in.shape:
         raise TypeError(
-            f"device_reduce_by_key_add expects values_in.shape == keys_in.shape; got "
+            f"reduce_by_key_add expects values_in.shape == keys_in.shape; got "
             f"keys_in={keys_in.shape}, values_in={values_in.shape}"
         )
     if not hasattr(keys_out, "shape") or len(keys_out.shape) != 1:
-        raise TypeError(f"device_reduce_by_key_add expects 1-D keys_out; got shape {getattr(keys_out, 'shape', None)}")
+        raise TypeError(f"reduce_by_key_add expects 1-D keys_out; got shape {getattr(keys_out, 'shape', None)}")
     if keys_out.dtype != keys_in.dtype:
-        raise TypeError(f"device_reduce_by_key_add dtype mismatch: keys_in={keys_in.dtype}, keys_out={keys_out.dtype}")
+        raise TypeError(f"reduce_by_key_add dtype mismatch: keys_in={keys_in.dtype}, keys_out={keys_out.dtype}")
     if not hasattr(values_out, "shape") or len(values_out.shape) != 1:
         raise TypeError(
-            f"device_reduce_by_key_add expects 1-D values_out; got shape {getattr(values_out, 'shape', None)}"
+            f"reduce_by_key_add expects 1-D values_out; got shape {getattr(values_out, 'shape', None)}"
         )
     if values_out.dtype != values_in.dtype:
         raise TypeError(
-            f"device_reduce_by_key_add dtype mismatch: values_in={values_in.dtype}, values_out={values_out.dtype}"
+            f"reduce_by_key_add dtype mismatch: values_in={values_in.dtype}, values_out={values_out.dtype}"
         )
     if keys_out.shape[0] < keys_in.shape[0]:
         raise ValueError(
-            f"device_reduce_by_key_add keys_out.shape[0]={keys_out.shape[0]} < keys_in.shape[0]={keys_in.shape[0]}; "
+            f"reduce_by_key_add keys_out.shape[0]={keys_out.shape[0]} < keys_in.shape[0]={keys_in.shape[0]}; "
             f"keys_out must hold at least N entries (worst case: every key is unique)"
         )
     if values_out.shape[0] < values_in.shape[0]:
         raise ValueError(
-            f"device_reduce_by_key_add values_out.shape[0]={values_out.shape[0]} < values_in.shape[0]={values_in.shape[0]}; "
+            f"reduce_by_key_add values_out.shape[0]={values_out.shape[0]} < values_in.shape[0]={values_in.shape[0]}; "
             f"values_out must hold at least N entries"
         )
     if not hasattr(num_runs, "shape") or num_runs.shape != (1,):
-        raise TypeError(f"device_reduce_by_key_add expects num_runs.shape == (1,); got {num_runs.shape}")
+        raise TypeError(f"reduce_by_key_add expects num_runs.shape == (1,); got {num_runs.shape}")
     if num_runs.dtype != i32:
-        raise TypeError(f"device_reduce_by_key_add expects num_runs.dtype == qd.i32; got {num_runs.dtype}")
+        raise TypeError(f"reduce_by_key_add expects num_runs.dtype == qd.i32; got {num_runs.dtype}")
     if keys_in.dtype not in _SUPPORTED_KEY_DTYPES:
         raise NotImplementedError(
-            f"device_reduce_by_key_add keys dtype {keys_in.dtype} not in first-land set "
+            f"reduce_by_key_add keys dtype {keys_in.dtype} not in first-land set "
             f"{[d for d in _SUPPORTED_KEY_DTYPES]}; see design doc dtype matrix"
         )
     if values_in.dtype not in _SUPPORTED_VALUE_DTYPES:
         raise NotImplementedError(
-            f"device_reduce_by_key_add values dtype {values_in.dtype} not in first-land set "
+            f"reduce_by_key_add values dtype {values_in.dtype} not in first-land set "
             f"{[d for d in _SUPPORTED_VALUE_DTYPES]}; see design doc dtype matrix"
         )
 
 
-def device_reduce_by_key_scratch_slots(n: int) -> int:
-    """Number of ``u32`` scratch slots :func:`device_reduce_by_key_add` needs for a length-``n`` input.
+def reduce_by_key_scratch_slots(n: int) -> int:
+    """Number of ``u32`` scratch slots :func:`reduce_by_key_add` needs for a length-``n`` input.
 
-    Pure host-side arithmetic, dtype-independent (the scan operates on head-flags-as-counts, which are ``u32``).
-    Layout: ``scratch[0:n]`` holds the run positions, ``scratch[n:]`` the scan partials (plus deeper recursion
-    levels for ``n > BLOCK_DIM``). Allocate up front::
+    Host- **and** kernel-callable (branch-free integer arithmetic over an unrolled fixed loop, no device round-trip):
+    pass a Python ``int`` to size an allocation, or call it inside a kernel on a device-read ``N`` to validate
+    against ``scratch.shape[0]`` on-device. Dtype-independent (the scan operates on head-flags-as-counts, which are
+    ``u32``). Layout: ``scratch[0:n]`` holds the run positions, ``scratch[n:]`` the scan partials (plus deeper
+    recursion levels for ``n > BLOCK_DIM``). Allocate up front::
 
-        scratch = qd.field(qd.u32, shape=max(qd.algorithms.device_reduce_by_key_scratch_slots(N), 1))
+        scratch = qd.Tensor(qd.ndarray(qd.u32, shape=max(qd.algorithms.reduce_by_key_scratch_slots(N), 1)))
 
     Returns ``0`` for ``n <= 0`` and ``n`` for ``n <= BLOCK_DIM`` (single-tile in-place scan).
     """
-    if n <= 0:
-        return 0
-    if n <= BLOCK_DIM:
-        return n
+    pos = n > 0
+    big = n > BLOCK_DIM
+    small_pos = pos * (1 - big)
     B0 = (n + BLOCK_DIM - 1) // BLOCK_DIM
-    return _scan_total_scratch_slots(B0, partials_cursor=n + B0)
+    return n * small_pos + _scan_total_scratch_slots(B0, partials_cursor=n + B0) * big
 
 
-def device_reduce_by_key_add(keys_in, values_in, keys_out, values_out, num_runs, scratch):
+def reduce_by_key_add(keys_in, values_in, keys_out, values_out, num_runs, scratch):
     """Collapse every consecutive run of equal ``keys_in`` into ``(key, sum_of_values)``.
 
     Args:
         keys_in: 1-D tensor of ``u32`` / ``i32`` / ``f32``. Sort by key beforehand (e.g. via
-            ``qd.algorithms.device_radix_sort``) if you need a global per-key sum rather than a per-run sum.
+            ``qd.algorithms.radix_sort``) if you need a global per-key sum rather than a per-run sum.
         values_in: 1-D tensor of ``u32`` / ``i32`` / ``f32``, same shape as ``keys_in``.
         keys_out: 1-D tensor of the same dtype as ``keys_in``, capacity ``>= N``. Receives the unique-run keys at
             indices ``[0 : num_runs[0])``; the tail is left untouched.
@@ -215,7 +216,7 @@ def device_reduce_by_key_add(keys_in, values_in, keys_out, values_out, num_runs,
             first ``num_runs[0]`` slots are overwritten; if ``values_out`` was longer, the tail past that prefix is
             left untouched.
         num_runs: 1-element ``i32`` tensor receiving the number of runs.
-        scratch: caller-owned 1-D ``u32`` workspace of :func:`device_reduce_by_key_scratch_slots` ``(N)`` slots. There
+        scratch: caller-owned 1-D ``u32`` workspace of :func:`reduce_by_key_scratch_slots` ``(N)`` slots. There
             is no module-level shared scratch; a too-small buffer raises :class:`InsufficientScratchError`.
 
     Same async / no-implicit-sync contract as the rest of ``qd.algorithms.*``: ``num_runs`` is a tensor (not a Python
@@ -229,7 +230,7 @@ def device_reduce_by_key_add(keys_in, values_in, keys_out, values_out, num_runs,
     if N == 0:
         return
 
-    _validate_caller_scratch("device_reduce_by_key_add", N, scratch, device_reduce_by_key_scratch_slots(N), u32)
+    _validate_caller_scratch("reduce_by_key_add", N, scratch, reduce_by_key_scratch_slots(N), u32)
     B0 = (N + BLOCK_DIM - 1) // BLOCK_DIM
     positions_off = 0
     partials_off = N
@@ -290,4 +291,4 @@ def device_reduce_by_key_add(keys_in, values_in, keys_out, values_out, num_runs,
     _rbk_count(keys_in, scratch, positions_off, N, num_runs)
 
 
-__all__ = ["device_reduce_by_key_add", "device_reduce_by_key_scratch_slots"]
+__all__ = ["reduce_by_key_add", "reduce_by_key_scratch_slots"]

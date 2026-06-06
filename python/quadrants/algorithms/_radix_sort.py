@@ -1,12 +1,17 @@
 # type: ignore
-"""Device-wide LSB radix sort (single fused kernel).
+"""Device-wide LSB radix sort (one capturable launch chain).
 
-``qd.algorithms.device_radix_sort`` emits the **entire** sort as one ``@qd.kernel`` whose body is a fixed sequence of
-top-level ``for`` loops - each of which Quadrants offloads as its own serialized GPU launch, giving the implicit
-grid-wide synchronization the algorithm needs between phases. (This replaces an earlier multi-launch form that launched
-``~28`` separate kernels per 4-pass u32 sort from the host.)
+The sort is exposed as exactly two public callables sharing one body:
 
-Three properties make the fused form graph-friendly:
+- :func:`radix_sort_func` - a ``@qd.func``: call it at the **top level** of your own ``@qd.kernel`` to compose the
+  sort inline with other phases in one compiled kernel / captured graph (the qipc path).
+- :func:`radix_sort` - a thin ``@qd.kernel`` wrapping that func, for launching the sort standalone from the host.
+
+The body is a fixed sequence of top-level ``for`` loops - each of which Quadrants offloads as its own serialized GPU
+launch, giving the implicit grid-wide synchronization the algorithm needs between phases. (This replaces an earlier
+multi-launch form that launched ``~28`` separate kernels per 4-pass u32 sort from the host.)
+
+Three properties make this form graph-friendly:
 
 1. **Fixed launch topology.** The number and order of internal launches is a compile-time constant, fixed by the
    ``log256_max_n`` template (``D``) and the pass count - *not* by the runtime ``N``. The scan over the tile
@@ -19,7 +24,7 @@ Three properties make the fused form graph-friendly:
    loop bounds as ``Expr``s (dynamic, not compile-time constant), the CUDA codegen leaves each offload's grid at the
    *saturating* value (``num_SMs * max_blocks_per_SM * 2``) and the runtime grid-stride loop walks the actual range -
    a fixed ~core-count grid regardless of ``N``. See ``perso_hugh/doc/qipc/qipc_sort_as_kernel.md`` §D4.
-3. **Single host call.** One ``_fused_radix_sort(...)`` invocation replaces the host ping-pong loop.
+3. **Single call.** One :func:`radix_sort_func` invocation replaces the host ping-pong loop.
 
 Algorithm (classical histogram-scan-scatter LSB radix sort, Knuth Vol. 3 §5.2.5, Blelloch 1990). Each digit pass
 (8 bits) is: per-block histogram (digit-major ``scratch[d*num_blocks+b]``) -> exclusive scan of the histograms ->
@@ -41,10 +46,11 @@ participation); histogram ``atomic_add`` and the scatter store are gated on ``i 
 histogram or write past the output.
 
 **Scratch.** The sort needs a **caller-owned** 1-D ``u32`` ``scratch`` buffer of
-``device_radix_sort_scratch_slots(N)`` slots (tile histograms + scan partials; ``u32`` regardless of key width, so
-8-byte-key sorts have the same footprint as 4-byte ones). There is **no** module-level shared-scratch fallback - the
-caller always owns the buffer (graph- / multi-stream-safe, no global state). A too-small buffer raises
-:class:`InsufficientScratchError` *before* any in-place key mutation, so the caller's ``keys`` stay recoverable.
+:func:`radix_sort_scratch_slots` ``(N, log256_max_n)`` slots (tile histograms + scan partials; ``u32`` regardless of
+key width, so 8-byte-key sorts have the same footprint as 4-byte ones). There is **no** module-level shared-scratch
+fallback - the caller always owns the buffer (graph- / multi-stream-safe, no global state). Both public callables run
+unvalidated and do **no** on-device scratch-sufficiency check (a DtoH would defeat graph capture), so size ``scratch``
+correctly up front; :class:`InsufficientScratchError` remains for callers that want to pre-check on the host.
 """
 
 from quadrants.lang.impl import static
@@ -78,7 +84,7 @@ def _key_width_bits(dtype) -> int:
         return 32
     if dtype in _SUPPORTED_KEY_DTYPES_64:
         return 64
-    raise NotImplementedError(f"device_radix_sort key dtype {dtype} not supported")
+    raise NotImplementedError(f"radix_sort key dtype {dtype} not supported")
 
 
 # --- Per-phase device bodies (one tile per block; grid sized to the work) ---------------
@@ -91,7 +97,7 @@ def _key_width_bits(dtype) -> int:
 
 
 @_func
-def _fused_twiddle(keys: template(), n: i32, KEY_DTYPE: template(), KEY_WIDTH: template(), DO_TWIDDLE: template()):
+def _radix_twiddle(keys: template(), n: i32, KEY_DTYPE: template(), KEY_WIDTH: template(), DO_TWIDDLE: template()):
     """In-place map between caller-dtype keys and monotone-unsigned "sortable" keys (signed / float only).
 
     ``DO_TWIDDLE=True`` maps dtype -> sort order before the first pass; ``False`` is the inverse after the last pass.
@@ -132,7 +138,7 @@ def _fused_twiddle(keys: template(), n: i32, KEY_DTYPE: template(), KEY_WIDTH: t
 
 
 @_func
-def _fused_hist(keys: template(), scratch: template(), n: i32, num_blocks: i32, bit_start: i32, KEY_WIDTH: template()):
+def _radix_hist(keys: template(), scratch: template(), n: i32, num_blocks: i32, bit_start: i32, KEY_WIDTH: template()):
     """Per-block histogram of digit ``(key >> bit_start) & 0xFF`` into ``scratch`` (digit-major: ``d*num_blocks+b``).
 
     Tile histograms are ``u32`` regardless of key width (each count <= ``BLOCK_DIM`` = 256). ``KEY_WIDTH`` selects the
@@ -162,7 +168,7 @@ def _fused_hist(keys: template(), scratch: template(), n: i32, num_blocks: i32, 
 
 
 @_func
-def _fused_reduce(scratch: template(), in_off: i32, out_off: i32, n: i32, total_threads: i32):
+def _radix_reduce(scratch: template(), in_off: i32, out_off: i32, n: i32, total_threads: i32):
     """Tile-reduce ``scratch[in_off : in_off+n]`` -> per-tile sums ``scratch[out_off : out_off+ceil(n/BLOCK_DIM)]``.
 
     u32 / add specialization of ``_reduce._reduce_pass``. One tile per block; out-of-range lanes contribute ``0``.
@@ -180,7 +186,7 @@ def _fused_reduce(scratch: template(), in_off: i32, out_off: i32, n: i32, total_
 
 
 @_func
-def _fused_base_scan(scratch: template(), off: i32, n_valid: i32):
+def _radix_base_scan(scratch: template(), off: i32, n_valid: i32):
     """Single-block in-place exclusive scan of ``scratch[off : off+n_valid]`` (``n_valid <= BLOCK_DIM``).
 
     u32 / add specialization of ``_scan._scan_block_inplace_u32``. Recursion base of the scan staircase.
@@ -196,7 +202,7 @@ def _fused_base_scan(scratch: template(), off: i32, n_valid: i32):
 
 
 @_func
-def _fused_downsweep(scratch: template(), off: i32, part_off: i32, n: i32, total_threads: i32):
+def _radix_downsweep(scratch: template(), off: i32, part_off: i32, n: i32, total_threads: i32):
     """Downsweep: per-tile exclusive scan of ``scratch[off:off+n]`` + the scanned per-tile prefix at
     ``scratch[part_off + block_id]``, written back in place.
 
@@ -216,7 +222,7 @@ def _fused_downsweep(scratch: template(), off: i32, part_off: i32, n: i32, total
 
 
 @_func
-def _fused_scatter(
+def _radix_scatter(
     keys_in: template(),
     keys_out: template(),
     values_in: template(),
@@ -283,72 +289,119 @@ def _fused_scatter(
 def _emit_scan_staircase(scratch, off, n, levels_remaining: int):
     """Emit a *fixed-depth* in-place exclusive scan of ``scratch[off : off+n]`` (digit-major histograms).
 
-    Plain-Python helper run at kernel-trace time: it makes the ``@qd.func`` calls that become offloaded launches.
+    Plain-Python helper run at kernel-compile time: it makes the ``@qd.func`` calls that become offloaded launches.
     ``off`` / ``n`` flow as Quadrants ``Expr``s (runtime), so the scratch offsets are tight to the actual ``N``;
     ``levels_remaining`` is a Python int (``= log256_max_n - 1``) so the recursion depth - and hence the launch
     topology - is a compile-time constant, independent of ``N``. The ``n <= BLOCK_DIM`` base case is reached by
     exhausting ``levels_remaining`` rather than by inspecting ``n`` (forcing a constant depth).
     """
     if levels_remaining == 0:
-        _fused_base_scan(scratch, off, n)
+        _radix_base_scan(scratch, off, n)
         return
     B = (n + (BLOCK_DIM - 1)) // BLOCK_DIM
     part_off = off + n
-    _fused_reduce(scratch, off, part_off, n, B * BLOCK_DIM)
+    _radix_reduce(scratch, off, part_off, n, B * BLOCK_DIM)
     _emit_scan_staircase(scratch, part_off, B, levels_remaining - 1)
-    _fused_downsweep(scratch, off, part_off, n, B * BLOCK_DIM)
+    _radix_downsweep(scratch, off, part_off, n, B * BLOCK_DIM)
 
 
 def _emit_pass(keys, tmp_keys, values, tmp_values, scratch, n, num_blocks, hist_len, p, KEY_DTYPE, HAS_VALUES,
                KEY_WIDTH, LOG256_MAX_N):
-    """Emit one digit pass (histogram -> scan staircase -> scatter) at trace time.
+    """Emit one digit pass (histogram -> scan staircase -> scatter) at compile time.
 
-    Pure-Python (runs during kernel tracing): ``p`` is a Python int from the static pass loop, so the src/dst (and
-    value) ping-pong is selected here in plain Python and the field handles are passed straight into the ``@qd.func``
-    calls - no field-handle assignment in the traced body (which the tracer rejects).
+    Pure-Python (runs during kernel compilation): ``p`` is a Python int from the static pass loop, so the src/dst
+    (and value) ping-pong is selected here in plain Python and the field handles are passed straight into the
+    ``@qd.func`` calls - no field-handle assignment in the compiled body (which the compiler frontend rejects).
     """
     bit_start = p * RADIX_BITS
     src = keys if (p % 2 == 0) else tmp_keys
     dst = tmp_keys if (p % 2 == 0) else keys
     vsrc = values if (p % 2 == 0) else tmp_values
     vdst = tmp_values if (p % 2 == 0) else values
-    _fused_hist(src, scratch, n, num_blocks, bit_start, KEY_WIDTH)
+    _radix_hist(src, scratch, n, num_blocks, bit_start, KEY_WIDTH)
     _emit_scan_staircase(scratch, 0, hist_len, LOG256_MAX_N - 1)
-    _fused_scatter(src, dst, vsrc, vdst, scratch, n, num_blocks, bit_start, KEY_DTYPE, HAS_VALUES, KEY_WIDTH)
+    _radix_scatter(src, dst, vsrc, vdst, scratch, n, num_blocks, bit_start, KEY_DTYPE, HAS_VALUES, KEY_WIDTH)
+
+
+@_func
+def radix_sort_func(
+    keys: template(),
+    tmp_keys: template(),
+    values: template(),
+    tmp_values: template(),
+    scratch: template(),
+    N: template(),
+    KEY_DTYPE: template(),
+    HAS_VALUES: template(),
+    END_BIT: template(),
+    LOG256_MAX_N: template(),
+):
+    """Whole LSB radix sort as one ``@qd.func`` - the composable form; see module docstring.
+
+    Call it at the **top level** of your own ``@qd.kernel`` (e.g. :func:`radix_sort` below, or a qipc ``graph=True``
+    parent that chains it with other phases). Each phase helper's single top-level ``for`` stays its own offloaded GPU
+    launch, so the inter-phase grid-wide synchronization survives and every phase is captured as a node in the parent's
+    graph. **Must not be called from inside a *runtime* ``for`` / ``if`` / ``while``** in the caller - that would demote
+    the phase loops out of top-level position, collapse the per-phase barriers and corrupt the sort. Compile-time
+    ``static`` loops (like the pass loop here) are fine.
+
+    Compile-time params: ``KEY_DTYPE`` (the key element dtype, one of ``{u32, i32, f32, u64, i64, f64}``), ``HAS_VALUES``
+    (whether ``values`` / ``tmp_values`` are real buffers or placeholders), ``END_BIT`` (low key bits to sort - positive
+    even multiple of ``8``, ``<=`` key width), and ``LOG256_MAX_N`` (scan depth ``D``; the emitted sort handles any
+    count ``<= 256 ** D``). The width, pass count and twiddle need are derived from ``KEY_DTYPE`` + ``END_BIT`` at
+    compile time. ``KEY_DTYPE`` is an explicit param because an ``ndarray`` kernel argument (the qipc path) exposes no
+    ``.dtype`` inside the kernel - pass the dtype you already know (the :func:`radix_sort` wrapper derives it from its
+    field / ndarray argument for you).
+
+    ``N`` is a 0-d ``i32`` ndarray handle read once as ``N[()]``; ``num_blocks`` / ``hist_len`` are derived on-device.
+    The pass loop and scan staircase are statically unrolled, so the launch topology is fixed regardless of ``N``;
+    after an even pass count the result lands in ``keys`` (and ``values``). The caller owns ``scratch`` (size it with
+    :func:`radix_sort_scratch_slots` ``(capacity_N, LOG256_MAX_N)``) and the device-resident ``N``. There is **no**
+    host-side validation or scratch-sufficiency check (a DtoH would defeat graph capture) - pass distinct, same-shape
+    buffers and size ``scratch`` correctly up front.
+    """
+    KEY_WIDTH = static(_key_width_bits(KEY_DTYPE))
+    NUM_PASSES = static(END_BIT // RADIX_BITS)
+    NEEDS_TWIDDLE = static(KEY_DTYPE in _TWIDDLE_KEY_DTYPES)
+    n = N[()]
+    num_blocks = (n + (BLOCK_DIM - 1)) // BLOCK_DIM
+    hist_len = num_blocks * RADIX_DIGITS
+    if static(NEEDS_TWIDDLE):
+        _radix_twiddle(keys, n, KEY_DTYPE, KEY_WIDTH, True)
+    for p in static(range(NUM_PASSES)):
+        _emit_pass(keys, tmp_keys, values, tmp_values, scratch, n, num_blocks, hist_len, p, KEY_DTYPE, HAS_VALUES,
+                   KEY_WIDTH, LOG256_MAX_N)
+    if static(NEEDS_TWIDDLE):
+        _radix_twiddle(keys, n, KEY_DTYPE, KEY_WIDTH, False)
 
 
 @kernel
-def _fused_radix_sort(
+def radix_sort(
     keys: template(),
     tmp_keys: template(),
     values: template(),
     tmp_values: template(),
     scratch: template(),
     N: ndarray_ann(dtype=i32, ndim=0),
-    KEY_DTYPE: template(),
     HAS_VALUES: template(),
-    KEY_WIDTH: template(),
-    NEEDS_TWIDDLE: template(),
-    NUM_PASSES: template(),
+    END_BIT: template(),
     LOG256_MAX_N: template(),
 ):
-    """Whole LSB radix sort as one kernel; see module docstring.
+    """Host-launchable LSB radix sort - a thin ``@qd.kernel`` wrapping :func:`radix_sort_func`.
 
-    ``N`` is a 0-d ``i32`` ndarray read once as ``N[()]``; ``num_blocks`` / ``hist_len`` are derived on-device. The
-    pass loop and the scan staircase are statically unrolled (compile-time ``NUM_PASSES`` / ``LOG256_MAX_N``), so the
-    launch topology is fixed regardless of ``N``. After an even ``NUM_PASSES`` the result lands in ``keys`` (and
-    ``values``).
+    A ``@qd.func`` cannot be launched from the host, so this kernel just calls the func at top level, which inlines it
+    and keeps every phase as its own offload. Use this to sort from the host; call :func:`radix_sort_func` directly to
+    compose the sort inside your own ``graph=True`` parent kernel (the qipc path). Same compile-time params
+    (``HAS_VALUES`` / ``END_BIT`` / ``LOG256_MAX_N``), same caller-owned ``scratch`` + 0-d ``N`` contract, and the same
+    no-validation / no-scratch-check caveat as the func; see :func:`radix_sort_func` and the module docstring.
+
+    ``keys`` / ``tmp_keys`` are distinct same-shape 1-D buffers of a supported dtype (``{u32, i32, f32, u64, i64,
+    f64}``); ``keys`` is sorted in place and ``tmp_keys`` is ping-pong scratch (garbage on return). When
+    ``HAS_VALUES`` is false pass ``keys`` / ``tmp_keys`` again as the ``values`` / ``tmp_values`` placeholders (every
+    value access is ``HAS_VALUES``-guarded). ``N`` is a 0-d ``i32`` ndarray holding the element count on-device. The key
+    dtype is read off the (real field / ndarray) ``keys`` argument and forwarded as the func's ``KEY_DTYPE``.
     """
-    n = N[()]
-    num_blocks = (n + (BLOCK_DIM - 1)) // BLOCK_DIM
-    hist_len = num_blocks * RADIX_DIGITS
-    if static(NEEDS_TWIDDLE):
-        _fused_twiddle(keys, n, KEY_DTYPE, KEY_WIDTH, True)
-    for p in static(range(NUM_PASSES)):
-        _emit_pass(keys, tmp_keys, values, tmp_values, scratch, n, num_blocks, hist_len, p, KEY_DTYPE, HAS_VALUES,
-                   KEY_WIDTH, LOG256_MAX_N)
-    if static(NEEDS_TWIDDLE):
-        _fused_twiddle(keys, n, KEY_DTYPE, KEY_WIDTH, False)
+    radix_sort_func(keys, tmp_keys, values, tmp_values, scratch, N, keys.dtype, HAS_VALUES, END_BIT, LOG256_MAX_N)
 
 
 def _min_log256_for_n(n: int) -> int:
@@ -362,184 +415,50 @@ def _min_log256_for_n(n: int) -> int:
     return d
 
 
-def fused_radix_sort_scratch_slots(n, log256_max_n: int):
-    """Minimum u32 scratch slots the fused sort needs for length ``n`` at scan depth ``log256_max_n``.
+def radix_sort_scratch_slots(n, log256_max_n: int = None):
+    """Minimum u32 scratch slots :func:`radix_sort` / :func:`radix_sort_func` need for a length-``n`` input.
 
-    ``hist_len = ceil(n/BLOCK_DIM) * RADIX_DIGITS`` for the tile histograms, plus the staircase partials. Because the
-    staircase is forced to ``log256_max_n - 1`` reduce levels (even when ``n`` would naturally bottom out sooner),
-    this can be a few slots larger than the natural recursion for small ``n`` at an over-specified ``D`` (each forced
-    extra level adds 1 slot). The caller must allocate **at least** this many slots (more is fine); size against the
-    provisioned upper bound on the element count (e.g. qipc's ``padded_N``), **not** ``256**log256_max_n``.
+    ``hist_len = ceil(n/BLOCK_DIM) * RADIX_DIGITS`` for the tile histograms, plus the scan-staircase partials.
+    Dtype-independent (tile histograms are ``u32`` regardless of key width). Use it to size a caller-owned ``scratch``
+    buffer up front::
 
-    Host- **and** kernel-callable: the body is pure ``ceil``/multiply/accumulate arithmetic and the ``log256_max_n``
-    loop unrolls at trace time, so ``n`` may be a Python ``int`` (host) **or** a device-read ``Expr`` (kernel). The
-    kernel path lets the sort re-check the actual device-``N`` against ``scratch.shape[0]`` on-device and raise an
-    overflow flag (yield-and-realloc) instead of relying on the host knowing ``N``. ``log256_max_n`` must be a
-    compile-time constant in either context.
+        D = log256_max_n  # the same depth you pass to the sort
+        scratch = qd.Tensor(qd.ndarray(qd.u32, shape=max(qd.algorithms.radix_sort_scratch_slots(N, D), 1)))
 
-    No ``n <= 1`` special-case: the formula already yields a valid lower bound for any ``n >= 0`` (``n = 0`` -> 0).
-    Use :func:`device_radix_sort_scratch_slots` for the host "ask first" sizing (which picks the default depth and
-    returns ``0`` for ``n <= 1``).
+    ``log256_max_n`` is the compile-time scan depth ``D``. The staircase is forced to ``D - 1`` reduce levels (even
+    when ``n`` would naturally bottom out sooner), so for small ``n`` at an over-specified ``D`` this can be a few slots
+    larger than the natural recursion (each forced extra level adds 1 slot). Allocate **at least** this many (more is
+    fine); size against the provisioned upper bound on the count (e.g. qipc's ``padded_N``), **not** ``256**D``.
+
+    Two ways to call it:
+
+    - **explicit depth** ``radix_sort_scratch_slots(n, D)`` - host- **and** kernel-callable: the body is pure
+      ``ceil``/multiply/accumulate arithmetic and the ``D`` loop unrolls at compile time, so ``n`` may be a Python
+      ``int`` (host) **or** a device-read ``Expr`` (kernel, e.g. to re-check the actual device-``N`` against
+      ``scratch.shape[0]`` on-device). ``D`` must be a compile-time constant in either context.
+    - **auto depth** ``radix_sort_scratch_slots(n)`` - host-only convenience: derives the minimal depth from ``n`` via
+      :func:`_min_log256_for_n` (a data-dependent loop that cannot compile device-side).
+
+    Returns the real footprint for every ``n >= 0`` (``n = 0`` -> 0; ``n = 1`` -> one tile histogram = ``RADIX_DIGITS``
+    slots). Unlike the removed host entry there is no ``n <= 1`` early-out: the kernel always runs all phases, so a
+    length-1 sort still needs its histogram slots. Multiply by 4 for the byte size.
     """
+    if log256_max_n is None:
+        log256_max_n = _min_log256_for_n(n)
     num_blocks = (n + (BLOCK_DIM - 1)) // BLOCK_DIM
     hist_len = num_blocks * RADIX_DIGITS
     cursor = hist_len
     nn = hist_len
     for _ in range(log256_max_n - 1):
         B = (nn + (BLOCK_DIM - 1)) // BLOCK_DIM
-        cursor += B
+        cursor = cursor + B  # ``+=`` would lower to atomic_add on a non-writable Expr in kernel scope
         nn = B
     return cursor
 
 
-def device_radix_sort_scratch_slots(n: int) -> int:
-    """Number of ``u32`` scratch slots :func:`device_radix_sort` needs to sort a length-``n`` input at the default
-    scan depth.
-
-    Pure host-side arithmetic - no device round-trip - and dtype-independent (tile histograms are ``u32`` regardless
-    of key width). Use it to size a caller-supplied ``scratch`` buffer up front::
-
-        scratch = qd.field(qd.u32, shape=qd.algorithms.device_radix_sort_scratch_slots(N))
-
-    Returns ``0`` for ``n <= 1`` (the sort returns early without touching scratch). Multiply by 4 for the byte size.
-    For an over-specified depth (the graph path that fixes ``log256_max_n`` ahead of time), use
-    :func:`fused_radix_sort_scratch_slots` with that explicit ``D``.
-    """
-    if n <= 1:
-        return 0
-    return fused_radix_sort_scratch_slots(n, _min_log256_for_n(n))
-
-
-def _validate(keys, tmp_keys, values, tmp_values, scratch, end_bit):
-    if not hasattr(keys, "shape") or len(keys.shape) != 1:
-        raise TypeError(f"device_radix_sort expects 1-D keys; got shape {getattr(keys, 'shape', None)}")
-    if keys.dtype not in _SUPPORTED_KEY_DTYPES:
-        raise NotImplementedError(
-            f"device_radix_sort key dtype {keys.dtype} not supported; supported: {list(_SUPPORTED_KEY_DTYPES)}"
-        )
-    if not hasattr(tmp_keys, "shape") or tmp_keys.shape != keys.shape:
-        raise TypeError(
-            f"device_radix_sort expects tmp_keys.shape == keys.shape; got {keys.shape}, {getattr(tmp_keys, 'shape', None)}"
-        )
-    if tmp_keys.dtype != keys.dtype:
-        raise TypeError(f"device_radix_sort dtype mismatch: keys={keys.dtype}, tmp_keys={tmp_keys.dtype}")
-    if keys is tmp_keys:
-        raise ValueError("device_radix_sort requires keys and tmp_keys to be distinct buffers")
-    if scratch is None:
-        raise TypeError(
-            "device_radix_sort requires a caller-provided scratch buffer (there is no shared-scratch fallback); "
-            "allocate a 1-D u32 scratch of device_radix_sort_scratch_slots(N) slots"
-        )
-    if not hasattr(scratch, "shape") or len(scratch.shape) != 1:
-        raise TypeError(
-            f"device_radix_sort scratch must be a 1-D u32 tensor; got shape {getattr(scratch, 'shape', None)}"
-        )
-    if scratch.dtype != u32:
-        raise TypeError(
-            f"device_radix_sort scratch must have dtype u32 (tile histograms are u32 regardless of key width); "
-            f"got {scratch.dtype}"
-        )
-    if (values is None) != (tmp_values is None):
-        raise ValueError("device_radix_sort: values and tmp_values must be passed together (both or neither)")
-    if values is not None:
-        if not hasattr(values, "shape") or values.shape != keys.shape:
-            raise TypeError(
-                f"device_radix_sort expects values.shape == keys.shape; got {keys.shape}, {getattr(values, 'shape', None)}"
-            )
-        if tmp_values.shape != values.shape:
-            raise TypeError(
-                f"device_radix_sort expects tmp_values.shape == values.shape; got {values.shape}, {tmp_values.shape}"
-            )
-        if tmp_values.dtype != values.dtype:
-            raise TypeError(f"device_radix_sort dtype mismatch: values={values.dtype}, tmp_values={tmp_values.dtype}")
-        if values is tmp_values:
-            raise ValueError("device_radix_sort requires values and tmp_values to be distinct buffers")
-        if values.dtype not in _SUPPORTED_VALUE_DTYPES:
-            raise NotImplementedError(
-                f"device_radix_sort value dtype {values.dtype} not supported; supported: {list(_SUPPORTED_VALUE_DTYPES)}"
-            )
-    key_width = _key_width_bits(keys.dtype)
-    if end_bit <= 0 or end_bit > key_width or end_bit % RADIX_BITS != 0 or (end_bit // RADIX_BITS) % 2 != 0:
-        raise ValueError(
-            f"device_radix_sort end_bit must be a positive even multiple of {RADIX_BITS} and <= {key_width} "
-            f"(key width), so an even number of digit passes leaves the result back in keys; got {end_bit}"
-        )
-
-
-def device_radix_sort(
-    keys, tmp_keys, values=None, tmp_values=None, end_bit=None, scratch=None, *, n=None, log256_max_n: int = None
-):  # pylint: disable=too-many-locals,too-many-branches
-    """Sort ``keys`` ascending on the device using a single fused-kernel LSB radix sort (see module docstring).
-
-    Args:
-        keys: 1-D tensor of ``u32`` / ``i32`` / ``f32`` (32-bit) or ``u64`` / ``i64`` / ``f64`` (64-bit), sorted in
-            place. Order matches ``numpy.sort``.
-        tmp_keys: 1-D ping-pong workspace, same shape/dtype as ``keys``, distinct buffer; contents at return are
-            garbage.
-        values: optional 1-D tensor (any supported scalar dtype, independent of the key dtype), same shape as
-            ``keys``; permuted in lock-step (key-value sort), in place.
-        tmp_values: required iff ``values`` is given; same shape/dtype as ``values``, distinct buffer.
-        end_bit: number of low key bits to sort (positive even multiple of ``RADIX_BITS = 8``, ``<=`` key width).
-            Defaults to the full key width. Pass a smaller value if the high bits are known to be zero (saves passes).
-        scratch: **required** caller-owned 1-D ``u32`` workspace sized via :func:`device_radix_sort_scratch_slots`
-            (or :func:`fused_radix_sort_scratch_slots` for an explicit ``log256_max_n``). There is no module-level
-            shared-scratch fallback. A too-small buffer raises :class:`InsufficientScratchError` *before* any in-place
-            key mutation, so the caller's ``keys`` stay recoverable.
-        n: optional 0-d ``i32`` ndarray (``shape=()``) holding the element count on-device - the graph / device-``N``
-            path. If ``None``, the count is ``keys.shape[0]`` and a 0-d ndarray is allocated and filled with it.
-        log256_max_n: compile-time scan depth ``D``; the kernel handles any element count ``<= 256**D`` (a captured
-            graph for a given ``D`` is reusable across all such counts). Defaults to the minimal depth for
-            ``keys.shape[0]``. When set, size ``scratch`` with ``fused_radix_sort_scratch_slots(N, D)``.
-    """
-    import quadrants as qd  # pylint: disable=import-outside-toplevel
-
-    key_width = _key_width_bits(keys.dtype) if keys.dtype in _SUPPORTED_KEY_DTYPES else None
-    if end_bit is None:
-        end_bit = key_width if key_width is not None else 32
-    _validate(keys, tmp_keys, values, tmp_values, scratch, end_bit)
-    key_width = _key_width_bits(keys.dtype)
-
-    capacity_n = keys.shape[0]
-    if capacity_n <= 1:
-        return
-
-    if log256_max_n is None:
-        log256_max_n = _min_log256_for_n(capacity_n)
-    elif capacity_n > RADIX_DIGITS**log256_max_n:
-        raise ValueError(
-            f"device_radix_sort: capacity N={capacity_n} exceeds 256**log256_max_n=256**{log256_max_n}="
-            f"{RADIX_DIGITS**log256_max_n}; increase log256_max_n"
-        )
-
-    num_passes = end_bit // RADIX_BITS
-    has_values = values is not None
-    needs_twiddle = keys.dtype in _TWIDDLE_KEY_DTYPES
-    # Placeholder tensors for the values args when there are no values, so the kernel's template key gets a real
-    # tensor type; the body guards every value access on ``HAS_VALUES`` so they are never dereferenced.
-    values_arg = values if has_values else keys
-    tmp_values_arg = tmp_values if has_values else tmp_keys
-
-    # Up-front scratch check (the full staircase footprint) against the caller buffer. Done before the kernel
-    # launches its first (twiddle) offload, so a short buffer leaves the caller's keys untouched.
-    needed = fused_radix_sort_scratch_slots(capacity_n, log256_max_n)
-    if needed > scratch.shape[0]:
-        raise InsufficientScratchError("device_radix_sort", capacity_n, needed, scratch.shape[0])
-
-    if n is None:
-        # 0-d i32 ndarray matching the kernel's ``N`` annotation (read torch-style as ``N[()]``). The device-N graph
-        # path supplies its own scalar ndarray.
-        n = qd.ndarray(i32, shape=())
-        n.fill(capacity_n)
-
-    _fused_radix_sort(
-        keys, tmp_keys, values_arg, tmp_values_arg, scratch, n,
-        keys.dtype, has_values, key_width, needs_twiddle, num_passes, log256_max_n,
-    )
-
-
 __all__ = [
     "InsufficientScratchError",
-    "device_radix_sort",
-    "device_radix_sort_scratch_slots",
-    "fused_radix_sort_scratch_slots",
+    "radix_sort",
+    "radix_sort_func",
+    "radix_sort_scratch_slots",
 ]

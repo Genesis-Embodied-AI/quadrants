@@ -2,11 +2,11 @@
 
 Covers:
 
-- ``qd.algorithms.device_reduce_{add,min,max}`` - two-or-more-pass tree reduction with caller scratch + ``bit_cast``.
-- ``qd.algorithms.device_exclusive_scan_{add,min,max}`` - three-pass scan.
-- ``qd.algorithms.device_select`` - scan-based stream compaction.
-- ``qd.algorithms.device_radix_sort`` - LSB radix sort built on ``block.radix_rank_match_atomic_or``.
-- ``qd.algorithms.device_reduce_by_key_add`` - scan + scatter + atomic_add reduce-by-key.
+- ``qd.algorithms.reduce_{add,min,max}`` - two-or-more-pass tree reduction with caller scratch + ``bit_cast``.
+- ``qd.algorithms.exclusive_scan_{add,min,max}`` - three-pass scan.
+- ``qd.algorithms.select`` - scan-based stream compaction.
+- ``qd.algorithms.radix_sort`` / ``radix_sort_func`` - LSB radix sort built on ``block.radix_rank_match_atomic_or``.
+- ``qd.algorithms.reduce_by_key_add`` - scan + scatter + atomic_add reduce-by-key.
 
 Each test runs across the full ``arch=qd.gpu`` parametrization so the kernels are exercised on CUDA, AMDGPU, Vulkan,
 and Metal (where the host supports each).
@@ -35,31 +35,46 @@ _FOURBYTE_DTYPES = (qd.i32, qd.u32, qd.f32)
 
 
 def _reduce_scratch(arr):
-    slots = max(qd.algorithms.device_reduce_scratch_slots(arr.shape[0]), 1)
+    slots = max(qd.algorithms.reduce_scratch_slots(arr.shape[0]), 1)
     sdt = qd.u32 if arr.dtype in _FOURBYTE_DTYPES else qd.u64
     return qd.field(sdt, shape=slots)
 
 
 def _scan_scratch(arr):
-    slots = max(qd.algorithms.device_exclusive_scan_scratch_slots(arr.shape[0]), 1)
+    slots = max(qd.algorithms.exclusive_scan_scratch_slots(arr.shape[0]), 1)
     sdt = qd.u32 if arr.dtype in _FOURBYTE_DTYPES else qd.u64
     return qd.field(sdt, shape=slots)
 
 
 def _select_scratch(n):
-    return qd.field(qd.u32, shape=max(qd.algorithms.device_select_scratch_slots(n), 1))
+    return qd.field(qd.u32, shape=max(qd.algorithms.select_scratch_slots(n), 1))
 
 
 def _rbk_scratch(n):
-    return qd.field(qd.u32, shape=max(qd.algorithms.device_reduce_by_key_scratch_slots(n), 1))
+    return qd.field(qd.u32, shape=max(qd.algorithms.reduce_by_key_scratch_slots(n), 1))
 
 
 def _radix_scratch(n, depth=None):
-    if depth is None:
-        slots = qd.algorithms.device_radix_sort_scratch_slots(n)
-    else:
-        slots = qd.algorithms.fused_radix_sort_scratch_slots(n, depth)
+    slots = qd.algorithms.radix_sort_scratch_slots(n, depth)
     return qd.field(qd.u32, shape=max(slots, 1))
+
+
+def _run_radix_sort(keys, tmp_keys, scratch, *, values=None, tmp_values=None, end_bit=None, log256_max_n=None):
+    """Launch the ``radix_sort`` kernel the way a host caller would, deriving the compile-time params the deleted
+    ``device_radix_sort`` Python entry used to derive (key width / pass count / scan depth / 0-d ``N`` ndarray)."""
+    from quadrants.algorithms._radix_sort import _key_width_bits, _min_log256_for_n
+
+    n = keys.shape[0]
+    if log256_max_n is None:
+        log256_max_n = _min_log256_for_n(n)
+    if end_bit is None:
+        end_bit = _key_width_bits(keys.dtype)
+    has_values = values is not None
+    values_arg = values if has_values else keys
+    tmp_values_arg = tmp_values if has_values else tmp_keys
+    nd = qd.ndarray(qd.i32, shape=())
+    nd.fill(n)
+    qd.algorithms.radix_sort(keys, tmp_keys, values_arg, tmp_values_arg, scratch, nd, has_values, end_bit, log256_max_n)
 
 # ---------------------------------------------------------------------------
 # Module-level constants: dtype sets, size sweeps, identity tables.
@@ -82,7 +97,7 @@ _DTYPE_TO_NP = {
     qd.f64: np.float64,
 }
 
-# Identities for device_reduce_min / max (passed by tests that initialize an "all-identity" input). Floats use the
+# Identities for reduce_min / max (passed by tests that initialize an "all-identity" input). Floats use the
 # +/- inf extremum; ints use the dtype's positive / negative range extreme.
 _MIN_IDENTITY = {
     qd.i32: 2**31 - 1,
@@ -162,9 +177,9 @@ def _skip_if_dtype_unsupported(dtype):
 
 
 def _skip_if_radix_sort_large_n_on_apple_gpu(N):
-    """Skip large-N ``device_radix_sort`` calls on Metal / MoltenVK.
+    """Skip large-N ``radix_sort`` calls on Metal / MoltenVK.
 
-    *Why this skip exists.* On Apple GPUs (Metal directly, and MoltenVK / Vulkan-on-Darwin), ``device_radix_sort``
+    *Why this skip exists.* On Apple GPUs (Metal directly, and MoltenVK / Vulkan-on-Darwin), ``radix_sort``
     produces incorrect results once N crosses ``BLOCK_DIM**2 = 65_536``: the ``test_device_radix_sort_keys_only``
     parametrization at N=200_000 reports 50-90% of elements in the wrong position on those backends. CUDA, AMDGPU,
     and Linux Vulkan all pass at every tested size on the same code, so the regression is in the Apple-GPU codegen /
@@ -176,7 +191,7 @@ def _skip_if_radix_sort_large_n_on_apple_gpu(N):
     (radix-sort-then-RBK at N=1M, ``test_scratch_round_trip_across_qd_reset`` at ~2.6M) also need this guard.
     """
     if N >= 200_000 and _is_apple_gpu_backend():
-        pytest.skip("device_radix_sort produces incorrect results on Metal / MoltenVK at N >= 200_000")
+        pytest.skip("radix_sort produces incorrect results on Metal / MoltenVK at N >= 200_000")
 
 
 # ---------------------------------------------------------------------------
@@ -248,7 +263,7 @@ def test_bit_cast_round_trips_f32():
 @test_utils.test(arch=qd.gpu)
 def test_bit_cast_round_trips_f64():
     """Smoke: feed exact-known f64 bit patterns into the kernel, bit_cast through a u64 buffer, read back. Mirrors
-    ``test_bit_cast_round_trips_f32`` for the 8-byte-dtype path used by 64-bit ``device_reduce_*`` / scan.
+    ``test_bit_cast_round_trips_f32`` for the 8-byte-dtype path used by 64-bit ``reduce_*`` / scan.
 
     We push the host-computed bit pattern in via a u64 source field rather than arithmetic on f64 literals to dodge
     kernel-side fp-contract / FMA-reassociation that can offset the result by 1 ulp from the host-side value.
@@ -335,7 +350,7 @@ def _reduce_host(rng, op, dtype, N):
 
 
 def _check_reduce(op, dtype, N):
-    """Run ``device_reduce_<op>(arr)`` and verify against ``numpy.<op>(arr)``.
+    """Run ``reduce_<op>(arr)`` and verify against ``numpy.<op>(arr)``.
 
     ``add`` accumulates so it needs (a) wider integer promotion + mod-wrap masking for u32/u64 and (b) per-N float
     tolerance. ``min`` / ``max`` pick one input element, so they're bitwise-exact for both ints and floats.
@@ -346,7 +361,7 @@ def _check_reduce(op, dtype, N):
     host = _reduce_host(rng, op, dtype, N)
     _fill_field(inp, host)
 
-    qd_fn = getattr(qd.algorithms, f"device_reduce_{op}")
+    qd_fn = getattr(qd.algorithms, f"reduce_{op}")
     qd_fn(inp, out=out, scratch=_reduce_scratch(inp))
     got = out.to_numpy()[0]
 
@@ -384,8 +399,8 @@ def _check_reduce(op, dtype, N):
 @pytest.mark.parametrize("N", _REDUCE_SIZES)
 @pytest.mark.parametrize("dtype", _REDUCE_DTYPES)
 @test_utils.test(arch=qd.gpu)
-def test_device_reduce(op, dtype, N):
-    """``device_reduce_{add,min,max}`` match numpy across the full size sweep + dtype set.
+def test_reduce(op, dtype, N):
+    """``reduce_{add,min,max}`` match numpy across the full size sweep + dtype set.
 
     Unified across the three op variants. ``add`` accumulates so it needs overflow / precision-aware comparison;
     ``min`` / ``max`` pick one element of the input and are bitwise-exact.
@@ -394,8 +409,8 @@ def test_device_reduce(op, dtype, N):
 
 
 @test_utils.test(arch=qd.gpu)
-def test_device_reduce_min_derives_identity_from_dtype():
-    """``device_reduce_min`` does not take an identity argument; it's derived from ``arr.dtype`` (mirror of the
+def test_reduce_min_derives_identity_from_dtype():
+    """``reduce_min`` does not take an identity argument; it's derived from ``arr.dtype`` (mirror of the
     ``block.reduce_min`` / ``subgroup.reduce_min`` contract). On an all-min-identity input the reduction returns
     the identity itself (largest representable value), which exercises the auto-derivation end-to-end."""
     for dtype in _REDUCE_DTYPES:
@@ -406,28 +421,28 @@ def test_device_reduce_min_derives_identity_from_dtype():
         identity = _MIN_IDENTITY[dtype]
         host = np.full(4, identity, dtype=_DTYPE_TO_NP[dtype])
         _fill_field(inp, host)
-        qd.algorithms.device_reduce_min(inp, out=out, scratch=_reduce_scratch(inp))
+        qd.algorithms.reduce_min(inp, out=out, scratch=_reduce_scratch(inp))
         got = out.to_numpy()[0]
         assert got == _DTYPE_TO_NP[dtype](identity), f"{dtype}: got {got}, expected {identity}"
 
 
 @test_utils.test(arch=qd.gpu)
-def test_device_reduce_rejects_dtype_mismatch():
+def test_reduce_rejects_dtype_mismatch():
     """input and out must have the same dtype."""
     inp = qd.field(qd.i32, shape=4)
     out = qd.field(qd.f32, shape=1)
     with pytest.raises(TypeError):
-        qd.algorithms.device_reduce_add(inp, out=out, scratch=_reduce_scratch(inp))
+        qd.algorithms.reduce_add(inp, out=out, scratch=_reduce_scratch(inp))
 
 
 @test_utils.test(arch=qd.gpu)
-def test_device_reduce_rejects_unsupported_dtype():
+def test_reduce_rejects_unsupported_dtype():
     """Supported set is {i32, u32, f32, i64, u64, f64}; narrower dtypes (i16, f16, etc.) are out of scope and must
     raise NotImplementedError so callers don't silently get bit-cast nonsense."""
     inp = qd.field(qd.i16, shape=4)
     out = qd.field(qd.i16, shape=1)
     with pytest.raises(NotImplementedError):
-        qd.algorithms.device_reduce_add(inp, out=out, scratch=qd.field(qd.u32, shape=1))
+        qd.algorithms.reduce_add(inp, out=out, scratch=qd.field(qd.u32, shape=1))
 
 
 def _alloc_scan_input_out(dtype, N):
@@ -458,7 +473,7 @@ def _scan_host(rng, op, dtype, N):
 
 
 def _check_scan(op, dtype, N):
-    """Run ``device_exclusive_scan_<op>(arr)`` and verify against ``numpy.<op>.accumulate``-shifted.
+    """Run ``exclusive_scan_<op>(arr)`` and verify against ``numpy.<op>.accumulate``-shifted.
 
     Like the reduce family, ``add`` accumulates (overflow / precision care) while ``min`` / ``max`` are
     bitwise-exact in both float and int paths.
@@ -470,7 +485,7 @@ def _check_scan(op, dtype, N):
     host = _scan_host(rng, op, dtype, N)
     _fill_field(inp, host)
 
-    qd_fn = getattr(qd.algorithms, f"device_exclusive_scan_{op}")
+    qd_fn = getattr(qd.algorithms, f"exclusive_scan_{op}")
     qd_fn(inp, out=out, scratch=_scan_scratch(inp))
     got = out.to_numpy()
 
@@ -514,47 +529,47 @@ def _check_scan(op, dtype, N):
 @pytest.mark.parametrize("N", _SCAN_SIZES)
 @pytest.mark.parametrize("dtype", _SCAN_DTYPES)
 @test_utils.test(arch=qd.gpu)
-def test_device_exclusive_scan(op, dtype, N):
-    """``device_exclusive_scan_{add,min,max}`` match ``numpy.{cumsum, minimum.accumulate, maximum.accumulate}``-shifted
+def test_exclusive_scan(op, dtype, N):
+    """``exclusive_scan_{add,min,max}`` match ``numpy.{cumsum, minimum.accumulate, maximum.accumulate}``-shifted
     across the full size sweep + dtype set. Unified across the three op variants; same overflow vs bitwise-exact
     handling as the reduce family."""
     _check_scan(op, dtype, N)
 
 
 @test_utils.test(arch=qd.gpu)
-def test_device_exclusive_scan_rejects_inplace():
+def test_exclusive_scan_rejects_inplace():
     """In-place scan (out is input) is rejected per the design doc - see 'API design' / 'Aliasing' in
     qipc_device_algos_design.md."""
     arr = qd.field(qd.i32, shape=4)
     with pytest.raises(ValueError):
-        qd.algorithms.device_exclusive_scan_add(arr, out=arr, scratch=_scan_scratch(arr))
+        qd.algorithms.exclusive_scan_add(arr, out=arr, scratch=_scan_scratch(arr))
 
 
 @test_utils.test(arch=qd.gpu)
-def test_device_exclusive_scan_rejects_shape_mismatch():
+def test_exclusive_scan_rejects_shape_mismatch():
     """out.shape must equal input.shape."""
     inp = qd.field(qd.i32, shape=4)
     out = qd.field(qd.i32, shape=8)
     with pytest.raises(TypeError):
-        qd.algorithms.device_exclusive_scan_add(inp, out=out, scratch=_scan_scratch(inp))
+        qd.algorithms.exclusive_scan_add(inp, out=out, scratch=_scan_scratch(inp))
 
 
 @test_utils.test(arch=qd.gpu)
-def test_device_exclusive_scan_rejects_dtype_mismatch():
+def test_exclusive_scan_rejects_dtype_mismatch():
     """input and out must have the same dtype."""
     inp = qd.field(qd.i32, shape=4)
     out = qd.field(qd.f32, shape=4)
     with pytest.raises(TypeError):
-        qd.algorithms.device_exclusive_scan_add(inp, out=out, scratch=_scan_scratch(inp))
+        qd.algorithms.exclusive_scan_add(inp, out=out, scratch=_scan_scratch(inp))
 
 
 @test_utils.test(arch=qd.gpu)
-def test_device_exclusive_scan_rejects_unsupported_dtype():
+def test_exclusive_scan_rejects_unsupported_dtype():
     """Supported set is {i32, u32, f32, i64, u64, f64}; narrower / wider scalar dtypes raise NotImplementedError."""
     inp = qd.field(qd.i16, shape=4)
     out = qd.field(qd.i16, shape=4)
     with pytest.raises(NotImplementedError):
-        qd.algorithms.device_exclusive_scan_add(inp, out=out, scratch=qd.field(qd.u32, shape=1))
+        qd.algorithms.exclusive_scan_add(inp, out=out, scratch=qd.field(qd.u32, shape=1))
 
 
 # ---------------------------------------------------------------------------
@@ -565,8 +580,8 @@ def test_device_exclusive_scan_rejects_unsupported_dtype():
 @pytest.mark.parametrize("N", _SELECT_SIZES)
 @pytest.mark.parametrize("dtype", _SELECT_DTYPES)
 @test_utils.test(arch=qd.gpu)
-def test_device_select_basic(dtype, N):
-    """device_select packs the elements with flags != 0 into a dense prefix of out, in stable input order; num_out[0]
+def test_select_basic(dtype, N):
+    """select packs the elements with flags != 0 into a dense prefix of out, in stable input order; num_out[0]
     holds the count. Covers all 6 supported scalar dtypes - the scatter (``dst[idx] = src[i]``) is dtype-agnostic, so
     a single parametrized test serves both the 4-byte and 8-byte paths."""
     _skip_if_dtype_unsupported(dtype)
@@ -590,7 +605,7 @@ def test_device_select_basic(dtype, N):
     _fill_field(inp, host)
     _fill_field(flags, flags_host)
 
-    qd.algorithms.device_select(inp, flags, out=out, num_out=num_out, scratch=_select_scratch(inp.shape[0]))
+    qd.algorithms.select(inp, flags, out=out, num_out=num_out, scratch=_select_scratch(inp.shape[0]))
     got_n = int(num_out.to_numpy()[0])
     assert got_n == expected_n, f"{dtype} N={N}: got count {got_n}, expected {expected_n}"
 
@@ -601,10 +616,10 @@ def test_device_select_basic(dtype, N):
 @pytest.mark.parametrize("N", _SELECT_STRUCT_SIZES)
 @pytest.mark.parametrize("nfields", _SELECT_STRUCT_NFIELDS)
 @test_utils.test(arch=qd.gpu)
-def test_device_select_struct_dtype(nfields, N):
-    """device_select over a Struct-of-i32 (libuipc-shape: Vector2i / Vector3i / Vector4i).
+def test_select_struct_dtype(nfields, N):
+    """select over a Struct-of-i32 (libuipc-shape: Vector2i / Vector3i / Vector4i).
 
-    No code path inside ``device_select`` knows about struct dtypes; the scatter is ``dst[idx] = src[i]`` which
+    No code path inside ``select`` knows about struct dtypes; the scatter is ``dst[idx] = src[i]`` which
     lowers per-field. This test pins that contract end-to-end across nfields = 2 / 3 / 4 and a range of N.
     Fill / read-back goes through the struct-field ``from_numpy`` / ``to_numpy`` dict APIs to avoid per-element
     Python-scope assignment (which is O(N) host hops and dominates the test runtime for larger N).
@@ -623,7 +638,7 @@ def test_device_select_struct_dtype(nfields, N):
     inp.from_numpy(fields_host)
     _fill_field(flags, flags_host)
 
-    qd.algorithms.device_select(inp, flags, out=out, num_out=num_out, scratch=_select_scratch(inp.shape[0]))
+    qd.algorithms.select(inp, flags, out=out, num_out=num_out, scratch=_select_scratch(inp.shape[0]))
 
     expected_n = int(flags_host.sum())
     got_n = int(num_out.to_numpy()[0])
@@ -640,7 +655,7 @@ def test_device_select_struct_dtype(nfields, N):
 
 
 @test_utils.test(arch=qd.gpu)
-def test_device_select_all_selected():
+def test_select_all_selected():
     """flags = all 1 -> out is a copy of input, num_out = N."""
     N = 1024
     inp = qd.field(qd.i32, shape=N)
@@ -653,13 +668,13 @@ def test_device_select_all_selected():
     _fill_field(inp, host)
     _fill_field(flags, np.ones(N, dtype=np.int32))
 
-    qd.algorithms.device_select(inp, flags, out=out, num_out=num_out, scratch=_select_scratch(inp.shape[0]))
+    qd.algorithms.select(inp, flags, out=out, num_out=num_out, scratch=_select_scratch(inp.shape[0]))
     assert int(num_out.to_numpy()[0]) == N
     np.testing.assert_array_equal(out.to_numpy(), host)
 
 
 @test_utils.test(arch=qd.gpu)
-def test_device_select_none_selected():
+def test_select_none_selected():
     """flags = all 0 -> nothing written, num_out = 0."""
     N = 1024
     inp = qd.field(qd.i32, shape=N)
@@ -670,15 +685,15 @@ def test_device_select_none_selected():
     _fill_field(inp, np.arange(N, dtype=np.int32))
     _fill_field(flags, np.zeros(N, dtype=np.int32))
 
-    qd.algorithms.device_select(inp, flags, out=out, num_out=num_out, scratch=_select_scratch(inp.shape[0]))
+    qd.algorithms.select(inp, flags, out=out, num_out=num_out, scratch=_select_scratch(inp.shape[0]))
     assert int(num_out.to_numpy()[0]) == 0
 
 
 @test_utils.test(arch=qd.gpu)
-def test_device_select_zero_one_flag_contract():
-    """Pin the 0/1 flag contract documented in ``algorithms.md`` and the ``device_select`` docstring.
+def test_select_zero_one_flag_contract():
+    """Pin the 0/1 flag contract documented in ``algorithms.md`` and the ``select`` docstring.
 
-    ``device_select`` prefix-sums ``flags`` *directly* as counts (no implicit normalization), so the contract is
+    ``select`` prefix-sums ``flags`` *directly* as counts (no implicit normalization), so the contract is
     that every entry is exactly ``0`` or ``1`` and ``1`` selects. This regression test pins the contract by
     construction: an interleaved ``[1, 0, 1, 0, ...]`` pattern of length ``N`` selects exactly the even indices
     (``N/2`` elements, in input order). If a future change accidentally re-introduces an implicit normalization
@@ -696,7 +711,7 @@ def test_device_select_zero_one_flag_contract():
     _fill_field(inp, inp_host)
     _fill_field(flags, flags_host)
 
-    qd.algorithms.device_select(inp, flags, out=out, num_out=num_out, scratch=_select_scratch(inp.shape[0]))
+    qd.algorithms.select(inp, flags, out=out, num_out=num_out, scratch=_select_scratch(inp.shape[0]))
     got_n = int(num_out.to_numpy()[0])
     assert got_n == N // 2, f"interleaved 0/1 flags should select N/2 = {N // 2} entries, got {got_n}"
     expected = inp_host[::2]
@@ -704,44 +719,44 @@ def test_device_select_zero_one_flag_contract():
 
 
 @test_utils.test(arch=qd.gpu)
-def test_device_select_rejects_shape_mismatch():
+def test_select_rejects_shape_mismatch():
     inp = qd.field(qd.i32, shape=4)
     flags = qd.field(qd.i32, shape=5)
     out = qd.field(qd.i32, shape=4)
     num_out = qd.field(qd.i32, shape=1)
     with pytest.raises(TypeError):
-        qd.algorithms.device_select(inp, flags, out=out, num_out=num_out, scratch=_select_scratch(inp.shape[0]))
+        qd.algorithms.select(inp, flags, out=out, num_out=num_out, scratch=_select_scratch(inp.shape[0]))
 
 
 @test_utils.test(arch=qd.gpu)
-def test_device_select_rejects_flags_wrong_dtype():
+def test_select_rejects_flags_wrong_dtype():
     inp = qd.field(qd.i32, shape=4)
     flags = qd.field(qd.f32, shape=4)
     out = qd.field(qd.i32, shape=4)
     num_out = qd.field(qd.i32, shape=1)
     with pytest.raises(TypeError):
-        qd.algorithms.device_select(inp, flags, out=out, num_out=num_out, scratch=_select_scratch(inp.shape[0]))
+        qd.algorithms.select(inp, flags, out=out, num_out=num_out, scratch=_select_scratch(inp.shape[0]))
 
 
 @test_utils.test(arch=qd.gpu)
-def test_device_select_rejects_dtype_mismatch():
+def test_select_rejects_dtype_mismatch():
     inp = qd.field(qd.i32, shape=4)
     flags = qd.field(qd.i32, shape=4)
     out = qd.field(qd.f32, shape=4)
     num_out = qd.field(qd.i32, shape=1)
     with pytest.raises(TypeError):
-        qd.algorithms.device_select(inp, flags, out=out, num_out=num_out, scratch=_select_scratch(inp.shape[0]))
+        qd.algorithms.select(inp, flags, out=out, num_out=num_out, scratch=_select_scratch(inp.shape[0]))
 
 
 @test_utils.test(arch=qd.gpu)
-def test_device_select_rejects_short_out():
+def test_select_rejects_short_out():
     """out must hold at least N elements (worst-case all-selected)."""
     inp = qd.field(qd.i32, shape=8)
     flags = qd.field(qd.i32, shape=8)
     out = qd.field(qd.i32, shape=4)  # < input size
     num_out = qd.field(qd.i32, shape=1)
     with pytest.raises(ValueError):
-        qd.algorithms.device_select(inp, flags, out=out, num_out=num_out, scratch=_select_scratch(inp.shape[0]))
+        qd.algorithms.select(inp, flags, out=out, num_out=num_out, scratch=_select_scratch(inp.shape[0]))
 
 
 # ---------------------------------------------------------------------------
@@ -788,7 +803,7 @@ def _gen_keys(rng, dtype, N):
 @pytest.mark.parametrize("dtype", _RADIX_KEY_DTYPES)
 @test_utils.test(arch=qd.gpu)
 def test_device_radix_sort_keys_only(dtype, N):
-    """device_radix_sort matches numpy.sort for every supported key dtype ({u32, i32, f32, u64, i64, f64})."""
+    """radix_sort matches numpy.sort for every supported key dtype ({u32, i32, f32, u64, i64, f64})."""
     _skip_if_dtype_unsupported(dtype)
     _skip_if_radix_sort_large_n_on_apple_gpu(N)
     rng = np.random.default_rng(seed=1234)
@@ -798,7 +813,7 @@ def test_device_radix_sort_keys_only(dtype, N):
     tmp = qd.field(dtype, shape=N)
     _fill_field(keys, host)
 
-    qd.algorithms.device_radix_sort(keys, tmp_keys=tmp, scratch=_radix_scratch(keys.shape[0]))
+    _run_radix_sort(keys, tmp, _radix_scratch(keys.shape[0]))
     got = keys.to_numpy()
     want = np.sort(host, kind="stable")
     np.testing.assert_array_equal(got, want, err_msg=f"{dtype} radix_sort(N={N})")
@@ -822,8 +837,8 @@ def test_device_radix_sort_key_value(dtype, N):
     _fill_field(keys, host)
     _fill_field(values, np.arange(N, dtype=np.int32))
 
-    qd.algorithms.device_radix_sort(
-        keys, tmp_keys=tmp_keys, values=values, tmp_values=tmp_values, scratch=_radix_scratch(keys.shape[0])
+    _run_radix_sort(
+        keys, tmp_keys, _radix_scratch(keys.shape[0]), values=values, tmp_values=tmp_values
     )
 
     got_keys = keys.to_numpy()
@@ -843,14 +858,13 @@ def test_device_radix_sort_already_sorted():
     tmp = qd.field(qd.u32, shape=N)
     host = np.arange(N, dtype=np.uint32) * 7
     _fill_field(keys, host)
-    qd.algorithms.device_radix_sort(keys, tmp_keys=tmp, scratch=_radix_scratch(keys.shape[0]))
+    _run_radix_sort(keys, tmp, _radix_scratch(keys.shape[0]))
     np.testing.assert_array_equal(keys.to_numpy(), host)
 
 
-# --- Fused-kernel specifics: over-specified scan depth (the graph path fixes ``log256_max_n`` ahead of time so one
+# --- Scan-depth specifics: over-specified scan depth (the graph path fixes ``log256_max_n`` ahead of time so one
 # captured topology serves a range of N). The dtype x size matrix (incl. key-value) is covered by
-# ``test_device_radix_sort_keys_only`` / ``_key_value`` above - now backed by this fused kernel - and the
-# caller-scratch tests further below. -------------------------------------------------------------------------------
+# ``test_device_radix_sort_keys_only`` / ``_key_value`` above and the caller-scratch tests further below. ------------
 
 
 @pytest.mark.parametrize("N", [7, 257, 1025, 65536])
@@ -858,7 +872,7 @@ def test_device_radix_sort_already_sorted():
 def test_device_radix_sort_overspecified_depth(N):
     """An over-specified ``log256_max_n`` (deeper than the minimal depth for N) must still sort correctly - the
     forced extra staircase levels operate on length-1 buffers and act as identity no-ops. Also covers sizing scratch
-    via ``fused_radix_sort_scratch_slots(N, D)`` for an explicit depth ``D``."""
+    via ``radix_sort_scratch_slots(N, D)`` for an explicit depth ``D``."""
     D = 3  # 256**3 = 16_777_216 >= every N here, so depth is intentionally deeper than needed
     rng = np.random.default_rng(seed=99)
     host = _gen_keys(rng, qd.u32, N)
@@ -867,10 +881,9 @@ def test_device_radix_sort_overspecified_depth(N):
     tmp = qd.field(qd.u32, shape=N)
     _fill_field(keys, host)
 
-    slots = qd.algorithms.fused_radix_sort_scratch_slots(N, D)
-    scratch = qd.field(qd.u32, shape=max(slots, 1))
+    scratch = _radix_scratch(N, D)
 
-    qd.algorithms.device_radix_sort(keys, tmp_keys=tmp, scratch=scratch, log256_max_n=D)
+    _run_radix_sort(keys, tmp, scratch, log256_max_n=D)
     np.testing.assert_array_equal(keys.to_numpy(), np.sort(host, kind="stable"), err_msg=f"u32 sort(N={N}, D={D})")
 
 
@@ -882,7 +895,7 @@ def test_device_radix_sort_reverse_sorted():
     tmp = qd.field(qd.i32, shape=N)
     host = (np.arange(N, dtype=np.int32) * -7).astype(np.int32)  # decreasing
     _fill_field(keys, host)
-    qd.algorithms.device_radix_sort(keys, tmp_keys=tmp, scratch=_radix_scratch(keys.shape[0]))
+    _run_radix_sort(keys, tmp, _radix_scratch(keys.shape[0]))
     np.testing.assert_array_equal(keys.to_numpy(), np.sort(host))
 
 
@@ -894,73 +907,18 @@ def test_device_radix_sort_all_same():
     tmp = qd.field(qd.i32, shape=N)
     host = np.full(N, 42, dtype=np.int32)
     _fill_field(keys, host)
-    qd.algorithms.device_radix_sort(keys, tmp_keys=tmp, scratch=_radix_scratch(keys.shape[0]))
+    _run_radix_sort(keys, tmp, _radix_scratch(keys.shape[0]))
     np.testing.assert_array_equal(keys.to_numpy(), host)
 
 
 @test_utils.test(arch=qd.gpu)
 def test_device_radix_sort_n1():
-    """N=1 is the trivial early-return path."""
+    """N=1: the kernel runs all phases on a single-element tile and leaves it in place."""
     keys = qd.field(qd.i32, shape=1)
     tmp = qd.field(qd.i32, shape=1)
     _fill_field(keys, np.asarray([42], dtype=np.int32))
-    qd.algorithms.device_radix_sort(keys, tmp_keys=tmp, scratch=_radix_scratch(keys.shape[0]))
+    _run_radix_sort(keys, tmp, _radix_scratch(keys.shape[0]))
     assert int(keys.to_numpy()[0]) == 42
-
-
-@test_utils.test(arch=qd.gpu)
-def test_device_radix_sort_rejects_dtype_mismatch():
-    keys = qd.field(qd.i32, shape=8)
-    tmp = qd.field(qd.u32, shape=8)
-    with pytest.raises(TypeError):
-        qd.algorithms.device_radix_sort(keys, tmp_keys=tmp, scratch=_radix_scratch(keys.shape[0]))
-
-
-@test_utils.test(arch=qd.gpu)
-def test_device_radix_sort_rejects_shape_mismatch():
-    keys = qd.field(qd.i32, shape=8)
-    tmp = qd.field(qd.i32, shape=4)
-    with pytest.raises(TypeError):
-        qd.algorithms.device_radix_sort(keys, tmp_keys=tmp, scratch=_radix_scratch(keys.shape[0]))
-
-
-@test_utils.test(arch=qd.gpu)
-def test_device_radix_sort_rejects_aliasing():
-    keys = qd.field(qd.i32, shape=8)
-    with pytest.raises(ValueError):
-        qd.algorithms.device_radix_sort(keys, tmp_keys=keys, scratch=_radix_scratch(keys.shape[0]))
-
-
-@test_utils.test(arch=qd.gpu)
-def test_device_radix_sort_rejects_unsupported_dtype():
-    """Supported set is {u32, i32, f32, u64, i64, f64}; narrower / wider dtypes raise NotImplementedError."""
-    keys = qd.field(qd.i16, shape=8)
-    tmp = qd.field(qd.i16, shape=8)
-    with pytest.raises(NotImplementedError):
-        qd.algorithms.device_radix_sort(keys, tmp_keys=tmp, scratch=_radix_scratch(keys.shape[0]))
-
-
-@test_utils.test(arch=qd.gpu)
-def test_device_radix_sort_rejects_missing_tmp_values():
-    """values requires tmp_values."""
-    keys = qd.field(qd.i32, shape=8)
-    tmp_keys = qd.field(qd.i32, shape=8)
-    values = qd.field(qd.i32, shape=8)
-    with pytest.raises(ValueError):
-        qd.algorithms.device_radix_sort(
-            keys, tmp_keys=tmp_keys, values=values, scratch=_radix_scratch(keys.shape[0])
-        )
-
-
-@test_utils.test(arch=qd.gpu)
-def test_device_radix_sort_rejects_odd_passes():
-    """end_bit must yield an even number of passes so the result lands in keys."""
-    keys = qd.field(qd.i32, shape=8)
-    tmp = qd.field(qd.i32, shape=8)
-    with pytest.raises(ValueError):
-        qd.algorithms.device_radix_sort(
-            keys, tmp_keys=tmp, end_bit=8, scratch=_radix_scratch(keys.shape[0])
-        )  # 1 pass - odd
 
 
 # ---------------------------------------------------------------------------
@@ -1010,7 +968,7 @@ def _gen_run_keys(rng, dtype, N):
 @pytest.mark.parametrize("key_dtype", [qd.i32, qd.u32, qd.f32])
 @pytest.mark.parametrize("val_dtype", [qd.i32, qd.u32, qd.f32])
 @test_utils.test(arch=qd.gpu)
-def test_device_reduce_by_key_add(key_dtype, val_dtype, N):
+def test_reduce_by_key_add(key_dtype, val_dtype, N):
     """Cross-product of key dtype × value dtype × size, against a CPU oracle.
 
     Values are bounded so ``f32`` accumulation error stays controlled - the tolerance is ``_F32_LARGE_N_*`` for f32
@@ -1034,7 +992,7 @@ def test_device_reduce_by_key_add(key_dtype, val_dtype, N):
     _fill_field(keys_in, keys_host)
     _fill_field(values_in, values_host)
 
-    qd.algorithms.device_reduce_by_key_add(
+    qd.algorithms.reduce_by_key_add(
         keys_in, values_in, keys_out=keys_out, values_out=values_out, num_runs=num_runs,
         scratch=_rbk_scratch(keys_in.shape[0]),
     )
@@ -1058,7 +1016,7 @@ def test_device_reduce_by_key_add(key_dtype, val_dtype, N):
 
 
 @test_utils.test(arch=qd.gpu)
-def test_device_reduce_by_key_add_all_same():
+def test_reduce_by_key_add_all_same():
     """All keys equal -> single run, values_out[0] = sum of all values."""
     N = 1024
     keys_in = qd.field(qd.i32, shape=N)
@@ -1071,7 +1029,7 @@ def test_device_reduce_by_key_add_all_same():
     vals = rng.integers(-100, 100, size=N, dtype=np.int32)
     _fill_field(values_in, vals)
 
-    qd.algorithms.device_reduce_by_key_add(
+    qd.algorithms.reduce_by_key_add(
         keys_in, values_in, keys_out=keys_out, values_out=values_out, num_runs=num_runs,
         scratch=_rbk_scratch(keys_in.shape[0]),
     )
@@ -1081,7 +1039,7 @@ def test_device_reduce_by_key_add_all_same():
 
 
 @test_utils.test(arch=qd.gpu)
-def test_device_reduce_by_key_add_all_unique():
+def test_reduce_by_key_add_all_unique():
     """No two consecutive keys equal -> num_runs == N, values_out is a copy of values."""
     N = 1024
     keys_in = qd.field(qd.i32, shape=N)
@@ -1094,7 +1052,7 @@ def test_device_reduce_by_key_add_all_unique():
     _fill_field(keys_in, keys_host)
     _fill_field(values_in, vals_host)
 
-    qd.algorithms.device_reduce_by_key_add(
+    qd.algorithms.reduce_by_key_add(
         keys_in, values_in, keys_out=keys_out, values_out=values_out, num_runs=num_runs,
         scratch=_rbk_scratch(keys_in.shape[0]),
     )
@@ -1104,35 +1062,35 @@ def test_device_reduce_by_key_add_all_unique():
 
 
 @test_utils.test(arch=qd.gpu)
-def test_device_reduce_by_key_add_rejects_shape_mismatch():
+def test_reduce_by_key_add_rejects_shape_mismatch():
     keys_in = qd.field(qd.i32, shape=8)
     values_in = qd.field(qd.i32, shape=4)  # wrong length
     keys_out = qd.field(qd.i32, shape=8)
     values_out = qd.field(qd.i32, shape=8)
     num_runs = qd.field(qd.i32, shape=1)
     with pytest.raises(TypeError):
-        qd.algorithms.device_reduce_by_key_add(
+        qd.algorithms.reduce_by_key_add(
             keys_in, values_in, keys_out=keys_out, values_out=values_out, num_runs=num_runs,
             scratch=_rbk_scratch(keys_in.shape[0]),
         )
 
 
 @test_utils.test(arch=qd.gpu)
-def test_device_reduce_by_key_add_rejects_dtype_mismatch():
+def test_reduce_by_key_add_rejects_dtype_mismatch():
     keys_in = qd.field(qd.i32, shape=8)
     values_in = qd.field(qd.i32, shape=8)
     keys_out = qd.field(qd.f32, shape=8)  # dtype != keys_in
     values_out = qd.field(qd.i32, shape=8)
     num_runs = qd.field(qd.i32, shape=1)
     with pytest.raises(TypeError):
-        qd.algorithms.device_reduce_by_key_add(
+        qd.algorithms.reduce_by_key_add(
             keys_in, values_in, keys_out=keys_out, values_out=values_out, num_runs=num_runs,
             scratch=_rbk_scratch(keys_in.shape[0]),
         )
 
 
 @test_utils.test(arch=qd.gpu)
-def test_device_reduce_by_key_add_rejects_short_out():
+def test_reduce_by_key_add_rejects_short_out():
     """keys_out and values_out must hold at least N entries (worst case: all unique)."""
     keys_in = qd.field(qd.i32, shape=16)
     values_in = qd.field(qd.i32, shape=16)
@@ -1140,21 +1098,21 @@ def test_device_reduce_by_key_add_rejects_short_out():
     values_out = qd.field(qd.i32, shape=16)
     num_runs = qd.field(qd.i32, shape=1)
     with pytest.raises(ValueError):
-        qd.algorithms.device_reduce_by_key_add(
+        qd.algorithms.reduce_by_key_add(
             keys_in, values_in, keys_out=keys_out, values_out=values_out, num_runs=num_runs,
             scratch=_rbk_scratch(keys_in.shape[0]),
         )
 
 
 @test_utils.test(arch=qd.gpu)
-def test_device_reduce_by_key_add_rejects_unsupported_dtype():
+def test_reduce_by_key_add_rejects_unsupported_dtype():
     keys_in = qd.field(qd.i64, shape=8)
     values_in = qd.field(qd.i64, shape=8)
     keys_out = qd.field(qd.i64, shape=8)
     values_out = qd.field(qd.i64, shape=8)
     num_runs = qd.field(qd.i32, shape=1)
     with pytest.raises(NotImplementedError):
-        qd.algorithms.device_reduce_by_key_add(
+        qd.algorithms.reduce_by_key_add(
             keys_in, values_in, keys_out=keys_out, values_out=values_out, num_runs=num_runs,
             scratch=_rbk_scratch(keys_in.shape[0]),
         )
@@ -1169,7 +1127,7 @@ def test_device_reduce_by_key_add_rejects_unsupported_dtype():
 @pytest.mark.parametrize("dtype", _RADIX_KEY_DTYPES)
 @test_utils.test(arch=qd.gpu)
 def test_device_radix_sort_n_1m(dtype):
-    """N = 1_000_000 - qipc's hot-path size, with a caller-owned scratch sized via ``device_radix_sort_scratch_slots``.
+    """N = 1_000_000 - qipc's hot-path size, with a caller-owned scratch sized via ``radix_sort_scratch_slots``.
     8-byte key dtypes run twice as many passes (8 instead of 4) for the same N; the scratch requirement is unchanged
     (the histograms are always u32), so the same buffer covers both widths."""
     _skip_if_dtype_unsupported(dtype)
@@ -1182,13 +1140,13 @@ def test_device_radix_sort_n_1m(dtype):
     tmp = qd.field(dtype, shape=N)
     _fill_field(keys, host)
 
-    qd.algorithms.device_radix_sort(keys, tmp_keys=tmp, scratch=_radix_scratch(N))
+    _run_radix_sort(keys, tmp, _radix_scratch(N))
     np.testing.assert_array_equal(keys.to_numpy(), np.sort(host, kind="stable"))
 
 
 @test_utils.test(arch=qd.gpu)
-def test_device_reduce_by_key_add_n_1m():
-    """N = 1_000_000 reduce-by-key with a caller-owned scratch sized via ``device_reduce_by_key_scratch_slots``."""
+def test_reduce_by_key_add_n_1m():
+    """N = 1_000_000 reduce-by-key with a caller-owned scratch sized via ``reduce_by_key_scratch_slots``."""
     N = 1_000_000
     _skip_if_radix_sort_large_n_on_apple_gpu(N)
     rng = np.random.default_rng(seed=1234)
@@ -1203,7 +1161,7 @@ def test_device_reduce_by_key_add_n_1m():
     _fill_field(keys_in, keys_host)
     _fill_field(values_in, values_host)
 
-    qd.algorithms.device_reduce_by_key_add(
+    qd.algorithms.reduce_by_key_add(
         keys_in, values_in, keys_out=keys_out, values_out=values_out, num_runs=num_runs,
         scratch=_rbk_scratch(keys_in.shape[0]),
     )
@@ -1230,7 +1188,7 @@ def test_device_reduce_by_key_add_n_1m():
 @test_utils.test(arch=qd.gpu)
 def test_prefix_sum_executor_emits_deprecation_warning():
     """`PrefixSumExecutor(N)` must emit `DeprecationWarning` per the migration plan in algorithms.md."""
-    with pytest.warns(DeprecationWarning, match="device_exclusive_scan_add"):
+    with pytest.warns(DeprecationWarning, match="exclusive_scan_add"):
         qd.algorithms.PrefixSumExecutor(64)
 
 
@@ -1238,29 +1196,28 @@ def test_prefix_sum_executor_emits_deprecation_warning():
 def test_parallel_sort_emits_deprecation_warning():
     """`parallel_sort` must emit `DeprecationWarning` per the migration plan in algorithms.md."""
     keys = qd.field(qd.i32, shape=8)
-    with pytest.warns(DeprecationWarning, match="device_radix_sort"):
+    with pytest.warns(DeprecationWarning, match="radix_sort"):
         qd.algorithms.parallel_sort(keys)
 
 
-# --- Caller-scratch insufficiency paths. Each algorithm raises ``InsufficientScratchError`` (a ``RuntimeError``
-# subclass carrying the required slot count) when the caller-supplied ``scratch`` is smaller than
-# ``*_scratch_slots(N)``, rather than launching with a too-small buffer. The radix variant additionally pins that the
-# refusal happens *before* any in-place key twiddle, so a failed call leaves ``keys`` recoverable.
+# --- Caller-scratch insufficiency paths. The reduce / scan / select / reduce-by-key host entries raise
+# ``InsufficientScratchError`` (a ``RuntimeError`` subclass carrying the required slot count) when the caller-supplied
+# ``scratch`` is smaller than ``*_scratch_slots(N)``, rather than launching with a too-small buffer. (The radix sort
+# is launched directly as a kernel with no host-side check, so it has no equivalent path.)
 
 
 @test_utils.test(arch=qd.gpu)
 def test_device_radix_sort_caller_scratch():
-    """Caller-owned ``scratch`` buffer (sized via ``device_radix_sort_scratch_slots``) sorts identically to the
-    shared-scratch path, without consulting the module-level scratch."""
+    """Caller-owned ``scratch`` buffer (sized via ``radix_sort_scratch_slots``) sorts correctly."""
     N = 100_000
     rng = np.random.default_rng(seed=7)
     host = rng.integers(-(2**31), 2**31 - 1, size=N, dtype=np.int32)
     keys = qd.field(qd.i32, shape=N)
     tmp = qd.field(qd.i32, shape=N)
-    scratch = qd.field(qd.u32, shape=qd.algorithms.device_radix_sort_scratch_slots(N))
+    scratch = qd.field(qd.u32, shape=qd.algorithms.radix_sort_scratch_slots(N))
     _fill_field(keys, host)
 
-    qd.algorithms.device_radix_sort(keys, tmp_keys=tmp, scratch=scratch)
+    _run_radix_sort(keys, tmp, scratch)
     np.testing.assert_array_equal(keys.to_numpy(), np.sort(host, kind="stable"))
 
 
@@ -1275,13 +1232,11 @@ def test_device_radix_sort_caller_scratch_key_value():
     tmp_keys = qd.field(qd.u64, shape=N)
     values = qd.field(qd.i32, shape=N)
     tmp_values = qd.field(qd.i32, shape=N)
-    scratch = qd.field(qd.u32, shape=qd.algorithms.device_radix_sort_scratch_slots(N))
+    scratch = qd.field(qd.u32, shape=qd.algorithms.radix_sort_scratch_slots(N))
     _fill_field(keys, host)
     _fill_field(values, np.arange(N, dtype=np.int32))
 
-    qd.algorithms.device_radix_sort(
-        keys, tmp_keys=tmp_keys, values=values, tmp_values=tmp_values, scratch=scratch
-    )
+    _run_radix_sort(keys, tmp_keys, scratch, values=values, tmp_values=tmp_values)
     want_idx = np.argsort(host, kind="stable")
     np.testing.assert_array_equal(keys.to_numpy(), host[want_idx])
     np.testing.assert_array_equal(values.to_numpy(), want_idx.astype(np.int32))
@@ -1289,19 +1244,20 @@ def test_device_radix_sort_caller_scratch_key_value():
 
 @test_utils.test(arch=qd.gpu)
 def test_device_radix_sort_scratch_slots_query():
-    """``device_radix_sort_scratch_slots`` returns 0 for N<=1 and the full recursive scan footprint otherwise; a
-    buffer of exactly that size sorts successfully."""
-    from quadrants.algorithms._radix_sort import BLOCK_DIM, RADIX_DIGITS
-    from quadrants.algorithms._scan import _scan_total_scratch_slots
+    """``radix_sort_scratch_slots`` returns the real footprint for every N (0 for N=0, one tile histogram for N=1),
+    and the auto-depth form matches the explicit minimal-depth form; a buffer of exactly that size sorts successfully."""
+    from quadrants.algorithms._radix_sort import BLOCK_DIM, RADIX_DIGITS, _min_log256_for_n
 
-    assert qd.algorithms.device_radix_sort_scratch_slots(0) == 0
-    assert qd.algorithms.device_radix_sort_scratch_slots(1) == 0
+    assert qd.algorithms.radix_sort_scratch_slots(0) == 0
+    assert qd.algorithms.radix_sort_scratch_slots(1) == RADIX_DIGITS
 
     N = 100_000
     num_blocks = (N + BLOCK_DIM - 1) // BLOCK_DIM
     hist_len = num_blocks * RADIX_DIGITS
-    needed = qd.algorithms.device_radix_sort_scratch_slots(N)
-    assert needed == _scan_total_scratch_slots(hist_len, partials_cursor=hist_len)
+    needed = qd.algorithms.radix_sort_scratch_slots(N)
+    # auto depth == explicit minimal depth, and the footprint starts at the tile histograms.
+    assert needed == qd.algorithms.radix_sort_scratch_slots(N, _min_log256_for_n(N))
+    assert needed >= hist_len
 
     rng = np.random.default_rng(seed=9)
     host = rng.integers(-(2**31), 2**31 - 1, size=N, dtype=np.int32)
@@ -1310,66 +1266,34 @@ def test_device_radix_sort_scratch_slots_query():
     scratch = qd.field(qd.u32, shape=needed)  # exactly enough
     _fill_field(keys, host)
 
-    qd.algorithms.device_radix_sort(keys, tmp_keys=tmp, scratch=scratch)
+    _run_radix_sort(keys, tmp, scratch)
     np.testing.assert_array_equal(keys.to_numpy(), np.sort(host, kind="stable"))
 
 
 @test_utils.test(arch=qd.gpu)
-def test_device_radix_sort_insufficient_caller_scratch():
-    """A too-small caller ``scratch`` raises ``InsufficientScratchError`` (a ``RuntimeError`` subclass) carrying the
-    required size, *before* any in-place twiddle - so the caller's keys are untouched and recoverable."""
-    N = 100_000
-    needed = qd.algorithms.device_radix_sort_scratch_slots(N)
-    rng = np.random.default_rng(seed=10)
-    host = rng.integers(-(2**30), 2**30, size=N, dtype=np.int32)  # signed -> would hit the in-place twiddle
-    keys = qd.field(qd.i32, shape=N)
-    tmp = qd.field(qd.i32, shape=N)
-    scratch = qd.field(qd.u32, shape=needed - 1)  # one slot short
-    _fill_field(keys, host)
-
-    with pytest.raises(qd.algorithms.InsufficientScratchError) as excinfo:
-        qd.algorithms.device_radix_sort(keys, tmp_keys=tmp, scratch=scratch)
-    assert excinfo.value.required_slots == needed
-    assert excinfo.value.provided_slots == needed - 1
-    assert isinstance(excinfo.value, RuntimeError)
-    np.testing.assert_array_equal(keys.to_numpy(), host)  # no twiddle ran
-
-
-@test_utils.test(arch=qd.gpu)
-def test_device_radix_sort_rejects_non_u32_scratch():
-    """A caller ``scratch`` of the wrong dtype is rejected (tile histograms are u32 regardless of key width)."""
-    N = 1000
-    keys = qd.field(qd.i32, shape=N)
-    tmp = qd.field(qd.i32, shape=N)
-    bad_scratch = qd.field(qd.i32, shape=qd.algorithms.device_radix_sort_scratch_slots(N))
-    with pytest.raises(TypeError, match="u32"):
-        qd.algorithms.device_radix_sort(keys, tmp_keys=tmp, scratch=bad_scratch)
-
-
-@test_utils.test(arch=qd.gpu)
-def test_device_select_insufficient_scratch():
-    """A caller ``scratch`` one slot short of ``device_select_scratch_slots(N)`` raises ``InsufficientScratchError``
+def test_select_insufficient_scratch():
+    """A caller ``scratch`` one slot short of ``select_scratch_slots(N)`` raises ``InsufficientScratchError``
     (a ``RuntimeError`` subclass) carrying the required / provided slot counts, before any scatter runs."""
     N = 100_000
-    needed = qd.algorithms.device_select_scratch_slots(N)
+    needed = qd.algorithms.select_scratch_slots(N)
     inp = qd.field(qd.i32, shape=N)
     flags = qd.field(qd.i32, shape=N)
     out = qd.field(qd.i32, shape=N)
     num_out = qd.field(qd.i32, shape=1)
     scratch = qd.field(qd.u32, shape=needed - 1)
     with pytest.raises(qd.algorithms.InsufficientScratchError) as excinfo:
-        qd.algorithms.device_select(inp, flags, out=out, num_out=num_out, scratch=scratch)
+        qd.algorithms.select(inp, flags, out=out, num_out=num_out, scratch=scratch)
     assert excinfo.value.required_slots == needed
     assert excinfo.value.provided_slots == needed - 1
     assert isinstance(excinfo.value, RuntimeError)
 
 
 @test_utils.test(arch=qd.gpu)
-def test_device_reduce_by_key_add_insufficient_scratch():
-    """A caller ``scratch`` one slot short of ``device_reduce_by_key_scratch_slots(N)`` raises
+def test_reduce_by_key_add_insufficient_scratch():
+    """A caller ``scratch`` one slot short of ``reduce_by_key_scratch_slots(N)`` raises
     ``InsufficientScratchError``."""
     N = 100_000
-    needed = qd.algorithms.device_reduce_by_key_scratch_slots(N)
+    needed = qd.algorithms.reduce_by_key_scratch_slots(N)
     keys_in = qd.field(qd.i32, shape=N)
     values_in = qd.field(qd.i32, shape=N)
     keys_out = qd.field(qd.i32, shape=N)
@@ -1377,7 +1301,7 @@ def test_device_reduce_by_key_add_insufficient_scratch():
     num_runs = qd.field(qd.i32, shape=1)
     scratch = qd.field(qd.u32, shape=needed - 1)
     with pytest.raises(qd.algorithms.InsufficientScratchError) as excinfo:
-        qd.algorithms.device_reduce_by_key_add(
+        qd.algorithms.reduce_by_key_add(
             keys_in, values_in, keys_out=keys_out, values_out=values_out, num_runs=num_runs, scratch=scratch
         )
     assert excinfo.value.required_slots == needed
@@ -1385,33 +1309,33 @@ def test_device_reduce_by_key_add_insufficient_scratch():
 
 
 @test_utils.test(arch=qd.gpu)
-def test_device_reduce_add_insufficient_scratch():
-    """``device_reduce_*`` needs ``device_reduce_scratch_slots(N)`` slots; a one-slot-short u32 scratch raises
+def test_reduce_add_insufficient_scratch():
+    """``reduce_*`` needs ``reduce_scratch_slots(N)`` slots; a one-slot-short u32 scratch raises
     ``InsufficientScratchError`` before any kernel launches. ``N = 1M`` forces a multi-level reduce so the slot
     count is comfortably > 1."""
     N = 1_000_000
-    needed = qd.algorithms.device_reduce_scratch_slots(N)
+    needed = qd.algorithms.reduce_scratch_slots(N)
     assert needed > 1
     inp = qd.field(qd.i32, shape=N)
     out = qd.field(qd.i32, shape=1)
     scratch = qd.field(qd.u32, shape=needed - 1)
     with pytest.raises(qd.algorithms.InsufficientScratchError) as excinfo:
-        qd.algorithms.device_reduce_add(inp, out=out, scratch=scratch)
+        qd.algorithms.reduce_add(inp, out=out, scratch=scratch)
     assert excinfo.value.required_slots == needed
 
 
 @test_utils.test(arch=qd.gpu)
-def test_device_exclusive_scan_add_insufficient_scratch():
-    """``device_exclusive_scan_*`` needs ``device_exclusive_scan_scratch_slots(N)`` slots (top-level partials plus
+def test_exclusive_scan_add_insufficient_scratch():
+    """``exclusive_scan_*`` needs ``exclusive_scan_scratch_slots(N)`` slots (top-level partials plus
     deeper recursion); a one-slot-short u32 scratch raises ``InsufficientScratchError``."""
     N = 1_000_000
-    needed = qd.algorithms.device_exclusive_scan_scratch_slots(N)
+    needed = qd.algorithms.exclusive_scan_scratch_slots(N)
     assert needed > 1
     inp = qd.field(qd.i32, shape=N)
     out = qd.field(qd.i32, shape=N)
     scratch = qd.field(qd.u32, shape=needed - 1)
     with pytest.raises(qd.algorithms.InsufficientScratchError) as excinfo:
-        qd.algorithms.device_exclusive_scan_add(inp, out=out, scratch=scratch)
+        qd.algorithms.exclusive_scan_add(inp, out=out, scratch=scratch)
     assert excinfo.value.required_slots == needed
 
 
@@ -1422,10 +1346,10 @@ def test_device_exclusive_scan_add_insufficient_scratch():
 
 @pytest.mark.parametrize("dtype", _REDUCE_DTYPES)
 @test_utils.test(arch=qd.gpu)
-def test_device_reduce_add_n_1m(dtype):
+def test_reduce_add_n_1m(dtype):
     """N = 1_000_000 reduce over the full dtype matrix. 4-byte dtypes use the u32 scratch (4K slots for top-level
     partials, recursion adds ~16); 8-byte dtypes use the u64 scratch with the same slot count at half the byte cost.
-    Scratch is caller-owned, sized to N via device_reduce_scratch_slots."""
+    Scratch is caller-owned, sized to N via reduce_scratch_slots."""
     _skip_if_dtype_unsupported(dtype)
     N = 1_000_000
     rng = np.random.default_rng(seed=1234)
@@ -1434,7 +1358,7 @@ def test_device_reduce_add_n_1m(dtype):
     inp = qd.field(dtype, shape=N)
     out = qd.field(dtype, shape=1)
     _fill_field(inp, host)
-    qd.algorithms.device_reduce_add(inp, out=out, scratch=_reduce_scratch(inp))
+    qd.algorithms.reduce_add(inp, out=out, scratch=_reduce_scratch(inp))
 
     got = out.to_numpy()[0]
     if _is_float(dtype):
@@ -1459,10 +1383,10 @@ def test_device_reduce_add_n_1m(dtype):
 
 @pytest.mark.parametrize("dtype", _SCAN_DTYPES)
 @test_utils.test(arch=qd.gpu)
-def test_device_exclusive_scan_add_n_1m(dtype):
+def test_exclusive_scan_add_n_1m(dtype):
     """N = 1_000_000 exclusive scan over the full dtype matrix. 4-byte dtypes go through the u32 scratch; 8-byte
     dtypes through the u64 scratch (4K slots at the top level for both, recursion adds ~16). Scratch is caller-owned,
-    sized to N via device_exclusive_scan_scratch_slots."""
+    sized to N via exclusive_scan_scratch_slots."""
     _skip_if_dtype_unsupported(dtype)
     N = 1_000_000
     rng = np.random.default_rng(seed=1234)
@@ -1479,7 +1403,7 @@ def test_device_exclusive_scan_add_n_1m(dtype):
     inp = qd.field(dtype, shape=N)
     out = qd.field(dtype, shape=N)
     _fill_field(inp, host)
-    qd.algorithms.device_exclusive_scan_add(inp, out=out, scratch=_scan_scratch(inp))
+    qd.algorithms.exclusive_scan_add(inp, out=out, scratch=_scan_scratch(inp))
 
     got = out.to_numpy()
     if _is_float(dtype):
@@ -1515,7 +1439,7 @@ def test_caller_scratch_round_trip_across_qd_reset(req_arch):
     keys1 = qd.field(qd.i32, shape=N1)
     tmp1 = qd.field(qd.i32, shape=N1)
     _fill_field(keys1, host1)
-    qd.algorithms.device_radix_sort(keys1, tmp_keys=tmp1, scratch=_radix_scratch(N1))
+    _run_radix_sort(keys1, tmp1, _radix_scratch(N1))
     np.testing.assert_array_equal(keys1.to_numpy(), np.sort(host1))
 
     # --- Cross the qd.reset() + qd.init() boundary. After this, everything should behave as if cycle 1 never ran.
@@ -1528,7 +1452,7 @@ def test_caller_scratch_round_trip_across_qd_reset(req_arch):
     keys2 = qd.field(qd.i32, shape=N2)
     tmp2 = qd.field(qd.i32, shape=N2)
     _fill_field(keys2, host2)
-    qd.algorithms.device_radix_sort(keys2, tmp_keys=tmp2, scratch=_radix_scratch(N2))
+    _run_radix_sort(keys2, tmp2, _radix_scratch(N2))
     np.testing.assert_array_equal(keys2.to_numpy(), np.sort(host2))
 
 
@@ -1552,7 +1476,7 @@ def test_device_radix_sort_end_bit_16():
     tmp = qd.field(qd.u32, shape=N)
     _fill_field(keys, host)
 
-    qd.algorithms.device_radix_sort(keys, tmp_keys=tmp, end_bit=16, scratch=_radix_scratch(keys.shape[0]))
+    _run_radix_sort(keys, tmp, _radix_scratch(keys.shape[0]), end_bit=16)
     got = keys.to_numpy()
     # `got` should be sorted by the low 16 bits, in stable order of the original input. Tie-breaking on the low 16
     # bits keeps the original input index order.
@@ -1589,15 +1513,13 @@ def test_radix_sort_then_reduce_by_key_pipeline(dtype):
     _fill_field(keys, keys_host)
     _fill_field(values, values_host)
 
-    qd.algorithms.device_radix_sort(
-        keys, tmp_keys=tmp_keys, values=values, tmp_values=tmp_values, scratch=_radix_scratch(keys.shape[0])
-    )
+    _run_radix_sort(keys, tmp_keys, _radix_scratch(keys.shape[0]), values=values, tmp_values=tmp_values)
     # After sort, keys is ascending; values is permuted to match. Now RBK collapses runs of equal keys into per-key
     # sums.
     keys_out = qd.field(dtype, shape=N)
     values_out = qd.field(qd.i32, shape=N)
     num_runs = qd.field(qd.i32, shape=1)
-    qd.algorithms.device_reduce_by_key_add(
+    qd.algorithms.reduce_by_key_add(
         keys, values, keys_out=keys_out, values_out=values_out, num_runs=num_runs, scratch=_rbk_scratch(keys.shape[0])
     )
 
