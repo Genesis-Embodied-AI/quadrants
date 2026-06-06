@@ -1,8 +1,8 @@
 # type: ignore
 """Device-wide reduce-by-key.
 
-Implements ``qd.algorithms.device_reduce_by_key_add`` on top of the existing device exclusive scan internals and the
-shared ``Field(u32)`` scratch.
+Implements ``qd.algorithms.device_reduce_by_key_add`` on top of the existing device exclusive scan internals and a
+**caller-owned** ``u32`` scratch buffer (sized via :func:`device_reduce_by_key_scratch_slots`).
 
 Reduce-by-key takes two parallel 1-D tensors - ``keys`` and ``values`` - and collapses every **consecutive run of
 equal keys** into a single output entry ``(unique_key, sum_of_values_in_run)``. Keys that are equal but separated by
@@ -33,11 +33,11 @@ Algorithm (scan + scatter; no segmented-scan primitive needed):
 This first-land scope supports only the ``add`` reduction. ``min`` / ``max`` variants would need ``atomic_min`` /
 ``atomic_max``, which have spottier cross-backend support for ``f32`` - defer to a follow-up gated on real qipc usage.
 
-Scratch budget: ``N + ceil(N / 256) + ...`` ``u32`` slots, ≈ ``1.004 * N``. The default 5 MB scratch covers ``N`` up
-to ~1.3M. For larger ``N``, raise via ``quadrants._scratch.set_scratch_bytes(...)`` before any algorithm call.
+**Scratch.** A **caller-owned** 1-D ``u32`` buffer of :func:`device_reduce_by_key_scratch_slots` ``(N)`` slots
+(``positions = scratch[0:N]`` plus the scan partials above them, ≈ ``1.004 * N``). There is no module-level shared
+scratch - the caller always owns the buffer; a too-small buffer raises :class:`InsufficientScratchError`.
 """
 
-from quadrants._scratch import get_scratch_u32, scratch_capacity_u32
 from quadrants.lang.kernel_impl import kernel
 from quadrants.lang.misc import loop_config
 from quadrants.lang.ops import atomic_add, bit_cast
@@ -45,8 +45,8 @@ from quadrants.lang.simt.reductions import _bin_add
 from quadrants.types.annotations import template
 from quadrants.types.primitive_types import f32, i32, u32
 
-from ._reduce import BLOCK_DIM, _identity_bits, _reduce_pass
-from ._scan import _exclusive_scan_inplace_u32, _scan_pass3
+from ._reduce import BLOCK_DIM, _identity_bits, _reduce_pass, _validate_caller_scratch
+from ._scan import _exclusive_scan_inplace_u32, _scan_pass3, _scan_total_scratch_slots
 
 _SUPPORTED_KEY_DTYPES = (u32, i32, f32)
 _SUPPORTED_VALUE_DTYPES = (u32, i32, f32)
@@ -183,7 +183,26 @@ def _validate_inputs(keys_in, values_in, keys_out, values_out, num_runs):
         )
 
 
-def device_reduce_by_key_add(keys_in, values_in, keys_out, values_out, num_runs):
+def device_reduce_by_key_scratch_slots(n: int) -> int:
+    """Number of ``u32`` scratch slots :func:`device_reduce_by_key_add` needs for a length-``n`` input.
+
+    Pure host-side arithmetic, dtype-independent (the scan operates on head-flags-as-counts, which are ``u32``).
+    Layout: ``scratch[0:n]`` holds the run positions, ``scratch[n:]`` the scan partials (plus deeper recursion
+    levels for ``n > BLOCK_DIM``). Allocate up front::
+
+        scratch = qd.field(qd.u32, shape=max(qd.algorithms.device_reduce_by_key_scratch_slots(N), 1))
+
+    Returns ``0`` for ``n <= 0`` and ``n`` for ``n <= BLOCK_DIM`` (single-tile in-place scan).
+    """
+    if n <= 0:
+        return 0
+    if n <= BLOCK_DIM:
+        return n
+    B0 = (n + BLOCK_DIM - 1) // BLOCK_DIM
+    return _scan_total_scratch_slots(B0, partials_cursor=n + B0)
+
+
+def device_reduce_by_key_add(keys_in, values_in, keys_out, values_out, num_runs, scratch):
     """Collapse every consecutive run of equal ``keys_in`` into ``(key, sum_of_values)``.
 
     Args:
@@ -196,32 +215,24 @@ def device_reduce_by_key_add(keys_in, values_in, keys_out, values_out, num_runs)
             first ``num_runs[0]`` slots are overwritten; if ``values_out`` was longer, the tail past that prefix is
             left untouched.
         num_runs: 1-element ``i32`` tensor receiving the number of runs.
+        scratch: caller-owned 1-D ``u32`` workspace of :func:`device_reduce_by_key_scratch_slots` ``(N)`` slots. There
+            is no module-level shared scratch; a too-small buffer raises :class:`InsufficientScratchError`.
 
     Same async / no-implicit-sync contract as the rest of ``qd.algorithms.*``: ``num_runs`` is a tensor (not a Python
     int); fetch the count with ``int(num_runs.to_numpy()[0])`` after the call.
 
     **NaN handling for f32 keys**: NaN ``!=`` NaN is true, so each NaN becomes its own run. This is consistent with
     treating NaN as "different from everything", which matches the run-length-encoding spirit of reduce-by-key.
-
-    **Scratch budget**: ~``1.004 * N`` u32 slots. Default 5 MB covers ``N`` up to ~1.3M; raise via
-    ``quadrants._scratch.set_scratch_bytes(...)`` for larger inputs.
     """
     _validate_inputs(keys_in, values_in, keys_out, values_out, num_runs)
     N = keys_in.shape[0]
     if N == 0:
         return
 
-    scratch = get_scratch_u32()
-    cap = scratch_capacity_u32()
+    _validate_caller_scratch("device_reduce_by_key_add", N, scratch, device_reduce_by_key_scratch_slots(N), u32)
     B0 = (N + BLOCK_DIM - 1) // BLOCK_DIM
     positions_off = 0
     partials_off = N
-    if partials_off + B0 > cap:
-        raise RuntimeError(
-            f"device_reduce_by_key_add on N={N} needs >= {partials_off + B0} u32 scratch slots, "
-            f"but only {cap} are configured. Call quadrants._scratch.set_scratch_bytes(...) "
-            f"before any algorithm runs."
-        )
 
     identity_bits = _identity_bits(0, i32)
     op = _bin_add
@@ -279,4 +290,4 @@ def device_reduce_by_key_add(keys_in, values_in, keys_out, values_out, num_runs)
     _rbk_count(keys_in, scratch, positions_off, N, num_runs)
 
 
-__all__ = ["device_reduce_by_key_add"]
+__all__ = ["device_reduce_by_key_add", "device_reduce_by_key_scratch_slots"]

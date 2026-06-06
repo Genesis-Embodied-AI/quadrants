@@ -17,8 +17,11 @@ Layout (host driver builds a recursion plan, kernels are the per-pass workers):
 A single generic kernel handles every pass; ``src_is_u32`` and ``dst_is_u32`` are compile-time template flags
 selecting between the bit_cast and direct-read / direct-write paths.
 
-The shared scratch field is owned by ``quadrants._scratch`` (see that module). The default 5 MB capacity covers
-reductions well past ``N = 64M`` elements at ``BLOCK_DIM=256`` (reduce uses only ``~N / BLOCK_DIM`` slots).
+**Scratch.** ``device_reduce_*`` needs a **caller-owned** scratch buffer sized via
+:func:`device_reduce_scratch_slots` (``~N / BLOCK_DIM`` slots; the per-block partials live there between launches).
+The dtype is ``u32`` for 4-byte element types and ``u64`` for 8-byte ones (the partials are ``bit_cast`` to / from
+the element dtype). There is no module-level shared scratch - the caller always owns the buffer (graph- /
+multi-stream-safe, no global state); a too-small buffer raises :class:`InsufficientScratchError`.
 
 The reduce monoid identity (e.g. ``+inf`` for ``min`` over ``f32``, ``2**31 - 1`` for ``min`` over ``i32``) is passed
 to the kernel as its raw 4-byte bit pattern in a ``u32`` runtime arg, then ``qd.bit_cast``-ed to ``dtype`` inside the
@@ -28,12 +31,6 @@ unsigned identities, and keeps ``identity`` out of the kernel template key (one 
 
 import struct
 
-from quadrants._scratch import (
-    get_scratch_u32,
-    get_scratch_u64,
-    scratch_capacity_u32,
-    scratch_capacity_u64,
-)
 from quadrants.lang.impl import static
 from quadrants.lang.kernel_impl import kernel
 from quadrants.lang.misc import loop_config
@@ -72,6 +69,67 @@ def _dtype_width_bytes(dtype) -> int:
     if dtype in _SUPPORTED_DTYPES_8B:
         return 8
     raise NotImplementedError(f"device reduce dtype {dtype} not supported")
+
+
+class InsufficientScratchError(RuntimeError):
+    """Raised by a ``qd.algorithms.*`` device op when the caller-supplied ``scratch`` buffer is too small.
+
+    Shared by every device algorithm (reduce, scan, select, reduce-by-key, radix sort) so callers can catch a single
+    type. Subclasses ``RuntimeError`` so existing ``except RuntimeError`` / ``pytest.raises(RuntimeError)`` call sites
+    keep working, while exposing the required size programmatically:
+
+    - ``err.required_slots`` - the minimum slot count the caller must allocate (equal to the op's
+      ``*_scratch_slots(N)``).
+    - ``err.provided_slots`` - what was actually supplied.
+    - ``err.slot_bytes`` / ``err.required_bytes`` / ``err.provided_bytes`` - byte-level view (4 for ``u32`` scratch,
+      8 for ``u64`` scratch).
+
+    This is the "try and fail with the size" path; the matching ``*_scratch_slots`` function is the "ask first" path.
+    """
+
+    def __init__(self, op: str, n: int, required_slots: int, provided_slots: int, slot_bytes: int = 4):
+        self.op = op
+        self.n = n
+        self.required_slots = required_slots
+        self.provided_slots = provided_slots
+        self.slot_bytes = slot_bytes
+        self.required_bytes = required_slots * slot_bytes
+        self.provided_bytes = provided_slots * slot_bytes
+        width = slot_bytes * 8
+        super().__init__(
+            f"{op} on N={n} needs >= {required_slots} u{width} scratch slots ({required_slots * slot_bytes} bytes, "
+            f"including all recursion levels), but the supplied scratch holds only {provided_slots} slots "
+            f"({provided_slots * slot_bytes} bytes). Allocate a 1-D u{width} scratch of at least "
+            f"{op}_scratch_slots(N)={required_slots} slots (e.g. qd.field(qd.u{width}, shape={required_slots}))."
+        )
+
+
+def _scratch_dtype_for_width(width: int):
+    """Return the scratch element dtype an algorithm of element-width ``width`` bytes expects: ``u32`` for 4-byte
+    element dtypes, ``u64`` for 8-byte ones (the partials are ``bit_cast`` to / from the element dtype)."""
+    return u32 if width == 4 else u64
+
+
+def _validate_caller_scratch(op: str, n: int, scratch, required_slots: int, expected_dtype):
+    """Validate a caller-owned ``scratch`` buffer for a device algorithm.
+
+    Enforces the shared contract: ``scratch`` is mandatory (no module-level shared fallback), 1-D, of
+    ``expected_dtype`` (``u32`` or ``u64``), and holds at least ``required_slots`` slots. A too-small buffer raises
+    :class:`InsufficientScratchError` *before* the op launches anything, so partial side effects never corrupt the
+    caller's inputs.
+    """
+    width = 4 if expected_dtype == u32 else 8
+    if scratch is None:
+        raise TypeError(
+            f"{op} requires a caller-provided scratch buffer (there is no shared-scratch fallback); "
+            f"allocate a 1-D u{width * 8} scratch of {op}_scratch_slots(N) slots"
+        )
+    if not hasattr(scratch, "shape") or len(scratch.shape) != 1:
+        raise TypeError(f"{op} scratch must be a 1-D u{width * 8} tensor; got shape {getattr(scratch, 'shape', None)}")
+    if scratch.dtype != expected_dtype:
+        raise TypeError(f"{op} scratch must have dtype u{width * 8}; got {scratch.dtype}")
+    if scratch.shape[0] < required_slots:
+        raise InsufficientScratchError(op, n, required_slots, scratch.shape[0], slot_bytes=width)
 
 
 def _identity_bits(value, dtype) -> int:
@@ -256,7 +314,23 @@ def _plan_levels(N: int):
     return sizes, dst_offsets, cumul
 
 
-def _device_reduce(arr, *, out, op, identity_value):
+def device_reduce_scratch_slots(n: int) -> int:
+    """Number of scratch slots :func:`device_reduce_add` / ``_min`` / ``_max`` need to reduce a length-``n`` input.
+
+    Pure host-side arithmetic. The count is **dtype-width-independent** (it is a slot count, not a byte count): a
+    4-byte reduce stages through a ``u32`` scratch and an 8-byte reduce through a ``u64`` scratch, both of this many
+    slots. Allocate the matching-width buffer up front::
+
+        slots = qd.algorithms.device_reduce_scratch_slots(N)
+        scratch = qd.field(qd.u32, shape=slots)   # u64 for i64 / u64 / f64 inputs
+
+    Returns ``0`` for ``n <= 1`` (the reduce returns the trivial answer without touching scratch).
+    """
+    _, _, total_scratch = _plan_levels(n)
+    return total_scratch
+
+
+def _device_reduce(arr, *, out, op, identity_value, scratch):
     """Internal driver shared by ``device_reduce_{add,min,max}``.
 
     Dispatches on ``arr.dtype`` width: 4-byte dtypes go through the ``Field(u32)`` scratch and ``_reduce_pass``;
@@ -280,13 +354,7 @@ def _device_reduce(arr, *, out, op, identity_value):
     N = arr.shape[0]
     sizes, dst_offsets, total_scratch = _plan_levels(N)
 
-    scratch_cap = scratch_capacity_u32() if width == 4 else scratch_capacity_u64()
-    if total_scratch > scratch_cap:
-        raise RuntimeError(
-            f"device reduce on N={N} (dtype={dtype}) needs {total_scratch} "
-            f"u{width * 8} scratch slots, but only {scratch_cap} are configured. "
-            f"Call quadrants._scratch.set_scratch_bytes(...) before any algorithm runs to raise the cap."
-        )
+    _validate_caller_scratch("device_reduce", N, scratch, total_scratch, _scratch_dtype_for_width(width))
 
     num_passes = len(sizes) - 1
     identity_bits = _identity_bits(identity_value, dtype)
@@ -297,7 +365,6 @@ def _device_reduce(arr, *, out, op, identity_value):
         _device_reduce_trivial(arr, out=out, identity_bits=identity_bits)
         return
 
-    scratch = get_scratch_u32() if width == 4 else get_scratch_u64()
     pass_kernel = _reduce_pass if width == 4 else _reduce_pass_u64
 
     for k in range(num_passes):
@@ -358,7 +425,7 @@ def _device_reduce_trivial(arr, *, out, identity_bits):
         raise AssertionError(f"_device_reduce_trivial called with N={N}")
 
 
-def device_reduce_add(arr, out):
+def device_reduce_add(arr, out, scratch):
     """Compute ``out[0] = sum(arr)`` on the device.
 
     Args:
@@ -367,36 +434,45 @@ def device_reduce_add(arr, out):
         out: 1-element tensor of the same dtype as ``arr``. Caller-supplied so the call is fully asynchronous - no
             implicit device-to-host sync. To get a Python scalar, do ``out.to_numpy()[0]`` explicitly after this
             call.
+        scratch: caller-owned 1-D workspace of :func:`device_reduce_scratch_slots` ``(N)`` slots, ``u32`` for 4-byte
+            ``arr`` dtypes and ``u64`` for 8-byte ones. There is no module-level shared scratch; a too-small buffer
+            raises :class:`InsufficientScratchError`.
 
-    The implementation is a two-or-more-pass tree reduction built on ``block.reduce_add``. Scratch is drawn from the
-    quadrants-level shared scratch field (``Field(u32)`` for 4-byte dtypes, ``Field(u64)`` for 8-byte); no per-call
-    allocation. See the design doc at ``perso_hugh/doc/qipc/qipc_device_algos_design.md`` for the recursion plan and
-    the ``bit_cast``-into-scratch scheme.
+    The implementation is a two-or-more-pass tree reduction built on ``block.reduce_add``. See the design doc at
+    ``perso_hugh/doc/qipc/qipc_device_algos_design.md`` for the recursion plan and the ``bit_cast``-into-scratch
+    scheme.
     """
-    _device_reduce(arr, out=out, op=_bin_add, identity_value=0)
+    _device_reduce(arr, out=out, op=_bin_add, identity_value=0, scratch=scratch)
 
 
-def device_reduce_min(arr, out):
+def device_reduce_min(arr, out, scratch):
     """Compute ``out[0] = min(arr)`` on the device.
 
     Args:
         arr: see ``device_reduce_add`` (any of ``{i32, u32, f32, i64, u64, f64}``).
         out: see ``device_reduce_add``.
+        scratch: see ``device_reduce_add``.
 
     The monoid identity is derived from ``arr.dtype`` automatically (the largest representable value:
     ``+inf`` for ``f32`` / ``f64``, ``INT32_MAX`` / ``INT64_MAX`` for signed ints, ``UINT32_MAX`` / ``UINT64_MAX``
     for unsigned). Mirrors the ``block.reduce_min`` / ``subgroup.reduce_min`` contract: the typed reduce
     primitives do not take an identity argument because (op, dtype) fixes it.
     """
-    _device_reduce(arr, out=out, op=_bin_min, identity_value=_min_identity(arr.dtype))
+    _device_reduce(arr, out=out, op=_bin_min, identity_value=_min_identity(arr.dtype), scratch=scratch)
 
 
-def device_reduce_max(arr, out):
+def device_reduce_max(arr, out, scratch):
     """Compute ``out[0] = max(arr)`` on the device. Mirror of :func:`device_reduce_min` with ``max`` and the
     dtype's *negative* extremum (``-inf`` for floats, ``INT32_MIN`` / ``INT64_MIN`` for signed ints, ``0`` for
     unsigned ints), again derived from ``arr.dtype`` automatically.
     """
-    _device_reduce(arr, out=out, op=_bin_max, identity_value=_max_identity(arr.dtype))
+    _device_reduce(arr, out=out, op=_bin_max, identity_value=_max_identity(arr.dtype), scratch=scratch)
 
 
-__all__ = ["device_reduce_add", "device_reduce_min", "device_reduce_max"]
+__all__ = [
+    "InsufficientScratchError",
+    "device_reduce_add",
+    "device_reduce_max",
+    "device_reduce_min",
+    "device_reduce_scratch_slots",
+]

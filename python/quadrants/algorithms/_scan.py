@@ -18,19 +18,17 @@ Algorithm (three-pass, multi-level when needed):
   per-thread tile prefixes via ``block.exclusive_scan(op, identity, dtype)``, fetches its block prefix from the
   scanned partials buffer, and writes ``out[i] = op(block_prefix, tile_prefix)``.
 
-Total scratch usage at ``N = 1M`` and ``BLOCK_DIM = 256``: ``B0 = 4096`` plus ``B1 = 16`` u32 slots = 4112 slots =
-~16 KB, trivial relative to the 5 MB default.
+**Scratch.** ``device_exclusive_scan_*`` needs a **caller-owned** buffer sized via
+:func:`device_exclusive_scan_scratch_slots` (the partials buffer, ``~N / BLOCK_DIM`` slots plus deeper recursion
+levels; ``0`` for ``N <= BLOCK_DIM``, which runs as a single-tile launch with no scratch). The dtype is ``u32`` for
+4-byte element types and ``u64`` for 8-byte ones. There is no module-level shared scratch - the caller always owns
+the buffer; a too-small buffer raises :class:`InsufficientScratchError`. Total scratch usage at ``N = 1M`` and
+``BLOCK_DIM = 256`` is ``B0 = 4096`` plus ``B1 = 16`` = 4112 slots (~16 KB at ``u32``).
 
 The ``PrefixSumExecutor`` class in ``_algorithms.py`` predates this work; it is kept for backward compat. The new
 functional API is preferred for new code - see ``docs/source/user_guide/algorithms.md``.
 """
 
-from quadrants._scratch import (
-    get_scratch_u32,
-    get_scratch_u64,
-    scratch_capacity_u32,
-    scratch_capacity_u64,
-)
 from quadrants.lang.impl import static
 from quadrants.lang.kernel_impl import kernel
 from quadrants.lang.misc import loop_config
@@ -51,6 +49,8 @@ from ._reduce import (
     _min_identity,
     _reduce_pass,
     _reduce_pass_u64,
+    _scratch_dtype_for_width,
+    _validate_caller_scratch,
 )
 
 _SUPPORTED_DTYPES = _REDUCE_SUPPORTED_DTYPES  # {i32, u32, f32, i64, u64, f64}
@@ -226,12 +226,13 @@ def _exclusive_scan_inplace_u32(scratch, off: int, n: int, identity_bits: int, o
 
     B = (n + BLOCK_DIM - 1) // BLOCK_DIM
     partials_off = partials_cursor
-    if partials_off + B > scratch_capacity_u32():
+    # Capacity comes from the caller-owned buffer we were handed (``scratch.shape[0]``); the up-front
+    # ``_validate_caller_scratch`` check should already have refused an undersized buffer, so this is a backstop.
+    if partials_off + B > scratch.shape[0]:
         raise RuntimeError(
             f"device exclusive scan ran out of scratch at recursion level "
-            f"n={n}, B={B}, partials_off={partials_off}, capacity="
-            f"{scratch_capacity_u32()}. Call _scratch.set_scratch_bytes(...) "
-            f"before any algorithm runs."
+            f"n={n}, B={B}, partials_off={partials_off}, capacity={scratch.shape[0]}. "
+            f"Allocate a larger scratch sized via device_exclusive_scan_scratch_slots(N)."
         )
 
     _reduce_pass(
@@ -280,11 +281,12 @@ def _exclusive_scan_inplace_u64(scratch, off: int, n: int, identity_bits: int, o
 
     B = (n + BLOCK_DIM - 1) // BLOCK_DIM
     partials_off = partials_cursor
-    if partials_off + B > scratch_capacity_u64():
+    # Capacity from the handed-in buffer; see note in ``_exclusive_scan_inplace_u32``.
+    if partials_off + B > scratch.shape[0]:
         raise RuntimeError(
             f"device exclusive scan ran out of u64 scratch at recursion level n={n}, B={B}, "
-            f"partials_off={partials_off}, capacity={scratch_capacity_u64()}. "
-            f"Call _scratch.set_scratch_bytes(...) before any algorithm runs."
+            f"partials_off={partials_off}, capacity={scratch.shape[0]}. "
+            f"Allocate a larger scratch sized via device_exclusive_scan_scratch_slots(N)."
         )
 
     _reduce_pass_u64(
@@ -320,7 +322,26 @@ def _exclusive_scan_inplace_u64(scratch, off: int, n: int, identity_bits: int, o
     )
 
 
-def _device_exclusive_scan(arr, *, out, op, identity_value):
+def device_exclusive_scan_scratch_slots(n: int) -> int:
+    """Number of scratch slots :func:`device_exclusive_scan_add` / ``_min`` / ``_max`` need to scan a length-``n``
+    input.
+
+    Pure host-side arithmetic, **dtype-width-independent** (slot count, not byte count): 4-byte scans stage through a
+    ``u32`` scratch and 8-byte scans through a ``u64`` scratch, both of this many slots. Allocate the matching-width
+    buffer up front::
+
+        slots = qd.algorithms.device_exclusive_scan_scratch_slots(N)
+        scratch = qd.field(qd.u32, shape=max(slots, 1))   # u64 for i64 / u64 / f64 inputs
+
+    Returns ``0`` for ``n <= BLOCK_DIM`` (the scan runs as a single-tile launch with no scratch).
+    """
+    if n <= BLOCK_DIM:
+        return 0
+    B0 = (n + BLOCK_DIM - 1) // BLOCK_DIM
+    return _scan_total_scratch_slots(B0, partials_cursor=B0)
+
+
+def _device_exclusive_scan(arr, *, out, op, identity_value, scratch):
     """Internal driver shared by ``device_exclusive_scan_{add,min,max}``."""
     if not hasattr(arr, "shape") or len(arr.shape) != 1:
         raise TypeError(f"device exclusive scan expects a 1-D input tensor; got shape {getattr(arr, 'shape', None)}")
@@ -364,23 +385,12 @@ def _device_exclusive_scan(arr, *, out, op, identity_value):
             _scan_single_tile_input_to_out_u64(arr, out, N, identity_bits, op, dtype)
         return
 
-    if width == 4:
-        scratch = get_scratch_u32()
-        scratch_cap = scratch_capacity_u32()
-    else:
-        scratch = get_scratch_u64()
-        scratch_cap = scratch_capacity_u64()
     B0 = (N + BLOCK_DIM - 1) // BLOCK_DIM
     # Reserve scratch slots: scratch[0:B0] for the top-level partials. The recursive scan sub-allocates from
     # scratch[B0:] for any deeper levels. Use ``_scan_total_scratch_slots`` to account for the *full* recursion
     # up front, so we refuse the call before pass 1 instead of partway through pass 2.
     needed = _scan_total_scratch_slots(B0, partials_cursor=B0)
-    if needed > scratch_cap:
-        raise RuntimeError(
-            f"device exclusive scan on N={N} (dtype={dtype}) needs >= {needed} {scratch.dtype} scratch slots "
-            f"(top-level partials B0={B0} plus deeper recursion levels), but only {scratch_cap} are configured. "
-            f"Call _scratch.set_scratch_bytes(...) before any algorithm runs."
-        )
+    _validate_caller_scratch("device_exclusive_scan", N, scratch, needed, _scratch_dtype_for_width(width))
 
     reduce_pass_kernel = _reduce_pass if width == 4 else _reduce_pass_u64
     scan_inplace_driver = _exclusive_scan_inplace_u32 if width == 4 else _exclusive_scan_inplace_u64
@@ -480,49 +490,54 @@ def _scan_trivial_n1_u64(dst: template(), identity_bits: u64, dtype: template())
         dst[0] = bit_cast(identity_bits, dtype)
 
 
-def device_exclusive_scan_add(arr, out):
+def device_exclusive_scan_add(arr, out, scratch):
     """Compute ``out[i] = sum(arr[0:i])`` (exclusive prefix sum) on the device.
 
     Args:
         arr: 1-D tensor of any supported scalar dtype - ``{i32, u32, f32, i64, u64, f64}``. Pass a ``qd.field``,
             ``qd.ndarray``, or ``qd.Tensor`` wrapper around either.
         out: 1-D tensor with the same dtype and shape as ``arr``. Must be a distinct buffer (no in-place scan).
+        scratch: caller-owned 1-D workspace of :func:`device_exclusive_scan_scratch_slots` ``(N)`` slots, ``u32`` for
+            4-byte ``arr`` dtypes and ``u64`` for 8-byte ones (unused, so any matching-width buffer is fine, when
+            ``N <= BLOCK_DIM``). There is no module-level shared scratch; a too-small buffer raises
+            :class:`InsufficientScratchError`.
 
-    The implementation is the three-pass Blelloch-style scan built on ``block.exclusive_scan`` and the shared
-    scratch fields (``Field(u32)`` for 4-byte dtypes, ``Field(u64)`` for 8-byte). Recurses on the partials buffer
-    when ``N`` is large enough that the partials count exceeds ``BLOCK_DIM``.
+    The implementation is the three-pass Blelloch-style scan built on ``block.exclusive_scan``. Recurses on the
+    partials buffer when ``N`` is large enough that the partials count exceeds ``BLOCK_DIM``.
 
     See the design doc at ``perso_hugh/doc/qipc/qipc_device_algos_design.md`` for the algorithmic background and
     the ``bit_cast``-into-scratch scheme.
     """
-    _device_exclusive_scan(arr, out=out, op=_bin_add, identity_value=0)
+    _device_exclusive_scan(arr, out=out, op=_bin_add, identity_value=0, scratch=scratch)
 
 
-def device_exclusive_scan_min(arr, out):
+def device_exclusive_scan_min(arr, out, scratch):
     """Compute ``out[i] = min(arr[0:i])`` (exclusive prefix min) on the device.
 
     Args:
         arr: see ``device_exclusive_scan_add`` (any of ``{i32, u32, f32, i64, u64, f64}``).
         out: see ``device_exclusive_scan_add``.
+        scratch: see ``device_exclusive_scan_add``.
 
     The monoid identity is derived from ``arr.dtype`` automatically (largest representable value: ``+inf`` for
     floats, ``INT{32,64}_MAX`` for signed ints, ``UINT{32,64}_MAX`` for unsigned). Mirrors the
     ``block.exclusive_min`` / ``subgroup.exclusive_min_tiled`` contract: the typed scan primitives do not take an
     identity argument because (op, dtype) fixes it.
     """
-    _device_exclusive_scan(arr, out=out, op=_bin_min, identity_value=_min_identity(arr.dtype))
+    _device_exclusive_scan(arr, out=out, op=_bin_min, identity_value=_min_identity(arr.dtype), scratch=scratch)
 
 
-def device_exclusive_scan_max(arr, out):
+def device_exclusive_scan_max(arr, out, scratch):
     """Compute ``out[i] = max(arr[0:i])`` (exclusive prefix max) on the device. Mirror of
     :func:`device_exclusive_scan_min` with ``max`` and the dtype's *negative* extremum (``-inf`` for floats,
     ``INT{32,64}_MIN`` for signed ints, ``0`` for unsigned), again derived from ``arr.dtype`` automatically.
     """
-    _device_exclusive_scan(arr, out=out, op=_bin_max, identity_value=_max_identity(arr.dtype))
+    _device_exclusive_scan(arr, out=out, op=_bin_max, identity_value=_max_identity(arr.dtype), scratch=scratch)
 
 
 __all__ = [
     "device_exclusive_scan_add",
     "device_exclusive_scan_max",
     "device_exclusive_scan_min",
+    "device_exclusive_scan_scratch_slots",
 ]

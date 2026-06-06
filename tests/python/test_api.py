@@ -266,16 +266,23 @@ user_api[qd.ad] = [
     "no_grad",
 ]
 user_api[qd.algorithms] = [
+    "InsufficientScratchError",
     "PrefixSumExecutor",
     "device_exclusive_scan_add",
     "device_exclusive_scan_max",
     "device_exclusive_scan_min",
+    "device_exclusive_scan_scratch_slots",
     "device_radix_sort",
+    "device_radix_sort_scratch_slots",
     "device_reduce_add",
     "device_reduce_by_key_add",
+    "device_reduce_by_key_scratch_slots",
     "device_reduce_max",
     "device_reduce_min",
+    "device_reduce_scratch_slots",
     "device_select",
+    "device_select_scratch_slots",
+    "fused_radix_sort_scratch_slots",
     "parallel_sort",
 ]
 user_api[qd.Field] = [
