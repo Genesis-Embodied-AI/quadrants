@@ -18,6 +18,9 @@ class KernelLauncher : public lang::KernelLauncher {
 
  private:
   void launch_offloaded_tasks_with_do_while(Handle handle, LaunchContextBuilder &ctx);
+  // Reads the i32 graph_do_while condition flag for `cond_arg_id` back from device to host. Assumes the caller has
+  // already `synchronize()`d so the device writes are visible. Returns the flag value (loop continues while != 0).
+  int32_t readback_graph_do_while_flag(LaunchContextBuilder &ctx, int cond_arg_id);
   Handle register_kernel(const lang::CompiledKernelData &compiled_kernel_data);
 
   Config config_;
