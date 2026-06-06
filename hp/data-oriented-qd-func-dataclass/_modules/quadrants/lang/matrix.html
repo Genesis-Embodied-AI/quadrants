@@ -2232,8 +2232,21 @@
 
 
 <span class="k">class</span><span class="w"> </span><span class="nc">VectorType</span><span class="p">(</span><span class="n">MatrixType</span><span class="p">):</span>
-    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">n</span><span class="p">,</span> <span class="n">dtype</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">n</span><span class="p">,</span> <span class="n">dtype</span><span class="p">,</span> <span class="n">unpacked</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">):</span>
         <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">n</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="n">dtype</span><span class="p">)</span>
+        <span class="c1"># Per-thread storage-layout marker. When set, the type is only valid as a ``@qd.dataclass`` field annotation;</span>
+        <span class="c1"># ``__call__`` / ``field()`` / ``ndarray()`` refuse to instantiate, since the unpacked layout has no meaning</span>
+        <span class="c1"># outside of the @qd.dataclass field-expansion path. The flag itself is consumed by ``StructType.__init__``;</span>
+        <span class="c1"># this class is otherwise unaware of it.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_is_unpacked</span> <span class="o">=</span> <span class="nb">bool</span><span class="p">(</span><span class="n">unpacked</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_reject_if_unpacked</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">what</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_is_unpacked</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;cannot </span><span class="si">{</span><span class="n">what</span><span class="si">}</span><span class="s2"> a vector declared with unpacked=True; the unpacked layout is only honored on &quot;</span>
+                <span class="s2">&quot;``@qd.dataclass`` field annotations. Either drop ``unpacked=True`` or use the type in an annotation &quot;</span>
+                <span class="s2">&quot;like ``r: qd.types.vector(N, dtype, unpacked=True)`` on a class decorated with @qd.dataclass.&quot;</span>
+            <span class="p">)</span>
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Return a vector matching the shape and dtype.</span>
@@ -2257,6 +2270,7 @@
 <span class="sd">                &gt;&gt;&gt; v = vec3(1)</span>
 
 <span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_reject_if_unpacked</span><span class="p">(</span><span class="s2">&quot;instantiate&quot;</span><span class="p">)</span>
         <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">args</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
             <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">&quot;Custom type instances need to be created with an initial value.&quot;</span><span class="p">)</span>
         <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">args</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
@@ -2304,14 +2318,17 @@
         <span class="k">return</span> <span class="n">make_matrix_with_shape</span><span class="p">(</span><span class="n">entries</span><span class="p">,</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">n</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">dtype</span><span class="p">)</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">field</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_reject_if_unpacked</span><span class="p">(</span><span class="s2">&quot;create a field of&quot;</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">Vector</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">n</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">dtype</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">ndarray</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_reject_if_unpacked</span><span class="p">(</span><span class="s2">&quot;create an ndarray of&quot;</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">Vector</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">n</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">dtype</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">to_string</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="n">dtype_str</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">dtype</span><span class="o">.</span><span class="n">to_string</span><span class="p">()</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">dtype</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="s2">&quot;&quot;</span>
-        <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;VectorType[</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">n</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="n">dtype_str</span><span class="si">}</span><span class="s2">]&quot;</span>
+        <span class="n">suffix</span> <span class="o">=</span> <span class="s2">&quot;, unpacked=True&quot;</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_is_unpacked</span> <span class="k">else</span> <span class="s2">&quot;&quot;</span>
+        <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;VectorType[</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">n</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="n">dtype_str</span><span class="si">}{</span><span class="n">suffix</span><span class="si">}</span><span class="s2">]&quot;</span>
 
 
 <div class="viewcode-block" id="MatrixNdarray">

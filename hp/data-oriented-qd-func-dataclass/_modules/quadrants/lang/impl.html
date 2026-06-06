@@ -436,7 +436,21 @@
     <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">rhs</span><span class="p">,</span> <span class="n">BufferView</span><span class="p">):</span>
         <span class="k">return</span> <span class="n">rhs</span>
     <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">rhs</span><span class="p">,</span> <span class="n">Struct</span><span class="p">):</span>
-        <span class="k">return</span> <span class="n">Struct</span><span class="p">(</span><span class="n">rhs</span><span class="o">.</span><span class="n">to_dict</span><span class="p">(</span><span class="n">include_methods</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">include_ndim</span><span class="o">=</span><span class="kc">True</span><span class="p">))</span>
+        <span class="c1"># Build the rewrap dict from ``__entries`` directly rather than via ``to_dict()``: ``to_dict()`` recursively</span>
+        <span class="c1"># flattens nested Structs to plain dicts, which then rebuild without their ``_qd_unpacked_groups`` tag. By</span>
+        <span class="c1"># keeping nested Struct instances intact, ``Struct.__init__`` calls ``expr_init`` on each entry, recursing here</span>
+        <span class="c1"># and preserving the tag on every nested level.</span>
+        <span class="n">d</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">rhs</span><span class="o">.</span><span class="n">_Struct__entries</span><span class="p">)</span>  <span class="c1"># type: ignore[attr-defined]  # name-mangled access</span>
+        <span class="k">if</span> <span class="n">rhs</span><span class="o">.</span><span class="n">_Struct__methods</span><span class="p">:</span>  <span class="c1"># type: ignore[attr-defined]</span>
+            <span class="n">d</span><span class="p">[</span><span class="s2">&quot;__struct_methods&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">rhs</span><span class="o">.</span><span class="n">_Struct__methods</span>  <span class="c1"># type: ignore[attr-defined]</span>
+        <span class="n">new_struct</span> <span class="o">=</span> <span class="n">Struct</span><span class="p">(</span><span class="n">d</span><span class="p">)</span>
+        <span class="c1"># Preserve unpacked-vector group metadata on this level (nested levels are handled by the recursion above).</span>
+        <span class="c1"># ``setattr`` (rather than attribute assignment) sidesteps pyright&#39;s ``reportAttributeAccessIssue``; ``Struct``</span>
+        <span class="c1"># doesn&#39;t statically declare this attribute -- it&#39;s a per-instance metadata tag.</span>
+        <span class="n">groups</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">rhs</span><span class="p">,</span> <span class="s2">&quot;_qd_unpacked_groups&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">groups</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="nb">setattr</span><span class="p">(</span><span class="n">new_struct</span><span class="p">,</span> <span class="s2">&quot;_qd_unpacked_groups&quot;</span><span class="p">,</span> <span class="n">groups</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">new_struct</span>
     <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">rhs</span><span class="p">,</span> <span class="nb">list</span><span class="p">):</span>
         <span class="k">return</span> <span class="p">[</span><span class="n">expr_init</span><span class="p">(</span><span class="n">e</span><span class="p">)</span> <span class="k">for</span> <span class="n">e</span> <span class="ow">in</span> <span class="n">rhs</span><span class="p">]</span>
     <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">rhs</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">):</span>
@@ -657,7 +671,15 @@
         <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">StructField</span><span class="p">):</span>
             <span class="n">entries</span> <span class="o">=</span> <span class="p">{</span><span class="n">k</span><span class="p">:</span> <span class="n">subscript</span><span class="p">(</span><span class="n">ast_builder</span><span class="p">,</span> <span class="n">v</span><span class="p">,</span> <span class="o">*</span><span class="n">indices</span><span class="p">)</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">value</span><span class="o">.</span><span class="n">_items</span><span class="p">}</span>
             <span class="n">entries</span><span class="p">[</span><span class="s2">&quot;__struct_methods&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">value</span><span class="o">.</span><span class="n">struct_methods</span>
-            <span class="k">return</span> <span class="n">_IntermediateStruct</span><span class="p">(</span><span class="n">entries</span><span class="p">)</span>
+            <span class="n">struct</span> <span class="o">=</span> <span class="n">_IntermediateStruct</span><span class="p">(</span><span class="n">entries</span><span class="p">)</span>
+            <span class="c1"># Carry ``_qd_unpacked_groups`` from the originating ``StructType`` (attached to the ``StructField`` in</span>
+            <span class="c1"># ``StructType.field``) onto the per-index intermediate struct so the AST transformer recognises</span>
+            <span class="c1"># ``f[i].r[k]`` as an unpacked-vector group access. Nested StructFields contribute their own tags via the</span>
+            <span class="c1"># recursive ``subscript`` call above, so ``outer_field[i].inner.r[k]`` also works.</span>
+            <span class="n">groups</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="s2">&quot;_qd_unpacked_groups&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">groups</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="nb">setattr</span><span class="p">(</span><span class="n">struct</span><span class="p">,</span> <span class="s2">&quot;_qd_unpacked_groups&quot;</span><span class="p">,</span> <span class="n">groups</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">struct</span>
         <span class="k">return</span> <span class="n">Expr</span><span class="p">(</span><span class="n">ast_builder</span><span class="o">.</span><span class="n">expr_subscript</span><span class="p">(</span><span class="n">_var</span><span class="p">,</span> <span class="n">indices_expr_group</span><span class="p">,</span> <span class="n">dbg_info</span><span class="p">))</span>
     <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">AnyArray</span><span class="p">):</span>
         <span class="k">assert</span> <span class="n">indices_expr_group</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>

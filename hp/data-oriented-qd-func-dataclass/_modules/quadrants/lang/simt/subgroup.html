@@ -804,17 +804,19 @@
 
 
 
-<span class="c1"># Pull in the reduce / scan / segmented-reduce APIs that live in ``quadrants.lang.simt.reductions``.  The import</span>
-<span class="c1"># has to happen *after* the primitives ``reductions`` depends on (``ballot``, ``invocation_id``, ``shuffle``,</span>
-<span class="c1"># ``shuffle_up``, ``shuffle_down``, ``log2_group_size``) are defined, so this back-import sits at the bottom of</span>
-<span class="c1"># the module body.  Side effect: every name in ``reductions.__all__`` becomes accessible as</span>
-<span class="c1"># ``qd.simt.subgroup.X``, preserving the historical public API.</span>
+<span class="c1"># Pull in the reduce / scan / segmented-reduce APIs that live in ``quadrants.lang.simt.reductions`` and the sorting</span>
+<span class="c1"># APIs that live in ``quadrants.lang.simt.sorting``.  Both back-imports have to happen *after* the primitives they</span>
+<span class="c1"># depend on (``ballot``, ``invocation_id``, ``shuffle``, ``shuffle_up``, ``shuffle_down``, ``log2_group_size``) are</span>
+<span class="c1"># defined, so they sit at the bottom of the module body.  Side effect: every name in ``reductions.__all__`` /</span>
+<span class="c1"># ``sorting.__all__`` becomes accessible as ``qd.simt.subgroup.X``, preserving the convention that every</span>
+<span class="c1"># subgroup-scope op lives in a single namespace from the user&#39;s perspective.</span>
 <span class="c1">#</span>
 <span class="c1"># WARNING: reordering definitions above this line -- in particular moving any of ``ballot`` / ``invocation_id`` /</span>
-<span class="c1"># ``shuffle`` / ``shuffle_up`` / ``shuffle_down`` / ``log2_group_size`` below this back-import -- will silently</span>
-<span class="c1"># break the circular import (``reductions`` would see only a partially-populated ``subgroup`` module).  Keep this</span>
-<span class="c1"># line at the bottom of the module body, after every name ``reductions`` consumes.</span>
+<span class="c1"># ``shuffle`` / ``shuffle_up`` / ``shuffle_down`` / ``log2_group_size`` below these back-imports -- will silently</span>
+<span class="c1"># break the circular import (the back-imported modules would see only a partially-populated ``subgroup`` module).</span>
+<span class="c1"># Keep these lines at the bottom of the module body, after every name they consume.</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.simt.reductions</span><span class="w"> </span><span class="kn">import</span> <span class="o">*</span>  <span class="c1"># noqa: E402, F401  pylint: disable=wrong-import-position,wildcard-import</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.simt.sorting</span><span class="w"> </span><span class="kn">import</span> <span class="o">*</span>  <span class="c1"># noqa: E402, F401  pylint: disable=wrong-import-position,wildcard-import</span>
 
 <span class="n">__all__</span> <span class="o">=</span> <span class="p">[</span>
     <span class="s2">&quot;sync&quot;</span><span class="p">,</span>
@@ -890,6 +892,8 @@
     <span class="s2">&quot;exclusive_and&quot;</span><span class="p">,</span>
     <span class="s2">&quot;exclusive_or&quot;</span><span class="p">,</span>
     <span class="s2">&quot;exclusive_xor&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;bitonic_sort_kv_tiled&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;bitonic_sort_kv&quot;</span><span class="p">,</span>
 <span class="p">]</span>
 </pre></div>
 

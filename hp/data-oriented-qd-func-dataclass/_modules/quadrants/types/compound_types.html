@@ -367,12 +367,16 @@
 
 <div class="viewcode-block" id="vector">
 <a class="viewcode-back" href="../../../autoapi/quadrants/types/compound_types/index.html#quadrants.types.compound_types.vector">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">vector</span><span class="p">(</span><span class="n">n</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">vector</span><span class="p">(</span><span class="n">n</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">unpacked</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Creates a vector type with given shape and data type.</span>
 
 <span class="sd">    Args:</span>
 <span class="sd">        n (int): dimension of the vector.</span>
 <span class="sd">        dtype (:mod:`~quadrants.types.primitive_types`): vector data type.</span>
+<span class="sd">        unpacked (bool): per-thread storage-layout marker. When ``True``, the type is only valid as a</span>
+<span class="sd">            ``@qd.dataclass`` field annotation, where it expands into ``n`` independent scalar slots (one ``alloca``</span>
+<span class="sd">            per slot) instead of one packed slot. The unpacked layout lets the optimiser promote slots to registers</span>
+<span class="sd">            independently and spill only the ones it has to. See :doc:`/user_guide/matrix_vector` for details.</span>
 
 <span class="sd">    Returns:</span>
 <span class="sd">        A vector type.</span>
@@ -382,7 +386,7 @@
 <span class="sd">        &gt;&gt;&gt; vec3 = qd.types.vector(3, qd.f32)  # 3d vector type</span>
 <span class="sd">        &gt;&gt;&gt; v = vec3([1., 2., 3.])  # an instance of this type</span>
 <span class="sd">    &quot;&quot;&quot;</span>
-    <span class="k">return</span> <span class="n">quadrants</span><span class="o">.</span><span class="n">lang</span><span class="o">.</span><span class="n">matrix</span><span class="o">.</span><span class="n">VectorType</span><span class="p">(</span><span class="n">n</span><span class="p">,</span> <span class="n">dtype</span><span class="p">)</span>  <span class="c1"># type: ignore</span></div>
+    <span class="k">return</span> <span class="n">quadrants</span><span class="o">.</span><span class="n">lang</span><span class="o">.</span><span class="n">matrix</span><span class="o">.</span><span class="n">VectorType</span><span class="p">(</span><span class="n">n</span><span class="p">,</span> <span class="n">dtype</span><span class="p">,</span> <span class="n">unpacked</span><span class="o">=</span><span class="n">unpacked</span><span class="p">)</span>  <span class="c1"># type: ignore</span></div>
 
 
 
