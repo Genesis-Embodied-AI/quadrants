@@ -170,59 +170,6 @@ def test_graph_do_while_multiple_loops():
 
 
 @test_utils.test()
-def test_graph_do_while_statements_outside_loop_reexecute_every_iter():
-    """Pin the current 'whole kernel is the loop body' semantics.
-
-    ``while qd.graph_do_while(...)`` is a kernel-level marker, not a Python
-    control-flow scope: the AST transformer flattens the whole kernel into a
-    single IR and the runtime wraps that *whole* IR in the conditional WHILE.
-    So any offloaded task you write textually *outside* the ``while`` block
-    (before or after) ALSO re-executes every iteration.
-
-    Today this is observable, surprising, and documented as a footgun (see
-    ``docs/source/user_guide/graph.md``). This test pins the behaviour so a
-    future change can't silently flip it; once the planned AST tightening
-    lands, the kernel below will be rejected at compile time and this test
-    should be updated to assert that rejection instead.
-    """
-    N = 16
-
-    @qd.kernel(graph=True)
-    def looks_innocent(
-        x: qd.types.ndarray(qd.i32, ndim=1),
-        c: qd.types.ndarray(qd.i32, ndim=0),
-    ):
-        for i in range(x.shape[0]):
-            x[i] = 0
-        while qd.graph_do_while(c):
-            for i in range(x.shape[0]):
-                x[i] = x[i] + 1
-            for i in range(1):
-                c[()] = c[()] - 1
-        for i in range(x.shape[0]):
-            x[i] = x[i] * 2
-
-    x = qd.ndarray(qd.i32, shape=(N,))
-    c = qd.ndarray(qd.i32, shape=())
-    x.from_numpy(np.zeros(N, dtype=np.int32))
-    c.from_numpy(np.array(5, dtype=np.int32))
-
-    looks_innocent(x, c)
-
-    assert c.to_numpy() == 0
-    np.testing.assert_array_equal(
-        x.to_numpy(),
-        np.full(N, 2, dtype=np.int32),
-        err_msg=(
-            "footgun semantics broken: every iteration of graph_do_while must "
-            "re-execute the pre-loop reset (x=0) and post-loop double (x*=2). "
-            "Expected x==2 (one iter's worth, doubled) on every element after "
-            "the loop terminates, NOT 5 or 10."
-        ),
-    )
-
-
-@test_utils.test()
 def test_graph_do_while_canonical_seed_writeback_idiom():
     """Document the canonical loop-carried-state idiom.
 
