@@ -559,6 +559,50 @@ def test_graph_do_while_mixed_with_top_level_for_loops():
 
 
 @test_utils.test()
+def test_graph_do_while_canonical_seed_writeback_idiom():
+    """The seed / iterate / writeback idiom for loop-carried state (see graph.md).
+
+    The init and writeback live in *separate non-graph* kernels so they run exactly once, while the
+    graph=True kernel contains only the do-while loop. State carries normally because nothing outside
+    the loop body resets it. (On this branch the equivalent run-once top-level for-loops could also
+    live inside the iterate kernel -- see test_graph_do_while_mixed_with_top_level_for_loops -- this
+    test pins the separate-kernel split documented as the alternative.)
+    """
+    N = 8
+
+    @qd.kernel  # no graph -- runs once per call
+    def seed(q_iter: qd.types.ndarray(qd.i32, ndim=1), q: qd.types.ndarray(qd.i32, ndim=1)):
+        for i in range(q.shape[0]):
+            q_iter[i] = q[i]
+
+    @qd.kernel(graph=True)
+    def iterate(q_iter: qd.types.ndarray(qd.i32, ndim=1), c: qd.types.ndarray(qd.i32, ndim=0)):
+        while qd.graph_do_while(c):
+            for i in range(q_iter.shape[0]):
+                q_iter[i] = q_iter[i] + 1
+            for _ in range(1):
+                c[()] = c[()] - 1
+
+    @qd.kernel  # no graph -- runs once per call
+    def writeback(q: qd.types.ndarray(qd.i32, ndim=1), q_iter: qd.types.ndarray(qd.i32, ndim=1)):
+        for i in range(q.shape[0]):
+            q[i] = q_iter[i]
+
+    q = qd.ndarray(qd.i32, shape=(N,))
+    q_iter = qd.ndarray(qd.i32, shape=(N,))
+    c = qd.ndarray(qd.i32, shape=())
+    q.from_numpy(np.full(N, 100, dtype=np.int32))
+    c.from_numpy(np.array(4, dtype=np.int32))
+
+    seed(q_iter, q)
+    iterate(q_iter, c)
+    writeback(q, q_iter)
+
+    assert c.to_numpy() == 0
+    np.testing.assert_array_equal(q.to_numpy(), np.full(N, 104, dtype=np.int32))
+
+
+@test_utils.test()
 def test_graph_do_while_nested_mixed_with_for_loops():
     """For-loops interleaved with a nested graph_do_while at the outer level."""
     N = 16
