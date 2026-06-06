@@ -1,7 +1,7 @@
 # type: ignore
 """Device-wide stream compaction (``select`` / ``compact``).
 
-``qd.algorithms.device_select(arr, flags, out, num_out)`` packs the elements of ``arr`` for which the corresponding
+``qd.algorithms.select(arr, flags, out, num_out)`` packs the elements of ``arr`` for which the corresponding
 ``flags`` entry is set into a dense prefix of ``out``, in stable input order, and writes the count of selected
 elements to ``num_out[0]``. Each ``flags[i]`` must be exactly ``0`` or ``1`` (``1`` selects); the algorithm
 prefix-sums ``flags`` directly as counts, so non-0/1 values produce wrong indices and counts (caller's responsibility,
@@ -10,7 +10,7 @@ no normalization pass).
 Algorithm (textbook scan-based compaction):
 
 1. Exclusive prefix-sum the ``flags`` (treated as 0 / 1) into the shared ``Field(u32)`` scratch, producing per-element
-   write indices. This reuses the same three-pass scan internals as ``device_exclusive_scan_add`` but targets a
+   write indices. This reuses the same three-pass scan internals as ``exclusive_scan_add`` but targets a
    scratch slice for the output instead of a caller-supplied ``out`` tensor.
 2. A single fused "scatter" kernel reads ``arr[i]`` and ``flags[i]``, and if the flag is set, writes
    ``out[indices[i]] = arr[i]``.
@@ -22,12 +22,12 @@ device scan). The scratch is *always* u32 regardless of the element dtype, becau
 flags-as-counts (i32) which always fit in u32; the element dtype only shows up at scatter time as
 ``dst[idx] = src[i]``, which lowers per-field for struct dtypes without any scratch reinterpretation.
 
-This is why ``device_select`` works on any element dtype Quadrants supports for field assignment - scalars
+This is why ``select`` works on any element dtype Quadrants supports for field assignment - scalars
 (``i32`` / ``u32`` / ``f32`` / ``i64`` / ``u64`` / ``f64``) and structs (libuipc ``Vector{2,3,4}i``,
 ``LinearBVHAABB``, etc.).
 
-**Scratch.** ``device_select`` needs a **caller-owned** 1-D ``u32`` scratch buffer of
-:func:`device_select_scratch_slots` ``(N)`` slots (the per-element indices ``scratch[0:N]`` plus the scan partials
+**Scratch.** ``select`` needs a **caller-owned** 1-D ``u32`` scratch buffer of
+:func:`select_scratch_slots` ``(N)`` slots (the per-element indices ``scratch[0:N]`` plus the scan partials
 above them). ``u32`` regardless of the element dtype (the scan operates on flags-as-counts). There is no
 module-level shared scratch - the caller always owns the buffer; a too-small buffer raises
 :class:`InsufficientScratchError`.
@@ -87,24 +87,25 @@ def _select_count(
         num_out[0] = last_idx + last_inc
 
 
-def device_select_scratch_slots(n: int) -> int:
-    """Number of ``u32`` scratch slots :func:`device_select` needs to compact a length-``n`` input.
+def select_scratch_slots(n: int) -> int:
+    """Number of ``u32`` scratch slots :func:`select` needs to compact a length-``n`` input.
 
-    Pure host-side arithmetic, dtype-independent (the scan operates on flags-as-counts, which are always ``u32``).
-    Layout: ``scratch[0:n]`` holds the per-element write indices, ``scratch[n:]`` the scan partials (plus any deeper
-    recursion levels). Allocate up front::
+    Host- **and** kernel-callable (branch-free integer arithmetic over an unrolled fixed loop, no device round-trip):
+    pass a Python ``int`` to size an allocation, or call it inside a kernel on a device-read ``N`` to validate
+    against ``scratch.shape[0]`` on-device. Dtype-independent (the scan operates on flags-as-counts, which are always
+    ``u32``). Layout: ``scratch[0:n]`` holds the per-element write indices, ``scratch[n:]`` the scan partials (plus
+    any deeper recursion levels). Allocate up front::
 
-        scratch = qd.field(qd.u32, shape=max(qd.algorithms.device_select_scratch_slots(N), 1))
+        scratch = qd.Tensor(qd.ndarray(qd.u32, shape=max(qd.algorithms.select_scratch_slots(N), 1)))
 
     Returns ``0`` for ``n <= 0``.
     """
-    if n <= 0:
-        return 0
+    pos = n > 0
     B0 = (n + BLOCK_DIM - 1) // BLOCK_DIM
-    return _scan_total_scratch_slots(B0, partials_cursor=n + B0)
+    return _scan_total_scratch_slots(B0, partials_cursor=n + B0) * pos
 
 
-def device_select(arr, flags, out, num_out, scratch):
+def select(arr, flags, out, num_out, scratch):
     """Stream-compact ``arr`` by ``flags``: copy ``arr[i]`` to a dense prefix of ``out`` for every ``i`` where
     ``flags[i] == 1``, in stable input order. Write the count of selected elements to ``num_out[0]``.
 
@@ -122,41 +123,41 @@ def device_select(arr, flags, out, num_out, scratch):
         out: 1-D tensor with the same dtype as ``arr``. Must hold at least ``N`` elements (so a
             worst-case-everyone-selected run fits); only the prefix ``out[0 : num_out[0]]`` is meaningful on return.
         num_out: 1-element ``i32`` tensor receiving the selected count.
-        scratch: caller-owned 1-D ``u32`` workspace of :func:`device_select_scratch_slots` ``(N)`` slots. There is no
+        scratch: caller-owned 1-D ``u32`` workspace of :func:`select_scratch_slots` ``(N)`` slots. There is no
             module-level shared scratch; a too-small buffer raises :class:`InsufficientScratchError`.
 
-    Same async / no-implicit-sync contract as ``device_reduce_*`` and ``device_exclusive_scan_*``: ``num_out`` is a
+    Same async / no-implicit-sync contract as ``reduce_*`` and ``exclusive_scan_*``: ``num_out`` is a
     tensor, not a Python scalar - call ``num_out.to_numpy()[0]`` explicitly to get the count host-side.
 
     See the design doc at ``perso_hugh/doc/qipc/qipc_device_algos_design.md`` for the scratch-into-indices layout and
     the algorithm reference.
     """
     if not hasattr(arr, "shape") or len(arr.shape) != 1:
-        raise TypeError(f"device_select expects a 1-D arr; got shape {getattr(arr, 'shape', None)}")
+        raise TypeError(f"select expects a 1-D arr; got shape {getattr(arr, 'shape', None)}")
     if not hasattr(flags, "shape") or flags.shape != arr.shape:
-        raise TypeError(f"device_select expects flags.shape == arr.shape; got arr={arr.shape}, flags={flags.shape}")
+        raise TypeError(f"select expects flags.shape == arr.shape; got arr={arr.shape}, flags={flags.shape}")
     if flags.dtype != i32:
-        raise TypeError(f"device_select expects flags.dtype == qd.i32; got {flags.dtype}")
+        raise TypeError(f"select expects flags.dtype == qd.i32; got {flags.dtype}")
     if not hasattr(out, "shape") or len(out.shape) != 1:
-        raise TypeError(f"device_select expects a 1-D out; got shape {getattr(out, 'shape', None)}")
+        raise TypeError(f"select expects a 1-D out; got shape {getattr(out, 'shape', None)}")
     if out.dtype != arr.dtype:
-        raise TypeError(f"device_select dtype mismatch: arr={arr.dtype}, out={out.dtype}")
+        raise TypeError(f"select dtype mismatch: arr={arr.dtype}, out={out.dtype}")
     if out.shape[0] < arr.shape[0]:
         raise ValueError(
-            f"device_select out.shape[0]={out.shape[0]} < arr.shape[0]={arr.shape[0]}; "
+            f"select out.shape[0]={out.shape[0]} < arr.shape[0]={arr.shape[0]}; "
             "out must hold at least the input size to be safe in the all-selected case"
         )
     if not hasattr(num_out, "shape") or num_out.shape != (1,):
-        raise TypeError(f"device_select expects num_out.shape == (1,); got {num_out.shape}")
+        raise TypeError(f"select expects num_out.shape == (1,); got {num_out.shape}")
     if num_out.dtype != i32:
-        raise TypeError(f"device_select expects num_out.dtype == qd.i32; got {num_out.dtype}")
+        raise TypeError(f"select expects num_out.dtype == qd.i32; got {num_out.dtype}")
 
     N = arr.shape[0]
     if N == 0:
         return
 
     # Scratch layout: scratch[0:N] = indices, scratch[N : N + B0] = level-0 partials, then deeper levels above.
-    _validate_caller_scratch("device_select", N, scratch, device_select_scratch_slots(N), u32)
+    _validate_caller_scratch("select", N, scratch, select_scratch_slots(N), u32)
     B0 = (N + BLOCK_DIM - 1) // BLOCK_DIM
     indices_off = 0
     partials_off = N
@@ -208,4 +209,4 @@ def device_select(arr, flags, out, num_out, scratch):
     _select_count(flags, scratch, indices_off, N, num_out)
 
 
-__all__ = ["device_select", "device_select_scratch_slots"]
+__all__ = ["select", "select_scratch_slots"]
