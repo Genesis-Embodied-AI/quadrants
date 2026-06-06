@@ -8,7 +8,14 @@ KernelLauncher::KernelLauncher(Config config) : config_(std::move(config)) {
 }
 
 void KernelLauncher::launch_offloaded_tasks_with_do_while(Handle handle, LaunchContextBuilder &ctx) {
-  const ArgArrayPtrKey key{ctx.graph_do_while_arg_id, TypeFactory::DATA_PTR_POS_IN_NDARRAY};
+  // Nested graph_do_while is not yet supported on the GFX (Vulkan/Metal) backend: it would need a
+  // per-task-range kernel launch and per-task level tags on SPIR-V TaskAttributes (the LLVM
+  // OffloadedTask tags don't reach this backend). Single-level graph_do_while works.
+  QD_ERROR_IF(ctx.graph_do_while_levels.size() > 1,
+              "Nested qd.graph_do_while() is not yet supported on the Vulkan/Metal backend. Use a "
+              "single graph_do_while loop, or run on the CUDA / CPU backend.");
+
+  const ArgArrayPtrKey key{ctx.graph_do_while_levels[0].cond_arg_id, TypeFactory::DATA_PTR_POS_IN_NDARRAY};
   auto it = ctx.array_ptrs.find(key);
   QD_ASSERT(it != ctx.array_ptrs.end());
 
@@ -29,7 +36,7 @@ void KernelLauncher::launch_offloaded_tasks_with_do_while(Handle handle, LaunchC
 void KernelLauncher::launch_kernel(const lang::CompiledKernelData &compiled_kernel_data, LaunchContextBuilder &ctx) {
   auto handle = register_kernel(compiled_kernel_data);
 
-  if (ctx.graph_do_while_arg_id >= 0) {
+  if (ctx.has_graph_do_while()) {
     launch_offloaded_tasks_with_do_while(handle, ctx);
   } else {
     config_.gfx_runtime_->launch_kernel(handle, ctx);

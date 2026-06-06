@@ -4,6 +4,7 @@
 #include "quadrants/rhi/amdgpu/amdgpu_context.h"
 #include "quadrants/rhi/amdgpu/amdgpu_stream_pin.h"
 #include "quadrants/program/adstack_size_expr_eval.h"
+#include "quadrants/program/graph_do_while_driver.h"
 #include "quadrants/program/launch_context_builder.h"
 #include "quadrants/program/program.h"
 #include "quadrants/runtime/amdgpu/amdgpu_utils.h"
@@ -218,14 +219,40 @@ void KernelLauncher::launch_offloaded_tasks_with_do_while(LaunchContextBuilder &
                                                           const std::vector<OffloadedTask> &offloaded_tasks,
                                                           void *context_pointer,
                                                           int arg_size) {
-  int32_t counter_val;
-  do {
-    launch_offloaded_tasks(ctx, amdgpu_module, offloaded_tasks, context_pointer, arg_size);
-    counter_val = 0;
+  const auto &levels = ctx.graph_do_while_levels;
+  auto read_flag = [&](int level) -> bool {
+    int32_t counter_val = 0;
     auto *stream = AMDGPUContext::get_instance().get_stream();
     AMDGPUDriver::get_instance().stream_synchronize(stream);
-    AMDGPUDriver::get_instance().memcpy_device_to_host(&counter_val, ctx.graph_do_while_flag_dev_ptr, sizeof(int32_t));
-  } while (counter_val != 0);
+    AMDGPUDriver::get_instance().memcpy_device_to_host(&counter_val, levels[level].flag_dev_ptr, sizeof(int32_t));
+    return counter_val != 0;
+  };
+
+  std::vector<int> level_per_task(offloaded_tasks.size());
+  for (size_t i = 0; i < offloaded_tasks.size(); i++) {
+    level_per_task[i] = offloaded_tasks[i].graph_do_while_level_id;
+  }
+  const bool has_top_level_task =
+      std::any_of(level_per_task.begin(), level_per_task.end(), [](int l) { return l < 0; });
+
+  if (levels.size() == 1 && !has_top_level_task) {
+    // Single loop with every task inside it: re-run the full task list each iteration (HIP has no
+    // conditional graph nodes). For-loop-mixed kernels fall through to the general driver below.
+    do {
+      launch_offloaded_tasks(ctx, amdgpu_module, offloaded_tasks, context_pointer, arg_size);
+    } while (read_flag(0));
+    return;
+  }
+
+  // Nested or for-loop-mixed graph_do_while host fallback: per-task dispatch driven by level tags.
+  auto launch_task = [&](int i) -> bool {
+    const auto &task = offloaded_tasks[i];
+    amdgpu_module->launch(task.name, task.grid_dim, task.block_dim, task.dynamic_shared_array_bytes,
+                          {(void *)&context_pointer}, {arg_size});
+    return true;
+  };
+  auto continue_level = [&](int level) -> bool { return read_flag(level); };
+  run_graph_do_while((int)offloaded_tasks.size(), level_per_task, levels, launch_task, continue_level);
 }
 
 bool KernelLauncher::on_amdgpu_device(void *ptr) {
@@ -241,7 +268,7 @@ void KernelLauncher::launch_llvm_kernel(Handle handle, LaunchContextBuilder &ctx
   // kernel-launch graph nodes but no conditional / while nodes today, so the CUDA fast path that builds a conditional
   // graph cannot be ported. The `AmdgpuDefaultStreamPinGuard` further down is skipped on this branch; that's fine
   // because `graph_launch` enqueues a single op on the active stream and there are no recursive launches to reorder.
-  if (ctx.use_graph && ctx.graph_do_while_arg_id < 0) {
+  if (ctx.use_graph && !ctx.has_graph_do_while()) {
     auto &lctx = contexts_[handle.get_launch_id()];
     if (graph_manager_.try_launch(handle.get_launch_id(), ctx, lctx.jit_module, *lctx.parameters, lctx.offloaded_tasks,
                                   get_runtime_executor())) {
@@ -346,9 +373,7 @@ void KernelLauncher::launch_llvm_kernel(Handle handle, LaunchContextBuilder &ctx
           }
         }
         ctx.set_ndarray_ptrs(arg_id, (uint64)device_ptrs[data_ptr_idx], (uint64)device_ptrs[grad_ptr_idx]);
-        if (arg_id == ctx.graph_do_while_arg_id) {
-          ctx.graph_do_while_flag_dev_ptr = device_ptrs[data_ptr_idx];
-        }
+        ctx.resolve_graph_do_while_flag(arg_id, device_ptrs[data_ptr_idx]);
       } else if (arr_sz > 0) {  // why use arr_sz constrain?
         // Ndarray
         DeviceAllocation *ptr = static_cast<DeviceAllocation *>(data_ptr);
@@ -363,9 +388,7 @@ void KernelLauncher::launch_llvm_kernel(Handle handle, LaunchContextBuilder &ctx
         }
 
         ctx.set_ndarray_ptrs(arg_id, (uint64)device_ptrs[data_ptr_idx], (uint64)device_ptrs[grad_ptr_idx]);
-        if (arg_id == ctx.graph_do_while_arg_id) {
-          ctx.graph_do_while_flag_dev_ptr = device_ptrs[data_ptr_idx];
-        }
+        ctx.resolve_graph_do_while_flag(arg_id, device_ptrs[data_ptr_idx]);
       }
     }
   }
@@ -422,8 +445,10 @@ void KernelLauncher::launch_llvm_kernel(Handle handle, LaunchContextBuilder &ctx
   // Adstack-cache invalidation bump - see `bump_writes_for_kernel_llvm` in `program/adstack_size_expr_eval.{h,cpp}`.
   bump_writes_for_kernel_llvm(executor->get_program(), &ctx, offloaded_tasks);
 
-  if (ctx.graph_do_while_arg_id >= 0) {
-    QD_ASSERT(ctx.graph_do_while_flag_dev_ptr);
+  if (ctx.has_graph_do_while()) {
+    for (const auto &level : ctx.graph_do_while_levels) {
+      QD_ASSERT(level.flag_dev_ptr);
+    }
     launch_offloaded_tasks_with_do_while(ctx, amdgpu_module, offloaded_tasks, context_pointer, arg_size);
   } else {
     launch_offloaded_tasks(ctx, amdgpu_module, offloaded_tasks, context_pointer, arg_size);

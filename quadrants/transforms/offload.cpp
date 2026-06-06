@@ -78,8 +78,14 @@ class Offloader {
     pending_serial_statements->grid_dim = 1;
     pending_serial_statements->block_dim = 1;
 
-    auto assemble_serial_statements = [&]() {
+    // `level_id` is the innermost graph_do_while level of the for-loop that triggered the flush; the
+    // pending serial holds that for-loop's implicit bound/listgen computations, so it belongs to the
+    // same level. The final flush (no following for-loop) passes -1 (outside all loops). The frontend
+    // restriction (gdw bodies / gdw-using kernels contain only for-loops + gdw whiles) guarantees a
+    // pending serial never mixes statements from two different levels.
+    auto assemble_serial_statements = [&](int level_id = -1) {
       if (!pending_serial_statements->body->statements.empty()) {
+        pending_serial_statements->graph_do_while_level_id = level_id;
         root_block->insert(std::move(pending_serial_statements));
         pending_serial_statements = Stmt::make_typed<OffloadedStmt>(OffloadedStmt::TaskType::serial, arch, kernel);
         pending_serial_statements->grid_dim = 1;
@@ -91,7 +97,7 @@ class Offloader {
       auto &stmt = root_statements[i];
       // Note that stmt->parent is root_block, which doesn't contain stmt now.
       if (auto s = stmt->cast<RangeForStmt>(); s && !s->strictly_serialized) {
-        assemble_serial_statements();
+        assemble_serial_statements(s->graph_do_while_level_id);
         auto offloaded = Stmt::make_typed<OffloadedStmt>(OffloadedStmt::TaskType::range_for, arch, kernel);
         // offloaded->body is an empty block now.
         offloaded->grid_dim = config.saturating_grid_dim;
@@ -127,13 +133,14 @@ class Offloader {
         }
         offloaded->range_hint = s->range_hint;
         offloaded->stream_parallel_group_id = s->stream_parallel_group_id;
+        offloaded->graph_do_while_level_id = s->graph_do_while_level_id;
         offloaded->loop_name = s->loop_name;
         root_block->insert(std::move(offloaded));
       } else if (auto st = stmt->cast<StructForStmt>()) {
-        assemble_serial_statements();
+        assemble_serial_statements(st->graph_do_while_level_id);
         emit_struct_for(st, root_block, config, st->mem_access_opt);
       } else if (auto st = stmt->cast<MeshForStmt>()) {
-        assemble_serial_statements();
+        assemble_serial_statements(st->graph_do_while_level_id);
         auto offloaded = Stmt::make_typed<OffloadedStmt>(OffloadedStmt::TaskType::mesh_for, arch, kernel);
         offloaded->grid_dim = config.saturating_grid_dim;
         if (st->block_dim == 0) {
@@ -151,6 +158,7 @@ class Offloader {
         offloaded->major_to_types = std::move(st->major_to_types);
         offloaded->minor_relation_types = std::move(st->minor_relation_types);
         offloaded->mem_access_opt = st->mem_access_opt;
+        offloaded->graph_do_while_level_id = st->graph_do_while_level_id;
         root_block->insert(std::move(offloaded));
       } else {
         pending_serial_statements->body->insert(std::move(stmt));
@@ -193,12 +201,14 @@ class Offloader {
         offloaded_clear_list->body->insert(Stmt::make<ClearListStmt>(snode_child));
         offloaded_clear_list->grid_dim = 1;
         offloaded_clear_list->block_dim = 1;
+        offloaded_clear_list->graph_do_while_level_id = for_stmt->graph_do_while_level_id;
         // Intentionally do not set offloaded_clear_list->snode, so that there
         // is nothing special about this task, which could otherwise cause
         // problems when fused with other serial tasks.
         root_block->insert(std::move(offloaded_clear_list));
         auto offloaded_listgen = Stmt::make_typed<OffloadedStmt>(OffloadedStmt::TaskType::listgen, arch, kernel);
         offloaded_listgen->snode = snode_child;
+        offloaded_listgen->graph_do_while_level_id = for_stmt->graph_do_while_level_id;
         offloaded_listgen->grid_dim = config.saturating_grid_dim;
         offloaded_listgen->block_dim = std::min(
             snode_child->max_num_elements(), (int64)std::min(Program::default_block_dim(config), config.max_block_dim));
@@ -239,6 +249,7 @@ class Offloader {
     offloaded_struct_for->num_cpu_threads = std::min(for_stmt->num_cpu_threads, config.cpu_max_num_threads);
     offloaded_struct_for->mem_access_opt = mem_access_opt;
     offloaded_struct_for->stream_parallel_group_id = for_stmt->stream_parallel_group_id;
+    offloaded_struct_for->graph_do_while_level_id = for_stmt->graph_do_while_level_id;
     offloaded_struct_for->loop_name = for_stmt->loop_name;
 
     root_block->insert(std::move(offloaded_struct_for));

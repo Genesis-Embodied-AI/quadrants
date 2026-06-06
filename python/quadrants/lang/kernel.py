@@ -234,6 +234,13 @@ class ASTGenerator:
             # be available to use in build_Call, later.
             tree = _kernel_impl_dataclass.unpack_ast_struct_expressions(self.tree, struct_locals=struct_locals)
             ctx.only_parse_function_def = self.only_parse_function_def
+            # Rebuild the graph_do_while level table from scratch each compilation pass (build_While
+            # appends to it as it walks the AST). Skip when only_parse_function_def: the body is not
+            # walked, so build_While never runs to repopulate it -- and on a fast-cache restore the table
+            # was already rebuilt from the cached (cond_arg_name, parent_id) pairs in _try_load_fastcache.
+            if not ctx.only_parse_function_def:
+                self.current_kernel.graph_do_while_levels = []
+                self.current_kernel._graph_do_while_level_stack = []
             transform_tree(tree, ctx)
             if not ctx.is_real_function and not ctx.only_parse_function_def:
                 if self.current_kernel.return_type and ctx.returned != ReturnStatus.ReturnedValue:
@@ -276,6 +283,17 @@ class ASTGenerator:
         return node  # Basic types (str, int, None, etc.)
 
 
+@dataclasses.dataclass
+class GraphDoWhileLevel:
+    """One nested ``qd.graph_do_while`` loop in a ``graph=True`` kernel, indexed by level id (assigned
+    outer-before-inner by the AST transformer). Mirrors the C++ ``GraphDoWhileLevel``."""
+
+    cond_arg_name: str
+    parent_id: int
+    # Resolved C++ arg index of the condition ndarray (filled during launch-arg iteration).
+    cond_cpp_arg_id: int = -1
+
+
 class Kernel(FuncBase):
     counter = 0
 
@@ -306,7 +324,14 @@ class Kernel(FuncBase):
         self.materialized_kernels: dict[CompiledKernelKeyType, KernelCxx] = {}
         self.has_print = False
         self.use_graph: bool = False
+        # Legacy single-loop arg name, kept for reporting/back-compat; equals the outermost level's
+        # condition arg for nested kernels. The authoritative data is `graph_do_while_levels`.
         self.graph_do_while_arg: str | None = None
+        # Nested graph_do_while level table, indexed by level id (outer before inner). Rebuilt each
+        # compilation pass by the AST transformer; serialized to the launch context at launch.
+        self.graph_do_while_levels: list[GraphDoWhileLevel] = []
+        # Transient stack of active level ids, used only while transforming the AST.
+        self._graph_do_while_level_stack: list[int] = []
         self.quadrants_callable: QuadrantsCallable | None = None
         self.visited_functions: set[FunctionSourceInfo] = set()
         self.kernel_function_info: FunctionSourceInfo | None = None
@@ -350,10 +375,10 @@ class Kernel(FuncBase):
                 self.raise_on_templated_floats, kernel_source_info, args, self.arg_metas
             )
             used_py_dataclass_parameters = None
-            cached_graph_do_while_arg: str | None = None
+            cached_graph_do_while_levels: list[tuple[str, int]] | None = None
             if self.fast_checksum:
                 self.src_ll_cache_observations.cache_key_generated = True
-                used_py_dataclass_parameters, frontend_cache_key, cached_graph_do_while_arg = src_hasher.load(  # type: ignore[reportAssignmentType]
+                used_py_dataclass_parameters, frontend_cache_key, cached_graph_do_while_levels = src_hasher.load(  # type: ignore[reportAssignmentType]
                     self.fast_checksum
                 )
             if used_py_dataclass_parameters is not None and frontend_cache_key is not None:
@@ -369,8 +394,14 @@ class Kernel(FuncBase):
                 if self.compiled_kernel_data_by_key[key]:
                     self.src_ll_cache_observations.cache_loaded = True
                     self.used_py_dataclass_parameters_by_key_enforcing[key] = used_py_dataclass_parameters
-                    if cached_graph_do_while_arg is not None:
-                        self.graph_do_while_arg = cached_graph_do_while_arg
+                    # Fast-cache restore skips AST transformation, so rebuild the gdw level table (and
+                    # the legacy outermost-arg alias) from the cached (cond_arg_name, parent_id) pairs.
+                    if cached_graph_do_while_levels:
+                        self.graph_do_while_levels = [
+                            GraphDoWhileLevel(cond_arg_name=name, parent_id=parent)
+                            for name, parent in cached_graph_do_while_levels
+                        ]
+                        self.graph_do_while_arg = self.graph_do_while_levels[0].cond_arg_name
                     return used_py_dataclass_parameters
 
         elif self.quadrants_callable and not self.quadrants_callable.is_pure and self.runtime.print_non_pure:
@@ -541,8 +572,10 @@ class Kernel(FuncBase):
                 # which weakens API/type safety and can route the wrong struct type through launch.
                 if getattr(val, "_qd_all_field", False) and getattr(needed_, _FIELDS, None) is not None:
                     continue
-                if self.graph_do_while_arg is not None and self.arg_metas[i_in].name == self.graph_do_while_arg:
-                    self._graph_do_while_cpp_arg_id = i_out - template_num
+                if self.graph_do_while_levels:
+                    for _gdw_level in self.graph_do_while_levels:
+                        if self.arg_metas[i_in].name == _gdw_level.cond_arg_name:
+                            _gdw_level.cond_cpp_arg_id = i_out - template_num
                 num_args_, is_launch_ctx_cacheable_ = self._recursive_set_args(
                     self.used_py_dataclass_parameters_by_key_enforcing[key],
                     self.arg_metas[i_in].name,
@@ -604,7 +637,9 @@ class Kernel(FuncBase):
                         self.fast_checksum,
                         self.visited_functions,
                         self.used_py_dataclass_parameters_by_key_enforcing[key],
-                        graph_do_while_arg=self.graph_do_while_arg,  # type: ignore[reportCallIssue]
+                        graph_do_while_levels=[  # type: ignore[reportCallIssue]
+                            (level.cond_arg_name, level.parent_id) for level in self.graph_do_while_levels
+                        ],
                     )
                     self.src_ll_cache_observations.cache_stored = True
             self._last_compiled_kernel_data = compiled_kernel_data
@@ -614,8 +649,8 @@ class Kernel(FuncBase):
                     "qd_stream is not compatible with graph=True kernels. "
                     "See docs/source/user_guide/streams.md for details."
                 )
-            if self.graph_do_while_arg is not None and hasattr(self, "_graph_do_while_cpp_arg_id"):
-                launch_ctx.graph_do_while_arg_id = self._graph_do_while_cpp_arg_id
+            for _gdw_level in self.graph_do_while_levels:
+                launch_ctx.add_graph_do_while_level(_gdw_level.cond_cpp_arg_id, _gdw_level.parent_id)
             stream_handle = qd_stream.handle if qd_stream is not None else 0
             if stream_handle:
                 prog.set_current_cuda_stream(stream_handle)

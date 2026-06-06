@@ -369,5 +369,324 @@ def test_graph_do_while_fastcache_restores_arg(tmp_path: pathlib.Path):
         assert proc.returncode == RET_SUCCESS
 
 
+@test_utils.test()
+def test_graph_do_while_nested_two_levels():
+    """Two nested graph_do_while loops. The inner counter is reset at the start of each outer
+    iteration; total work is outer_iters * inner_iters."""
+    N = 32
+    OUTER, INNER = 3, 4
+
+    @qd.kernel(graph=True)
+    def k(
+        x: qd.types.ndarray(qd.i32, ndim=1),
+        outer: qd.types.ndarray(qd.i32, ndim=0),
+        inner: qd.types.ndarray(qd.i32, ndim=0),
+    ):
+        while qd.graph_do_while(outer):
+            for _ in range(1):
+                inner[()] = INNER
+            while qd.graph_do_while(inner):
+                for i in range(x.shape[0]):
+                    x[i] = x[i] + 1
+                for _ in range(1):
+                    inner[()] = inner[()] - 1
+            for _ in range(1):
+                outer[()] = outer[()] - 1
+
+    x = qd.ndarray(qd.i32, shape=(N,))
+    outer = qd.ndarray(qd.i32, shape=())
+    inner = qd.ndarray(qd.i32, shape=())
+    x.from_numpy(np.zeros(N, dtype=np.int32))
+    outer.from_numpy(np.array(OUTER, dtype=np.int32))
+    inner.from_numpy(np.array(0, dtype=np.int32))
+
+    k(x, outer, inner)
+    if _is_graph_do_while_natively_supported():
+        assert _graph_used()
+        assert _graph_cache_size() == 1
+
+    assert outer.to_numpy() == 0
+    np.testing.assert_array_equal(x.to_numpy(), np.full(N, OUTER * INNER, dtype=np.int32))
+
+    # Re-run with different counts to confirm the indirection slots refresh (no rebuild).
+    OUTER2, INNER2 = 5, 2
+    x.from_numpy(np.zeros(N, dtype=np.int32))
+    outer.from_numpy(np.array(OUTER2, dtype=np.int32))
+
+    @qd.kernel(graph=True)
+    def k2(
+        x: qd.types.ndarray(qd.i32, ndim=1),
+        outer: qd.types.ndarray(qd.i32, ndim=0),
+        inner: qd.types.ndarray(qd.i32, ndim=0),
+    ):
+        while qd.graph_do_while(outer):
+            for _ in range(1):
+                inner[()] = INNER2
+            while qd.graph_do_while(inner):
+                for i in range(x.shape[0]):
+                    x[i] = x[i] + 1
+                for _ in range(1):
+                    inner[()] = inner[()] - 1
+            for _ in range(1):
+                outer[()] = outer[()] - 1
+
+    k2(x, outer, inner)
+    np.testing.assert_array_equal(x.to_numpy(), np.full(N, OUTER2 * INNER2, dtype=np.int32))
+
+
+@test_utils.test()
+def test_graph_do_while_nested_three_levels():
+    """Three nested graph_do_while loops; total work is the product of the three iteration counts."""
+    N = 16
+    A, B, C = 2, 3, 2
+
+    @qd.kernel(graph=True)
+    def k(
+        x: qd.types.ndarray(qd.i32, ndim=1),
+        a: qd.types.ndarray(qd.i32, ndim=0),
+        b: qd.types.ndarray(qd.i32, ndim=0),
+        c: qd.types.ndarray(qd.i32, ndim=0),
+    ):
+        while qd.graph_do_while(a):
+            for _ in range(1):
+                b[()] = B
+            while qd.graph_do_while(b):
+                for _ in range(1):
+                    c[()] = C
+                while qd.graph_do_while(c):
+                    for i in range(x.shape[0]):
+                        x[i] = x[i] + 1
+                    for _ in range(1):
+                        c[()] = c[()] - 1
+                for _ in range(1):
+                    b[()] = b[()] - 1
+            for _ in range(1):
+                a[()] = a[()] - 1
+
+    x = qd.ndarray(qd.i32, shape=(N,))
+    a = qd.ndarray(qd.i32, shape=())
+    b = qd.ndarray(qd.i32, shape=())
+    c = qd.ndarray(qd.i32, shape=())
+    x.from_numpy(np.zeros(N, dtype=np.int32))
+    a.from_numpy(np.array(A, dtype=np.int32))
+    b.from_numpy(np.array(0, dtype=np.int32))
+    c.from_numpy(np.array(0, dtype=np.int32))
+
+    k(x, a, b, c)
+    if _is_graph_do_while_natively_supported():
+        assert _graph_used()
+        assert _graph_cache_size() == 1
+
+    assert a.to_numpy() == 0
+    np.testing.assert_array_equal(x.to_numpy(), np.full(N, A * B * C, dtype=np.int32))
+
+
+@test_utils.test()
+def test_graph_do_while_siblings():
+    """Two independent (sibling) graph_do_while loops at the kernel top level."""
+    N = 24
+    C1, C2 = 5, 3
+
+    @qd.kernel(graph=True)
+    def k(
+        x: qd.types.ndarray(qd.i32, ndim=1),
+        y: qd.types.ndarray(qd.i32, ndim=1),
+        c1: qd.types.ndarray(qd.i32, ndim=0),
+        c2: qd.types.ndarray(qd.i32, ndim=0),
+    ):
+        while qd.graph_do_while(c1):
+            for i in range(x.shape[0]):
+                x[i] = x[i] + 1
+            for _ in range(1):
+                c1[()] = c1[()] - 1
+        while qd.graph_do_while(c2):
+            for i in range(y.shape[0]):
+                y[i] = y[i] + 2
+            for _ in range(1):
+                c2[()] = c2[()] - 1
+
+    x = qd.ndarray(qd.i32, shape=(N,))
+    y = qd.ndarray(qd.i32, shape=(N,))
+    c1 = qd.ndarray(qd.i32, shape=())
+    c2 = qd.ndarray(qd.i32, shape=())
+    x.from_numpy(np.zeros(N, dtype=np.int32))
+    y.from_numpy(np.zeros(N, dtype=np.int32))
+    c1.from_numpy(np.array(C1, dtype=np.int32))
+    c2.from_numpy(np.array(C2, dtype=np.int32))
+
+    k(x, y, c1, c2)
+    if _is_graph_do_while_natively_supported():
+        assert _graph_used()
+        assert _graph_cache_size() == 1
+
+    assert c1.to_numpy() == 0
+    assert c2.to_numpy() == 0
+    np.testing.assert_array_equal(x.to_numpy(), np.full(N, C1, dtype=np.int32))
+    np.testing.assert_array_equal(y.to_numpy(), np.full(N, 2 * C2, dtype=np.int32))
+
+
+@test_utils.test()
+def test_graph_do_while_mixed_with_top_level_for_loops():
+    """Mix plain top-level for-loops (run once) with a graph_do_while loop. This is the headline
+    case: a for-loop before and after the loop, both executed exactly once."""
+    N = 20
+    ITERS = 5
+
+    @qd.kernel(graph=True)
+    def k(x: qd.types.ndarray(qd.i32, ndim=1), c: qd.types.ndarray(qd.i32, ndim=0)):
+        for i in range(x.shape[0]):
+            x[i] = x[i] + 100
+        while qd.graph_do_while(c):
+            for i in range(x.shape[0]):
+                x[i] = x[i] + 1
+            for _ in range(1):
+                c[()] = c[()] - 1
+        for i in range(x.shape[0]):
+            x[i] = x[i] * 2
+
+    x = qd.ndarray(qd.i32, shape=(N,))
+    c = qd.ndarray(qd.i32, shape=())
+    x.from_numpy(np.zeros(N, dtype=np.int32))
+    c.from_numpy(np.array(ITERS, dtype=np.int32))
+
+    k(x, c)
+    if _is_graph_do_while_natively_supported():
+        assert _graph_used()
+        assert _graph_cache_size() == 1
+
+    assert c.to_numpy() == 0
+    np.testing.assert_array_equal(x.to_numpy(), np.full(N, (100 + ITERS) * 2, dtype=np.int32))
+
+
+@test_utils.test()
+def test_graph_do_while_nested_mixed_with_for_loops():
+    """For-loops interleaved with a nested graph_do_while at the outer level."""
+    N = 16
+    OUTER, INNER = 4, 3
+
+    @qd.kernel(graph=True)
+    def k(
+        x: qd.types.ndarray(qd.i32, ndim=1),
+        outer: qd.types.ndarray(qd.i32, ndim=0),
+        inner: qd.types.ndarray(qd.i32, ndim=0),
+    ):
+        for i in range(x.shape[0]):
+            x[i] = x[i] + 1000
+        while qd.graph_do_while(outer):
+            for _ in range(1):
+                inner[()] = INNER
+            for i in range(x.shape[0]):
+                x[i] = x[i] + 10
+            while qd.graph_do_while(inner):
+                for i in range(x.shape[0]):
+                    x[i] = x[i] + 1
+                for _ in range(1):
+                    inner[()] = inner[()] - 1
+            for _ in range(1):
+                outer[()] = outer[()] - 1
+
+    x = qd.ndarray(qd.i32, shape=(N,))
+    outer = qd.ndarray(qd.i32, shape=())
+    inner = qd.ndarray(qd.i32, shape=())
+    x.from_numpy(np.zeros(N, dtype=np.int32))
+    outer.from_numpy(np.array(OUTER, dtype=np.int32))
+    inner.from_numpy(np.array(0, dtype=np.int32))
+
+    k(x, outer, inner)
+    if _is_graph_do_while_natively_supported():
+        assert _graph_used()
+        assert _graph_cache_size() == 1
+
+    assert outer.to_numpy() == 0
+    expected = 1000 + OUTER * 10 + OUTER * INNER
+    np.testing.assert_array_equal(x.to_numpy(), np.full(N, expected, dtype=np.int32))
+
+
+@test_utils.test()
+def test_graph_do_while_nested_dynamic_bounds():
+    """A nested loop whose inner for-loop bound is read from device memory. The dynamic bound forces
+    the offloader to emit a serial bound-computation task, which must be tagged at the inner level."""
+    N = 32
+    OUTER = 3
+
+    @qd.kernel(graph=True)
+    def k(
+        x: qd.types.ndarray(qd.i32, ndim=1),
+        n: qd.types.ndarray(qd.i32, ndim=0),
+        outer: qd.types.ndarray(qd.i32, ndim=0),
+        inner: qd.types.ndarray(qd.i32, ndim=0),
+    ):
+        while qd.graph_do_while(outer):
+            for _ in range(1):
+                inner[()] = 2
+            while qd.graph_do_while(inner):
+                for i in range(n[()]):
+                    x[i] = x[i] + 1
+                for _ in range(1):
+                    inner[()] = inner[()] - 1
+            for _ in range(1):
+                outer[()] = outer[()] - 1
+
+    half = N // 2
+    x = qd.ndarray(qd.i32, shape=(N,))
+    n = qd.ndarray(qd.i32, shape=())
+    outer = qd.ndarray(qd.i32, shape=())
+    inner = qd.ndarray(qd.i32, shape=())
+    x.from_numpy(np.zeros(N, dtype=np.int32))
+    n.from_numpy(np.array(half, dtype=np.int32))
+    outer.from_numpy(np.array(OUTER, dtype=np.int32))
+    inner.from_numpy(np.array(0, dtype=np.int32))
+
+    k(x, n, outer, inner)
+    if _is_graph_do_while_natively_supported():
+        assert _graph_used()
+        assert _graph_cache_size() == 1
+
+    assert outer.to_numpy() == 0
+    expected = np.zeros(N, dtype=np.int32)
+    expected[:half] = OUTER * 2
+    np.testing.assert_array_equal(x.to_numpy(), expected)
+
+
+@test_utils.test()
+def test_graph_do_while_bare_statement_raises():
+    """A bare (non-for) statement in a graph_do_while-using kernel body must raise."""
+
+    @qd.kernel(graph=True)
+    def k(x: qd.types.ndarray(qd.i32, ndim=1), c: qd.types.ndarray(qd.i32, ndim=0)):
+        x[0] = 1
+        while qd.graph_do_while(c):
+            for i in range(x.shape[0]):
+                x[i] = x[i] + 1
+            for _ in range(1):
+                c[()] = c[()] - 1
+
+    x = qd.ndarray(qd.i32, shape=(4,))
+    c = qd.ndarray(qd.i32, shape=())
+    c.from_numpy(np.array(1, dtype=np.int32))
+    with pytest.raises(qd.QuadrantsSyntaxError, match="may contain only for-loops"):
+        k(x, c)
+
+
+@test_utils.test()
+def test_graph_do_while_inside_for_loop_raises():
+    """graph_do_while nested inside a real for-loop must raise."""
+
+    @qd.kernel(graph=True)
+    def k(x: qd.types.ndarray(qd.i32, ndim=1), c: qd.types.ndarray(qd.i32, ndim=0)):
+        for _ in range(2):
+            while qd.graph_do_while(c):
+                for i in range(x.shape[0]):
+                    x[i] = x[i] + 1
+                for _ in range(1):
+                    c[()] = c[()] - 1
+
+    x = qd.ndarray(qd.i32, shape=(4,))
+    c = qd.ndarray(qd.i32, shape=())
+    c.from_numpy(np.array(1, dtype=np.int32))
+    with pytest.raises(qd.QuadrantsSyntaxError, match="kernel top level"):
+        k(x, c)
+
+
 if __name__ == "__main__":
     globals()[sys.argv[1]](sys.argv[2:])

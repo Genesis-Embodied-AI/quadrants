@@ -1,5 +1,6 @@
 #include "quadrants/runtime/cpu/kernel_launcher.h"
 #include "quadrants/program/adstack_size_expr_eval.h"
+#include "quadrants/program/graph_do_while_driver.h"
 #include "quadrants/program/program.h"
 #include "quadrants/rhi/arch.h"
 #include "quadrants/runtime/llvm/llvm_runtime_executor.h"
@@ -7,10 +8,9 @@
 namespace quadrants::lang {
 namespace cpu {
 
-void KernelLauncher::launch_offloaded_tasks(LaunchContextBuilder &ctx,
-                                            const std::vector<TaskFunc> &task_funcs,
-                                            const std::vector<AdStackSizingInfo> &ad_stacks,
-                                            const std::vector<std::size_t> &num_threads_per_task) {
+void KernelLauncher::prepare_offloaded_tasks(LaunchContextBuilder &ctx,
+                                             const std::vector<TaskFunc> &task_funcs,
+                                             const std::vector<AdStackSizingInfo> &ad_stacks) {
   auto *executor = get_runtime_executor();
   ctx.get_context().cpu_assert_failed = 0;
   // Two gates govern the per-launch adstack publish work, both opt-in by the kernel's IR shape. Forward-only kernels
@@ -27,8 +27,6 @@ void KernelLauncher::launch_offloaded_tasks(LaunchContextBuilder &ctx,
     // reducer below tightens specific slots.
     executor->publish_adstack_lazy_claim_buffers(task_funcs.size());
   }
-  // Span every task's `publish_adstack_metadata` call below with one shared read cache.
-  SizeExprLaunchScope launch_scope;
   // Max-reducer dispatch. Runs before the per-task `publish_adstack_metadata` loop so each call sees the dispatched
   // values via the executor's transient result map and can substitute captured `MaxOverRange`s into per-stack
   // `SerializedSizeExpr` trees inside its encoder. Gated on whether any task has captured specs so forward-only and
@@ -39,7 +37,15 @@ void KernelLauncher::launch_offloaded_tasks(LaunchContextBuilder &ctx,
   if (any_max_reducer_task) {
     executor->dispatch_max_reducers_for_tasks(ad_stacks, &ctx, /*device_runtime_context_ptr=*/nullptr);
   }
-  for (size_t i = 0; i < task_funcs.size(); ++i) {
+}
+
+bool KernelLauncher::run_one_offloaded_task(LaunchContextBuilder &ctx,
+                                            std::size_t i,
+                                            const std::vector<TaskFunc> &task_funcs,
+                                            const std::vector<AdStackSizingInfo> &ad_stacks,
+                                            const std::vector<std::size_t> &num_threads_per_task) {
+  auto *executor = get_runtime_executor();
+  {
     if (!ad_stacks[i].allocas.empty()) {
       executor->publish_adstack_metadata(ad_stacks[i], num_threads_per_task[i], &ctx);
       if (ad_stacks[i].bound_expr.has_value()) {
@@ -88,19 +94,57 @@ void KernelLauncher::launch_offloaded_tasks(LaunchContextBuilder &ctx,
         executor->ensure_per_task_float_heap_post_reducer(i, ad_stacks[i], num_threads_per_task[i], &ctx);
       }
     }
-    task_funcs[i](&ctx.get_context());
-    if (ctx.get_context().cpu_assert_failed)
+  }
+  task_funcs[i](&ctx.get_context());
+  return ctx.get_context().cpu_assert_failed == 0;
+}
+
+void KernelLauncher::launch_offloaded_tasks(LaunchContextBuilder &ctx,
+                                            const std::vector<TaskFunc> &task_funcs,
+                                            const std::vector<AdStackSizingInfo> &ad_stacks,
+                                            const std::vector<std::size_t> &num_threads_per_task) {
+  prepare_offloaded_tasks(ctx, task_funcs, ad_stacks);
+  // Span every task's `publish_adstack_metadata` call with one shared read cache.
+  SizeExprLaunchScope launch_scope;
+  for (size_t i = 0; i < task_funcs.size(); ++i) {
+    if (!run_one_offloaded_task(ctx, i, task_funcs, ad_stacks, num_threads_per_task)) {
       break;
+    }
   }
 }
 
 void KernelLauncher::launch_offloaded_tasks_with_do_while(LaunchContextBuilder &ctx,
                                                           const std::vector<TaskFunc> &task_funcs,
                                                           const std::vector<AdStackSizingInfo> &ad_stacks,
-                                                          const std::vector<std::size_t> &num_threads_per_task) {
-  do {
-    launch_offloaded_tasks(ctx, task_funcs, ad_stacks, num_threads_per_task);
-  } while (ctx.get_context().cpu_assert_failed == 0 && *static_cast<int32_t *>(ctx.graph_do_while_flag_dev_ptr) != 0);
+                                                          const std::vector<std::size_t> &num_threads_per_task,
+                                                          const std::vector<int> &graph_do_while_level_per_task) {
+  const auto &levels = ctx.graph_do_while_levels;
+  const bool has_top_level_task = std::any_of(graph_do_while_level_per_task.begin(),
+                                              graph_do_while_level_per_task.end(), [](int l) { return l < 0; });
+  if (levels.size() == 1 && !has_top_level_task) {
+    // Single loop with every task inside it: preserve the historical behaviour of re-running the entire
+    // task list each iteration (this also keeps the reverse-mode adstack re-setup path intact). The
+    // `!has_top_level_task` guard excludes kernels that mix the loop with plain top-level for-loops,
+    // which must run exactly once -- those go through the general driver below.
+    do {
+      launch_offloaded_tasks(ctx, task_funcs, ad_stacks, num_threads_per_task);
+    } while (ctx.get_context().cpu_assert_failed == 0 &&
+             *static_cast<int32_t *>(levels[0].flag_dev_ptr) != 0);
+    return;
+  }
+
+  // Nested graph_do_while: drive the loop tree from the per-task level tags. Adstack setup is done
+  // once up front (nested graph_do_while + reverse-mode adstack is not a supported combination).
+  prepare_offloaded_tasks(ctx, task_funcs, ad_stacks);
+  SizeExprLaunchScope launch_scope;
+  auto launch_task = [&](int i) -> bool {
+    return run_one_offloaded_task(ctx, (std::size_t)i, task_funcs, ad_stacks, num_threads_per_task);
+  };
+  auto continue_level = [&](int level) -> bool {
+    return ctx.get_context().cpu_assert_failed == 0 &&
+           *static_cast<int32_t *>(levels[level].flag_dev_ptr) != 0;
+  };
+  run_graph_do_while((int)task_funcs.size(), graph_do_while_level_per_task, levels, launch_task, continue_level);
 }
 
 void KernelLauncher::launch_llvm_kernel(Handle handle, LaunchContextBuilder &ctx) {
@@ -120,9 +164,7 @@ void KernelLauncher::launch_llvm_kernel(Handle handle, LaunchContextBuilder &ctx
 
     if (ctx.device_allocation_type[arg_id] == LaunchContextBuilder::DevAllocType::kNone) {
       ctx.set_host_accessible_ndarray_ptrs(arg_id, (uint64)data_ptr, (uint64)grad_ptr);
-      if (arg_id == ctx.graph_do_while_arg_id) {
-        ctx.graph_do_while_flag_dev_ptr = data_ptr;
-      }
+      ctx.resolve_graph_do_while_flag(arg_id, data_ptr);
     } else if (ctx.array_runtime_sizes[arg_id] > 0) {
       uint64 host_ptr = (uint64)executor->get_device_alloc_info_ptr(*static_cast<DeviceAllocation *>(data_ptr));
       ctx.set_array_device_allocation_type(arg_id, LaunchContextBuilder::DevAllocType::kNone);
@@ -130,9 +172,7 @@ void KernelLauncher::launch_llvm_kernel(Handle handle, LaunchContextBuilder &ctx
           grad_ptr == nullptr ? 0
                               : (uint64)executor->get_device_alloc_info_ptr(*static_cast<DeviceAllocation *>(grad_ptr));
       ctx.set_host_accessible_ndarray_ptrs(arg_id, host_ptr, host_ptr_grad);
-      if (arg_id == ctx.graph_do_while_arg_id) {
-        ctx.graph_do_while_flag_dev_ptr = (void *)host_ptr;
-      }
+      ctx.resolve_graph_do_while_flag(arg_id, (void *)host_ptr);
     }
   }
   // Adstack-cache invalidation bump - see `bump_writes_for_kernel_llvm` in `program/adstack/write_gen.{h,cpp}`. This
@@ -148,10 +188,13 @@ void KernelLauncher::launch_llvm_kernel(Handle handle, LaunchContextBuilder &ctx
   bump_writes_for_kernel_llvm(executor->get_program(), &ctx, launcher_ctx.snode_writes_per_task,
                               launcher_ctx.arr_writes_per_task, launcher_ctx.arr_reads_per_task);
 
-  if (ctx.graph_do_while_arg_id >= 0) {
-    QD_ASSERT(ctx.graph_do_while_flag_dev_ptr);
+  if (ctx.has_graph_do_while()) {
+    for (const auto &level : ctx.graph_do_while_levels) {
+      QD_ASSERT(level.flag_dev_ptr);
+    }
     launch_offloaded_tasks_with_do_while(ctx, launcher_ctx.task_funcs, launcher_ctx.ad_stacks,
-                                         launcher_ctx.num_threads_per_task);
+                                         launcher_ctx.num_threads_per_task,
+                                         launcher_ctx.graph_do_while_level_per_task);
   } else {
     launch_offloaded_tasks(ctx, launcher_ctx.task_funcs, launcher_ctx.ad_stacks, launcher_ctx.num_threads_per_task);
   }
@@ -177,12 +220,14 @@ KernelLauncher::Handle KernelLauncher::register_llvm_kernel(const LLVM::Compiled
     std::vector<std::vector<int>> snode_writes_per_task;
     std::vector<std::vector<int>> arr_writes_per_task;
     std::vector<std::vector<int>> arr_reads_per_task;
+    std::vector<int> graph_do_while_level_per_task;
     task_funcs.reserve(data.tasks.size());
     ad_stacks.reserve(data.tasks.size());
     num_threads_per_task.reserve(data.tasks.size());
     snode_writes_per_task.reserve(data.tasks.size());
     arr_writes_per_task.reserve(data.tasks.size());
     arr_reads_per_task.reserve(data.tasks.size());
+    graph_do_while_level_per_task.reserve(data.tasks.size());
     for (auto &task : data.tasks) {
       auto *func_ptr = jit_module->lookup_function(task.name);
       QD_ASSERT_INFO(func_ptr, "Offloaded datum function {} not found", task.name);
@@ -196,6 +241,7 @@ KernelLauncher::Handle KernelLauncher::register_llvm_kernel(const LLVM::Compiled
       snode_writes_per_task.push_back(task.snode_writes);
       arr_writes_per_task.push_back(task.arr_writes);
       arr_reads_per_task.push_back(task.arr_reads);
+      graph_do_while_level_per_task.push_back(task.graph_do_while_level_id);
     }
 
     // Populate ctx
@@ -206,6 +252,7 @@ KernelLauncher::Handle KernelLauncher::register_llvm_kernel(const LLVM::Compiled
     ctx.snode_writes_per_task = std::move(snode_writes_per_task);
     ctx.arr_writes_per_task = std::move(arr_writes_per_task);
     ctx.arr_reads_per_task = std::move(arr_reads_per_task);
+    ctx.graph_do_while_level_per_task = std::move(graph_do_while_level_per_task);
 
     // Precompute the array-typed parameter `arg_id`s so `launch_llvm_kernel` does not have to walk the
     // full parameters list and re-check `is_array` on every invocation.

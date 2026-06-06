@@ -504,6 +504,7 @@ class FunctionDefTransformer:
 
         if ctx.is_kernel:
             FunctionDefTransformer._validate_stream_parallel_exclusivity(node.body, ctx.global_vars)
+            FunctionDefTransformer._validate_graph_do_while_structure(node.body)
 
         with ctx.variable_scope_guard():
             build_stmts(ctx, node.body)
@@ -532,6 +533,60 @@ class FunctionDefTransformer:
         if isinstance(func_node, ast.Name) and func_node.id == "stream_parallel":
             return True
         return False
+
+    @staticmethod
+    def _is_graph_do_while_while(stmt: ast.stmt) -> bool:
+        """Syntactic check matching ASTTransformer._is_graph_do_while_call: a ``while
+        qd.graph_do_while(var):`` loop."""
+        if not isinstance(stmt, ast.While):
+            return False
+        test = stmt.test
+        if not isinstance(test, ast.Call):
+            return False
+        func = test.func
+        if isinstance(func, ast.Attribute) and func.attr == "graph_do_while":
+            return True
+        if isinstance(func, ast.Name) and func.id == "graph_do_while":
+            return True
+        return False
+
+    @staticmethod
+    def _validate_graph_do_while_structure(body: list[ast.stmt]) -> None:
+        """If a kernel uses qd.graph_do_while() anywhere, enforce that every top-level statement list
+        (the kernel body and each graph_do_while body) contains only for-loops and graph_do_while
+        while-loops. This keeps per-task graph_do_while level tagging exact: the offloader tags a flushed
+        serial (bound/listgen) task with the level of the for-loop that flushed it, which is only correct
+        if no bare top-level statement at a different level precedes that for-loop. For-loops and
+        graph_do_while loops may be freely mixed/nested; bare statements must be wrapped in
+        ``for _ in range(1):``."""
+        uses_gdw = any(
+            FunctionDefTransformer._is_graph_do_while_while(n) for stmt in body for n in ast.walk(stmt)
+        )
+        if not uses_gdw:
+            return
+        FunctionDefTransformer._validate_graph_do_while_stmt_list(body, is_kernel_top=True)
+
+    @staticmethod
+    def _validate_graph_do_while_stmt_list(stmts: list[ast.stmt], is_kernel_top: bool) -> None:
+        for i, stmt in enumerate(stmts):
+            if FunctionDefTransformer._is_docstring(stmt, i):
+                continue
+            if FunctionDefTransformer._is_coverage_probe(stmt):
+                continue
+            if isinstance(stmt, ast.For):
+                # A for-loop is an offloaded task; its body is ordinary loop code (unrestricted).
+                continue
+            if FunctionDefTransformer._is_graph_do_while_while(stmt):
+                if stmt.orelse:
+                    raise QuadrantsSyntaxError("'else' clause for 'while' not supported in Quadrants kernels")
+                FunctionDefTransformer._validate_graph_do_while_stmt_list(stmt.body, is_kernel_top=False)
+                continue
+            where = "the kernel body" if is_kernel_top else "a qd.graph_do_while() body"
+            raise QuadrantsSyntaxError(
+                f"When a kernel uses qd.graph_do_while(), {where} may contain only for-loops and "
+                f"qd.graph_do_while() while-loops (they may be freely mixed and nested). Wrap other "
+                f"statements in 'for _ in range(1):'. [offending stmt {i}: {type(stmt).__name__}]"
+            )
 
     @staticmethod
     def _is_docstring(stmt: ast.stmt, index: int) -> bool:

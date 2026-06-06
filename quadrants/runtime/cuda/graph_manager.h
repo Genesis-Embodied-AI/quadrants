@@ -58,16 +58,23 @@ struct CachedGraph {
   RuntimeContext persistent_ctx{};
   std::size_t arg_buffer_size{0};
   std::size_t result_buffer_size{0};
-  // Device-side pointer slot for graph_do_while indirection. Holds the address
-  // of the user's counter ndarray. The condition kernel reads through this
-  // slot, allowing the counter ndarray to change between calls without
-  // rebuilding.
-  void *counter_ptr_slot{nullptr};
+  // Device-side pointer slots for graph_do_while indirection, one per nested level (indexed by level
+  // id). Each holds the address of that level's condition ndarray; the condition kernel reads through
+  // its slot, so the ndarray can change between launches without rebuilding the graph. Empty when the
+  // kernel has no graph_do_while loop.
+  std::vector<void *> counter_ptr_slots;
+  // Persistent device int holding the constant 1, plus a slot pointing at it. Used to re-arm a nested
+  // conditional handle at the start of each parent iteration: the condition kernel invoked with this
+  // slot unconditionally sets the handle to 1 (cudaGraphCondAssignDefault only re-arms at top-level
+  // launch, not per child-body re-execution -- see graph_nested_design.md R1). Only allocated for
+  // kernels that have at least one nested graph_do_while level.
+  void *const_one_dev{nullptr};
+  void *const_one_slot{nullptr};
   std::size_t num_nodes{0};
 
   CachedGraph(std::size_t arg_buffer_size,
               std::size_t result_buffer_size,
-              bool needs_counter_ptr_slot,
+              int num_graph_do_while_levels,
               LlvmRuntimeExecutor *executor);
   ~CachedGraph();
   CachedGraph(const CachedGraph &) = delete;
@@ -114,7 +121,13 @@ class GraphManager {
                                 const std::vector<std::pair<int, Callable::Parameter>> &parameters,
                                 LlvmRuntimeExecutor *executor);
   void ensure_condition_kernel_loaded();
-  void *add_conditional_while_node(void *graph, unsigned long long *cond_handle_out);
+  // Create a conditional handle on `graph` with default launch value 1 (CU_GRAPH_COND_ASSIGN_DEFAULT).
+  // Must be called before any re-arm init kernel that references the handle, so the handle value is
+  // baked into that kernel's params.
+  unsigned long long create_cond_handle(void *graph);
+  // Create a conditional WHILE node in `graph` using the pre-created `handle`, depending on `prev_node`
+  // if non-null. Returns the conditional node (for chaining siblings); outputs the body graph to fill.
+  void *add_conditional_while_node(void *graph, void *prev_node, unsigned long long handle, void **body_graph_out);
   void *add_kernel_node(void *graph,
                         void *prev_node,
                         void *func,
@@ -122,6 +135,21 @@ class GraphManager {
                         unsigned int block_dim,
                         unsigned int shared_mem,
                         void **kernel_params);
+  // Recursively build the nodes for graph_do_while level `parent_id` (-1 = kernel top level) over the
+  // task range [begin, end) into `target_graph` (the body graph of `parent_id`, or the root graph for
+  // -1). Direct tasks become kernel nodes; each contiguous run of a child level becomes a conditional
+  // WHILE node (preceded by a re-arm init kernel when nested, i.e. parent_id != -1) whose body is
+  // filled recursively. For a real loop level (parent_id >= 0) the level's condition kernel is appended
+  // last. `cond_handles` is indexed by level id and filled as conditional nodes are created.
+  void build_level(int parent_id,
+                   void *target_graph,
+                   int begin,
+                   int end,
+                   const std::vector<OffloadedTask> &tasks,
+                   const std::vector<GraphDoWhileLevel> &levels,
+                   std::vector<unsigned long long> &cond_handles,
+                   JITModule *cuda_module,
+                   CachedGraph &cached);
 
   // Keyed by launch_id, which uniquely identifies a compiled kernel variant
   // (each template specialization gets its own launch_id).
