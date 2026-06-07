@@ -256,6 +256,12 @@ struct TaskAttributes {
   // task dispatches when `cp_id < resume_point` or after a yield observed earlier in this launch. -1 is
   // the offline-cache-load default so deserialised tasks that predate slice 4 keep "always run" semantics.
   int32_t checkpoint_id{-1};
+  // Innermost `qd.graph_do_while()` loop level this task belongs to (-1 = outside all graph_do_while loops, i.e.
+  // top-level tasks that run exactly once). Mirrors `OffloadedTask::graph_do_while_level_id` on the LLVM path and is
+  // copied straight from the `OffloadedStmt` at SPIR-V codegen time. The host-side do-while driver in the GFX
+  // kernel launcher uses it (together with the per-level table on `LaunchContextBuilder`) to reconstruct the loop
+  // nesting from this flat task list and drive (possibly nested / sibling) loops on the host.
+  int graph_do_while_level_id{-1};
 
   static std::string buffers_name(BufferInfo b);
 
@@ -269,7 +275,8 @@ struct TaskAttributes {
             range_for_attribs,
             ad_stack,
             snode_writes,
-            checkpoint_id);
+            checkpoint_id,
+            graph_do_while_level_id);
 };
 
 /**

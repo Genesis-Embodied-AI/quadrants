@@ -224,6 +224,7 @@ class LowerAST : public IRVisitor {
       new_for->index_offsets = offsets;
       new_for->stream_parallel_group_id = stmt->stream_parallel_group_id;
       new_for->checkpoint_id = stmt->checkpoint_id;
+      new_for->graph_do_while_level_id = stmt->graph_do_while_level_id;
       VecStatement new_statements;
       for (int i = 0; i < (int)stmt->loop_var_ids.size(); i++) {
         Stmt *loop_index = new_statements.push_back<LoopIndexStmt>(new_for.get(), snode->physical_index_position[i]);
@@ -260,6 +261,7 @@ class LowerAST : public IRVisitor {
                                                       /*loop_name=*/stmt->loop_name);
       new_for->stream_parallel_group_id = stmt->stream_parallel_group_id;
       new_for->checkpoint_id = stmt->checkpoint_id;
+      new_for->graph_do_while_level_id = stmt->graph_do_while_level_id;
       VecStatement new_statements;
       Stmt *loop_index = new_statements.push_back<LoopIndexStmt>(new_for.get(), 0);
       for (int i = (int)shape.size() - 1; i >= 0; i--) {
@@ -274,6 +276,7 @@ class LowerAST : public IRVisitor {
     } else if (stmt->mesh) {
       auto &&new_for = std::make_unique<MeshForStmt>(stmt->mesh, stmt->element_type, std::move(stmt->body),
                                                      stmt->is_bit_vectorized, stmt->num_cpu_threads, stmt->block_dim);
+      new_for->graph_do_while_level_id = stmt->graph_do_while_level_id;
       new_for->body->insert(std::make_unique<LoopIndexStmt>(new_for.get(), 0), 0);
       new_for->body->local_var_to_stmt[stmt->loop_var_ids[0]] = new_for->body->statements[0].get();
       new_for->mem_access_opt = stmt->mem_access_opt;
@@ -295,6 +298,7 @@ class LowerAST : public IRVisitor {
                                                         /*loop_name=*/stmt->loop_name);
         new_for->stream_parallel_group_id = stmt->stream_parallel_group_id;
         new_for->checkpoint_id = stmt->checkpoint_id;
+        new_for->graph_do_while_level_id = stmt->graph_do_while_level_id;
         new_for->body->insert(std::make_unique<LoopIndexStmt>(new_for.get(), 0), 0);
         new_for->body->local_var_to_stmt[stmt->loop_var_ids[0]] = new_for->body->statements[0].get();
         fctx.push_back(std::move(new_for));

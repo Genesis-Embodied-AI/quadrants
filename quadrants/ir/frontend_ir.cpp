@@ -112,6 +112,7 @@ FrontendForStmt::FrontendForStmt(const FrontendForStmt &o)
       block_dim(o.block_dim),
       stream_parallel_group_id(o.stream_parallel_group_id),
       checkpoint_id(o.checkpoint_id),
+      graph_do_while_level_id(o.graph_do_while_level_id),
       loop_name(o.loop_name) {
 }
 
@@ -122,6 +123,7 @@ void FrontendForStmt::init_config(Arch arch, const ForLoopConfig &config) {
   block_dim = config.block_dim;
   stream_parallel_group_id = config.stream_parallel_group_id;
   checkpoint_id = config.checkpoint_id;
+  graph_do_while_level_id = config.graph_do_while_level_id;
   loop_name = config.loop_name;
   if (arch == Arch::cuda || arch == Arch::amdgpu) {
     num_cpu_threads = 1;
@@ -1477,6 +1479,7 @@ void ASTBuilder::create_assert_stmt(const Expr &cond,
 void ASTBuilder::begin_frontend_range_for(const Expr &i, const Expr &s, const Expr &e, const DebugInfo &dbg_info) {
   for_loop_dec_.config.stream_parallel_group_id = current_stream_parallel_group_id_;
   for_loop_dec_.config.checkpoint_id = current_checkpoint_id_;
+  for_loop_dec_.config.graph_do_while_level_id = current_graph_do_while_level_id_;
   auto stmt_unique = std::make_unique<FrontendForStmt>(i, s, e, arch_, for_loop_dec_.config, dbg_info);
   auto stmt = stmt_unique.get();
   this->insert(std::move(stmt_unique));
@@ -1492,6 +1495,7 @@ void ASTBuilder::begin_frontend_struct_for_on_snode(const ExprGroup &loop_vars,
              "The execution order is not guaranteed.");
   for_loop_dec_.config.stream_parallel_group_id = current_stream_parallel_group_id_;
   for_loop_dec_.config.checkpoint_id = current_checkpoint_id_;
+  for_loop_dec_.config.graph_do_while_level_id = current_graph_do_while_level_id_;
   auto stmt_unique = std::make_unique<FrontendForStmt>(loop_vars, snode, arch_, for_loop_dec_.config, dbg_info);
   for_loop_dec_.reset();
   auto stmt = stmt_unique.get();
@@ -1507,6 +1511,7 @@ void ASTBuilder::begin_frontend_struct_for_on_external_tensor(const ExprGroup &l
              "The execution order is not guaranteed.");
   for_loop_dec_.config.stream_parallel_group_id = current_stream_parallel_group_id_;
   for_loop_dec_.config.checkpoint_id = current_checkpoint_id_;
+  for_loop_dec_.config.graph_do_while_level_id = current_graph_do_while_level_id_;
   auto stmt_unique =
       std::make_unique<FrontendForStmt>(loop_vars, external_tensor, arch_, for_loop_dec_.config, dbg_info);
   for_loop_dec_.reset();
@@ -1524,6 +1529,7 @@ void ASTBuilder::begin_frontend_mesh_for(const Expr &i,
              "The execution order is not guaranteed.");
   for_loop_dec_.config.stream_parallel_group_id = current_stream_parallel_group_id_;
   for_loop_dec_.config.checkpoint_id = current_checkpoint_id_;
+  for_loop_dec_.config.graph_do_while_level_id = current_graph_do_while_level_id_;
   auto stmt_unique =
       std::make_unique<FrontendForStmt>(ExprGroup(i), mesh_ptr, element_type, arch_, for_loop_dec_.config, dbg_info);
   for_loop_dec_.reset();

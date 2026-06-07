@@ -384,6 +384,10 @@ class ASTSerializer : public IRVisitor, public ExpressionVisitor {
     emit(stmt->block_dim);
     emit(stmt->stream_parallel_group_id);
     emit(stmt->checkpoint_id);
+    // graph_do_while nesting emits no loop IR (the while body is inlined), so the loop structure is
+    // otherwise invisible to the cache key. The per-for-loop level tag is the only record of which
+    // graph_do_while level a task belongs to, so it must be part of the key.
+    emit(stmt->graph_do_while_level_id);
     emit(stmt->body.get());
   }
 

@@ -17,6 +17,10 @@ from .fast_caching_types import HashedFunctionSourceInfo
 from .hash_utils import hash_iterable_strings
 from .python_side_cache import PythonSideCache
 
+# Bumped whenever the persisted CacheValue schema changes (see create_cache_key). v2 replaced the
+# single graph_do_while_arg string with a nested level table.
+_CACHE_VALUE_SCHEMA_VERSION = "cachevalue-v2-gdw-levels"
+
 
 def create_cache_key(
     raise_on_templated_floats: bool,
@@ -53,6 +57,9 @@ def create_cache_key(
             str(kernel_source_info.start_lineno),
             "pruned",
             "kcov" if os.environ.get("QD_KERNEL_COVERAGE") == "1" else "",
+            # Fast-cache value schema version. Bump when CacheValue's stored fields change so stale
+            # entries are not mis-read. v2: graph_do_while single-arg -> nested level table.
+            _CACHE_VALUE_SCHEMA_VERSION,
         )
     )
     return cache_key
@@ -62,7 +69,9 @@ class CacheValue(BaseModel):
     frontend_cache_key: str
     hashed_function_source_infos: list[HashedFunctionSourceInfo]
     used_py_dataclass_parameters: set[str]
-    graph_do_while_arg: str | None = None
+    # Nested graph_do_while level table as (cond_arg_name, parent_id) pairs, indexed by level id.
+    # None / empty for kernels without graph_do_while.
+    graph_do_while_levels: list[tuple[str, int]] | None = None
 
 
 def store(
@@ -70,7 +79,7 @@ def store(
     fast_cache_key: str,
     function_source_infos: Iterable[FunctionSourceInfo],
     used_py_dataclass_parameters: set[str],
-    graph_do_while_arg: str | None = None,
+    graph_do_while_levels: list[tuple[str, int]] | None = None,
 ) -> None:
     """
     Note that unlike other caches, this cache is not going to store the actual value we want.
@@ -98,7 +107,7 @@ def store(
         frontend_cache_key=frontend_cache_key,
         hashed_function_source_infos=list(hashed_function_source_infos),
         used_py_dataclass_parameters=used_py_dataclass_parameters,
-        graph_do_while_arg=graph_do_while_arg,
+        graph_do_while_levels=graph_do_while_levels,
     )
     cache.store(fast_cache_key, cache_value_obj.model_dump_json())
 
@@ -116,7 +125,9 @@ def _try_load(cache_key: str) -> CacheValue | None:
     return cache_value_obj
 
 
-def load(cache_key: str) -> tuple[set[str], str, str | None] | tuple[None, None, None]:
+def load(
+    cache_key: str,
+) -> tuple[set[str], str, list[tuple[str, int]] | None] | tuple[None, None, None]:
     """
     loads function source infos from cache, if available
     checks the hashes against the current source code
@@ -125,7 +136,11 @@ def load(cache_key: str) -> tuple[set[str], str, str | None] | tuple[None, None,
     if cache_value is None:
         return None, None, None
     if function_hasher.validate_hashed_function_infos(cache_value.hashed_function_source_infos):
-        return cache_value.used_py_dataclass_parameters, cache_value.frontend_cache_key, cache_value.graph_do_while_arg
+        return (
+            cache_value.used_py_dataclass_parameters,
+            cache_value.frontend_cache_key,
+            cache_value.graph_do_while_levels,
+        )
     return None, None, None
 
 

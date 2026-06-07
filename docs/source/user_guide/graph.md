@@ -9,13 +9,16 @@ Both features run on every backend. They are *hardware accelerated* on CUDA (via
 | Feature | `qd.cuda` SM 9.0+ | `qd.cuda` < SM 9.0 | `qd.amdgpu` | `qd.metal` | `qd.vulkan` | `qd.cpu` |
 | --- | --- | --- | --- | --- | --- | --- |
 | `graph=True` | hardware accelerated | hardware accelerated | hardware accelerated | runs (no acceleration) | runs (no acceleration) | runs (no acceleration) |
-| `graph_do_while` | hardware accelerated | host fallback | host fallback | host fallback | host fallback | host fallback |
+| `graph_do_while` (single) | hardware accelerated | host fallback | host fallback | host fallback | host fallback | host fallback |
+| `graph_do_while` (nested / sibling) | hardware accelerated | host fallback | host fallback | host fallback | host fallback | host fallback |
 | `qd.checkpoint` skip (IF gate) | hardware accelerated (conditional graph node) | GPU-side (codegen prologue + flat graph) | GPU-side (codegen prologue + flat HIP graph) | GPU-side (gate shader + indirect dispatch) | GPU-side (gate shader + indirect dispatch) | host-branch gating |
 | `qd.checkpoint(yield_on=…)` + `kernel.resume()` | implemented | implemented | implemented | implemented | implemented | implemented |
 
 `qd.checkpoint` gating happens entirely on the device for every GPU backend. The exact device mechanism differs by backend (see "Backend coverage notes" below) but the Python contract (`qd.checkpoint`, `GraphStatus`, `kernel.resume(from_checkpoint=…)`) is identical.
 
 AMDGPU `graph_do_while` still falls back to the host-side loop because HIP does not currently expose conditional / while graph nodes (as of ROCm 7.2). `qd.checkpoint` gating is fully GPU-side on AMDGPU via the same codegen prologue + flat HIP graph approach used on pre-Hopper CUDA — body kernels self-early-return when `*resume_point > cp_id` or `*yield_signal != -1`, and a pre-built yield-check kernel (bundled HSACO covering gfx90a / gfx942 / gfx1030 / gfx1100 / 1101 / 1102 / 1200 / 1201) atomically updates `yield_signal` inline. The streaming path (graph_do_while + checkpoint) uses the same prologue and yield-check kernel, just driven by a host-side do-while loop instead of a single graph launch.
+
+Nested and sibling `graph_do_while` loops (see [Nested loops](#nested-loops-and-mixing-with-for-loops)) work on every backend: hardware-accelerated as a single GPU-side graph on CUDA SM 9.0+, and via a host-side driver everywhere else (CPU, CUDA pre-SM 9.0, AMDGPU, Vulkan, Metal). On the host-fallback backends each loop-body pass is replayed from the host and the condition value is copied GPU → host between iterations (see [Caveats](#caveats)).
 
 ## Basic usage
 
@@ -133,21 +136,122 @@ def converge(x: qd.types.ndarray(qd.f32, ndim=1),
 
 `graph_do_while` has **do-while** semantics: the kernel body always executes at least once before the condition is checked. This matches the behavior of CUDA conditional while nodes. The flag value must be >= 1 at launch time. Passing 0 with a kernel that decrements the counter will cause an infinite loop.
 
+> **Reset the flag outside the loop body, never inside it.** The counter / `keep_going` flag must reach a terminating value *as a result of the loop body*. If you (re)set the flag to a non-zero value **inside** the `while qd.graph_do_while(...)` body — e.g. `for _ in range(1): counter[()] = N` placed within the loop — it is re-applied on every iteration and the loop never terminates. Do the reset before the loop (a run-once top-level `for`, see [Loop-carried state](#loop-carried-state)) or on the host between launches (`counter.fill(N)`).
+
 ### ndarray vs field
 
 The parameter used by `graph_do_while` MUST be an ndarray.
 
 However, other parameters can be any supported Quadrants kernel parameter type.
 
+### Nested loops and mixing with for-loops
+
+`graph_do_while` loops can be **nested** inside one another, placed **side by side** (siblings),
+and freely **mixed with plain top-level for-loops**. Each loop has its own scalar `qd.i32` counter
+ndarray. On CUDA SM 9.0+ the whole nest runs entirely GPU-side as one graph of conditional while
+nodes; on the host-fallback backends the loop nest is driven from the host.
+
+```python
+@qd.kernel(graph=True)
+def nested(x: qd.types.ndarray(qd.i32, ndim=1),
+           outer: qd.types.ndarray(qd.i32, ndim=0),
+           inner: qd.types.ndarray(qd.i32, ndim=0)):
+    # A plain for-loop at the top level runs exactly once (like an ordinary graph=True kernel).
+    for i in range(x.shape[0]):
+        x[i] = x[i] + 100
+
+    while qd.graph_do_while(outer):
+        # Re-initialise the inner counter at the start of every outer iteration, otherwise the
+        # inner loop only runs on the first outer pass.
+        for _ in range(1):
+            inner[()] = 5
+        while qd.graph_do_while(inner):
+            for i in range(x.shape[0]):
+                x[i] = x[i] + 1
+            for _ in range(1):
+                inner[()] = inner[()] - 1
+        for _ in range(1):
+            outer[()] = outer[()] - 1
+```
+
+Important points for nested loops:
+
+- **Re-arm inner counters.** An inner loop's counter is not reset automatically between outer
+  iterations. Reset it at the top of the enclosing loop body (as `inner[()] = 5` above), or the inner
+  loop will only run during the first outer iteration.
+- **Each level needs its own counter ndarray.** Don't share one counter ndarray across two levels.
+- **Checkpoints compose with any loop level.** `qd.checkpoint` blocks can sit inside any
+  `graph_do_while` level — top-level, nested, or a sibling — as flat siblings, provided that level is
+  not itself inside a checkpoint (a checkpoint may not transitively contain another checkpoint, even
+  across a loop boundary — see [Checkpoints](#checkpoints-with-qdcheckpoint-experimental)). `cp_id`s
+  are assigned as one flat sequence across the whole kernel regardless of nesting, and yield / resume
+  is global: a yield in any level returns control to the host and resume skips every `cp_id` below the
+  resume point.
+
+### Kernel structure restriction
+
+When a kernel uses `qd.graph_do_while()` anywhere, **every top-level statement** — both in the kernel
+body and inside each `graph_do_while` body — must be either a `for`-loop or a `qd.graph_do_while()`
+`while`-loop. Bare statements (assignments, `if`, etc.) at these levels are rejected with a
+`QuadrantsSyntaxError`. Wrap any such statement in a trivial loop:
+
+```python
+# Instead of:   counter[()] = counter[()] - 1
+for _ in range(1):
+    counter[()] = counter[()] - 1
+```
+
+This restriction keeps each offloaded task tagged with the exact loop level it belongs to. `for`-loops
+and `graph_do_while` loops may otherwise be freely ordered, mixed, and nested. A `graph_do_while`
+`while`-loop may only appear at the kernel top level or directly inside another `graph_do_while` body —
+it cannot be placed inside a `for`-loop.
+
+### Loop-carried state
+
+A common pattern is an iterative solver that initializes some working state once, refines it across
+iterations, then reads the result back. Be deliberate about **where** each piece lives, because only
+statements *inside* the `while qd.graph_do_while(...)` body repeat:
+
+- **One-time init / writeback** belong at the kernel top level (a top-level `for`-loop runs exactly
+  once — see [Nested loops and mixing with for-loops](#nested-loops-and-mixing-with-for-loops)), or in
+  a separate non-`graph` kernel.
+- **Per-iteration work** belongs inside the `while` body.
+- **Loop-carried state** (a value that iteration `k+1` reads from iteration `k`) just works: it is held
+  in global memory and nothing outside the loop body resets it between iterations.
+
+```python
+@qd.kernel(graph=True)
+def newton(q_iter: qd.types.ndarray(qd.f32, ndim=1),
+           q:      qd.types.ndarray(qd.f32, ndim=1),
+           ncond:  qd.types.ndarray(qd.i32, ndim=0)):
+    # One-time seed: top-level for-loop, runs exactly once.
+    for i in range(q.shape[0]):
+        q_iter[i] = q[i]
+    # Iterative refinement: repeats while ncond != 0. q_iter carries between iterations.
+    while qd.graph_do_while(ncond):
+        # ... update q_iter from its previous-iteration value ...
+        for _ in range(1):
+            ncond[()] = ncond[()] - 1
+    # One-time writeback: top-level for-loop, runs exactly once.
+    for i in range(q.shape[0]):
+        q[i] = q_iter[i]
+```
+
+If you would rather keep the `graph=True` kernel focused on just the loop, the equivalent **seed /
+iterate / writeback** split works too — move the init and writeback into their own non-`graph`
+`@qd.kernel` functions and call them around the iterate kernel on the host. Either structure is fine;
+the only hard rule is that the do-while flag must not be reset inside the loop body (see
+[Do-while semantics](#do-while-semantics)).
+
 ### Restrictions
 
-- The same physical ndarray must be used for the counter parameter on every
-  call. Passing a different ndarray raises an error, because the counter's
-  device pointer is baked into the graph at creation time.
+- The counter ndarray may be swapped between calls: the cached graph reads each counter through an
+  indirection slot that is refreshed on every launch, so passing a different ndarray (or alternating
+  between several) replays the cached graph without rebuilding it.
 
 ### Caveats
 
-On platforms without native device-side conditional graph nodes — currently CUDA pre-SM 9.0 and **AMDGPU** (HIP has no conditional / while node API as of ROCm 7.2) — the value of the `graph_do_while` parameter will be copied from the GPU to the host each iteration, in order to check whether we should continue iterating. This causes a GPU pipeline stall. At the end of each loop iteration:
+On platforms without native device-side conditional graph nodes — currently CUDA pre-SM 9.0, **AMDGPU** (HIP has no conditional / while node API as of ROCm 7.2), Vulkan, Metal, and CPU — the value of the `graph_do_while` parameter will be copied from the GPU to the host each iteration, in order to check whether we should continue iterating. This causes a GPU pipeline stall. For nested loops this host round-trip happens once per iteration of each loop level, and each loop-body task is replayed individually, so deeply nested loops on these backends pay correspondingly more host overhead (they remain correct, just slower than the CUDA SM 9.0+ native path). At the end of each loop iteration:
 - wait for GPU async queue to finish processing
 - copy condition value to hostside
 - evaluate condition value on hostside
@@ -204,7 +308,7 @@ If `yield_on=foo` is supplied, the body may write a non-zero value into the `foo
 3. Disables every later checkpoint in the same launch (subsequent gate steps see "I'm past the yield point" and short-circuit their IF bodies).
 4. Resets `*foo` to `0` so the next launch starts clean without host intervention.
 
-Combined with `qd.graph_do_while`, the framework also handles WHILE early-exit: as soon as a yield has been observed, the loop terminates. Without that the loop body would re-enter, see "post-yield" state in every gate, skip every checkpoint, never decrement the counter, and spin forever.
+Combined with `qd.graph_do_while`, the framework also handles WHILE early-exit: as soon as a yield has been observed, the loop terminates. For **nested** `graph_do_while` loops the yield propagates outward — every enclosing loop level also exits — so control returns to the host from the outermost loop regardless of which level the yielding checkpoint sat in. Without that the loop body would re-enter, see "post-yield" state in every gate, skip every checkpoint, never decrement the counter, and spin forever.
 
 All GPU backends implement the yield-check as a tiny device kernel:
 - **CUDA SM 9.0+**: `_qd_checkpoint_yield_check` kernel appended inside each checkpoint's IF conditional body; the conditional gate skips it when the checkpoint is skipped.
@@ -238,7 +342,7 @@ Kernels with `qd.checkpoint()` but no `yield_on=` keep their previous return con
 
 - Must be used inside `@qd.kernel(graph=True)`.
 - `yield_on=` (when supplied) must be the bare name of a kernel parameter that is a 0-d `qd.types.ndarray(qd.i32, ndim=0)`.
-- Checkpoints cannot be nested inside other checkpoints. A checkpoint inside a `qd.graph_do_while` body is fine and is the expected pattern.
+- Checkpoints cannot be nested inside other checkpoints — **not even through an intervening `qd.graph_do_while`**. A `checkpoint → graph_do_while → checkpoint` chain is still a nested checkpoint and is rejected (otherwise bare work in the outer checkpoint would silently re-execute on resume). A checkpoint inside a `qd.graph_do_while` body — at the top level, or in a **nested / sibling** loop that is not itself inside a checkpoint — is fine and is the expected pattern; the checkpoints at every level form one flat `cp_id` sequence.
 - Cannot be combined with `qd.stream_parallel()` in the same kernel.
 
 ### Authoring tip: every statement inside a checkpoint must live in a top-level `for` loop

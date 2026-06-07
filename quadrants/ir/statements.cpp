@@ -224,6 +224,7 @@ std::unique_ptr<Stmt> RangeForStmt::clone() const {
   new_stmt->reversed = reversed;
   new_stmt->stream_parallel_group_id = stream_parallel_group_id;
   new_stmt->checkpoint_id = checkpoint_id;
+  new_stmt->graph_do_while_level_id = graph_do_while_level_id;
   new_stmt->loop_name = loop_name;
   return new_stmt;
 }
@@ -247,6 +248,7 @@ std::unique_ptr<Stmt> StructForStmt::clone() const {
   new_stmt->mem_access_opt = mem_access_opt;
   new_stmt->stream_parallel_group_id = stream_parallel_group_id;
   new_stmt->checkpoint_id = checkpoint_id;
+  new_stmt->graph_do_while_level_id = graph_do_while_level_id;
   new_stmt->loop_name = loop_name;
   return new_stmt;
 }
@@ -273,6 +275,7 @@ std::unique_ptr<Stmt> MeshForStmt::clone() const {
   new_stmt->major_to_types = major_to_types;
   new_stmt->minor_relation_types = minor_relation_types;
   new_stmt->mem_access_opt = mem_access_opt;
+  new_stmt->graph_do_while_level_id = graph_do_while_level_id;
   return new_stmt;
 }
 
@@ -408,6 +411,7 @@ std::unique_ptr<Stmt> OffloadedStmt::clone() const {
   new_stmt->mem_access_opt = mem_access_opt;
   new_stmt->stream_parallel_group_id = stream_parallel_group_id;
   new_stmt->checkpoint_id = checkpoint_id;
+  new_stmt->graph_do_while_level_id = graph_do_while_level_id;
   new_stmt->loop_name = loop_name;
   // Shared-pointer copy: the captured trip-count `SizeExpr` is read-only after `determine_ad_stack_size`
   // populates it in `compile_to_offloads`, and LLVM codegen clones each offload at `codegen.cpp:68`

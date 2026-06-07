@@ -403,7 +403,7 @@ GfxRuntime::KernelHandle GfxRuntime::register_quadrants_kernel(GfxRuntime::Regis
   return res;
 }
 
-void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_ctx) {
+void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_ctx, int task_begin, int task_end) {
   auto *ti_kernel = ti_kernels_[handle.get_launch_id()].get();
 
 #if defined(__APPLE__)
@@ -537,6 +537,13 @@ void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_c
   // Record commands
   const auto &task_attribs = ti_kernel->ti_kernel_attribs().tasks_attribs;
 
+  // Half-open task range to actually dispatch. `task_end == -1` means "all tasks" (the normal whole-kernel launch);
+  // the graph_do_while host driver passes a single-task range to replay one loop-body task at a time.
+  const int dispatch_task_begin = task_begin;
+  const int dispatch_task_end = (task_end < 0) ? int(task_attribs.size()) : task_end;
+  QD_ASSERT(dispatch_task_begin >= 0 && dispatch_task_end <= int(task_attribs.size()) &&
+            dispatch_task_begin <= dispatch_task_end);
+
   // Adstack-cache invalidation bump - see `bump_writes_for_kernel_spirv` in `program/adstack_size_expr_eval.{h,cpp}`.
   if (program_impl_ != nullptr) {
     bump_writes_for_kernel_spirv(program_impl_->program, &host_ctx, task_attribs,
@@ -581,22 +588,23 @@ void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_c
   }
 
   // GPU-side per-checkpoint gating setup (Vulkan / Metal). Replaces an earlier per-task host-branch
-  // gating loop (slice 4) with the design `reentrant.md` §6.2 specifies for non-CUDA-12.4 GPU
-  // backends: a small "gate" compute shader runs in the same cmdlist before each checkpoint's body
-  // kernels and writes either `(active_gx, 1, 1)` or `(0, 0, 0)` into a per-kernel dim3 slot; body
-  // kernels then dispatch via `CommandList::dispatch_indirect` so a skipped checkpoint dispatches
-  // zero workgroups (no GPU work). After the body, an indirect-gated yield-check shader atomic-CASes
-  // the cp_id into a shared `yield_signal` slot if the user's `yield_on=` ndarray flag is non-zero.
+  // gating loop with the design `reentrant.md` §6.2 specifies for non-CUDA-12.4 GPU backends: a small
+  // "gate" compute shader runs in the same cmdlist before each checkpoint's body kernels and writes
+  // either `(active_gx, 1, 1)` or `(0, 0, 0)` into a per-kernel dim3 slot; body kernels then dispatch
+  // via `CommandList::dispatch_indirect` so a skipped checkpoint dispatches zero workgroups (no GPU
+  // work). After the body, an indirect-gated yield-check shader atomic-CASes the cp_id into a shared
+  // `yield_signal` slot if the user's `yield_on=` ndarray flag is non-zero.
   //
   // The host reads `yield_signal` once at the end of the launch (single 8-byte D2H) and surfaces the
   // first-yielder cp_id through `last_yield_cp_id_on_last_call()`. No per-task host calls, no per-
   // task D2H stalls. See `runtime/gfx/checkpoint_launch.cpp` for the orchestration logic.
   //
   // group_x for each task is hoisted out of the per-task dispatch loop because the gate's params
-  // buffer needs to bake the active dim for every body kernel up-front (first launch only). The
-  // value is a function of the kernel's compile-time `advisory_total_num_threads` and the per-launch
-  // ndarray shape lookups; identical to the calculation inlined further down. Stored here as a
-  // dense `int[n_tasks]` so the launcher can index by task index without recomputing.
+  // buffer needs to bake the active dim for every body kernel up-front (first launch only). The value
+  // is a function of the kernel's compile-time `advisory_total_num_threads` and the per-launch ndarray
+  // shape lookups; identical to the calculation inlined in the dispatch loop. Stored as a dense
+  // `int[n_tasks]` (the full task list, not the dispatch sub-range) so the gate params stay complete
+  // even when the nested graph_do_while driver dispatches one task at a time.
   std::vector<int> per_task_group_x(task_attribs.size(), 0);
   for (int i = 0; i < (int)task_attribs.size(); ++i) {
     const auto &attribs = task_attribs[i];
@@ -688,7 +696,9 @@ void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_c
 
   ensure_current_cmdlist();
 
-  for (int i = 0; i < task_attribs.size(); ++i) {
+  // Dispatch only the requested task sub-range. A plain launch passes [0, num_tasks); the nested
+  // graph_do_while host driver replays one task at a time via launch_kernel(handle, ctx, i, i + 1).
+  for (int i = dispatch_task_begin; i < dispatch_task_end; ++i) {
     const auto &attribs = task_attribs[i];
     // GPU-side gating: cp_id >= 0 tasks dispatch via `dispatch_indirect` against a per-cp out_dims
     // SSBO; the gate shader (run inline below before this checkpoint's first body task) decides on
@@ -1141,6 +1151,16 @@ void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_c
   }
 
   submit_current_cmdlist_if_timeout();
+}
+
+int GfxRuntime::get_num_tasks(KernelHandle handle) const {
+  auto *ti_kernel = ti_kernels_[handle.get_launch_id()].get();
+  return int(ti_kernel->ti_kernel_attribs().tasks_attribs.size());
+}
+
+int GfxRuntime::get_task_graph_do_while_level_id(KernelHandle handle, int task_idx) const {
+  auto *ti_kernel = ti_kernels_[handle.get_launch_id()].get();
+  return ti_kernel->ti_kernel_attribs().tasks_attribs[task_idx].graph_do_while_level_id;
 }
 
 void GfxRuntime::buffer_copy(DevicePtr dst, DevicePtr src, size_t size) {
