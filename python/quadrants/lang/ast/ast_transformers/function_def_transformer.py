@@ -575,13 +575,17 @@ class FunctionDefTransformer:
 
     @staticmethod
     def _validate_graph_do_while_structure(body: list[ast.stmt]) -> None:
-        """If a kernel uses qd.graph_do_while() anywhere, enforce that every top-level statement list
-        (the kernel body and each graph_do_while body) contains only for-loops and graph_do_while
-        while-loops. This keeps per-task graph_do_while level tagging exact: the offloader tags a flushed
-        serial (bound/listgen) task with the level of the for-loop that flushed it, which is only correct
-        if no bare top-level statement at a different level precedes that for-loop. For-loops and
-        graph_do_while loops may be freely mixed/nested; bare statements must be wrapped in
-        ``for _ in range(1):``."""
+        """If a kernel uses qd.graph_do_while() anywhere, enforce structural rules that keep per-task
+        graph_do_while level tagging exact (the offloader tags a flushed serial bound/listgen task with
+        the level of the for-loop that flushed it).
+
+        At the *kernel top level* only for-loops, graph_do_while while-loops, and qd.checkpoint() blocks
+        are allowed; a bare statement there would re-execute every iteration (the E25 footgun) and must be
+        wrapped in ``for _ in range(1):``. *Inside* a graph_do_while body (and checkpoints within one)
+        everything already runs every iteration, so bare expression statements (``@qd.func`` calls and
+        directives like ``qd.loop_config(...)``) and ``if qd.static(...)`` compile-time branches are also
+        permitted -- their inlined for-loops are built while the level is active and so stay correctly
+        tagged. Bare assignments remain rejected everywhere (wrap in ``for _ in range(1):``)."""
         uses_gdw = any(
             FunctionDefTransformer._is_graph_do_while_while(n) for stmt in body for n in ast.walk(stmt)
         )
@@ -607,10 +611,27 @@ class FunctionDefTransformer:
             if FunctionDefTransformer._is_checkpoint_with(stmt):
                 # A `with qd.checkpoint(...)` block groups offloaded tasks; it is a legal sibling of
                 # for-loops / graph_do_while loops (the canonical qipc "checkpoint inside loop" pattern).
-                # Its body holds the checkpoint's for-loop tasks, validated under the same rules. Nested
-                # checkpoints are rejected later in ASTTransformer._build_checkpoint_with.
-                FunctionDefTransformer._validate_graph_do_while_stmt_list(stmt.body, is_kernel_top=is_kernel_top)
+                # Its body is task territory (everything runs every iteration), so validate it with the
+                # in-loop rules. Nested checkpoints are rejected later in ASTTransformer._build_checkpoint_with.
+                FunctionDefTransformer._validate_graph_do_while_stmt_list(stmt.body, is_kernel_top=False)
                 continue
+            if not is_kernel_top:
+                # Inside a graph_do_while body (or a checkpoint within one) every statement already runs on
+                # every iteration, so the E25 "looks like it runs once" footgun -- which is purely a
+                # kernel-top-level concern -- does not apply here. Permit the task-emitting / directive
+                # statements the qipc graph kernels rely on:
+                #   * bare expression statements -- `@qd.func` calls (inlined, so their for-loops become
+                #     offloaded tasks tagged at this level) and loop directives like `qd.loop_config(...)`;
+                #   * `if qd.static(...)` compile-time branches (only the taken branch is emitted, at this
+                #     level).
+                # Their inlined for-loops are built while this level is active, so per-task level tagging
+                # stays exact. Bare assignments are still rejected (wrap them in `for _ in range(1):`).
+                if isinstance(stmt, ast.Expr):
+                    continue
+                if isinstance(stmt, ast.If):
+                    FunctionDefTransformer._validate_graph_do_while_stmt_list(stmt.body, is_kernel_top=False)
+                    FunctionDefTransformer._validate_graph_do_while_stmt_list(stmt.orelse, is_kernel_top=False)
+                    continue
             where = "the kernel body" if is_kernel_top else "a qd.graph_do_while() body"
             raise QuadrantsSyntaxError(
                 f"When a kernel uses qd.graph_do_while(), {where} may contain only for-loops, "
