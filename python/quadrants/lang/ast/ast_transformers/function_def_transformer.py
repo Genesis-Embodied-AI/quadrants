@@ -557,6 +557,23 @@ class FunctionDefTransformer:
         return False
 
     @staticmethod
+    def _is_checkpoint_with(stmt: ast.stmt) -> bool:
+        """Syntactic check matching ASTTransformer._is_checkpoint_call: a ``with qd.checkpoint(...):``
+        block. A checkpoint groups offloaded tasks and is a legal top-level / graph_do_while-body
+        statement (its for-loop body is validated recursively)."""
+        if not isinstance(stmt, ast.With) or len(stmt.items) != 1:
+            return False
+        ctx_expr = stmt.items[0].context_expr
+        if not isinstance(ctx_expr, ast.Call):
+            return False
+        func = ctx_expr.func
+        if isinstance(func, ast.Attribute) and func.attr == "checkpoint":
+            return True
+        if isinstance(func, ast.Name) and func.id == "checkpoint":
+            return True
+        return False
+
+    @staticmethod
     def _validate_graph_do_while_structure(body: list[ast.stmt]) -> None:
         """If a kernel uses qd.graph_do_while() anywhere, enforce that every top-level statement list
         (the kernel body and each graph_do_while body) contains only for-loops and graph_do_while
@@ -587,11 +604,19 @@ class FunctionDefTransformer:
                     raise QuadrantsSyntaxError("'else' clause for 'while' not supported in Quadrants kernels")
                 FunctionDefTransformer._validate_graph_do_while_stmt_list(stmt.body, is_kernel_top=False)
                 continue
+            if FunctionDefTransformer._is_checkpoint_with(stmt):
+                # A `with qd.checkpoint(...)` block groups offloaded tasks; it is a legal sibling of
+                # for-loops / graph_do_while loops (the canonical qipc "checkpoint inside loop" pattern).
+                # Its body holds the checkpoint's for-loop tasks, validated under the same rules. Nested
+                # checkpoints are rejected later in ASTTransformer._build_checkpoint_with.
+                FunctionDefTransformer._validate_graph_do_while_stmt_list(stmt.body, is_kernel_top=is_kernel_top)
+                continue
             where = "the kernel body" if is_kernel_top else "a qd.graph_do_while() body"
             raise QuadrantsSyntaxError(
-                f"When a kernel uses qd.graph_do_while(), {where} may contain only for-loops and "
-                f"qd.graph_do_while() while-loops (they may be freely mixed and nested). Wrap other "
-                f"statements in 'for _ in range(1):'. [offending stmt {i}: {type(stmt).__name__}]"
+                f"When a kernel uses qd.graph_do_while(), {where} may contain only for-loops, "
+                f"qd.graph_do_while() while-loops, and qd.checkpoint() blocks (they may be freely "
+                f"mixed and nested). Wrap other statements in 'for _ in range(1):'. "
+                f"[offending stmt {i}: {type(stmt).__name__}]"
             )
 
     @staticmethod
