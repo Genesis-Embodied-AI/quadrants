@@ -420,9 +420,8 @@ class CFGBuilder : public IRVisitor {
     current_stmt_id_ = backup_stmt_id;
   }
 
-  static std::unique_ptr<ControlFlowGraph> run(IRNode *root, bool root_in_parallel_for) {
+  static std::unique_ptr<ControlFlowGraph> run(IRNode *root) {
     CFGBuilder builder;
-    builder.in_parallel_for_ = root_in_parallel_for;
     root->accept(&builder);
     if (!builder.graph_->nodes[builder.graph_->final_node]->empty()) {
       // Make the final node empty (by adding an empty final node).
@@ -449,8 +448,8 @@ class CFGBuilder : public IRVisitor {
 };
 
 namespace irpass::analysis {
-std::unique_ptr<ControlFlowGraph> build_cfg(IRNode *root, bool root_in_parallel_for) {
-  return CFGBuilder::run(root, root_in_parallel_for);
+std::unique_ptr<ControlFlowGraph> build_cfg(IRNode *root) {
+  return CFGBuilder::run(root);
 }
 }  // namespace irpass::analysis
 
