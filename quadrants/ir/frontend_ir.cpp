@@ -1472,7 +1472,33 @@ void ASTBuilder::create_assert_stmt(const Expr &cond,
   this->insert(std::move(stmt_unique));
 }
 
+void ASTBuilder::warn_if_named_nested_loop() {
+  if (for_loop_dec_.config.loop_name.empty()) {
+    return;
+  }
+  // Walk the open block stack; if any enclosing block belongs to a for-loop, the loop we are about
+  // to emit is nested and its name will not survive offloading. `while` (incl. graph_do_while) and
+  // `if` are FrontendWhileStmt / FrontendIfStmt, not FrontendForStmt, so they are correctly ignored;
+  // `qd.checkpoint` pushes no block at all.
+  bool nested = false;
+  for (int i = (int)stack_.size() - 1; i >= 0; i--) {
+    Stmt *parent = stack_[i]->parent_stmt();
+    if (parent && parent->is<FrontendForStmt>()) {
+      nested = true;
+      break;
+    }
+  }
+  QD_WARN_IF(nested,
+             "qd.loop_config(name=\"{}\") is set on a for-loop nested inside another for-loop; the "
+             "name is ignored. Only top-level loops (direct children of the kernel body, a "
+             "qd.checkpoint, or a qd.graph_do_while) are offloaded as separately named GPU kernels. "
+             "Move the loop to the top level, or unroll the enclosing loop with "
+             "`for ... in qd.static(range(...))` so each inner loop becomes its own named kernel.",
+             for_loop_dec_.config.loop_name);
+}
+
 void ASTBuilder::begin_frontend_range_for(const Expr &i, const Expr &s, const Expr &e, const DebugInfo &dbg_info) {
+  warn_if_named_nested_loop();
   for_loop_dec_.config.stream_parallel_group_id = current_stream_parallel_group_id_;
   auto stmt_unique = std::make_unique<FrontendForStmt>(i, s, e, arch_, for_loop_dec_.config, dbg_info);
   auto stmt = stmt_unique.get();
@@ -1484,6 +1510,7 @@ void ASTBuilder::begin_frontend_range_for(const Expr &i, const Expr &s, const Ex
 void ASTBuilder::begin_frontend_struct_for_on_snode(const ExprGroup &loop_vars,
                                                     SNode *snode,
                                                     const DebugInfo &dbg_info) {
+  warn_if_named_nested_loop();
   QD_WARN_IF(for_loop_dec_.config.strictly_serialized,
              "ti.loop_config(serialize=True) does not have effect on the struct for. "
              "The execution order is not guaranteed.");
@@ -1498,6 +1525,7 @@ void ASTBuilder::begin_frontend_struct_for_on_snode(const ExprGroup &loop_vars,
 void ASTBuilder::begin_frontend_struct_for_on_external_tensor(const ExprGroup &loop_vars,
                                                               const Expr &external_tensor,
                                                               const DebugInfo &dbg_info) {
+  warn_if_named_nested_loop();
   QD_WARN_IF(for_loop_dec_.config.strictly_serialized,
              "ti.loop_config(serialize=True) does not have effect on the struct for. "
              "The execution order is not guaranteed.");
@@ -1514,6 +1542,7 @@ void ASTBuilder::begin_frontend_mesh_for(const Expr &i,
                                          const mesh::MeshPtr &mesh_ptr,
                                          const mesh::MeshElementType &element_type,
                                          const DebugInfo &dbg_info) {
+  warn_if_named_nested_loop();
   QD_WARN_IF(for_loop_dec_.config.strictly_serialized,
              "ti.loop_config(serialize=True) does not have effect on the mesh for. "
              "The execution order is not guaranteed.");
