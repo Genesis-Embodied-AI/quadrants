@@ -33,30 +33,47 @@ std::vector<OffloadedStmt *> collect_offloaded_tasks(IRNode *root) {
   return tasks;
 }
 
-// Run store-to-load forwarding + dead-store elimination over a single offloaded task's sub-block, scoped to
-// that block alone. Correctness relies on the existing CFG boundary seeding: reaching_definition_analysis seeds
-// the start node with all global pointers ("may contain data before this kernel") and live_variable_analysis
-// seeds the final node with all global store destinations ("may be loaded after this kernel"). Because the CFG
-// here spans only one task, every global address (fields, external tensors, global temporaries that carry data
-// between tasks) is therefore conservatively treated as live-in and live-out of the task -- so no store that a
-// sibling task may read is ever eliminated, and no value is forwarded across a task (device-launch) boundary.
-bool optimize_offload_block(Block *block,
-                            bool in_parallel_for,
-                            bool after_lower_access,
-                            bool autodiff_enabled,
-                            const std::optional<ControlFlowGraph::LiveVarAnalysisConfig> &lva_config_opt) {
-  if (block == nullptr || block->statements.empty()) {
-    return false;
-  }
-  auto cfg = analysis::build_cfg(block, in_parallel_for);
-  cfg->simplify_graph();
+// Build and optimize a control-flow graph for a SINGLE offloaded task, scoped to that task alone.
+//
+// The task is temporarily moved into a throwaway wrapper block and run through the normal Block ->
+// OffloadedStmt CFG construction, then moved back, leaving the IR shape unchanged. Building through a wrapper
+// (instead of stitching together per-sub-block CFGs) is what makes this correct: the resulting CFG is
+// byte-for-byte the slice that the whole-kernel CFG would build for this one task -- including the offloaded
+// for-body's implicit-loop `continue` edges (which are wired by visit(OffloadedStmt), not by visit(Block)), the
+// prologue/body/epilogue chaining, and the body's is_parallel_executed flag. Optimizing each sub-block in
+// isolation would drop the `continue` loop-back edges and wrongly dead-store-eliminate a global store that
+// precedes a `continue` (regression caught by test_cfg_continue).
+//
+// Scoping the analyses to one task is semantics-preserving because each offloaded task is a separate device
+// launch and the existing CFG boundary seeding is conservative across the launch boundary:
+// reaching_definition_analysis seeds the start node with all global pointers ("may already hold data") and
+// live_variable_analysis seeds the final node with all global store destinations ("may be read later"). With
+// the CFG spanning only one task, every global address -- fields, external tensors, and the global-temporary
+// buffer that carries scalars between tasks -- is therefore treated as live-in and live-out of the task, so no
+// store a sibling task may read is eliminated and no value is forwarded across a task (device-launch) boundary.
+bool optimize_one_task(Block *parent,
+                       OffloadedStmt *off,
+                       bool after_lower_access,
+                       bool autodiff_enabled,
+                       const std::optional<ControlFlowGraph::LiveVarAnalysisConfig> &lva_config_opt) {
+  const int location = parent->locate(off);
+  QD_ASSERT(location != -1);
+  Block wrapper;
+  wrapper.insert(parent->extract(off));
   bool modified = false;
-  if (cfg->store_to_load_forwarding(after_lower_access, autodiff_enabled)) {
-    modified = true;
+  {
+    // |cfg| holds raw pointers into |wrapper| (its container nodes) and into the task's own sub-blocks; keep
+    // both alive until the analyses are done, then move the task back before |wrapper| leaves scope.
+    auto cfg = analysis::build_cfg(&wrapper);
+    cfg->simplify_graph();
+    if (cfg->store_to_load_forwarding(after_lower_access, autodiff_enabled)) {
+      modified = true;
+    }
+    if (cfg->dead_store_elimination(after_lower_access, lva_config_opt)) {
+      modified = true;
+    }
   }
-  if (cfg->dead_store_elimination(after_lower_access, lva_config_opt)) {
-    modified = true;
-  }
+  parent->insert(wrapper.extract(off), location);
   return modified;
 }
 
@@ -75,29 +92,18 @@ bool cfg_optimization(const CompileConfig &config,
   // Per-offloaded-task scoping: once the kernel is offloaded, optimize each task's CFG independently instead of
   // building one whole-kernel CFG across all tasks. This keeps the (super-linear) dataflow analyses small per
   // task without changing semantics -- see the comment on CompileConfig::cfg_optimization_per_task and
-  // optimize_offload_block above. Disabled for the real-matrix path (which skips the analyses entirely) and
-  // pre-offload IR (no tasks yet), both of which fall through to the whole-kernel path below.
-  if (config.cfg_optimization_per_task && !real_matrix_enabled) {
+  // optimize_one_task above. Skipped for the real-matrix path (which runs no analyses) and for pre-offload IR
+  // (no tasks yet); also skipped when CFG dumping is requested, so QD_DUMP_CFG keeps dumping the whole-kernel
+  // graph. All of these fall through to the whole-kernel path below.
+  const char *dump_cfg_env = std::getenv(DUMP_CFG_ENV.data());
+  const bool dump_cfg = dump_cfg_env != nullptr && std::string(dump_cfg_env) == "1";
+  if (config.cfg_optimization_per_task && !real_matrix_enabled && !dump_cfg) {
     auto tasks = collect_offloaded_tasks(root);
     if (!tasks.empty()) {
+      auto *block = root->as<Block>();
       bool result_modified = false;
       for (auto *off : tasks) {
-        const bool body_parallel = off->task_type == OffloadedStmt::TaskType::range_for ||
-                                    off->task_type == OffloadedStmt::TaskType::struct_for ||
-                                    off->task_type == OffloadedStmt::TaskType::mesh_for;
-        // Prologues/epilogues run serially; only the for-task body is parallel-executed.
-        result_modified |= optimize_offload_block(off->tls_prologue.get(), false, after_lower_access,
-                                                  autodiff_enabled, lva_config_opt);
-        result_modified |= optimize_offload_block(off->mesh_prologue.get(), false, after_lower_access,
-                                                  autodiff_enabled, lva_config_opt);
-        result_modified |= optimize_offload_block(off->bls_prologue.get(), false, after_lower_access,
-                                                  autodiff_enabled, lva_config_opt);
-        result_modified |= optimize_offload_block(off->body.get(), body_parallel, after_lower_access,
-                                                  autodiff_enabled, lva_config_opt);
-        result_modified |= optimize_offload_block(off->bls_epilogue.get(), false, after_lower_access,
-                                                  autodiff_enabled, lva_config_opt);
-        result_modified |= optimize_offload_block(off->tls_epilogue.get(), false, after_lower_access,
-                                                  autodiff_enabled, lva_config_opt);
+        result_modified |= optimize_one_task(block, off, after_lower_access, autodiff_enabled, lva_config_opt);
       }
       // TODO: implement cfg->dead_instruction_elimination()
       die(root);  // remove unused allocas across the whole kernel
@@ -107,8 +113,6 @@ bool cfg_optimization(const CompileConfig &config,
 
   auto cfg = analysis::build_cfg(root);
 
-  const char *dump_cfg_env = std::getenv(DUMP_CFG_ENV.data());
-  bool dump_cfg = dump_cfg_env != nullptr && std::string(dump_cfg_env) == "1";
   if (dump_cfg) {
     std::string suffix = phase.empty() ? "_before_cfg_opt" : ("_" + phase + "_before_cfg_opt");
     cfg->dump_graph_to_file(config, kernel_name, suffix);
