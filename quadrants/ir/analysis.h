@@ -72,7 +72,11 @@ namespace analysis {
  */
 AliasResult alias_analysis(Stmt *var1, Stmt *var2);
 
-std::unique_ptr<ControlFlowGraph> build_cfg(IRNode *root);
+// |root_in_parallel_for| seeds the builder's parallel-execution context. It is true when |root| is the body
+// block of an offloaded range_for/struct_for/mesh_for task built in isolation (see per-task cfg_optimization),
+// so that nodes inside it are correctly flagged is_parallel_executed even though they are not visited through
+// the enclosing OffloadedStmt. Defaults to false (whole-kernel / serial builds), preserving prior behaviour.
+std::unique_ptr<ControlFlowGraph> build_cfg(IRNode *root, bool root_in_parallel_for = false);
 void check_fields_registered(IRNode *root);
 std::unique_ptr<IRNode> clone(IRNode *root);
 std::unique_ptr<Stmt> clone(Stmt *root);
