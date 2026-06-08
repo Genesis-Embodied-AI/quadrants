@@ -1011,9 +1011,17 @@ void QuadrantsLLVMContext::mark_function_as_cuda_kernel(llvm::Function *func, in
   // Keep nvvm.annotations for launch bounds (maxntidx, minctasm).
   insert_nvvm_annotation(func, "kernel", 1);
   if (block_dim != 0) {
-    // CUDA launch bounds
+    // CUDA launch bounds. minctasm (min CTAs/SM) sets the occupancy target ptxas optimizes for and
+    // therefore the register ceiling (regs <= 65536 / (block_dim * minctasm)); it also overrides
+    // -maxrregcount / CU_JIT_MAX_REGISTERS. QD_MINCTASM overrides the default 2 so the occupancy/
+    // register tradeoff can be swept without recompiling each value (experiment knob).
     insert_nvvm_annotation(func, "maxntidx", block_dim);
-    insert_nvvm_annotation(func, "minctasm", 2);
+    int minctasm = 2;
+    if (const char *e = std::getenv("QD_MINCTASM")) {
+      int v = std::atoi(e);
+      if (v > 0) minctasm = v;
+    }
+    insert_nvvm_annotation(func, "minctasm", minctasm);
   }
 }
 
