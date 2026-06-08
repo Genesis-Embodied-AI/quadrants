@@ -172,7 +172,10 @@ QuadrantsLLVMContext *LlvmRuntimeExecutor::get_llvm_context() {
 }
 
 JITModule *LlvmRuntimeExecutor::create_jit_module(std::unique_ptr<llvm::Module> module) {
-  return jit_session_->add_module(std::move(module));
+  // Thread the configured register cap (gpu_max_reg -> CU_JIT_MAX_REGISTERS) into the JIT. Without
+  // this the field is silently ignored (only ever reaches the offline-cache key), so kernels always
+  // compile at the launch-bound ceiling. 0 keeps the driver default (and CPU's max_reg==0 assert).
+  return jit_session_->add_module(std::move(module), config_.gpu_max_reg);
 }
 
 JITModule *LlvmRuntimeExecutor::get_runtime_jit_module() {
