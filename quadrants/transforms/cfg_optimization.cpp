@@ -14,8 +14,8 @@ namespace {
 
 // Collect the top-level offloaded tasks of |root| iff |root| is an already-offloaded kernel body, i.e. a Block
 // whose statements are all OffloadedStmt. Returns an empty vector otherwise (pre-offload IR, function bodies,
-// non-Block roots), in which case the caller falls back to the whole-kernel CFG. This is what makes the
-// per-task path activate only post-offload, where the notion of "an offloaded task" exists.
+// non-Block roots). This is what lets the caller tell "post-offload" (run per-task cfg) from "pre-offload /
+// other" (ditch cfg, under cfg_optimization_per_task), since "an offloaded task" only exists post-offload.
 std::vector<OffloadedStmt *> collect_offloaded_tasks(IRNode *root) {
   std::vector<OffloadedStmt *> tasks;
   auto *block = root->cast<Block>();
@@ -89,26 +89,37 @@ bool cfg_optimization(const CompileConfig &config,
                       const std::string &phase) {
   QD_AUTO_PROF;
 
-  // Per-offloaded-task scoping: once the kernel is offloaded, optimize each task's CFG independently instead of
-  // building one whole-kernel CFG across all tasks. This keeps the (super-linear) dataflow analyses small per
-  // task without changing semantics -- see the comment on CompileConfig::cfg_optimization_per_task and
-  // optimize_one_task above. Skipped for the real-matrix path (which runs no analyses) and for pre-offload IR
-  // (no tasks yet); also skipped when CFG dumping is requested, so QD_DUMP_CFG keeps dumping the whole-kernel
-  // graph. All of these fall through to the whole-kernel path below.
   const char *dump_cfg_env = std::getenv(DUMP_CFG_ENV.data());
   const bool dump_cfg = dump_cfg_env != nullptr && std::string(dump_cfg_env) == "1";
-  if (config.cfg_optimization_per_task && !real_matrix_enabled && !dump_cfg) {
+
+  // Per-offloaded-task scoping. Once the kernel is offloaded we optimize each task's CFG independently; and we
+  // deliberately DITCH the expensive whole-kernel cfg_optimization in the pre-offload phase, relying on the
+  // post-offload per-task cfg below to do the store-to-load forwarding + dead-store elimination once tasks
+  // exist. The expensive (super-linear) reaching-definition / forwarding analyses otherwise run on the monolithic
+  // pre-offload kernel IR -- where there are no tasks to scope to -- and dominate compile time. cfg_optimization
+  // is an optimization, not a correctness pass, so dropping it pre-offload is safe; the only thing lost is
+  // cross-task forwarding/DSE on the monolithic IR, which is invalid across separate device launches anyway.
+  // QD_DUMP_CFG forces the whole-kernel path so the full graph can still be dumped for debugging.
+  if (config.cfg_optimization_per_task && !dump_cfg) {
     auto tasks = collect_offloaded_tasks(root);
     if (!tasks.empty()) {
-      auto *block = root->as<Block>();
+      // Post-offload: per-task store-to-load forwarding + dead-store elimination (skipped for the real-matrix
+      // path, matching the whole-kernel path which runs no analyses there).
       bool result_modified = false;
-      for (auto *off : tasks) {
-        result_modified |= optimize_one_task(block, off, after_lower_access, autodiff_enabled, lva_config_opt);
+      if (!real_matrix_enabled) {
+        auto *block = root->as<Block>();
+        for (auto *off : tasks) {
+          result_modified |= optimize_one_task(block, off, after_lower_access, autodiff_enabled, lva_config_opt);
+        }
       }
       // TODO: implement cfg->dead_instruction_elimination()
       die(root);  // remove unused allocas across the whole kernel
       return result_modified;
     }
+    // Pre-offload IR (no offloaded tasks yet) or a non-offloaded body: ditch the whole-kernel cfg analyses and
+    // keep only the cheap dead-alloca cleanup; the post-offload per-task path will optimize each task later.
+    die(root);
+    return false;
   }
 
   auto cfg = analysis::build_cfg(root);
