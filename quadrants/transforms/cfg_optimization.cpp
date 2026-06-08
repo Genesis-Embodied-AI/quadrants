@@ -116,10 +116,21 @@ bool cfg_optimization(const CompileConfig &config,
       die(root);  // remove unused allocas across the whole kernel
       return result_modified;
     }
-    // Pre-offload IR (no offloaded tasks yet) or a non-offloaded body: ditch the whole-kernel cfg analyses and
-    // keep only the cheap dead-alloca cleanup; the post-offload per-task path will optimize each task later.
-    die(root);
-    return false;
+    // No offloaded tasks yet. Within compile_to_offloads these are the pre-offload full_simplify calls on the
+    // monolithic kernel IR (the phases below, all *before* irpass::offload): their whole-kernel cfg is the
+    // (super-linear) reaching-definition / store-to-load analysis that dominates compile time, and it is
+    // redundant because the post-offload per-task cfg ("simplify_III" onward) redoes the intra-task
+    // store-to-load forwarding + dead-store elimination once tasks exist. So for exactly those phases we ditch
+    // cfg, keeping only the cheap dead-alloca cleanup. For ANY other caller of full_simplify on non-offloaded
+    // IR (unit tests, standalone blocks / function bodies that are never offloaded), we must still run the
+    // whole-kernel cfg below, or its forwarding/DSE would be silently lost -- so we fall through.
+    const bool pre_offload_compile_phase =
+        phase == "simplify_I" || phase == "simplify_II" || phase == "pre_autodiff" || phase == "post_autodiff";
+    if (pre_offload_compile_phase) {
+      die(root);
+      return false;
+    }
+    // else: fall through to the whole-kernel cfg path below.
   }
 
   auto cfg = analysis::build_cfg(root);
