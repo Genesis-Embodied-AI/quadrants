@@ -16,14 +16,14 @@ Common one-liners:
 
 ```
 # run one file
-python tests/run_tests.py test_tile16
+python tests/run_tests.py test_tile
 
 # run one test (any pytest -k expression)
-python tests/run_tests.py -k test_tile16_cholesky
+python tests/run_tests.py -k test_cholesky
 
 # run on a specific backend (or comma-separated list)
 python tests/run_tests.py --arch cuda
-python tests/run_tests.py --arch metal -k tile16
+python tests/run_tests.py --arch metal -k tile
 
 # same, via env var (handy for CI)
 QD_WANTED_ARCHS=metal,vulkan python tests/run_tests.py

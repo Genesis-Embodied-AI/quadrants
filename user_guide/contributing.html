@@ -435,7 +435,7 @@
 <section id="running-tests">
 <h2>Running tests<a class="headerlink" href="#running-tests" title="Link to this heading">#</a></h2>
 <p>Run the test suite with <code class="docutils literal notranslate"><span class="pre">python</span> <span class="pre">tests/run_tests.py</span></code>. CLI arguments are forwarded to pytest. For example, to run only Metal tests matching a keyword:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">python</span> <span class="n">tests</span><span class="o">/</span><span class="n">run_tests</span><span class="o">.</span><span class="n">py</span> <span class="o">--</span><span class="n">arch</span> <span class="n">metal</span> <span class="o">-</span><span class="n">k</span> <span class="s2">&quot;test_tile16_cholesky&quot;</span>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">python</span> <span class="n">tests</span><span class="o">/</span><span class="n">run_tests</span><span class="o">.</span><span class="n">py</span> <span class="o">--</span><span class="n">arch</span> <span class="n">metal</span> <span class="o">-</span><span class="n">k</span> <span class="s2">&quot;test_cholesky&quot;</span>
 </pre></div>
 </div>
 <p>The target architecture can also be set via the <code class="docutils literal notranslate"><span class="pre">QD_WANTED_ARCHS</span></code> environment variable (comma-separated, e.g. <code class="docutils literal notranslate"><span class="pre">QD_WANTED_ARCHS=metal,vulkan</span></code>).</p>
