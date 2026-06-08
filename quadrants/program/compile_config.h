@@ -9,6 +9,14 @@ struct CompileConfig {
   Arch arch;
   bool debug;
   bool cfg_optimization;
+  // When true (default), cfg_optimization scopes its store-to-load forwarding and dead-store elimination to
+  // each offloaded task independently once the kernel has been offloaded, instead of running one whole-kernel
+  // control-flow graph spanning all tasks. Each offloaded task is a separate device launch, so cross-task
+  // store-to-load forwarding of registers is impossible anyway, and global memory is treated conservatively
+  // (live-in and live-out of every task) by the existing CFG boundary seeding -- so the per-task scoping is
+  // semantics-preserving while making the dataflow analyses ~linear in total IR instead of super-linear in the
+  // combined whole-kernel IR. Set false to restore the whole-kernel behaviour.
+  bool cfg_optimization_per_task{true};
   bool check_out_of_bound;
   bool validate_autodiff;
   int simd_width;
