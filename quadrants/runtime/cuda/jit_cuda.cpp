@@ -163,8 +163,12 @@ JITModule *JITSessionCUDA::add_module(std::unique_ptr<llvm::Module> M, int max_r
   // Insert options
   if (max_reg != 0) {
     options[num_options] = CU_JIT_MAX_REGISTERS;
-    option_values[num_options] = &max_reg;
+    // cuModuleLoadDataEx takes scalar (unsigned int) option values BY VALUE, cast to void* -- NOT a
+    // pointer to the value. Passing &max_reg made ptxas read the pointer address as the register
+    // count (a huge number), which it clamps to the hw max 255 -> the cap silently had no effect.
+    option_values[num_options] = reinterpret_cast<void *>(static_cast<uintptr_t>(max_reg));
     num_options++;
+    QD_INFO("CU_JIT_MAX_REGISTERS set to {}", max_reg);
   }
 
   QD_ASSERT(num_options <= max_num_options);
