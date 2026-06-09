@@ -13,6 +13,7 @@ Both features run on every backend. They are *hardware accelerated* on CUDA (via
 | `graph_do_while` (nested / sibling) | hardware accelerated | host fallback | host fallback | host fallback | host fallback | host fallback |
 | `qd.checkpoint` skip (IF gate) | hardware accelerated (conditional graph node) | GPU-side (codegen prologue + flat graph) | GPU-side (codegen prologue + flat HIP graph) | GPU-side (gate shader + indirect dispatch) | GPU-side (gate shader + indirect dispatch) | host-branch gating |
 | `qd.checkpoint(yield_on=…)` + `kernel.resume()` | implemented | implemented | implemented | implemented | implemented | implemented |
+| `qd.graph_parallel` / `qd.branch` (concurrent branches) | concurrent (parallel streams) | concurrent (parallel streams) | runs serially (correct) | runs serially (correct) | runs serially (correct) | runs serially (correct) |
 
 `qd.checkpoint` gating happens entirely on the device for every GPU backend. The exact device mechanism differs by backend (see "Backend coverage notes" below) but the Python contract (`qd.checkpoint`, `GraphStatus`, `kernel.resume(from_checkpoint=…)`) is identical.
 
@@ -366,3 +367,49 @@ This forces the offloader to emit a `range_for` task that picks up the surroundi
 - **Vulkan / Metal**: same Python contract; lowering is GPU-side via indirect dispatch. Each body kernel is issued as an indirect dispatch reading its `dim3` from a small per-kernel device buffer; a SPIR-V `checkpoint_gate_shader` runs at the head of each checkpoint and writes either the real `dim3` or `(0, 0, 0)` based on `*resume_point` / `*yield_signal`. A SPIR-V `checkpoint_yield_check_shader` does the atomic-CAS on `yield_signal` and is itself indirect-dispatched (so it no-ops on skipped checkpoints). Vulkan uses `vkCmdDispatchIndirect`; Metal uses `dispatchThreadgroupsWithIndirectBuffer:`. One `Device::readback_data` of `yield_signal` happens at the end of the command-buffer submission to surface yields to the host.
 - **CPU (x64 + arm64)**: full host-branch gating — same Python contract, implemented in `KernelLauncher` rather than as device-side IF nodes. There is no graph object on CPU, so there is also no graph-build cost, and a yielding launch simply stops executing further checkpoint tasks. The launcher is arch-agnostic; the same code path covers Linux x86 (`qd.x64`) and Apple Silicon (`qd.arm64`). Useful for prototyping and for unit-testing yield/resume host loops without a GPU.
 - **AMDGPU**: GPU-side gating, mirror of the pre-Hopper CUDA path. Every cp_id >= 0 body kernel carries a codegen-emitted LLVM-IR prologue that reads `RuntimeContext::checkpoint_resume_point_ptr` / `checkpoint_yield_signal_ptr` and early-returns when its checkpoint should be skipped. A pre-built `_qd_checkpoint_yield_check` kernel (bundled HSACO produced by `scripts/build_checkpoint_yield_check_hsaco.py`, covering gfx90a / gfx942 / gfx1030 / gfx1100 / 1101 / 1102 / 1200 / 1201) self-gates with the same predicate and atomic-CASes `yield_signal` when the user's `yield_on=` flag reads non-zero. The HIP graph fast path inlines that kernel into a single flat graph; the streaming path (graph_do_while + checkpoint) launches the same kernel directly via `hipModuleLaunchKernel` after each yielding checkpoint's last body kernel. One per-launch HtoD of `resume_point` + init of `yield_signal=-1`, one post-launch DtoH of `yield_signal` per launch (or per iter for graph_do_while). No host-side per-checkpoint decisions.
+
+## Concurrent branches with `qd.graph_parallel` *(experimental)*
+
+`qd.checkpoint` and `graph_do_while` change *which* kernels run and *how many times*; `qd.graph_parallel` changes *how* a graph's kernels are scheduled relative to each other. By default the kernels captured in a `graph=True` kernel run as a single dependency chain (each waits for the previous one), even when they are completely independent. A `with qd.graph_parallel():` region lets you declare independent stages so the CUDA graph runs them on **parallel streams**.
+
+This is the graph-compatible analogue of [`qd.stream_parallel()`](streams.md) (which only works for non-graph kernels): both express "these sequences are independent, run them concurrently", but `graph_parallel` is honoured by the CUDA graph builder so it composes with `graph=True` and `graph_do_while`.
+
+```python
+@qd.kernel(graph=True)
+def step(...):
+    while qd.graph_do_while(ncond):
+        assemble_shared(...)                 # serial: feeds both branches
+
+        with qd.graph_parallel():            # fork: branches run concurrently
+            with qd.branch(name="pt"):       # point-triangle contacts
+                pt_assemble(...)
+                pt_hessian(...)
+            with qd.branch(name="ee"):       # edge-edge contacts (independent of pt)
+                ee_assemble(...)
+                ee_hessian(...)
+        # join: everything below waits for BOTH branches to finish
+        merge_hessians(...)
+        precondition(...)
+```
+
+### Semantics
+
+- **Fork / join.** Every `qd.branch()` in the region forks from the work that precedes the region. All branches must finish before any work *after* the region begins (the join). On CUDA the join is a single empty graph node depending on every branch's last kernel.
+- **Branches are independent — you guarantee it.** Calls *within* a branch keep their program order, but calls in *different* branches have no ordering. The branches must be data-race free with respect to one another: no branch may read what another writes, and no two branches may write the same memory. Quadrants does not check this; getting it wrong gives nondeterministic results, exactly like `qd.stream_parallel()`.
+- **`name=` is optional** and used only as a label for profiling / graph introspection.
+
+### Restrictions (enforced at kernel compile time)
+
+- Must be used inside `@qd.kernel(graph=True)`.
+- A region body may contain only `with qd.branch():` blocks, optionally wrapped in `if qd.static(...)` (so an optional branch can be compiled in or out — e.g. enabling edge-edge contacts only when a feature flag is set). A single-branch region is allowed and lowers to a plain chain (no fork/join overhead).
+- `qd.branch()` may appear only directly inside a `qd.graph_parallel()` region.
+- Regions cannot be nested, and a branch body must be straight-line task work — no `qd.graph_do_while`, `qd.checkpoint`, or nested `qd.graph_parallel` inside a branch (a region may, however, sit inside a `qd.graph_do_while` body, as shown above).
+
+### Backend behaviour
+
+| backend | result | scheduling |
+| --- | --- | --- |
+| CUDA (graph path) | correct | branches run **concurrently** on parallel streams |
+| AMDGPU / CPU / Vulkan / Metal | correct | branches run **serially** (the concurrency tags are honoured only by the CUDA graph builder today) |
+
+Because branches are independent by construction, running them serially on the other backends produces identical results — only the scheduling differs. `qd.graph_parallel` lowers onto the same internal concurrency-group mechanism as `qd.stream_parallel`, so non-graph fallbacks also fork the branches across streams.
