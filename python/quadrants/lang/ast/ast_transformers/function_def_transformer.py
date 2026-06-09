@@ -574,6 +574,38 @@ class FunctionDefTransformer:
         return False
 
     @staticmethod
+    def _is_graph_parallel_with(stmt: ast.stmt) -> bool:
+        """Syntactic check matching ASTTransformer._is_graph_parallel_call: a
+        ``with qd.graph_parallel():`` fork/join region."""
+        if not isinstance(stmt, ast.With) or len(stmt.items) != 1:
+            return False
+        ctx_expr = stmt.items[0].context_expr
+        if not isinstance(ctx_expr, ast.Call):
+            return False
+        func = ctx_expr.func
+        if isinstance(func, ast.Attribute) and func.attr == "graph_parallel":
+            return True
+        if isinstance(func, ast.Name) and func.id == "graph_parallel":
+            return True
+        return False
+
+    @staticmethod
+    def _is_branch_with(stmt: ast.stmt) -> bool:
+        """Syntactic check matching ASTTransformer._is_branch_call: a ``with qd.branch(...):`` member
+        of a ``qd.graph_parallel()`` region."""
+        if not isinstance(stmt, ast.With) or len(stmt.items) != 1:
+            return False
+        ctx_expr = stmt.items[0].context_expr
+        if not isinstance(ctx_expr, ast.Call):
+            return False
+        func = ctx_expr.func
+        if isinstance(func, ast.Attribute) and func.attr == "branch":
+            return True
+        if isinstance(func, ast.Name) and func.id == "branch":
+            return True
+        return False
+
+    @staticmethod
     def _validate_graph_do_while_structure(body: list[ast.stmt]) -> None:
         """If a kernel uses qd.graph_do_while() anywhere, enforce structural rules that keep per-task
         graph_do_while level tagging exact (the offloader tags a flushed serial bound/listgen task with
@@ -614,6 +646,15 @@ class FunctionDefTransformer:
                 # Its body is task territory (everything runs every iteration), so validate it with the
                 # in-loop rules. Nested checkpoints are rejected later in ASTTransformer._build_checkpoint_with.
                 FunctionDefTransformer._validate_graph_do_while_stmt_list(stmt.body, is_kernel_top=False)
+                continue
+            if FunctionDefTransformer._is_graph_parallel_with(stmt):
+                # A `with qd.graph_parallel()` region groups concurrent `with qd.branch()` members; it is
+                # a legal sibling of for-loops / checkpoints. Its body must be branch blocks only (enforced
+                # fully in ASTTransformer._build_graph_parallel_with); each branch body is task territory,
+                # validated with the in-loop rules.
+                for member in stmt.body:
+                    if FunctionDefTransformer._is_branch_with(member):
+                        FunctionDefTransformer._validate_graph_do_while_stmt_list(member.body, is_kernel_top=False)
                 continue
             if not is_kernel_top:
                 # Inside a graph_do_while body (or a checkpoint within one) every statement already runs on

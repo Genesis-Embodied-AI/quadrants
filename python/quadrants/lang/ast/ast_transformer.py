@@ -1399,6 +1399,49 @@ class ASTTransformer(Builder):
         return True, yield_on_name
 
     @staticmethod
+    def _is_graph_parallel_call(node: ast.expr) -> bool:
+        """If *node* is a ``qd.graph_parallel()`` call return True, else False."""
+        if not isinstance(node, ast.Call):
+            return False
+        func = node.func
+        is_gp = (isinstance(func, ast.Attribute) and func.attr == "graph_parallel") or (
+            isinstance(func, ast.Name) and func.id == "graph_parallel"
+        )
+        if not is_gp:
+            return False
+        if node.args or node.keywords:
+            raise QuadrantsSyntaxError("qd.graph_parallel() takes no arguments")
+        return True
+
+    @staticmethod
+    def _is_branch_call(node: ast.expr) -> tuple[bool, str | None]:
+        """If *node* is ``qd.branch(...)`` return ``(True, name)``; otherwise ``(False, None)``.
+
+        ``name`` is the value of the optional ``name=`` kwarg (a string literal) or ``None``. The call
+        shape is validated here so misuse raises at the ``with`` site rather than later.
+        """
+        if not isinstance(node, ast.Call):
+            return False, None
+        func = node.func
+        is_branch = (isinstance(func, ast.Attribute) and func.attr == "branch") or (
+            isinstance(func, ast.Name) and func.id == "branch"
+        )
+        if not is_branch:
+            return False, None
+        if node.args:
+            raise QuadrantsSyntaxError("qd.branch() takes no positional arguments; use qd.branch(name='...') instead")
+        name: str | None = None
+        for kw in node.keywords:
+            if kw.arg != "name":
+                raise QuadrantsSyntaxError(
+                    f"qd.branch() got unexpected keyword argument {kw.arg!r}; only 'name' is supported"
+                )
+            if not (isinstance(kw.value, ast.Constant) and isinstance(kw.value.value, str)):
+                raise QuadrantsSyntaxError("qd.branch(name=...) must be a string literal")
+            name = kw.value.value
+        return True, name
+
+    @staticmethod
     def build_While(ctx: ASTTransformerFuncContext, node: ast.While) -> None:
         if node.orelse:
             raise QuadrantsSyntaxError("'else' clause for 'while' not supported in Quadrants kernels")
@@ -1641,9 +1684,17 @@ class ASTTransformer(Builder):
         if is_checkpoint:
             return ASTTransformer._build_checkpoint_with(ctx, node, yield_on_name)
 
+        if ASTTransformer._is_graph_parallel_call(item.context_expr):
+            return ASTTransformer._build_graph_parallel_with(ctx, node)
+
+        is_branch, branch_name = ASTTransformer._is_branch_call(item.context_expr)
+        if is_branch:
+            return ASTTransformer._build_branch_with(ctx, node, branch_name)
+
         if not FunctionDefTransformer._is_stream_parallel_with(node, ctx.global_vars):
             raise QuadrantsSyntaxError(
-                "'with' in Quadrants kernels only supports qd.stream_parallel() or qd.checkpoint()"
+                "'with' in Quadrants kernels only supports qd.stream_parallel(), qd.checkpoint(), "
+                "qd.graph_parallel(), or qd.branch()"
             )
         if not ctx.is_kernel:
             raise QuadrantsSyntaxError("qd.stream_parallel() can only be used inside @qd.kernel, not @qd.func")
@@ -1705,6 +1756,60 @@ class ASTTransformer(Builder):
         finally:
             ctx._in_checkpoint = False
             ctx.ast_builder.end_checkpoint()
+        return None
+
+    @staticmethod
+    def _build_graph_parallel_with(ctx: ASTTransformerFuncContext, node: ast.With) -> None:
+        """Handles ``with qd.graph_parallel():`` fork/join regions.
+
+        Validates the use-site (kernel must be graph=True, no nesting) and that the region body contains
+        only ``with qd.branch():`` blocks, then walks the body. The region emits no IR tag of its own --
+        each ``branch`` inside lowers to a stream-parallel group (via begin/end_stream_parallel), and the
+        CUDA graph builder forks the distinct groups in a contiguous run and joins them. Regions are kept
+        apart by the serial work between them (see d3_0_graph_parallel_impl.md)."""
+        if not ctx.is_kernel:
+            raise QuadrantsSyntaxError("qd.graph_parallel() can only be used inside @qd.kernel, not @qd.func")
+        kernel = ctx.global_context.current_kernel
+        if kernel is None or not kernel.use_graph:
+            raise QuadrantsSyntaxError("qd.graph_parallel() requires @qd.kernel(graph=True)")
+        if getattr(ctx, "_in_graph_parallel", False):
+            raise QuadrantsSyntaxError("qd.graph_parallel() regions cannot be nested")
+        if getattr(ctx, "_in_branch", False):
+            raise QuadrantsSyntaxError("qd.graph_parallel() cannot appear inside a qd.branch() body")
+        for i, stmt in enumerate(node.body):
+            if FunctionDefTransformer._is_docstring(stmt, i) or FunctionDefTransformer._is_coverage_probe(stmt):
+                continue
+            is_branch = False
+            if isinstance(stmt, ast.With) and stmt.items:
+                is_branch, _ = ASTTransformer._is_branch_call(stmt.items[0].context_expr)
+            if not is_branch:
+                raise QuadrantsSyntaxError(
+                    "A qd.graph_parallel() region may contain only 'with qd.branch():' blocks "
+                    f"[offending stmt {i}: {type(stmt).__name__}]"
+                )
+        ctx._in_graph_parallel = True
+        try:
+            build_stmts(ctx, node.body)
+        finally:
+            ctx._in_graph_parallel = False
+        return None
+
+    @staticmethod
+    def _build_branch_with(ctx: ASTTransformerFuncContext, node: ast.With, name: str | None) -> None:
+        """Handles ``with qd.branch():`` members of a ``qd.graph_parallel()`` region.
+
+        Reuses the stream-parallel tagging: begin_stream_parallel() assigns this branch a fresh
+        ``stream_parallel_group_id`` that every for-loop in the body inherits, so the offloaded tasks
+        carry the branch id all the way to the graph builder. ``name`` is currently a label only."""
+        if not getattr(ctx, "_in_graph_parallel", False):
+            raise QuadrantsSyntaxError("qd.branch() can only be used directly inside a qd.graph_parallel() region")
+        ctx._in_branch = True
+        ctx.ast_builder.begin_stream_parallel()
+        try:
+            build_stmts(ctx, node.body)
+        finally:
+            ctx.ast_builder.end_stream_parallel()
+            ctx._in_branch = False
         return None
 
     @staticmethod
