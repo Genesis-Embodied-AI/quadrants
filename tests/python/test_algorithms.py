@@ -1164,6 +1164,61 @@ def test_reduce_by_key_add(key_dtype, val_dtype, N):
         np.testing.assert_array_equal(got_vals, want_vals, err_msg=f"{key_dtype}/{val_dtype} N={N}: values")
 
 
+@pytest.mark.parametrize("N", [1, 255, 256, 257, 1024, 65537])
+@pytest.mark.parametrize("key_dtype", [qd.i32, qd.f32])
+@pytest.mark.parametrize("val_dtype", [qd.i32, qd.f32])
+@test_utils.test(arch=qd.gpu)
+def test_reduce_by_key_add_func_composition(key_dtype, val_dtype, N):
+    """``reduce_by_key_add_func`` composes at the **top level** of a user ``@qd.kernel`` with a device-resident count
+    (``count[0]``), a compile-time ``DEPTH``, and the values dtype as a template (needed only for the zero-init of
+    ``values_out``). Pins the graph-composable reduce-by-key path: count flows as a device ``Expr`` while ``DEPTH``
+    fixes the launch topology (head flags + in-place scan + zero + scatter + count all emit inside one kernel)."""
+    from quadrants.algorithms._reduce import _reduce_depth_for_n
+
+    depth = _reduce_depth_for_n(N)
+    rng = np.random.default_rng(seed=1234)
+    keys_host = _gen_run_keys(rng, key_dtype, N)
+    val_np = to_numpy_type(val_dtype)
+    if val_dtype == qd.f32:
+        values_host = rng.uniform(-1.0, 1.0, size=N).astype(val_np)
+    else:
+        values_host = rng.integers(-100, 100, size=N, dtype=val_np)
+
+    keys_in = qd.field(key_dtype, shape=N)
+    values_in = qd.field(val_dtype, shape=N)
+    keys_out = qd.field(key_dtype, shape=N)
+    values_out = qd.field(val_dtype, shape=N)
+    num_runs = qd.field(qd.i32, shape=1)
+    scratch = qd.field(qd.u32, shape=max(qd.algorithms.reduce_by_key_scratch_slots(N), 1))
+    count = qd.field(qd.i32, shape=1)
+    _fill_field(keys_in, keys_host)
+    _fill_field(values_in, values_host)
+    count.from_numpy(np.asarray([N], dtype=np.int32))
+
+    @qd.kernel
+    def run(VALUE_DTYPE: qd.template(), DEPTH: qd.template()):
+        qd.algorithms.reduce_by_key_add_func(
+            keys_in, values_in, keys_out, values_out, num_runs, scratch, count[0], VALUE_DTYPE, DEPTH
+        )
+
+    run(val_dtype, depth)
+    nr = int(num_runs.to_numpy()[0])
+    want_keys, want_vals = _ref_rbk_add(keys_host, values_host)
+
+    assert nr == len(want_keys), f"{key_dtype}/{val_dtype} N={N}: num_runs {nr} vs {len(want_keys)}"
+    np.testing.assert_array_equal(keys_out.to_numpy()[:nr], want_keys, err_msg=f"{key_dtype}/{val_dtype} N={N}: keys")
+    if val_dtype == qd.f32:
+        np.testing.assert_allclose(
+            values_out.to_numpy()[:nr], want_vals,
+            rtol=_F32_LARGE_N_RTOL, atol=_F32_LARGE_N_ATOL,
+            err_msg=f"{key_dtype}/{val_dtype} N={N}: values",
+        )
+    else:
+        np.testing.assert_array_equal(
+            values_out.to_numpy()[:nr], want_vals, err_msg=f"{key_dtype}/{val_dtype} N={N}: values"
+        )
+
+
 @test_utils.test(arch=qd.gpu)
 def test_reduce_by_key_add_all_same():
     """All keys equal -> single run, values_out[0] = sum of all values."""

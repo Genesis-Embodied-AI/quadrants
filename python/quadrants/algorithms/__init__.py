@@ -16,7 +16,11 @@ from ._reduce import (
     reduce_min_func,
     reduce_scratch_slots,
 )
-from ._reduce_by_key import reduce_by_key_add, reduce_by_key_scratch_slots
+from ._reduce_by_key import (
+    reduce_by_key_add,
+    reduce_by_key_add_func,
+    reduce_by_key_scratch_slots,
+)
 from ._scan import (
     exclusive_scan_add,
     exclusive_scan_add_func,
@@ -41,6 +45,7 @@ __all__ = [
     "reduce_add",
     "reduce_add_func",
     "reduce_by_key_add",
+    "reduce_by_key_add_func",
     "reduce_by_key_scratch_slots",
     "reduce_max",
     "reduce_max_func",
