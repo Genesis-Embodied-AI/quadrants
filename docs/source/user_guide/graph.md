@@ -11,6 +11,7 @@ Graphs reduce kernel launch overhead by capturing a sequence of GPU operations i
 | `graph=True` | hardware accelerated | hardware accelerated | hardware accelerated | runs (no acceleration) | runs (no acceleration) | runs (no acceleration) |
 | `qd.graph_do_while` | hardware accelerated | host fallback | host fallback | host fallback | host fallback | host fallback |
 | `qd.checkpoint` | GPU-side | GPU-side | GPU-side | GPU-side | GPU-side | host-side |
+| `qd.graph_parallel` / `qd.branch` (concurrent branches) | concurrent (parallel streams) | concurrent (parallel streams) | runs serially (correct) | runs serially (correct) | runs serially (correct) | runs serially (correct) |
 
 AMDGPU `graph_do_while` falls back to the host-side loop because HIP does not currently expose conditional / while graph nodes (as of ROCm 7.2).
 
@@ -466,3 +467,49 @@ In this case, our recommendation is:
     - this will ensure your code is compact and maintainable
 - if you need optimum 100% performance on unsupported platforms, then consider PRing onto quadrants an optimized graph implementation for your target platform
     - for example it could somehow run MAX_ITER iterations anyway, similar to the earlier hand-rolled version, but via the graph abstraction, hence allowing the code to be compact, cross-platform, and also optimally fast
+
+## Concurrent branches with `qd.graph_parallel` *(experimental)*
+
+`qd.checkpoint` and `graph_do_while` change *which* kernels run and *how many times*; `qd.graph_parallel` changes *how* a graph's kernels are scheduled relative to each other. By default the kernels captured in a `graph=True` kernel run as a single dependency chain (each waits for the previous one), even when they are completely independent. A `with qd.graph_parallel():` region lets you declare independent stages so the CUDA graph runs them on **parallel streams**.
+
+This is the graph-compatible analogue of [`qd.stream_parallel()`](streams.md) (which only works for non-graph kernels): both express "these sequences are independent, run them concurrently", but `graph_parallel` is honoured by the CUDA graph builder so it composes with `graph=True` and `graph_do_while`.
+
+```python
+@qd.kernel(graph=True)
+def step(...):
+    while qd.graph_do_while(ncond):
+        assemble_shared(...)                 # serial: feeds both branches
+
+        with qd.graph_parallel():            # fork: branches run concurrently
+            with qd.branch(name="pt"):       # point-triangle contacts
+                pt_assemble(...)
+                pt_hessian(...)
+            with qd.branch(name="ee"):       # edge-edge contacts (independent of pt)
+                ee_assemble(...)
+                ee_hessian(...)
+        # join: everything below waits for BOTH branches to finish
+        merge_hessians(...)
+        precondition(...)
+```
+
+### Semantics
+
+- **Fork / join.** Every `qd.branch()` in the region forks from the work that precedes the region. All branches must finish before any work *after* the region begins (the join). On CUDA the join is a single empty graph node depending on every branch's last kernel.
+- **Branches are independent — you guarantee it.** Calls *within* a branch keep their program order, but calls in *different* branches have no ordering. The branches must be data-race free with respect to one another: no branch may read what another writes, and no two branches may write the same memory. Quadrants does not check this; getting it wrong gives nondeterministic results, exactly like `qd.stream_parallel()`.
+- **`name=` is optional** and used only as a label for profiling / graph introspection.
+
+### Restrictions (enforced at kernel compile time)
+
+- Must be used inside `@qd.kernel(graph=True)`.
+- A region body may contain only `with qd.branch():` blocks, optionally wrapped in `if qd.static(...)` (so an optional branch can be compiled in or out — e.g. enabling edge-edge contacts only when a feature flag is set). A single-branch region is allowed and lowers to a plain chain (no fork/join overhead).
+- `qd.branch()` may appear only directly inside a `qd.graph_parallel()` region.
+- Regions cannot be nested, and a branch body must be straight-line task work — no `qd.graph_do_while`, `qd.checkpoint`, or nested `qd.graph_parallel` inside a branch (a region may, however, sit inside a `qd.graph_do_while` body, as shown above).
+
+### Backend behaviour
+
+| backend | result | scheduling |
+| --- | --- | --- |
+| CUDA (graph path) | correct | branches run **concurrently** on parallel streams |
+| AMDGPU / CPU / Vulkan / Metal | correct | branches run **serially** (the concurrency tags are honoured only by the CUDA graph builder today) |
+
+Because branches are independent by construction, running them serially on the other backends produces identical results — only the scheduling differs. `qd.graph_parallel` lowers onto the same internal concurrency-group mechanism as `qd.stream_parallel`, so non-graph fallbacks also fork the branches across streams.

@@ -693,12 +693,18 @@ class FunctionDefTransformer:
                 continue
             if FunctionDefTransformer._is_graph_parallel_with(stmt):
                 # A `with qd.graph_parallel()` region groups concurrent `with qd.branch()` members; it is
-                # a legal sibling of for-loops / checkpoints. Its body must be branch blocks only (enforced
-                # fully in ASTTransformer._build_graph_parallel_with); each branch body is task territory,
-                # validated with the in-loop rules.
-                for member in stmt.body:
+                # a legal sibling of for-loops / checkpoints. Its body must be branch blocks (optionally
+                # under `if qd.static(...)`); the full check is in ASTTransformer._build_graph_parallel_with.
+                # Each branch body is task territory, validated here with the in-loop rules. Descend through
+                # `if` members so branches inside an optional-branch `if qd.static(...)` are reached too.
+                pending = list(stmt.body)
+                while pending:
+                    member = pending.pop()
                     if FunctionDefTransformer._is_branch_with(member):
                         FunctionDefTransformer._validate_graph_do_while_stmt_list(member.body, is_kernel_top=False)
+                    elif isinstance(member, ast.If):
+                        pending.extend(member.body)
+                        pending.extend(member.orelse)
                 continue
             where = "the kernel body" if is_kernel_top else "a qd.graph_do_while() body"
             raise QuadrantsSyntaxError(

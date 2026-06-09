@@ -1705,23 +1705,38 @@ class ASTTransformer(Builder):
             raise QuadrantsSyntaxError("qd.graph_parallel() regions cannot be nested")
         if getattr(ctx, "_in_branch", False):
             raise QuadrantsSyntaxError("qd.graph_parallel() cannot appear inside a qd.branch() body")
-        for i, stmt in enumerate(node.body):
-            if FunctionDefTransformer._is_docstring(stmt, i) or FunctionDefTransformer._is_coverage_probe(stmt):
-                continue
-            is_branch = False
-            if isinstance(stmt, ast.With) and stmt.items:
-                is_branch, _ = ASTTransformer._is_branch_call(stmt.items[0].context_expr)
-            if not is_branch:
-                raise QuadrantsSyntaxError(
-                    "A qd.graph_parallel() region may contain only 'with qd.branch():' blocks "
-                    f"[offending stmt {i}: {type(stmt).__name__}]"
-                )
+        ASTTransformer._validate_graph_parallel_body(node.body)
         ctx._in_graph_parallel = True
         try:
             build_stmts(ctx, node.body)
         finally:
             ctx._in_graph_parallel = False
         return None
+
+    @staticmethod
+    def _validate_graph_parallel_body(stmts: list[ast.stmt]) -> None:
+        """A qd.graph_parallel() region body may contain only `with qd.branch():` blocks, optionally
+        wrapped in compile-time `if qd.static(...)` branches (the optional-branch pattern, e.g. qipc's
+        ENABLE_EE). Docstrings / coverage probes / `pass` are allowed. Anything else (a bare for-loop,
+        assignment, etc.) is a serial task that would silently fall outside any branch, so reject it."""
+        for i, stmt in enumerate(stmts):
+            if FunctionDefTransformer._is_docstring(stmt, i) or FunctionDefTransformer._is_coverage_probe(stmt):
+                continue
+            if isinstance(stmt, ast.Pass):
+                continue
+            if isinstance(stmt, ast.With) and stmt.items:
+                is_branch, _ = ASTTransformer._is_branch_call(stmt.items[0].context_expr)
+                if is_branch:
+                    continue
+            if isinstance(stmt, ast.If):
+                ASTTransformer._validate_graph_parallel_body(stmt.body)
+                ASTTransformer._validate_graph_parallel_body(stmt.orelse)
+                continue
+            raise QuadrantsSyntaxError(
+                "A qd.graph_parallel() region may contain only 'with qd.branch():' blocks (optionally "
+                "inside 'if qd.static(...)'). Move other work outside the region. "
+                f"[offending stmt {i}: {type(stmt).__name__}]"
+            )
 
     @staticmethod
     def _build_branch_with(ctx: ASTTransformerFuncContext, node: ast.With, name: str | None) -> None:
