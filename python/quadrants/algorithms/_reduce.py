@@ -31,13 +31,20 @@ unsigned identities, and keeps ``identity`` out of the kernel template key (one 
 
 import struct
 
+from quadrants.lang.expr import make_constant_expr
 from quadrants.lang.impl import static
 from quadrants.lang.kernel_impl import func as _func
 from quadrants.lang.kernel_impl import kernel
 from quadrants.lang.misc import loop_config
 from quadrants.lang.ops import bit_cast
 from quadrants.lang.simt import block as _block
-from quadrants.lang.simt.reductions import _typed_max_identity, _typed_min_identity
+from quadrants.lang.simt.reductions import (
+    _bin_add,
+    _bin_max,
+    _bin_min,
+    _typed_max_identity,
+    _typed_min_identity,
+)
 from quadrants.types.annotations import template
 from quadrants.types.primitive_types import (
     f32,
@@ -340,6 +347,16 @@ def _reduce_pass_u64(
 _OP_ADD = 0
 _OP_MIN = 1
 _OP_MAX = 2
+_OP_BINS = {_OP_ADD: _bin_add, _OP_MIN: _bin_min, _OP_MAX: _bin_max}
+
+
+def _typed_zero_expr(dtype):
+    """A typed-constant ``0`` ``Expr`` for ``dtype`` (the additive identity). Called at trace time inside a kernel /
+    func, like :func:`_typed_min_identity`. ``make_constant_expr`` insists the literal's kind match the dtype's, so
+    use ``0.0`` for real dtypes and ``0`` for integers."""
+    if dtype in (f32, f64):
+        return make_constant_expr(0.0, dtype)
+    return make_constant_expr(0, dtype)
 
 
 def _reduce_depth_for_n(n: int) -> int:
@@ -390,43 +407,36 @@ def _reduce_phase(
     DTYPE: template(),
     WIDE: template(),
     OP: template(),
+    OP_BIN: template(),
     SRC_WIDE: template(),
     DST_WIDE: template(),
 ):
     """One reduce phase: tile-reduce ``src[src_off:src_off+n]`` -> per-tile aggregates
-    ``dst[dst_off:dst_off+ceil(n/BLOCK_DIM)]`` under ``OP`` (``_OP_{ADD,MIN,MAX}``).
+    ``dst[dst_off:dst_off+ceil(n/BLOCK_DIM)]`` under ``OP`` (``_OP_{ADD,MIN,MAX}``, with ``OP_BIN`` the matching
+    ``_bin_*`` binary op).
 
     ``@qd.func`` phase of :func:`_emit_reduce` - its single top-level ``for`` becomes its own offloaded GPU launch (and
     graph node) when inlined into a kernel. ``SRC_WIDE`` / ``DST_WIDE`` switch between the ``qd.bit_cast``-through-``WIDE``
     (``u32`` / ``u64``) scratch path and the direct caller-tensor path (the input on the first phase, ``out`` on the
     last). Out-of-range lanes contribute the ``OP`` identity (``0`` / ``+extremum`` / ``-extremum``), derived in-kernel
-    from ``DTYPE`` so no runtime identity arg is needed.
+    from ``DTYPE`` so no runtime identity arg is needed. ``v`` is initialised to that identity *before* any branch
+    (Quadrants requires a variable's first assignment at the outer scope; later ``if`` branches only reassign it).
     """
     loop_config(block_dim=BLOCK_DIM)
     for i in range(total_threads):
         tid = i % BLOCK_DIM
         block_id = i // BLOCK_DIM
-        if static(WIDE == u32):
-            zero_t = bit_cast(u32(0), DTYPE)
-        else:
-            zero_t = bit_cast(u64(0), DTYPE)
+        v = _typed_zero_expr(DTYPE)  # typed additive identity; unconditional first assignment
         if static(OP == _OP_MIN):
-            v = _typed_min_identity(zero_t)
+            v = _typed_min_identity(v)
         elif static(OP == _OP_MAX):
-            v = _typed_max_identity(zero_t)
-        else:
-            v = zero_t
+            v = _typed_max_identity(v)
         if i < n:
             if static(SRC_WIDE):
                 v = bit_cast(src[src_off + i], DTYPE)
             else:
                 v = src[src_off + i]
-        if static(OP == _OP_MIN):
-            agg = _block.reduce_min(v, BLOCK_DIM, DTYPE)
-        elif static(OP == _OP_MAX):
-            agg = _block.reduce_max(v, BLOCK_DIM, DTYPE)
-        else:
-            agg = _block.reduce_add(v, BLOCK_DIM, DTYPE)
+        agg = _block.reduce(v, BLOCK_DIM, OP_BIN, DTYPE)
         if tid == 0:
             if static(DST_WIDE):
                 dst[dst_off + block_id] = bit_cast(agg, WIDE)
@@ -434,7 +444,7 @@ def _reduce_phase(
                 dst[dst_off + block_id] = agg
 
 
-def _emit_reduce_rec(src, src_off, SRC_WIDE, scratch, cursor, out, n, phases_remaining, DTYPE, WIDE, OP):
+def _emit_reduce_rec(src, src_off, SRC_WIDE, scratch, cursor, out, n, phases_remaining, DTYPE, WIDE, OP, OP_BIN):
     """Emit one rung of the reduce staircase at kernel-compile time, then recurse on the partials.
 
     ``n`` / ``src_off`` / ``cursor`` are Quadrants ``Expr``s (device, runtime); ``phases_remaining`` is a Python int so
@@ -443,16 +453,17 @@ def _emit_reduce_rec(src, src_off, SRC_WIDE, scratch, cursor, out, n, phases_rem
     above ``cursor`` and recurse. An over-specified depth bottoms out at length-1 buffers that reduce as identity rungs.
     """
     if phases_remaining == 1:
-        _reduce_phase(src, out, src_off, 0, n, BLOCK_DIM, DTYPE, WIDE, OP, SRC_WIDE, False)
+        _reduce_phase(src, out, src_off, 0, n, BLOCK_DIM, DTYPE, WIDE, OP, OP_BIN, SRC_WIDE, False)
         return
     B = (n + (BLOCK_DIM - 1)) // BLOCK_DIM
-    _reduce_phase(src, scratch, src_off, cursor, n, B * BLOCK_DIM, DTYPE, WIDE, OP, SRC_WIDE, True)
-    _emit_reduce_rec(scratch, cursor, True, scratch, cursor + B, out, B, phases_remaining - 1, DTYPE, WIDE, OP)
+    _reduce_phase(src, scratch, src_off, cursor, n, B * BLOCK_DIM, DTYPE, WIDE, OP, OP_BIN, SRC_WIDE, True)
+    _emit_reduce_rec(scratch, cursor, True, scratch, cursor + B, out, B, phases_remaining - 1, DTYPE, WIDE, OP, OP_BIN)
 
 
 def _emit_reduce(arr, out, scratch, n, DEPTH, DTYPE, WIDE, OP):
     """Emit a fixed-depth (``DEPTH`` phases) reduce of ``arr[0:n]`` into ``out[0]``; see :func:`_emit_reduce_rec`."""
-    _emit_reduce_rec(arr, 0, False, scratch, 0, out, n, DEPTH, DTYPE, WIDE, OP)
+    OP_BIN = _OP_BINS[OP]  # resolve the binary op at trace time so the @qd.func receives it as a template
+    _emit_reduce_rec(arr, 0, False, scratch, 0, out, n, DEPTH, DTYPE, WIDE, OP, OP_BIN)
 
 
 @_func
@@ -466,7 +477,7 @@ def reduce_add_func(arr: template(), out: template(), scratch: template(), n: i3
     emitted reduce handles any count ``<= BLOCK_DIM ** DEPTH``. Size ``scratch`` via
     :func:`reduce_scratch_slots` ``(capacity_n, DEPTH)``.
     """
-    WIDE = static(_scratch_dtype_for_width(_dtype_width_bytes(DTYPE)))
+    WIDE = _scratch_dtype_for_width(_dtype_width_bytes(DTYPE))  # compile-time (from the DTYPE template); not a static()
     _emit_reduce(arr, out, scratch, n, DEPTH, DTYPE, WIDE, _OP_ADD)
 
 
@@ -474,7 +485,7 @@ def reduce_add_func(arr: template(), out: template(), scratch: template(), n: i3
 def reduce_min_func(arr: template(), out: template(), scratch: template(), n: i32, DTYPE: template(), DEPTH: template()):
     """Graph-composable ``out[0] = min(arr[0:n])`` - the @qd.func form of :func:`reduce_min` (identity derived from
     ``DTYPE``). See :func:`reduce_add_func` for the top-level-call contract and arg semantics."""
-    WIDE = static(_scratch_dtype_for_width(_dtype_width_bytes(DTYPE)))
+    WIDE = _scratch_dtype_for_width(_dtype_width_bytes(DTYPE))  # compile-time (from the DTYPE template); not a static()
     _emit_reduce(arr, out, scratch, n, DEPTH, DTYPE, WIDE, _OP_MIN)
 
 
@@ -482,7 +493,7 @@ def reduce_min_func(arr: template(), out: template(), scratch: template(), n: i3
 def reduce_max_func(arr: template(), out: template(), scratch: template(), n: i32, DTYPE: template(), DEPTH: template()):
     """Graph-composable ``out[0] = max(arr[0:n])`` - the @qd.func form of :func:`reduce_max` (identity derived from
     ``DTYPE``). See :func:`reduce_add_func` for the top-level-call contract and arg semantics."""
-    WIDE = static(_scratch_dtype_for_width(_dtype_width_bytes(DTYPE)))
+    WIDE = _scratch_dtype_for_width(_dtype_width_bytes(DTYPE))  # compile-time (from the DTYPE template); not a static()
     _emit_reduce(arr, out, scratch, n, DEPTH, DTYPE, WIDE, _OP_MAX)
 
 
