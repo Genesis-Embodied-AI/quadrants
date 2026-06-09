@@ -60,21 +60,12 @@ def _radix_scratch(n, depth=None):
 
 
 def _run_radix_sort(keys, tmp_keys, scratch, *, values=None, tmp_values=None, end_bit=None, log256_max_n=None):
-    """Launch the ``radix_sort`` kernel the way a host caller would, deriving the compile-time params the deleted
-    ``device_radix_sort`` Python entry used to derive (key width / pass count / scan depth / 0-d ``N`` ndarray)."""
-    from quadrants.algorithms._radix_sort import _key_width_bits, _min_log256_for_n
-
-    n = keys.shape[0]
-    if log256_max_n is None:
-        log256_max_n = _min_log256_for_n(n)
-    if end_bit is None:
-        end_bit = _key_width_bits(keys.dtype)
-    has_values = values is not None
-    values_arg = values if has_values else keys
-    tmp_values_arg = tmp_values if has_values else tmp_keys
-    nd = qd.ndarray(qd.i32, shape=())
-    nd.fill(n)
-    qd.algorithms.radix_sort(keys, tmp_keys, values_arg, tmp_values_arg, scratch, nd, has_values, end_bit, log256_max_n)
+    """Thin pass-through to the friendly ``qd.algorithms.radix_sort`` host entry (which derives key width / pass count /
+    scan depth / device-resident ``N`` and validates scratch itself)."""
+    qd.algorithms.radix_sort(
+        keys, tmp_keys, scratch,
+        values=values, tmp_values=tmp_values, end_bit=end_bit, log256_max_n=log256_max_n,
+    )
 
 # ---------------------------------------------------------------------------
 # Module-level constants: dtype sets, size sweeps, identity tables.
@@ -1404,10 +1395,10 @@ def test_parallel_sort_emits_deprecation_warning():
         qd.algorithms.parallel_sort(keys)
 
 
-# --- Caller-scratch insufficiency paths. The reduce / scan / select / reduce-by-key host entries raise
+# --- Caller-scratch insufficiency paths. The reduce / scan / select / reduce-by-key / radix-sort host entries raise
 # ``InsufficientScratchError`` (a ``RuntimeError`` subclass carrying the required slot count) when the caller-supplied
-# ``scratch`` is smaller than ``*_scratch_slots(N)``, rather than launching with a too-small buffer. (The radix sort
-# is launched directly as a kernel with no host-side check, so it has no equivalent path.)
+# ``scratch`` is smaller than ``*_scratch_slots(N)``, rather than launching with a too-small buffer. (The composable
+# ``*_func`` forms skip this check - they run as device code where a host DtoH would defeat graph capture.)
 
 
 @test_utils.test(arch=qd.gpu)
@@ -1472,6 +1463,23 @@ def test_device_radix_sort_scratch_slots_query():
 
     _run_radix_sort(keys, tmp, scratch)
     np.testing.assert_array_equal(keys.to_numpy(), np.sort(host, kind="stable"))
+
+
+@test_utils.test(arch=qd.gpu)
+def test_radix_sort_insufficient_scratch():
+    """The friendly ``radix_sort`` host entry validates ``scratch`` against ``radix_sort_scratch_slots(N)`` and raises
+    ``InsufficientScratchError`` (with the required slot count) before launching, rather than sorting into a too-small
+    buffer."""
+    N = 100_000
+    needed = qd.algorithms.radix_sort_scratch_slots(N)
+    keys = qd.field(qd.i32, shape=N)
+    tmp = qd.field(qd.i32, shape=N)
+    scratch = qd.field(qd.u32, shape=needed - 1)
+    _fill_field(keys, np.arange(N, dtype=np.int32))
+    with pytest.raises(qd.algorithms.InsufficientScratchError) as excinfo:
+        _run_radix_sort(keys, tmp, scratch)
+    assert excinfo.value.required_slots == needed
+    assert excinfo.value.provided_slots == needed - 1
 
 
 @test_utils.test(arch=qd.gpu)
