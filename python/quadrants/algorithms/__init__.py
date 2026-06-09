@@ -26,7 +26,7 @@ from ._scan import (
     exclusive_scan_min_func,
     exclusive_scan_scratch_slots,
 )
-from ._select import select, select_scratch_slots
+from ._select import select, select_func, select_scratch_slots
 
 __all__ = [
     "InsufficientScratchError",
@@ -48,6 +48,7 @@ __all__ = [
     "reduce_min_func",
     "reduce_scratch_slots",
     "select",
+    "select_func",
     "select_scratch_slots",
     "parallel_sort",
     "radix_sort",
