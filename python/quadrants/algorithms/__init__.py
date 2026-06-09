@@ -19,8 +19,11 @@ from ._reduce import (
 from ._reduce_by_key import reduce_by_key_add, reduce_by_key_scratch_slots
 from ._scan import (
     exclusive_scan_add,
+    exclusive_scan_add_func,
     exclusive_scan_max,
+    exclusive_scan_max_func,
     exclusive_scan_min,
+    exclusive_scan_min_func,
     exclusive_scan_scratch_slots,
 )
 from ._select import select, select_scratch_slots
@@ -29,8 +32,11 @@ __all__ = [
     "InsufficientScratchError",
     "PrefixSumExecutor",
     "exclusive_scan_add",
+    "exclusive_scan_add_func",
     "exclusive_scan_max",
+    "exclusive_scan_max_func",
     "exclusive_scan_min",
+    "exclusive_scan_min_func",
     "exclusive_scan_scratch_slots",
     "reduce_add",
     "reduce_add_func",

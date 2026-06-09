@@ -533,23 +533,14 @@ def _scan_host(rng, op, dtype, N):
     return _rand_reduce_host(rng, dtype, N, bound=10000)
 
 
-def _check_scan(op, dtype, N):
-    """Run ``exclusive_scan_<op>(arr)`` and verify against ``numpy.<op>.accumulate``-shifted.
+def _verify_scan(got, op, dtype, N, host):
+    """Assert ``got`` matches ``numpy.<op>.accumulate``-shifted of ``host``.
 
-    Like the reduce family, ``add`` accumulates (overflow / precision care) while ``min`` / ``max`` are
-    bitwise-exact in both float and int paths.
+    Shared by the host ``exclusive_scan_{op}`` test and the ``exclusive_scan_{op}_func`` composition test. Like the
+    reduce family, ``add`` accumulates (overflow / precision care) while ``min`` / ``max`` are bitwise-exact in both
+    float and int paths.
     """
-    _skip_if_dtype_unsupported(dtype)
-    inp, out = _alloc_scan_input_out(dtype, N)
-    rng = np.random.default_rng(seed=1234)
     np_dt = _DTYPE_TO_NP[dtype]
-    host = _scan_host(rng, op, dtype, N)
-    _fill_field(inp, host)
-
-    qd_fn = getattr(qd.algorithms, f"exclusive_scan_{op}")
-    qd_fn(inp, out=out, scratch=_scan_scratch(inp))
-    got = out.to_numpy()
-
     if op == "add":
         if _is_float(dtype):
             ref = np.concatenate([[0.0], np.cumsum(host.astype(np.float64))[:-1]])
@@ -586,6 +577,19 @@ def _check_scan(op, dtype, N):
         np.testing.assert_array_equal(got, ref, err_msg=f"{dtype} scan_{op}(N={N})")
 
 
+def _check_scan(op, dtype, N):
+    """Run host ``exclusive_scan_<op>(arr)`` and verify against :func:`_verify_scan`."""
+    _skip_if_dtype_unsupported(dtype)
+    inp, out = _alloc_scan_input_out(dtype, N)
+    rng = np.random.default_rng(seed=1234)
+    host = _scan_host(rng, op, dtype, N)
+    _fill_field(inp, host)
+
+    qd_fn = getattr(qd.algorithms, f"exclusive_scan_{op}")
+    qd_fn(inp, out=out, scratch=_scan_scratch(inp))
+    _verify_scan(out.to_numpy(), op, dtype, N, host)
+
+
 @pytest.mark.parametrize("op", _SCAN_OPS)
 @pytest.mark.parametrize("N", _SCAN_SIZES)
 @pytest.mark.parametrize("dtype", _SCAN_DTYPES)
@@ -595,6 +599,46 @@ def test_exclusive_scan(op, dtype, N):
     across the full size sweep + dtype set. Unified across the three op variants; same overflow vs bitwise-exact
     handling as the reduce family."""
     _check_scan(op, dtype, N)
+
+
+@pytest.mark.parametrize("op", _SCAN_OPS)
+@pytest.mark.parametrize("N", [1, 255, 256, 257, 1024, 65537])
+@pytest.mark.parametrize("dtype", [qd.i32, qd.f32, qd.u64])
+@test_utils.test(arch=qd.gpu)
+def test_exclusive_scan_func_composition(op, dtype, N):
+    """``exclusive_scan_{add,min,max}_func`` compose at the **top level** of a user ``@qd.kernel`` with a
+    device-resident count (``count[0]``) and a compile-time ``DEPTH``, matching the host ``exclusive_scan_*`` entries.
+    This pins the graph-composable path qipc uses: the count flows as a device ``Expr`` while ``DEPTH`` fixes the
+    launch topology (out-of-place ``arr`` -> ``out`` with a caller-sized partials staircase in ``scratch``)."""
+    _skip_if_dtype_unsupported(dtype)
+    from quadrants.algorithms._reduce import _reduce_depth_for_n
+
+    depth = _reduce_depth_for_n(N)
+    rng = np.random.default_rng(seed=1234)
+    host = _scan_host(rng, op, dtype, N)
+
+    arr, out = _alloc_scan_input_out(dtype, N)
+    sdt = qd.u32 if dtype in _FOURBYTE_DTYPES else qd.u64
+    scratch = qd.field(sdt, shape=max(qd.algorithms.exclusive_scan_scratch_slots(N, depth), 1))
+    count = qd.field(qd.i32, shape=1)
+    _fill_field(arr, host)
+    count.from_numpy(np.asarray([N], dtype=np.int32))
+
+    if op == "add":
+        @qd.kernel
+        def run(DTYPE: qd.template(), DEPTH: qd.template()):
+            qd.algorithms.exclusive_scan_add_func(arr, out, scratch, count[0], DTYPE, DEPTH)
+    elif op == "min":
+        @qd.kernel
+        def run(DTYPE: qd.template(), DEPTH: qd.template()):
+            qd.algorithms.exclusive_scan_min_func(arr, out, scratch, count[0], DTYPE, DEPTH)
+    else:
+        @qd.kernel
+        def run(DTYPE: qd.template(), DEPTH: qd.template()):
+            qd.algorithms.exclusive_scan_max_func(arr, out, scratch, count[0], DTYPE, DEPTH)
+
+    run(dtype, depth)
+    _verify_scan(out.to_numpy(), op, dtype, N, host)
 
 
 @test_utils.test(arch=qd.gpu)
