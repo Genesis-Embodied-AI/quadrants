@@ -83,9 +83,16 @@ class Offloader {
     // same level. The final flush (no following for-loop) passes -1 (outside all loops). The frontend
     // restriction (gdw bodies / gdw-using kernels contain only for-loops + gdw whiles) guarantees a
     // pending serial never mixes statements from two different levels.
-    auto assemble_serial_statements = [&](int level_id = -1) {
+    // `sp_group_id` is the stream_parallel_group_id (qd.branch / qd.stream_parallel) of the for-loop that
+    // triggered the flush. The pending serial holds that loop's implicit bound/listgen computations, so it
+    // belongs to the same concurrency branch and must carry the same group id -- otherwise the bound task
+    // (group 0) would split the branch's contiguous run and defeat the CUDA graph builder's fork/join.
+    // The same frontend restriction that keeps a pending serial within one graph_do_while level (gdw
+    // bodies / regions contain only for-loops) keeps it within one branch, so this never mixes groups.
+    auto assemble_serial_statements = [&](int level_id = -1, int sp_group_id = 0) {
       if (!pending_serial_statements->body->statements.empty()) {
         pending_serial_statements->graph_do_while_level_id = level_id;
+        pending_serial_statements->stream_parallel_group_id = sp_group_id;
         root_block->insert(std::move(pending_serial_statements));
         pending_serial_statements = Stmt::make_typed<OffloadedStmt>(OffloadedStmt::TaskType::serial, arch, kernel);
         pending_serial_statements->grid_dim = 1;
@@ -97,7 +104,7 @@ class Offloader {
       auto &stmt = root_statements[i];
       // Note that stmt->parent is root_block, which doesn't contain stmt now.
       if (auto s = stmt->cast<RangeForStmt>(); s && !s->strictly_serialized) {
-        assemble_serial_statements(s->graph_do_while_level_id);
+        assemble_serial_statements(s->graph_do_while_level_id, s->stream_parallel_group_id);
         auto offloaded = Stmt::make_typed<OffloadedStmt>(OffloadedStmt::TaskType::range_for, arch, kernel);
         // offloaded->body is an empty block now.
         offloaded->grid_dim = config.saturating_grid_dim;
@@ -138,7 +145,7 @@ class Offloader {
         offloaded->loop_name = s->loop_name;
         root_block->insert(std::move(offloaded));
       } else if (auto st = stmt->cast<StructForStmt>()) {
-        assemble_serial_statements(st->graph_do_while_level_id);
+        assemble_serial_statements(st->graph_do_while_level_id, st->stream_parallel_group_id);
         emit_struct_for(st, root_block, config, st->mem_access_opt);
       } else if (auto st = stmt->cast<MeshForStmt>()) {
         assemble_serial_statements(st->graph_do_while_level_id);
