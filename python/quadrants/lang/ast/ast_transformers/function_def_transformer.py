@@ -34,7 +34,11 @@ from quadrants.lang.exception import (
 from quadrants.lang.matrix import MatrixType
 from quadrants.lang.stream import stream_parallel
 from quadrants.lang.struct import StructType
-from quadrants.lang.util import to_quadrants_type
+from quadrants.lang.util import (
+    is_data_oriented,
+    is_dataclass_instance,
+    to_quadrants_type,
+)
 from quadrants.types import annotations, buffer_view_type, ndarray_type, primitive_types
 
 
@@ -149,6 +153,21 @@ class FunctionDefTransformer:
                         field.type,
                         this_arg_features[field_idx],
                     )
+                elif isinstance(field.type, type) and getattr(field.type, "_data_oriented", False):
+                    # ``@qd.data_oriented`` field type inside a typed-dataclass kernel arg. The two patterns are
+                    # semantically incompatible at this layer: dataclass kernel-arg recursion uses annotations to
+                    # flatten leaf fields into per-leaf kernel args at compile time, but data_oriented containers don't
+                    # carry per-attribute type annotations — they need a value-driven walk
+                    # (``_predeclare_struct_ndarrays``), which only fires for ``qd.template()`` / ``qd.Tensor``
+                    # annotations. Rather than silently miscompile, raise a clear error pointing users to the
+                    # recommended pattern.
+                    raise QuadrantsSyntaxError(
+                        f"Kernel arg {argument_name!r}: field {field.name!r} has @qd.data_oriented type "
+                        f"{field.type.__name__!r}, which cannot be flattened into a typed-dataclass kernel arg. "
+                        f"Use ``{argument_name}: qd.template()`` for the outer kernel arg annotation instead; "
+                        f"data_oriented contents (including nested ndarrays) are walked at kernel-compile time via "
+                        f"the template path."
+                    )
                 else:
                     result, obj = FunctionDefTransformer._decl_and_create_variable(
                         ctx,
@@ -218,22 +237,31 @@ class FunctionDefTransformer:
         cache = ctx.global_context.ndarray_to_any_array
         launch_info = ctx.global_context.struct_ndarray_launch_info
 
-        def _walk_obj(obj, arg_idx, path):
-            if dataclasses.is_dataclass(obj) and not isinstance(obj, type):
+        # ``_seen`` set guards against attribute-graph cycles in user containers (e.g. Genesis ``sim.solver.sim is
+        # sim``). Without it this walker recurses infinitely on the back-edge and blows the Python stack at compile
+        # time. Tracked by ``id(obj)`` to avoid relying on ``__hash__`` for arbitrary user types.
+        def _walk_obj(obj, arg_idx, path, seen):
+            obj_id = id(obj)
+            if obj_id in seen:
+                return
+            seen.add(obj_id)
+            if is_dataclass_instance(obj):
                 for field in dataclasses.fields(obj):
                     child = getattr(obj, field.name)
                     if isinstance(child, _TensorClass):
                         child = child._unwrap()
                     if isinstance(child, _ndarray.Ndarray):
                         _register_ndarray(child, arg_idx, (*path, field.name))
-                    elif dataclasses.is_dataclass(child) and not isinstance(child, type):
-                        _walk_obj(child, arg_idx, (*path, field.name))
+                    elif is_dataclass_instance(child) or is_data_oriented(child):
+                        _walk_obj(child, arg_idx, (*path, field.name), seen)
             else:
                 for attr_name, attr_val in vars(obj).items():
                     if isinstance(attr_val, _TensorClass):
                         attr_val = attr_val._unwrap()
                     if isinstance(attr_val, _ndarray.Ndarray):
                         _register_ndarray(attr_val, arg_idx, (*path, attr_name))
+                    elif is_dataclass_instance(attr_val) or is_data_oriented(attr_val):
+                        _walk_obj(attr_val, arg_idx, (*path, attr_name), seen)
 
         def _register_ndarray(nd, arg_idx, attr_chain):
             key = id(nd)
@@ -268,10 +296,10 @@ class FunctionDefTransformer:
                 val = val._unwrap()
             if isinstance(val, _ndarray.Ndarray):
                 continue
-            if dataclasses.is_dataclass(val) and not isinstance(val, type):
-                _walk_obj(val, i, ())
+            if is_dataclass_instance(val):
+                _walk_obj(val, i, (), set())
             elif hasattr(val, "__dict__"):
-                _walk_obj(val, i, ())
+                _walk_obj(val, i, (), set())
 
     @staticmethod
     def _unwrap_tensor(data: Any) -> Any:
