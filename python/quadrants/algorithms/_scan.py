@@ -35,7 +35,7 @@ from quadrants.lang.kernel_impl import kernel
 from quadrants.lang.misc import loop_config
 from quadrants.lang.ops import bit_cast
 from quadrants.lang.simt import block as _block
-from quadrants.lang.simt.reductions import _bin_add, _bin_max, _bin_min
+from quadrants.lang.simt.reductions import _bin_add, _typed_max_identity, _typed_min_identity
 from quadrants.types.annotations import template
 from quadrants.types.primitive_types import i32, u32, u64
 
@@ -44,14 +44,18 @@ from ._reduce import (
 )
 from ._reduce import (
     BLOCK_DIM,
+    _OP_ADD,
+    _OP_BINS,
+    _OP_MAX,
+    _OP_MIN,
     _dtype_width_bytes,
-    _identity_bits,
     _level_partials_slots,
-    _max_identity,
-    _min_identity,
+    _reduce_depth_for_n,
     _reduce_pass,
     _reduce_pass_u64,
+    _reduce_phase,
     _scratch_dtype_for_width,
+    _typed_zero_expr,
     _validate_caller_scratch,
 )
 
@@ -321,28 +325,238 @@ def _exclusive_scan_inplace_u64(scratch, off: int, n: int, identity_bits: int, o
     )
 
 
-def exclusive_scan_scratch_slots(n: int) -> int:
-    """Number of scratch slots :func:`exclusive_scan_add` / ``_min`` / ``_max`` need to scan a length-``n``
-    input.
+def exclusive_scan_scratch_slots(n, depth: int = None) -> int:
+    """Number of scratch slots ``exclusive_scan_{add,min,max}`` / ``*_func`` need to scan a length-``n`` input.
 
-    Host- **and** kernel-callable (branch-free integer arithmetic over an unrolled fixed loop, no device round-trip):
-    pass a Python ``int`` to size an allocation, or call it inside a kernel on a device-read ``N`` to validate
-    against ``scratch.shape[0]`` on-device. The count is **dtype-width-independent** (slot count, not byte count):
-    4-byte scans stage through a ``u32`` scratch and 8-byte scans through a ``u64`` scratch, both of this many slots.
-    Allocate the matching-width buffer up front::
+    The out-of-place staircase stages the per-tile partials in scratch: pass 1 writes ``B0 = ceil(n / BLOCK_DIM)``
+    partials, then the in-place scan of those partials stacks ``ceil(B0 / BLOCK_DIM)`` more, ... for ``depth - 2``
+    further levels (the final tile-scan writes straight back). The count is **dtype-width-independent** (slot count,
+    not byte count): 4-byte scans stage through a ``u32`` scratch and 8-byte scans through a ``u64`` scratch, both of
+    this many slots::
 
         slots = qd.algorithms.exclusive_scan_scratch_slots(N)
-        scratch = qd.Tensor(qd.ndarray(qd.u32, shape=max(slots, 1)))   # u64 for i64 / u64 / f64 inputs
+        scratch = qd.field(qd.u32, shape=max(slots, 1))   # u64 for i64 / u64 / f64 inputs
 
-    Returns ``0`` for ``n <= BLOCK_DIM`` (the scan runs as a single-tile launch with no scratch).
+    Two ways to call it: **explicit depth** ``exclusive_scan_scratch_slots(n, D)`` is host- **and** kernel-callable
+    (branch-free arithmetic over the unrolled ``D`` loop); **auto depth** ``exclusive_scan_scratch_slots(n)`` derives
+    the minimal ``D`` from ``n`` (host-only). Returns ``0`` for ``depth <= 1`` (``n <= BLOCK_DIM``: a single tile
+    scans straight to ``out`` with no scratch).
     """
-    big = n > BLOCK_DIM
-    B0 = (n + BLOCK_DIM - 1) // BLOCK_DIM
-    return _scan_total_scratch_slots(B0, partials_cursor=B0) * big
+    if depth is None:
+        depth = _reduce_depth_for_n(n)
+    if depth <= 1:
+        return 0
+    cursor = (n + (BLOCK_DIM - 1)) // BLOCK_DIM  # B0 partials from pass 1
+    cur = cursor
+    for _ in range(depth - 2):
+        cur = (cur + (BLOCK_DIM - 1)) // BLOCK_DIM
+        cursor = cursor + cur
+    return cursor
 
 
-def _exclusive_scan(arr, *, out, op, identity_value, scratch):
-    """Internal driver shared by ``exclusive_scan_{add,min,max}``."""
+# ---------------------------------------------------------------------------------------------------------------------
+# Graph-composable exclusive scan: fixed-depth staircase of @qd.func phases (device-resident count, compile-time depth)
+# ---------------------------------------------------------------------------------------------------------------------
+#
+# Mirrors the reduce design (see ``_reduce.py``): the friendly host entries ``exclusive_scan_{add,min,max}`` validate +
+# size on the host and launch ``_exclusive_scan_kernel`` (one launch; the three-pass Blelloch scan is emitted *inside*
+# the kernel as a staircase of ``@qd.func`` phases). ``exclusive_scan_{add,min,max}_func`` are the graph-composable
+# counterparts: call them at the **top level** of your own ``@qd.kernel`` with a device-resident count ``n`` (i32 Expr)
+# and a compile-time ``DEPTH``, so one captured graph replays for any count ``<= BLOCK_DIM ** DEPTH``. The scan is
+# out-of-place (``arr`` -> ``out``); ``scratch`` stages the per-tile partials staircase (``bit_cast`` through ``u32`` /
+# ``u64``). Same op-tree as the host driver - see ``perso_hugh/doc/qipc/qipc_device_algos_design.md``.
+
+
+def _scan_identity(dtype, OP):
+    """Typed monoid-identity ``Expr`` for ``(OP, dtype)``: ``0`` for add, ``+extremum`` for min, ``-extremum`` for max.
+    Trace-time helper (like :func:`_typed_min_identity`), used to seed out-of-range lanes and lane 0's predecessor in
+    the block scans. Returns an ``Expr``, so its result is a valid unconditional first assignment inside a phase."""
+    ident = _typed_zero_expr(dtype)
+    if OP == _OP_MIN:
+        return _typed_min_identity(ident)
+    if OP == _OP_MAX:
+        return _typed_max_identity(ident)
+    return ident
+
+
+@_func
+def _scan_tile_phase(
+    src: template(),
+    dst: template(),
+    src_off: i32,
+    dst_off: i32,
+    n: i32,
+    DTYPE: template(),
+    WIDE: template(),
+    OP: template(),
+    OP_BIN: template(),
+    SRC_WIDE: template(),
+    DST_WIDE: template(),
+):
+    """Single-block exclusive scan of ``src[src_off:src_off+n]`` -> ``dst[dst_off:dst_off+n]`` (``n <= BLOCK_DIM``).
+
+    The recursion base / single-tile case. ``SRC_WIDE`` / ``DST_WIDE`` switch between the ``bit_cast``-through-``WIDE``
+    scratch path and the direct caller-tensor path. ``v`` is seeded with the monoid identity *before* the load branch
+    (Quadrants requires a variable's first assignment at the outer scope)."""
+    loop_config(block_dim=BLOCK_DIM)
+    for i in range(BLOCK_DIM):
+        ident = _scan_identity(DTYPE, OP)
+        v = ident
+        if i < n:
+            if static(SRC_WIDE):
+                v = bit_cast(src[src_off + i], DTYPE)
+            else:
+                v = src[src_off + i]
+        prefix = _block.exclusive_scan(v, BLOCK_DIM, OP_BIN, ident, DTYPE)
+        if i < n:
+            if static(DST_WIDE):
+                dst[dst_off + i] = bit_cast(prefix, WIDE)
+            else:
+                dst[dst_off + i] = prefix
+
+
+@_func
+def _scan_downsweep_phase(
+    src: template(),
+    prefixes: template(),
+    dst: template(),
+    src_off: i32,
+    prefixes_off: i32,
+    dst_off: i32,
+    n: i32,
+    total_threads: i32,
+    DTYPE: template(),
+    WIDE: template(),
+    OP: template(),
+    OP_BIN: template(),
+    SRC_WIDE: template(),
+    DST_WIDE: template(),
+):
+    """Per-tile exclusive scan of ``src[src_off:src_off+n]`` plus the scanned per-tile prefix
+    ``prefixes[prefixes_off + block_id]``, written to ``dst[dst_off:dst_off+n]``.
+
+    ``prefixes`` is always the ``WIDE`` scratch (the scanned partials from a lower level). ``src`` / ``dst`` switch
+    between the caller tensors (``SRC_WIDE`` / ``DST_WIDE`` False) and the ``WIDE`` scratch (in-place partials scan).
+    ``dst`` may alias ``src``; the per-thread read-modify-write and ``block.exclusive_scan``'s internal barrier keep a
+    block's tile consistent, and blocks write disjoint tiles."""
+    loop_config(block_dim=BLOCK_DIM)
+    for i in range(total_threads):
+        tid = i % BLOCK_DIM
+        block_id = i // BLOCK_DIM
+        ident = _scan_identity(DTYPE, OP)
+        v = ident
+        if i < n:
+            if static(SRC_WIDE):
+                v = bit_cast(src[src_off + i], DTYPE)
+            else:
+                v = src[src_off + i]
+        tile_prefix = _block.exclusive_scan(v, BLOCK_DIM, OP_BIN, ident, DTYPE)
+        block_prefix = bit_cast(prefixes[prefixes_off + block_id], DTYPE)
+        if i < n:
+            scanned = OP_BIN(block_prefix, tile_prefix)
+            if static(DST_WIDE):
+                dst[dst_off + i] = bit_cast(scanned, WIDE)
+            else:
+                dst[dst_off + i] = scanned
+
+
+def _emit_scan_inplace(buf, off, n, levels_remaining, DTYPE, WIDE, OP, OP_BIN):
+    """Emit a fixed-depth in-place exclusive scan of ``buf[off:off+n]`` (``WIDE`` scratch) at kernel-compile time.
+
+    The partials-scan half of the staircase (Blelloch pass 2): reduce ``buf[off:off+n]`` into ``buf[off+n:...]``,
+    recursively scan those partials, then downsweep back. ``n`` / ``off`` flow as ``Expr`` s; ``levels_remaining`` is a
+    Python int so the depth is a compile-time constant (the base is reached by exhausting it, not by inspecting ``n``).
+    Reuses :func:`_reduce_phase` for the tile-reduce rung."""
+    if levels_remaining == 0:
+        _scan_tile_phase(buf, buf, off, off, n, DTYPE, WIDE, OP, OP_BIN, True, True)
+        return
+    B = (n + (BLOCK_DIM - 1)) // BLOCK_DIM
+    part_off = off + n
+    _reduce_phase(buf, buf, off, part_off, n, B * BLOCK_DIM, DTYPE, WIDE, OP, OP_BIN, True, True)
+    _emit_scan_inplace(buf, part_off, B, levels_remaining - 1, DTYPE, WIDE, OP, OP_BIN)
+    _scan_downsweep_phase(buf, buf, buf, off, part_off, off, n, B * BLOCK_DIM, DTYPE, WIDE, OP, OP_BIN, True, True)
+
+
+def _emit_scan(arr, out, scratch, n, DEPTH, DTYPE, WIDE, OP):
+    """Emit a fixed-depth (``DEPTH``) out-of-place exclusive scan of ``arr[0:n]`` into ``out[0:n]`` at compile time.
+
+    ``DEPTH == 1`` (``n <= BLOCK_DIM``) is a single tile straight to ``out``; otherwise the three-pass scan: pass 1
+    tile-reduce ``arr`` -> ``scratch[0:B0]`` (:func:`_reduce_phase`), pass 2 in-place scan of those ``B0`` partials
+    (:func:`_emit_scan_inplace`, ``DEPTH - 2`` further levels), pass 3 downsweep ``arr`` + ``scratch[0:B0]`` -> ``out``.
+    An over-specified ``DEPTH`` bottoms out at length-1 partials that scan as identity rungs."""
+    OP_BIN = _OP_BINS[OP]  # resolve the binary op at trace time so the @qd.func phases receive it as a template
+    if DEPTH == 1:
+        _scan_tile_phase(arr, out, 0, 0, n, DTYPE, WIDE, OP, OP_BIN, False, False)
+        return
+    B0 = (n + (BLOCK_DIM - 1)) // BLOCK_DIM
+    _reduce_phase(arr, scratch, 0, 0, n, B0 * BLOCK_DIM, DTYPE, WIDE, OP, OP_BIN, False, True)
+    _emit_scan_inplace(scratch, 0, B0, DEPTH - 2, DTYPE, WIDE, OP, OP_BIN)
+    _scan_downsweep_phase(arr, scratch, out, 0, 0, 0, n, B0 * BLOCK_DIM, DTYPE, WIDE, OP, OP_BIN, False, False)
+
+
+@_func
+def exclusive_scan_add_func(
+    arr: template(), out: template(), scratch: template(), n: i32, DTYPE: template(), DEPTH: template()
+):
+    """Graph-composable ``out[i] = sum(arr[0:i])`` (exclusive prefix sum) - the @qd.func form of
+    :func:`exclusive_scan_add`.
+
+    Call at the **top level** of your own ``@qd.kernel`` (e.g. a qipc ``graph=True`` parent); never nest it in ordinary
+    runtime ``for`` / ``if`` / ``while`` control flow. ``n`` is a device ``Expr`` (the live count); ``DTYPE`` is the
+    element dtype (pass it explicitly - an ndarray kernel arg has no in-kernel ``.dtype``); ``DEPTH`` is the compile-time
+    phase count - the scan handles any count ``<= BLOCK_DIM ** DEPTH``. ``out`` must be distinct from ``arr``; size
+    ``scratch`` via :func:`exclusive_scan_scratch_slots` ``(capacity_n, DEPTH)``."""
+    WIDE = _scratch_dtype_for_width(_dtype_width_bytes(DTYPE))  # compile-time (from the DTYPE template)
+    _emit_scan(arr, out, scratch, n, DEPTH, DTYPE, WIDE, _OP_ADD)
+
+
+@_func
+def exclusive_scan_min_func(
+    arr: template(), out: template(), scratch: template(), n: i32, DTYPE: template(), DEPTH: template()
+):
+    """Graph-composable ``out[i] = min(arr[0:i])`` (identity ``+extremum`` from ``DTYPE``) - the @qd.func form of
+    :func:`exclusive_scan_min`. See :func:`exclusive_scan_add_func` for the top-level-call contract and arg semantics."""
+    WIDE = _scratch_dtype_for_width(_dtype_width_bytes(DTYPE))
+    _emit_scan(arr, out, scratch, n, DEPTH, DTYPE, WIDE, _OP_MIN)
+
+
+@_func
+def exclusive_scan_max_func(
+    arr: template(), out: template(), scratch: template(), n: i32, DTYPE: template(), DEPTH: template()
+):
+    """Graph-composable ``out[i] = max(arr[0:i])`` (identity ``-extremum`` from ``DTYPE``) - the @qd.func form of
+    :func:`exclusive_scan_max`. See :func:`exclusive_scan_add_func` for the top-level-call contract and arg semantics."""
+    WIDE = _scratch_dtype_for_width(_dtype_width_bytes(DTYPE))
+    _emit_scan(arr, out, scratch, n, DEPTH, DTYPE, WIDE, _OP_MAX)
+
+
+@kernel
+def _exclusive_scan_kernel(
+    arr: template(),
+    out: template(),
+    scratch: template(),
+    n: i32,
+    DTYPE: template(),
+    OP: template(),
+    DEPTH: template(),
+):
+    """Host-launch wrapper for the scan staircase: a thin ``@qd.kernel`` dispatching to the matching
+    ``exclusive_scan_{add,min,max}_func`` at top level. ``n`` is a plain runtime count (the host knows ``N``). Private -
+    the public host entries are :func:`exclusive_scan_add` / ``_min`` / ``_max``."""
+    if static(OP == _OP_MIN):
+        exclusive_scan_min_func(arr, out, scratch, n, DTYPE, DEPTH)
+    elif static(OP == _OP_MAX):
+        exclusive_scan_max_func(arr, out, scratch, n, DTYPE, DEPTH)
+    else:
+        exclusive_scan_add_func(arr, out, scratch, n, DTYPE, DEPTH)
+
+
+def _exclusive_scan_host(arr, *, out, scratch, OP):
+    """Shared host entry for ``exclusive_scan_{add,min,max}``: validate, size, and launch :func:`_exclusive_scan_kernel`.
+
+    Keeps the friendly host contract (dtype / shape / no-in-place / scratch validation up front, depth + ``N`` derived
+    from ``arr.shape``) while the device work is the single-launch graph-composable staircase. ``N == 1`` is handled by
+    the staircase itself (a single tile writes the identity to ``out[0]``)."""
     if not hasattr(arr, "shape") or len(arr.shape) != 1:
         raise TypeError(f"device exclusive scan expects a 1-D input tensor; got shape {getattr(arr, 'shape', None)}")
     if not hasattr(out, "shape") or out.shape != arr.shape:
@@ -357,7 +571,6 @@ def _exclusive_scan(arr, *, out, op, identity_value, scratch):
             "pass a distinct `out` buffer (the API is designed around "
             "caller-supplied out, see qipc_device_algos_design.md)"
         )
-
     dtype = arr.dtype
     if dtype not in _SUPPORTED_DTYPES:
         raise NotImplementedError(
@@ -365,129 +578,11 @@ def _exclusive_scan(arr, *, out, op, identity_value, scratch):
             f"{[d for d in _SUPPORTED_DTYPES]}); see design doc dtype matrix"
         )
     width = _dtype_width_bytes(dtype)
-
     N = arr.shape[0]
-    identity_bits = _identity_bits(identity_value, dtype)
-
-    if N == 0:
-        return
-    if N == 1:
-        if width == 4:
-            _scan_trivial_n1(out, identity_bits, dtype)
-        else:
-            _scan_trivial_n1_u64(out, identity_bits, dtype)
-        return
-
-    if N <= BLOCK_DIM:
-        if width == 4:
-            _scan_single_tile_input_to_out(arr, out, N, identity_bits, op, dtype)
-        else:
-            _scan_single_tile_input_to_out_u64(arr, out, N, identity_bits, op, dtype)
-        return
-
-    B0 = (N + BLOCK_DIM - 1) // BLOCK_DIM
-    # Reserve scratch slots: scratch[0:B0] for the top-level partials. The recursive scan sub-allocates from
-    # scratch[B0:] for any deeper levels. Use ``_scan_total_scratch_slots`` to account for the *full* recursion
-    # up front, so we refuse the call before pass 1 instead of partway through pass 2.
-    needed = _scan_total_scratch_slots(B0, partials_cursor=B0)
-    _validate_caller_scratch("exclusive_scan", N, scratch, needed, _scratch_dtype_for_width(width))
-
-    reduce_pass_kernel = _reduce_pass if width == 4 else _reduce_pass_u64
-    scan_inplace_driver = _exclusive_scan_inplace_u32 if width == 4 else _exclusive_scan_inplace_u64
-    pass3_kernel = _scan_pass3 if width == 4 else _scan_pass3_u64
-
-    # Pass 1: tile-reduce arr -> scratch[0:B0]
-    reduce_pass_kernel(
-        arr,
-        scratch,
-        0,
-        0,
-        N,
-        B0 * BLOCK_DIM,
-        identity_bits,
-        op,
-        dtype,
-        False,
-        True,
-    )
-
-    # Pass 2: exclusive-scan scratch[0:B0] in place (recursive if B0 > BLOCK_DIM).
-    scan_inplace_driver(scratch, 0, B0, identity_bits, op, dtype, B0)
-
-    # Pass 3: arr + scratch[0:B0] -> out
-    pass3_kernel(
-        arr,
-        0,
-        scratch,
-        0,
-        out,
-        0,
-        N,
-        B0 * BLOCK_DIM,
-        identity_bits,
-        op,
-        dtype,
-        False,
-        False,
-    )
-
-
-@kernel
-def _scan_single_tile_input_to_out(
-    src: template(),
-    dst: template(),
-    n_valid: i32,
-    identity_bits: u32,
-    op: template(),
-    dtype: template(),
-):
-    """Fast path for ``N <= BLOCK_DIM`` (4-byte dtype): one block reads the input tile, exclusive-scans, writes
-    ``out``. No scratch needed."""
-    loop_config(block_dim=BLOCK_DIM)
-    for i in range(BLOCK_DIM):
-        identity = bit_cast(identity_bits, dtype)
-        v = identity
-        if i < n_valid:
-            v = src[i]
-        prefix = _block.exclusive_scan(v, BLOCK_DIM, op, identity, dtype)
-        if i < n_valid:
-            dst[i] = prefix
-
-
-@kernel
-def _scan_single_tile_input_to_out_u64(
-    src: template(),
-    dst: template(),
-    n_valid: i32,
-    identity_bits: u64,
-    op: template(),
-    dtype: template(),
-):
-    """8-byte sibling of :func:`_scan_single_tile_input_to_out`."""
-    loop_config(block_dim=BLOCK_DIM)
-    for i in range(BLOCK_DIM):
-        identity = bit_cast(identity_bits, dtype)
-        v = identity
-        if i < n_valid:
-            v = src[i]
-        prefix = _block.exclusive_scan(v, BLOCK_DIM, op, identity, dtype)
-        if i < n_valid:
-            dst[i] = prefix
-
-
-@kernel
-def _scan_trivial_n1(dst: template(), identity_bits: u32, dtype: template()):
-    """N == 1 path (4-byte dtype): write the identity to out[0]. Exclusive scan of a single element is just the
-    identity."""
-    for _ in range(1):
-        dst[0] = bit_cast(identity_bits, dtype)
-
-
-@kernel
-def _scan_trivial_n1_u64(dst: template(), identity_bits: u64, dtype: template()):
-    """8-byte sibling of :func:`_scan_trivial_n1`."""
-    for _ in range(1):
-        dst[0] = bit_cast(identity_bits, dtype)
+    depth = _reduce_depth_for_n(N)
+    required = exclusive_scan_scratch_slots(N, depth)
+    _validate_caller_scratch("exclusive_scan", N, scratch, required, _scratch_dtype_for_width(width))
+    _exclusive_scan_kernel(arr, out, scratch, N, dtype, OP, depth)
 
 
 def exclusive_scan_add(arr, out, scratch):
@@ -502,13 +597,14 @@ def exclusive_scan_add(arr, out, scratch):
             ``N <= BLOCK_DIM``). There is no module-level shared scratch; a too-small buffer raises
             :class:`InsufficientScratchError`.
 
-    The implementation is the three-pass Blelloch-style scan built on ``block.exclusive_scan``. Recurses on the
-    partials buffer when ``N`` is large enough that the partials count exceeds ``BLOCK_DIM``.
+    A three-pass Blelloch-style scan built on ``block.exclusive_scan``, emitted as one kernel launch (a fixed-depth
+    staircase that recurses on the partials buffer when ``N > BLOCK_DIM``). To compose the scan inside your own
+    ``graph=True`` parent kernel, call :func:`exclusive_scan_add_func` directly.
 
     See the design doc at ``perso_hugh/doc/qipc/qipc_device_algos_design.md`` for the algorithmic background and
     the ``bit_cast``-into-scratch scheme.
     """
-    _exclusive_scan(arr, out=out, op=_bin_add, identity_value=0, scratch=scratch)
+    _exclusive_scan_host(arr, out=out, scratch=scratch, OP=_OP_ADD)
 
 
 def exclusive_scan_min(arr, out, scratch):
@@ -522,17 +618,19 @@ def exclusive_scan_min(arr, out, scratch):
     The monoid identity is derived from ``arr.dtype`` automatically (largest representable value: ``+inf`` for
     floats, ``INT{32,64}_MAX`` for signed ints, ``UINT{32,64}_MAX`` for unsigned). Mirrors the
     ``block.exclusive_min`` / ``subgroup.exclusive_min_tiled`` contract: the typed scan primitives do not take an
-    identity argument because (op, dtype) fixes it.
+    identity argument because (op, dtype) fixes it. Call :func:`exclusive_scan_min_func` to compose inside your own
+    ``graph=True`` kernel.
     """
-    _exclusive_scan(arr, out=out, op=_bin_min, identity_value=_min_identity(arr.dtype), scratch=scratch)
+    _exclusive_scan_host(arr, out=out, scratch=scratch, OP=_OP_MIN)
 
 
 def exclusive_scan_max(arr, out, scratch):
     """Compute ``out[i] = max(arr[0:i])`` (exclusive prefix max) on the device. Mirror of
     :func:`exclusive_scan_min` with ``max`` and the dtype's *negative* extremum (``-inf`` for floats,
-    ``INT{32,64}_MIN`` for signed ints, ``0`` for unsigned), again derived from ``arr.dtype`` automatically.
+    ``INT{32,64}_MIN`` for signed ints, ``0`` for unsigned), again derived from ``arr.dtype`` automatically. Call
+    :func:`exclusive_scan_max_func` to compose inside your own ``graph=True`` kernel.
     """
-    _exclusive_scan(arr, out=out, op=_bin_max, identity_value=_max_identity(arr.dtype), scratch=scratch)
+    _exclusive_scan_host(arr, out=out, scratch=scratch, OP=_OP_MAX)
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -626,7 +724,10 @@ def _emit_exclusive_scan_add(buf, off, n, levels_remaining: int):
 
 __all__ = [
     "exclusive_scan_add",
+    "exclusive_scan_add_func",
     "exclusive_scan_max",
+    "exclusive_scan_max_func",
     "exclusive_scan_min",
+    "exclusive_scan_min_func",
     "exclusive_scan_scratch_slots",
 ]
