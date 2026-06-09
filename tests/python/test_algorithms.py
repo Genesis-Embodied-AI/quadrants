@@ -445,6 +445,67 @@ def test_reduce_rejects_unsupported_dtype():
         qd.algorithms.reduce_add(inp, out=out, scratch=qd.field(qd.u32, shape=1))
 
 
+@pytest.mark.parametrize("op", _REDUCE_OPS)
+@pytest.mark.parametrize("N", [1, 255, 256, 257, 1024, 65537])
+@pytest.mark.parametrize("dtype", [qd.i32, qd.f32, qd.u64])
+@test_utils.test(arch=qd.gpu)
+def test_reduce_func_composition(op, dtype, N):
+    """``reduce_{add,min,max}_func`` compose at the **top level** of a user ``@qd.kernel`` with a device-resident
+    count (``count[0]``) and a compile-time ``DEPTH``, matching the host ``reduce_*`` entries. This pins the
+    graph-composable path qipc uses: the count flows as a device ``Expr`` while ``DEPTH`` fixes the launch topology.
+    """
+    _skip_if_dtype_unsupported(dtype)
+    from quadrants.algorithms._reduce import _reduce_depth_for_n
+
+    depth = _reduce_depth_for_n(N)
+    rng = np.random.default_rng(seed=7)
+    host = _reduce_host(rng, op, dtype, N)
+
+    arr = qd.field(dtype, shape=N)
+    out = qd.field(dtype, shape=1)
+    sdt = qd.u32 if dtype in _FOURBYTE_DTYPES else qd.u64
+    scratch = qd.field(sdt, shape=max(qd.algorithms.reduce_scratch_slots(N, depth), 1))
+    count = qd.field(qd.i32, shape=1)
+    _fill_field(arr, host)
+    count.from_numpy(np.asarray([N], dtype=np.int32))
+
+    if op == "add":
+        @qd.kernel
+        def run(DTYPE: qd.template(), DEPTH: qd.template()):
+            qd.algorithms.reduce_add_func(arr, out, scratch, count[0], DTYPE, DEPTH)
+    elif op == "min":
+        @qd.kernel
+        def run(DTYPE: qd.template(), DEPTH: qd.template()):
+            qd.algorithms.reduce_min_func(arr, out, scratch, count[0], DTYPE, DEPTH)
+    else:
+        @qd.kernel
+        def run(DTYPE: qd.template(), DEPTH: qd.template()):
+            qd.algorithms.reduce_max_func(arr, out, scratch, count[0], DTYPE, DEPTH)
+
+    run(dtype, depth)
+    got = out.to_numpy()[0]
+
+    if op == "add":
+        if _is_float(dtype):
+            expected = float(np.sum(host.astype(np.float64)))
+            rtol, atol = (_F32_REDUCE_RTOL, _F32_REDUCE_ATOL) if dtype == qd.f32 else (_F64_RTOL, _F64_ATOL)
+            assert math.isclose(got, expected, rel_tol=rtol, abs_tol=atol), f"{dtype} N={N}: {got} vs {expected}"
+        else:
+            mask = (1 << 64) - 1 if dtype == qd.u64 else None
+            ref = int(np.sum(host.astype(np.uint64 if dtype == qd.u64 else np.int64)))
+            got_int = int(got)
+            if mask is not None:
+                ref &= mask
+                got_int &= mask
+            assert got_int == ref, f"{dtype} N={N}: {got_int} vs {ref}"
+    else:
+        expected = host.min() if op == "min" else host.max()
+        if _is_float(dtype):
+            assert got == pytest.approx(expected, abs=1e-6 if dtype == qd.f32 else 1e-12)
+        else:
+            assert int(got) == int(expected), f"{dtype} reduce_{op}_func(N={N}): {got} vs {expected}"
+
+
 def _alloc_scan_input_out(dtype, N):
     inp = qd.field(dtype, shape=N)
     out = qd.field(dtype, shape=N)
