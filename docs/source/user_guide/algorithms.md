@@ -1,6 +1,6 @@
 # Algorithms
 
-Device-wide algorithms are primitives that consume and produce whole arrays, executed as one or more kernel launches under the hood. They sit one tier above block and subgroup primitives: they *use* `block.reduce`, `block.exclusive_scan`, `block.radix_rank_match_atomic_or`, and `subgroup` reductions internally, and rely on the kernel-launch boundary (plus `atomic_add` in a few places) for cross-block synchronization rather than any in-kernel grid-scope barrier. Most are called from host (Python) code, not from inside a kernel. Some also ship a composable `@qd.func` form (the `_func` suffix) you can call at the **top level** of your own kernel so the op fuses with your other phases into one compiled kernel / captured graph - currently the device-wide reduce (`reduce_{add,min,max}_func`), the exclusive scan (`exclusive_scan_{add,min,max}_func`), stream compaction (`select_func`), reduce-by-key (`reduce_by_key_add_func`), and the LSB radix sort (`radix_sort_func`). These `_func` forms take the live element count as a **device-resident** `Expr` and a compile-time recursion `DEPTH`, so one captured graph replays for every count up to the depth's capacity; the LSB radix sort additionally has no host Python wrapper at all (it ships only as the `radix_sort` `@qd.kernel` + `radix_sort_func` `@qd.func`).
+Device-wide algorithms are primitives that consume and produce whole arrays, executed as one or more kernel launches under the hood. They sit one tier above block and subgroup primitives: they *use* `block.reduce`, `block.exclusive_scan`, `block.radix_rank_match_atomic_or`, and `subgroup` reductions internally, and rely on the kernel-launch boundary (plus `atomic_add` in a few places) for cross-block synchronization rather than any in-kernel grid-scope barrier. Most are called from host (Python) code, not from inside a kernel. Some also ship a composable `@qd.func` form (the `_func` suffix) you can call at the **top level** of your own kernel so the op fuses with your other phases into one compiled kernel / captured graph - currently the device-wide reduce (`reduce_{add,min,max}_func`), the exclusive scan (`exclusive_scan_{add,min,max}_func`), stream compaction (`select_func`), reduce-by-key (`reduce_by_key_add_func`), and the LSB radix sort (`radix_sort_func`). These `_func` forms take the live element count as a **device-resident** `Expr` and a compile-time recursion `DEPTH` (the radix sort calls it `LOG256_MAX_N`), so one captured graph replays for every count up to the depth's capacity. Every algorithm also has a friendly host (Python) entry that validates inputs, derives the depth, and launches the work standalone; the host entry is the right choice unless you specifically need to fuse the op into your own captured graph.
 
 ## What's available
 
@@ -12,7 +12,7 @@ Device-wide algorithms are primitives that consume and produce whole arrays, exe
 | `qd.algorithms.exclusive_scan_{add,min,max}_func(arr, out, scratch, n, DTYPE, DEPTH)` | Same scan as a `@qd.func`, to compose at the top level of your own kernel (device-resident count `n`, compile-time `DEPTH`). | yes  | yes\*  | yes    | yes\* |
 | `qd.algorithms.select(arr, flags, out, num_out, scratch)`     | Stream compaction: copy `arr[i]` to a dense prefix of `out` for every `flags[i] == 1` (`flags` must be exactly 0/1). Friendly host entry. | yes  | yes\*  | yes    | yes\* |
 | `qd.algorithms.select_func(arr, flags, out, num_out, scratch, n, DEPTH)` | Same compaction as a `@qd.func`, to compose at the top level of your own kernel (device-resident count `n`, compile-time `DEPTH`; no `DTYPE` - the scatter is dtype-agnostic). | yes  | yes\*  | yes    | yes\* |
-| `qd.algorithms.radix_sort(keys, tmp_keys, values, tmp_values, scratch, N, HAS_VALUES, END_BIT, LOG256_MAX_N)` | LSB radix sort (32-bit / 64-bit scalar keys, optional key-value) as a host-launchable `@qd.kernel`. | yes  | yes\*  | yes    | yes\* |
+| `qd.algorithms.radix_sort(keys, tmp_keys, scratch, *, values=None, tmp_values=None, end_bit=None, log256_max_n=None)` | LSB radix sort (32-bit / 64-bit scalar keys, optional key-value). Friendly host entry (derives passes / depth / device-`N`, validates scratch). | yes  | yes\*  | yes    | yes\* |
 | `qd.algorithms.radix_sort_func(keys, tmp_keys, values, tmp_values, scratch, N, KEY_DTYPE, HAS_VALUES, END_BIT, LOG256_MAX_N)` | Same sort as a `@qd.func`, to compose at the top level of your own kernel. | yes  | yes\*  | yes    | yes\* |
 | `qd.algorithms.reduce_by_key_add(keys_in, values_in, keys_out, values_out, num_runs, scratch)` | Collapse each consecutive run of equal keys into `(key, sum_of_values)`. Friendly host entry. | yes  | yes\*  | yes    | yes\* |
 | `qd.algorithms.reduce_by_key_add_func(keys_in, values_in, keys_out, values_out, num_runs, scratch, n, VALUE_DTYPE, DEPTH)` | Same reduce-by-key as a `@qd.func`, to compose at the top level of your own kernel (device-resident count `n`, compile-time `DEPTH`; `VALUE_DTYPE` only for the `values_out` zero-init). | yes  | yes\*  | yes    | yes\* |
@@ -229,12 +229,10 @@ Scratch footprint: `select_scratch_slots(N)` ≈ `N` u32 slots (one write index 
 
 ### `qd.algorithms.radix_sort(...)` / `radix_sort_func(...)`
 
-Ascending in-place LSB radix sort over a 1-D tensor of 32-bit or 64-bit scalar keys (`u32` / `i32` / `f32` / `u64` / `i64` / `f64`), with optional lock-step permutation of a `values` tensor (key-value sort). It ships as two callables that share one body:
+Ascending in-place LSB radix sort over a 1-D tensor of 32-bit or 64-bit scalar keys (`u32` / `i32` / `f32` / `u64` / `i64` / `f64`), with optional lock-step permutation of a `values` tensor (key-value sort). Same design B split as the other algorithms - a friendly host entry plus a composable func:
 
-- `radix_sort(keys, tmp_keys, values, tmp_values, scratch, N, HAS_VALUES, END_BIT, LOG256_MAX_N)` - a `@qd.kernel`, launched from the host.
-- `radix_sort_func(keys, tmp_keys, values, tmp_values, scratch, N, KEY_DTYPE, HAS_VALUES, END_BIT, LOG256_MAX_N)` - a `@qd.func`, called at the **top level** of your own `@qd.kernel` (the qipc path) so the sort composes with your other phases into one compiled kernel / captured graph. The kernel simply wraps the func, deriving `KEY_DTYPE` from its `keys` argument.
-
-Unlike the other algorithms there is no host Python wrapper: both are device code. `N` is passed as a 0-d `i32` ndarray (the count lives **on-device**, so one captured graph replays for any count `<= 256 ** LOG256_MAX_N`), the compile-time flags (`HAS_VALUES`, `END_BIT`, `LOG256_MAX_N`) are passed explicitly, and **for a keys-only sort you pass `keys` / `tmp_keys` again in the `values` / `tmp_values` slots** as placeholders (every value access is `HAS_VALUES`-guarded). There is **no** host-side validation or scratch-sufficiency check.
+- `radix_sort(keys, tmp_keys, scratch, *, values=None, tmp_values=None, end_bit=None, log256_max_n=None)` - the friendly **host (Python) entry**. Validates inputs, derives the pass count / scan depth / twiddle and the device-resident count, validates `scratch`, and launches the sort as one capturable kernel chain. Pass **both** `values` and `tmp_values` for a key-value sort, or neither for keys-only; `end_bit` defaults to the key width and `log256_max_n` to the minimal depth for `N`.
+- `radix_sort_func(keys, tmp_keys, values, tmp_values, scratch, N, KEY_DTYPE, HAS_VALUES, END_BIT, LOG256_MAX_N)` - a `@qd.func`, called at the **top level** of your own `@qd.kernel` (the qipc path) so the sort composes with your other phases into one compiled kernel / captured graph. Here `N` is a 0-d `i32` ndarray (the count lives **on-device**, so one captured graph replays for any count `<= 256 ** LOG256_MAX_N`), the compile-time flags (`KEY_DTYPE`, `HAS_VALUES`, `END_BIT`, `LOG256_MAX_N`) are passed explicitly, and **for a keys-only sort you pass `keys` / `tmp_keys` again in the `values` / `tmp_values` slots** as placeholders (every value access is `HAS_VALUES`-guarded). The func does **no** host-side validation or scratch-sufficiency check (a DtoH would defeat graph capture).
 
 ```python
 import quadrants as qd
@@ -244,22 +242,17 @@ keys     = qd.field(qd.f32, shape=N)
 tmp_keys = qd.field(qd.f32, shape=N)   # workspace; contents on return are garbage
 # ... fill keys ...
 
-D = 1                                  # scan depth: smallest D with 256**D >= N
-while 256 ** D < N:
-    D += 1
-scratch = qd.Tensor(qd.ndarray(qd.u32, shape=max(qd.algorithms.radix_sort_scratch_slots(N, D), 1)))
-nd = qd.ndarray(qd.i32, shape=())      # device-resident element count
-nd.fill(N)
+scratch = qd.field(qd.u32, shape=max(qd.algorithms.radix_sort_scratch_slots(N), 1))
 
-# Keys-only: keys / tmp_keys double as the value placeholders, HAS_VALUES=False, END_BIT=32 (f32 width).
-qd.algorithms.radix_sort(keys, tmp_keys, keys, tmp_keys, scratch, nd, False, 32, D)
+# Keys-only: the host entry derives end_bit (32 for f32), depth, and the device-resident N for you.
+qd.algorithms.radix_sort(keys, tmp_keys, scratch)
 # keys is now ascending; tmp_keys holds intermediate state.
 
-# Key-value sort:
+# Key-value sort: pass both values and tmp_values.
 values     = qd.field(qd.i32, shape=N)
 tmp_values = qd.field(qd.i32, shape=N)
 # ... fill values (e.g. with original indices) ...
-qd.algorithms.radix_sort(keys, tmp_keys, values, tmp_values, scratch, nd, True, 32, D)
+qd.algorithms.radix_sort(keys, tmp_keys, scratch, values=values, tmp_values=tmp_values)
 # keys ascending; values permuted so values[k] corresponds to keys[k].
 ```
 
@@ -284,18 +277,21 @@ Arguments:
 
 - `keys`: 1-D tensor. Sorted **in place**. For `radix_sort`, pass `qd.field`, `qd.ndarray`, or `qd.Tensor`.
 - `tmp_keys`: ping-pong workspace, same shape & dtype as `keys`, distinct buffer. Contents on return are intermediate and should be considered garbage.
-- `values`, `tmp_values`: the key-value buffers (any supported scalar dtype, independent of the key dtype, same shape as `keys`, distinct from each other). For a keys-only sort pass `keys` / `tmp_keys` here as placeholders and set `HAS_VALUES=False`.
-- `scratch`: required caller-owned 1-D `qd.u32` tensor used as the per-pass tile-histogram + scan workspace. Size it with `qd.algorithms.radix_sort_scratch_slots(N, LOG256_MAX_N)` (the footprint is dtype-independent — tile histograms are `u32` regardless of key width). See [Scratch space](#scratch-space).
-- `N`: 0-d `i32` ndarray (`shape=()`) holding the element count **on-device**.
-- `KEY_DTYPE` (`radix_sort_func` only): the key element dtype (one of the supported set). The `radix_sort` kernel derives this from `keys` for you; the func takes it explicitly because an `ndarray` kernel argument exposes no `.dtype` inside the kernel.
-- `HAS_VALUES`: compile-time bool — whether `values` / `tmp_values` are real buffers (`True`) or placeholders (`False`).
-- `END_BIT`: compile-time number of low key bits to sort. Use the full key width (32 for 4-byte keys, 64 for 8-byte). Must be a positive multiple of `8` that yields an even number of digit passes so the result lands back in `keys`. Pass a smaller value when the high bits are known to be zero (e.g. `16` for keys `< 2**16`) to save passes.
-- `LOG256_MAX_N`: compile-time scan depth `D`; the emitted sort handles any element count `<= 256**D`, so a graph captured for a given `D` is reusable across all such counts. Size `scratch` with the same `D`.
+- `scratch`: required caller-owned 1-D `qd.u32` tensor used as the per-pass tile-histogram + scan workspace. Size it with `qd.algorithms.radix_sort_scratch_slots(N[, log256_max_n])` (the footprint is dtype-independent — tile histograms are `u32` regardless of key width). The host `radix_sort` validates it for you and raises `InsufficientScratchError` if it is too small. See [Scratch space](#scratch-space).
+- `values`, `tmp_values` (`radix_sort` keyword args; positional for the func): the key-value buffers (any supported scalar dtype, independent of the key dtype, same shape as `keys`, distinct from each other). For the host `radix_sort`, pass **both** (key-value) or **neither** (keys-only); for `radix_sort_func`, pass `keys` / `tmp_keys` here as placeholders for a keys-only sort and set `HAS_VALUES=False`.
+- `end_bit` (`radix_sort` keyword; `END_BIT` template for the func): number of low key bits to sort. Defaults (host) to the full key width (32 for 4-byte keys, 64 for 8-byte). Must be a positive multiple of `8` that yields an even number of digit passes so the result lands back in `keys`. Pass a smaller value when the high bits are known to be zero (e.g. `16` for keys `< 2**16`) to save passes.
+- `log256_max_n` (`radix_sort` keyword; `LOG256_MAX_N` template for the func): scan depth `D`; the emitted sort handles any element count `<= 256**D`, so a graph captured for a given `D` is reusable across all such counts. The host `radix_sort` defaults it to the minimal depth for `N`; size `scratch` with the same `D`.
+
+Func-only arguments (passed explicitly to `radix_sort_func`; the host `radix_sort` derives them):
+
+- `N`: 0-d `i32` ndarray (`shape=()`) holding the element count **on-device**. The host entry builds and fills this from `keys.shape[0]`.
+- `KEY_DTYPE`: the key element dtype (one of the supported set). The host entry reads this off `keys`; the func takes it explicitly because an `ndarray` kernel argument exposes no `.dtype` inside the kernel.
+- `HAS_VALUES`: compile-time bool — whether `values` / `tmp_values` are real buffers (`True`) or placeholders (`False`). The host entry sets it from whether you passed `values`.
 
 Constraints:
 
 - **Dtypes:** the key dtype and value dtype are each independently one of `{qd.u32, qd.i32, qd.f32, qd.u64, qd.i64, qd.f64}`. Narrower scalar dtypes (`qd.i16`, `qd.f16`, ...) and struct dtypes raise `NotImplementedError` at compile time. 8-byte keys run 8 digit passes per sort; 4-byte keys run 4. Scratch footprint is the same for both widths (the per-tile histograms are `u32` regardless).
-- **Aliasing:** `keys` and `tmp_keys` must be distinct buffers; same for real `values` / `tmp_values`. (No host check enforces this — passing the same buffer corrupts the sort.)
+- **Aliasing:** `keys` and `tmp_keys` must be distinct buffers; same for real `values` / `tmp_values`. The host `radix_sort` rejects aliased buffers with a `ValueError`; `radix_sort_func` does not check (passing the same buffer corrupts the sort).
 - **Stability:** stable sort - equal keys keep their original input order in the output.
 - **NaN handling (f32):** matches `numpy.sort` (NaNs land at the end). NaNs are not tested separately and should not be relied on for ordering invariants beyond `numpy.sort`.
 
@@ -383,7 +379,7 @@ Scratch footprint: `reduce_by_key_scratch_slots(N)` ≈ `1.004 * N` u32 slots. S
 
 ### `qd.algorithms.parallel_sort(keys, values=None)`
 
-> **Deprecated.** New code should call the LSB radix sort `qd.algorithms.radix_sort` (a `@qd.kernel`) or `qd.algorithms.radix_sort_func` (a `@qd.func`) instead. The radix sort is asymptotically `O(N log_radix N)` rather than `O(N log^2 N)`, is **stable** (odd-even merge sort is not), supports 32-bit and 64-bit scalar keys across CUDA / AMDGPU / Vulkan / Metal, and accepts `qd.field`, `qd.ndarray`, and `qd.Tensor` (`parallel_sort` is field-only). The only thing `parallel_sort` is competitive on is very small N (~4K and below); even there the radix path is comparable on modern hardware. To migrate, allocate `tmp_keys` of the same shape and dtype as `keys` plus a `u32` `scratch` buffer, then call `radix_sort` (see its section above for the full signature). `parallel_sort` is kept for one release cycle for backward compat and will be removed thereafter.
+> **Deprecated.** New code should call the LSB radix sort `qd.algorithms.radix_sort` (the host entry) or `qd.algorithms.radix_sort_func` (a `@qd.func`) instead. The radix sort is asymptotically `O(N log_radix N)` rather than `O(N log^2 N)`, is **stable** (odd-even merge sort is not), supports 32-bit and 64-bit scalar keys across CUDA / AMDGPU / Vulkan / Metal, and accepts `qd.field`, `qd.ndarray`, and `qd.Tensor` (`parallel_sort` is field-only). The only thing `parallel_sort` is competitive on is very small N (~4K and below); even there the radix path is comparable on modern hardware. To migrate, allocate `tmp_keys` of the same shape and dtype as `keys` plus a `u32` `scratch` buffer, then call `radix_sort` (see its section above for the full signature). `parallel_sort` is kept for one release cycle for backward compat and will be removed thereafter.
 
 In-place sort. Reorders `keys` ascending; if `values` is provided, applies the same permutation to `values` (key-value sort). Both arguments must be 1-D `qd.field` - `parallel_sort` reaches into `snode.ptr.offset` internally, so `ndarray` is **not** supported and will fail at compile time with an `AttributeError`.
 
