@@ -30,6 +30,7 @@ functional API is preferred for new code - see ``docs/source/user_guide/algorith
 """
 
 from quadrants.lang.impl import static
+from quadrants.lang.kernel_impl import func as _func
 from quadrants.lang.kernel_impl import kernel
 from quadrants.lang.misc import loop_config
 from quadrants.lang.ops import bit_cast
@@ -532,6 +533,95 @@ def exclusive_scan_max(arr, out, scratch):
     ``INT{32,64}_MIN`` for signed ints, ``0`` for unsigned), again derived from ``arr.dtype`` automatically.
     """
     _exclusive_scan(arr, out=out, op=_bin_max, identity_value=_max_identity(arr.dtype), scratch=scratch)
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# Internal: u32 / add fixed-depth exclusive-scan staircase (shared with the radix-sort histogram scan)
+# ---------------------------------------------------------------------------------------------------------------------
+#
+# The host-launched ``exclusive_scan_{add,min,max}`` above branch on ``N = arr.shape[0]`` on the *host* and launch
+# ``template()`` kernels, so they cannot be composed at the top level of a ``@qd.kernel(graph=True)`` parent driven by a
+# device-resident count. This block is the graph-composable building block they lack: a fixed-depth staircase of
+# ``@qd.func`` phases (``u32`` / add, in place) emitted at kernel-compile time, so ``n`` flows as a device ``Expr`` while
+# the recursion depth is a compile-time Python int (constant launch topology). ``radix_sort`` reuses it for its
+# digit-histogram scan; it is kept private until a public graph-composable scan entry point lands. See
+# ``perso_hugh/doc/qipc/qipc_device_algos_design.md``.
+
+
+@_func
+def _graph_scan_reduce(buf: template(), in_off: i32, out_off: i32, n: i32, total_threads: i32):
+    """Tile-reduce ``buf[in_off:in_off+n]`` -> per-tile sums ``buf[out_off:out_off+ceil(n/BLOCK_DIM)]`` (u32 / add).
+
+    One tile per block; out-of-range lanes contribute ``0``. ``@qd.func`` phase of :func:`_emit_exclusive_scan_add` -
+    its single top-level ``for`` becomes its own offloaded GPU launch (and graph node) when inlined into a kernel.
+    """
+    loop_config(block_dim=BLOCK_DIM)
+    for i in range(total_threads):
+        tid = i % BLOCK_DIM
+        block_id = i // BLOCK_DIM
+        v = u32(0)
+        if i < n:
+            v = buf[in_off + i]
+        agg = _block.reduce_add(v, BLOCK_DIM, u32)
+        if tid == 0:
+            buf[out_off + block_id] = agg
+
+
+@_func
+def _graph_scan_base(buf: template(), off: i32, n_valid: i32):
+    """Single-block in-place exclusive scan of ``buf[off:off+n_valid]`` (``n_valid <= BLOCK_DIM``); recursion base of
+    the staircase. u32 / add specialization of :func:`_scan_block_inplace_u32`."""
+    loop_config(block_dim=BLOCK_DIM)
+    for i in range(BLOCK_DIM):
+        v = u32(0)
+        if i < n_valid:
+            v = buf[off + i]
+        prefix = _block.exclusive_scan(v, BLOCK_DIM, _bin_add, u32(0), u32)
+        if i < n_valid:
+            buf[off + i] = prefix
+
+
+@_func
+def _graph_scan_downsweep(buf: template(), off: i32, part_off: i32, n: i32, total_threads: i32):
+    """Downsweep: per-tile exclusive scan of ``buf[off:off+n]`` plus the scanned per-tile prefix at
+    ``buf[part_off + block_id]``, written back in place (u32 / add, ``src == dst == buf``)."""
+    loop_config(block_dim=BLOCK_DIM)
+    for i in range(total_threads):
+        tid = i % BLOCK_DIM
+        block_id = i // BLOCK_DIM
+        v = u32(0)
+        if i < n:
+            v = buf[off + i]
+        tile_prefix = _block.exclusive_scan(v, BLOCK_DIM, _bin_add, u32(0), u32)
+        block_prefix = buf[part_off + block_id]
+        if i < n:
+            buf[off + i] = block_prefix + tile_prefix
+
+
+def _emit_exclusive_scan_add(buf, off, n, levels_remaining: int):
+    """Emit a *fixed-depth* in-place ``u32`` / add exclusive scan of ``buf[off:off+n]`` at kernel-compile time.
+
+    Plain-Python helper run during kernel tracing (the scan counterpart of radix sort's ``_emit_pass``): it makes the
+    ``@qd.func`` calls (:func:`_graph_scan_reduce` / :func:`_graph_scan_base` / :func:`_graph_scan_downsweep`) that each
+    become a top-level offloaded GPU launch - and a node in the enclosing captured graph. Call it at the **top level**
+    of a kernel (a ``while qd.graph_do_while(...)`` body also counts as top level); never nest it in ordinary runtime
+    ``for`` / ``if`` / ``while`` control flow, which would demote the phase loops and collapse the per-phase grid-wide
+    barriers.
+
+    ``off`` / ``n`` flow as Quadrants ``Expr`` s (runtime), so the offsets track the actual count and one captured
+    graph serves every count ``<= 256 ** (levels_remaining + 1)``; ``levels_remaining`` is a Python int, so the
+    recursion depth - and hence the launch topology - is a compile-time constant. The base case is reached by
+    exhausting ``levels_remaining`` (not by inspecting ``n``), giving a constant depth. The per-tile partials are
+    stacked in ``buf`` above ``n``.
+    """
+    if levels_remaining == 0:
+        _graph_scan_base(buf, off, n)
+        return
+    B = (n + (BLOCK_DIM - 1)) // BLOCK_DIM
+    part_off = off + n
+    _graph_scan_reduce(buf, off, part_off, n, B * BLOCK_DIM)
+    _emit_exclusive_scan_add(buf, part_off, B, levels_remaining - 1)
+    _graph_scan_downsweep(buf, off, part_off, n, B * BLOCK_DIM)
 
 
 __all__ = [

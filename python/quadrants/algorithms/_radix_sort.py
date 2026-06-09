@@ -59,12 +59,12 @@ from quadrants.lang.kernel_impl import kernel
 from quadrants.lang.misc import loop_config
 from quadrants.lang.ops import atomic_add, bit_cast
 from quadrants.lang.simt import block as _block
-from quadrants.lang.simt.reductions import _bin_add
 from quadrants.types import ndarray as ndarray_ann
 from quadrants.types.annotations import template
 from quadrants.types.primitive_types import f32, f64, i32, i64, u32, u64
 
 from ._reduce import BLOCK_DIM, InsufficientScratchError
+from ._scan import _emit_exclusive_scan_add
 
 RADIX_BITS = 8
 """Bits per digit. Matches the ``block.radix_rank_match_atomic_or`` constraint that ``block_dim == 1 << radix_bits``;
@@ -168,60 +168,6 @@ def _radix_hist(keys: template(), scratch: template(), n: i32, num_blocks: i32, 
 
 
 @_func
-def _radix_reduce(scratch: template(), in_off: i32, out_off: i32, n: i32, total_threads: i32):
-    """Tile-reduce ``scratch[in_off : in_off+n]`` -> per-tile sums ``scratch[out_off : out_off+ceil(n/BLOCK_DIM)]``.
-
-    u32 / add specialization of ``_reduce._reduce_pass``. One tile per block; out-of-range lanes contribute ``0``.
-    """
-    loop_config(block_dim=BLOCK_DIM)
-    for i in range(total_threads):
-        tid = i % BLOCK_DIM
-        block_id = i // BLOCK_DIM
-        v = u32(0)
-        if i < n:
-            v = scratch[in_off + i]
-        agg = _block.reduce_add(v, BLOCK_DIM, u32)
-        if tid == 0:
-            scratch[out_off + block_id] = agg
-
-
-@_func
-def _radix_base_scan(scratch: template(), off: i32, n_valid: i32):
-    """Single-block in-place exclusive scan of ``scratch[off : off+n_valid]`` (``n_valid <= BLOCK_DIM``).
-
-    u32 / add specialization of ``_scan._scan_block_inplace_u32``. Recursion base of the scan staircase.
-    """
-    loop_config(block_dim=BLOCK_DIM)
-    for i in range(BLOCK_DIM):
-        v = u32(0)
-        if i < n_valid:
-            v = scratch[off + i]
-        prefix = _block.exclusive_scan(v, BLOCK_DIM, _bin_add, u32(0), u32)
-        if i < n_valid:
-            scratch[off + i] = prefix
-
-
-@_func
-def _radix_downsweep(scratch: template(), off: i32, part_off: i32, n: i32, total_threads: i32):
-    """Downsweep: per-tile exclusive scan of ``scratch[off:off+n]`` + the scanned per-tile prefix at
-    ``scratch[part_off + block_id]``, written back in place.
-
-    u32 / add specialization of ``_scan._scan_pass3`` with ``src == dst == scratch``.
-    """
-    loop_config(block_dim=BLOCK_DIM)
-    for i in range(total_threads):
-        tid = i % BLOCK_DIM
-        block_id = i // BLOCK_DIM
-        v = u32(0)
-        if i < n:
-            v = scratch[off + i]
-        tile_prefix = _block.exclusive_scan(v, BLOCK_DIM, _bin_add, u32(0), u32)
-        block_prefix = scratch[part_off + block_id]
-        if i < n:
-            scratch[off + i] = block_prefix + tile_prefix
-
-
-@_func
 def _radix_scatter(
     keys_in: template(),
     keys_out: template(),
@@ -286,25 +232,6 @@ def _radix_scatter(
                     values_out[dst] = values_in[i]
 
 
-def _emit_scan_staircase(scratch, off, n, levels_remaining: int):
-    """Emit a *fixed-depth* in-place exclusive scan of ``scratch[off : off+n]`` (digit-major histograms).
-
-    Plain-Python helper run at kernel-compile time: it makes the ``@qd.func`` calls that become offloaded launches.
-    ``off`` / ``n`` flow as Quadrants ``Expr``s (runtime), so the scratch offsets are tight to the actual ``N``;
-    ``levels_remaining`` is a Python int (``= log256_max_n - 1``) so the recursion depth - and hence the launch
-    topology - is a compile-time constant, independent of ``N``. The ``n <= BLOCK_DIM`` base case is reached by
-    exhausting ``levels_remaining`` rather than by inspecting ``n`` (forcing a constant depth).
-    """
-    if levels_remaining == 0:
-        _radix_base_scan(scratch, off, n)
-        return
-    B = (n + (BLOCK_DIM - 1)) // BLOCK_DIM
-    part_off = off + n
-    _radix_reduce(scratch, off, part_off, n, B * BLOCK_DIM)
-    _emit_scan_staircase(scratch, part_off, B, levels_remaining - 1)
-    _radix_downsweep(scratch, off, part_off, n, B * BLOCK_DIM)
-
-
 def _emit_pass(keys, tmp_keys, values, tmp_values, scratch, n, num_blocks, hist_len, p, KEY_DTYPE, HAS_VALUES,
                KEY_WIDTH, LOG256_MAX_N):
     """Emit one digit pass (histogram -> scan staircase -> scatter) at compile time.
@@ -312,6 +239,10 @@ def _emit_pass(keys, tmp_keys, values, tmp_values, scratch, n, num_blocks, hist_
     Pure-Python (runs during kernel compilation): ``p`` is a Python int from the static pass loop, so the src/dst
     (and value) ping-pong is selected here in plain Python and the field handles are passed straight into the
     ``@qd.func`` calls - no field-handle assignment in the compiled body (which the compiler frontend rejects).
+
+    The histogram scan reuses the shared graph-composable staircase :func:`._scan._emit_exclusive_scan_add` (``u32`` /
+    add, in place, fixed depth). ``LOG256_MAX_N - 1`` reduce levels makes the digit-major ``scratch[0:hist_len]`` scan a
+    compile-time-constant launch topology, independent of the device-resident ``N``.
     """
     bit_start = p * RADIX_BITS
     src = keys if (p % 2 == 0) else tmp_keys
@@ -319,7 +250,7 @@ def _emit_pass(keys, tmp_keys, values, tmp_values, scratch, n, num_blocks, hist_
     vsrc = values if (p % 2 == 0) else tmp_values
     vdst = tmp_values if (p % 2 == 0) else values
     _radix_hist(src, scratch, n, num_blocks, bit_start, KEY_WIDTH)
-    _emit_scan_staircase(scratch, 0, hist_len, LOG256_MAX_N - 1)
+    _emit_exclusive_scan_add(scratch, 0, hist_len, LOG256_MAX_N - 1)
     _radix_scatter(src, dst, vsrc, vdst, scratch, n, num_blocks, bit_start, KEY_DTYPE, HAS_VALUES, KEY_WIDTH)
 
 
