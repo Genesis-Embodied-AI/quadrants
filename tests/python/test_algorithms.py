@@ -718,6 +718,50 @@ def test_select_basic(dtype, N):
     np.testing.assert_array_equal(got, expected, err_msg=f"{dtype} select(N={N})")
 
 
+@pytest.mark.parametrize("N", [1, 255, 256, 257, 1024, 65537])
+@pytest.mark.parametrize("dtype", [qd.i32, qd.f32, qd.u64])
+@test_utils.test(arch=qd.gpu)
+def test_select_func_composition(dtype, N):
+    """``select_func`` composes at the **top level** of a user ``@qd.kernel`` with a device-resident count
+    (``count[0]``) and a compile-time ``DEPTH``, matching the host ``select`` entry. This pins the graph-composable
+    compaction path qipc uses: the count flows as a device ``Expr`` while ``DEPTH`` fixes the launch topology (the
+    scan-of-flags staircase + scatter + count all emit inside one kernel)."""
+    _skip_if_dtype_unsupported(dtype)
+    from quadrants.algorithms._reduce import _reduce_depth_for_n
+
+    depth = _reduce_depth_for_n(N)
+    rng = np.random.default_rng(seed=1234)
+    np_dt = _DTYPE_TO_NP[dtype]
+    if dtype in (qd.f32, qd.f64):
+        host = rng.uniform(-1.0, 1.0, size=N).astype(np_dt)
+    elif dtype in (qd.u32, qd.u64):
+        host = rng.integers(0, 10000, size=N, dtype=np_dt)
+    else:
+        host = rng.integers(-10000, 10000, size=N, dtype=np_dt)
+    flags_host = (rng.random(N) < 0.3).astype(np.int32)
+    expected = host[flags_host == 1]
+    expected_n = int(flags_host.sum())
+
+    arr = qd.field(dtype, shape=N)
+    flags = qd.field(qd.i32, shape=N)
+    out = qd.field(dtype, shape=max(N, 1))
+    num_out = qd.field(qd.i32, shape=1)
+    scratch = qd.field(qd.u32, shape=max(qd.algorithms.select_scratch_slots(N), 1))
+    count = qd.field(qd.i32, shape=1)
+    _fill_field(arr, host)
+    _fill_field(flags, flags_host)
+    count.from_numpy(np.asarray([N], dtype=np.int32))
+
+    @qd.kernel
+    def run(DEPTH: qd.template()):
+        qd.algorithms.select_func(arr, flags, out, num_out, scratch, count[0], DEPTH)
+
+    run(depth)
+    got_n = int(num_out.to_numpy()[0])
+    assert got_n == expected_n, f"{dtype} N={N}: got count {got_n}, expected {expected_n}"
+    np.testing.assert_array_equal(out.to_numpy()[:got_n], expected, err_msg=f"{dtype} select_func(N={N})")
+
+
 @pytest.mark.parametrize("N", _SELECT_STRUCT_SIZES)
 @pytest.mark.parametrize("nfields", _SELECT_STRUCT_NFIELDS)
 @test_utils.test(arch=qd.gpu)
