@@ -497,12 +497,6 @@ def test_sym_eig_above_cap_raises():
 
 
 def _test_sym_eig_sort_order(n, dt):
-    if n == 3 and qd.lang.impl.current_cfg().arch == qd.vulkan:
-        # The closed-form 3×3 path (`_sym_eig3x3` → Eigen3 `computeDirect`) segfaults during SPIR-V codegen on the
-        # cluster's Vulkan stack (genesis-v1_23 image). Same code runs cleanly on amddesktop's Vulkan, so this is a
-        # pre-existing driver / SDK quirk, not a regression from sort-order changes — n=2 and n>=4 work on all
-        # backends. Track separately if it matters; remove this skip once the underlying Vulkan codegen is fixed.
-        pytest.skip("cluster Vulkan segfaults in _sym_eig3x3 SPIR-V codegen (pre-existing)")
     np_dt = np.float32 if dt == qd.f32 else np.float64
     rng = np.random.default_rng(0x501D + n)
     Q, _ = np.linalg.qr(rng.standard_normal((n, n)))

@@ -51,11 +51,10 @@ Symmetric eigendecomposition — for a real symmetric `A`, returns `(eigenvalues
 
 Eigenvalues come back sorted **ascending** (`eigvals[0] <= eigvals[1] <= ...`) for every shape, with column `i` of `eigenvectors` being the eigenvector for `eigvals[i]`. This matches NumPy / LAPACK's `eigh` (note that `qd.svd` sorts σ *descending*, also matching its NumPy / LAPACK counterpart — the cross-op disagreement is the standard convention, not an inconsistency).
 
-Three implementations dispatch by size:
+Two implementations dispatch by size:
 
 - **2×2** — closed-form via the trace / determinant identity.
-- **3×3** — closed-form Cardano method (Eigen3 `computeDirect`).
-- **4×4 .. 12×12** — cyclic Jacobi: 12 sweeps of Givens rotations zeroing every off-diagonal `(p, q)` pair, with `Q := Q · J` accumulated as eigenvectors. ~6 digits of accuracy in `f32`, ~12 digits in `f64`.
+- **3×3 .. 12×12** — cyclic Jacobi: 12 sweeps of Givens rotations zeroing every off-diagonal `(p, q)` pair, with `Q := Q · J` accumulated as eigenvectors. ~6 digits of accuracy in `f32`, ~12 digits in `f64`.
 
 Calling at `N >= 13` raises (`"Symmetric eigen solver currently supports sizes up to 12×12."`).
 
@@ -180,10 +179,10 @@ The rotation factor `R` from `A = R @ S` is the rigid alignment that minimises `
 ## Shapes, performance, portability
 
 - **Compile time.**
-  - **Closed-form ops** (`qd.svd`, `qd.sym_eig` 2×2/3×3, `qd.polar_decompose`, `qd.eig`, `qd.solve`) — each call is unrolled per thread into a moderately large block of straight-line code; compile time is generally fine at these shapes.
-  - **Cyclic Jacobi** (`qd.sym_eig` ≥4×4, `qd.make_spd`) — the per-pair Givens step is unrolled but the outer sweep loop is a runtime `range`, so compile time is roughly proportional to `N²` (number of `(p, q)` pairs per sweep) rather than `N² · MAX_SWEEPS`. Concrete numbers on CUDA + LLVM 22.1: ~3 s at N=4, ~30 s at N=6, ~3 min at N=9, ~2 min at N=12 (yes, faster than N=9 — the per-pair body is dominated by `if static(p < q):` filtering).
+  - **Closed-form ops** (`qd.svd`, `qd.sym_eig` 2×2, `qd.polar_decompose`, `qd.eig`, `qd.solve`) — each call is unrolled per thread into a moderately large block of straight-line code; compile time is generally fine at these shapes.
+  - **Cyclic Jacobi** (`qd.sym_eig` ≥3×3, `qd.make_spd`) — the per-pair Givens step is unrolled but the outer sweep loop is a runtime `range`, so compile time is roughly proportional to `N²` (number of `(p, q)` pairs per sweep) rather than `N² · MAX_SWEEPS`. Concrete numbers on CUDA + LLVM 22.1: ~3 s at N=4, ~30 s at N=6, ~3 min at N=9, ~2 min at N=12 (yes, faster than N=9 — the per-pair body is dominated by `if static(p < q):` filtering).
 - **Runtime cost.** Cyclic Jacobi at N=12 with `MAX_SWEEPS=12` does roughly `12 · 66 · 12 ≈ 9500` per-thread arithmetic ops — fast on any modern GPU, but if you're calling it inside a hot kernel for a million elements that's still ~10 GFLOP-equivalent. For larger matrices use a different algorithm (or call quadrants `linalg.*` for a sparse-aware path).
-- **Backend portability.** All ops compile cleanly on CUDA, AMDGPU, Vulkan, and Metal — they are pure register arithmetic with no SIMT primitives, so there is no codegen split. The `qd.sym_eig` ≥4×4 / `qd.make_spd` paths have been verified at N ∈ {4,5,6,9,12} × {f32, f64} × five symmetric-matrix factories on CUDA + Vulkan + AMDGPU; Metal coverage is via the same parametrized tests.
+- **Backend portability.** All ops compile cleanly on CUDA, AMDGPU, Vulkan, and Metal — they are pure register arithmetic with no SIMT primitives, so there is no codegen split. The `qd.sym_eig` ≥3×3 / `qd.make_spd` paths have been verified at N ∈ {3,4,5,6,9,12} × {f32, f64} × five symmetric-matrix factories on CUDA + Vulkan + AMDGPU; Metal coverage is via the same parametrized tests.
 
 ## Related
 
