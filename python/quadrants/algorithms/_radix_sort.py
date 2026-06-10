@@ -64,6 +64,7 @@ from quadrants.lang.kernel_impl import kernel
 from quadrants.lang.misc import loop_config
 from quadrants.lang.ops import atomic_add, bit_cast
 from quadrants.lang.simt import block as _block
+from quadrants._tensor_wrapper import Tensor
 from quadrants.types import ndarray as ndarray_ann
 from quadrants.types.annotations import template
 from quadrants.types.primitive_types import f32, f64, i32, i64, u32, u64
@@ -316,12 +317,13 @@ def radix_sort_func(
 
 @kernel
 def _radix_sort_kernel(
-    keys: template(),
-    tmp_keys: template(),
-    values: template(),
-    tmp_values: template(),
-    scratch: template(),
+    keys: Tensor,
+    tmp_keys: Tensor,
+    values: Tensor,
+    tmp_values: Tensor,
+    scratch: Tensor,
     N: ndarray_ann(dtype=i32, ndim=0),
+    KEY_DTYPE: template(),
     HAS_VALUES: template(),
     END_BIT: template(),
     LOG256_MAX_N: template(),
@@ -330,12 +332,13 @@ def _radix_sort_kernel(
     :func:`radix_sort`).
 
     A ``@qd.func`` cannot be launched from the host, so this kernel just calls the func at top level, which inlines it
-    and keeps every phase as its own offload. ``N`` is a 0-d ``i32`` ndarray holding the element count on-device (the
-    friendly :func:`radix_sort` host builds and fills it); ``HAS_VALUES`` / ``END_BIT`` / ``LOG256_MAX_N`` are the
-    compile-time params it derives. The key dtype is read off the (real field / ndarray) ``keys`` argument and
-    forwarded as the func's ``KEY_DTYPE``.
+    and keeps every phase as its own offload. The buffers are ``qd.Tensor`` params so the host entry can pass either a
+    ``qd.field`` or a ``qd.ndarray`` (the qipc path); an ndarray kernel arg has no in-kernel ``.dtype``, so the key
+    dtype rides along as the ``KEY_DTYPE`` template (the host derives it from the buffer argument). ``N`` is a 0-d
+    ``i32`` ndarray holding the element count on-device (the friendly :func:`radix_sort` host builds and fills it);
+    ``HAS_VALUES`` / ``END_BIT`` / ``LOG256_MAX_N`` are the compile-time params it derives.
     """
-    radix_sort_func(keys, tmp_keys, values, tmp_values, scratch, N, keys.dtype, HAS_VALUES, END_BIT, LOG256_MAX_N)
+    radix_sort_func(keys, tmp_keys, values, tmp_values, scratch, N, KEY_DTYPE, HAS_VALUES, END_BIT, LOG256_MAX_N)
 
 
 def _validate_radix_inputs(keys, tmp_keys, values, tmp_values, end_bit):
@@ -380,7 +383,7 @@ def _validate_radix_inputs(keys, tmp_keys, values, tmp_values, end_bit):
             )
 
 
-def radix_sort(keys, tmp_keys, scratch, *, values=None, tmp_values=None, end_bit=None, log256_max_n=None):
+def radix_sort(keys, tmp_keys, scratch, *, values=None, tmp_values=None, end_bit=None, log256_max_n=None, n=None):
     """Sort ``keys`` in place with an LSB radix sort (the friendly host entry).
 
     Validates inputs, derives the compile-time params (pass count / scan depth / twiddle) and the device-resident
@@ -399,22 +402,31 @@ def radix_sort(keys, tmp_keys, scratch, *, values=None, tmp_values=None, end_bit
             key-value pairs, or neither for keys-only. Permuted in lock-step with the keys.
         end_bit: low key bits to sort - a positive multiple of 8, ``<=`` the key width. Defaults to the full key width.
         log256_max_n: scan depth ``D`` (the emitted sort handles any count ``<= 256 ** D``). Defaults to the minimal
-            depth for ``N = keys.shape[0]``. Pass an explicit ``D`` (sized against a provisioned upper bound) to keep a
+            depth for ``N`` (see ``n``). Pass an explicit ``D`` (sized against a provisioned upper bound) to keep a
             fixed launch topology across calls with varying counts; size ``scratch`` with the same ``D``.
+        n: element count to sort. Defaults to ``keys.shape[0]`` (sort the whole buffer). Pass an explicit ``n`` to sort
+            only the first ``n`` slots of oversized reusable buffers (the qipc ``padded_N`` idiom); the trailing slots
+            are left untouched. Must satisfy ``0 <= n <= keys.shape[0]``.
     """
     _validate_radix_inputs(keys, tmp_keys, values, tmp_values, end_bit)
-    N = keys.shape[0]
+    capacity = keys.shape[0]
+    N = capacity if n is None else int(n)
+    if N < 0 or N > capacity:
+        raise ValueError(f"radix_sort n={N} out of range for keys of length {capacity}")
+    key_dtype = keys.dtype
     if log256_max_n is None:
         log256_max_n = _min_log256_for_n(N)
     if end_bit is None:
-        end_bit = _key_width_bits(keys.dtype)
+        end_bit = _key_width_bits(key_dtype)
     has_values = values is not None
     values_arg = values if has_values else keys
     tmp_values_arg = tmp_values if has_values else tmp_keys
     _validate_caller_scratch("radix_sort", N, scratch, radix_sort_scratch_slots(N, log256_max_n), u32)
     n_dev = ndarray(i32, shape=())
     n_dev.fill(N)
-    _radix_sort_kernel(keys, tmp_keys, values_arg, tmp_values_arg, scratch, n_dev, has_values, end_bit, log256_max_n)
+    _radix_sort_kernel(
+        keys, tmp_keys, values_arg, tmp_values_arg, scratch, n_dev, key_dtype, has_values, end_bit, log256_max_n
+    )
 
 
 def _min_log256_for_n(n: int) -> int:
