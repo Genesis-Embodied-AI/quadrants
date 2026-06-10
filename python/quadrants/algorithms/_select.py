@@ -101,7 +101,7 @@ def _select_count_phase(
         num_out[0] = last_idx + last_inc
 
 
-def _emit_select_scan(flags, scratch, n, DEPTH):
+def _emit_select_scan(flags, scratch, n, LOG256_MAX_N):
     """Emit the exclusive prefix-sum of ``flags`` (0/1 counts) into the ``u32`` index slice ``scratch[0:n]`` at
     kernel-compile time, with the per-tile partials staircase stacked at ``scratch[n:]``.
 
@@ -109,15 +109,15 @@ def _emit_select_scan(flags, scratch, n, DEPTH):
     indices and the partials live in one ``u32`` buffer (indices at offset 0, partials at offset ``n``), so it can't
     reuse ``_emit_scan`` directly (that takes a separate ``out``). ``flags`` is read-only (the scatter / count phases
     re-read it), so the scan is out-of-place into ``scratch``. ``DTYPE`` is ``i32`` (flags-as-counts) staged through a
-    ``u32`` (``WIDE``) scratch. ``n`` flows as an ``Expr``; ``DEPTH`` is the compile-time phase count.
+    ``u32`` (``WIDE``) scratch. ``n`` flows as an ``Expr``; ``LOG256_MAX_N`` is the compile-time phase count.
     """
-    if DEPTH == 1:
+    if LOG256_MAX_N == 1:
         _scan_tile_phase(flags, scratch, 0, 0, n, i32, u32, _OP_ADD, _bin_add, False, True)
         return
     B0 = (n + (BLOCK_DIM - 1)) // BLOCK_DIM
     part_off = n  # indices occupy scratch[0:n]; the level-0 partials start right above them
     _reduce_phase(flags, scratch, 0, part_off, n, B0 * BLOCK_DIM, i32, u32, _OP_ADD, _bin_add, False, True)
-    _emit_scan_inplace(scratch, part_off, B0, DEPTH - 2, i32, u32, _OP_ADD, _bin_add)
+    _emit_scan_inplace(scratch, part_off, B0, LOG256_MAX_N - 2, i32, u32, _OP_ADD, _bin_add)
     _scan_downsweep_phase(flags, scratch, scratch, 0, part_off, 0, n, B0 * BLOCK_DIM, i32, u32, _OP_ADD, _bin_add, False, True)
 
 
@@ -129,18 +129,18 @@ def select_func(
     num_out: template(),
     scratch: template(),
     n: i32,
-    DEPTH: template(),
+    LOG256_MAX_N: template(),
 ):
     """Graph-composable stream compaction - the ``@qd.func`` form of :func:`select`.
 
     Call at the **top level** of your own ``@qd.kernel`` (e.g. a qipc ``graph=True`` parent); never nest it in
     ordinary runtime ``for`` / ``if`` / ``while`` control flow. ``n`` is the live element count as a device ``Expr``;
-    ``DEPTH`` is the compile-time phase count - select handles any count ``<= BLOCK_DIM ** DEPTH``. ``flags`` is an
-    ``i32`` 0/1 mask the same length as ``arr``; selected ``arr[i]`` are packed into a dense prefix of ``out`` (size
-    ``out`` for the all-selected case) and the count lands in ``num_out[0]``. ``scratch`` is a ``u32`` buffer sized via
-    :func:`select_scratch_slots` ``(capacity_n)`` (it stages the per-element indices plus the scan partials); no DTYPE
-    is needed because the scatter ``out[idx] = arr[i]`` lowers per-field for any element dtype."""
-    _emit_select_scan(flags, scratch, n, DEPTH)
+    ``LOG256_MAX_N`` is the compile-time phase count - select handles any count ``<= BLOCK_DIM ** LOG256_MAX_N``.
+    ``flags`` is an ``i32`` 0/1 mask the same length as ``arr``; selected ``arr[i]`` are packed into a dense prefix of
+    ``out`` (size ``out`` for the all-selected case) and the count lands in ``num_out[0]``. ``scratch`` is a ``u32``
+    buffer sized via :func:`select_scratch_slots` ``(capacity_n)`` (it stages the per-element indices plus the scan
+    partials); no DTYPE is needed because the scatter ``out[idx] = arr[i]`` lowers per-field for any element dtype."""
+    _emit_select_scan(flags, scratch, n, LOG256_MAX_N)
     _select_scatter_phase(arr, flags, scratch, 0, out, n)
     _select_count_phase(flags, scratch, 0, n, num_out)
 
@@ -153,11 +153,11 @@ def _select_kernel(
     num_out: template(),
     scratch: template(),
     n: i32,
-    DEPTH: template(),
+    LOG256_MAX_N: template(),
 ):
     """Host-launch wrapper for :func:`select_func` (one launch; the scan + scatter + count phases are emitted inside).
     ``n`` is a plain runtime count (the host knows ``N``). Private - the public host entry is :func:`select`."""
-    select_func(arr, flags, out, num_out, scratch, n, DEPTH)
+    select_func(arr, flags, out, num_out, scratch, n, LOG256_MAX_N)
 
 
 def select_scratch_slots(n: int) -> int:
@@ -231,10 +231,10 @@ def select(arr, flags, out, num_out, scratch):
 
     # Scratch layout: scratch[0:N] = indices, scratch[N : N + B0] = level-0 partials, then deeper levels above.
     _validate_caller_scratch("select", N, scratch, select_scratch_slots(N), u32)
-    depth = _reduce_depth_for_n(N)
+    log256_max_n = _reduce_depth_for_n(N)
     # One launch: the scan-of-flags staircase + scatter + count are emitted inside _select_kernel as @qd.func phases
     # (the same fixed-depth scan that backs exclusive_scan_add). N == 1 falls out of the single-tile base case.
-    _select_kernel(arr, flags, out, num_out, scratch, N, depth)
+    _select_kernel(arr, flags, out, num_out, scratch, N, log256_max_n)
 
 
 __all__ = ["select", "select_func", "select_scratch_slots"]

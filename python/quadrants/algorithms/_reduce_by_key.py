@@ -157,19 +157,19 @@ def reduce_by_key_add_func(
     scratch: template(),
     n: i32,
     VALUE_DTYPE: template(),
-    DEPTH: template(),
+    LOG256_MAX_N: template(),
 ):
     """Graph-composable reduce-by-key (add) - the ``@qd.func`` form of :func:`reduce_by_key_add`.
 
     Call at the **top level** of your own ``@qd.kernel`` (e.g. a qipc ``graph=True`` parent); never nest it in
     ordinary runtime ``for`` / ``if`` / ``while`` control flow. ``n`` is the live element count as a device ``Expr``;
-    ``DEPTH`` is the compile-time phase count (any count ``<= BLOCK_DIM ** DEPTH``). ``VALUE_DTYPE`` is the values
-    dtype (needed only to write the typed zero before the scatter ``atomic_add``; keys are handled generically). The
-    five phases - head flags, in-place exclusive scan of those flags (the same staircase as ``exclusive_scan_add``,
-    via :func:`_emit_scan_inplace`), zero ``values_out``, scatter, count - each emit as their own offloaded launch.
-    Size ``scratch`` via :func:`reduce_by_key_scratch_slots` ``(capacity_n)``."""
+    ``LOG256_MAX_N`` is the compile-time phase count (any count ``<= BLOCK_DIM ** LOG256_MAX_N``). ``VALUE_DTYPE``
+    is the values dtype (needed only to write the typed zero before the scatter ``atomic_add``; keys are handled
+    generically). The five phases - head flags, in-place exclusive scan of those flags (the same staircase as
+    ``exclusive_scan_add``, via :func:`_emit_scan_inplace`), zero ``values_out``, scatter, count - each emit as their
+    own offloaded launch. Size ``scratch`` via :func:`reduce_by_key_scratch_slots` ``(capacity_n)``."""
     _rbk_head_flags_phase(keys_in, scratch, 0, n)
-    _emit_scan_inplace(scratch, 0, n, DEPTH - 1, i32, u32, _OP_ADD, _bin_add)
+    _emit_scan_inplace(scratch, 0, n, LOG256_MAX_N - 1, i32, u32, _OP_ADD, _bin_add)
     _rbk_zero_values_out_phase(values_out, n, VALUE_DTYPE)
     _rbk_scatter_phase(keys_in, values_in, scratch, 0, keys_out, values_out, n)
     _rbk_count_phase(keys_in, scratch, 0, n, num_runs)
@@ -185,11 +185,11 @@ def _reduce_by_key_add_kernel(
     scratch: template(),
     n: i32,
     VALUE_DTYPE: template(),
-    DEPTH: template(),
+    LOG256_MAX_N: template(),
 ):
     """Host-launch wrapper for :func:`reduce_by_key_add_func` (one launch; all five phases emit inside). ``n`` is a
     plain runtime count (the host knows ``N``). Private - the public host entry is :func:`reduce_by_key_add`."""
-    reduce_by_key_add_func(keys_in, values_in, keys_out, values_out, num_runs, scratch, n, VALUE_DTYPE, DEPTH)
+    reduce_by_key_add_func(keys_in, values_in, keys_out, values_out, num_runs, scratch, n, VALUE_DTYPE, LOG256_MAX_N)
 
 
 def _validate_inputs(keys_in, values_in, keys_out, values_out, num_runs):
@@ -286,11 +286,13 @@ def reduce_by_key_add(keys_in, values_in, keys_out, values_out, num_runs, scratc
         return
 
     _validate_caller_scratch("reduce_by_key_add", N, scratch, reduce_by_key_scratch_slots(N), u32)
-    depth = _reduce_depth_for_n(N)
+    log256_max_n = _reduce_depth_for_n(N)
     # One launch: head flags -> in-place exclusive scan (the same staircase as exclusive_scan_add) -> zero values_out
     # -> scatter -> count, all emitted inside _reduce_by_key_add_kernel as @qd.func phases. N == 1 falls out of the
     # single-tile base case of the scan.
-    _reduce_by_key_add_kernel(keys_in, values_in, keys_out, values_out, num_runs, scratch, N, values_in.dtype, depth)
+    _reduce_by_key_add_kernel(
+        keys_in, values_in, keys_out, values_out, num_runs, scratch, N, values_in.dtype, log256_max_n
+    )
 
 
 __all__ = ["reduce_by_key_add", "reduce_by_key_add_func", "reduce_by_key_scratch_slots"]

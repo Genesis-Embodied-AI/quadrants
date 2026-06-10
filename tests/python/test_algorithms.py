@@ -54,8 +54,8 @@ def _rbk_scratch(n):
     return qd.field(qd.u32, shape=max(qd.algorithms.reduce_by_key_scratch_slots(n), 1))
 
 
-def _radix_scratch(n, depth=None):
-    slots = qd.algorithms.radix_sort_scratch_slots(n, depth)
+def _radix_scratch(n, log256_max_n=None):
+    slots = qd.algorithms.radix_sort_scratch_slots(n, log256_max_n)
     return qd.field(qd.u32, shape=max(slots, 1))
 
 
@@ -442,38 +442,39 @@ def test_reduce_rejects_unsupported_dtype():
 @test_utils.test(arch=qd.gpu)
 def test_reduce_func_composition(op, dtype, N):
     """``reduce_{add,min,max}_func`` compose at the **top level** of a user ``@qd.kernel`` with a device-resident
-    count (``count[0]``) and a compile-time ``DEPTH``, matching the host ``reduce_*`` entries. This pins the
-    graph-composable path qipc uses: the count flows as a device ``Expr`` while ``DEPTH`` fixes the launch topology.
+    count (``count[0]``) and a compile-time ``LOG256_MAX_N``, matching the host ``reduce_*`` entries. This pins the
+    graph-composable path qipc uses: the count flows as a device ``Expr`` while ``LOG256_MAX_N`` fixes the launch
+    topology.
     """
     _skip_if_dtype_unsupported(dtype)
     from quadrants.algorithms._reduce import _reduce_depth_for_n
 
-    depth = _reduce_depth_for_n(N)
+    log256_max_n = _reduce_depth_for_n(N)
     rng = np.random.default_rng(seed=7)
     host = _reduce_host(rng, op, dtype, N)
 
     arr = qd.field(dtype, shape=N)
     out = qd.field(dtype, shape=1)
     sdt = qd.u32 if dtype in _FOURBYTE_DTYPES else qd.u64
-    scratch = qd.field(sdt, shape=max(qd.algorithms.reduce_scratch_slots(N, depth), 1))
+    scratch = qd.field(sdt, shape=max(qd.algorithms.reduce_scratch_slots(N, log256_max_n), 1))
     count = qd.field(qd.i32, shape=1)
     _fill_field(arr, host)
     count.from_numpy(np.asarray([N], dtype=np.int32))
 
     if op == "add":
         @qd.kernel
-        def run(DTYPE: qd.template(), DEPTH: qd.template()):
-            qd.algorithms.reduce_add_func(arr, out, scratch, count[0], DTYPE, DEPTH)
+        def run(DTYPE: qd.template(), LOG256_MAX_N: qd.template()):
+            qd.algorithms.reduce_add_func(arr, out, scratch, count[0], DTYPE, LOG256_MAX_N)
     elif op == "min":
         @qd.kernel
-        def run(DTYPE: qd.template(), DEPTH: qd.template()):
-            qd.algorithms.reduce_min_func(arr, out, scratch, count[0], DTYPE, DEPTH)
+        def run(DTYPE: qd.template(), LOG256_MAX_N: qd.template()):
+            qd.algorithms.reduce_min_func(arr, out, scratch, count[0], DTYPE, LOG256_MAX_N)
     else:
         @qd.kernel
-        def run(DTYPE: qd.template(), DEPTH: qd.template()):
-            qd.algorithms.reduce_max_func(arr, out, scratch, count[0], DTYPE, DEPTH)
+        def run(DTYPE: qd.template(), LOG256_MAX_N: qd.template()):
+            qd.algorithms.reduce_max_func(arr, out, scratch, count[0], DTYPE, LOG256_MAX_N)
 
-    run(dtype, depth)
+    run(dtype, log256_max_n)
     got = out.to_numpy()[0]
 
     if op == "add":
@@ -598,37 +599,38 @@ def test_exclusive_scan(op, dtype, N):
 @test_utils.test(arch=qd.gpu)
 def test_exclusive_scan_func_composition(op, dtype, N):
     """``exclusive_scan_{add,min,max}_func`` compose at the **top level** of a user ``@qd.kernel`` with a
-    device-resident count (``count[0]``) and a compile-time ``DEPTH``, matching the host ``exclusive_scan_*`` entries.
-    This pins the graph-composable path qipc uses: the count flows as a device ``Expr`` while ``DEPTH`` fixes the
-    launch topology (out-of-place ``arr`` -> ``out`` with a caller-sized partials staircase in ``scratch``)."""
+    device-resident count (``count[0]``) and a compile-time ``LOG256_MAX_N``, matching the host ``exclusive_scan_*``
+    entries. This pins the graph-composable path qipc uses: the count flows as a device ``Expr`` while
+    ``LOG256_MAX_N`` fixes the launch topology (out-of-place ``arr`` -> ``out`` with a caller-sized partials staircase
+    in ``scratch``)."""
     _skip_if_dtype_unsupported(dtype)
     from quadrants.algorithms._reduce import _reduce_depth_for_n
 
-    depth = _reduce_depth_for_n(N)
+    log256_max_n = _reduce_depth_for_n(N)
     rng = np.random.default_rng(seed=1234)
     host = _scan_host(rng, op, dtype, N)
 
     arr, out = _alloc_scan_input_out(dtype, N)
     sdt = qd.u32 if dtype in _FOURBYTE_DTYPES else qd.u64
-    scratch = qd.field(sdt, shape=max(qd.algorithms.exclusive_scan_scratch_slots(N, depth), 1))
+    scratch = qd.field(sdt, shape=max(qd.algorithms.exclusive_scan_scratch_slots(N, log256_max_n), 1))
     count = qd.field(qd.i32, shape=1)
     _fill_field(arr, host)
     count.from_numpy(np.asarray([N], dtype=np.int32))
 
     if op == "add":
         @qd.kernel
-        def run(DTYPE: qd.template(), DEPTH: qd.template()):
-            qd.algorithms.exclusive_scan_add_func(arr, out, scratch, count[0], DTYPE, DEPTH)
+        def run(DTYPE: qd.template(), LOG256_MAX_N: qd.template()):
+            qd.algorithms.exclusive_scan_add_func(arr, out, scratch, count[0], DTYPE, LOG256_MAX_N)
     elif op == "min":
         @qd.kernel
-        def run(DTYPE: qd.template(), DEPTH: qd.template()):
-            qd.algorithms.exclusive_scan_min_func(arr, out, scratch, count[0], DTYPE, DEPTH)
+        def run(DTYPE: qd.template(), LOG256_MAX_N: qd.template()):
+            qd.algorithms.exclusive_scan_min_func(arr, out, scratch, count[0], DTYPE, LOG256_MAX_N)
     else:
         @qd.kernel
-        def run(DTYPE: qd.template(), DEPTH: qd.template()):
-            qd.algorithms.exclusive_scan_max_func(arr, out, scratch, count[0], DTYPE, DEPTH)
+        def run(DTYPE: qd.template(), LOG256_MAX_N: qd.template()):
+            qd.algorithms.exclusive_scan_max_func(arr, out, scratch, count[0], DTYPE, LOG256_MAX_N)
 
-    run(dtype, depth)
+    run(dtype, log256_max_n)
     _verify_scan(out.to_numpy(), op, dtype, N, host)
 
 
@@ -714,13 +716,13 @@ def test_select_basic(dtype, N):
 @test_utils.test(arch=qd.gpu)
 def test_select_func_composition(dtype, N):
     """``select_func`` composes at the **top level** of a user ``@qd.kernel`` with a device-resident count
-    (``count[0]``) and a compile-time ``DEPTH``, matching the host ``select`` entry. This pins the graph-composable
-    compaction path qipc uses: the count flows as a device ``Expr`` while ``DEPTH`` fixes the launch topology (the
-    scan-of-flags staircase + scatter + count all emit inside one kernel)."""
+    (``count[0]``) and a compile-time ``LOG256_MAX_N``, matching the host ``select`` entry. This pins the
+    graph-composable compaction path qipc uses: the count flows as a device ``Expr`` while ``LOG256_MAX_N`` fixes the
+    launch topology (the scan-of-flags staircase + scatter + count all emit inside one kernel)."""
     _skip_if_dtype_unsupported(dtype)
     from quadrants.algorithms._reduce import _reduce_depth_for_n
 
-    depth = _reduce_depth_for_n(N)
+    log256_max_n = _reduce_depth_for_n(N)
     rng = np.random.default_rng(seed=1234)
     np_dt = _DTYPE_TO_NP[dtype]
     if dtype in (qd.f32, qd.f64):
@@ -744,10 +746,10 @@ def test_select_func_composition(dtype, N):
     count.from_numpy(np.asarray([N], dtype=np.int32))
 
     @qd.kernel
-    def run(DEPTH: qd.template()):
-        qd.algorithms.select_func(arr, flags, out, num_out, scratch, count[0], DEPTH)
+    def run(LOG256_MAX_N: qd.template()):
+        qd.algorithms.select_func(arr, flags, out, num_out, scratch, count[0], LOG256_MAX_N)
 
-    run(depth)
+    run(log256_max_n)
     got_n = int(num_out.to_numpy()[0])
     assert got_n == expected_n, f"{dtype} N={N}: got count {got_n}, expected {expected_n}"
     np.testing.assert_array_equal(out.to_numpy()[:got_n], expected, err_msg=f"{dtype} select_func(N={N})")
@@ -1161,12 +1163,13 @@ def test_reduce_by_key_add(key_dtype, val_dtype, N):
 @test_utils.test(arch=qd.gpu)
 def test_reduce_by_key_add_func_composition(key_dtype, val_dtype, N):
     """``reduce_by_key_add_func`` composes at the **top level** of a user ``@qd.kernel`` with a device-resident count
-    (``count[0]``), a compile-time ``DEPTH``, and the values dtype as a template (needed only for the zero-init of
-    ``values_out``). Pins the graph-composable reduce-by-key path: count flows as a device ``Expr`` while ``DEPTH``
-    fixes the launch topology (head flags + in-place scan + zero + scatter + count all emit inside one kernel)."""
+    (``count[0]``), a compile-time ``LOG256_MAX_N``, and the values dtype as a template (needed only for the zero-init
+    of ``values_out``). Pins the graph-composable reduce-by-key path: count flows as a device ``Expr`` while
+    ``LOG256_MAX_N`` fixes the launch topology (head flags + in-place scan + zero + scatter + count all emit inside one
+    kernel)."""
     from quadrants.algorithms._reduce import _reduce_depth_for_n
 
-    depth = _reduce_depth_for_n(N)
+    log256_max_n = _reduce_depth_for_n(N)
     rng = np.random.default_rng(seed=1234)
     keys_host = _gen_run_keys(rng, key_dtype, N)
     val_np = to_numpy_type(val_dtype)
@@ -1187,12 +1190,12 @@ def test_reduce_by_key_add_func_composition(key_dtype, val_dtype, N):
     count.from_numpy(np.asarray([N], dtype=np.int32))
 
     @qd.kernel
-    def run(VALUE_DTYPE: qd.template(), DEPTH: qd.template()):
+    def run(VALUE_DTYPE: qd.template(), LOG256_MAX_N: qd.template()):
         qd.algorithms.reduce_by_key_add_func(
-            keys_in, values_in, keys_out, values_out, num_runs, scratch, count[0], VALUE_DTYPE, DEPTH
+            keys_in, values_in, keys_out, values_out, num_runs, scratch, count[0], VALUE_DTYPE, LOG256_MAX_N
         )
 
-    run(val_dtype, depth)
+    run(val_dtype, log256_max_n)
     nr = int(num_runs.to_numpy()[0])
     want_keys, want_vals = _ref_rbk_add(keys_host, values_host)
 
