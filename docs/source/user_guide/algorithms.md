@@ -21,6 +21,20 @@ Device-wide algorithms operate on whole arrays — reductions, scans, radix sort
 
 \* `reduce_*`, `exclusive_scan_*`, `select`, `radix_sort` / `radix_sort_func`, `reduce_by_key_add`, and `parallel_sort` run anywhere a Quadrants kernel runs; portability is inherited from the underlying block / subgroup primitives.
 
+## Host entries and composable `_func` forms
+
+Each algorithm comes in two forms:
+
+- **Host entry** (e.g. `reduce_add`, `radix_sort`) — called from Python. It validates its inputs, derives the recursion depth from the input length, and launches the work standalone. Use this unless you specifically need to fuse the op into your own captured graph.
+- **Composable `@qd.func`** (the `_func` suffix, e.g. `reduce_add_func`, `radix_sort_func`) — called at the **top level** of your own `@qd.kernel`, so the op is captured into the same kernel / graph as your surrounding phases.
+
+The two forms differ in how the input size is supplied:
+
+- For a `_func` form the **live element count** is a **device-resident** scalar (named `n` or `N`), so it can be data-dependent and never has to be read back to the host — which is what lets the op be captured into a graph that replays without re-tracing. The host entries read the count on the host instead.
+- The **maximum capacity** of a `_func` form is a **compile-time** recursion depth (`DEPTH`, or `LOG256_MAX_N` for the radix sort): one captured graph replays for any live count up to that depth's capacity. The host entries derive the depth for you.
+
+Because a `_func` form runs entirely as device code it does no host-side validation (a size check would force a device→host read of the count that defeats graph capture), so you must size its `scratch` correctly up front — see [Scratch space](#scratch-space).
+
 ## Scratch space
 
 Every device-wide algorithm in this module decomposes into "per-block partial → cross-block combine → finalize" passes (tree reduction, three-pass Blelloch scan, four-pass radix sort, scan-then-scatter compaction). The per-block partials need somewhere to live between kernel launches - that buffer is called **scratch**, and **the caller owns it**. Every algorithm takes a mandatory `scratch` argument.
