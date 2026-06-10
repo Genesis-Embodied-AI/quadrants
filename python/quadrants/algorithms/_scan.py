@@ -36,6 +36,7 @@ from quadrants.lang.misc import loop_config
 from quadrants.lang.ops import bit_cast
 from quadrants.lang.simt import block as _block
 from quadrants.lang.simt.reductions import _bin_add, _typed_max_identity, _typed_min_identity
+from quadrants._tensor_wrapper import Tensor
 from quadrants.types.annotations import template
 from quadrants.types.primitive_types import i32, u32, u64
 
@@ -532,17 +533,18 @@ def exclusive_scan_max_func(
 
 @kernel
 def _exclusive_scan_kernel(
-    arr: template(),
-    out: template(),
-    scratch: template(),
+    arr: Tensor,
+    out: Tensor,
+    scratch: Tensor,
     n: i32,
     DTYPE: template(),
     OP: template(),
     DEPTH: template(),
 ):
     """Host-launch wrapper for the scan staircase: a thin ``@qd.kernel`` dispatching to the matching
-    ``exclusive_scan_{add,min,max}_func`` at top level. ``n`` is a plain runtime count (the host knows ``N``). Private -
-    the public host entries are :func:`exclusive_scan_add` / ``_min`` / ``_max``."""
+    ``exclusive_scan_{add,min,max}_func`` at top level. The buffers are ``qd.Tensor`` params so the host entry can pass
+    either a ``qd.field`` or a ``qd.ndarray`` (the qipc path). ``n`` is a plain runtime count (the host knows ``N``).
+    Private - the public host entries are :func:`exclusive_scan_add` / ``_min`` / ``_max``."""
     if static(OP == _OP_MIN):
         exclusive_scan_min_func(arr, out, scratch, n, DTYPE, DEPTH)
     elif static(OP == _OP_MAX):
@@ -551,12 +553,12 @@ def _exclusive_scan_kernel(
         exclusive_scan_add_func(arr, out, scratch, n, DTYPE, DEPTH)
 
 
-def _exclusive_scan_host(arr, *, out, scratch, OP):
+def _exclusive_scan_host(arr, *, out, scratch, OP, n=None):
     """Shared host entry for ``exclusive_scan_{add,min,max}``: validate, size, and launch :func:`_exclusive_scan_kernel`.
 
     Keeps the friendly host contract (dtype / shape / no-in-place / scratch validation up front, depth + ``N`` derived
-    from ``arr.shape``) while the device work is the single-launch graph-composable staircase. ``N == 1`` is handled by
-    the staircase itself (a single tile writes the identity to ``out[0]``)."""
+    from ``arr.shape`` or the explicit ``n``) while the device work is the single-launch graph-composable staircase.
+    ``N == 1`` is handled by the staircase itself (a single tile writes the identity to ``out[0]``)."""
     if not hasattr(arr, "shape") or len(arr.shape) != 1:
         raise TypeError(f"device exclusive scan expects a 1-D input tensor; got shape {getattr(arr, 'shape', None)}")
     if not hasattr(out, "shape") or out.shape != arr.shape:
@@ -578,14 +580,17 @@ def _exclusive_scan_host(arr, *, out, scratch, OP):
             f"{[d for d in _SUPPORTED_DTYPES]}); see design doc dtype matrix"
         )
     width = _dtype_width_bytes(dtype)
-    N = arr.shape[0]
+    capacity = arr.shape[0]
+    N = capacity if n is None else int(n)
+    if N < 0 or N > capacity:
+        raise ValueError(f"exclusive_scan n={N} out of range for input of length {capacity}")
     depth = _reduce_depth_for_n(N)
     required = exclusive_scan_scratch_slots(N, depth)
     _validate_caller_scratch("exclusive_scan", N, scratch, required, _scratch_dtype_for_width(width))
     _exclusive_scan_kernel(arr, out, scratch, N, dtype, OP, depth)
 
 
-def exclusive_scan_add(arr, out, scratch):
+def exclusive_scan_add(arr, out, scratch, *, n=None):
     """Compute ``out[i] = sum(arr[0:i])`` (exclusive prefix sum) on the device.
 
     Args:
@@ -596,6 +601,9 @@ def exclusive_scan_add(arr, out, scratch):
             4-byte ``arr`` dtypes and ``u64`` for 8-byte ones (unused, so any matching-width buffer is fine, when
             ``N <= BLOCK_DIM``). There is no module-level shared scratch; a too-small buffer raises
             :class:`InsufficientScratchError`.
+        n: element count to scan. Defaults to ``arr.shape[0]`` (scan the whole buffer). Pass an explicit ``n`` to scan
+            only the first ``n`` slots of oversized reusable buffers (the qipc ``padded_N`` idiom); ``out`` slots past
+            ``n`` are left untouched. Must satisfy ``0 <= n <= arr.shape[0]``.
 
     A three-pass Blelloch-style scan built on ``block.exclusive_scan``, emitted as one kernel launch (a fixed-depth
     staircase that recurses on the partials buffer when ``N > BLOCK_DIM``). To compose the scan inside your own
@@ -604,16 +612,17 @@ def exclusive_scan_add(arr, out, scratch):
     See the design doc at ``perso_hugh/doc/qipc/qipc_device_algos_design.md`` for the algorithmic background and
     the ``bit_cast``-into-scratch scheme.
     """
-    _exclusive_scan_host(arr, out=out, scratch=scratch, OP=_OP_ADD)
+    _exclusive_scan_host(arr, out=out, scratch=scratch, OP=_OP_ADD, n=n)
 
 
-def exclusive_scan_min(arr, out, scratch):
+def exclusive_scan_min(arr, out, scratch, *, n=None):
     """Compute ``out[i] = min(arr[0:i])`` (exclusive prefix min) on the device.
 
     Args:
         arr: see ``exclusive_scan_add`` (any of ``{i32, u32, f32, i64, u64, f64}``).
         out: see ``exclusive_scan_add``.
         scratch: see ``exclusive_scan_add``.
+        n: see ``exclusive_scan_add`` (first-``n`` of an oversized buffer; defaults to the whole buffer).
 
     The monoid identity is derived from ``arr.dtype`` automatically (largest representable value: ``+inf`` for
     floats, ``INT{32,64}_MAX`` for signed ints, ``UINT{32,64}_MAX`` for unsigned). Mirrors the
@@ -621,16 +630,17 @@ def exclusive_scan_min(arr, out, scratch):
     identity argument because (op, dtype) fixes it. Call :func:`exclusive_scan_min_func` to compose inside your own
     ``graph=True`` kernel.
     """
-    _exclusive_scan_host(arr, out=out, scratch=scratch, OP=_OP_MIN)
+    _exclusive_scan_host(arr, out=out, scratch=scratch, OP=_OP_MIN, n=n)
 
 
-def exclusive_scan_max(arr, out, scratch):
+def exclusive_scan_max(arr, out, scratch, *, n=None):
     """Compute ``out[i] = max(arr[0:i])`` (exclusive prefix max) on the device. Mirror of
     :func:`exclusive_scan_min` with ``max`` and the dtype's *negative* extremum (``-inf`` for floats,
     ``INT{32,64}_MIN`` for signed ints, ``0`` for unsigned), again derived from ``arr.dtype`` automatically. Call
-    :func:`exclusive_scan_max_func` to compose inside your own ``graph=True`` kernel.
+    :func:`exclusive_scan_max_func` to compose inside your own ``graph=True`` kernel. ``n`` selects the first-``n``
+    sub-range of an oversized buffer (defaults to the whole buffer).
     """
-    _exclusive_scan_host(arr, out=out, scratch=scratch, OP=_OP_MAX)
+    _exclusive_scan_host(arr, out=out, scratch=scratch, OP=_OP_MAX, n=n)
 
 
 # ---------------------------------------------------------------------------------------------------------------------
