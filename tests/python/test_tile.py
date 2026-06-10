@@ -1325,8 +1325,14 @@ def test_shared_array_partial_cols(TILE, make_tile, tdim, m_size, partial_store,
     dst = qd.field(dtype=qd.f32, shape=(tdim, tdim))
 
     @qd.kernel(fastcache=True)
-    def k1(src_f: qd.Template, dst_f: qd.Template, NCOLS: qd.i32, N: qd.Template,
-           partial_store: qd.Template, partial_load: qd.Template):
+    def k1(
+        src_f: qd.Template,
+        dst_f: qd.Template,
+        NCOLS: qd.i32,
+        N: qd.Template,
+        partial_store: qd.Template,
+        partial_load: qd.Template,
+    ):
         qd.loop_config(block_dim=N)
         tile_size = N
         for _ in range(tile_size):
