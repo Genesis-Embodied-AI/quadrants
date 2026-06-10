@@ -1,0 +1,84 @@
+quadrants.lang.buffer_view
+==========================
+
+.. py:module:: quadrants.lang.buffer_view
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   quadrants.lang.buffer_view.BufferView
+
+
+Module Contents
+---------------
+
+.. py:class:: BufferView(arr, offset, size)
+
+   A view into a sub-range [offset, offset+size) of an ndarray.
+
+   Create via slice syntax::
+
+       view = data[:16]           # offset=0, size=16
+       view = data[8:24]          # offset=8, size=16
+
+   Or construct directly::
+
+       view = qd.BufferView(data, offset=16, size=32)
+
+   Subviews can be created from an existing view::
+
+       sub = view.subview(offset=4, size=8)
+
+   Annotate kernel/func parameters with ``BufferView[dtype]`` or plain ``BufferView``::
+
+       @qd.kernel
+       def k(v: BufferView[qd.f32]):
+           for i in range(v.size):
+               v[i] *= 2.0
+
+
+   .. py:attribute:: arr
+
+
+   .. py:attribute:: offset
+
+
+   .. py:attribute:: size
+
+
+   .. py:property:: shape
+
+      Returns the shape of this view as a tuple, e.g. ``(16,)``.
+
+
+   .. py:property:: dtype
+
+      Element dtype of the backing ndarray (a view shares its array's dtype).
+
+      Lets a host-constructed view be passed wherever an ndarray's ``.dtype`` is read - e.g. the
+      ``qd.algorithms.*`` host entries that derive their compile-time element type from the buffer argument.
+
+
+   .. py:method:: subview(offset, size)
+
+      Create a sub-range view within this view, with bounds checking.
+
+      Offsets are relative to this view's start, not the ndarray's::
+
+          a = data[8:24]          # offset=8, size=16 into data
+          b = a.subview(4, 8)     # offset=12, size=8 into data
+
+
+
+   .. py:method:: subscript(*indices)
+
+
+   .. py:method:: get_ndarray()
+
+      Returns the underlying ndarray (host-side only).
+
+
+
