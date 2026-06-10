@@ -280,44 +280,6 @@ def _eig2x2(A, dt):
     return eigenvalues, eigenvectors
 
 
-@func
-def _sym_eig2x2(A, dt):
-    """Compute the eigenvalues and right eigenvectors (Av=lambda v) of a 2x2 real symmetric matrix.
-
-    Mathematical concept refers to https://en.wikipedia.org/wiki/Eigendecomposition_of_a_matrix.
-
-    Args:
-        A (qd.Matrix(2, 2)): input 2x2 symmetric matrix `A`.
-        dt (DataType): date type of elements in matrix `A`, typically accepts qd.f32 or qd.f64.
-
-    Returns:
-        eigenvalues (qd.Vector(2)): The eigenvalues. Each entry store one eigen value.
-        eigenvectors (qd.Matrix(2, 2)): The eigenvectors. Each column stores one eigenvector.
-    """
-    assert all(A == A.transpose()), "A needs to be symmetric"
-    tr = A.trace()
-    det = A.determinant()
-    gap = tr**2 - 4 * det
-    # `gap >= 0` for symmetric A, so `lambda_hi >= lambda_lo`. Emit them as `(lambda_lo, lambda_hi)` so the result is
-    # sorted ascending — matches the >=3x3 paths and NumPy / LAPACK convention for symmetric EVD.
-    lambda_hi = (tr + ops.sqrt(gap)) * 0.5
-    lambda_lo = (tr - ops.sqrt(gap)) * 0.5
-    eigenvalues = Vector([lambda_lo, lambda_hi], dt=dt)
-
-    A_hi = A - lambda_hi * Matrix.identity(dt, 2)
-    A_lo = A - lambda_lo * Matrix.identity(dt, 2)
-    v_hi = Vector.zero(dt, 2)
-    v_lo = Vector.zero(dt, 2)
-    if all(A_hi == Matrix.zero(dt, 2, 2)) and all(A_hi == Matrix.zero(dt, 2, 2)):
-        v_hi = Vector([0.0, 1.0]).cast(dt)
-        v_lo = Vector([1.0, 0.0]).cast(dt)
-    else:
-        v_hi = Vector([A_lo[0, 0], A_lo[1, 0]], dt=dt).normalized()
-        v_lo = Vector([A_hi[0, 0], A_hi[1, 0]], dt=dt).normalized()
-    eigenvectors = Matrix.cols([v_lo, v_hi])
-    return eigenvalues, eigenvectors
-
-
 def polar_decompose(A, dt=None):
     """Perform polar decomposition (A=UP) for arbitrary size matrix.
 
@@ -385,7 +347,7 @@ def sym_eig(A, dt=None):
 
     Mathematical concept refers to https://en.wikipedia.org/wiki/Eigendecomposition_of_a_matrix.
 
-    Size ``A.n == 2`` uses a closed-form (trace / determinant) path. Sizes ``3 ≤ A.n ≤ 12`` use cyclic Jacobi
+    All sizes ``2 ≤ A.n ≤ 12`` use cyclic Jacobi
     (:func:`quadrants._funcs_sym_eig_general.sym_eig_general`).
 
     Args:
@@ -398,8 +360,6 @@ def sym_eig(A, dt=None):
     """
     if dt is None:
         dt = impl.get_runtime().default_fp
-    if A.n == 2:
-        return _sym_eig2x2(A, dt)
     # pylint: disable=C0415
     from quadrants._funcs_sym_eig_general import sym_eig_general
 

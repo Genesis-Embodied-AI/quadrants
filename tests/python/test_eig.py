@@ -529,13 +529,13 @@ def _test_sym_eig_sort_order(n, dt):
         ), f"column {i} is not the eigenvector of eigvals[{i}]={eigvals_qd[i]}: residual={residual}"
 
 
-@pytest.mark.parametrize("n", [3, pytest.param(12, marks=pytest.mark.slow)])
+@pytest.mark.parametrize("n", [2, 3, pytest.param(12, marks=pytest.mark.slow)])
 @test_utils.test(arch=qd.gpu, default_fp=qd.f32, fast_math=False)
 def test_sym_eig_sort_order_f32(n):
     _test_sym_eig_sort_order(n, qd.f32)
 
 
-@pytest.mark.parametrize("n", [3, pytest.param(12, marks=pytest.mark.slow)])
+@pytest.mark.parametrize("n", [2, 3, pytest.param(12, marks=pytest.mark.slow)])
 @test_utils.test(require=qd.extension.data64, arch=qd.gpu, default_fp=qd.f64, fast_math=False)
 def test_sym_eig_sort_order_f64(n):
     _test_sym_eig_sort_order(n, qd.f64)
