@@ -39,6 +39,17 @@ Because a `_func` form runs entirely as device code it does no host-side validat
 
 The `_func` forms bake their **maximum capacity** in as a compile-time constant, `LOG256_MAX_N`. An op compiled for a given `LOG256_MAX_N` correctly handles any live count `n` with `0 <= n <= 256 ** LOG256_MAX_N`: every op fans in `BLOCK_DIM = 256` elements per staircase level, so the capacity is base-256 in the number of levels (for the reduce / scan family `LOG256_MAX_N` is the number of phases; for the radix sort it is the histogram-scan depth — same base-256 capacity either way). The `_func` template spells it `LOG256_MAX_N` (uppercase, because it is a compile-time `qd.template()`); the `*_scratch_slots` host helpers take the same value as a lowercase `log256_max_n` argument.
 
+The capacity grows fast — each level multiplies it by 256:
+
+| `LOG256_MAX_N` | Max count (`256 ** LOG256_MAX_N`) |
+|----------------|-----------------------------------|
+| `1`            | `256` |
+| `2`            | `65,536` |
+| `3`            | `16,777,216` |
+| `4`            | `4,294,967,296` (≈ 4.3 billion) |
+
+`LOG256_MAX_N = 4` already exceeds what a 32-bit index can address (`256 ** 4 == 2 ** 32`), so in practice you rarely need more than 3–4.
+
 It must be compile-time because it fixes the number and order of the internal launches: the staircase is statically unrolled to `LOG256_MAX_N` levels, and that fixed launch topology is exactly what lets **one captured graph replay for any count up to the capacity** without re-tracing. The live count `n` flows as a device value while `LOG256_MAX_N` is frozen at trace time.
 
 **Pick it from an upper bound, not the current count.** Use the smallest `LOG256_MAX_N` whose capacity covers the largest count you will ever feed the captured graph — `LOG256_MAX_N = ceil(log256(capacity))`, floored at `1`. Size it against a *provisioned* upper bound (a buffer capacity, qipc's `padded_N`, ...), not today's `n`, so the same graph serves the whole range below it:
