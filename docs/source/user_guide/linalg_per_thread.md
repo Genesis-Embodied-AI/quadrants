@@ -179,7 +179,7 @@ The rotation factor `R` from `A = R @ S` is the rigid alignment that minimises `
 
 - **Compile time.**
   - **Closed-form ops** (`qd.svd`, `qd.polar_decompose`, `qd.eig`, `qd.solve`) — each call is unrolled per thread into a moderately large block of straight-line code; compile time is generally fine at these shapes.
-  - **Cyclic Jacobi** (`qd.sym_eig` all sizes, `qd.make_spd`) — compile time is roughly proportional to `N²` . Concrete numbers on CUDA + LLVM 22.1: ~3 s at N=4, ~30 s at N=6, ~3 min at N=9, ~2 min at N=12.
+  - **Cyclic Jacobi** (`qd.sym_eig`, `qd.make_spd`) — the outer sweep loop is unrolled for `N ≤ 6` and a runtime loop for `N > 6` (unrolling it at larger `N` explodes compile time). Compile times for a single `qd.sym_eig` call on CUDA + LLVM 22.1 (`QD_OFFLINE_CACHE=0`): ~11 s at N=4, ~95 s at N=6 (unrolled); ~26 s at N=9, ~123 s at N=12 (runtime).
 - **Runtime cost.** Cyclic Jacobi at N=12 with `MAX_SWEEPS=12` does roughly `12 · 66 · 12 ≈ 9500` per-thread arithmetic ops — fast on any modern GPU, but if you're calling it inside a hot kernel for a million elements that's still ~10 GFLOP-equivalent. For larger matrices use a different algorithm (or call quadrants `linalg.*` for a sparse-aware path).
 
 ## Related
