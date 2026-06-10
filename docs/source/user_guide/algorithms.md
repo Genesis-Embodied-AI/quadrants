@@ -30,10 +30,33 @@ Each algorithm comes in two forms:
 
 The two forms differ in how the input size is supplied:
 
-- For a `_func` form the **live element count** is a **device-resident** scalar (named `n` or `N`), so it can be data-dependent and never has to be read back to the host — which is what lets the op be captured into a graph that replays without re-tracing. The host entries read the count on the host instead.
-- The **maximum capacity** of a `_func` form is a **compile-time** recursion depth (`LOG256_MAX_N`): one captured graph replays for any live count up to that depth's capacity. The host entries derive the depth for you.
+- For a `_func` form the **live element count** is a **device-resident** scalar (named `n`), so it can be data-dependent and never has to be read back to the host — which is what lets the op be captured into a graph that replays without re-tracing. The host entries read the count on the host instead.
+- The **maximum capacity** of a `_func` form is a **compile-time** constant, `LOG256_MAX_N`: one captured graph replays for any live count up to that capacity. The host entries derive it for you; on the `_func` path you supply it — see [Capacity (`LOG256_MAX_N`)](#capacity-log256_max_n).
 
 Because a `_func` form runs entirely as device code it does no host-side validation (a size check would force a device→host read of the count that defeats graph capture), so you must size its `scratch` correctly up front — see [Scratch space](#scratch-space).
+
+## Capacity (`LOG256_MAX_N`)
+
+The `_func` forms bake their **maximum capacity** in as a compile-time constant, `LOG256_MAX_N`. An op compiled for a given `LOG256_MAX_N` correctly handles any live count `n` with `0 <= n <= 256 ** LOG256_MAX_N`: every op fans in `BLOCK_DIM = 256` elements per staircase level, so the capacity is base-256 in the number of levels (for the reduce / scan family `LOG256_MAX_N` is the number of phases; for the radix sort it is the histogram-scan depth — same base-256 capacity either way). The `_func` template spells it `LOG256_MAX_N` (uppercase, because it is a compile-time `qd.template()`); the `*_scratch_slots` host helpers take the same value as a lowercase `log256_max_n` argument.
+
+It must be compile-time because it fixes the number and order of the internal launches: the staircase is statically unrolled to `LOG256_MAX_N` levels, and that fixed launch topology is exactly what lets **one captured graph replay for any count up to the capacity** without re-tracing. The live count `n` flows as a device value while `LOG256_MAX_N` is frozen at trace time.
+
+**Pick it from an upper bound, not the current count.** Use the smallest `LOG256_MAX_N` whose capacity covers the largest count you will ever feed the captured graph — `LOG256_MAX_N = ceil(log256(capacity))`, floored at `1`. Size it against a *provisioned* upper bound (a buffer capacity, qipc's `padded_N`, ...), not today's `n`, so the same graph serves the whole range below it:
+
+```python
+def log256_max_n(capacity: int) -> int:
+    d = 1
+    while 256 ** d < capacity:
+        d += 1
+    return d
+```
+
+- **Over-specifying is safe.** A capacity larger than the live count just adds staircase levels that operate on length-1 buffers — harmless identity no-ops. The only cost is a few extra empty launches and marginally larger scratch, so when in doubt, round up.
+- **Under-specifying is a bug.** If `256 ** LOG256_MAX_N < n` the op cannot address the tail of the input, and the `_func` path has no host-side guard to catch it. Always cover your worst case.
+
+Size `scratch` with the **same** `LOG256_MAX_N` you compile the op for — `reduce_scratch_slots(capacity, log256_max_n)`, `exclusive_scan_scratch_slots(capacity, log256_max_n)`, `radix_sort_scratch_slots(capacity, log256_max_n)` — see [Scratch space](#scratch-space).
+
+The **host entries** (`reduce_add`, `exclusive_scan_add`, `select`, `reduce_by_key_add`, `radix_sort`) never take this argument: they read the input length on the host and derive the minimal capacity for you. `LOG256_MAX_N` is only something you supply on the composable `_func` path.
 
 ## Scratch space
 
