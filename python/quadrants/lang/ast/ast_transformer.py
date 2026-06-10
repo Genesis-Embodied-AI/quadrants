@@ -94,7 +94,9 @@ class ASTTransformer(Builder):
         if isinstance(node, (ast.stmt, ast.expr)) and isinstance(node.ptr, Expr):
             node.ptr.dbg_info = _qd_core.DebugInfo(ctx.get_pos_info(node))
             node.ptr.ptr.set_dbg_info(node.ptr.dbg_info)
-        if ctx.is_pure and node.violates_pure and not ctx.static_scope_status.is_in_static_scope:
+        # ``qd.static`` is intentionally NOT a purity escape hatch: a captured module global is still flagged inside
+        # a static scope, since its value never enters the fastcache key regardless of static wrapping.
+        if ctx.is_pure and node.violates_pure:
             if isinstance(node.ptr, (float, int, Field)):
                 if not _is_quadrants_internal_file(ctx.file):
                     message = f"[PURE.VIOLATION] WARNING: Accessing global variable {node.id} {type(node.ptr)} {node.violates_pure_reason}"
@@ -779,7 +781,8 @@ class ASTTransformer(Builder):
             node.violates_pure = node.value.violates_pure
             if node.violates_pure:
                 node.violates_pure_reason = node.value.violates_pure_reason
-            if ctx.is_pure and node.violates_pure and not ctx.static_scope_status.is_in_static_scope:
+            # ``qd.static`` is intentionally NOT a purity escape hatch (see ``build_Name``).
+            if ctx.is_pure and node.violates_pure:
                 if isinstance(node.ptr, (int, float, Field)):
                     violation = True
                     if violation and isinstance(node.ptr, enum.Enum):
