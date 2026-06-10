@@ -5,8 +5,7 @@ trap { Write-Error $_; exit 1 }
 pip install -U pip
 pip install --group dev
 
-# Set up the build toolchain, then exit WITHOUT building (-w writes env vars and stops before
-# the wheel build). With a pre-installed Visual Studio (discovered via vswhere) this is a no-op
-# for the compiler; only if no VS is found does build.py install Build Tools and exit non-zero
-# (intentional, ignored by SilentlyContinue). This avoids building the wheel twice.
-Start-Process -NoNewWindow -FilePath "python" -ArgumentList "build.py","-w","prereq-env.ps1" -ErrorAction SilentlyContinue -Wait
+# NOTE: We no longer install Visual Studio Build Tools here. build.py (run in 2_build.ps1)
+# discovers the Visual Studio already present on the runner via vswhere and builds against it
+# (Ninja + VS developer shell), which avoids the ~15 min Build Tools download. If a future image
+# ships no Visual Studio at all, build.py will install Build Tools and exit non-zero in 2_build.
