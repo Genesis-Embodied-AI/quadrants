@@ -97,7 +97,10 @@ class ASTTransformer(Builder):
         # ``qd.static`` is intentionally NOT a purity escape hatch: a captured module global is still flagged inside
         # a static scope, since its value never enters the fastcache key regardless of static wrapping.
         if ctx.is_pure and node.violates_pure:
-            if isinstance(node.ptr, (float, int, Field)):
+            # ``str`` is included alongside the numeric/``Field`` types: a captured string only affects a kernel through
+            # compile-time ``qd.static`` branches, and its value never enters the fastcache key, so it is cache-unsafe
+            # in exactly the same way as a captured int/float.
+            if isinstance(node.ptr, (float, int, str, Field)):
                 if not _is_quadrants_internal_file(ctx.file):
                     message = f"[PURE.VIOLATION] WARNING: Accessing global variable {node.id} {type(node.ptr)} {node.violates_pure_reason}"
                     if node.id.upper() == node.id:
@@ -783,7 +786,8 @@ class ASTTransformer(Builder):
                 node.violates_pure_reason = node.value.violates_pure_reason
             # ``qd.static`` is intentionally NOT a purity escape hatch (see ``build_Name``).
             if ctx.is_pure and node.violates_pure:
-                if isinstance(node.ptr, (int, float, Field)):
+                # ``str`` included for the same reason as in ``build_Name``: a captured string is cache-unsafe.
+                if isinstance(node.ptr, (int, float, str, Field)):
                     violation = True
                     if violation and isinstance(node.ptr, enum.Enum):
                         violation = False
