@@ -373,7 +373,7 @@ def make_spd(A, dt=None):
     by clamping its eigenvalues to ``≥ 0``.
 
     Implemented as ``Q · diag(max(λ, 0)) · Qᵀ`` where ``A = Q diag(λ) Qᵀ`` is the symmetric eigendecomposition
-    computed by :func:`sym_eig`.
+    computed by :func:`sym_eig`. Supports the same sizes as :func:`sym_eig` (``A.n ≤ 6``).
 
     Args:
         A (qd.Matrix(n, n)): Symmetric matrix.
@@ -387,7 +387,9 @@ def make_spd(A, dt=None):
     # pylint: disable=C0415
     from quadrants._funcs_sym_eig_general import make_spd as _make_spd
 
-    return _make_spd(A, dt)
+    if A.n <= 6:
+        return _make_spd(A, dt)
+    raise Exception("Symmetric eigen solver currently supports sizes up to 6×6.")
 
 
 @func

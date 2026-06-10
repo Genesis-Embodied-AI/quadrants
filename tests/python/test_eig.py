@@ -491,6 +491,21 @@ def test_sym_eig_above_cap_raises():
         run()
 
 
+@test_utils.test(require=qd.extension.data64, default_fp=qd.f64, fast_math=False)
+def test_make_spd_above_cap_raises():
+    """``qd.make_spd`` shares the cyclic-Jacobi path, so it carries the same ``N <= 6`` cap as ``qd.sym_eig``;
+    calling at ``N = 7`` must raise rather than compile the slow unrolled path."""
+    A = qd.Matrix.field(7, 7, dtype=qd.f64, shape=())
+    A.from_numpy(np.eye(7))
+    with pytest.raises(Exception, match="up to 6"):
+
+        @qd.kernel
+        def run():
+            _ = qd.make_spd(A[None], qd.f64)
+
+        run()
+
+
 # ---------------------------------------------------------------------------
 # Sort-order contract: every shape of qd.sym_eig must return eigenvalues in ascending order (matches NumPy / LAPACK's
 # `eigh`). The vector at column i must be the eigenvector for `eigvals[i]` (i.e. the sort applies to both).
