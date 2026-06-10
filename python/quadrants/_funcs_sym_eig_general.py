@@ -1,8 +1,8 @@
-"""Symmetric eigenvalue decomposition for ``2 <= N <= 12`` via cyclic Jacobi.
+"""Symmetric eigenvalue decomposition for ``2 <= N <= 6`` via cyclic Jacobi.
 
 Cyclic Jacobi is the textbook robust algorithm for small symmetric EVD: it iteratively zeros out off-diagonal entries
 via Givens rotations until the matrix is (numerically) diagonal. Complexity is O(N^3) per sweep and convergence is
-quadratic near the solution, so ``MAX_SWEEPS = 12`` is comfortably enough to hit f64 precision for any ``N <= 12``.
+quadratic near the solution, so ``MAX_SWEEPS = 12`` is comfortably enough to hit f64 precision for any ``N <= 6``.
 
 Algorithm (Golub & Van Loan, §8.5):
 

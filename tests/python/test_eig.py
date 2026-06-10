@@ -212,8 +212,9 @@ def test_sym_eig3x3_f64(a00):
 
 
 # ---------------------------------------------------------------------------
-# Symmetric eigendecomposition for N >= 4 (Householder + implicit QR). qipc's ABD / contact Hessian make_spd
-# projection needs sizes 6, 9, 12.
+# Symmetric eigendecomposition for N >= 4 (cyclic Jacobi). Supported sizes are capped at 6×6 (N=4 unrolled,
+# N=5/6 runtime sweep loop); larger blocks are intentionally unsupported because the inner Givens steps stay
+# unrolled and compile time grows steeply.
 # ---------------------------------------------------------------------------
 
 
@@ -295,7 +296,7 @@ def _test_sym_eig_general(n, dt, factory):
     np.testing.assert_allclose(A_reconstructed, A_np, rtol=tol, atol=tol)
 
 
-@pytest.mark.parametrize("n", [4, pytest.param(12, marks=pytest.mark.slow)])
+@pytest.mark.parametrize("n", [4, 6])
 @pytest.mark.parametrize(
     "factory",
     [
@@ -311,7 +312,7 @@ def test_sym_eig_general_f32(n, factory):
     _test_sym_eig_general(n, qd.f32, factory)
 
 
-@pytest.mark.parametrize("n", [4, pytest.param(12, marks=pytest.mark.slow)])
+@pytest.mark.parametrize("n", [4, 6])
 @pytest.mark.parametrize(
     "factory",
     [
@@ -358,7 +359,7 @@ def _test_make_spd(n, dt, factory):
     np.testing.assert_allclose(A_spd_qd, expected, rtol=tol, atol=tol)
 
 
-@pytest.mark.parametrize("n", [4, pytest.param(12, marks=pytest.mark.slow)])
+@pytest.mark.parametrize("n", [4, 6])
 @pytest.mark.parametrize(
     "factory",
     [_sym_eig_factory_indefinite, _sym_eig_factory_random, _sym_eig_factory_spd],
@@ -368,7 +369,7 @@ def test_make_spd_f32(n, factory):
     _test_make_spd(n, qd.f32, factory)
 
 
-@pytest.mark.parametrize("n", [4, pytest.param(12, marks=pytest.mark.slow)])
+@pytest.mark.parametrize("n", [4, 6])
 @pytest.mark.parametrize(
     "factory",
     [_sym_eig_factory_indefinite, _sym_eig_factory_random, _sym_eig_factory_spd],
@@ -404,7 +405,7 @@ def _test_sym_eig_trivial(n, dt, A_np, expected_eigvals):
     np.testing.assert_allclose(Q.T @ Q, np.eye(n), rtol=tol, atol=tol)
 
 
-@pytest.mark.parametrize("n", [4, pytest.param(12, marks=pytest.mark.slow)])
+@pytest.mark.parametrize("n", [4, 6])
 @pytest.mark.parametrize("alpha", [0.0, 1.0, -2.5])
 @test_utils.test(require=qd.extension.data64, arch=qd.gpu, default_fp=qd.f64, fast_math=False)
 def test_sym_eig_alpha_identity_f64(n, alpha):
@@ -419,8 +420,8 @@ def _test_make_spd_idempotent(n, dt, factory):
     """``make_spd(make_spd(A)) ≈ make_spd(A)`` — defining property of a projector.
 
     Uses an ndarray-arg parametric kernel so ``qd.make_spd`` is JIT-compiled exactly once and called twice
-    (``A → A_spd_1`` and ``A_spd_1 → A_spd_2``). Compiling it twice at N=12 on CUDA blows past the per-test
-    timeout — one compile fits comfortably.
+    (``A → A_spd_1`` and ``A_spd_1 → A_spd_2``). Compiling it twice at the larger sizes on CUDA blows past the
+    per-test timeout — one compile fits comfortably.
     """
     np_dt = np.float32 if dt == qd.f32 else np.float64
     mat_t = qd.types.matrix(n, n, dt)
@@ -445,7 +446,7 @@ def _test_make_spd_idempotent(n, dt, factory):
     )
 
 
-@pytest.mark.parametrize("n", [4, pytest.param(12, marks=pytest.mark.slow)])
+@pytest.mark.parametrize("n", [4, 6])
 @pytest.mark.parametrize(
     "factory",
     [_sym_eig_factory_indefinite, _sym_eig_factory_negative_definite, _sym_eig_factory_spd],
@@ -455,7 +456,7 @@ def test_make_spd_idempotent_f64(n, factory):
     _test_make_spd_idempotent(n, qd.f64, factory)
 
 
-@pytest.mark.parametrize("n", [4, pytest.param(12, marks=pytest.mark.slow)])
+@pytest.mark.parametrize("n", [4, 6])
 @test_utils.test(require=qd.extension.data64, arch=qd.gpu, default_fp=qd.f64, fast_math=False)
 def test_make_spd_negative_definite_zero_f64(n):
     """A symmetric matrix with all-negative eigenvalues projects to the zero matrix (``Q · diag(max(λ, 0)) · Qᵀ``
@@ -477,11 +478,11 @@ def test_make_spd_negative_definite_zero_f64(n):
 
 @test_utils.test(require=qd.extension.data64, default_fp=qd.f64, fast_math=False)
 def test_sym_eig_above_cap_raises():
-    """``qd.sym_eig`` only supports ``N <= 12``; calling at ``N = 13`` must raise a clear error rather than silently
+    """``qd.sym_eig`` only supports ``N <= 6``; calling at ``N = 7`` must raise a clear error rather than silently
     producing wrong results."""
-    A = qd.Matrix.field(13, 13, dtype=qd.f64, shape=())
-    A.from_numpy(np.eye(13))
-    with pytest.raises(Exception, match="up to 12"):
+    A = qd.Matrix.field(7, 7, dtype=qd.f64, shape=())
+    A.from_numpy(np.eye(7))
+    with pytest.raises(Exception, match="up to 6"):
 
         @qd.kernel
         def run():
@@ -529,13 +530,13 @@ def _test_sym_eig_sort_order(n, dt):
         ), f"column {i} is not the eigenvector of eigvals[{i}]={eigvals_qd[i]}: residual={residual}"
 
 
-@pytest.mark.parametrize("n", [2, 3, pytest.param(12, marks=pytest.mark.slow)])
+@pytest.mark.parametrize("n", [2, 3, 6])
 @test_utils.test(arch=qd.gpu, default_fp=qd.f32, fast_math=False)
 def test_sym_eig_sort_order_f32(n):
     _test_sym_eig_sort_order(n, qd.f32)
 
 
-@pytest.mark.parametrize("n", [2, 3, pytest.param(12, marks=pytest.mark.slow)])
+@pytest.mark.parametrize("n", [2, 3, 6])
 @test_utils.test(require=qd.extension.data64, arch=qd.gpu, default_fp=qd.f64, fast_math=False)
 def test_sym_eig_sort_order_f64(n):
     _test_sym_eig_sort_order(n, qd.f64)

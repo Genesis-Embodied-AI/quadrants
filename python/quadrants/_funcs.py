@@ -347,7 +347,7 @@ def sym_eig(A, dt=None):
 
     Mathematical concept refers to https://en.wikipedia.org/wiki/Eigendecomposition_of_a_matrix.
 
-    All sizes ``2 ≤ A.n ≤ 12`` use cyclic Jacobi
+    All sizes ``2 ≤ A.n ≤ 6`` use cyclic Jacobi
     (:func:`quadrants._funcs_sym_eig_general.sym_eig_general`).
 
     Args:
@@ -363,9 +363,9 @@ def sym_eig(A, dt=None):
     # pylint: disable=C0415
     from quadrants._funcs_sym_eig_general import sym_eig_general
 
-    if A.n <= 12:
+    if A.n <= 6:
         return sym_eig_general(A, dt)
-    raise Exception("Symmetric eigen solver currently supports sizes up to 12×12.")
+    raise Exception("Symmetric eigen solver currently supports sizes up to 6×6.")
 
 
 def make_spd(A, dt=None):
