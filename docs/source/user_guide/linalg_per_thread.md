@@ -179,9 +179,8 @@ The rotation factor `R` from `A = R @ S` is the rigid alignment that minimises `
 
 - **Compile time.**
   - **Closed-form ops** (`qd.svd`, `qd.polar_decompose`, `qd.eig`, `qd.solve`) — each call is unrolled per thread into a moderately large block of straight-line code; compile time is generally fine at these shapes.
-  - **Cyclic Jacobi** (`qd.sym_eig` all sizes, `qd.make_spd`) — the per-pair Givens step is unrolled but the outer sweep loop is a runtime `range`, so compile time is roughly proportional to `N²` (number of `(p, q)` pairs per sweep) rather than `N² · MAX_SWEEPS`. Concrete numbers on CUDA + LLVM 22.1: ~3 s at N=4, ~30 s at N=6, ~3 min at N=9, ~2 min at N=12 (yes, faster than N=9 — the per-pair body is dominated by `if static(p < q):` filtering).
+  - **Cyclic Jacobi** (`qd.sym_eig` all sizes, `qd.make_spd`) — compile time is roughly proportional to `N²` . Concrete numbers on CUDA + LLVM 22.1: ~3 s at N=4, ~30 s at N=6, ~3 min at N=9, ~2 min at N=12.
 - **Runtime cost.** Cyclic Jacobi at N=12 with `MAX_SWEEPS=12` does roughly `12 · 66 · 12 ≈ 9500` per-thread arithmetic ops — fast on any modern GPU, but if you're calling it inside a hot kernel for a million elements that's still ~10 GFLOP-equivalent. For larger matrices use a different algorithm (or call quadrants `linalg.*` for a sparse-aware path).
-- **Backend portability.** All ops compile cleanly on CUDA, AMDGPU, Vulkan, and Metal — they are pure register arithmetic with no SIMT primitives, so there is no codegen split. The `qd.sym_eig` / `qd.make_spd` paths have been verified at N ∈ {2,3,4,5,6,9,12} × {f32, f64} × five symmetric-matrix factories on CUDA + Vulkan + AMDGPU; Metal coverage is via the same parametrized tests.
 
 ## Related
 
