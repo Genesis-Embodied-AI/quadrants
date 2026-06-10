@@ -26,7 +26,9 @@ The outer sweep loop is dispatched by size:
   this directive sidesteps.
 
 The inner ``(p, q)`` and per-row ``static(range)`` updates are always unrolled, so each Givens step is straight-line
-code regardless of the sweep-loop form.
+code regardless of the sweep-loop form. The sweep body is mutated in place on ``A_work`` / ``eigvecs``; it is inlined
+into both branches rather than factored into a ``@func`` because matrices cross a ``@func`` boundary by value, so a
+helper's in-place updates would not propagate back.
 """
 
 from quadrants.lang import ops
@@ -40,63 +42,6 @@ _MAX_SWEEPS = 12
 # For ``N <= _STATIC_SWEEP_MAX_N`` the outer sweep loop is unrolled (``static``); above it a runtime sweep loop is
 # used to keep compile time bounded. See the module docstring.
 _STATIC_SWEEP_MAX_N = 6
-
-
-@func
-def _jacobi_sweep(A_work, eigvecs, dt):
-    """One cyclic-Jacobi sweep.
-
-    For every ``(p, q)`` with ``p < q``, apply the Givens rotation that zeros ``A_work[p, q]`` to both sides of
-    ``A_work`` and accumulate it into ``eigvecs``. Matrices are passed and returned by value; returns the updated
-    ``(A_work, eigvecs)``. Factored out so the outer sweep loop can be either ``static`` (unrolled) or a runtime
-    ``range`` without duplicating the body — see the module docstring for the size dispatch.
-    """
-    N = static(A_work.n)
-    zero = A_work[0, 0] * 0.0
-    one = zero + 1.0
-    for p in static(range(N)):
-        for q in static(range(N)):
-            if static(p < q):
-                apq = A_work[p, q]
-                if ops.abs(apq) > _CONSIDER_AS_ZERO:
-                    app = A_work[p, p]
-                    aqq = A_work[q, q]
-                    diff = aqq - app
-
-                    tau = one
-                    if ops.abs(diff) < _CONSIDER_AS_ZERO:
-                        if apq < 0.0:
-                            tau = -one
-                    else:
-                        theta = diff / (2.0 * apq)
-                        tau = 1.0 / (ops.abs(theta) + ops.sqrt(1.0 + theta * theta))
-                        if theta < 0.0:
-                            tau = -tau
-
-                    gc = 1.0 / ops.sqrt(1.0 + tau * tau)
-                    gs = tau * gc
-
-                    for r in static(range(N)):
-                        arp = A_work[r, p]
-                        arq = A_work[r, q]
-                        A_work[r, p] = gc * arp - gs * arq
-                        A_work[r, q] = gs * arp + gc * arq
-
-                    for k in static(range(N)):
-                        akp = A_work[p, k]
-                        akq = A_work[q, k]
-                        A_work[p, k] = gc * akp - gs * akq
-                        A_work[q, k] = gs * akp + gc * akq
-
-                    A_work[p, q] = zero
-                    A_work[q, p] = zero
-
-                    for r in static(range(N)):
-                        vrp = eigvecs[r, p]
-                        vrq = eigvecs[r, q]
-                        eigvecs[r, p] = gc * vrp - gs * vrq
-                        eigvecs[r, q] = gs * vrp + gc * vrq
-    return A_work, eigvecs
 
 
 @func
@@ -127,11 +72,93 @@ def sym_eig_general(A, dt):
 
     if static(N <= _STATIC_SWEEP_MAX_N):
         for _sweep in static(range(_MAX_SWEEPS)):
-            A_work, eigvecs = _jacobi_sweep(A_work, eigvecs, dt)
+            for p in static(range(N)):
+                for q in static(range(N)):
+                    if static(p < q):
+                        apq = A_work[p, q]
+                        if ops.abs(apq) > _CONSIDER_AS_ZERO:
+                            app = A_work[p, p]
+                            aqq = A_work[q, q]
+                            diff = aqq - app
+
+                            tau = one
+                            if ops.abs(diff) < _CONSIDER_AS_ZERO:
+                                if apq < 0.0:
+                                    tau = -one
+                            else:
+                                theta = diff / (2.0 * apq)
+                                tau = 1.0 / (ops.abs(theta) + ops.sqrt(1.0 + theta * theta))
+                                if theta < 0.0:
+                                    tau = -tau
+
+                            gc = 1.0 / ops.sqrt(1.0 + tau * tau)
+                            gs = tau * gc
+
+                            for r in static(range(N)):
+                                arp = A_work[r, p]
+                                arq = A_work[r, q]
+                                A_work[r, p] = gc * arp - gs * arq
+                                A_work[r, q] = gs * arp + gc * arq
+
+                            for k in static(range(N)):
+                                akp = A_work[p, k]
+                                akq = A_work[q, k]
+                                A_work[p, k] = gc * akp - gs * akq
+                                A_work[q, k] = gs * akp + gc * akq
+
+                            A_work[p, q] = zero
+                            A_work[q, p] = zero
+
+                            for r in static(range(N)):
+                                vrp = eigvecs[r, p]
+                                vrq = eigvecs[r, q]
+                                eigvecs[r, p] = gc * vrp - gs * vrq
+                                eigvecs[r, q] = gs * vrp + gc * vrq
     else:
         loop_config(serialize=True)
         for _sweep in range(_MAX_SWEEPS):
-            A_work, eigvecs = _jacobi_sweep(A_work, eigvecs, dt)
+            for p in static(range(N)):
+                for q in static(range(N)):
+                    if static(p < q):
+                        apq = A_work[p, q]
+                        if ops.abs(apq) > _CONSIDER_AS_ZERO:
+                            app = A_work[p, p]
+                            aqq = A_work[q, q]
+                            diff = aqq - app
+
+                            tau = one
+                            if ops.abs(diff) < _CONSIDER_AS_ZERO:
+                                if apq < 0.0:
+                                    tau = -one
+                            else:
+                                theta = diff / (2.0 * apq)
+                                tau = 1.0 / (ops.abs(theta) + ops.sqrt(1.0 + theta * theta))
+                                if theta < 0.0:
+                                    tau = -tau
+
+                            gc = 1.0 / ops.sqrt(1.0 + tau * tau)
+                            gs = tau * gc
+
+                            for r in static(range(N)):
+                                arp = A_work[r, p]
+                                arq = A_work[r, q]
+                                A_work[r, p] = gc * arp - gs * arq
+                                A_work[r, q] = gs * arp + gc * arq
+
+                            for k in static(range(N)):
+                                akp = A_work[p, k]
+                                akq = A_work[q, k]
+                                A_work[p, k] = gc * akp - gs * akq
+                                A_work[q, k] = gs * akp + gc * akq
+
+                            A_work[p, q] = zero
+                            A_work[q, p] = zero
+
+                            for r in static(range(N)):
+                                vrp = eigvecs[r, p]
+                                vrq = eigvecs[r, q]
+                                eigvecs[r, p] = gc * vrp - gs * vrq
+                                eigvecs[r, q] = gs * vrp + gc * vrq
 
     for i in static(range(N)):
         eigvals[i] = A_work[i, i]
