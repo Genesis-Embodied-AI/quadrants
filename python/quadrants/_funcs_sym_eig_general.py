@@ -16,10 +16,10 @@ Algorithm (Golub & Van Loan, §8.5):
 
 The outer sweep loop is dispatched by size:
 
-* ``N <= 6`` — ``static(range)``: the sweep loop is fully unrolled into straight-line code, which is faster at
+* ``N <= 4`` — ``static(range)``: the sweep loop is fully unrolled into straight-line code, which is faster at
   runtime and compiles acceptably at these small sizes.
-* ``N > 6`` — runtime ``range``: a static unroll of ``MAX_SWEEPS`` × O(N²) Givens steps explodes the compile time
-  past N=6, so the sweep count is kept as a runtime loop to bound it. This branch is tagged
+* ``N > 4`` — runtime ``range``: a static unroll of ``MAX_SWEEPS`` × O(N²) Givens steps makes compile time grow
+  quickly with N, so the sweep count is kept as a runtime loop to bound it. This branch is tagged
   ``loop_config(serialize=True)`` so a calling ``@qd.kernel`` without its own outermost ``for ... in range(...)``
   still executes the sweeps sequentially on a single thread instead of parallelizing them — see
   ``perso_hugh/doc/quadrants_runtime_range_in_func_parallelized_gotcha_20260510.md`` for the underlying gotcha that
@@ -41,7 +41,7 @@ _CONSIDER_AS_ZERO = 1e-30
 _MAX_SWEEPS = 12
 # For ``N <= _STATIC_SWEEP_MAX_N`` the outer sweep loop is unrolled (``static``); above it a runtime sweep loop is
 # used to keep compile time bounded. See the module docstring.
-_STATIC_SWEEP_MAX_N = 6
+_STATIC_SWEEP_MAX_N = 4
 
 
 @func
