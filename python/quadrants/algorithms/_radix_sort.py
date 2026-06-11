@@ -116,6 +116,9 @@ def _radix_twiddle(keys: template(), n: i32, KEY_DTYPE: template(), KEY_WIDTH: t
             if static(KEY_DTYPE == i32):
                 keys[i] = bit_cast(v ^ u32(0x80000000), KEY_DTYPE)
             else:  # f32
+                # Forward (DO_TWIDDLE) picks the mask from the *input* sign bit; the inverse picks it from the
+                # *output* sign bit, which is the *opposite* bit (the forward twiddle flips it) - hence the two
+                # branches select the 0x80000000 / 0xFFFFFFFF masks in swapped order.
                 if static(DO_TWIDDLE):
                     if (v & u32(0x80000000)) != u32(0):
                         keys[i] = bit_cast(v ^ u32(0xFFFFFFFF), KEY_DTYPE)
@@ -131,6 +134,8 @@ def _radix_twiddle(keys: template(), n: i32, KEY_DTYPE: template(), KEY_WIDTH: t
             if static(KEY_DTYPE == i64):
                 keys[i] = bit_cast(w ^ u64(0x8000000000000000), KEY_DTYPE)
             else:  # f64
+                # Same input- vs output-sign-bit asymmetry as the 32-bit f32 case above (forward picks from the
+                # input sign bit, inverse from the output sign bit), so the masks are selected in swapped order.
                 if static(DO_TWIDDLE):
                     if (w & u64(0x8000000000000000)) != u64(0):
                         keys[i] = bit_cast(w ^ u64(0xFFFFFFFFFFFFFFFF), KEY_DTYPE)
@@ -217,6 +222,8 @@ def _radix_scatter(
             digit = i32((key >> u32(bit_start)) & u32(RADIX_DIGITS - 1))
             if tid < RADIX_DIGITS:
                 global_off = bit_cast(scratch[tid * num_blocks + block_id], i32)
+                # Subtract the block-local exclusive prefix: rebases rank from "position among all keys in this
+                # block" to "position among only this digit's keys in this block" (the intra-digit base offset).
                 block_offsets[tid] = global_off - excl_prefix[tid]
             _block.sync()
             if i < n:
@@ -461,6 +468,9 @@ def radix_sort(keys, tmp_keys, scratch, *, values=None, tmp_values=None, end_bit
     if end_bit is None:
         end_bit = _key_width_bits(key_dtype)
     has_values = values is not None
+    # Pass real tensors (keys / tmp_keys) as the values_* placeholders even when has_values=False, so the kernel's
+    # template key gets a concrete tensor type; the kernel body guards every values access on has_values, so these
+    # placeholders are never actually dereferenced.
     values_arg = values if has_values else keys
     tmp_values_arg = tmp_values if has_values else tmp_keys
     _validate_caller_scratch("radix_sort", N, scratch, radix_sort_scratch_slots(N, log256_max_n), u32)

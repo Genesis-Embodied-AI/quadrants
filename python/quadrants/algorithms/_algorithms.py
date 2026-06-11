@@ -24,8 +24,8 @@ def parallel_sort(keys, values=None):
         (a ``@qd.func`` for in-kernel composition). The new API is asymptotically ``O(N log_radix N)`` rather than
         ``O(N log^2 N)``, supports ``{u32, i32, f32, u64, i64, f64}`` keys across CUDA / AMDGPU / Vulkan / Metal, and
         takes caller-supplied tmp + scratch buffers so the call stays fully async. ``parallel_sort`` is kept for one
-        release cycle for backward compat and will be removed thereafter. See
-        ``docs/source/user_guide/algorithms.md`` for the migration recipe.
+        release cycle for backward compat and will be removed thereafter. See ``docs/source/user_guide/algorithms.md``
+        for the migration recipe.
 
     References:
         https://developer.nvidia.com/gpugems/gpugems2/part-vi-simulation-and-numerical-algorithms/chapter-46-improved-gpu-sorting
