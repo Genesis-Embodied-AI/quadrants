@@ -129,15 +129,6 @@ class BufferView:
         """Returns the shape of this view as a tuple, e.g. ``(16,)``."""
         return (self.size,)
 
-    @property
-    def dtype(self):
-        """Element dtype of the backing ndarray (a view shares its array's dtype).
-
-        Lets a host-constructed view be passed wherever an ndarray's ``.dtype`` is read - e.g. the
-        ``qd.algorithms.*`` host entries that derive their compile-time element type from the buffer argument.
-        """
-        return self.arr.dtype
-
     def subview(self, offset, size):
         """Create a sub-range view within this view, with bounds checking.
 

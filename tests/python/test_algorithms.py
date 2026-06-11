@@ -1063,29 +1063,6 @@ def test_device_radix_sort_subcount_n(dtype):
 
 
 @test_utils.test(arch=qd.gpu)
-def test_device_radix_sort_accepts_buffer_view():
-    """A host-constructed ``BufferView`` (an ``ndarray[a:b]`` slice) forwards ``.dtype`` / ``.shape``, so the
-    ``qd.algorithms.*`` host entries accept a sub-range view of an oversized reusable buffer (the qipc idiom)."""
-    cap, n = 4096, 2500
-    rng = np.random.default_rng(seed=11)
-    host = _gen_keys(rng, qd.u32, cap)
-    keys = qd.ndarray(qd.u32, shape=cap)
-    tmp = qd.ndarray(qd.u32, shape=cap)
-    keys.from_numpy(host)
-
-    kview = keys[0:n]
-    tview = tmp[0:n]
-    assert kview.dtype == keys.dtype  # the BufferView.dtype forwarding this test pins
-    assert kview.shape[0] == n
-
-    qd.algorithms.radix_sort(kview, tview, _radix_scratch(n))
-
-    got = keys.to_numpy()
-    np.testing.assert_array_equal(got[:n], np.sort(host[:n], kind="stable"), err_msg="view head sorted")
-    np.testing.assert_array_equal(got[n:], host[n:], err_msg="view tail untouched")
-
-
-@test_utils.test(arch=qd.gpu)
 def test_radix_sort_rejects_odd_pass_end_bit():
     """An ``end_bit`` implying an odd number of 8-bit passes (e.g. 8 or 24 for a 32-bit key) would leave the
     ping-pong result in ``tmp_keys`` instead of ``keys`` (and run the untwiddle on the wrong buffer), so the host
