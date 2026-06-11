@@ -1227,8 +1227,7 @@ void TaskCodeGenLLVM::visit(AssertStmt *stmt) {
       auto arg = stmt->args[i];
       QD_ASSERT(llvm_val[arg]);
 
-      // First convert the argument to an integral type with the same number of
-      // bits:
+      // First convert the argument to an integral type with the same number of bits:
       auto cast_type = llvm::Type::getIntNTy(*llvm_context, 8 * (std::size_t)data_type_size(arg->ret_type));
       auto cast_int = builder->CreateBitCast(llvm_val[arg], cast_type);
 
