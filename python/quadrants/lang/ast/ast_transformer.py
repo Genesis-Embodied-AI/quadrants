@@ -1662,6 +1662,40 @@ class ASTTransformer(Builder):
                     f"{kernel.func.__name__!r}. Available parameters: {arg_names}"
                 )
 
+        # Reject the bare-statement-loses-cp_id footgun at AST time. The offloader's
+        # pending-serial bucket loses the surrounding `checkpoint_id` and emits such statements
+        # as `serial` tasks with `cp_id == -1`, meaning they would run unconditionally even when
+        # the checkpoint is skipped -- a silent correctness bug. The workaround (and the only
+        # currently-supported pattern) is to wrap such statements in a one-iteration `for` loop;
+        # see `docs/source/user_guide/graph.md` ("Every statement inside a checkpoint must live
+        # in a top-level `for` loop"). We reject the specific cases known to hit the footgun
+        # (Assign / AugAssign / AnnAssign / non-docstring Expr) rather than allow-list every
+        # valid construct, so other top-level statements (For, While, If, With, Pass) keep
+        # working transparently; nested `with qd.checkpoint(...)` in particular still falls
+        # through to the existing nested-checkpoint check at the start of this method.
+        for i, stmt in enumerate(node.body):
+            is_bare_offender = isinstance(stmt, (ast.Assign, ast.AugAssign, ast.AnnAssign))
+            if not is_bare_offender and isinstance(stmt, ast.Expr):
+                # Allow only the docstring (str/bytes/None constant at index 0); reject every
+                # other top-level Expr (function calls, etc.) since they all become serial tasks.
+                is_docstring = i == 0 and isinstance(stmt.value, ast.Constant)
+                is_bare_offender = not is_docstring
+            if not is_bare_offender:
+                continue
+            stmt_desc = type(stmt).__name__
+            lineno = getattr(stmt, "lineno", None)
+            loc = f" at line {lineno}" if lineno is not None else ""
+            raise QuadrantsSyntaxError(
+                f"bare top-level statement inside 'with qd.checkpoint(...)' would run "
+                f"unconditionally and bypass the checkpoint gate; found '{stmt_desc}'{loc} "
+                f"(statement index {i}). Wrap it in a one-iteration loop:\n\n"
+                f"  with qd.checkpoint(...):\n"
+                f"      for _ in range(1):\n"
+                f"          <your statements here>\n\n"
+                f"See docs/source/user_guide/graph.md ('Every statement inside a checkpoint must "
+                f"live in a top-level for loop')."
+            )
+
         kernel.checkpoint_yield_on_args.append(yield_on_name)
         # Hand control to the C++ ASTBuilder so that every for-loop emitted by `build_stmts`
         # below is tagged with this checkpoint's `cp_id` on its `ForLoopConfig.checkpoint_id`.

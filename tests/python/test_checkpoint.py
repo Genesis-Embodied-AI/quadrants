@@ -245,6 +245,99 @@ def test_checkpoint_yield_on_nonexistent_arg_raises():
 
 
 @test_utils.test()
+def test_checkpoint_bare_assign_rejected():
+    """A bare assignment inside a checkpoint body is rejected at AST time.
+
+    Without the AST check, the offloader's pending-serial bucket would emit the assignment
+    as a `serial` task with `cp_id == -1`, so it would run unconditionally even when the
+    checkpoint is skipped -- a silent correctness bug. See `graph.md` and the rejected-
+    statements section of `_build_checkpoint_with`.
+    """
+
+    @qd.kernel(graph=True)
+    def k(c: qd.types.ndarray(qd.i32, ndim=0)):
+        with qd.checkpoint():
+            c[()] = c[()] - 1
+
+    c = qd.ndarray(qd.i32, shape=())
+    with pytest.raises(qd.QuadrantsSyntaxError, match=r"bare top-level statement.*'Assign'"):
+        k(c)
+
+
+@test_utils.test()
+def test_checkpoint_bare_augassign_rejected():
+    """Same as `_bare_assign_rejected` for `+=` / `-=` etc."""
+
+    @qd.kernel(graph=True)
+    def k(c: qd.types.ndarray(qd.i32, ndim=0)):
+        with qd.checkpoint():
+            c[()] -= 1
+
+    c = qd.ndarray(qd.i32, shape=())
+    with pytest.raises(qd.QuadrantsSyntaxError, match=r"bare top-level statement.*'AugAssign'"):
+        k(c)
+
+
+@test_utils.test()
+def test_checkpoint_bare_call_expr_rejected():
+    """A bare top-level expression (function call etc.) inside a checkpoint is rejected."""
+
+    @qd.func
+    def helper(c: qd.types.ndarray(qd.i32, ndim=0)) -> None:
+        c[()] = c[()] - 1
+
+    @qd.kernel(graph=True)
+    def k(c: qd.types.ndarray(qd.i32, ndim=0)):
+        with qd.checkpoint():
+            helper(c)
+
+    c = qd.ndarray(qd.i32, shape=())
+    with pytest.raises(qd.QuadrantsSyntaxError, match=r"bare top-level statement.*'Expr'"):
+        k(c)
+
+
+@test_utils.test()
+def test_checkpoint_for_loop_wrap_accepted():
+    """The canonical workaround -- wrap the bare statement in a one-iteration `for` loop --
+    must continue to compile and run."""
+    N = 4
+
+    @qd.kernel(graph=True)
+    def k(x: qd.types.ndarray(qd.i32, ndim=1), c: qd.types.ndarray(qd.i32, ndim=0)):
+        with qd.checkpoint():
+            for i in range(x.shape[0]):
+                x[i] = x[i] + 1
+            for _ in range(1):
+                c[()] = c[()] + 1
+
+    x = qd.ndarray(qd.i32, shape=(N,))
+    c = qd.ndarray(qd.i32, shape=())
+    x.from_numpy(np.zeros(N, dtype=np.int32))
+    c.from_numpy(np.array(0, dtype=np.int32))
+    k(x, c)
+    np.testing.assert_array_equal(x.to_numpy(), np.full(N, 1, dtype=np.int32))
+    assert c.to_numpy() == 1
+
+
+@test_utils.test()
+def test_checkpoint_docstring_allowed():
+    """A docstring at the top of a checkpoint body is allowed (it's a no-op `Expr(Constant)`)."""
+    N = 4
+
+    @qd.kernel(graph=True)
+    def k(x: qd.types.ndarray(qd.i32, ndim=1)):
+        with qd.checkpoint():
+            """This checkpoint increments x."""
+            for i in range(x.shape[0]):
+                x[i] = x[i] + 1
+
+    x = qd.ndarray(qd.i32, shape=(N,))
+    x.from_numpy(np.zeros(N, dtype=np.int32))
+    k(x)
+    np.testing.assert_array_equal(x.to_numpy(), np.full(N, 1, dtype=np.int32))
+
+
+@test_utils.test()
 def test_checkpoint_nested_raises():
     """Per design doc 8.2: checkpoints inside other checkpoints are forbidden at compile time."""
 
