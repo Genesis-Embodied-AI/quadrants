@@ -1074,7 +1074,6 @@ def test_radix_sort_func_composition(dtype, N):
     Pins the public func against the host ``radix_sort``: keys come back ascending and the ``u32`` payload follows the
     stable argsort. The reduce / scan / select / reduce-by-key families have matching ``*_func`` composition tests."""
     _skip_if_dtype_unsupported(dtype)
-    _skip_if_radix_sort_large_n_on_apple_gpu(N)
     from quadrants.algorithms._radix_sort import _min_log256_for_n
 
     end_bit = 32 if dtype in _FOURBYTE_DTYPES else 64
