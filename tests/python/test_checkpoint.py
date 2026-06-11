@@ -245,61 +245,90 @@ def test_checkpoint_yield_on_nonexistent_arg_raises():
 
 
 @test_utils.test()
-def test_checkpoint_bare_assign_rejected():
-    """A bare assignment inside a checkpoint body is rejected at AST time.
+def test_checkpoint_bare_assign_autowrapped():
+    """A bare `Assign` inside a checkpoint body is silently auto-wrapped in a one-iteration
+    `for` loop by the AST transformer so it picks up the checkpoint's `cp_id` and gets
+    skipped on resume.
 
-    Without the AST check, the offloader's pending-serial bucket would emit the assignment
+    Without the auto-wrap, the offloader's pending-serial bucket would emit the assignment
     as a `serial` task with `cp_id == -1`, so it would run unconditionally even when the
-    checkpoint is skipped -- a silent correctness bug. See `graph.md` and the rejected-
-    statements section of `_build_checkpoint_with`.
+    checkpoint is skipped -- a silent correctness bug. We pin both that the body runs on a
+    fresh launch and that it is correctly skipped on a `resume(from_checkpoint=1)`.
     """
 
     @qd.kernel(graph=True)
-    def k(c: qd.types.ndarray(qd.i32, ndim=0)):
-        with qd.checkpoint():
-            c[()] = c[()] - 1
+    def k(c: qd.types.ndarray(qd.i32, ndim=0), yo: qd.types.ndarray(qd.i32, ndim=0)):
+        with qd.checkpoint(yield_on=yo):  # cp_id 0 -- bare assign, auto-wrapped
+            c[()] = c[()] + 1
+        with qd.checkpoint():  # cp_id 1 -- sentinel for the resume path
+            for _ in range(1):
+                c[()] = c[()] + 10
 
     c = qd.ndarray(qd.i32, shape=())
-    with pytest.raises(qd.QuadrantsSyntaxError, match=r"bare top-level statement.*'Assign'"):
-        k(c)
+    yo = qd.ndarray(qd.i32, shape=())
+    c.from_numpy(np.array(0, dtype=np.int32))
+    yo.from_numpy(np.array(0, dtype=np.int32))
+    k(c, yo)  # fresh launch: both cp_id 0 (auto-wrapped) and cp_id 1 run -> c == 11
+    assert c.to_numpy() == 11
+
+    c.from_numpy(np.array(0, dtype=np.int32))
+    yo.from_numpy(np.array(0, dtype=np.int32))
+    k.resume(c, yo, from_checkpoint=1)  # cp_id 0 must be skipped; only cp_id 1 runs -> c == 10
+    assert c.to_numpy() == 10
 
 
 @test_utils.test()
-def test_checkpoint_bare_augassign_rejected():
-    """Same as `_bare_assign_rejected` for `+=` / `-=` etc."""
+def test_checkpoint_bare_augassign_autowrapped():
+    """Same as `_bare_assign_autowrapped` for `+=` / `-=` etc. (`AugAssign`)."""
 
     @qd.kernel(graph=True)
     def k(c: qd.types.ndarray(qd.i32, ndim=0)):
         with qd.checkpoint():
-            c[()] -= 1
+            c[()] += 1
+        with qd.checkpoint():
+            for _ in range(1):
+                c[()] += 10
 
     c = qd.ndarray(qd.i32, shape=())
-    with pytest.raises(qd.QuadrantsSyntaxError, match=r"bare top-level statement.*'AugAssign'"):
-        k(c)
+    c.from_numpy(np.array(0, dtype=np.int32))
+    k(c)
+    assert c.to_numpy() == 11
+
+    c.from_numpy(np.array(0, dtype=np.int32))
+    k.resume(c, from_checkpoint=1)
+    assert c.to_numpy() == 10
 
 
 @test_utils.test()
-def test_checkpoint_bare_call_expr_rejected():
-    """A bare top-level expression (function call etc.) inside a checkpoint is rejected."""
+def test_checkpoint_bare_call_expr_autowrapped():
+    """A bare top-level `Expr` (function call) inside a checkpoint is auto-wrapped too."""
 
     @qd.func
-    def helper(c: qd.types.ndarray(qd.i32, ndim=0)) -> None:
-        c[()] = c[()] - 1
+    def bump(c: qd.types.ndarray(qd.i32, ndim=0)) -> None:
+        c[()] = c[()] + 1
 
     @qd.kernel(graph=True)
     def k(c: qd.types.ndarray(qd.i32, ndim=0)):
         with qd.checkpoint():
-            helper(c)
+            bump(c)
+        with qd.checkpoint():
+            for _ in range(1):
+                c[()] += 10
 
     c = qd.ndarray(qd.i32, shape=())
-    with pytest.raises(qd.QuadrantsSyntaxError, match=r"bare top-level statement.*'Expr'"):
-        k(c)
+    c.from_numpy(np.array(0, dtype=np.int32))
+    k(c)
+    assert c.to_numpy() == 11
+
+    c.from_numpy(np.array(0, dtype=np.int32))
+    k.resume(c, from_checkpoint=1)
+    assert c.to_numpy() == 10
 
 
 @test_utils.test()
 def test_checkpoint_for_loop_wrap_accepted():
-    """The canonical workaround -- wrap the bare statement in a one-iteration `for` loop --
-    must continue to compile and run."""
+    """An explicit one-iteration `for` wrap (the pattern the auto-wrap synthesizes) must
+    continue to compile and run, mixed alongside real for-loops."""
     N = 4
 
     @qd.kernel(graph=True)

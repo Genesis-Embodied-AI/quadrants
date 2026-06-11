@@ -1662,39 +1662,40 @@ class ASTTransformer(Builder):
                     f"{kernel.func.__name__!r}. Available parameters: {arg_names}"
                 )
 
-        # Reject the bare-statement-loses-cp_id footgun at AST time. The offloader's
-        # pending-serial bucket loses the surrounding `checkpoint_id` and emits such statements
-        # as `serial` tasks with `cp_id == -1`, meaning they would run unconditionally even when
-        # the checkpoint is skipped -- a silent correctness bug. The workaround (and the only
-        # currently-supported pattern) is to wrap such statements in a one-iteration `for` loop;
-        # see `docs/source/user_guide/graph.md` ("Every statement inside a checkpoint must live
-        # in a top-level `for` loop"). We reject the specific cases known to hit the footgun
-        # (Assign / AugAssign / AnnAssign / non-docstring Expr) rather than allow-list every
-        # valid construct, so other top-level statements (For, While, If, With, Pass) keep
-        # working transparently; nested `with qd.checkpoint(...)` in particular still falls
-        # through to the existing nested-checkpoint check at the start of this method.
+        # Auto-wrap bare top-level statements in the checkpoint body in a one-iteration
+        # `for` loop. The offloader's pending-serial bucket loses the surrounding
+        # `checkpoint_id` and emits such statements as `serial` tasks with `cp_id == -1`,
+        # meaning they would run unconditionally even when the checkpoint is skipped -- a
+        # silent correctness bug. The fix is to lower them as `range_for` tasks instead by
+        # wrapping each bare statement in `for _ in range(1): <stmt>`. We target the specific
+        # statement kinds known to hit the footgun (Assign / AugAssign / AnnAssign /
+        # non-docstring Expr) and leave everything else (For, While, If, With, Pass,
+        # docstring) untouched so they keep working transparently; nested
+        # `with qd.checkpoint(...)` in particular still falls through to the existing
+        # nested-checkpoint check at the start of this method.
+        new_body: list[ast.stmt] = []
         for i, stmt in enumerate(node.body):
-            is_bare_offender = isinstance(stmt, (ast.Assign, ast.AugAssign, ast.AnnAssign))
-            if not is_bare_offender and isinstance(stmt, ast.Expr):
-                # Allow only the docstring (str/bytes/None constant at index 0); reject every
-                # other top-level Expr (function calls, etc.) since they all become serial tasks.
+            needs_wrap = isinstance(stmt, (ast.Assign, ast.AugAssign, ast.AnnAssign))
+            if not needs_wrap and isinstance(stmt, ast.Expr):
                 is_docstring = i == 0 and isinstance(stmt.value, ast.Constant)
-                is_bare_offender = not is_docstring
-            if not is_bare_offender:
-                continue
-            stmt_desc = type(stmt).__name__
-            lineno = getattr(stmt, "lineno", None)
-            loc = f" at line {lineno}" if lineno is not None else ""
-            raise QuadrantsSyntaxError(
-                f"bare top-level statement inside 'with qd.checkpoint(...)' would run "
-                f"unconditionally and bypass the checkpoint gate; found '{stmt_desc}'{loc} "
-                f"(statement index {i}). Wrap it in a one-iteration loop:\n\n"
-                f"  with qd.checkpoint(...):\n"
-                f"      for _ in range(1):\n"
-                f"          <your statements here>\n\n"
-                f"See docs/source/user_guide/graph.md ('Every statement inside a checkpoint must "
-                f"live in a top-level for loop')."
-            )
+                needs_wrap = not is_docstring
+            if needs_wrap:
+                wrapped = ast.For(
+                    target=ast.Name(id="_", ctx=ast.Store()),
+                    iter=ast.Call(
+                        func=ast.Name(id="range", ctx=ast.Load()),
+                        args=[ast.Constant(value=1)],
+                        keywords=[],
+                    ),
+                    body=[stmt],
+                    orelse=[],
+                )
+                ast.copy_location(wrapped, stmt)
+                ast.fix_missing_locations(wrapped)
+                new_body.append(wrapped)
+            else:
+                new_body.append(stmt)
+        node.body = new_body
 
         kernel.checkpoint_yield_on_args.append(yield_on_name)
         # Hand control to the C++ ASTBuilder so that every for-loop emitted by `build_stmts`
