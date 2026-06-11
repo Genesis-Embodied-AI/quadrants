@@ -600,9 +600,21 @@ void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_c
   std::vector<int> per_task_group_x(task_attribs.size(), 0);
   for (int i = 0; i < (int)task_attribs.size(); ++i) {
     const auto &attribs = task_attribs[i];
+    // Cap `advisory_total_num_threads` to the ACTUAL iteration count when the codegen was able to
+    // extract the range end as a product of ndarray-shape lookups (see
+    // `RangeForAttributes::end_shape_product`). Without this cap, a grad kernel whose range is
+    // runtime-determined (`const_end = false`) inherits `kMaxNumThreadsGridStrideLoop = 131072`
+    // from the codegen fallback, and the adstack-heap sizing below multiplies that by the per-
+    // thread stride to request (e.g.) 48 GB for a 1-iteration B=1 workload - exceeding Metal's
+    // `maxBufferLength` and producing a hard RHI error. The in-shader grid-stride loop handles
+    // any dispatched thread count >= 1 correctly; a tight cap just means each dispatched thread
+    // processes fewer strides of idle work.
     int effective_advisory_threads = attribs.advisory_total_num_threads;
     if (attribs.range_for_attribs && !attribs.range_for_attribs->end_shape_product.empty()) {
       const auto &range = *attribs.range_for_attribs;
+      // `const_begin` is asserted true at codegen whenever `end_stmt` is populated (see the
+      // `QD_ASSERT(stmt->const_begin)` in the `if (stmt->end_stmt)` branch of
+      // `spirv_codegen.cpp`), so `range.begin` is the literal begin value, not a gtmp offset.
       int64_t iter_end = 1;
       for (const auto &ref : range.end_shape_product) {
         std::vector<int> indices = ref.arg_id;
@@ -614,6 +626,15 @@ void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_c
       effective_advisory_threads =
           int(std::min<int64_t>(int64_t(effective_advisory_threads), std::max<int64_t>(1, iter_count)));
     }
+    // Adstack-bearing tasks additionally cap at `kAdStackMaxConcurrentThreads`, matching the LLVM
+    // CUDA / AMDGPU launchers' `kAdStackMaxConcurrentThreads = 65536` advisory cap. The per-thread
+    // int / float adstack heap rows scale linearly with the dispatched thread count, so an
+    // uncapped 600k-thread MPM grid kernel would request ~2.5 GB just for the int heap
+    // (`linear_thread_idx * stride_int_bytes`) on every reverse-mode launch - the same kernel
+    // sizes to ~70 MB on LLVM thanks to that cap. SPIR-V's in-shader grid-stride loop handles the
+    // smaller dispatch correctly: each launched invocation walks `i += grid_dim() * block_dim()`
+    // until it has covered the full logical iteration count. Skip the cap on tasks without
+    // adstack allocas to keep forward-only and adstack-free kernels at saturating throughput.
     constexpr int kAdStackMaxConcurrentThreads = 65536;
     if (!attribs.ad_stack.allocas.empty() && effective_advisory_threads > kAdStackMaxConcurrentThreads) {
       effective_advisory_threads = kAdStackMaxConcurrentThreads;

@@ -1,0 +1,55 @@
+"""User-facing ``qd.checkpoint`` context-manager and its no-op Python-runtime stub.
+
+Mirrors ``graph_status.py`` which holds the other half of the same feature surface
+(``GraphStatus``). Kept in its own module to keep ``lang/misc.py`` from growing further --
+the AST transformer and the C++ runtime are the actual implementation; this file is just
+the public API entry point.
+
+Re-exported via ``qd.lang.misc`` (and therefore as ``qd.checkpoint``) for the user-facing
+canonical import path.
+"""
+
+from __future__ import annotations
+
+from contextlib import contextmanager
+
+
+@contextmanager
+def checkpoint(*, yield_on=None):
+    """Marks a section of a graph kernel as a skippable, optionally yieldable stage.
+
+    Used as ``with qd.checkpoint():`` or ``with qd.checkpoint(yield_on=flag):`` inside a
+    ``@qd.kernel(graph=True)`` kernel body. Each ``with`` block becomes a checkpoint with an
+    auto-assigned ``cp_id`` (0, 1, 2, ... by declaration order, flat across the kernel,
+    independent of whether the checkpoint is inside or outside a ``qd.graph_do_while``).
+
+    On CUDA SM 9.0+ / 12.4+ each checkpoint compiles to a CUDA graph IF conditional node
+    around its body kernels. On other GPU backends it lowers to a small "gate" kernel that
+    rewrites per-kernel indirect-dispatch grid dimensions to ``(0, 0, 0)`` to skip the
+    checkpoint body. CPU runs checkpoint bodies behind a host branch.
+
+    If ``yield_on`` is a scalar ``qd.i32`` ndarray that is also a kernel parameter, an
+    auto-inserted yield-check kernel runs after the checkpoint body. If the user wrote a
+    non-zero value into ``yield_on`` during the body, the framework records this checkpoint
+    as the yielding one, disables downstream checkpoints in the enclosing
+    ``qd.graph_do_while`` body, exits the loop, and reports the ``cp_id`` to the host via
+    the ``GraphStatus`` returned by the kernel call (see ``graph.md``). The yield-check
+    kernel resets ``yield_on`` back to 0 after reading it; the user does not have to clear
+    it from the host.
+
+    Restrictions (enforced at kernel compile time):
+      - Must be used inside ``@qd.kernel(graph=True)``.
+      - ``yield_on``, when supplied, must name a kernel parameter that is a 0-d
+        ``qd.types.ndarray(qd.i32, ndim=0)``.
+      - Checkpoints cannot be nested inside other checkpoints. Checkpoints inside a
+        ``qd.graph_do_while`` body are fine and are the expected pattern.
+      - Cannot be combined with ``qd.stream_parallel()`` in the same kernel.
+
+    This function should not be called directly at runtime; it is recognised and transformed
+    during AST compilation. At Python runtime (outside kernels), this is a no-op context
+    manager so that doctests / type-checking can import the symbol freely.
+
+    See also ``docs/source/user_guide/graph.md`` for the host-side yield/resume loop and
+    cross-backend semantics.
+    """
+    yield

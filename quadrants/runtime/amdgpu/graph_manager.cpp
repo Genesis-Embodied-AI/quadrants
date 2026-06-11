@@ -483,6 +483,8 @@ bool GraphManager::try_launch(int launch_id,
     AMDGPUDriver::get_instance().memcpy_host_to_device_async(
         cached.persistent_device_arg_buffer, ctx.get_context().arg_buffer, cached.arg_buffer_size, stream_for_setup);
   }
+  // Stage the RuntimeContext on device. Its arg_buffer / result_buffer pointers reference the persistent device
+  // buffers above; none of its fields change between graph launches so one copy is sufficient.
   AMDGPUDriver::get_instance().memcpy_host_to_device_async(cached.device_runtime_ctx, &cached.persistent_ctx,
                                                            sizeof(RuntimeContext), stream_for_setup);
   AMDGPUDriver::get_instance().stream_synchronize(stream_for_setup);
