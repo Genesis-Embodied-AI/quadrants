@@ -567,7 +567,7 @@
 </tr>
 <tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code> objects</p></td>
 <td><p>Yes</p></td>
-<td><p>member types recursively, narrowed by pruning (see <a class="reference internal" href="#pruning-driven-argument-hashing">Pruning-driven argument hashing</a>); primitive member types and values baked into kernel (see <a class="reference internal" href="#compound-type-cache-keying">Advanced — compound-type cache keying</a>)</p></td>
+<td><p>member types recursively, narrowed to only members accessed by the kernel (see <a class="reference internal" href="#how-the-cache-key-is-computed">How the cache key is computed</a>); primitive member types and values baked into kernel (see <a class="reference internal" href="#compound-type-cache-keying">Advanced — compound-type cache keying</a>)</p></td>
 </tr>
 <tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">qd.Template</span></code> primitives (int, float, bool)</p></td>
 <td><p>Yes</p></td>
@@ -593,7 +593,7 @@
 </table>
 </div>
 <p>If any kernel-used parameter is of an unsupported type, fastcache is disabled for that call and the kernel falls back to normal compilation. For <code class="docutils literal notranslate"><span class="pre">qd.field</span></code> / <code class="docutils literal notranslate"><span class="pre">ScalarField</span></code> / <code class="docutils literal notranslate"><span class="pre">MatrixField</span></code> arriving through a <code class="docutils literal notranslate"><span class="pre">qd.Tensor</span></code>-annotated parameter, this is silent — no warning is emitted. For other unsupported types, a warning is logged at the <code class="docutils literal notranslate"><span class="pre">warn</span></code> level identifying the offending parameter.</p>
-<p>Kernel-unused members of any type — including unrecognised ones — do <strong>not</strong> disable fastcache. The pruning narrowing in the args hasher skips them entirely, so opaque metadata (UUIDs, Pydantic configs, parent back-pointers) attached to a <code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code> instance is harmless as long as the kernel doesn’t read it.</p>
+<p>Kernel-unused members of any type — including unrecognised ones — do <strong>not</strong> disable fastcache. The args hasher skips them entirely, so opaque metadata (UUIDs, Pydantic configs, parent back-pointers) attached to a <code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code> instance is harmless as long as the kernel doesn’t read it.</p>
 </section>
 <section id="source-code-must-be-available">
 <h3>3. Source code must be available<a class="headerlink" href="#source-code-must-be-available" title="Link to this heading">#</a></h3>
@@ -611,36 +611,20 @@
 <li><p><strong>Template parameter values</strong> (since they are baked into the compiled kernel).</p></li>
 </ul>
 <p>When any of these change, the resulting key is different, so a new compilation occurs and a new entry is stored. Previous entries remain on disk — multiple cached versions coexist. You do not need to manually clear the cache when making code changes — the hash mismatch causes a transparent recompilation.</p>
-<section id="pruning-driven-argument-hashing">
-<h3>Pruning-driven argument hashing<a class="headerlink" href="#pruning-driven-argument-hashing" title="Link to this heading">#</a></h3>
+<section id="how-the-cache-key-is-computed">
+<h3>How the cache key is computed<a class="headerlink" href="#how-the-cache-key-is-computed" title="Link to this heading">#</a></h3>
 <p>Fastcache uses a <strong>two-level cache</strong>:</p>
 <ul class="simple">
-<li><p><strong>L1</strong> (source + config only): stores the set of <em>flat names</em> the kernel actually reads — e.g. <code class="docutils literal notranslate"><span class="pre">__qd_state__qd_x</span></code> for a kernel that reads <code class="docutils literal notranslate"><span class="pre">state.x</span></code>. This is the kernel’s pruning info, computed at compile time by the AST builder.</p></li>
-<li><p><strong>L2</strong> (L1 + narrow argument hash): stores the compiled artifact under a key that only hashes the arg paths in the L1 pruning set.</p></li>
+<li><p><strong>L1</strong> (source + config only): identifies which kernel-arg variables the kernel actually reads or writes.</p></li>
+<li><p><strong>L2</strong> (L1 + narrow argument hash): stores the compiled artifact under a key that only hashes those variables.</p></li>
 </ul>
 <section id="two-rules">
 <h4>Two rules<a class="headerlink" href="#two-rules" title="Link to this heading">#</a></h4>
 <p>The args hasher enforces two strict invariants:</p>
-<ol class="arabic">
-<li><p><strong>The cache key may only include contributions from kernel-pruned paths.</strong> A path is “pruned” (in the pruning-info sense) if Quadrants’s compiler recorded the kernel reading it. Pruning info covers:</p>
-<ul class="simple">
-<li><p>Dataclass-flattened param accesses (<code class="docutils literal notranslate"><span class="pre">__qd_some_dc__qd_field</span></code> Names produced by <code class="docutils literal notranslate"><span class="pre">FlattenAttributeNameTransformer</span></code>, marked via <code class="docutils literal notranslate"><span class="pre">build_Name</span></code>).</p></li>
-<li><p>Ndarray accesses on data_oriented / template args (<code class="docutils literal notranslate"><span class="pre">struct_ndarray_launch_info</span></code>, folded into the pruning set by <code class="docutils literal notranslate"><span class="pre">Kernel._fold_struct_nd_paths_into_pruning</span></code>).</p></li>
-<li><p>Any other attribute-chain access on a kernel arg (<code class="docutils literal notranslate"><span class="pre">self.dofs.x</span></code>, <code class="docutils literal notranslate"><span class="pre">cfg.n</span></code>, …) recorded by <code class="docutils literal notranslate"><span class="pre">ASTTransformer.build_Attribute</span></code>’s <code class="docutils literal notranslate"><span class="pre">_qd_arg_chain</span></code> tracking and folded by <code class="docutils literal notranslate"><span class="pre">Kernel._fold_kernel_arg_chain_paths_into_pruning</span></code>. This covers primitive members baked into the kernel, nested struct paths, and accesses through <code class="docutils literal notranslate"><span class="pre">&#64;qd.func</span></code> callees (propagated by <code class="docutils literal notranslate"><span class="pre">Pruning.record_after_call</span></code>).</p></li>
-</ul>
-<p>Paths <em>not</em> in the pruning set are skipped by the args hasher — they are guaranteed not to affect kernel codegen because the kernel cannot read them.</p>
-</li>
-<li><p><strong>Unrecognised types at kernel-read paths must not be silently dropped or hashed by type-name.</strong> If pruning says the kernel reads a path and the value at that path is a type the args hasher doesn’t explicitly handle (Pydantic models, UUIDs, third-party tensor wrappers, …), fastcache is disabled for the call with a one-shot <code class="docutils literal notranslate"><span class="pre">[FASTCACHE][UNKNOWN_TYPE]</span></code> warning identifying the offending type plus an <code class="docutils literal notranslate"><span class="pre">[INVALID_FUNC]</span></code> log line confirming the cache is off. Capturing type identity without type parameters (dtype/shape on a hypothetical tensor type) would silently mask a value-affecting change.</p></li>
+<ol class="arabic simple">
+<li><p><strong>If the kernel does not read or write a variable, it is entirely ignored by fastcache.</strong> It will not cause fastcache to fail, nor emit a warning, nor emit an error.</p></li>
+<li><p><strong>Unrecognised types at variables the kernel reads or writes must not be silently dropped or hashed by type-name.</strong> If the value at such a variable has a type the args hasher doesn’t explicitly handle (Pydantic models, UUIDs, third-party tensor wrappers, …), fastcache is disabled for the call with a one-shot <code class="docutils literal notranslate"><span class="pre">[FASTCACHE][UNKNOWN_TYPE]</span></code> warning identifying the offending type plus an <code class="docutils literal notranslate"><span class="pre">[INVALID_FUNC]</span></code> log line confirming the cache is off.</p></li>
 </ol>
-</section>
-<section id="practical-implications">
-<h4>Practical implications<a class="headerlink" href="#practical-implications" title="Link to this heading">#</a></h4>
-<ul class="simple">
-<li><p><strong>Kernel-unused members do not affect the cache key.</strong> If a <code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code> container has an opaque metadata member (UUID, Pydantic config, parent-solver back-pointer), and the kernel never reads it, the member is <em>not</em> hashed. Changes to <code class="docutils literal notranslate"><span class="pre">self._uid</span></code> or <code class="docutils literal notranslate"><span class="pre">self.cfg</span></code> don’t disturb the cache key of a kernel that reads <code class="docutils literal notranslate"><span class="pre">self.dofs_state.x</span></code>.</p></li>
-<li><p><strong>Kernel-unused members of unrecognised types are also fine.</strong> Pruning narrowing skips them before the type-recognition check runs.</p></li>
-<li><p><strong>Kernel-read members of unrecognised types fail fastcache loudly.</strong> Either add explicit handling in <code class="docutils literal notranslate"><span class="pre">quadrants/lang/_fast_caching/args_hasher.py::stringify_obj_type</span></code> (for new tensor-like types whose dtype/shape matter), or move the access out of the kernel-read path (for opaque metadata that shouldn’t be there in the first place).</p></li>
-</ul>
-<p><code class="docutils literal notranslate"><span class="pre">qd.field</span></code> / <code class="docutils literal notranslate"><span class="pre">ScalarField</span></code> / <code class="docutils literal notranslate"><span class="pre">MatrixField</span></code> are <em>recognised-but-unsupported</em>: encountering one at a kernel-read path disables fastcache for the call (with a warn-level diagnostic).</p>
 </section>
 </section>
 </section>
@@ -668,7 +652,7 @@
 <section id="compound-type-cache-keying">
 <h3>Compound-type cache keying<a class="headerlink" href="#compound-type-cache-keying" title="Link to this heading">#</a></h3>
 <p>The args hasher walks compound-type kernel parameters recursively. For each leaf member it decides what (if anything) contributes to the cache key. The headline rules:</p>
-<p><strong><code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code>:</strong> the walker descends into <code class="docutils literal notranslate"><span class="pre">vars(obj)</span></code>, narrowed by pruning info. For each walked child:</p>
+<p><strong><code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code>:</strong> the walker descends into <code class="docutils literal notranslate"><span class="pre">vars(obj)</span></code>, narrowed to only include variables accessed by the kernel. For each walked child:</p>
 <ul class="simple">
 <li><p><code class="docutils literal notranslate"><span class="pre">qd.ndarray</span></code> member — <code class="docutils literal notranslate"><span class="pre">(dtype,</span> <span class="pre">ndim,</span> <span class="pre">layout)</span></code> is included in the cache key. Element values are not.</p></li>
 <li><p>Primitive (<code class="docutils literal notranslate"><span class="pre">int</span></code> / <code class="docutils literal notranslate"><span class="pre">float</span></code> / <code class="docutils literal notranslate"><span class="pre">bool</span></code> / <code class="docutils literal notranslate"><span class="pre">enum.Enum</span></code>) member — value is baked into the kernel (same semantics as a <code class="docutils literal notranslate"><span class="pre">qd.Template</span></code> primitive). Two instances of the same class with different primitive member values get different cache entries.</p></li>
@@ -752,9 +736,8 @@
 </ul>
 </li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#cache-keying">Cache keying</a><ul class="nav section-nav flex-column">
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#pruning-driven-argument-hashing">Pruning-driven argument hashing</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#how-the-cache-key-is-computed">How the cache key is computed</a><ul class="nav section-nav flex-column">
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#two-rules">Two rules</a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#practical-implications">Practical implications</a></li>
 </ul>
 </li>
 </ul>

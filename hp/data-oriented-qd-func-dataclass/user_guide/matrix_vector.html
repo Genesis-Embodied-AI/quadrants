@@ -513,7 +513,7 @@
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">large</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">64</span><span class="p">,</span> <span class="mi">64</span><span class="p">))</span>
 </pre></div>
 </div>
-<p>The 144-element threshold matches the largest size officially supported by the per-thread linalg APIs (<code class="docutils literal notranslate"><span class="pre">qd.sym_eig</span></code> and <code class="docutils literal notranslate"><span class="pre">qd.make_spd</span></code> up to 12×12, <code class="docutils literal notranslate"><span class="pre">Matrix.inverse</span></code> up to 12×12) — those internal constructions stay below the warning threshold.</p>
+<p>The 144-element threshold is set by the largest size officially supported by the per-thread linalg APIs (<code class="docutils literal notranslate"><span class="pre">Matrix.inverse</span></code> up to 12×12; <code class="docutils literal notranslate"><span class="pre">qd.sym_eig</span></code> and <code class="docutils literal notranslate"><span class="pre">qd.make_spd</span></code> cap lower, at 6×6) — those internal constructions stay below the warning threshold.</p>
 </section>
 <section id="storage-layout-packed-vs-unpacked-vectors">
 <h2>Storage layout: packed vs unpacked vectors<a class="headerlink" href="#storage-layout-packed-vs-unpacked-vectors" title="Link to this heading">#</a></h2>
