@@ -40,9 +40,9 @@ void KernelLauncher::launch_offloaded_tasks_with_do_while(Handle handle, LaunchC
   }
 
   if (levels.size() == 1 && !has_top_level_task) {
-    // Single loop whose body is the entire kernel: keep the historical fast path of recording every task in one
-    // command list each iteration, which is materially cheaper than the per-task replay the general driver below
-    // uses (one cmdlist + one args-buffer blit per iteration instead of per task).
+    // Single loop whose body is the entire kernel: keep the historical fast path of recording every task in one command
+    // list each iteration, which is materially cheaper than the per-task replay the general driver below uses (one
+    // cmdlist + one args-buffer blit per iteration instead of per task).
     int32_t flag_val;
     do {
       config_.gfx_runtime_->launch_kernel(handle, ctx);

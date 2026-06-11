@@ -371,8 +371,8 @@ def test_graph_do_while_fastcache_restores_arg(tmp_path: pathlib.Path):
 
 @test_utils.test()
 def test_graph_do_while_nested_two_levels():
-    """Two nested graph_do_while loops. The inner counter is reset at the start of each outer
-    iteration; total work is outer_iters * inner_iters."""
+    """Two nested graph_do_while loops. The inner counter is reset at the start of each outer iteration; total work is
+    outer_iters * inner_iters."""
     N = 32
     OUTER, INNER = 3, 4
 
@@ -562,11 +562,11 @@ def test_graph_do_while_mixed_with_top_level_for_loops():
 def test_graph_do_while_canonical_seed_writeback_idiom():
     """The seed / iterate / writeback idiom for loop-carried state (see graph.md).
 
-    The init and writeback live in *separate non-graph* kernels so they run exactly once, while the
-    graph=True kernel contains only the do-while loop. State carries normally because nothing outside
-    the loop body resets it. (On this branch the equivalent run-once top-level for-loops could also
-    live inside the iterate kernel -- see test_graph_do_while_mixed_with_top_level_for_loops -- this
-    test pins the separate-kernel split documented as the alternative.)
+    The init and writeback live in *separate non-graph* kernels so they run exactly once, while the graph=True kernel
+    contains only the do-while loop. State carries normally because nothing outside the loop body resets it. (On this
+    branch the equivalent run-once top-level for-loops could also live inside the iterate kernel -- see
+    test_graph_do_while_mixed_with_top_level_for_loops -- this test pins the separate-kernel split documented as the
+    alternative.)
     """
     N = 8
 
@@ -648,8 +648,8 @@ def test_graph_do_while_nested_mixed_with_for_loops():
 
 @test_utils.test()
 def test_graph_do_while_nested_dynamic_bounds():
-    """A nested loop whose inner for-loop bound is read from device memory. The dynamic bound forces
-    the offloader to emit a serial bound-computation task, which must be tagged at the inner level."""
+    """A nested loop whose inner for-loop bound is read from device memory. The dynamic bound forces the offloader to
+    emit a serial bound-computation task, which must be tagged at the inner level."""
     N = 32
     OUTER = 3
 

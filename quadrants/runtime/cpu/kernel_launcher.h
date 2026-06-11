@@ -53,13 +53,13 @@ class KernelLauncher : public LLVM::KernelLauncher {
                                             const std::vector<AdStackSizingInfo> &ad_stacks,
                                             const std::vector<std::size_t> &num_threads_per_task,
                                             const std::vector<int> &graph_do_while_level_per_task);
-  // Once-per-launch adstack setup (lazy-claim buffers + max-reducer dispatch), shared by the flat and
-  // nested graph_do_while paths.
+  // Once-per-launch adstack setup (lazy-claim buffers + max-reducer dispatch), shared by the flat and nested
+  // graph_do_while paths.
   void prepare_offloaded_tasks(LaunchContextBuilder &ctx,
                                const std::vector<TaskFunc> &task_funcs,
                                const std::vector<AdStackSizingInfo> &ad_stacks);
-  // Run a single offloaded task (per-task adstack publish + invoke). Returns false if a device-side
-  // assert fired (kernel should stop). `launch_scope` must span the whole launch.
+  // Run a single offloaded task (per-task adstack publish + invoke). Returns false if a device-side assert fired
+  // (kernel should stop). `launch_scope` must span the whole launch.
   bool run_one_offloaded_task(LaunchContextBuilder &ctx,
                               std::size_t i,
                               const std::vector<TaskFunc> &task_funcs,

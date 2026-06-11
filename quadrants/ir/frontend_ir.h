@@ -934,9 +934,9 @@ class ASTBuilder {
   int id_counter_{0};
   int stream_parallel_group_counter_{0};
   int current_stream_parallel_group_id_{0};
-  // Innermost active graph_do_while level id (-1 if not inside any). The Python AST transformer manages
-  // the stack and calls set_graph_do_while_level_id() on enter/exit; for-loops created while it is >= 0
-  // are tagged with it (mirrors current_stream_parallel_group_id_).
+  // Innermost active graph_do_while level id (-1 if not inside any). The Python AST transformer manages the stack and
+  // calls set_graph_do_while_level_id() on enter/exit; for-loops created while it is >= 0 are tagged with it (mirrors
+  // current_stream_parallel_group_id_).
   int current_graph_do_while_level_id_{-1};
 
  public:
@@ -1078,9 +1078,8 @@ class ASTBuilder {
     current_stream_parallel_group_id_ = 0;
   }
 
-  // Set the innermost active graph_do_while level id. Pass the new level id when entering a
-  // graph_do_while loop, and the parent level id (or -1) when leaving it. The Python AST transformer
-  // owns the level stack and the level table.
+  // Set the innermost active graph_do_while level id. Pass the new level id when entering a graph_do_while loop, and
+  // the parent level id (or -1) when leaving it. The Python AST transformer owns the level stack and the level table.
   void set_graph_do_while_level_id(int level_id) {
     current_graph_do_while_level_id_ = level_id;
   }

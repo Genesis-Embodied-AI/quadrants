@@ -536,8 +536,7 @@ class FunctionDefTransformer:
 
     @staticmethod
     def _is_graph_do_while_while(stmt: ast.stmt) -> bool:
-        """Syntactic check matching ASTTransformer._is_graph_do_while_call: a ``while
-        qd.graph_do_while(var):`` loop."""
+        """Syntactic check matching ASTTransformer._is_graph_do_while_call: a ``while qd.graph_do_while(var):`` loop."""
         if not isinstance(stmt, ast.While):
             return False
         test = stmt.test
@@ -552,16 +551,13 @@ class FunctionDefTransformer:
 
     @staticmethod
     def _validate_graph_do_while_structure(body: list[ast.stmt]) -> None:
-        """If a kernel uses qd.graph_do_while() anywhere, enforce that every top-level statement list
-        (the kernel body and each graph_do_while body) contains only for-loops and graph_do_while
-        while-loops. This keeps per-task graph_do_while level tagging exact: the offloader tags a flushed
-        serial (bound/listgen) task with the level of the for-loop that flushed it, which is only correct
-        if no bare top-level statement at a different level precedes that for-loop. For-loops and
-        graph_do_while loops may be freely mixed/nested; bare statements must be wrapped in
+        """If a kernel uses qd.graph_do_while() anywhere, enforce that every top-level statement list (the kernel body
+        and each graph_do_while body) contains only for-loops and graph_do_while while-loops. This keeps per-task
+        graph_do_while level tagging exact: the offloader tags a flushed serial (bound/listgen) task with the level of
+        the for-loop that flushed it, which is only correct if no bare top-level statement at a different level precedes
+        that for-loop. For-loops and graph_do_while loops may be freely mixed/nested; bare statements must be wrapped in
         ``for _ in range(1):``."""
-        uses_gdw = any(
-            FunctionDefTransformer._is_graph_do_while_while(n) for stmt in body for n in ast.walk(stmt)
-        )
+        uses_gdw = any(FunctionDefTransformer._is_graph_do_while_while(n) for stmt in body for n in ast.walk(stmt))
         if not uses_gdw:
             return
         FunctionDefTransformer._validate_graph_do_while_stmt_list(body, is_kernel_top=True)

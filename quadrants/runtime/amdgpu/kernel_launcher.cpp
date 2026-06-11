@@ -236,8 +236,8 @@ void KernelLauncher::launch_offloaded_tasks_with_do_while(LaunchContextBuilder &
       std::any_of(level_per_task.begin(), level_per_task.end(), [](int l) { return l < 0; });
 
   if (levels.size() == 1 && !has_top_level_task) {
-    // Single loop with every task inside it: re-run the full task list each iteration (HIP has no
-    // conditional graph nodes). For-loop-mixed kernels fall through to the general driver below.
+    // Single loop with every task inside it: re-run the full task list each iteration (HIP has no conditional graph
+    // nodes). For-loop-mixed kernels fall through to the general driver below.
     do {
       launch_offloaded_tasks(ctx, amdgpu_module, offloaded_tasks, context_pointer, arg_size);
     } while (read_flag(0));

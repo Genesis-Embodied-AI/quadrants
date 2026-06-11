@@ -1996,9 +1996,9 @@ std::string TaskCodeGenLLVM::init_offloaded_task_function(OffloadedStmt *stmt, s
   func = llvm::Function::Create(task_function_type, llvm::Function::ExternalLinkage, task_kernel_name, module.get());
 
   current_task = std::make_unique<OffloadedTask>(task_kernel_name);
-  // Carry the per-task graph_do_while level tag for all LLVM backends (CPU/CUDA/AMDGPU). Set here, in
-  // the shared task-init path, rather than per-backend (unlike stream_parallel_group_id which is
-  // GPU-only), because the graph_do_while host fallback runs on CPU too.
+  // Carry the per-task graph_do_while level tag for all LLVM backends (CPU/CUDA/AMDGPU). Set here, in the shared
+  // task-init path, rather than per-backend (unlike stream_parallel_group_id which is GPU-only), because the
+  // graph_do_while host fallback runs on CPU too.
   current_task->graph_do_while_level_id = stmt->graph_do_while_level_id;
   // Pre-register the per-task AdStackSizingInfo so the registry id is assigned BEFORE codegen visits any
   // `AdStackPushStmt`, letting it bake the immediate. Metadata (`allocated_max_sizes` + `size_exprs`) is filled in at

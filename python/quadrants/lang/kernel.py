@@ -234,10 +234,10 @@ class ASTGenerator:
             # be available to use in build_Call, later.
             tree = _kernel_impl_dataclass.unpack_ast_struct_expressions(self.tree, struct_locals=struct_locals)
             ctx.only_parse_function_def = self.only_parse_function_def
-            # Rebuild the graph_do_while level table from scratch each compilation pass (build_While
-            # appends to it as it walks the AST). Skip when only_parse_function_def: the body is not
-            # walked, so build_While never runs to repopulate it -- and on a fast-cache restore the table
-            # was already rebuilt from the cached (cond_arg_name, parent_id) pairs in _try_load_fastcache.
+            # Rebuild the graph_do_while level table from scratch each compilation pass (build_While appends to it as it
+            # walks the AST). Skip when only_parse_function_def: the body is not walked, so build_While never runs to
+            # repopulate it -- and on a fast-cache restore the table was already rebuilt from the cached (cond_arg_name,
+            # parent_id) pairs in _try_load_fastcache.
             if not ctx.only_parse_function_def:
                 self.current_kernel.graph_do_while_levels = []
                 self.current_kernel._graph_do_while_level_stack = []
@@ -324,11 +324,11 @@ class Kernel(FuncBase):
         self.materialized_kernels: dict[CompiledKernelKeyType, KernelCxx] = {}
         self.has_print = False
         self.use_graph: bool = False
-        # Legacy single-loop arg name, kept for reporting/back-compat; equals the outermost level's
-        # condition arg for nested kernels. The authoritative data is `graph_do_while_levels`.
+        # Legacy single-loop arg name, kept for reporting/back-compat; equals the outermost level's condition arg for
+        # nested kernels. The authoritative data is `graph_do_while_levels`.
         self.graph_do_while_arg: str | None = None
-        # Nested graph_do_while level table, indexed by level id (outer before inner). Rebuilt each
-        # compilation pass by the AST transformer; serialized to the launch context at launch.
+        # Nested graph_do_while level table, indexed by level id (outer before inner). Rebuilt each compilation pass by
+        # the AST transformer; serialized to the launch context at launch.
         self.graph_do_while_levels: list[GraphDoWhileLevel] = []
         # Transient stack of active level ids, used only while transforming the AST.
         self._graph_do_while_level_stack: list[int] = []
@@ -394,8 +394,8 @@ class Kernel(FuncBase):
                 if self.compiled_kernel_data_by_key[key]:
                     self.src_ll_cache_observations.cache_loaded = True
                     self.used_py_dataclass_parameters_by_key_enforcing[key] = used_py_dataclass_parameters
-                    # Fast-cache restore skips AST transformation, so rebuild the gdw level table (and
-                    # the legacy outermost-arg alias) from the cached (cond_arg_name, parent_id) pairs.
+                    # Fast-cache restore skips AST transformation, so rebuild the gdw level table (and the legacy
+                    # outermost-arg alias) from the cached (cond_arg_name, parent_id) pairs.
                     if cached_graph_do_while_levels:
                         self.graph_do_while_levels = [
                             GraphDoWhileLevel(cond_arg_name=name, parent_id=parent)

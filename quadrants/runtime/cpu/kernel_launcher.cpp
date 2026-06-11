@@ -122,27 +122,25 @@ void KernelLauncher::launch_offloaded_tasks_with_do_while(LaunchContextBuilder &
   const bool has_top_level_task = std::any_of(graph_do_while_level_per_task.begin(),
                                               graph_do_while_level_per_task.end(), [](int l) { return l < 0; });
   if (levels.size() == 1 && !has_top_level_task) {
-    // Single loop with every task inside it: preserve the historical behaviour of re-running the entire
-    // task list each iteration (this also keeps the reverse-mode adstack re-setup path intact). The
-    // `!has_top_level_task` guard excludes kernels that mix the loop with plain top-level for-loops,
-    // which must run exactly once -- those go through the general driver below.
+    // Single loop with every task inside it: preserve the historical behaviour of re-running the entire task list each
+    // iteration (this also keeps the reverse-mode adstack re-setup path intact). The `!has_top_level_task` guard
+    // excludes kernels that mix the loop with plain top-level for-loops, which must run exactly once -- those go
+    // through the general driver below.
     do {
       launch_offloaded_tasks(ctx, task_funcs, ad_stacks, num_threads_per_task);
-    } while (ctx.get_context().cpu_assert_failed == 0 &&
-             *static_cast<int32_t *>(levels[0].flag_dev_ptr) != 0);
+    } while (ctx.get_context().cpu_assert_failed == 0 && *static_cast<int32_t *>(levels[0].flag_dev_ptr) != 0);
     return;
   }
 
-  // Nested graph_do_while: drive the loop tree from the per-task level tags. Adstack setup is done
-  // once up front (nested graph_do_while + reverse-mode adstack is not a supported combination).
+  // Nested graph_do_while: drive the loop tree from the per-task level tags. Adstack setup is done once up front
+  // (nested graph_do_while + reverse-mode adstack is not a supported combination).
   prepare_offloaded_tasks(ctx, task_funcs, ad_stacks);
   SizeExprLaunchScope launch_scope;
   auto launch_task = [&](int i) -> bool {
     return run_one_offloaded_task(ctx, (std::size_t)i, task_funcs, ad_stacks, num_threads_per_task);
   };
   auto continue_level = [&](int level) -> bool {
-    return ctx.get_context().cpu_assert_failed == 0 &&
-           *static_cast<int32_t *>(levels[level].flag_dev_ptr) != 0;
+    return ctx.get_context().cpu_assert_failed == 0 && *static_cast<int32_t *>(levels[level].flag_dev_ptr) != 0;
   };
   run_graph_do_while((int)task_funcs.size(), graph_do_while_level_per_task, levels, launch_task, continue_level);
 }
@@ -193,8 +191,7 @@ void KernelLauncher::launch_llvm_kernel(Handle handle, LaunchContextBuilder &ctx
       QD_ASSERT(level.flag_dev_ptr);
     }
     launch_offloaded_tasks_with_do_while(ctx, launcher_ctx.task_funcs, launcher_ctx.ad_stacks,
-                                         launcher_ctx.num_threads_per_task,
-                                         launcher_ctx.graph_do_while_level_per_task);
+                                         launcher_ctx.num_threads_per_task, launcher_ctx.graph_do_while_level_per_task);
   } else {
     launch_offloaded_tasks(ctx, launcher_ctx.task_funcs, launcher_ctx.ad_stacks, launcher_ctx.num_threads_per_task);
   }
@@ -254,8 +251,8 @@ KernelLauncher::Handle KernelLauncher::register_llvm_kernel(const LLVM::Compiled
     ctx.arr_reads_per_task = std::move(arr_reads_per_task);
     ctx.graph_do_while_level_per_task = std::move(graph_do_while_level_per_task);
 
-    // Precompute the array-typed parameter `arg_id`s so `launch_llvm_kernel` does not have to walk the
-    // full parameters list and re-check `is_array` on every invocation.
+    // Precompute the array-typed parameter `arg_id`s so `launch_llvm_kernel` does not have to walk the full parameters
+    // list and re-check `is_array` on every invocation.
     ctx.array_arg_ids.clear();
     for (const auto &kv : *ctx.parameters) {
       if (kv.second.is_array) {

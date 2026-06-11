@@ -78,11 +78,11 @@ class Offloader {
     pending_serial_statements->grid_dim = 1;
     pending_serial_statements->block_dim = 1;
 
-    // `level_id` is the innermost graph_do_while level of the for-loop that triggered the flush; the
-    // pending serial holds that for-loop's implicit bound/listgen computations, so it belongs to the
-    // same level. The final flush (no following for-loop) passes -1 (outside all loops). The frontend
-    // restriction (gdw bodies / gdw-using kernels contain only for-loops + gdw whiles) guarantees a
-    // pending serial never mixes statements from two different levels.
+    // `level_id` is the innermost graph_do_while level of the for-loop that triggered the flush; the pending serial
+    // holds that for-loop's implicit bound/listgen computations, so it belongs to the same level. The final flush (no
+    // following for-loop) passes -1 (outside all loops). The frontend restriction (gdw bodies / gdw-using kernels
+    // contain only for-loops + gdw whiles) guarantees a pending serial never mixes statements from two different
+    // levels.
     auto assemble_serial_statements = [&](int level_id = -1) {
       if (!pending_serial_statements->body->statements.empty()) {
         pending_serial_statements->graph_do_while_level_id = level_id;

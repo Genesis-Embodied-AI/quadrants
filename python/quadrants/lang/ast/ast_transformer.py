@@ -1381,9 +1381,9 @@ class ASTTransformer(Builder):
                 )
             if not kernel.use_graph:
                 raise QuadrantsSyntaxError("qd.graph_do_while() requires @qd.kernel(graph=True)")
-            # graph_do_while emits no loop IR; its body's for-loops must be top-level (offloaded)
-            # tasks. So it may only appear at the kernel top level or directly inside another
-            # graph_do_while (both at loop_depth 0), never inside a real for-loop.
+            # graph_do_while emits no loop IR; its body's for-loops must be top-level (offloaded) tasks. So it may only
+            # appear at the kernel top level or directly inside another graph_do_while (both at loop_depth 0), never
+            # inside a real for-loop.
             if ctx.loop_depth != 0:
                 raise QuadrantsSyntaxError(
                     "qd.graph_do_while() must be at the kernel top level or directly nested inside "

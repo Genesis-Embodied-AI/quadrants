@@ -222,10 +222,10 @@ void *GraphManager::add_kernel_node(void *graph,
 unsigned long long GraphManager::create_cond_handle(void *graph) {
   void *cu_ctx = CUDAContext::get_instance().get_context();
   unsigned long long handle = 0;
-  // The handle is created on the same graph the conditional node lives in (the root graph for a
-  // top-level loop, or a parent body graph for a nested loop), matching the validated structure in
-  // tmp/nested_cond_validate.cu. The default value (1) is only auto-applied at top-level graph launch;
-  // nested loops are re-armed each parent iteration by an explicit init kernel (see build_level).
+  // The handle is created on the same graph the conditional node lives in (the root graph for a top-level loop, or a
+  // parent body graph for a nested loop), matching the validated structure in tmp/nested_cond_validate.cu. The default
+  // value (1) is only auto-applied at top-level graph launch; nested loops are re-armed each parent iteration by an
+  // explicit init kernel (see build_level).
   CUDADriver::get_instance().graph_conditional_handle_create(&handle, graph, cu_ctx,
                                                              /*defaultLaunchValue=*/1,
                                                              /*flags=CU_GRAPH_COND_ASSIGN_DEFAULT=*/1);
@@ -250,8 +250,8 @@ void *GraphManager::add_conditional_while_node(void *graph,
   cond_node_params.ctx = cu_ctx;
 
   void *cond_node = nullptr;
-  CUDADriver::get_instance().graph_add_node(&cond_node, graph, prev_node ? &prev_node : nullptr,
-                                            prev_node ? 1 : 0, &cond_node_params);
+  CUDADriver::get_instance().graph_add_node(&cond_node, graph, prev_node ? &prev_node : nullptr, prev_node ? 1 : 0,
+                                            &cond_node_params);
 
   // CUDA replaces phGraph_out with a pointer to its owned array
   void **body_graphs = (void **)cond_node_params.phGraph_out;
@@ -310,13 +310,12 @@ void GraphManager::build_level(int parent_id,
       while (run_end < end && is_descendant_or_self(tasks[run_end].graph_do_while_level_id, child, levels)) {
         run_end++;
       }
-      // Create the child's conditional handle up front: the re-arm init kernel below bakes the handle
-      // value into its kernel params, so the handle must exist before that kernel node is added.
+      // Create the child's conditional handle up front: the re-arm init kernel below bakes the handle value into its
+      // kernel params, so the handle must exist before that kernel node is added.
       cond_handles[child] = create_cond_handle(target_graph);
-      // Re-arm the child handle at the start of each parent iteration. Only needed when this body
-      // itself re-executes (parent_id != -1); at the kernel top level cudaGraphCondAssignDefault
-      // already sets the handle to 1 at each graph launch. Reuses the condition kernel pointed at the
-      // constant-1 slot.
+      // Re-arm the child handle at the start of each parent iteration. Only needed when this body itself re-executes
+      // (parent_id != -1); at the kernel top level cudaGraphCondAssignDefault already sets the handle to 1 at each
+      // graph launch. Reuses the condition kernel pointed at the constant-1 slot.
       if (parent_id != -1) {
         void *init_args[2] = {&cond_handles[child], &cached.const_one_slot};
         prev_node = add_kernel_node(target_graph, prev_node, cond_kernel_func_, 1, 1, 0, init_args);
@@ -330,8 +329,8 @@ void GraphManager::build_level(int parent_id,
       cursor = run_end;
     }
   }
-  // For a real loop level, append its condition kernel last so it reads the flag after this
-  // iteration's work has updated it.
+  // For a real loop level, append its condition kernel last so it reads the flag after this iteration's work has
+  // updated it.
   if (parent_id >= 0) {
     void *cond_args[2] = {&cond_handles[parent_id], &cached.counter_ptr_slots[parent_id]};
     add_kernel_node(target_graph, prev_node, cond_kernel_func_, 1, 1, 0, cond_args);
@@ -339,11 +338,11 @@ void GraphManager::build_level(int parent_id,
 }
 
 bool GraphManager::launch_cached_graph(CachedGraph &cached, LaunchContextBuilder &ctx, bool use_graph_do_while) {
-  // TODO: these memcpy_host_to_device calls could be async (cuMemcpyHtoDAsync) on the launch stream
-  // for better CPU-GPU overlap.
+  // TODO: these memcpy_host_to_device calls could be async (cuMemcpyHtoDAsync) on the launch stream for better CPU-GPU
+  // overlap.
   if (use_graph_do_while) {
-    // Refresh every level's indirection slot with this launch's resolved condition ndarray pointer,
-    // so swapping any level's counter ndarray between launches works without a rebuild.
+    // Refresh every level's indirection slot with this launch's resolved condition ndarray pointer, so swapping any
+    // level's counter ndarray between launches works without a rebuild.
     QD_ASSERT(cached.counter_ptr_slots.size() == ctx.graph_do_while_levels.size());
     for (size_t level = 0; level < ctx.graph_do_while_levels.size(); level++) {
       void *flag_ptr = ctx.graph_do_while_levels[level].flag_dev_ptr;
@@ -412,10 +411,10 @@ bool GraphManager::try_launch(int launch_id,
 
   // --- Build CUDA graph ---
   //
-  // Without graph_do_while, work kernels go directly into the top-level graph. With graph_do_while,
-  // each loop level becomes a conditional WHILE node whose body graph holds that level's direct work
-  // kernels, any nested conditional nodes, and finally that level's condition kernel (last, so it
-  // reads the flag after this iteration's work). Nested example:
+  // Without graph_do_while, work kernels go directly into the top-level graph. With graph_do_while, each loop level
+  // becomes a conditional WHILE node whose body graph holds that level's direct work kernels, any nested conditional
+  // nodes, and finally that level's condition kernel (last, so it reads the flag after this iteration's work). Nested
+  // example:
   //
   //   Top-level graph
   //     └── Conditional while node (outer, repeats while outer flag != 0)
@@ -426,8 +425,8 @@ bool GraphManager::try_launch(int launch_id,
   //                 ├── outer-level work kernels
   //                 └── Outer condition kernel
   //
-  // The recursive builder (build_level) places direct/child/condition nodes from the per-task level
-  // tags. The non-nested case is the depth-1 special case of the same routine.
+  // The recursive builder (build_level) places direct/child/condition nodes from the per-task level tags. The
+  // non-nested case is the depth-1 special case of the same routine.
   void *graph = nullptr;
   CUDADriver::get_instance().graph_create(&graph, 0);
 
@@ -446,23 +445,23 @@ bool GraphManager::try_launch(int launch_id,
       // Pre-SM 9.0: fall back to host-side do-while loop.
       return false;
     }
-    // Initialise each level's indirection slot with this launch's resolved flag pointer (refreshed on
-    // every relaunch in launch_cached_graph).
+    // Initialise each level's indirection slot with this launch's resolved flag pointer (refreshed on every relaunch in
+    // launch_cached_graph).
     for (size_t level = 0; level < ctx.graph_do_while_levels.size(); level++) {
       QD_ASSERT(ctx.graph_do_while_levels[level].flag_dev_ptr);
       void *flag_ptr = ctx.graph_do_while_levels[level].flag_dev_ptr;
       CUDADriver::get_instance().memcpy_host_to_device(cached.counter_ptr_slots[level], &flag_ptr, sizeof(void *));
     }
     std::vector<unsigned long long> cond_handles(ctx.graph_do_while_levels.size(), 0);
-    build_level(/*parent_id=*/-1, graph, 0, (int)offloaded_tasks.size(), offloaded_tasks,
-                ctx.graph_do_while_levels, cond_handles, cuda_module, cached);
+    build_level(/*parent_id=*/-1, graph, 0, (int)offloaded_tasks.size(), offloaded_tasks, ctx.graph_do_while_levels,
+                cond_handles, cuda_module, cached);
   } else {
     void *prev_node = nullptr;
     for (const auto &task : offloaded_tasks) {
       void *ctx_ptr = &cached.persistent_ctx;
-      prev_node = add_kernel_node(graph, prev_node, cuda_module->lookup_function(task.name),
-                                  (unsigned int)task.grid_dim, (unsigned int)task.block_dim,
-                                  (unsigned int)task.dynamic_shared_array_bytes, &ctx_ptr);
+      prev_node =
+          add_kernel_node(graph, prev_node, cuda_module->lookup_function(task.name), (unsigned int)task.grid_dim,
+                          (unsigned int)task.block_dim, (unsigned int)task.dynamic_shared_array_bytes, &ctx_ptr);
     }
   }
 

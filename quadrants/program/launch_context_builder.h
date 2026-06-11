@@ -7,10 +7,10 @@ namespace quadrants::lang {
 
 struct RuntimeContext;
 
-// One entry per `graph_do_while` loop in a `graph=True` kernel, indexed by level id (the order the
-// AST transformer assigns: outer levels before the inner levels they contain). For nested loops the
-// runtime rebuilds the loop tree from these entries plus the per-task `graph_do_while_level_id` tags
-// baked into each OffloadedTask. A non-nested (depth-1) kernel has exactly one entry with parent -1.
+// One entry per `graph_do_while` loop in a `graph=True` kernel, indexed by level id (the order the AST transformer
+// assigns: outer levels before the inner levels they contain). For nested loops the runtime rebuilds the loop tree from
+// these entries plus the per-task `graph_do_while_level_id` tags baked into each OffloadedTask. A non-nested (depth-1)
+// kernel has exactly one entry with parent -1.
 struct GraphDoWhileLevel {
   // Kernel parameter index (C++ arg id, post-template) of this level's condition ndarray.
   int cond_arg_id{-1};
@@ -171,9 +171,9 @@ class LaunchContextBuilder {
   const StructType *args_type{nullptr};
   size_t result_buffer_size{0};
   bool use_graph{false};
-  // Level table for nested `graph_do_while`, indexed by level id (empty if the kernel has no
-  // graph_do_while loop). Populated from Python at launch; flag_dev_ptr filled in by the backend's
-  // ndarray-resolution loop. Replaces the old single-loop scalars (arg id + flag ptr).
+  // Level table for nested `graph_do_while`, indexed by level id (empty if the kernel has no graph_do_while loop).
+  // Populated from Python at launch; flag_dev_ptr filled in by the backend's ndarray-resolution loop. Replaces the old
+  // single-loop scalars (arg id + flag ptr).
   std::vector<GraphDoWhileLevel> graph_do_while_levels;
 
   // True if this kernel has at least one graph_do_while loop.
@@ -181,15 +181,15 @@ class LaunchContextBuilder {
     return !graph_do_while_levels.empty();
   }
 
-  // Append a graph_do_while level (called from Python at launch, in level-id order). `cond_arg_id` is
-  // the resolved C++ arg index of the condition ndarray; `parent_id` is the enclosing level id or -1.
+  // Append a graph_do_while level (called from Python at launch, in level-id order). `cond_arg_id` is the resolved C++
+  // arg index of the condition ndarray; `parent_id` is the enclosing level id or -1.
   void add_graph_do_while_level(int cond_arg_id, int parent_id) {
     graph_do_while_levels.push_back(GraphDoWhileLevel{cond_arg_id, parent_id, nullptr});
   }
 
-  // Resolve the flag device pointer for any level whose condition arg matches `arg_id`. Called by each
-  // backend's per-arg ndarray-resolution loop. (A given ndarray could in principle drive more than one
-  // level, so we set all matches rather than break.)
+  // Resolve the flag device pointer for any level whose condition arg matches `arg_id`. Called by each backend's
+  // per-arg ndarray-resolution loop. (A given ndarray could in principle drive more than one level, so we set all
+  // matches rather than break.)
   void resolve_graph_do_while_flag(int arg_id, void *flag_dev_ptr) {
     for (auto &level : graph_do_while_levels) {
       if (level.cond_arg_id == arg_id) {

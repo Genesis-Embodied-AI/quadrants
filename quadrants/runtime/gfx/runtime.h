@@ -116,9 +116,9 @@ class QD_DLL_EXPORT GfxRuntime {
 
   // Records (a contiguous range of) the kernel's offloaded tasks into the current command list. `task_begin` /
   // `task_end` select the half-open task range `[task_begin, task_end)`; the default `task_end == -1` means "all
-  // tasks", i.e. the normal whole-kernel launch. The range form is used by the GFX host-side graph_do_while driver
-  // to replay individual loop-body task sub-ranges (see `runtime/gfx/kernel_launcher.cpp`). The caller is
-  // responsible for `synchronize()`ing before reading back any device-side loop condition.
+  // tasks", i.e. the normal whole-kernel launch. The range form is used by the GFX host-side graph_do_while driver to
+  // replay individual loop-body task sub-ranges (see `runtime/gfx/kernel_launcher.cpp`). The caller is responsible for
+  // `synchronize()`ing before reading back any device-side loop condition.
   void launch_kernel(KernelHandle handle, LaunchContextBuilder &host_ctx, int task_begin = 0, int task_end = -1);
 
   // Number of offloaded tasks in a registered kernel. Used by the graph_do_while driver to size its per-task level

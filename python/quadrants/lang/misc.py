@@ -722,35 +722,27 @@ def loop_config(
 def graph_do_while(condition) -> bool:
     """Marks a while loop as a CUDA graph do-while conditional node.
 
-    Used as ``while qd.graph_do_while(flag):`` inside a
-    ``@qd.kernel(graph=True)`` kernel. The loop body repeats while
+    Used as ``while qd.graph_do_while(flag):`` inside a ``@qd.kernel(graph=True)`` kernel. The loop body repeats while
     ``flag`` (a scalar ``qd.i32`` ndarray) is non-zero.
 
-    On SM 9.0+ (Hopper) GPUs this compiles to a native CUDA graph
-    conditional while node. On older CUDA GPUs and non-CUDA backends
-    it falls back to a host-side do-while loop.
+    On SM 9.0+ (Hopper) GPUs this compiles to a native CUDA graph conditional while node. On older CUDA GPUs and
+    non-CUDA backends it falls back to a host-side do-while loop.
 
-    Only statements **inside** the ``while qd.graph_do_while(...):`` block
-    repeat. A top-level ``for``-loop placed before or after the block runs
-    exactly once, so one-time init / writeback can live in the same kernel
-    (or in separate non-graph kernels). Loop-carried state held in global
-    memory carries normally between iterations because nothing outside the
-    loop body resets it.
+    Only statements **inside** the ``while qd.graph_do_while(...):`` block repeat. A top-level ``for``-loop placed
+    before or after the block runs exactly once, so one-time init / writeback can live in the same kernel (or in
+    separate non-graph kernels). Loop-carried state held in global memory carries normally between iterations because
+    nothing outside the loop body resets it.
 
     .. warning::
-        Reset the condition flag **outside** the loop body, never inside it.
-        A reset such as ``for _ in range(1): counter[()] = N`` placed within
-        the ``while`` block is re-applied every iteration and the loop never
-        terminates. Reset it before the loop (a run-once top-level ``for``)
-        or on the host between launches (``counter.fill(N)``). See
-        ``docs/source/user_guide/graph.md`` for the loop-carried-state idiom.
+        Reset the condition flag **outside** the loop body, never inside it. A reset such as ``for _ in range(1):
+        counter[()] = N`` placed within the ``while`` block is re-applied every iteration and the loop never terminates.
+        Reset it before the loop (a run-once top-level ``for``) or on the host between launches (``counter.fill(N)``).
+        See ``docs/source/user_guide/graph.md`` for the loop-carried-state idiom.
 
-    A kernel that uses ``qd.graph_do_while`` may contain only ``for``-loops
-    and ``qd.graph_do_while`` ``while``-loops at each top level; bare
-    statements are rejected at compile time with a ``QuadrantsSyntaxError``.
+    A kernel that uses ``qd.graph_do_while`` may contain only ``for``-loops and ``qd.graph_do_while`` ``while``-loops at
+    each top level; bare statements are rejected at compile time with a ``QuadrantsSyntaxError``.
 
-    This function should not be called directly at runtime; it is
-    recognised and transformed during AST compilation.
+    This function should not be called directly at runtime; it is recognised and transformed during AST compilation.
     Requires ``@qd.kernel(graph=True)``.
     """
     return bool(condition)

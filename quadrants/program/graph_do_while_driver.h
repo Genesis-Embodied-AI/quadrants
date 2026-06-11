@@ -7,10 +7,10 @@
 
 namespace quadrants::lang {
 
-// Shared host-side driver for (possibly nested) graph_do_while loops, used by every backend that does
-// not have native GPU conditional-graph support (CPU, CUDA pre-SM 9.0, AMDGPU, GFX). It reconstructs
-// the loop nesting from the flat offloaded-task list using each task's `graph_do_while_level_id` plus
-// the launch-context level table (parent pointers), and drives the do-while loops on the host.
+// Shared host-side driver for (possibly nested) graph_do_while loops, used by every backend that does not have native
+// GPU conditional-graph support (CPU, CUDA pre-SM 9.0, AMDGPU, GFX). It reconstructs the loop nesting from the flat
+// offloaded-task list using each task's `graph_do_while_level_id` plus the launch-context level table (parent
+// pointers), and drives the do-while loops on the host.
 //
 // The backend supplies two callbacks:
 //   launch_task(i)        : launch offloaded task `i` (synchronously or enqueued). Return false to
@@ -70,8 +70,8 @@ inline bool process_level(int parent_id,
         cursor = run_end;
       }
     }
-    // The kernel top level (parent_id == -1) runs exactly once; a real loop level repeats while its
-    // flag stays non-zero.
+    // The kernel top level (parent_id == -1) runs exactly once; a real loop level repeats while its flag stays
+    // non-zero.
     keep_going = (parent_id >= 0) && continue_level(parent_id);
   } while (keep_going);
   return true;

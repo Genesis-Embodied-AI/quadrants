@@ -275,22 +275,22 @@ void KernelLauncher::launch_offloaded_tasks_with_do_while(LaunchContextBuilder &
       std::any_of(level_per_task.begin(), level_per_task.end(), [](int l) { return l < 0; });
 
   if (levels.size() == 1 && !has_top_level_task) {
-    // Single loop with every task inside it: re-run the full task list (with stream-parallel groups /
-    // adstack) each iteration. Kernels that mix the loop with plain top-level for-loops (which run once)
-    // fall through to the general driver below.
+    // Single loop with every task inside it: re-run the full task list (with stream-parallel groups / adstack) each
+    // iteration. Kernels that mix the loop with plain top-level for-loops (which run once) fall through to the general
+    // driver below.
     do {
       launch_offloaded_tasks(ctx, cuda_module, offloaded_tasks, device_context_ptr);
     } while (read_flag(0));
     return;
   }
 
-  // Nested or for-loop-mixed graph_do_while host fallback (pre-SM 9.0 only; SM 9.0+ uses native
-  // conditional graph nodes). Simple per-task dispatch driven by the per-task level tags;
-  // stream-parallel groups and reverse-mode adstack are not combined with this path.
+  // Nested or for-loop-mixed graph_do_while host fallback (pre-SM 9.0 only; SM 9.0+ uses native conditional graph
+  // nodes). Simple per-task dispatch driven by the per-task level tags; stream-parallel groups and reverse-mode adstack
+  // are not combined with this path.
   auto launch_task = [&](int i) -> bool {
     const auto &task = offloaded_tasks[i];
-    cuda_module->launch(task.name, task.grid_dim, task.block_dim, task.dynamic_shared_array_bytes,
-                        {&ctx.get_context()}, {});
+    cuda_module->launch(task.name, task.grid_dim, task.block_dim, task.dynamic_shared_array_bytes, {&ctx.get_context()},
+                        {});
     return true;
   };
   auto continue_level = [&](int level) -> bool { return read_flag(level); };
