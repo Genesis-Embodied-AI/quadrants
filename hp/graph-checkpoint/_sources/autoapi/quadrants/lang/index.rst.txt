@@ -13,6 +13,7 @@ Submodules
    /autoapi/quadrants/lang/any_array/index
    /autoapi/quadrants/lang/ast/index
    /autoapi/quadrants/lang/buffer_view/index
+   /autoapi/quadrants/lang/checkpoint/index
    /autoapi/quadrants/lang/common_ops/index
    /autoapi/quadrants/lang/exception/index
    /autoapi/quadrants/lang/expr/index

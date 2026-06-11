@@ -359,6 +359,9 @@
     <span class="n">get_decorator</span><span class="p">,</span>
 <span class="p">)</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.ast.ast_transformers.call_transformer</span><span class="w"> </span><span class="kn">import</span> <span class="n">CallTransformer</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.ast.ast_transformers.checkpoint_transformer</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">CheckpointTransformer</span><span class="p">,</span>
+<span class="p">)</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.ast.ast_transformers.function_def_transformer</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
     <span class="n">FunctionDefTransformer</span><span class="p">,</span>
 <span class="p">)</span>
@@ -1855,39 +1858,10 @@
 
     <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">_is_checkpoint_call</span><span class="p">(</span><span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">expr</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">bool</span><span class="p">,</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">]:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;If *node* is a ``qd.checkpoint(...)`` call return ``(True, yield_on_arg_name)``; otherwise</span>
-<span class="sd">        ``(False, None)``. ``yield_on_arg_name`` is ``None`` when the user wrote</span>
-<span class="sd">        ``qd.checkpoint()`` with no ``yield_on`` kwarg.</span>
-
-<span class="sd">        Validates the call shape (no positional args, only ``yield_on=`` as a bare ``ast.Name``)</span>
-<span class="sd">        and raises ``QuadrantsSyntaxError`` for misuse so the user gets a clear message at the</span>
-<span class="sd">        ``with`` site rather than a vague &quot;not stream_parallel&quot; error later.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
-        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Call</span><span class="p">):</span>
-            <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="kc">None</span>
-        <span class="n">func</span> <span class="o">=</span> <span class="n">node</span><span class="o">.</span><span class="n">func</span>
-        <span class="n">is_checkpoint</span> <span class="o">=</span> <span class="p">(</span><span class="nb">isinstance</span><span class="p">(</span><span class="n">func</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Attribute</span><span class="p">)</span> <span class="ow">and</span> <span class="n">func</span><span class="o">.</span><span class="n">attr</span> <span class="o">==</span> <span class="s2">&quot;checkpoint&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="p">(</span>
-            <span class="nb">isinstance</span><span class="p">(</span><span class="n">func</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Name</span><span class="p">)</span> <span class="ow">and</span> <span class="n">func</span><span class="o">.</span><span class="n">id</span> <span class="o">==</span> <span class="s2">&quot;checkpoint&quot;</span>
-        <span class="p">)</span>
-        <span class="k">if</span> <span class="ow">not</span> <span class="n">is_checkpoint</span><span class="p">:</span>
-            <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="kc">None</span>
-        <span class="k">if</span> <span class="n">node</span><span class="o">.</span><span class="n">args</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span>
-                <span class="s2">&quot;qd.checkpoint() takes no positional arguments; use qd.checkpoint(yield_on=flag) instead&quot;</span>
-            <span class="p">)</span>
-        <span class="n">yield_on_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
-        <span class="k">for</span> <span class="n">kw</span> <span class="ow">in</span> <span class="n">node</span><span class="o">.</span><span class="n">keywords</span><span class="p">:</span>
-            <span class="k">if</span> <span class="n">kw</span><span class="o">.</span><span class="n">arg</span> <span class="o">!=</span> <span class="s2">&quot;yield_on&quot;</span><span class="p">:</span>
-                <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span>
-                    <span class="sa">f</span><span class="s2">&quot;qd.checkpoint() got unexpected keyword argument </span><span class="si">{</span><span class="n">kw</span><span class="o">.</span><span class="n">arg</span><span class="si">!r}</span><span class="s2">; only &#39;yield_on&#39; is supported&quot;</span>
-                <span class="p">)</span>
-            <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">kw</span><span class="o">.</span><span class="n">value</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Name</span><span class="p">):</span>
-                <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span>
-                    <span class="s2">&quot;qd.checkpoint(yield_on=...) must be the bare name of a kernel parameter &quot;</span>
-                    <span class="s2">&quot;(e.g. `yield_on=overflow_flag`); expressions are not supported&quot;</span>
-                <span class="p">)</span>
-            <span class="n">yield_on_name</span> <span class="o">=</span> <span class="n">kw</span><span class="o">.</span><span class="n">value</span><span class="o">.</span><span class="n">id</span>
-        <span class="k">return</span> <span class="kc">True</span><span class="p">,</span> <span class="n">yield_on_name</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Thin forwarding wrapper around ``CheckpointTransformer.is_checkpoint_call``; the</span>
+<span class="sd">        actual logic lives in ``ast_transformers/checkpoint_transformer.py`` to keep this file</span>
+<span class="sd">        from growing per-feature.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">CheckpointTransformer</span><span class="o">.</span><span class="n">is_checkpoint_call</span><span class="p">(</span><span class="n">node</span><span class="p">)</span>
 
     <span class="nd">@staticmethod</span>
 <div class="viewcode-block" id="ASTTransformer.build_While">
@@ -2151,89 +2125,9 @@
         <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">With</span><span class="p">,</span>
         <span class="n">yield_on_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Handles ``with qd.checkpoint(yield_on=arg):`` blocks.</span>
-
-<span class="sd">        Slice 1a: validates the use-site (kernel must be graph=True, no nesting, yield_on must be a kernel</span>
-<span class="sd">        parameter) and records the checkpoint&#39;s ``yield_on`` arg on the kernel object. Walks the body</span>
-<span class="sd">        transparently -- for-loops inside the ``with`` become normal top-level for-loops in the kernel&#39;s</span>
-<span class="sd">        frontend IR. The ``cp_id`` is assigned by declaration order (list index in</span>
-<span class="sd">        ``kernel.checkpoint_yield_on_args``).</span>
-
-<span class="sd">        Later slices wire ``cp_id`` through ForLoopConfig → OffloadedTask so the GraphManager can wrap</span>
-<span class="sd">        each checkpoint&#39;s body kernels in an IF conditional node and insert the yield-check kernel.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
-        <span class="k">if</span> <span class="ow">not</span> <span class="n">ctx</span><span class="o">.</span><span class="n">is_kernel</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">&quot;qd.checkpoint() can only be used inside @qd.kernel, not @qd.func&quot;</span><span class="p">)</span>
-        <span class="n">kernel</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">global_context</span><span class="o">.</span><span class="n">current_kernel</span>
-        <span class="k">if</span> <span class="ow">not</span> <span class="n">kernel</span><span class="o">.</span><span class="n">use_graph</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">&quot;qd.checkpoint() requires @qd.kernel(graph=True)&quot;</span><span class="p">)</span>
-        <span class="k">if</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="s2">&quot;_in_checkpoint&quot;</span><span class="p">,</span> <span class="kc">False</span><span class="p">):</span>
-            <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span>
-                <span class="s2">&quot;qd.checkpoint() cannot be nested inside another qd.checkpoint(); checkpoints in the &quot;</span>
-                <span class="s2">&quot;same kernel must be flat siblings (a checkpoint inside qd.graph_do_while is fine)&quot;</span>
-            <span class="p">)</span>
-        <span class="k">if</span> <span class="n">yield_on_name</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-            <span class="n">arg_names</span> <span class="o">=</span> <span class="p">[</span><span class="n">m</span><span class="o">.</span><span class="n">name</span> <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="n">kernel</span><span class="o">.</span><span class="n">arg_metas</span><span class="p">]</span>
-            <span class="k">if</span> <span class="n">yield_on_name</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">arg_names</span><span class="p">:</span>
-                <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span>
-                    <span class="sa">f</span><span class="s2">&quot;qd.checkpoint(yield_on=</span><span class="si">{</span><span class="n">yield_on_name</span><span class="si">!r}</span><span class="s2">) does not match any parameter of kernel &quot;</span>
-                    <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">kernel</span><span class="o">.</span><span class="n">func</span><span class="o">.</span><span class="vm">__name__</span><span class="si">!r}</span><span class="s2">. Available parameters: </span><span class="si">{</span><span class="n">arg_names</span><span class="si">}</span><span class="s2">&quot;</span>
-                <span class="p">)</span>
-
-        <span class="c1"># Auto-wrap bare top-level statements in the checkpoint body in a one-iteration</span>
-        <span class="c1"># `for` loop. The offloader&#39;s pending-serial bucket loses the surrounding</span>
-        <span class="c1"># `checkpoint_id` and emits such statements as `serial` tasks with `cp_id == -1`,</span>
-        <span class="c1"># meaning they would run unconditionally even when the checkpoint is skipped -- a</span>
-        <span class="c1"># silent correctness bug. The fix is to lower them as `range_for` tasks instead by</span>
-        <span class="c1"># wrapping each bare statement in `for _ in range(1): &lt;stmt&gt;`. We target the specific</span>
-        <span class="c1"># statement kinds known to hit the footgun (Assign / AugAssign / AnnAssign /</span>
-        <span class="c1"># non-docstring Expr) and leave everything else (For, While, If, With, Pass,</span>
-        <span class="c1"># docstring) untouched so they keep working transparently; nested</span>
-        <span class="c1"># `with qd.checkpoint(...)` in particular still falls through to the existing</span>
-        <span class="c1"># nested-checkpoint check at the start of this method.</span>
-        <span class="n">new_body</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">ast</span><span class="o">.</span><span class="n">stmt</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
-        <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">stmt</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">body</span><span class="p">):</span>
-            <span class="n">needs_wrap</span> <span class="o">=</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">stmt</span><span class="p">,</span> <span class="p">(</span><span class="n">ast</span><span class="o">.</span><span class="n">Assign</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">AugAssign</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">AnnAssign</span><span class="p">))</span>
-            <span class="k">if</span> <span class="ow">not</span> <span class="n">needs_wrap</span> <span class="ow">and</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">stmt</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Expr</span><span class="p">):</span>
-                <span class="n">is_docstring</span> <span class="o">=</span> <span class="n">i</span> <span class="o">==</span> <span class="mi">0</span> <span class="ow">and</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">stmt</span><span class="o">.</span><span class="n">value</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Constant</span><span class="p">)</span>
-                <span class="n">needs_wrap</span> <span class="o">=</span> <span class="ow">not</span> <span class="n">is_docstring</span>
-            <span class="k">if</span> <span class="n">needs_wrap</span><span class="p">:</span>
-                <span class="n">wrapped</span> <span class="o">=</span> <span class="n">ast</span><span class="o">.</span><span class="n">For</span><span class="p">(</span>
-                    <span class="n">target</span><span class="o">=</span><span class="n">ast</span><span class="o">.</span><span class="n">Name</span><span class="p">(</span><span class="nb">id</span><span class="o">=</span><span class="s2">&quot;_&quot;</span><span class="p">,</span> <span class="n">ctx</span><span class="o">=</span><span class="n">ast</span><span class="o">.</span><span class="n">Store</span><span class="p">()),</span>
-                    <span class="nb">iter</span><span class="o">=</span><span class="n">ast</span><span class="o">.</span><span class="n">Call</span><span class="p">(</span>
-                        <span class="n">func</span><span class="o">=</span><span class="n">ast</span><span class="o">.</span><span class="n">Name</span><span class="p">(</span><span class="nb">id</span><span class="o">=</span><span class="s2">&quot;range&quot;</span><span class="p">,</span> <span class="n">ctx</span><span class="o">=</span><span class="n">ast</span><span class="o">.</span><span class="n">Load</span><span class="p">()),</span>
-                        <span class="n">args</span><span class="o">=</span><span class="p">[</span><span class="n">ast</span><span class="o">.</span><span class="n">Constant</span><span class="p">(</span><span class="n">value</span><span class="o">=</span><span class="mi">1</span><span class="p">)],</span>
-                        <span class="n">keywords</span><span class="o">=</span><span class="p">[],</span>
-                    <span class="p">),</span>
-                    <span class="n">body</span><span class="o">=</span><span class="p">[</span><span class="n">stmt</span><span class="p">],</span>
-                    <span class="n">orelse</span><span class="o">=</span><span class="p">[],</span>
-                <span class="p">)</span>
-                <span class="n">ast</span><span class="o">.</span><span class="n">copy_location</span><span class="p">(</span><span class="n">wrapped</span><span class="p">,</span> <span class="n">stmt</span><span class="p">)</span>
-                <span class="n">ast</span><span class="o">.</span><span class="n">fix_missing_locations</span><span class="p">(</span><span class="n">wrapped</span><span class="p">)</span>
-                <span class="n">new_body</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">wrapped</span><span class="p">)</span>
-            <span class="k">else</span><span class="p">:</span>
-                <span class="n">new_body</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">stmt</span><span class="p">)</span>
-        <span class="n">node</span><span class="o">.</span><span class="n">body</span> <span class="o">=</span> <span class="n">new_body</span>
-
-        <span class="n">kernel</span><span class="o">.</span><span class="n">checkpoint_yield_on_args</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">yield_on_name</span><span class="p">)</span>
-        <span class="c1"># Hand control to the C++ ASTBuilder so that every for-loop emitted by `build_stmts`</span>
-        <span class="c1"># below is tagged with this checkpoint&#39;s `cp_id` on its `ForLoopConfig.checkpoint_id`.</span>
-        <span class="c1"># The C++ counter is the source of truth for cp_id; we cross-check it against the</span>
-        <span class="c1"># Python list index so a future refactor that misaligns the two surfaces immediately.</span>
-        <span class="n">cpp_cp_id</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">ast_builder</span><span class="o">.</span><span class="n">begin_checkpoint</span><span class="p">()</span>
-        <span class="n">py_cp_id</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">kernel</span><span class="o">.</span><span class="n">checkpoint_yield_on_args</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span>
-        <span class="k">assert</span> <span class="n">cpp_cp_id</span> <span class="o">==</span> <span class="n">py_cp_id</span><span class="p">,</span> <span class="p">(</span>
-            <span class="sa">f</span><span class="s2">&quot;C++ ASTBuilder.begin_checkpoint() returned cp_id=</span><span class="si">{</span><span class="n">cpp_cp_id</span><span class="si">}</span><span class="s2"> but Python &quot;</span>
-            <span class="sa">f</span><span class="s2">&quot;kernel.checkpoint_yield_on_args index expected </span><span class="si">{</span><span class="n">py_cp_id</span><span class="si">}</span><span class="s2">; these counters &quot;</span>
-            <span class="sa">f</span><span class="s2">&quot;must stay in lockstep so the GraphManager (slice 1c) can index yield_on by cp_id&quot;</span>
-        <span class="p">)</span>
-        <span class="n">ctx</span><span class="o">.</span><span class="n">_in_checkpoint</span> <span class="o">=</span> <span class="kc">True</span>
-        <span class="k">try</span><span class="p">:</span>
-            <span class="n">build_stmts</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">body</span><span class="p">)</span>
-        <span class="k">finally</span><span class="p">:</span>
-            <span class="n">ctx</span><span class="o">.</span><span class="n">_in_checkpoint</span> <span class="o">=</span> <span class="kc">False</span>
-            <span class="n">ctx</span><span class="o">.</span><span class="n">ast_builder</span><span class="o">.</span><span class="n">end_checkpoint</span><span class="p">()</span>
-        <span class="k">return</span> <span class="kc">None</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Thin forwarding wrapper around ``CheckpointTransformer.build_checkpoint_with``; the</span>
+<span class="sd">        actual logic lives in ``ast_transformers/checkpoint_transformer.py``.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">CheckpointTransformer</span><span class="o">.</span><span class="n">build_checkpoint_with</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="p">,</span> <span class="n">yield_on_name</span><span class="p">,</span> <span class="n">build_stmts</span><span class="p">)</span>
 
     <span class="nd">@staticmethod</span>
 <div class="viewcode-block" id="ASTTransformer.build_Pass">

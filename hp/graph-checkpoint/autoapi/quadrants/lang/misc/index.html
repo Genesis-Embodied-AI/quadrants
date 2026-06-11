@@ -476,22 +476,19 @@
 <tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.misc.loop_config" title="quadrants.lang.misc.loop_config"><code class="xref py py-obj docutils literal notranslate"><span class="pre">loop_config</span></code></a>(*[, block_dim, serialize, parallelize, ...])</p></td>
 <td><p>Sets directives for the next loop</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.misc.checkpoint" title="quadrants.lang.misc.checkpoint"><code class="xref py py-obj docutils literal notranslate"><span class="pre">checkpoint</span></code></a>(*[, yield_on])</p></td>
-<td><p>Marks a section of a graph kernel as a skippable, optionally yieldable stage.</p></td>
-</tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.misc.graph_do_while" title="quadrants.lang.misc.graph_do_while"><code class="xref py py-obj docutils literal notranslate"><span class="pre">graph_do_while</span></code></a>(→ bool)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.misc.graph_do_while" title="quadrants.lang.misc.graph_do_while"><code class="xref py py-obj docutils literal notranslate"><span class="pre">graph_do_while</span></code></a>(→ bool)</p></td>
 <td><p>Marks a while loop as a CUDA graph do-while conditional node.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.misc.global_thread_idx" title="quadrants.lang.misc.global_thread_idx"><code class="xref py py-obj docutils literal notranslate"><span class="pre">global_thread_idx</span></code></a>()</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.misc.global_thread_idx" title="quadrants.lang.misc.global_thread_idx"><code class="xref py py-obj docutils literal notranslate"><span class="pre">global_thread_idx</span></code></a>()</p></td>
 <td><p>Returns the global thread id of this running thread,</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.misc.mesh_patch_idx" title="quadrants.lang.misc.mesh_patch_idx"><code class="xref py py-obj docutils literal notranslate"><span class="pre">mesh_patch_idx</span></code></a>()</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.misc.mesh_patch_idx" title="quadrants.lang.misc.mesh_patch_idx"><code class="xref py py-obj docutils literal notranslate"><span class="pre">mesh_patch_idx</span></code></a>()</p></td>
 <td><p>Returns the internal mesh patch id of this running thread,</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.misc.is_extension_enabled" title="quadrants.lang.misc.is_extension_enabled"><code class="xref py py-obj docutils literal notranslate"><span class="pre">is_extension_enabled</span></code></a>(→ bool)</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.misc.is_extension_enabled" title="quadrants.lang.misc.is_extension_enabled"><code class="xref py py-obj docutils literal notranslate"><span class="pre">is_extension_enabled</span></code></a>(→ bool)</p></td>
 <td><p>Directly returns whether extension is enabled, without needing to</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.misc.dump_compile_config" title="quadrants.lang.misc.dump_compile_config"><code class="xref py py-obj docutils literal notranslate"><span class="pre">dump_compile_config</span></code></a>(→ None)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.misc.dump_compile_config" title="quadrants.lang.misc.dump_compile_config"><code class="xref py py-obj docutils literal notranslate"><span class="pre">dump_compile_config</span></code></a>(→ None)</p></td>
 <td><p>Dumps the compile config, which can be usful for example in diagnosing fastcache issues, since</p></td>
 </tr>
 </tbody>
@@ -860,44 +857,6 @@ value untouched.</p>
 </dd></dl>
 
 <dl class="py function">
-<dt class="sig sig-object py" id="quadrants.lang.misc.checkpoint">
-<span class="sig-prename descclassname"><span class="pre">quadrants.lang.misc.</span></span><span class="sig-name descname"><span class="pre">checkpoint</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">yield_on</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/misc.html#checkpoint"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.misc.checkpoint" title="Link to this definition">#</a></dt>
-<dd><p>Marks a section of a graph kernel as a skippable, optionally yieldable stage.</p>
-<p>Used as <code class="docutils literal notranslate"><span class="pre">with</span> <span class="pre">qd.checkpoint():</span></code> or <code class="docutils literal notranslate"><span class="pre">with</span> <span class="pre">qd.checkpoint(yield_on=flag):</span></code> inside a
-<code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel(graph=True)</span></code> kernel body. Each <code class="docutils literal notranslate"><span class="pre">with</span></code> block becomes a checkpoint with an
-auto-assigned <code class="docutils literal notranslate"><span class="pre">cp_id</span></code> (0, 1, 2, … by declaration order, flat across the kernel,
-independent of whether the checkpoint is inside or outside a <code class="docutils literal notranslate"><span class="pre">qd.graph_do_while</span></code>).</p>
-<p>On CUDA SM 9.0+ / 12.4+ each checkpoint compiles to a CUDA graph IF conditional node
-around its body kernels. On other GPU backends it lowers to a small “gate” kernel that
-rewrites per-kernel indirect-dispatch grid dimensions to <code class="docutils literal notranslate"><span class="pre">(0,</span> <span class="pre">0,</span> <span class="pre">0)</span></code> to skip the
-checkpoint body. CPU runs checkpoint bodies behind a host branch.</p>
-<p>If <code class="docutils literal notranslate"><span class="pre">yield_on</span></code> is a scalar <code class="docutils literal notranslate"><span class="pre">qd.i32</span></code> ndarray that is also a kernel parameter, an
-auto-inserted yield-check kernel runs after the checkpoint body. If the user wrote a
-non-zero value into <code class="docutils literal notranslate"><span class="pre">yield_on</span></code> during the body, the framework records this checkpoint
-as the yielding one, disables downstream checkpoints in the enclosing
-<code class="docutils literal notranslate"><span class="pre">qd.graph_do_while</span></code> body, exits the loop, and reports the <code class="docutils literal notranslate"><span class="pre">cp_id</span></code> to the host via
-the <code class="docutils literal notranslate"><span class="pre">GraphStatus</span></code> returned by the kernel call (see <code class="docutils literal notranslate"><span class="pre">graph.md</span></code>). The yield-check
-kernel resets <code class="docutils literal notranslate"><span class="pre">yield_on</span></code> back to 0 after reading it; the user does not have to clear
-it from the host.</p>
-<dl class="simple">
-<dt>Restrictions (enforced at kernel compile time):</dt><dd><ul class="simple">
-<li><p>Must be used inside <code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel(graph=True)</span></code>.</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">yield_on</span></code>, when supplied, must name a kernel parameter that is a 0-d
-<code class="docutils literal notranslate"><span class="pre">qd.types.ndarray(qd.i32,</span> <span class="pre">ndim=0)</span></code>.</p></li>
-<li><p>Checkpoints cannot be nested inside other checkpoints. Checkpoints inside a
-<code class="docutils literal notranslate"><span class="pre">qd.graph_do_while</span></code> body are fine and are the expected pattern.</p></li>
-<li><p>Cannot be combined with <code class="docutils literal notranslate"><span class="pre">qd.stream_parallel()</span></code> in the same kernel.</p></li>
-</ul>
-</dd>
-</dl>
-<p>This function should not be called directly at runtime; it is recognised and transformed
-during AST compilation. At Python runtime (outside kernels), this is a no-op context
-manager so that doctests / type-checking can import the symbol freely.</p>
-<p>See also <code class="docutils literal notranslate"><span class="pre">docs/source/user_guide/graph.md</span></code> for the host-side yield/resume loop and
-cross-backend semantics.</p>
-</dd></dl>
-
-<dl class="py function">
 <dt class="sig sig-object py" id="quadrants.lang.misc.graph_do_while">
 <span class="sig-prename descclassname"><span class="pre">quadrants.lang.misc.</span></span><span class="sig-name descname"><span class="pre">graph_do_while</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">condition</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">bool</span></span></span><a class="reference internal" href="../../../../_modules/quadrants/lang/misc.html#graph_do_while"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.misc.graph_do_while" title="Link to this definition">#</a></dt>
 <dd><p>Marks a while loop as a CUDA graph do-while conditional node.</p>
@@ -1041,7 +1000,6 @@ the fastcache cache keys depend on the compile config.</p>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.misc.cache_read_only"><code class="docutils literal notranslate"><span class="pre">cache_read_only()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.misc.assume_in_range"><code class="docutils literal notranslate"><span class="pre">assume_in_range()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.misc.loop_config"><code class="docutils literal notranslate"><span class="pre">loop_config()</span></code></a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.misc.checkpoint"><code class="docutils literal notranslate"><span class="pre">checkpoint()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.misc.graph_do_while"><code class="docutils literal notranslate"><span class="pre">graph_do_while()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.misc.global_thread_idx"><code class="docutils literal notranslate"><span class="pre">global_thread_idx()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.misc.mesh_patch_idx"><code class="docutils literal notranslate"><span class="pre">mesh_patch_idx()</span></code></a></li>

@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>quadrants.lang.ast.ast_transformers.function_def_transformer &#8212; Quadrants 1.0.3 documentation</title>
+    <title>quadrants.lang.ast.ast_transformers.checkpoint_transformer &#8212; Quadrants 1.0.3 documentation</title>
   
   
   
@@ -55,12 +55,12 @@
     <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
     <script src="../../../../../../_static/design-tabs.js?v=f930bc37"></script>
     <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
-    <script>DOCUMENTATION_OPTIONS.pagename = 'autoapi/quadrants/lang/ast/ast_transformers/function_def_transformer/index';</script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'autoapi/quadrants/lang/ast/ast_transformers/checkpoint_transformer/index';</script>
     <script>DOCUMENTATION_OPTIONS.search_as_you_type = false;</script>
     <link rel="index" title="Index" href="../../../../../../genindex.html" />
     <link rel="search" title="Search" href="../../../../../../search.html" />
-    <link rel="next" title="quadrants.lang.ast.checkers" href="../../checkers/index.html" />
-    <link rel="prev" title="quadrants.lang.ast.ast_transformers.checkpoint_transformer" href="../checkpoint_transformer/index.html" />
+    <link rel="next" title="quadrants.lang.ast.ast_transformers.function_def_transformer" href="../function_def_transformer/index.html" />
+    <link rel="prev" title="quadrants.lang.ast.ast_transformers.call_transformer" href="../call_transformer/index.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
   <meta name="docsearch:version" content="1.0.3" />
@@ -349,7 +349,7 @@
     
     <li class="breadcrumb-item"><a href="../index.html" class="nav-link">quadrants.lang.ast.ast_transformers</a></li>
     
-    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">quadrants.lang.ast.ast_transformers.function_def_transformer</span></li>
+    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">quadrants.lang.ast.ast_transformers.checkpoint_transformer</span></li>
   </ul>
 </nav>
 </div>
@@ -366,13 +366,19 @@
 <div id="searchbox"></div>
                 <article class="bd-article">
                   
-  <section id="module-quadrants.lang.ast.ast_transformers.function_def_transformer">
-<span id="quadrants-lang-ast-ast-transformers-function-def-transformer"></span><h1>quadrants.lang.ast.ast_transformers.function_def_transformer<a class="headerlink" href="#module-quadrants.lang.ast.ast_transformers.function_def_transformer" title="Link to this heading">#</a></h1>
+  <section id="module-quadrants.lang.ast.ast_transformers.checkpoint_transformer">
+<span id="quadrants-lang-ast-ast-transformers-checkpoint-transformer"></span><h1>quadrants.lang.ast.ast_transformers.checkpoint_transformer<a class="headerlink" href="#module-quadrants.lang.ast.ast_transformers.checkpoint_transformer" title="Link to this heading">#</a></h1>
+<p>AST recognition and lowering for <code class="docutils literal notranslate"><span class="pre">qd.checkpoint(...)</span></code> <code class="docutils literal notranslate"><span class="pre">with</span></code> blocks.</p>
+<p>Lives alongside <code class="docutils literal notranslate"><span class="pre">call_transformer.py</span></code> / <code class="docutils literal notranslate"><span class="pre">function_def_transformer.py</span></code> so that
+<code class="docutils literal notranslate"><span class="pre">ast_transformer.py</span></code> doesn’t have to grow per-feature. <code class="docutils literal notranslate"><span class="pre">ASTTransformer.build_With</span></code> and
+<code class="docutils literal notranslate"><span class="pre">ASTTransformer._is_checkpoint_call</span></code> simply forward into the static methods here. See
+<code class="docutils literal notranslate"><span class="pre">docs/source/user_guide/graph.md</span></code> for the user-facing surface and
+<code class="docutils literal notranslate"><span class="pre">perso_hugh/doc/qipc/reentrant.md</span></code> for the design.</p>
 <section id="classes">
 <h2>Classes<a class="headerlink" href="#classes" title="Link to this heading">#</a></h2>
 <div class="pst-scrollable-table-container"><table class="autosummary longtable table autosummary">
 <tbody>
-<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.ast.ast_transformers.function_def_transformer.FunctionDefTransformer" title="quadrants.lang.ast.ast_transformers.function_def_transformer.FunctionDefTransformer"><code class="xref py py-obj docutils literal notranslate"><span class="pre">FunctionDefTransformer</span></code></a></p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.ast.ast_transformers.checkpoint_transformer.CheckpointTransformer" title="quadrants.lang.ast.ast_transformers.checkpoint_transformer.CheckpointTransformer"><code class="xref py py-obj docutils literal notranslate"><span class="pre">CheckpointTransformer</span></code></a></p></td>
 <td><p></p></td>
 </tr>
 </tbody>
@@ -382,12 +388,31 @@
 <section id="module-contents">
 <h2>Module Contents<a class="headerlink" href="#module-contents" title="Link to this heading">#</a></h2>
 <dl class="py class">
-<dt class="sig sig-object py" id="quadrants.lang.ast.ast_transformers.function_def_transformer.FunctionDefTransformer">
-<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">quadrants.lang.ast.ast_transformers.function_def_transformer.</span></span><span class="sig-name descname"><span class="pre">FunctionDefTransformer</span></span><a class="reference internal" href="../../../../../../_modules/quadrants/lang/ast/ast_transformers/function_def_transformer.html#FunctionDefTransformer"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.ast.ast_transformers.function_def_transformer.FunctionDefTransformer" title="Link to this definition">#</a></dt>
+<dt class="sig sig-object py" id="quadrants.lang.ast.ast_transformers.checkpoint_transformer.CheckpointTransformer">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">quadrants.lang.ast.ast_transformers.checkpoint_transformer.</span></span><span class="sig-name descname"><span class="pre">CheckpointTransformer</span></span><a class="reference internal" href="../../../../../../_modules/quadrants/lang/ast/ast_transformers/checkpoint_transformer.html#CheckpointTransformer"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.ast.ast_transformers.checkpoint_transformer.CheckpointTransformer" title="Link to this definition">#</a></dt>
 <dd><dl class="py method">
-<dt class="sig sig-object py" id="quadrants.lang.ast.ast_transformers.function_def_transformer.FunctionDefTransformer.build_FunctionDef">
-<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">build_FunctionDef</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ctx</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../../ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext" title="quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext"><span class="pre">quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">node</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ast.FunctionDef</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">build_stmts</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Callable</span><span class="p"><span class="pre">[</span></span><span class="p"><span class="pre">[</span></span><a class="reference internal" href="../../ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext" title="quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext"><span class="pre">quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">list</span><span class="p"><span class="pre">[</span></span><span class="pre">ast.stmt</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">None</span><span class="p"><span class="pre">]</span></span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="../../../../../../_modules/quadrants/lang/ast/ast_transformers/function_def_transformer.html#FunctionDefTransformer.build_FunctionDef"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.ast.ast_transformers.function_def_transformer.FunctionDefTransformer.build_FunctionDef" title="Link to this definition">#</a></dt>
-<dd></dd></dl>
+<dt class="sig sig-object py" id="quadrants.lang.ast.ast_transformers.checkpoint_transformer.CheckpointTransformer.is_checkpoint_call">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">is_checkpoint_call</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">node</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ast.expr</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">bool</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span><span class="p"><span class="pre">]</span></span></span></span><a class="reference internal" href="../../../../../../_modules/quadrants/lang/ast/ast_transformers/checkpoint_transformer.html#CheckpointTransformer.is_checkpoint_call"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.ast.ast_transformers.checkpoint_transformer.CheckpointTransformer.is_checkpoint_call" title="Link to this definition">#</a></dt>
+<dd><p>If <em>node</em> is a <code class="docutils literal notranslate"><span class="pre">qd.checkpoint(...)</span></code> call return <code class="docutils literal notranslate"><span class="pre">(True,</span> <span class="pre">yield_on_arg_name)</span></code>;
+otherwise <code class="docutils literal notranslate"><span class="pre">(False,</span> <span class="pre">None)</span></code>. <code class="docutils literal notranslate"><span class="pre">yield_on_arg_name</span></code> is <code class="docutils literal notranslate"><span class="pre">None</span></code> when the user wrote
+<code class="docutils literal notranslate"><span class="pre">qd.checkpoint()</span></code> with no <code class="docutils literal notranslate"><span class="pre">yield_on</span></code> kwarg.</p>
+<p>Validates the call shape (no positional args, only <code class="docutils literal notranslate"><span class="pre">yield_on=</span></code> as a bare <code class="docutils literal notranslate"><span class="pre">ast.Name</span></code>)
+and raises <code class="docutils literal notranslate"><span class="pre">QuadrantsSyntaxError</span></code> for misuse so the user gets a clear message at the
+<code class="docutils literal notranslate"><span class="pre">with</span></code> site rather than a vague “not stream_parallel” error later.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="quadrants.lang.ast.ast_transformers.checkpoint_transformer.CheckpointTransformer.build_checkpoint_with">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">build_checkpoint_with</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ctx</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../../ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext" title="quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext"><span class="pre">quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">node</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ast.With</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">yield_on_name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">build_stmts</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="../../../../../../_modules/quadrants/lang/ast/ast_transformers/checkpoint_transformer.html#CheckpointTransformer.build_checkpoint_with"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.ast.ast_transformers.checkpoint_transformer.CheckpointTransformer.build_checkpoint_with" title="Link to this definition">#</a></dt>
+<dd><p>Handles <code class="docutils literal notranslate"><span class="pre">with</span> <span class="pre">qd.checkpoint(yield_on=arg):</span></code> blocks.</p>
+<p>Validates the use-site (kernel must be <code class="docutils literal notranslate"><span class="pre">graph=True</span></code>, no nesting, <code class="docutils literal notranslate"><span class="pre">yield_on</span></code> must be
+a kernel parameter) and records the checkpoint’s <code class="docutils literal notranslate"><span class="pre">yield_on</span></code> arg on the kernel object.
+Walks the body transparently – for-loops inside the <code class="docutils literal notranslate"><span class="pre">with</span></code> become normal top-level
+for-loops in the kernel’s frontend IR. The <code class="docutils literal notranslate"><span class="pre">cp_id</span></code> is assigned by declaration order
+(list index in <code class="docutils literal notranslate"><span class="pre">kernel.checkpoint_yield_on_args</span></code>).</p>
+<p><code class="docutils literal notranslate"><span class="pre">build_stmts</span></code> is the <code class="docutils literal notranslate"><span class="pre">ast_transformer.build_stmts</span></code> callable injected by the caller
+to avoid a circular import.</p>
+</dd></dl>
 
 </dd></dl>
 
@@ -405,20 +430,20 @@
                   
 <div class="prev-next-area">
     <a class="left-prev"
-       href="../checkpoint_transformer/index.html"
+       href="../call_transformer/index.html"
        title="previous page">
       <i class="fa-solid fa-angle-left"></i>
       <div class="prev-next-info">
         <p class="prev-next-subtitle">previous</p>
-        <p class="prev-next-title">quadrants.lang.ast.ast_transformers.checkpoint_transformer</p>
+        <p class="prev-next-title">quadrants.lang.ast.ast_transformers.call_transformer</p>
       </div>
     </a>
     <a class="right-next"
-       href="../../checkers/index.html"
+       href="../function_def_transformer/index.html"
        title="next page">
       <div class="prev-next-info">
         <p class="prev-next-subtitle">next</p>
-        <p class="prev-next-title">quadrants.lang.ast.checkers</p>
+        <p class="prev-next-title">quadrants.lang.ast.ast_transformers.function_def_transformer</p>
       </div>
       <i class="fa-solid fa-angle-right"></i>
     </a>
@@ -443,8 +468,9 @@
     <ul class="pst-show_toc_level nav section-nav flex-column">
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#classes">Classes</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#module-contents">Module Contents</a><ul class="nav section-nav flex-column">
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.ast.ast_transformers.function_def_transformer.FunctionDefTransformer"><code class="docutils literal notranslate"><span class="pre">FunctionDefTransformer</span></code></a><ul class="nav section-nav flex-column">
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.ast.ast_transformers.function_def_transformer.FunctionDefTransformer.build_FunctionDef"><code class="docutils literal notranslate"><span class="pre">FunctionDefTransformer.build_FunctionDef()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.ast.ast_transformers.checkpoint_transformer.CheckpointTransformer"><code class="docutils literal notranslate"><span class="pre">CheckpointTransformer</span></code></a><ul class="nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.ast.ast_transformers.checkpoint_transformer.CheckpointTransformer.is_checkpoint_call"><code class="docutils literal notranslate"><span class="pre">CheckpointTransformer.is_checkpoint_call()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.ast.ast_transformers.checkpoint_transformer.CheckpointTransformer.build_checkpoint_with"><code class="docutils literal notranslate"><span class="pre">CheckpointTransformer.build_checkpoint_with()</span></code></a></li>
 </ul>
 </li>
 </ul>
@@ -455,7 +481,7 @@
   <div class="sidebar-secondary-item">
 
   <div class="tocsection sourcelink">
-    <a href="../../../../../../_sources/autoapi/quadrants/lang/ast/ast_transformers/function_def_transformer/index.rst.txt">
+    <a href="../../../../../../_sources/autoapi/quadrants/lang/ast/ast_transformers/checkpoint_transformer/index.rst.txt">
       <i class="fa-solid fa-file-lines"></i> Show Source
     </a>
   </div>
