@@ -27,20 +27,17 @@ namespace quadrants::lang {
 // yield_signal. The `final_block` jump matches the existing early- return pattern used by `cpu_assert_failed` gating so
 // all the per-task cleanup (epilogue + return) runs unchanged.
 //
-// On CUDA SM 9.0+ the conditional-graph-node gate prevents the body kernel from launching
-// when the checkpoint should be skipped, so the prologue is dead code in steady state. It
-// stays in for correctness on the overlapping case where a yield-check kernel earlier in
-// the same launched graph set yield_signal between the conditional gate's evaluation and
-// the body's execution (the conditional gate captured the value of resume_point at the
-// moment the gate kernel ran; if a yield-check kernel later in the graph fires, the body's
-// dispatch is still in-flight and the conditional-node skip semantics cover the rest of
-// the launch but not already-in-flight bodies). On pre-Hopper CUDA and on AMDGPU (which
-// also lacks conditional graph nodes) the prologue *is* the gating mechanism.
+// On CUDA SM 9.0+ the conditional-graph-node gate prevents the body kernel from launching when the checkpoint should
+// be skipped, so the prologue is dead code in steady state. It stays in for correctness on the overlapping case where
+// a yield-check kernel earlier in the same launched graph set yield_signal between the conditional gate's evaluation
+// and the body's execution (the conditional gate captured the value of resume_point at the moment the gate kernel ran;
+// if a yield-check kernel later in the graph fires, the body's dispatch is still in-flight and the conditional-node
+// skip semantics cover the rest of the launch but not already-in-flight bodies). On pre-Hopper CUDA and on AMDGPU
+// (which also lacks conditional graph nodes) the prologue *is* the gating mechanism.
 //
-// The CPU x64 codegen does not call this -- the host launcher does branch gating before
-// launch. The GFX (Vulkan / Metal) codegen path also does not call this -- those use indirect
-// dispatch with a SPIR-V gate shader that writes per-kernel `dim3` buffers, not a per-thread
-// early-return inside the body kernel.
+// The CPU x64 codegen does not call this -- the host launcher does branch gating before launch. The GFX (Vulkan /
+// Metal) codegen path also does not call this -- those use indirect dispatch with a SPIR-V gate shader that writes
+// per-kernel `dim3` buffers, not a per-thread early-return inside the body kernel.
 void TaskCodeGenLLVM::emit_checkpoint_gate_prologue(int cp_id) {
   auto *runtime_context_type = get_runtime_type("RuntimeContext");
   // Field indices into RuntimeContext: 0=arg_buffer, 1=runtime, 2=cpu_thread_id,

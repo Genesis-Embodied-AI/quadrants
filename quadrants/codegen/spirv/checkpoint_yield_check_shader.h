@@ -16,9 +16,8 @@ namespace quadrants::lang::spirv {
 // shared `yield_signal` slot (first-yielder-wins, mirroring the CUDA SM 9.0+ semantics in
 // `runtime/cuda/checkpoint_yield_check.cu`) and resets the user's flag back to 0 so the next launch starts clean.
 //
-// The yield-check dispatch is itself indirect-dispatched off the same per-kernel dim3 slot the
-// gate shader wrote, so a skipped checkpoint also skips its yield-check (no atomic ops on a
-// checkpoint that did not run).
+// The yield-check dispatch is itself indirect-dispatched off the same per-kernel dim3 slot the gate shader wrote, so
+// a skipped checkpoint also skips its yield-check (no atomic ops on a checkpoint that did not run).
 //
 // Bindings (descriptor set 0):
 //   0: rw       uint32_t[2]      - control:  [resume_point: i32, yield_signal: i32]
@@ -29,13 +28,12 @@ namespace quadrants::lang::spirv {
 //
 // Dispatched once per yielding checkpoint at (1, 1, 1).
 //
-// Returns the finalized SPIR-V binary; never empty (vanilla compute pipeline, no extra
-// capability requirements beyond OpAtomicCompareExchange which is universally supported on the
-// Quadrants-targeted Vulkan / Metal surface).
+// Returns the finalized SPIR-V binary; never empty (vanilla compute pipeline, no extra capability requirements beyond
+// OpAtomicCompareExchange which is universally supported on the Quadrants-targeted Vulkan / Metal surface).
 std::vector<uint32_t> build_checkpoint_yield_check_spirv(Arch arch, const DeviceCapabilityConfig *caps);
 
-// Word offsets within the params SSBO (binding 2). Layout fixed; host populates once at graph-
-// build time matching these offsets.
+// Word offsets within the params SSBO (binding 2). Layout fixed; host populates once at graph-build time matching
+// these offsets.
 struct CheckpointYieldCheckParams {
   static constexpr uint32_t kWordOffsetCpId = 0;
   static constexpr uint32_t kNumWords = 1;
