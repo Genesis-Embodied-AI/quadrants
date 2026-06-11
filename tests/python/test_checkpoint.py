@@ -324,8 +324,7 @@ def test_checkpoint_emits_if_nodes_on_cuda_native():
     np.testing.assert_array_equal(x.to_numpy(), np.full(N, 3, dtype=np.int32))
     if _is_checkpoint_if_path_native():
         assert _num_checkpoints_on_last_call() == 3, (
-            f"expected 3 IF conditional nodes on the native path, "
-            f"got {_num_checkpoints_on_last_call()}"
+            f"expected 3 IF conditional nodes on the native path, " f"got {_num_checkpoints_on_last_call()}"
         )
 
 
@@ -365,8 +364,7 @@ def test_checkpoint_emits_if_nodes_inside_graph_do_while():
     assert counter.to_numpy() == 0
     if _is_checkpoint_if_path_native():
         assert _num_checkpoints_on_last_call() == 2, (
-            f"expected 2 IF conditional nodes inside the WHILE body, "
-            f"got {_num_checkpoints_on_last_call()}"
+            f"expected 2 IF conditional nodes inside the WHILE body, " f"got {_num_checkpoints_on_last_call()}"
         )
 
 
@@ -492,7 +490,9 @@ def test_checkpoint_yield_resets_between_launches():
     launches.
     """
     if not _supports_checkpoint_yield_resume():
-        pytest.skip("yield reset semantics require the CUDA-native IF path (slice 1d) or CPU host-branch gating (slice 6)")
+        pytest.skip(
+            "yield reset semantics require the CUDA-native IF path (slice 1d) or CPU host-branch gating (slice 6)"
+        )
     N = 4
 
     @qd.kernel(graph=True)
@@ -527,7 +527,9 @@ def test_checkpoint_yield_exits_graph_do_while_early():
     forever. The cond-with-yield variant checks `yield_signal != -1` and exits the WHILE.
     """
     if not _supports_checkpoint_yield_resume_in_while_loop():
-        pytest.skip("WHILE early-exit not yet covered on this backend (e.g. AMDGPU slice 4 streaming-launcher fallback)")
+        pytest.skip(
+            "WHILE early-exit not yet covered on this backend (e.g. AMDGPU slice 4 streaming-launcher fallback)"
+        )
     N = 4
 
     @qd.kernel(graph=True)
@@ -591,7 +593,9 @@ def test_checkpoint_returns_graph_status():
 def test_checkpoint_graph_status_reports_yield():
     """Slice 2: a yielding launch returns `GraphStatus(yielded=True, checkpoint=cp_id)`."""
     if not _supports_checkpoint_yield_resume():
-        pytest.skip("GraphStatus yield reporting requires the CUDA-native IF path (slice 1d) or CPU host-branch gating (slice 6)")
+        pytest.skip(
+            "GraphStatus yield reporting requires the CUDA-native IF path (slice 1d) or CPU host-branch gating (slice 6)"
+        )
     N = 4
 
     @qd.kernel(graph=True)

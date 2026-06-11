@@ -91,7 +91,9 @@ def test_resume_offset_sequential_this():
     (resume launch only). Host loop sees one yield.
     """
     if not _supports_checkpoint_yield_resume():
-        pytest.skip("resume-offset semantics only validated on backends with checkpoint yield/resume support (CUDA SM 9.0+ or CPU)")
+        pytest.skip(
+            "resume-offset semantics only validated on backends with checkpoint yield/resume support (CUDA SM 9.0+ or CPU)"
+        )
 
     @qd.kernel(graph=True)
     def step(
@@ -134,7 +136,9 @@ def test_resume_offset_sequential_next():
     launch). Host loop sees one yield.
     """
     if not _supports_checkpoint_yield_resume():
-        pytest.skip("resume-offset semantics only validated on backends with checkpoint yield/resume support (CUDA SM 9.0+ or CPU)")
+        pytest.skip(
+            "resume-offset semantics only validated on backends with checkpoint yield/resume support (CUDA SM 9.0+ or CPU)"
+        )
 
     @qd.kernel(graph=True)
     def step(
@@ -180,7 +184,9 @@ def test_resume_offset_loop_this():
     C hit 3x (3 full iters in resume). Host loop sees one yield.
     """
     if not _supports_checkpoint_yield_resume_in_while_loop():
-        pytest.skip("WHILE+yield/resume semantics not yet covered on this backend (e.g. AMDGPU slice 4 streaming-launcher fallback)")
+        pytest.skip(
+            "WHILE+yield/resume semantics not yet covered on this backend (e.g. AMDGPU slice 4 streaming-launcher fallback)"
+        )
 
     # Note: every "logical statement" inside a checkpoint body must live in its own top-level
     # `for` loop so the offloader emits it as a range_for task tagged with the surrounding
@@ -243,7 +249,9 @@ def test_resume_offset_loop_next():
     iter 1, skipped) -> 1 (iter 2) -> 0 (iter 3). Host loop sees one yield.
     """
     if not _supports_checkpoint_yield_resume_in_while_loop():
-        pytest.skip("WHILE+yield/resume semantics not yet covered on this backend (e.g. AMDGPU slice 4 streaming-launcher fallback)")
+        pytest.skip(
+            "WHILE+yield/resume semantics not yet covered on this backend (e.g. AMDGPU slice 4 streaming-launcher fallback)"
+        )
 
     # See `_loop_this` comment about why the counter decrement uses `for _ in range(1):`.
     @qd.kernel(graph=True)
