@@ -176,7 +176,9 @@ CachedGraph &CachedGraph::operator=(CachedGraph &&other) noexcept {
 
 // Resolves ndarray parameter handles in the launch context to raw device pointers, writing them into the arg buffer
 // via `set_ndarray_ptrs`. Unlike the normal launch path, does not handle host-resident arrays (no temporary device
-// allocation or host-to-device transfer). Errors if any external array is on the host.
+// allocation or host-to-device transfer) since graph mode bakes device pointers into the cached graph -- a host-
+// resident ndarray would force a per-launch H2D copy that the cached graph cannot encode. Errors if any external
+// array is on the host.
 void GraphManager::resolve_ctx_ndarray_ptrs(LaunchContextBuilder &ctx,
                                             const std::vector<std::pair<int, Callable::Parameter>> &parameters,
                                             LlvmRuntimeExecutor *executor) {

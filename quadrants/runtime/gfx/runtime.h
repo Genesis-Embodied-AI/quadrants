@@ -1,6 +1,7 @@
 #pragma once
 #include "quadrants/util/lang_util.h"
 
+#include <unordered_map>
 #include <vector>
 #include <chrono>
 
@@ -458,6 +459,45 @@ class QD_DLL_EXPORT GfxRuntime {
                                        const CheckpointHandleState &state,
                                        int cp_id,
                                        DeviceAllocation yield_on_devalloc);
+
+  // Per-launch outputs of `prepare_checkpoint_launch_state`. `slot_in_cp[i]` is the dense slot
+  // index into `state.per_cp[cp].out_dims` for task `i` (12 bytes per slot, gate-written, body-
+  // kernel-indirect-read). `is_first_in_cp[i]` / `is_last_in_cp[i]` mark task-list boundaries
+  // used by the per-task dispatch loop to decide when to inject the gate / yield-check shaders.
+  // `yield_on_devallocs[cp]` is the user's resolved `yield_on=` ndarray DeviceAllocation for cp
+  // (or `kDeviceNullAllocation` for non-yielding checkpoints / cps whose ndarray arg wasn't
+  // found in `any_arrays`).
+  struct CheckpointLaunchPlan {
+    std::vector<int> slot_in_cp;
+    std::vector<bool> is_first_in_cp;
+    std::vector<bool> is_last_in_cp;
+    std::vector<DeviceAllocation> yield_on_devallocs;
+  };
+
+  // Per-launch preparation of the checkpoint subsystem on the GPU side. Builds the task-index ->
+  // slot map, resolves `yield_on=` DeviceAllocations, conditionally resets
+  // `last_yield_cp_id_on_last_call_`, and uploads the initial `(resume_point, -1)` words into the
+  // control buffer. Caller passes the freshly resolved `any_arrays` and the pre-launch
+  // `host_ctx.checkpoint_yield_on_arg_ids`. Implementation in `checkpoint_launch.cpp`. Returns an
+  // empty / default-constructed plan when the kernel has no checkpoints; runtime.cpp's main loop
+  // checks `kernel_has_checkpoints` before consuming any of the plan's vectors.
+  CheckpointLaunchPlan prepare_checkpoint_launch_state(
+      KernelHandle handle,
+      const LaunchContextBuilder &host_ctx,
+      const std::vector<quadrants::lang::spirv::TaskAttributes> &task_attribs,
+      const std::unordered_map<int, DeviceAllocation> &any_arrays,
+      bool kernel_has_checkpoints);
+
+  // Post-launch readback: flushes the cmdlist, blocks until the GPU drains, reads the 8-byte
+  // `(resume_point, yield_signal)` tuple back from the control buffer, and updates
+  // `last_yield_cp_id_on_last_call_` if a yield fired. Re-opens the cmdlist on return so any
+  // downstream work (e.g. the D2H blit of return values) can keep recording. Implementation in
+  // `checkpoint_launch.cpp`. Skips work entirely (still re-opens the cmdlist via the same
+  // `ensure_current_cmdlist()` call the caller would have made) when `kernel_has_checkpoints` is
+  // false or no checkpoint in this kernel has `yield_on=`.
+  void finalize_checkpoint_readback(KernelHandle handle,
+                                    const LaunchContextBuilder &host_ctx,
+                                    bool kernel_has_checkpoints);
 };
 
 GfxRuntime::RegisterParams run_codegen(Kernel *kernel,

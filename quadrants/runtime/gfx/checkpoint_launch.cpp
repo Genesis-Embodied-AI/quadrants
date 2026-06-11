@@ -297,5 +297,136 @@ void GfxRuntime::dispatch_checkpoint_yield_check(CommandList *cmdlist,
               int(dispatch_res));
 }
 
+// Per-launch preparation of the checkpoint subsystem on the GPU side. Mirrors what was previously
+// inlined in `runtime.cpp::launch_kernel` immediately after `ensure_checkpoint_state_for_handle`.
+// Extracted here so the main per-task dispatch loop in `runtime.cpp` stays focused on the standard
+// direct-dispatch path; this helper is only doing checkpoint-specific work and always returns an
+// empty plan when `kernel_has_checkpoints` is false.
+//
+// Side effects beyond the returned plan:
+//   - Conditionally resets `last_yield_cp_id_on_last_call_` to -1 (matches the CPU / AMDGPU
+//     contract: a kernel that can yield clears the cross-launch status at the top of every launch;
+//     non-yielding aux launches leave the prior value alone so the user's status read survives).
+//   - Uploads `(resume_point, -1)` into `state.control` so the gate shader's first dispatch sees a
+//     consistent starting tuple. Done before `ensure_current_cmdlist` opens the launch's cmdlist
+//     so the upload's wait-for-prior-launch semantics finish before the GPU starts gating.
+GfxRuntime::CheckpointLaunchPlan GfxRuntime::prepare_checkpoint_launch_state(
+    KernelHandle handle,
+    const LaunchContextBuilder &host_ctx,
+    const std::vector<quadrants::lang::spirv::TaskAttributes> &task_attribs,
+    const std::unordered_map<int, DeviceAllocation> &any_arrays,
+    bool kernel_has_checkpoints) {
+  CheckpointLaunchPlan plan;
+  plan.slot_in_cp.assign(task_attribs.size(), 0);
+  plan.is_first_in_cp.assign(task_attribs.size(), false);
+  plan.is_last_in_cp.assign(task_attribs.size(), false);
+  plan.yield_on_devallocs.assign(host_ctx.checkpoint_yield_on_arg_ids.size(), kDeviceNullAllocation);
+
+  if (!kernel_has_checkpoints) {
+    return plan;
+  }
+
+  const auto &state = checkpoint_handle_states_[handle.get_launch_id()];
+  // Per-cp slot map (cp_id -> dense slot index inside `state.per_cp[cp].out_dims`). Built once per
+  // launch since `body_task_indices` is stable. `slot_in_cp[i] == k` means task `i` reads dim3
+  // triple at byte offset `12 * k` of its checkpoint's out_dims buffer.
+  for (int cp = 0; cp < (int)state.per_cp.size(); ++cp) {
+    const auto &per_cp = state.per_cp[cp];
+    for (int slot = 0; slot < (int)per_cp.body_task_indices.size(); ++slot) {
+      int ti = per_cp.body_task_indices[slot];
+      plan.slot_in_cp[ti] = slot;
+      if (slot == 0) {
+        plan.is_first_in_cp[ti] = true;
+      }
+      if (slot == (int)per_cp.body_task_indices.size() - 1) {
+        plan.is_last_in_cp[ti] = true;
+      }
+    }
+  }
+  // Reset the public `last_yield_cp_id_on_last_call_` for any kernel that has at least one
+  // yielding checkpoint - matches the CPU / AMDGPU semantics. Aux launches without `yield_on=`
+  // on any cp leave it alone so the user's prior status read survives.
+  bool kernel_can_yield = false;
+  for (int aid : host_ctx.checkpoint_yield_on_arg_ids) {
+    if (aid >= 0) {
+      kernel_can_yield = true;
+      break;
+    }
+  }
+  if (kernel_can_yield) {
+    last_yield_cp_id_on_last_call_ = -1;
+  }
+  // Resolve each cp's user-supplied `yield_on=` ndarray to a DeviceAllocation by looking up its
+  // arg id in `any_arrays`. Done per-launch because the user can hand a different ndarray to the
+  // kernel each call - we don't bake the pointer into anything.
+  for (std::size_t cp = 0; cp < host_ctx.checkpoint_yield_on_arg_ids.size(); ++cp) {
+    int arg_id = host_ctx.checkpoint_yield_on_arg_ids[cp];
+    if (arg_id < 0) {
+      continue;
+    }
+    auto it = any_arrays.find(arg_id);
+    if (it != any_arrays.end()) {
+      plan.yield_on_devallocs[cp] = it->second;
+    }
+  }
+  // Seed the per-launch control buffer with `(resume_point, -1)`. `upload_data` blocks on any
+  // in-flight stream work touching the buffer; for the control buffer that's the previous
+  // launch's yield-check shader, which `synchronize()` (called between Python-visible launches)
+  // already drained. Done before `ensure_current_cmdlist` opens this launch's cmdlist so the
+  // first gate dispatch sees the freshly-uploaded values.
+  int32_t init_words[2] = {host_ctx.resume_from_checkpoint < 0 ? 0 : host_ctx.resume_from_checkpoint, -1};
+  DevicePtr dp = state.control->get_ptr(0);
+  const void *src_ptr = init_words;
+  size_t sz = sizeof(init_words);
+  RhiResult ur = device_->upload_data(&dp, &src_ptr, &sz, 1);
+  QD_ERROR_IF(ur != RhiResult::success, "Failed to upload checkpoint control buffer: RhiResult({})", int(ur));
+
+  return plan;
+}
+
+// Single end-of-launch readback of yield_signal. `synchronize()` semantics: `flush()` submits the
+// recorded cmdlist; `wait_idle()` waits for the GPU; `readback_data` then maps the host-readable
+// control buffer and reads the 8-byte `(resume_point, yield_signal)` tuple. We only care about
+// `yield_signal` here - if non-`-1`, it's the cp_id of the first checkpoint whose `yield_on=` flag
+// fired, propagated to the Python `GraphStatus` via `last_yield_cp_id_on_last_call()`.
+//
+// Re-opens the cmdlist on return so any downstream work (e.g. the D2H blit of return values) can
+// keep recording; the `flush()` above retired the cmdlist on backends that null it out.
+void GfxRuntime::finalize_checkpoint_readback(KernelHandle handle,
+                                              const LaunchContextBuilder &host_ctx,
+                                              bool kernel_has_checkpoints) {
+  if (!kernel_has_checkpoints) {
+    return;
+  }
+  bool kernel_can_yield = false;
+  for (int aid : host_ctx.checkpoint_yield_on_arg_ids) {
+    if (aid >= 0) {
+      kernel_can_yield = true;
+      break;
+    }
+  }
+  if (!kernel_can_yield) {
+    return;
+  }
+
+  flush();
+  device_->wait_idle();
+  const auto &state = checkpoint_handle_states_[handle.get_launch_id()];
+  int32_t ctrl_words[2] = {0, -1};
+  DevicePtr dp = state.control->get_ptr(0);
+  void *host_ptr = ctrl_words;
+  size_t sz = sizeof(ctrl_words);
+  RhiResult rr = device_->readback_data(&dp, &host_ptr, &sz, 1);
+  QD_ERROR_IF(rr != RhiResult::success, "Checkpoint control readback failed: RhiResult({})", int(rr));
+  if (ctrl_words[1] != -1) {
+    last_yield_cp_id_on_last_call_ = ctrl_words[1];
+  }
+  // After the readback there is no `current_cmdlist_` (the flush above retired it on backends that
+  // null it out). Re-open if any downstream work (the d2h blit below) needs to record into it;
+  // `ensure_current_cmdlist()` is idempotent so the call is safe even on backends that keep the
+  // cmdlist alive across flush.
+  ensure_current_cmdlist();
+}
+
 }  // namespace gfx
 }  // namespace quadrants::lang

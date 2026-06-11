@@ -646,66 +646,16 @@ void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_c
   bool kernel_has_checkpoints =
       ensure_checkpoint_state_for_handle(handle, task_attribs, host_ctx.checkpoint_yield_on_arg_ids, per_task_group_x);
 
-  // Per-cp slot map (cp_id -> dense slot index inside `state.per_cp[cp].out_dims`). Built once per
-  // launch since `body_task_indices` is stable. `slot_in_cp[i] == k` means task `i` reads dim3
-  // triple at byte offset `12 * k` of its checkpoint's out_dims buffer.
-  std::vector<int> slot_in_cp(task_attribs.size(), 0);
-  std::vector<bool> is_first_in_cp(task_attribs.size(), false);
-  std::vector<bool> is_last_in_cp(task_attribs.size(), false);
-  std::vector<DeviceAllocation> yield_on_devallocs(host_ctx.checkpoint_yield_on_arg_ids.size(), kDeviceNullAllocation);
-  if (kernel_has_checkpoints) {
-    const auto &state = checkpoint_handle_states_[handle.get_launch_id()];
-    for (int cp = 0; cp < (int)state.per_cp.size(); ++cp) {
-      const auto &per_cp = state.per_cp[cp];
-      for (int slot = 0; slot < (int)per_cp.body_task_indices.size(); ++slot) {
-        int ti = per_cp.body_task_indices[slot];
-        slot_in_cp[ti] = slot;
-        if (slot == 0) {
-          is_first_in_cp[ti] = true;
-        }
-        if (slot == (int)per_cp.body_task_indices.size() - 1) {
-          is_last_in_cp[ti] = true;
-        }
-      }
-    }
-    // Reset the public `last_yield_cp_id_on_last_call_` for any kernel that has at least one
-    // yielding checkpoint - matches the CPU / AMDGPU semantics. Aux launches without `yield_on=`
-    // on any cp leave it alone so the user's prior status read survives.
-    bool kernel_can_yield = false;
-    for (int aid : host_ctx.checkpoint_yield_on_arg_ids) {
-      if (aid >= 0) {
-        kernel_can_yield = true;
-        break;
-      }
-    }
-    if (kernel_can_yield) {
-      last_yield_cp_id_on_last_call_ = -1;
-    }
-    // Resolve each cp's user-supplied `yield_on=` ndarray to a DeviceAllocation by looking up its
-    // arg id in `any_arrays`. Done per-launch because the user can hand a different ndarray to the
-    // kernel each call - we don't bake the pointer into anything.
-    for (std::size_t cp = 0; cp < host_ctx.checkpoint_yield_on_arg_ids.size(); ++cp) {
-      int arg_id = host_ctx.checkpoint_yield_on_arg_ids[cp];
-      if (arg_id < 0) {
-        continue;
-      }
-      auto it = any_arrays.find(arg_id);
-      if (it != any_arrays.end()) {
-        yield_on_devallocs[cp] = it->second;
-      }
-    }
-    // Seed the per-launch control buffer with `(resume_point, -1)`. `upload_data` blocks on any
-    // in-flight stream work touching the buffer; for the control buffer that's the previous
-    // launch's yield-check shader, which `synchronize()` (called between Python-visible launches)
-    // already drained. Done before `ensure_current_cmdlist` opens this launch's cmdlist so the
-    // first gate dispatch sees the freshly-uploaded values.
-    int32_t init_words[2] = {host_ctx.resume_from_checkpoint < 0 ? 0 : host_ctx.resume_from_checkpoint, -1};
-    DevicePtr dp = state.control->get_ptr(0);
-    const void *src_ptr = init_words;
-    size_t sz = sizeof(init_words);
-    RhiResult ur = device_->upload_data(&dp, &src_ptr, &sz, 1);
-    QD_ERROR_IF(ur != RhiResult::success, "Failed to upload checkpoint control buffer: RhiResult({})", int(ur));
-  }
+  // Per-launch checkpoint plan: slot map, yield_on_devallocs, control-buffer seed. See
+  // `runtime/gfx/checkpoint_launch.cpp::prepare_checkpoint_launch_state` for the body. Returns a
+  // zero-filled plan for non-checkpoint kernels; the per-task loop below checks
+  // `kernel_has_checkpoints` before consuming any of the plan's vectors.
+  CheckpointLaunchPlan cp_plan =
+      prepare_checkpoint_launch_state(handle, host_ctx, task_attribs, any_arrays, kernel_has_checkpoints);
+  const auto &slot_in_cp = cp_plan.slot_in_cp;
+  const auto &is_first_in_cp = cp_plan.is_first_in_cp;
+  const auto &is_last_in_cp = cp_plan.is_last_in_cp;
+  const auto &yield_on_devallocs = cp_plan.yield_on_devallocs;
 
   ensure_current_cmdlist();
 
@@ -1110,40 +1060,10 @@ void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_c
     }
   }
 
-  // Single end-of-launch readback of yield_signal. `synchronize()` semantics: `flush()` submits
-  // the recorded cmdlist; `wait_idle()` waits for the GPU; `readback_data` then maps the host-
-  // readable control buffer and reads the 8-byte (resume_point, yield_signal) tuple. We only
-  // care about `yield_signal` here - if non-`-1`, it's the cp_id of the first checkpoint whose
-  // `yield_on=` flag fired, propagated to the Python `GraphStatus` via
-  // `last_yield_cp_id_on_last_call()`.
-  if (kernel_has_checkpoints) {
-    bool kernel_can_yield = false;
-    for (int aid : host_ctx.checkpoint_yield_on_arg_ids) {
-      if (aid >= 0) {
-        kernel_can_yield = true;
-        break;
-      }
-    }
-    if (kernel_can_yield) {
-      flush();
-      device_->wait_idle();
-      const auto &state = checkpoint_handle_states_[handle.get_launch_id()];
-      int32_t ctrl_words[2] = {0, -1};
-      DevicePtr dp = state.control->get_ptr(0);
-      void *host_ptr = ctrl_words;
-      size_t sz = sizeof(ctrl_words);
-      RhiResult rr = device_->readback_data(&dp, &host_ptr, &sz, 1);
-      QD_ERROR_IF(rr != RhiResult::success, "Checkpoint control readback failed: RhiResult({})", int(rr));
-      if (ctrl_words[1] != -1) {
-        last_yield_cp_id_on_last_call_ = ctrl_words[1];
-      }
-      // After the readback there is no `current_cmdlist_` (the flush above retired it on backends
-      // that null it out). Re-open if any downstream work (the d2h blit below) needs to record
-      // into it; `ensure_current_cmdlist()` is idempotent so the call is safe even on backends
-      // that keep the cmdlist alive across flush.
-      ensure_current_cmdlist();
-    }
-  }
+  // Single end-of-launch readback of yield_signal -- see
+  // `runtime/gfx/checkpoint_launch.cpp::finalize_checkpoint_readback` for the body. No-ops for
+  // non-checkpoint kernels and for checkpoint kernels where no checkpoint opted into `yield_on=`.
+  finalize_checkpoint_readback(handle, host_ctx, kernel_has_checkpoints);
 
   // Keep context buffers used in this dispatch
   if (ti_kernel->get_args_buffer_size()) {
