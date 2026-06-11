@@ -2,8 +2,8 @@
 """AST recognition and lowering for ``qd.checkpoint(...)`` ``with`` blocks.
 
 Lives alongside ``call_transformer.py`` / ``function_def_transformer.py`` so that ``ast_transformer.py`` doesn't have to
-grow per-feature. ``ASTTransformer.build_With`` and ``ASTTransformer._is_checkpoint_call`` simply forward into the
-static methods here.
+grow per-feature. ``ASTTransformer.build_With`` and ``ASTTransformer._is_checkpoint_call`` simply forward calls into
+the static methods here.
 
 See ``docs/source/user_guide/graph.md`` for the user-facing surface and ``perso_hugh/doc/qipc/reentrant.md`` for the
 design.
