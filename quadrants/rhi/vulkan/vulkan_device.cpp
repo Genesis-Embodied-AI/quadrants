@@ -914,17 +914,17 @@ void VulkanCommandList::buffer_barrier(DevicePtr ptr, size_t size) noexcept {
   barrier.dstAccessMask = (VK_ACCESS_TRANSFER_READ_BIT | VK_ACCESS_TRANSFER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT |
                            VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_INDIRECT_COMMAND_READ_BIT);
 
-  vkCmdPipelineBarrier(buffer_->buffer,
-                       /*srcStageMask=*/
-                       VK_PIPELINE_STAGE_TRANSFER_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT |
-                           VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT,
-                       /*dstStageMask=*/VK_PIPELINE_STAGE_TRANSFER_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT |
-                           VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT,
-                       /*srcStageMask=*/0, /*memoryBarrierCount=*/0, nullptr,
-                       /*bufferMemoryBarrierCount=*/1,
-                       /*pBufferMemoryBarriers=*/&barrier,
-                       /*imageMemoryBarrierCount=*/0,
-                       /*pImageMemoryBarriers=*/nullptr);
+  vkCmdPipelineBarrier(
+      buffer_->buffer,
+      /*srcStageMask=*/
+      VK_PIPELINE_STAGE_TRANSFER_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT,
+      /*dstStageMask=*/VK_PIPELINE_STAGE_TRANSFER_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT |
+          VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT,
+      /*srcStageMask=*/0, /*memoryBarrierCount=*/0, nullptr,
+      /*bufferMemoryBarrierCount=*/1,
+      /*pBufferMemoryBarriers=*/&barrier,
+      /*imageMemoryBarrierCount=*/0,
+      /*pImageMemoryBarriers=*/nullptr);
   buffer_->refs.push_back(buffer);
 }
 
@@ -945,17 +945,17 @@ void VulkanCommandList::memory_barrier() noexcept {
   barrier.dstAccessMask = (VK_ACCESS_TRANSFER_READ_BIT | VK_ACCESS_TRANSFER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT |
                            VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_INDIRECT_COMMAND_READ_BIT);
 
-  vkCmdPipelineBarrier(buffer_->buffer,
-                       /*srcStageMask=*/
-                       VK_PIPELINE_STAGE_TRANSFER_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT |
-                           VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT,
-                       /*dstStageMask=*/VK_PIPELINE_STAGE_TRANSFER_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT |
-                           VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT,
-                       /*srcStageMask=*/0, /*memoryBarrierCount=*/1, &barrier,
-                       /*bufferMemoryBarrierCount=*/0,
-                       /*pBufferMemoryBarriers=*/nullptr,
-                       /*imageMemoryBarrierCount=*/0,
-                       /*pImageMemoryBarriers=*/nullptr);
+  vkCmdPipelineBarrier(
+      buffer_->buffer,
+      /*srcStageMask=*/
+      VK_PIPELINE_STAGE_TRANSFER_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT,
+      /*dstStageMask=*/VK_PIPELINE_STAGE_TRANSFER_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT |
+          VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT,
+      /*srcStageMask=*/0, /*memoryBarrierCount=*/1, &barrier,
+      /*bufferMemoryBarrierCount=*/0,
+      /*pBufferMemoryBarriers=*/nullptr,
+      /*imageMemoryBarrierCount=*/0,
+      /*pImageMemoryBarriers=*/nullptr);
 }
 
 void VulkanCommandList::buffer_copy(DevicePtr dst, DevicePtr src, size_t size) noexcept {

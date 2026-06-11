@@ -714,16 +714,15 @@ bool GraphManager::try_launch(int launch_id,
           ++total_nodes;
           // 3. IF conditional node depending on the gate.
           GraphNodeParams cond_node_params{};
-          cond_node_params.type = 13;     // CU_GRAPH_NODE_TYPE_CONDITIONAL
+          cond_node_params.type = 13;  // CU_GRAPH_NODE_TYPE_CONDITIONAL
           cond_node_params.handle = if_handle;
           cond_node_params.condType = 0;  // CU_GRAPH_COND_TYPE_IF
           cond_node_params.size = 1;
           cond_node_params.phGraph_out = nullptr;
           cond_node_params.ctx = cu_ctx_local;
           void *if_node = nullptr;
-          CUDADriver::get_instance().graph_add_node(&if_node, kernel_target_graph,
-                                                    prev_outer ? &prev_outer : nullptr, prev_outer ? 1 : 0,
-                                                    &cond_node_params);
+          CUDADriver::get_instance().graph_add_node(&if_node, kernel_target_graph, prev_outer ? &prev_outer : nullptr,
+                                                    prev_outer ? 1 : 0, &cond_node_params);
           void **body_graphs = (void **)cond_node_params.phGraph_out;
           QD_ASSERT(body_graphs && body_graphs[0]);
           current_body_graph = body_graphs[0];

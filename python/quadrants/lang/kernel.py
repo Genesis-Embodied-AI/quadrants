@@ -52,6 +52,7 @@ from quadrants.lang.exception import (
     QuadrantsSyntaxError,
     handle_exception_from_cpp,
 )
+
 # `GraphStatus` is the host-facing return type for kernels that contain
 # `qd.checkpoint(yield_on=...)`. Imported from the dedicated `graph_status` module rather than
 # from `misc` to avoid a `kernel -> misc -> impl -> kernel` circular import.
@@ -826,7 +827,11 @@ class Kernel(FuncBase):
         compiled_kernel_data = self.compiled_kernel_data_by_key.get(key, None)
         self.launch_observations.found_kernel_in_materialize_cache = compiled_kernel_data is not None
         ret = self.launch_kernel(
-            key, kernel_cpp, compiled_kernel_data, *py_args, qd_stream=qd_stream,
+            key,
+            kernel_cpp,
+            compiled_kernel_data,
+            *py_args,
+            qd_stream=qd_stream,
             _resume_from_checkpoint=_resume_from_checkpoint,
         )
         if compiled_kernel_data is None:

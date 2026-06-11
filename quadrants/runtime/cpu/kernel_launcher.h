@@ -61,10 +61,8 @@ class KernelLauncher : public LLVM::KernelLauncher {
   }
 
  private:
-  void launch_offloaded_tasks(LaunchContextBuilder &ctx,
-                              const Context &launcher_ctx);
-  void launch_offloaded_tasks_with_do_while(LaunchContextBuilder &ctx,
-                                            const Context &launcher_ctx);
+  void launch_offloaded_tasks(LaunchContextBuilder &ctx, const Context &launcher_ctx);
+  void launch_offloaded_tasks_with_do_while(LaunchContextBuilder &ctx, const Context &launcher_ctx);
 
   // `std::deque` so references to existing entries survive an `emplace_back` from a nested launch.
   std::deque<Context> contexts_;

@@ -454,7 +454,9 @@ class QD_DLL_EXPORT GfxRuntime {
   // in `checkpoint_launch.cpp`. Called from `launch_kernel` immediately after the last body task of
   // each yielding checkpoint. Indirect-dispatched off the trailing out_dims slot so a skipped
   // checkpoint also skips its yield-check.
-  void dispatch_checkpoint_yield_check(CommandList *cmdlist, const CheckpointHandleState &state, int cp_id,
+  void dispatch_checkpoint_yield_check(CommandList *cmdlist,
+                                       const CheckpointHandleState &state,
+                                       int cp_id,
                                        DeviceAllocation yield_on_devalloc);
 };
 

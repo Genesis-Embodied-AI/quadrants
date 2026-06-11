@@ -50,12 +50,12 @@ std::vector<uint32_t> build_checkpoint_yield_check_spirv(Arch arch, const Device
     // atomicCAS(yield_signal, -1, cp_id). First-yielder-wins: if some earlier checkpoint
     // already raised yield this launch, that earlier cp_id stays in the slot; later checkpoints
     // see `old != -1` and noop the swap. Matches `checkpoint_yield_check.cu`'s `atomicCAS`.
-    Value cp_id_u32 = load_buf_u32(ir, params_buf,
-                                   ir.uint_immediate_number(ir.u32_type(), CheckpointYieldCheckParams::kWordOffsetCpId));
+    Value cp_id_u32 = load_buf_u32(
+        ir, params_buf, ir.uint_immediate_number(ir.u32_type(), CheckpointYieldCheckParams::kWordOffsetCpId));
 
-    Value ys_ptr = ir.struct_array_access(ir.u32_type(), control_buf,
-                                          ir.uint_immediate_number(ir.u32_type(),
-                                                                    CheckpointControlBuf::kWordOffsetYieldSignal));
+    Value ys_ptr =
+        ir.struct_array_access(ir.u32_type(), control_buf,
+                               ir.uint_immediate_number(ir.u32_type(), CheckpointControlBuf::kWordOffsetYieldSignal));
     Value neg_one_u32 = ir.uint_immediate_number(ir.u32_type(), 0xFFFFFFFFu);  // -1 as u32 bit pattern
     // OpAtomicCompareExchange returns the previous value; we don't consume it. Scope = Device
     // (`1`), Semantics = Relaxed (`0`); the surrounding cmdlist barriers carry the ordering.

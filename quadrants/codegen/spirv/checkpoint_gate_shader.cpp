@@ -44,10 +44,10 @@ std::vector<uint32_t> build_checkpoint_gate_spirv(Arch arch, const DeviceCapabil
   // resume_point + yield_signal are int32 in semantics ("yield_signal == -1" means no yield), but
   // the SSBO is u32[]; reinterpret via `OpBitcast` for the comparisons. Same convention as the
   // CUDA-native `_qd_checkpoint_if_gate`.
-  Value rp_u32 =
-      load_buf_u32(ir, control_buf, ir.uint_immediate_number(ir.u32_type(), CheckpointControlBuf::kWordOffsetResumePoint));
-  Value ys_u32 =
-      load_buf_u32(ir, control_buf, ir.uint_immediate_number(ir.u32_type(), CheckpointControlBuf::kWordOffsetYieldSignal));
+  Value rp_u32 = load_buf_u32(ir, control_buf,
+                              ir.uint_immediate_number(ir.u32_type(), CheckpointControlBuf::kWordOffsetResumePoint));
+  Value ys_u32 = load_buf_u32(ir, control_buf,
+                              ir.uint_immediate_number(ir.u32_type(), CheckpointControlBuf::kWordOffsetYieldSignal));
   Value cp_id_u32 =
       load_buf_u32(ir, params_buf, ir.uint_immediate_number(ir.u32_type(), CheckpointGateParams::kWordOffsetCpId));
   Value n_kernels_u32 =

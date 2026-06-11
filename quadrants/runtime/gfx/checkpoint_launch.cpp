@@ -58,8 +58,7 @@ namespace {
 
 // Build (and cache) the generic gate compute pipeline. Called from
 // `ensure_checkpoint_state_for_handle`; idempotent across handles.
-void ensure_gate_pipeline(Device *device, PipelineCache *backend_cache,
-                          std::unique_ptr<Pipeline> &pipeline_slot) {
+void ensure_gate_pipeline(Device *device, PipelineCache *backend_cache, std::unique_ptr<Pipeline> &pipeline_slot) {
   if (pipeline_slot) {
     return;
   }
@@ -75,7 +74,8 @@ void ensure_gate_pipeline(Device *device, PipelineCache *backend_cache,
 }
 
 // Build (and cache) the generic yield-check compute pipeline. Same shape as `ensure_gate_pipeline`.
-void ensure_yield_check_pipeline(Device *device, PipelineCache *backend_cache,
+void ensure_yield_check_pipeline(Device *device,
+                                 PipelineCache *backend_cache,
                                  std::unique_ptr<Pipeline> &pipeline_slot) {
   if (pipeline_slot) {
     return;
@@ -86,8 +86,7 @@ void ensure_yield_check_pipeline(Device *device, PipelineCache *backend_cache,
                  "capability requirements beyond `OpAtomicCompareExchange`. Bug in the shader builder?");
   PipelineSourceDesc source_desc{PipelineSourceType::spirv_binary, (void *)spirv.data(),
                                  spirv.size() * sizeof(uint32_t)};
-  auto [pipeline, res] =
-      device->create_pipeline_unique(source_desc, "qd_checkpoint_yield_check", backend_cache);
+  auto [pipeline, res] = device->create_pipeline_unique(source_desc, "qd_checkpoint_yield_check", backend_cache);
   QD_ERROR_IF(res != RhiResult::success, "Failed to create checkpoint yield-check pipeline (err: {})", int(res));
   pipeline_slot = std::move(pipeline);
 }
@@ -98,8 +97,11 @@ void ensure_yield_check_pipeline(Device *device, PipelineCache *backend_cache,
 // at end), and both false on the gate params / out_dims / yield-check params (device-only access).
 // `indirect` selects whether `AllocUsage::Indirect` is set in addition to `Storage`; required for
 // the `out_dims` buffer so `vkCmdDispatchIndirect` can read it.
-std::unique_ptr<DeviceAllocationGuard> alloc_small_ssbo(Device *device, size_t bytes, bool host_write,
-                                                        bool host_read, bool indirect) {
+std::unique_ptr<DeviceAllocationGuard> alloc_small_ssbo(Device *device,
+                                                        size_t bytes,
+                                                        bool host_write,
+                                                        bool host_read,
+                                                        bool indirect) {
   AllocUsage usage = AllocUsage::Storage;
   if (indirect) {
     usage = static_cast<AllocUsage>(static_cast<int>(usage) | static_cast<int>(AllocUsage::Indirect));
@@ -115,8 +117,8 @@ std::unique_ptr<DeviceAllocationGuard> alloc_small_ssbo(Device *device, size_t b
 // at first launch and to write the yield-check params (cp_id) per-checkpoint at first launch.
 void upload_u32_words(Device *device, DeviceAllocationGuard &buf, const std::vector<uint32_t> &data) {
   void *mapped = nullptr;
-  QD_ASSERT_INFO(device->map(buf, &mapped) == RhiResult::success,
-                 "Failed to map gating SSBO ({} bytes) for upload", data.size() * sizeof(uint32_t));
+  QD_ASSERT_INFO(device->map(buf, &mapped) == RhiResult::success, "Failed to map gating SSBO ({} bytes) for upload",
+                 data.size() * sizeof(uint32_t));
   std::memcpy(mapped, data.data(), data.size() * sizeof(uint32_t));
   device->unmap(buf);
 }
@@ -124,8 +126,10 @@ void upload_u32_words(Device *device, DeviceAllocationGuard &buf, const std::vec
 }  // namespace
 
 bool GfxRuntime::ensure_checkpoint_state_for_handle(
-    KernelHandle handle, const std::vector<quadrants::lang::spirv::TaskAttributes> &task_attribs,
-    const std::vector<int> &checkpoint_yield_on_arg_ids, const std::vector<int> &per_task_group_x) {
+    KernelHandle handle,
+    const std::vector<quadrants::lang::spirv::TaskAttributes> &task_attribs,
+    const std::vector<int> &checkpoint_yield_on_arg_ids,
+    const std::vector<int> &per_task_group_x) {
   // Fast path: no task carries a checkpoint id - this kernel is not yielding-capable, no gating
   // state to set up, the launcher should use the standard direct-dispatch path.
   bool has_any_cp = false;
@@ -169,8 +173,7 @@ bool GfxRuntime::ensure_checkpoint_state_for_handle(
                                      /*host_write=*/true, /*host_read=*/true, /*indirect=*/false);
     for (int32_t cp = 0; cp <= max_cp_id; ++cp) {
       auto &per_cp = state.per_cp[cp];
-      bool yielding =
-          (cp < (int32_t)checkpoint_yield_on_arg_ids.size()) && (checkpoint_yield_on_arg_ids[cp] >= 0);
+      bool yielding = (cp < (int32_t)checkpoint_yield_on_arg_ids.size()) && (checkpoint_yield_on_arg_ids[cp] >= 0);
       uint32_t n_dispatches = static_cast<uint32_t>(per_cp.body_task_indices.size()) + (yielding ? 1u : 0u);
       // Build gate params: [cp_id, n_dispatches, (gx, gy, gz) per body kernel, (1, 1, 1) if yielding].
       std::vector<uint32_t> gp;
@@ -200,9 +203,9 @@ bool GfxRuntime::ensure_checkpoint_state_for_handle(
       if (yielding) {
         // Yield-check params: 1 u32 word holding cp_id. Bake once.
         std::vector<uint32_t> ycp{static_cast<uint32_t>(cp)};
-        per_cp.yield_check_params = alloc_small_ssbo(
-            device_, spirv::CheckpointYieldCheckParams::kNumWords * sizeof(uint32_t),
-            /*host_write=*/true, /*host_read=*/false, /*indirect=*/false);
+        per_cp.yield_check_params =
+            alloc_small_ssbo(device_, spirv::CheckpointYieldCheckParams::kNumWords * sizeof(uint32_t),
+                             /*host_write=*/true, /*host_read=*/false, /*indirect=*/false);
         upload_u32_words(device_, *per_cp.yield_check_params, ycp);
       }
     }
@@ -260,8 +263,10 @@ void GfxRuntime::dispatch_checkpoint_gate(CommandList *cmdlist, const Checkpoint
 // off the trailing slot of out_dims so the shader no-ops when the checkpoint was skipped.
 // `yield_on_devalloc` is the user's `yield_on=` ndarray device allocation (resolved per-launch
 // from the `host_ctx.checkpoint_yield_on_arg_ids[cp_id]` arg id lookup against `any_arrays`).
-void GfxRuntime::dispatch_checkpoint_yield_check(CommandList *cmdlist, const CheckpointHandleState &state,
-                                                 int cp_id, DeviceAllocation yield_on_devalloc) {
+void GfxRuntime::dispatch_checkpoint_yield_check(CommandList *cmdlist,
+                                                 const CheckpointHandleState &state,
+                                                 int cp_id,
+                                                 DeviceAllocation yield_on_devalloc) {
   const auto &per_cp = state.per_cp[cp_id];
   QD_ASSERT_INFO(per_cp.yield_check_params != nullptr,
                  "dispatch_checkpoint_yield_check called for cp_id={} but no yield_check_params; "

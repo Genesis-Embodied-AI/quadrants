@@ -124,10 +124,8 @@ void KernelLauncher::launch_offloaded_tasks(LaunchContextBuilder &ctx, const Con
     // body, peek at the user's `yield_on` flag (already a host pointer because every
     // ndarray-backed kernel parameter is host-resident on CPU). A non-zero value here is the
     // CPU equivalent of the device-side yield-check kernel firing.
-    if (cp_id >= 0 && i < is_last_task_of_yielding_checkpoint.size() &&
-        is_last_task_of_yielding_checkpoint[i] &&
-        (std::size_t)cp_id < ctx.checkpoint_yield_on_dev_ptrs.size() &&
-        ctx.checkpoint_yield_on_dev_ptrs[cp_id]) {
+    if (cp_id >= 0 && i < is_last_task_of_yielding_checkpoint.size() && is_last_task_of_yielding_checkpoint[i] &&
+        (std::size_t)cp_id < ctx.checkpoint_yield_on_dev_ptrs.size() && ctx.checkpoint_yield_on_dev_ptrs[cp_id]) {
       int32_t *flag = static_cast<int32_t *>(ctx.checkpoint_yield_on_dev_ptrs[cp_id]);
       if (*flag != 0) {
         // First yielder wins (matches the atomicCAS semantics on the device side). Since this
