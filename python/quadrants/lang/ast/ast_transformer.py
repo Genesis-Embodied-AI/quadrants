@@ -103,7 +103,9 @@ class ASTTransformer(Builder):
             if isinstance(node.ptr, (float, int, str, Field)):
                 if not _is_quadrants_internal_file(ctx.file):
                     message = f"[PURE.VIOLATION] WARNING: Accessing global variable {node.id} {type(node.ptr)} {node.violates_pure_reason}"
-                    if node.id.upper() == node.id:
+                    # Transition period: violations inside a ``qd.static`` scope only warn (instead of raising) to give
+                    # downstream code time to migrate such constants to kernel parameters. ``UPPERCASE`` names also warn.
+                    if node.id.upper() == node.id or ctx.is_in_static_scope():
                         warnings.warn(message)
                     else:
                         raise exception.QuadrantsCompilationError(message)
@@ -797,7 +799,8 @@ class ASTTransformer(Builder):
                         violation = False
                     if violation:
                         message = f"[PURE.VIOLATION] WARNING: Accessing global var {node.attr} from outside function scope within pure kernel {node.value.violates_pure_reason}"
-                        if node.attr.upper() == node.attr:
+                        # Transition period: see ``build_Name`` — a ``qd.static`` scope downgrades the error to a warning.
+                        if node.attr.upper() == node.attr or ctx.is_in_static_scope():
                             warnings.warn(message)
                         else:
                             raise exception.QuadrantsCompilationError(message)

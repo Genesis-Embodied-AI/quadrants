@@ -282,3 +282,40 @@ def test_pure_validation_non_quadrants_attribute_warns():
 
     with pytest.warns(UserWarning, match=r"\[PURE\.VIOLATION\]"):
         assert k1() == 32
+
+
+@test_utils.test()
+def test_pure_validation_static_scope_warns():
+    # Transition period: a captured global accessed inside a ``qd.static`` scope of a pure kernel only warns instead of
+    # raising, to give downstream code time to migrate such constants to kernel parameters.
+    assert qd.lang is not None
+    arch = qd.lang.impl.current_cfg().arch
+    qd.init(arch=arch, offline_cache=False)
+
+    use_alias = True
+
+    @qd.kernel(pure=True)
+    def k1() -> qd.i32:
+        ret = 0
+        if qd.static(use_alias):
+            ret = 1
+        return ret
+
+    with pytest.warns(UserWarning, match=r"\[PURE\.VIOLATION\]"):
+        assert k1() == 1
+
+    class Cfg:
+        def __init__(self) -> None:
+            self.flag = True
+
+    cfg = Cfg()
+
+    @qd.kernel(pure=True)
+    def k2() -> qd.i32:
+        ret = 0
+        if qd.static(cfg.flag):
+            ret = 1
+        return ret
+
+    with pytest.warns(UserWarning, match=r"\[PURE\.VIOLATION\]"):
+        assert k2() == 1
