@@ -334,11 +334,12 @@
 <span></span><span class="c1"># type: ignore</span>
 <span class="sd">&quot;&quot;&quot;AST recognition and lowering for ``qd.checkpoint(...)`` ``with`` blocks.</span>
 
-<span class="sd">Lives alongside ``call_transformer.py`` / ``function_def_transformer.py`` so that</span>
-<span class="sd">``ast_transformer.py`` doesn&#39;t have to grow per-feature. ``ASTTransformer.build_With`` and</span>
-<span class="sd">``ASTTransformer._is_checkpoint_call`` simply forward into the static methods here. See</span>
-<span class="sd">``docs/source/user_guide/graph.md`` for the user-facing surface and</span>
-<span class="sd">``perso_hugh/doc/qipc/reentrant.md`` for the design.</span>
+<span class="sd">Lives alongside ``call_transformer.py`` / ``function_def_transformer.py`` so that ``ast_transformer.py`` doesn&#39;t have to</span>
+<span class="sd">grow per-feature. ``ASTTransformer.build_With`` and ``ASTTransformer._is_checkpoint_call`` simply forward calls into</span>
+<span class="sd">the static methods here.</span>
+
+<span class="sd">See ``docs/source/user_guide/graph.md`` for the user-facing surface and ``perso_hugh/doc/qipc/reentrant.md`` for the</span>
+<span class="sd">design.</span>
 <span class="sd">&quot;&quot;&quot;</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
@@ -356,13 +357,12 @@
 <div class="viewcode-block" id="CheckpointTransformer.is_checkpoint_call">
 <a class="viewcode-back" href="../../../../../autoapi/quadrants/lang/ast/ast_transformers/checkpoint_transformer/index.html#quadrants.lang.ast.ast_transformers.checkpoint_transformer.CheckpointTransformer.is_checkpoint_call">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">is_checkpoint_call</span><span class="p">(</span><span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">expr</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">bool</span><span class="p">,</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">]:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;If *node* is a ``qd.checkpoint(...)`` call return ``(True, yield_on_arg_name)``;</span>
-<span class="sd">        otherwise ``(False, None)``. ``yield_on_arg_name`` is ``None`` when the user wrote</span>
-<span class="sd">        ``qd.checkpoint()`` with no ``yield_on`` kwarg.</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;If *node* is a ``qd.checkpoint(...)`` call return ``(True, yield_on_arg_name)``; otherwise ``(False, None)``.</span>
+<span class="sd">        ``yield_on_arg_name`` is ``None`` when the user wrote ``qd.checkpoint()`` with no ``yield_on`` kwarg.</span>
 
-<span class="sd">        Validates the call shape (no positional args, only ``yield_on=`` as a bare ``ast.Name``)</span>
-<span class="sd">        and raises ``QuadrantsSyntaxError`` for misuse so the user gets a clear message at the</span>
-<span class="sd">        ``with`` site rather than a vague &quot;not stream_parallel&quot; error later.</span>
+<span class="sd">        Validates the call shape (no positional args, only ``yield_on=`` as a bare ``ast.Name`` parameter) and raises</span>
+<span class="sd">        ``QuadrantsSyntaxError`` for misuse so the user gets a clear message at the ``with`` site rather than a vague</span>
+<span class="sd">        &quot;not stream_parallel&quot; error later.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Call</span><span class="p">):</span>
             <span class="k">return</span> <span class="kc">False</span><span class="p">,</span> <span class="kc">None</span>
@@ -402,14 +402,12 @@
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Handles ``with qd.checkpoint(yield_on=arg):`` blocks.</span>
 
-<span class="sd">        Validates the use-site (kernel must be ``graph=True``, no nesting, ``yield_on`` must be</span>
-<span class="sd">        a kernel parameter) and records the checkpoint&#39;s ``yield_on`` arg on the kernel object.</span>
-<span class="sd">        Walks the body transparently -- for-loops inside the ``with`` become normal top-level</span>
-<span class="sd">        for-loops in the kernel&#39;s frontend IR. The ``cp_id`` is assigned by declaration order</span>
-<span class="sd">        (list index in ``kernel.checkpoint_yield_on_args``).</span>
+<span class="sd">        Validates the use-site (kernel must be ``graph=True``, no nesting, ``yield_on`` must be a kernel parameter)</span>
+<span class="sd">        and records the checkpoint&#39;s ``yield_on`` arg on the kernel object. Walks the body transparently -- for-loops</span>
+<span class="sd">        inside the ``with`` become normal top-level for-loops in the kernel&#39;s frontend IR. The ``cp_id`` is assigned by</span>
+<span class="sd">        declaration order (list index in ``kernel.checkpoint_yield_on_args``).</span>
 
-<span class="sd">        ``build_stmts`` is the ``ast_transformer.build_stmts`` callable injected by the caller</span>
-<span class="sd">        to avoid a circular import.</span>
+<span class="sd">        ``build_stmts`` is the ``ast_transformer.build_stmts`` callable injected by caller to avoid a circular import.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">ctx</span><span class="o">.</span><span class="n">is_kernel</span><span class="p">:</span>
             <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">&quot;qd.checkpoint() can only be used inside @qd.kernel, not @qd.func&quot;</span><span class="p">)</span>
@@ -429,17 +427,14 @@
                     <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">kernel</span><span class="o">.</span><span class="n">func</span><span class="o">.</span><span class="vm">__name__</span><span class="si">!r}</span><span class="s2">. Available parameters: </span><span class="si">{</span><span class="n">arg_names</span><span class="si">}</span><span class="s2">&quot;</span>
                 <span class="p">)</span>
 
-        <span class="c1"># Auto-wrap bare top-level statements in the checkpoint body in a one-iteration</span>
-        <span class="c1"># `for` loop. The offloader&#39;s pending-serial bucket loses the surrounding</span>
-        <span class="c1"># `checkpoint_id` and emits such statements as `serial` tasks with `cp_id == -1`,</span>
-        <span class="c1"># meaning they would run unconditionally even when the checkpoint is skipped -- a</span>
-        <span class="c1"># silent correctness bug. The fix is to lower them as `range_for` tasks instead by</span>
-        <span class="c1"># wrapping each bare statement in `for _ in range(1): &lt;stmt&gt;`. We target the specific</span>
-        <span class="c1"># statement kinds known to hit the footgun (Assign / AugAssign / AnnAssign /</span>
-        <span class="c1"># non-docstring Expr) and leave everything else (For, While, If, With, Pass,</span>
-        <span class="c1"># docstring) untouched so they keep working transparently; nested</span>
-        <span class="c1"># `with qd.checkpoint(...)` in particular still falls through to the existing</span>
-        <span class="c1"># nested-checkpoint check at the start of this method.</span>
+        <span class="c1"># Auto-wrap bare top-level statements in the checkpoint body in a one-iteration `for` loop. The offloader&#39;s</span>
+        <span class="c1"># pending-serial bucket loses the surrounding `checkpoint_id` and emits such statements as `serial` tasks with</span>
+        <span class="c1"># `cp_id == -1`, meaning that they would run unconditionally even when the checkpoint is skipped -- a silent</span>
+        <span class="c1"># correctness bug. The fix is to lower them as `range_for` tasks instead by wrapping each bare statement in `for</span>
+        <span class="c1"># _ in range(1): &lt;stmt&gt;`. We target the specific statement kinds known to hit the footgun (Assign / AugAssign /</span>
+        <span class="c1"># AnnAssign / non-docstring Expr) and leave everything else (For, While, If, With, Pass, docstring) untouched so</span>
+        <span class="c1"># they keep working transparently; nested `with qd.checkpoint(...)` in particular still falls through to the</span>
+        <span class="c1"># existing nested-checkpoint check at the start of this method.</span>
         <span class="n">new_body</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">ast</span><span class="o">.</span><span class="n">stmt</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
         <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">stmt</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">body</span><span class="p">):</span>
             <span class="n">needs_wrap</span> <span class="o">=</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">stmt</span><span class="p">,</span> <span class="p">(</span><span class="n">ast</span><span class="o">.</span><span class="n">Assign</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">AugAssign</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">AnnAssign</span><span class="p">))</span>
@@ -465,10 +460,10 @@
         <span class="n">node</span><span class="o">.</span><span class="n">body</span> <span class="o">=</span> <span class="n">new_body</span>
 
         <span class="n">kernel</span><span class="o">.</span><span class="n">checkpoint_yield_on_args</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">yield_on_name</span><span class="p">)</span>
-        <span class="c1"># Hand control to the C++ ASTBuilder so that every for-loop emitted by `build_stmts`</span>
-        <span class="c1"># below is tagged with this checkpoint&#39;s `cp_id` on its `ForLoopConfig.checkpoint_id`.</span>
-        <span class="c1"># The C++ counter is the source of truth for cp_id; we cross-check it against the</span>
-        <span class="c1"># Python list index so a future refactor that misaligns the two surfaces immediately.</span>
+        <span class="c1"># Hand control to the C++ ASTBuilder so that every for-loop emitted by `build_stmts` below is tagged with this</span>
+        <span class="c1"># checkpoint&#39;s `cp_id` on its `ForLoopConfig.checkpoint_id`. The C++ counter is the source of truth for cp_id;</span>
+        <span class="c1"># we cross-check it against the Python list index so that a future refactor that misaligns the two surfaces</span>
+        <span class="c1"># fires immediately.</span>
         <span class="n">cpp_cp_id</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">ast_builder</span><span class="o">.</span><span class="n">begin_checkpoint</span><span class="p">()</span>
         <span class="n">py_cp_id</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">kernel</span><span class="o">.</span><span class="n">checkpoint_yield_on_args</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span>
         <span class="k">assert</span> <span class="n">cpp_cp_id</span> <span class="o">==</span> <span class="n">py_cp_id</span><span class="p">,</span> <span class="p">(</span>

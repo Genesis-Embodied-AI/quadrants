@@ -333,13 +333,11 @@
   <h1>Source code for quadrants.lang.checkpoint</h1><div class="highlight"><pre>
 <span></span><span class="sd">&quot;&quot;&quot;User-facing ``qd.checkpoint`` context-manager and its no-op Python-runtime stub.</span>
 
-<span class="sd">Mirrors ``graph_status.py`` which holds the other half of the same feature surface</span>
-<span class="sd">(``GraphStatus``). Kept in its own module to keep ``lang/misc.py`` from growing further --</span>
-<span class="sd">the AST transformer and the C++ runtime are the actual implementation; this file is just</span>
-<span class="sd">the public API entry point.</span>
+<span class="sd">Mirrors ``graph_status.py``, which holds the other half of the same feature surface (``GraphStatus``). Kept in its own</span>
+<span class="sd">module to keep ``lang/misc.py`` from growing further -- the AST transformer and the C++ runtime are doing all the actual</span>
+<span class="sd">implementation work; this file is just the public API entry point.</span>
 
-<span class="sd">Re-exported via ``qd.lang.misc`` (and therefore as ``qd.checkpoint``) for the user-facing</span>
-<span class="sd">canonical import path.</span>
+<span class="sd">Re-exported via ``qd.lang.misc`` (and therefore as ``qd.checkpoint``) for the user-facing canonical import path.</span>
 <span class="sd">&quot;&quot;&quot;</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
@@ -353,39 +351,33 @@
 <span class="k">def</span><span class="w"> </span><span class="nf">checkpoint</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">yield_on</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Marks a section of a graph kernel as a skippable, optionally yieldable stage.</span>
 
-<span class="sd">    Used as ``with qd.checkpoint():`` or ``with qd.checkpoint(yield_on=flag):`` inside a</span>
-<span class="sd">    ``@qd.kernel(graph=True)`` kernel body. Each ``with`` block becomes a checkpoint with an</span>
-<span class="sd">    auto-assigned ``cp_id`` (0, 1, 2, ... by declaration order, flat across the kernel,</span>
-<span class="sd">    independent of whether the checkpoint is inside or outside a ``qd.graph_do_while``).</span>
+<span class="sd">    Used as ``with qd.checkpoint():`` or ``with qd.checkpoint(yield_on=flag):`` inside a ``@qd.kernel(graph=True)``</span>
+<span class="sd">    kernel body. Each ``with`` block becomes a checkpoint with an auto-assigned ``cp_id`` (0, 1, 2, ... by declaration</span>
+<span class="sd">    order, flat across the kernel, independent of whether the checkpoint is inside or outside a ``qd.graph_do_while``).</span>
 
-<span class="sd">    On CUDA SM 9.0+ / 12.4+ each checkpoint compiles to a CUDA graph IF conditional node</span>
-<span class="sd">    around its body kernels. On other GPU backends it lowers to a small &quot;gate&quot; kernel that</span>
-<span class="sd">    rewrites per-kernel indirect-dispatch grid dimensions to ``(0, 0, 0)`` to skip the</span>
-<span class="sd">    checkpoint body. CPU runs checkpoint bodies behind a host branch.</span>
+<span class="sd">    On CUDA SM 9.0+ / 12.4+ each checkpoint compiles to a CUDA graph IF conditional node around its body kernels. On</span>
+<span class="sd">    other GPU backends it lowers to a small &quot;gate&quot; kernel that rewrites per-kernel indirect-dispatch grid dimensions to</span>
+<span class="sd">    ``(0, 0, 0)`` to skip the checkpoint body. CPU runs checkpoint bodies behind a host branch.</span>
 
-<span class="sd">    If ``yield_on`` is a scalar ``qd.i32`` ndarray that is also a kernel parameter, an</span>
-<span class="sd">    auto-inserted yield-check kernel runs after the checkpoint body. If the user wrote a</span>
-<span class="sd">    non-zero value into ``yield_on`` during the body, the framework records this checkpoint</span>
-<span class="sd">    as the yielding one, disables downstream checkpoints in the enclosing</span>
-<span class="sd">    ``qd.graph_do_while`` body, exits the loop, and reports the ``cp_id`` to the host via</span>
-<span class="sd">    the ``GraphStatus`` returned by the kernel call (see ``graph.md``). The yield-check</span>
-<span class="sd">    kernel resets ``yield_on`` back to 0 after reading it; the user does not have to clear</span>
-<span class="sd">    it from the host.</span>
+<span class="sd">    If ``yield_on`` is a scalar ``qd.i32`` ndarray that is also a kernel parameter, an auto-inserted yield-check kernel</span>
+<span class="sd">    runs after the checkpoint body. If the user wrote a non-zero value into ``yield_on`` during the body, the framework</span>
+<span class="sd">    records this checkpoint as the yielding one, disables downstream checkpoints in the enclosing ``qd.graph_do_while``</span>
+<span class="sd">    body, exits the loop, and reports the ``cp_id`` to the host via the ``GraphStatus`` returned by the kernel call (see</span>
+<span class="sd">    ``graph.md``). The yield-check kernel resets ``yield_on`` back to 0 after reading it; the user does not have to</span>
+<span class="sd">    clear it from the host.</span>
 
 <span class="sd">    Restrictions (enforced at kernel compile time):</span>
 <span class="sd">      - Must be used inside ``@qd.kernel(graph=True)``.</span>
-<span class="sd">      - ``yield_on``, when supplied, must name a kernel parameter that is a 0-d</span>
-<span class="sd">        ``qd.types.ndarray(qd.i32, ndim=0)``.</span>
-<span class="sd">      - Checkpoints cannot be nested inside other checkpoints. Checkpoints inside a</span>
-<span class="sd">        ``qd.graph_do_while`` body are fine and are the expected pattern.</span>
+<span class="sd">      - ``yield_on``, when supplied, must name a kernel parameter that is a 0-d ``qd.types.ndarray(qd.i32, ndim=0)``.</span>
+<span class="sd">      - Checkpoints cannot be nested inside other checkpoints. Checkpoints inside a ``qd.graph_do_while`` body are fine</span>
+<span class="sd">        and are the expected pattern.</span>
 <span class="sd">      - Cannot be combined with ``qd.stream_parallel()`` in the same kernel.</span>
 
-<span class="sd">    This function should not be called directly at runtime; it is recognised and transformed</span>
-<span class="sd">    during AST compilation. At Python runtime (outside kernels), this is a no-op context</span>
-<span class="sd">    manager so that doctests / type-checking can import the symbol freely.</span>
+<span class="sd">    This function should not be called directly at runtime; it is recognised and transformed during AST compilation. At</span>
+<span class="sd">    Python runtime (outside kernels), this is a no-op context manager so that doctests / type-checking can import the</span>
+<span class="sd">    symbol freely.</span>
 
-<span class="sd">    See also ``docs/source/user_guide/graph.md`` for the host-side yield/resume loop and</span>
-<span class="sd">    cross-backend semantics.</span>
+<span class="sd">    See also ``docs/source/user_guide/graph.md`` for the host-side yield/resume loop and cross-backend semantics.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">yield</span></div>
 

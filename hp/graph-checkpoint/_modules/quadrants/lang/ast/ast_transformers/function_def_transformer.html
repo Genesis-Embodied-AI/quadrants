@@ -843,9 +843,9 @@
             <span class="n">FunctionDefTransformer</span><span class="o">.</span><span class="n">_validate_stream_parallel_exclusivity</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">body</span><span class="p">,</span> <span class="n">ctx</span><span class="o">.</span><span class="n">global_vars</span><span class="p">)</span>
             <span class="n">kernel</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">global_context</span><span class="o">.</span><span class="n">current_kernel</span>
             <span class="k">if</span> <span class="n">kernel</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-                <span class="c1"># Reset before walking the body so re-materialisations (e.g. when a templated kernel is compiled</span>
-                <span class="c1"># with a different argument shape) start from an empty list. Mirrors how `graph_do_while_arg`</span>
-                <span class="c1"># gets overwritten unconditionally during AST traversal.</span>
+                <span class="c1"># Reset before walking the body so re-materialisations (e.g. when a templated kernel is compiled with a</span>
+                <span class="c1"># different argument shape) start from an empty list. Mirrors how `graph_do_while_arg` gets overwritten</span>
+                <span class="c1"># unconditionally during AST traversal.</span>
                 <span class="n">kernel</span><span class="o">.</span><span class="n">checkpoint_yield_on_args</span> <span class="o">=</span> <span class="p">[]</span>
 
         <span class="k">with</span> <span class="n">ctx</span><span class="o">.</span><span class="n">variable_scope_guard</span><span class="p">():</span>

@@ -1858,9 +1858,8 @@
 
     <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">_is_checkpoint_call</span><span class="p">(</span><span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">expr</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">bool</span><span class="p">,</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">]:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Thin forwarding wrapper around ``CheckpointTransformer.is_checkpoint_call``; the</span>
-<span class="sd">        actual logic lives in ``ast_transformers/checkpoint_transformer.py`` to keep this file</span>
-<span class="sd">        from growing per-feature.&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Thin forwarding wrapper around ``CheckpointTransformer.is_checkpoint_call``; the actual logic lives in module</span>
+<span class="sd">        ``ast_transformers/checkpoint_transformer.py`` to keep this file from growing per-feature.&quot;&quot;&quot;</span>
         <span class="k">return</span> <span class="n">CheckpointTransformer</span><span class="o">.</span><span class="n">is_checkpoint_call</span><span class="p">(</span><span class="n">node</span><span class="p">)</span>
 
     <span class="nd">@staticmethod</span>
@@ -2125,8 +2124,8 @@
         <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">With</span><span class="p">,</span>
         <span class="n">yield_on_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Thin forwarding wrapper around ``CheckpointTransformer.build_checkpoint_with``; the</span>
-<span class="sd">        actual logic lives in ``ast_transformers/checkpoint_transformer.py``.&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Thin forwarding wrapper around ``CheckpointTransformer.build_checkpoint_with``; the actual logic lives in</span>
+<span class="sd">        ``ast_transformers/checkpoint_transformer.py``.&quot;&quot;&quot;</span>
         <span class="k">return</span> <span class="n">CheckpointTransformer</span><span class="o">.</span><span class="n">build_checkpoint_with</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="p">,</span> <span class="n">yield_on_name</span><span class="p">,</span> <span class="n">build_stmts</span><span class="p">)</span>
 
     <span class="nd">@staticmethod</span>

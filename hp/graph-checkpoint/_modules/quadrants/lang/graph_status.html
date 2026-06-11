@@ -333,12 +333,10 @@
   <h1>Source code for quadrants.lang.graph_status</h1><div class="highlight"><pre>
 <span></span><span class="sd">&quot;&quot;&quot;Plain-Python container returned from graph kernels that contain ``qd.checkpoint(yield_on=...)``.</span>
 
-<span class="sd">Lives in its own module (with no Quadrants-internal imports) so it can be imported safely from</span>
-<span class="sd">both ``kernel.py`` and ``misc.py`` without re-introducing the circular import chain that</span>
-<span class="sd">``misc.py -&gt; impl.py -&gt; kernel.py`` would create.</span>
+<span class="sd">Lives in its own module (with no Quadrants-internal imports) so it can be imported safely from both ``kernel.py`` and</span>
+<span class="sd">``misc.py`` without re-introducing the circular import chain that ``misc.py -&gt; impl.py -&gt; kernel.py`` would create.</span>
 
-<span class="sd">Re-exported via ``qd.lang.misc`` (and therefore as ``qd.GraphStatus``) for the user-facing</span>
-<span class="sd">canonical import path.</span>
+<span class="sd">Re-exported via ``qd.lang.misc`` (and therefore as ``qd.GraphStatus``) for the user-facing canonical import path.</span>
 <span class="sd">&quot;&quot;&quot;</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
@@ -349,11 +347,10 @@
 <span class="k">class</span><span class="w"> </span><span class="nc">GraphStatus</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Result returned by a graph kernel that contains ``qd.checkpoint(yield_on=...)`` blocks.</span>
 
-<span class="sd">    Returned from ``kernel(...)`` and ``kernel.resume(..., from_checkpoint=cp)`` whenever the</span>
-<span class="sd">    kernel was decorated with ``@qd.kernel(graph=True)`` and contains at least one checkpoint</span>
-<span class="sd">    that declared a ``yield_on=`` parameter. Read ``status.yielded`` to decide whether to keep</span>
-<span class="sd">    running the host loop, and ``status.checkpoint`` to find out which checkpoint asked the</span>
-<span class="sd">    host to handle something.</span>
+<span class="sd">    Returned from ``kernel(...)`` and ``kernel.resume(..., from_checkpoint=cp)`` whenever the kernel was decorated with</span>
+<span class="sd">    ``@qd.kernel(graph=True)`` and contains at least one checkpoint that has declared a ``yield_on=`` parameter. Read</span>
+<span class="sd">    ``status.yielded`` to decide whether to keep running the host loop, and ``status.checkpoint`` to find out which</span>
+<span class="sd">    checkpoint asked the host to handle something.</span>
 
 <span class="sd">    Canonical usage (mirrors the qipc re-entrant pattern; see ``graph.md``)::</span>
 
@@ -364,13 +361,11 @@
 <span class="sd">                                 from_checkpoint=status.checkpoint)</span>
 
 <span class="sd">    Attributes:</span>
-<span class="sd">        yielded: ``True`` iff one of the kernel&#39;s ``yield_on=`` checkpoints fired its flag on</span>
-<span class="sd">            the most recent launch. ``False`` means the kernel completed normally and the host</span>
-<span class="sd">            loop should exit.</span>
-<span class="sd">        checkpoint: ``cp_id`` of the checkpoint whose ``yield_on=`` flag was non-zero (or</span>
-<span class="sd">            ``None`` when ``yielded`` is ``False``). Pass it to ``kernel.resume(...,</span>
-<span class="sd">            from_checkpoint=cp)`` to skip every checkpoint with a lower ``cp_id`` on the next</span>
-<span class="sd">            launch.</span>
+<span class="sd">        yielded: ``True`` iff one of the kernel&#39;s ``yield_on=`` checkpoints fired its flag on the most recent launch.</span>
+<span class="sd">            ``False`` means the kernel completed normally and the host loop should exit.</span>
+<span class="sd">        checkpoint: ``cp_id`` of the checkpoint whose ``yield_on=`` flag was non-zero (or ``None`` when ``yielded`` is</span>
+<span class="sd">            ``False``). Pass it to ``kernel.resume(..., from_checkpoint=cp)`` to skip every checkpoint with a lower</span>
+<span class="sd">            ``cp_id`` on the next launch.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
     <span class="vm">__slots__</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;yielded&quot;</span><span class="p">,</span> <span class="s2">&quot;checkpoint&quot;</span><span class="p">)</span>

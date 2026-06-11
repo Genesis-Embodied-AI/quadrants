@@ -7,11 +7,12 @@ quadrants.lang.ast.ast_transformers.checkpoint_transformer
 
    AST recognition and lowering for ``qd.checkpoint(...)`` ``with`` blocks.
 
-   Lives alongside ``call_transformer.py`` / ``function_def_transformer.py`` so that
-   ``ast_transformer.py`` doesn't have to grow per-feature. ``ASTTransformer.build_With`` and
-   ``ASTTransformer._is_checkpoint_call`` simply forward into the static methods here. See
-   ``docs/source/user_guide/graph.md`` for the user-facing surface and
-   ``perso_hugh/doc/qipc/reentrant.md`` for the design.
+   Lives alongside ``call_transformer.py`` / ``function_def_transformer.py`` so that ``ast_transformer.py`` doesn't have to
+   grow per-feature. ``ASTTransformer.build_With`` and ``ASTTransformer._is_checkpoint_call`` simply forward calls into
+   the static methods here.
+
+   See ``docs/source/user_guide/graph.md`` for the user-facing surface and ``perso_hugh/doc/qipc/reentrant.md`` for the
+   design.
 
 
 
@@ -32,13 +33,12 @@ Module Contents
       :staticmethod:
 
 
-      If *node* is a ``qd.checkpoint(...)`` call return ``(True, yield_on_arg_name)``;
-      otherwise ``(False, None)``. ``yield_on_arg_name`` is ``None`` when the user wrote
-      ``qd.checkpoint()`` with no ``yield_on`` kwarg.
+      If *node* is a ``qd.checkpoint(...)`` call return ``(True, yield_on_arg_name)``; otherwise ``(False, None)``.
+      ``yield_on_arg_name`` is ``None`` when the user wrote ``qd.checkpoint()`` with no ``yield_on`` kwarg.
 
-      Validates the call shape (no positional args, only ``yield_on=`` as a bare ``ast.Name``)
-      and raises ``QuadrantsSyntaxError`` for misuse so the user gets a clear message at the
-      ``with`` site rather than a vague "not stream_parallel" error later.
+      Validates the call shape (no positional args, only ``yield_on=`` as a bare ``ast.Name`` parameter) and raises
+      ``QuadrantsSyntaxError`` for misuse so the user gets a clear message at the ``with`` site rather than a vague
+      "not stream_parallel" error later.
 
 
 
@@ -48,14 +48,12 @@ Module Contents
 
       Handles ``with qd.checkpoint(yield_on=arg):`` blocks.
 
-      Validates the use-site (kernel must be ``graph=True``, no nesting, ``yield_on`` must be
-      a kernel parameter) and records the checkpoint's ``yield_on`` arg on the kernel object.
-      Walks the body transparently -- for-loops inside the ``with`` become normal top-level
-      for-loops in the kernel's frontend IR. The ``cp_id`` is assigned by declaration order
-      (list index in ``kernel.checkpoint_yield_on_args``).
+      Validates the use-site (kernel must be ``graph=True``, no nesting, ``yield_on`` must be a kernel parameter)
+      and records the checkpoint's ``yield_on`` arg on the kernel object. Walks the body transparently -- for-loops
+      inside the ``with`` become normal top-level for-loops in the kernel's frontend IR. The ``cp_id`` is assigned by
+      declaration order (list index in ``kernel.checkpoint_yield_on_args``).
 
-      ``build_stmts`` is the ``ast_transformer.build_stmts`` callable injected by the caller
-      to avoid a circular import.
+      ``build_stmts`` is the ``ast_transformer.build_stmts`` callable injected by caller to avoid a circular import.
 
 
 

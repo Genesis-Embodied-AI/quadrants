@@ -363,11 +363,9 @@
   <section id="module-quadrants.lang.graph_status">
 <span id="quadrants-lang-graph-status"></span><h1>quadrants.lang.graph_status<a class="headerlink" href="#module-quadrants.lang.graph_status" title="Link to this heading">#</a></h1>
 <p>Plain-Python container returned from graph kernels that contain <code class="docutils literal notranslate"><span class="pre">qd.checkpoint(yield_on=...)</span></code>.</p>
-<p>Lives in its own module (with no Quadrants-internal imports) so it can be imported safely from
-both <code class="docutils literal notranslate"><span class="pre">kernel.py</span></code> and <code class="docutils literal notranslate"><span class="pre">misc.py</span></code> without re-introducing the circular import chain that
-<code class="docutils literal notranslate"><span class="pre">misc.py</span> <span class="pre">-&gt;</span> <span class="pre">impl.py</span> <span class="pre">-&gt;</span> <span class="pre">kernel.py</span></code> would create.</p>
-<p>Re-exported via <code class="docutils literal notranslate"><span class="pre">qd.lang.misc</span></code> (and therefore as <code class="docutils literal notranslate"><span class="pre">qd.GraphStatus</span></code>) for the user-facing
-canonical import path.</p>
+<p>Lives in its own module (with no Quadrants-internal imports) so it can be imported safely from both <code class="docutils literal notranslate"><span class="pre">kernel.py</span></code> and
+<code class="docutils literal notranslate"><span class="pre">misc.py</span></code> without re-introducing the circular import chain that <code class="docutils literal notranslate"><span class="pre">misc.py</span> <span class="pre">-&gt;</span> <span class="pre">impl.py</span> <span class="pre">-&gt;</span> <span class="pre">kernel.py</span></code> would create.</p>
+<p>Re-exported via <code class="docutils literal notranslate"><span class="pre">qd.lang.misc</span></code> (and therefore as <code class="docutils literal notranslate"><span class="pre">qd.GraphStatus</span></code>) for the user-facing canonical import path.</p>
 <section id="classes">
 <h2>Classes<a class="headerlink" href="#classes" title="Link to this heading">#</a></h2>
 <div class="pst-scrollable-table-container"><table class="autosummary longtable table autosummary">
@@ -385,11 +383,10 @@ canonical import path.</p>
 <dt class="sig sig-object py" id="quadrants.lang.graph_status.GraphStatus">
 <em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">quadrants.lang.graph_status.</span></span><span class="sig-name descname"><span class="pre">GraphStatus</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">yielded</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">checkpoint</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/graph_status.html#GraphStatus"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.graph_status.GraphStatus" title="Link to this definition">#</a></dt>
 <dd><p>Result returned by a graph kernel that contains <code class="docutils literal notranslate"><span class="pre">qd.checkpoint(yield_on=...)</span></code> blocks.</p>
-<p>Returned from <code class="docutils literal notranslate"><span class="pre">kernel(...)</span></code> and <code class="docutils literal notranslate"><span class="pre">kernel.resume(...,</span> <span class="pre">from_checkpoint=cp)</span></code> whenever the
-kernel was decorated with <code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel(graph=True)</span></code> and contains at least one checkpoint
-that declared a <code class="docutils literal notranslate"><span class="pre">yield_on=</span></code> parameter. Read <code class="docutils literal notranslate"><span class="pre">status.yielded</span></code> to decide whether to keep
-running the host loop, and <code class="docutils literal notranslate"><span class="pre">status.checkpoint</span></code> to find out which checkpoint asked the
-host to handle something.</p>
+<p>Returned from <code class="docutils literal notranslate"><span class="pre">kernel(...)</span></code> and <code class="docutils literal notranslate"><span class="pre">kernel.resume(...,</span> <span class="pre">from_checkpoint=cp)</span></code> whenever the kernel was decorated with
+<code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel(graph=True)</span></code> and contains at least one checkpoint that has declared a <code class="docutils literal notranslate"><span class="pre">yield_on=</span></code> parameter. Read
+<code class="docutils literal notranslate"><span class="pre">status.yielded</span></code> to decide whether to keep running the host loop, and <code class="docutils literal notranslate"><span class="pre">status.checkpoint</span></code> to find out which
+checkpoint asked the host to handle something.</p>
 <p>Canonical usage (mirrors the qipc re-entrant pattern; see <code class="docutils literal notranslate"><span class="pre">graph.md</span></code>):</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">status</span> <span class="o">=</span> <span class="n">step</span><span class="p">(</span><span class="n">arr</span><span class="p">,</span> <span class="n">overflow_flag</span><span class="p">,</span> <span class="n">newton_cond</span><span class="p">)</span>
 <span class="k">while</span> <span class="n">status</span><span class="o">.</span><span class="n">yielded</span><span class="p">:</span>
@@ -401,18 +398,16 @@ host to handle something.</p>
 <dl class="py attribute">
 <dt class="sig sig-object py" id="quadrants.lang.graph_status.GraphStatus.yielded">
 <span class="sig-name descname"><span class="pre">yielded</span></span><a class="reference internal" href="../../../../_modules/quadrants/lang/graph_status.html#GraphStatus.yielded"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.graph_status.GraphStatus.yielded" title="Link to this definition">#</a></dt>
-<dd><p><code class="docutils literal notranslate"><span class="pre">True</span></code> iff one of the kernel’s <code class="docutils literal notranslate"><span class="pre">yield_on=</span></code> checkpoints fired its flag on
-the most recent launch. <code class="docutils literal notranslate"><span class="pre">False</span></code> means the kernel completed normally and the host
-loop should exit.</p>
+<dd><p><code class="docutils literal notranslate"><span class="pre">True</span></code> iff one of the kernel’s <code class="docutils literal notranslate"><span class="pre">yield_on=</span></code> checkpoints fired its flag on the most recent launch.
+<code class="docutils literal notranslate"><span class="pre">False</span></code> means the kernel completed normally and the host loop should exit.</p>
 </dd></dl>
 
 <dl class="py attribute">
 <dt class="sig sig-object py" id="quadrants.lang.graph_status.GraphStatus.checkpoint">
 <span class="sig-name descname"><span class="pre">checkpoint</span></span><a class="reference internal" href="../../../../_modules/quadrants/lang/graph_status.html#GraphStatus.checkpoint"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.graph_status.GraphStatus.checkpoint" title="Link to this definition">#</a></dt>
-<dd><p><code class="docutils literal notranslate"><span class="pre">cp_id</span></code> of the checkpoint whose <code class="docutils literal notranslate"><span class="pre">yield_on=</span></code> flag was non-zero (or
-<code class="docutils literal notranslate"><span class="pre">None</span></code> when <code class="docutils literal notranslate"><span class="pre">yielded</span></code> is <code class="docutils literal notranslate"><span class="pre">False</span></code>). Pass it to <code class="docutils literal notranslate"><span class="pre">kernel.resume(...,</span>
-<span class="pre">from_checkpoint=cp)</span></code> to skip every checkpoint with a lower <code class="docutils literal notranslate"><span class="pre">cp_id</span></code> on the next
-launch.</p>
+<dd><p><code class="docutils literal notranslate"><span class="pre">cp_id</span></code> of the checkpoint whose <code class="docutils literal notranslate"><span class="pre">yield_on=</span></code> flag was non-zero (or <code class="docutils literal notranslate"><span class="pre">None</span></code> when <code class="docutils literal notranslate"><span class="pre">yielded</span></code> is
+<code class="docutils literal notranslate"><span class="pre">False</span></code>). Pass it to <code class="docutils literal notranslate"><span class="pre">kernel.resume(...,</span> <span class="pre">from_checkpoint=cp)</span></code> to skip every checkpoint with a lower
+<code class="docutils literal notranslate"><span class="pre">cp_id</span></code> on the next launch.</p>
 </dd></dl>
 
 <dl class="py attribute">
