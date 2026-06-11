@@ -212,9 +212,9 @@ def test_sym_eig3x3_f64(a00):
 
 
 # ---------------------------------------------------------------------------
-# Symmetric eigendecomposition for N >= 4 (cyclic Jacobi). Supported sizes are capped at 6×6 (N=4 unrolled,
-# N=5/6 runtime sweep loop); larger blocks are intentionally unsupported because the inner Givens steps stay
-# unrolled and compile time grows steeply.
+# Symmetric eigendecomposition for N >= 4 (cyclic Jacobi). Supported sizes are capped at 6×6 (N=4 unrolled, N=5/6
+# runtime sweep loop); larger blocks are intentionally unsupported because the inner Givens steps stay unrolled and
+# compile time grows steeply.
 # ---------------------------------------------------------------------------
 
 
@@ -265,6 +265,17 @@ def _sym_eig_factory_negative_definite(n, dt):
     Q, _ = np.linalg.qr(rng.standard_normal((n, n)))
     eigs = -np.linspace(0.5, 2.0, n)
     return (Q @ np.diag(eigs) @ Q.T).astype(np_dt)
+
+
+def _sym_eig_factory_equal_diag_block(n, dt):
+    """Equal-diagonal pair (``A[0,0] == A[1,1]``) with a negative off-diagonal — drives the degenerate Jacobi
+    rotation where ``|A[p,p] - A[q,q]| < eps`` and ``A[p,q] < 0``, so the rotation angle is pinned to ``tau = -1``."""
+    np_dt = np.float32 if dt == qd.f32 else np.float64
+    A = np.diag(np.arange(2, 2 + n, dtype=np_dt))
+    A[0, 0] = 2.0
+    A[1, 1] = 2.0
+    A[0, 1] = A[1, 0] = -1.0
+    return A
 
 
 def _test_sym_eig_general(n, dt, factory):
@@ -420,8 +431,8 @@ def _test_make_spd_idempotent(n, dt, factory):
     """``make_spd(make_spd(A)) ≈ make_spd(A)`` — defining property of a projector.
 
     Uses an ndarray-arg parametric kernel so ``qd.make_spd`` is JIT-compiled exactly once and called twice
-    (``A → A_spd_1`` and ``A_spd_1 → A_spd_2``). Compiling it twice at the larger sizes on CUDA blows past the
-    per-test timeout — one compile fits comfortably.
+    (``A → A_spd_1`` and ``A_spd_1 → A_spd_2``). Compiling it twice at the larger sizes on CUDA blows past the per-test
+    timeout — one compile fits comfortably.
     """
     np_dt = np.float32 if dt == qd.f32 else np.float64
     mat_t = qd.types.matrix(n, n, dt)
@@ -493,8 +504,8 @@ def test_sym_eig_above_cap_raises():
 
 @test_utils.test(require=qd.extension.data64, default_fp=qd.f64, fast_math=False)
 def test_make_spd_above_cap_raises():
-    """``qd.make_spd`` shares the cyclic-Jacobi path, so it carries the same ``N <= 6`` cap as ``qd.sym_eig``;
-    calling at ``N = 7`` must raise rather than compile the slow unrolled path."""
+    """``qd.make_spd`` shares the cyclic-Jacobi path, so it carries the same ``N <= 6`` cap as ``qd.sym_eig``; calling
+    at ``N = 7`` must raise rather than compile the slow unrolled path."""
     A = qd.Matrix.field(7, 7, dtype=qd.f64, shape=())
     A.from_numpy(np.eye(7))
     with pytest.raises(Exception, match="up to 6"):
@@ -504,6 +515,33 @@ def test_make_spd_above_cap_raises():
             _ = qd.make_spd(A[None], qd.f64)
 
         run()
+
+
+# ---------------------------------------------------------------------------
+# CPU coverage for the N > 4 runtime sweep branch and make_spd's dispatch. The parametrized N>=4 / make_spd tests above
+# run on ``arch=qd.gpu`` only, so the CPU coverage runner never exercises sym_eig_general's runtime branch or make_spd's
+# body. These mirror them on CPU at N=6 (runtime branch); the equal-diagonal factory additionally hits the degenerate
+# ``tau = -1`` rotation in both the static (N=2) and runtime (N=6) sweep branches.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("factory", [_sym_eig_factory_random, _sym_eig_factory_indefinite])
+@test_utils.test(arch=qd.cpu, require=qd.extension.data64, default_fp=qd.f64, fast_math=False)
+def test_sym_eig_general_cpu_f64(factory):
+    _test_sym_eig_general(6, qd.f64, factory)
+
+
+@pytest.mark.parametrize("n", [2, 6])
+@test_utils.test(arch=qd.cpu, require=qd.extension.data64, default_fp=qd.f64, fast_math=False)
+def test_sym_eig_equal_diag_degenerate_cpu_f64(n):
+    """Equal-diagonal pair with a negative off-diagonal hits the ``|diff| < eps`` / ``apq < 0`` degenerate rotation
+    (``tau = -1``) in both the static (N=2) and runtime (N=6) sweep branches."""
+    _test_sym_eig_general(n, qd.f64, _sym_eig_factory_equal_diag_block)
+
+
+@test_utils.test(arch=qd.cpu, require=qd.extension.data64, default_fp=qd.f64, fast_math=False)
+def test_make_spd_cpu_f64():
+    _test_make_spd(6, qd.f64, _sym_eig_factory_indefinite)
 
 
 # ---------------------------------------------------------------------------

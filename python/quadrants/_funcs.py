@@ -347,8 +347,7 @@ def sym_eig(A, dt=None):
 
     Mathematical concept refers to https://en.wikipedia.org/wiki/Eigendecomposition_of_a_matrix.
 
-    All sizes ``2 ≤ A.n ≤ 6`` use cyclic Jacobi
-    (:func:`quadrants._funcs_sym_eig_general.sym_eig_general`).
+    All sizes ``2 ≤ A.n ≤ 6`` use cyclic Jacobi (:func:`quadrants._funcs_sym_eig_general.sym_eig_general`).
 
     Args:
         A (qd.Matrix(n, n)): Symmetric Matrix for which the eigenvalues and right eigenvectors will be computed.
@@ -372,8 +371,8 @@ def make_spd(A, dt=None):
     """Project a symmetric matrix ``A`` to the nearest positive semi-definite matrix in the Frobenius norm sense,
     by clamping its eigenvalues to ``≥ 0``.
 
-    Implemented as ``Q · diag(max(λ, 0)) · Qᵀ`` where ``A = Q diag(λ) Qᵀ`` is the symmetric eigendecomposition
-    computed by :func:`sym_eig`. Supports the same sizes as :func:`sym_eig` (``A.n ≤ 6``).
+    Implemented as ``Q · diag(max(λ, 0)) · Qᵀ`` where ``A = Q diag(λ) Qᵀ`` is the symmetric eigendecomposition computed
+    by :func:`sym_eig`. Supports the same sizes as :func:`sym_eig` (``A.n ≤ 6``).
 
     Args:
         A (qd.Matrix(n, n)): Symmetric matrix.
