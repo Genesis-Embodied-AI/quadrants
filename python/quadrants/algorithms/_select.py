@@ -26,11 +26,10 @@ flags-as-counts (i32) which always fit in u32; the element dtype only shows up a
 This is why ``select`` works on any element dtype Quadrants supports for field assignment - scalars (``i32`` / ``u32`` /
 ``f32`` / ``i64`` / ``u64`` / ``f64``) and structs (libuipc ``Vector{2,3,4}i``, ``LinearBVHAABB``, etc.).
 
-**Scratch.** ``select`` needs a **caller-owned** 1-D ``u32`` scratch buffer of
-:func:`select_scratch_slots` ``(N)`` slots (the per-element indices ``scratch[0:N]`` plus the scan partials
-above them). ``u32`` regardless of the element dtype (the scan operates on flags-as-counts). There is no
-module-level shared scratch - the caller always owns the buffer; a too-small buffer raises
-:class:`InsufficientScratchError`.
+**Scratch.** ``select`` needs a **caller-owned** 1-D ``u32`` scratch buffer of :func:`select_scratch_slots` ``(N)``
+slots (the per-element indices ``scratch[0:N]`` plus the scan partials above them). ``u32`` regardless of the element
+dtype (the scan operates on flags-as-counts). There is no module-level shared scratch - the caller always owns the
+buffer; a too-small buffer raises :class:`InsufficientScratchError`.
 """
 
 from quadrants.lang.kernel_impl import func as _func

@@ -1084,6 +1084,60 @@ def test_radix_sort_rejects_odd_pass_end_bit():
         np.testing.assert_array_equal(keys.to_numpy(), np.sort(host, kind="stable"), err_msg=f"end_bit={good}")
 
 
+@pytest.mark.parametrize("N", [257, 1024, 65536])
+@pytest.mark.parametrize("dtype", _RADIX_KEY_DTYPES)
+@test_utils.test(arch=qd.gpu)
+def test_radix_sort_func_composition(dtype, N):
+    """``radix_sort_func`` composes at the **top level** of a user ``@qd.kernel`` with a device-resident 0-d count
+    (read as ``n[()]``) and compile-time ``KEY_DTYPE`` / ``HAS_VALUES`` / ``END_BIT`` / ``LOG256_MAX_N`` - the exact
+    graph-composable contract qipc chains inside its LBVH / broadphase pipelines (see ``radix_sort_func`` docstring).
+    Pins the public func against the host ``radix_sort``: keys come back ascending and the ``u32`` payload follows the
+    stable argsort. The reduce / scan / select / reduce-by-key families have matching ``*_func`` composition tests."""
+    _skip_if_dtype_unsupported(dtype)
+    _skip_if_radix_sort_large_n_on_apple_gpu(N)
+    from quadrants.algorithms._radix_sort import _min_log256_for_n
+
+    end_bit = 32 if dtype in _FOURBYTE_DTYPES else 64
+    log256_max_n = _min_log256_for_n(N)
+    rng = np.random.default_rng(seed=1357)
+    host = _gen_keys(rng, dtype, N)
+
+    key_nd = qd.types.ndarray(dtype, ndim=1)
+    u32_nd = qd.types.ndarray(qd.u32, ndim=1)
+    i32_0d = qd.types.ndarray(qd.i32, ndim=0)
+
+    @qd.kernel
+    def run(
+        keys: key_nd,
+        tmp_keys: key_nd,
+        values: u32_nd,
+        tmp_values: u32_nd,
+        scratch: u32_nd,
+        n: i32_0d,
+    ):
+        # Compile-time params (dtype / end_bit / depth) are captured Python constants, exactly as qipc's graph sort
+        # bakes ``qd.u32, True, SORT_END_BIT, SORT_LOG256_MAX_N`` into ``radix_sort_func``.
+        qd.algorithms.radix_sort_func(
+            keys, tmp_keys, values, tmp_values, scratch, n, dtype, True, end_bit, log256_max_n
+        )
+
+    keys = qd.ndarray(dtype, shape=(N,))
+    tmp_keys = qd.ndarray(dtype, shape=(N,))
+    values = qd.ndarray(qd.u32, shape=(N,))
+    tmp_values = qd.ndarray(qd.u32, shape=(N,))
+    scratch = qd.ndarray(qd.u32, shape=(max(qd.algorithms.radix_sort_scratch_slots(N, log256_max_n), 1),))
+    n_dev = qd.ndarray(qd.i32, shape=())
+    keys.from_numpy(host)
+    values.from_numpy(np.arange(N, dtype=np.uint32))
+    n_dev.fill(N)
+
+    run(keys, tmp_keys, values, tmp_values, scratch, n_dev)
+
+    want_idx = np.argsort(host, kind="stable")
+    np.testing.assert_array_equal(keys.to_numpy(), host[want_idx], err_msg=f"{dtype} keys(N={N})")
+    np.testing.assert_array_equal(values.to_numpy(), want_idx.astype(np.uint32), err_msg=f"{dtype} values(N={N})")
+
+
 # --- Scan-depth specifics: over-specified scan depth (the graph path fixes ``log256_max_n`` ahead of time so one
 # captured topology serves a range of N). The dtype x size matrix (incl. key-value) is covered by
 # ``test_device_radix_sort_keys_only`` / ``_key_value`` above and the caller-scratch tests further below. ------------
