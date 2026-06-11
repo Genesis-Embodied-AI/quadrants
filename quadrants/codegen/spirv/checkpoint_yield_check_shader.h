@@ -10,13 +10,11 @@
 
 namespace quadrants::lang::spirv {
 
-// Builds the SPIR-V compute shader that implements GPU-side yield detection for
-// `qd.checkpoint(yield_on=...)` blocks on Vulkan / Metal. One yield-check dispatch runs in the
-// same cmdlist as the checkpoint's body kernels, immediately after the last body kernel. It
-// reads the user's `yield_on=` flag and, if non-zero, atomic-CASes the checkpoint id into the
+// Builds the SPIR-V compute shader that implements GPU-side yield detection for `qd.checkpoint(yield_on=...)` blocks on
+// Vulkan / Metal. One yield-check dispatch runs in the same cmdlist as the checkpoint's body kernels, immediately after
+// the last body kernel. It reads the user's `yield_on=` flag and, if non-zero, atomic-CASes the checkpoint id into the
 // shared `yield_signal` slot (first-yielder-wins, mirroring the CUDA SM 9.0+ semantics in
-// `runtime/cuda/checkpoint_yield_check.cu`) and resets the user's flag back to 0 so the next
-// launch starts clean.
+// `runtime/cuda/checkpoint_yield_check.cu`) and resets the user's flag back to 0 so the next launch starts clean.
 //
 // The yield-check dispatch is itself indirect-dispatched off the same per-kernel dim3 slot the
 // gate shader wrote, so a skipped checkpoint also skips its yield-check (no atomic ops on a
