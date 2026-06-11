@@ -50,8 +50,8 @@ from quadrants.types.annotations import template
 from quadrants.types.primitive_types import f32, i32, u32
 
 from ._reduce import (
-    BLOCK_DIM,
     _OP_ADD,
+    BLOCK_DIM,
     _reduce_depth_for_n,
     _validate_caller_scratch,
 )
@@ -205,13 +205,9 @@ def _validate_inputs(keys_in, values_in, keys_out, values_out, num_runs):
     if keys_out.dtype != keys_in.dtype:
         raise TypeError(f"reduce_by_key_add dtype mismatch: keys_in={keys_in.dtype}, keys_out={keys_out.dtype}")
     if not hasattr(values_out, "shape") or len(values_out.shape) != 1:
-        raise TypeError(
-            f"reduce_by_key_add expects 1-D values_out; got shape {getattr(values_out, 'shape', None)}"
-        )
+        raise TypeError(f"reduce_by_key_add expects 1-D values_out; got shape {getattr(values_out, 'shape', None)}")
     if values_out.dtype != values_in.dtype:
-        raise TypeError(
-            f"reduce_by_key_add dtype mismatch: values_in={values_in.dtype}, values_out={values_out.dtype}"
-        )
+        raise TypeError(f"reduce_by_key_add dtype mismatch: values_in={values_in.dtype}, values_out={values_out.dtype}")
     if keys_out.shape[0] < keys_in.shape[0]:
         raise ValueError(
             f"reduce_by_key_add keys_out.shape[0]={keys_out.shape[0]} < keys_in.shape[0]={keys_in.shape[0]}; "
