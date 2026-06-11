@@ -97,7 +97,7 @@ Matrices and vectors are unrolled into scalar registers at compile time. Using m
 large = qd.field(qd.f32, shape=(64, 64))
 ```
 
-The 144-element threshold matches the largest size officially supported by the per-thread linalg APIs (`qd.sym_eig` and `qd.make_spd` up to 12×12, `Matrix.inverse` up to 12×12) — those internal constructions stay below the warning threshold.
+The 144-element threshold is set by the largest size officially supported by the per-thread linalg APIs (`Matrix.inverse` up to 12×12; `qd.sym_eig` and `qd.make_spd` cap lower, at 6×6) — those internal constructions stay below the warning threshold.
 
 ## Storage layout: packed vs unpacked vectors
 
