@@ -350,9 +350,32 @@ def get_traceback(stacklevel=1):
 
 
 def is_data_oriented(obj: Any) -> bool:
-    # Use getattr on class instead of object to bypass custom __getattr__ method that is
-    # overwritten at instance level and very slow.
-    return getattr(type(obj), "_data_oriented", False)
+    # Look up ``_data_oriented`` directly via ``__dict__`` on each class in the MRO, never through ``getattr``. Some
+    # third-party metaclasses (notably Pydantic's ``ModelMetaclass``) override ``__getattr__`` and recurse infinitely
+    # on missing attributes when probed for arbitrary names — ``getattr(type(obj), "_data_oriented", False)`` blows
+    # the stack on a Genesis ``RigidOptions`` instance. The MRO walk via ``__dict__`` skips any descriptor /
+    # ``__getattr__`` machinery; ``@qd.data_oriented`` always sets the flag directly on the decorated class so this
+    # finds it via ``cls.__dict__["_data_oriented"]`` without ever touching the metaclass attribute protocol.
+    for klass in type(obj).__mro__:
+        flag = klass.__dict__.get("_data_oriented")
+        if flag is not None:
+            return flag
+    return False
+
+
+def is_dataclass_instance(obj: Any) -> bool:
+    # Metaclass-safe replacement for ``dataclasses.is_dataclass(obj) and not isinstance(obj, type)``. The stdlib
+    # implementation calls ``hasattr(type(obj), '__dataclass_fields__')``, which delegates to the metaclass
+    # ``__getattr__`` for missing names. Pathological metaclasses (Pydantic's ``ModelMetaclass``) recurse infinitely
+    # on arbitrary attribute lookups and blow the stack. Walking the MRO and probing ``__dict__`` directly avoids
+    # any descriptor / ``__getattr__`` machinery, mirroring ``is_data_oriented`` above. Also folds in the
+    # ``not isinstance(obj, type)`` guard since callers always pair the two.
+    if isinstance(obj, type):
+        return False
+    for klass in type(obj).__mro__:
+        if "__dataclass_fields__" in klass.__dict__:
+            return True
+    return False
 
 
 def is_qd_template(annotation: Any) -> bool:
