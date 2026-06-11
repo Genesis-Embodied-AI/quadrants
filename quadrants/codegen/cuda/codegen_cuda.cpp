@@ -628,15 +628,13 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
       emit_cuda_gc(stmt);
     } else {
       init_offloaded_task_function(stmt);
-      // GPU-side checkpoint gating prologue: emit a per-task early-return at the top of
-      // `func_body_bb` reading `RuntimeContext::checkpoint_resume_point_ptr` and
-      // `RuntimeContext::checkpoint_yield_signal_ptr`. The prologue is the gating mechanism
-      // on pre-Hopper CUDA (which has no conditional-graph-node support); on SM 9.0+ it is
-      // dead code in the common path (the conditional gate prevents launch entirely) but
-      // stays in for correctness on the rare overlapping-gate case where some yield-check
-      // kernel earlier in the same launched graph set yield_signal between the conditional
-      // gate's evaluation and the body's execution. See `runtime/cuda/graph_manager.cpp`
-      // for the host side that populates the device pointers in `persistent_ctx`.
+      // GPU-side checkpoint gating prologue: emit a per-task early-return at the top of `func_body_bb` reading
+      // `RuntimeContext::checkpoint_resume_point_ptr` and `RuntimeContext::checkpoint_yield_signal_ptr`. The prologue
+      // is the gating mechanism on pre-Hopper CUDA (which has no conditional-graph-node support); on SM 9.0+ it is dead
+      // code in the common path (the conditional gate prevents launch entirely) but stays in for correctness on the
+      // rare overlapping-gate case where some yield-check kernel earlier in the same launched graph set yield_signal
+      // between the conditional gate's evaluation and the body's execution. See `runtime/cuda/graph_manager.cpp` for
+      // the host side that populates the device pointers in `persistent_ctx`.
       if (stmt->checkpoint_id >= 0) {
         emit_checkpoint_gate_prologue(stmt->checkpoint_id);
       }

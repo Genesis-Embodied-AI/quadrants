@@ -522,6 +522,9 @@ bool GraphManager::try_launch(int launch_id,
     ++total_nodes;
   };
 
+  // Each kernel node receives the device-side RuntimeContext pointer via the shared `cached.kernel_args` extra-config
+  // (see graph_manager.h for why all nodes share one). Stream-parallel groups (`stream_parallel_group_id != 0`) are
+  // silently serialized inside the graph, matching the CUDA implementation.
   for (const auto &task : offloaded_tasks) {
     if (task.checkpoint_id != current_cp_id) {
       emit_yield_check_for_closed_cp();

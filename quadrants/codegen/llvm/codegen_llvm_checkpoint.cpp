@@ -20,14 +20,12 @@ namespace quadrants::lang {
 //   if (ys != nullptr && *ys != -1) goto final_block;
 //
 // at the top of `func_body_bb` (after `init_offloaded_task_function` opens it). The two
-// null-checks let the prologue stay inert for callers that don't populate the
-// RuntimeContext slots (e.g. the non-graph CUDA / AMDGPU launch paths that land on the same
-// compiled task functions). When the slots are populated (the cached-graph path -- both pre-
-// Hopper and SM 9.0+ on CUDA, and the flat HIP graph path on AMDGPU), the check skips the
-// body whenever its cp_id is below the current resume_point or some earlier checkpoint in
-// this launch already set yield_signal. The `final_block` jump matches the existing early-
-// return pattern used by `cpu_assert_failed` gating so all the per-task cleanup (epilogue +
-// return) runs unchanged.
+// null-checks let the prologue stay inert for callers that don't populate the RuntimeContext slots (e.g. the non-graph
+// CUDA / AMDGPU launch paths that land on the same compiled task functions). When the slots are populated (the
+// cached-graph path -- both pre- Hopper and SM 9.0+ on CUDA, and the flat HIP graph path on AMDGPU), the check skips
+// the body whenever its cp_id is below the current resume_point or some earlier checkpoint in this launch already set
+// yield_signal. The `final_block` jump matches the existing early- return pattern used by `cpu_assert_failed` gating so
+// all the per-task cleanup (epilogue + return) runs unchanged.
 //
 // On CUDA SM 9.0+ the conditional-graph-node gate prevents the body kernel from launching
 // when the checkpoint should be skipped, so the prologue is dead code in steady state. It

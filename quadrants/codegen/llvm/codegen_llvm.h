@@ -396,10 +396,9 @@ class TaskCodeGenLLVM : public IRVisitor, public LLVMModuleBuilder {
 
   std::string init_offloaded_task_function(OffloadedStmt *stmt, std::string suffix = "");
 
-  // GPU-side `qd.checkpoint` gating prologue. Emits an LLVM-IR early-return at the top of
-  // `func_body_bb` (set up by `init_offloaded_task_function`) that reads
-  // `RuntimeContext::checkpoint_resume_point_ptr` / `checkpoint_yield_signal_ptr` and jumps
-  // to `final_block` whenever the checkpoint should be skipped.
+  // GPU-side `qd.checkpoint` gating prologue. Emits an LLVM-IR early-return at the top of `func_body_bb` (set up by
+  // `init_offloaded_task_function`) that reads `RuntimeContext::checkpoint_resume_point_ptr` /
+  // `checkpoint_yield_signal_ptr` and jumps to `final_block` whenever the checkpoint should be skipped.
   //
   // Used by the GPU backends as the gating mechanism on backends without conditional-graph
   // node support: pre-Hopper CUDA (no CUDA 12.4+ conditional nodes) and AMDGPU / HIP (no
