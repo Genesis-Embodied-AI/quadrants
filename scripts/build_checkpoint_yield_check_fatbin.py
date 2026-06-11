@@ -3,9 +3,9 @@
 
 Requires the CUDA toolkit (nvcc) to be installed.
 
-The output is a C header (checkpoint_yield_check_fatbin.h) containing the fatbin as a byte
-array, which is compiled into the quadrants binary. Same pattern as the IF-gate fatbin and
-the graph_do_while condition fatbin -- the user does not need libcudadevrt.a at runtime.
+The output is a C header (checkpoint_yield_check_fatbin.h) containing the fatbin as a byte array, which is compiled into
+the quadrants binary. Same pattern as the IF-gate fatbin and the graph_do_while condition fatbin -- the user does not
+need libcudadevrt.a at runtime.
 
 Usage:
     python scripts/build_checkpoint_yield_check_fatbin.py
@@ -24,12 +24,11 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 SRC = REPO_ROOT / "quadrants" / "runtime" / "cuda" / "checkpoint_yield_check.cu"
 OUT_HEADER = REPO_ROOT / "quadrants" / "runtime" / "cuda" / "checkpoint_yield_check_fatbin.h"
 
-# Targets cover both pre-Hopper (Turing / Ampere / Ada Lovelace) and Hopper+ (Blackwell). The yield-check
-# kernel itself only uses `atomicCAS` and direct pointer writes (no device runtime calls), so it builds
-# fine on every SM here. Pre-Hopper coverage is required because the qd.checkpoint pre-Hopper CUDA path
-# (codegen prologue + flat graph) still wires the yield-check kernel as a regular kernel node, just
-# inline after each yielding checkpoint's last body kernel instead of inside an IF conditional body.
-# Hopper+ coverage is unchanged from before.
+# Targets cover both pre-Hopper (Turing / Ampere / Ada Lovelace) and Hopper+ (Blackwell). The yield-check kernel itself
+# only uses `atomicCAS` and direct pointer writes (no device runtime calls), so it builds fine on every SM target here.
+# Pre-Hopper coverage is required because the qd.checkpoint pre-Hopper CUDA path (codegen prologue + flat graph) still
+# wires the yield-check kernel as a regular kernel node, just inline after each yielding checkpoint's last body kernel
+# instead of inside an IF conditional body. Hopper+ coverage is unchanged from before.
 SM_VERSIONS = [75, 80, 86, 89, 90, 100, 120]
 SM_TARGETS = [f"-gencode=arch=compute_{v},code=sm_{v}" for v in SM_VERSIONS]
 

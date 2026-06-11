@@ -98,8 +98,8 @@ class QuadrantsCallable:
     def resume(self, *args, from_checkpoint: int, **kwargs):
         """Re-launches the kernel, skipping every ``qd.checkpoint`` with ``cp_id < from_checkpoint``.
 
-        Use only on kernels decorated with ``@qd.kernel(graph=True)`` that contain at least
-        one ``qd.checkpoint(yield_on=...)`` block. The host loop pattern is::
+        Use only on ``@qd.kernel(graph=True)`` kernels with at least one ``qd.checkpoint(yield_on=...)`` block. The host
+        loop pattern is::
 
             status = step(arr, overflow_flag, newton_cond)
             while status.yielded:
@@ -109,16 +109,16 @@ class QuadrantsCallable:
 
         Returns the same ``GraphStatus`` shape as the plain call.
 
-        Raises ``RuntimeError`` if invoked on a kernel without any ``yield_on=`` checkpoint
-        (there is no resume_point slot to write to, so the call would be a no-op).
+        Raises ``RuntimeError`` if invoked on a kernel without any ``yield_on=`` checkpoint (there is no resume_point
+        slot to write to, so the call would be a no-op).
         """
         if not isinstance(from_checkpoint, int) or from_checkpoint < 0:
             raise RuntimeError(
                 f"from_checkpoint= must be a non-negative integer (typically `status.checkpoint` "
                 f"from the previous launch's GraphStatus); got {from_checkpoint!r}."
             )
-        # Smuggle the resume cookie past the AST-mapped kwargs path; `Kernel.__call__` pops it
-        # before anything else looks at kwargs.
+        # Smuggle the resume cookie past the AST-mapped kwargs path; `Kernel.__call__` pops it before anything else
+        # looks at kwargs.
         return self.wrapper.__call__(*args, _qd_from_checkpoint=from_checkpoint, **kwargs)
 
     def __get__(self, instance, owner):

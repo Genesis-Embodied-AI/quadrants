@@ -1367,9 +1367,8 @@ class ASTTransformer(Builder):
 
     @staticmethod
     def _is_checkpoint_call(node: ast.expr) -> tuple[bool, str | None]:
-        """Thin forwarding wrapper around ``CheckpointTransformer.is_checkpoint_call``; the
-        actual logic lives in ``ast_transformers/checkpoint_transformer.py`` to keep this file
-        from growing per-feature."""
+        """Thin forwarding wrapper around ``CheckpointTransformer.is_checkpoint_call``; the actual logic lives in module
+        ``ast_transformers/checkpoint_transformer.py`` to keep this file from growing per-feature."""
         return CheckpointTransformer.is_checkpoint_call(node)
 
     @staticmethod
@@ -1607,8 +1606,8 @@ class ASTTransformer(Builder):
         node: ast.With,
         yield_on_name: str | None,
     ) -> None:
-        """Thin forwarding wrapper around ``CheckpointTransformer.build_checkpoint_with``; the
-        actual logic lives in ``ast_transformers/checkpoint_transformer.py``."""
+        """Thin forwarding wrapper around ``CheckpointTransformer.build_checkpoint_with``; the actual logic lives in
+        ``ast_transformers/checkpoint_transformer.py``."""
         return CheckpointTransformer.build_checkpoint_with(ctx, node, yield_on_name, build_stmts)
 
     @staticmethod

@@ -3,10 +3,9 @@
 
 Requires the CUDA toolkit (nvcc) to be installed.
 
-The output is a C header (checkpoint_gate_fatbin.h) containing the fatbin as a byte array,
-which is compiled into the quadrants binary. At runtime this lets us load the gate kernel
-without needing libcudadevrt.a on the user's system. Mirrors the build pipeline for
-graph_do_while_cond.cu (see scripts/build_condition_kernel_fatbin.py).
+The output is a C header (checkpoint_gate_fatbin.h) containing the fatbin as a byte array, which is compiled into the
+quadrants binary. At runtime this lets us load the gate kernel without needing libcudadevrt.a on the user's system.
+Mirrors the build pipeline for graph_do_while_cond.cu (see scripts/build_condition_kernel_fatbin.py).
 
 Usage:
     python scripts/build_checkpoint_gate_fatbin.py

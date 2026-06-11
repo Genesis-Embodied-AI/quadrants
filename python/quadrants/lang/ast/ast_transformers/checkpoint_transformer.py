@@ -1,11 +1,12 @@
 # type: ignore
 """AST recognition and lowering for ``qd.checkpoint(...)`` ``with`` blocks.
 
-Lives alongside ``call_transformer.py`` / ``function_def_transformer.py`` so that
-``ast_transformer.py`` doesn't have to grow per-feature. ``ASTTransformer.build_With`` and
-``ASTTransformer._is_checkpoint_call`` simply forward into the static methods here. See
-``docs/source/user_guide/graph.md`` for the user-facing surface and
-``perso_hugh/doc/qipc/reentrant.md`` for the design.
+Lives alongside ``call_transformer.py`` / ``function_def_transformer.py`` so that ``ast_transformer.py`` doesn't have to
+grow per-feature. ``ASTTransformer.build_With`` and ``ASTTransformer._is_checkpoint_call`` simply forward into the
+static methods here.
+
+See ``docs/source/user_guide/graph.md`` for the user-facing surface and ``perso_hugh/doc/qipc/reentrant.md`` for the
+design.
 """
 
 from __future__ import annotations
@@ -19,13 +20,12 @@ from quadrants.lang.exception import QuadrantsSyntaxError
 class CheckpointTransformer:
     @staticmethod
     def is_checkpoint_call(node: ast.expr) -> tuple[bool, str | None]:
-        """If *node* is a ``qd.checkpoint(...)`` call return ``(True, yield_on_arg_name)``;
-        otherwise ``(False, None)``. ``yield_on_arg_name`` is ``None`` when the user wrote
-        ``qd.checkpoint()`` with no ``yield_on`` kwarg.
+        """If *node* is a ``qd.checkpoint(...)`` call return ``(True, yield_on_arg_name)``; otherwise ``(False, None)``.
+        ``yield_on_arg_name`` is ``None`` when the user wrote ``qd.checkpoint()`` with no ``yield_on`` kwarg.
 
-        Validates the call shape (no positional args, only ``yield_on=`` as a bare ``ast.Name``)
-        and raises ``QuadrantsSyntaxError`` for misuse so the user gets a clear message at the
-        ``with`` site rather than a vague "not stream_parallel" error later.
+        Validates the call shape (no positional args, only ``yield_on=`` as a bare ``ast.Name`` parameter) and raises
+        ``QuadrantsSyntaxError`` for misuse so the user gets a clear message at the ``with`` site rather than a vague
+        "not stream_parallel" error later.
         """
         if not isinstance(node, ast.Call):
             return False, None
@@ -62,14 +62,12 @@ class CheckpointTransformer:
     ) -> None:
         """Handles ``with qd.checkpoint(yield_on=arg):`` blocks.
 
-        Validates the use-site (kernel must be ``graph=True``, no nesting, ``yield_on`` must be
-        a kernel parameter) and records the checkpoint's ``yield_on`` arg on the kernel object.
-        Walks the body transparently -- for-loops inside the ``with`` become normal top-level
-        for-loops in the kernel's frontend IR. The ``cp_id`` is assigned by declaration order
-        (list index in ``kernel.checkpoint_yield_on_args``).
+        Validates the use-site (kernel must be ``graph=True``, no nesting, ``yield_on`` must be a kernel parameter)
+        and records the checkpoint's ``yield_on`` arg on the kernel object. Walks the body transparently -- for-loops
+        inside the ``with`` become normal top-level for-loops in the kernel's frontend IR. The ``cp_id`` is assigned by
+        declaration order (list index in ``kernel.checkpoint_yield_on_args``).
 
-        ``build_stmts`` is the ``ast_transformer.build_stmts`` callable injected by the caller
-        to avoid a circular import.
+        ``build_stmts`` is the ``ast_transformer.build_stmts`` callable injected by caller to avoid a circular import.
         """
         if not ctx.is_kernel:
             raise QuadrantsSyntaxError("qd.checkpoint() can only be used inside @qd.kernel, not @qd.func")
@@ -89,17 +87,14 @@ class CheckpointTransformer:
                     f"{kernel.func.__name__!r}. Available parameters: {arg_names}"
                 )
 
-        # Auto-wrap bare top-level statements in the checkpoint body in a one-iteration
-        # `for` loop. The offloader's pending-serial bucket loses the surrounding
-        # `checkpoint_id` and emits such statements as `serial` tasks with `cp_id == -1`,
-        # meaning they would run unconditionally even when the checkpoint is skipped -- a
-        # silent correctness bug. The fix is to lower them as `range_for` tasks instead by
-        # wrapping each bare statement in `for _ in range(1): <stmt>`. We target the specific
-        # statement kinds known to hit the footgun (Assign / AugAssign / AnnAssign /
-        # non-docstring Expr) and leave everything else (For, While, If, With, Pass,
-        # docstring) untouched so they keep working transparently; nested
-        # `with qd.checkpoint(...)` in particular still falls through to the existing
-        # nested-checkpoint check at the start of this method.
+        # Auto-wrap bare top-level statements in the checkpoint body in a one-iteration `for` loop. The offloader's
+        # pending-serial bucket loses the surrounding `checkpoint_id` and emits such statements as `serial` tasks with
+        # `cp_id == -1`, meaning that they would run unconditionally even when the checkpoint is skipped -- a silent
+        # correctness bug. The fix is to lower them as `range_for` tasks instead by wrapping each bare statement in `for
+        # _ in range(1): <stmt>`. We target the specific statement kinds known to hit the footgun (Assign / AugAssign /
+        # AnnAssign / non-docstring Expr) and leave everything else (For, While, If, With, Pass, docstring) untouched so
+        # they keep working transparently; nested `with qd.checkpoint(...)` in particular still falls through to the
+        # existing nested-checkpoint check at the start of this method.
         new_body: list[ast.stmt] = []
         for i, stmt in enumerate(node.body):
             needs_wrap = isinstance(stmt, (ast.Assign, ast.AugAssign, ast.AnnAssign))
@@ -125,10 +120,10 @@ class CheckpointTransformer:
         node.body = new_body
 
         kernel.checkpoint_yield_on_args.append(yield_on_name)
-        # Hand control to the C++ ASTBuilder so that every for-loop emitted by `build_stmts`
-        # below is tagged with this checkpoint's `cp_id` on its `ForLoopConfig.checkpoint_id`.
-        # The C++ counter is the source of truth for cp_id; we cross-check it against the
-        # Python list index so a future refactor that misaligns the two surfaces immediately.
+        # Hand control to the C++ ASTBuilder so that every for-loop emitted by `build_stmts` below is tagged with this
+        # checkpoint's `cp_id` on its `ForLoopConfig.checkpoint_id`. The C++ counter is the source of truth for cp_id;
+        # we cross-check it against the Python list index so that a future refactor that misaligns the two surfaces
+        # fires immediately.
         cpp_cp_id = ctx.ast_builder.begin_checkpoint()
         py_cp_id = len(kernel.checkpoint_yield_on_args) - 1
         assert cpp_cp_id == py_cp_id, (

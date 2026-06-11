@@ -2,21 +2,19 @@
 
 These tests cover slices 1a–1d of the qd.checkpoint implementation:
 
-  - *Slice 1a*: Python API surface plus AST recognition. ``qd.checkpoint`` is importable, usable
-    as a no-op context manager outside kernels, and parses successfully inside graph kernels.
-    Compile-time misuse raises ``QuadrantsSyntaxError``.
-  - *Slice 1b*: ``checkpoint_id`` plumbing through the IR (covered by the integration tests
-    below, since the IR threading is invisible at the Python boundary).
-  - *Slice 1c*: On CUDA SM 9.0+, the GraphManager wires one IF conditional node per checkpoint;
-    introspection via ``prog.get_graph_num_checkpoints_on_last_call()`` confirms the IF path.
-  - *Slice 1d*: ``yield_on=`` injects a yield-check kernel; on yield the framework atomically
-    records the first yielding cp_id, disables every later checkpoint in the launch, clears the
-    user's flag, and (inside ``qd.graph_do_while``) exits the WHILE early.
+  - *Slice 1a*: Python API surface plus AST recognition. ``qd.checkpoint`` imports cleanly, works as a no-op context
+    manager outside kernels, parses inside graph kernels, and compile-time misuse raises ``QuadrantsSyntaxError``.
+  - *Slice 1b*: ``checkpoint_id`` plumbing through the IR (covered by integration tests below, since the IR threading
+    is invisible at the Python boundary).
+  - *Slice 1c*: On CUDA SM 9.0+, the GraphManager wires up one IF conditional node per checkpoint; introspection via
+    ``prog.get_graph_num_checkpoints_on_last_call()`` confirms the IF path.
+  - *Slice 1d*: ``yield_on=`` injects a yield-check kernel; on yield the framework atomically records the first yielding
+    cp_id, disables every later checkpoint in the launch, clears the user's flag, and (inside ``qd.graph_do_while``)
+    exits the WHILE early.
 
-On non-CUDA / pre-SM-9.0 backends the construct is accepted and every body still runs
-unconditionally; the introspection-based assertions guard themselves behind
-``_is_checkpoint_if_path_native``. The host-side ``GraphStatus`` / ``step.resume(...)`` API
-arrives in slice 2.
+On non-CUDA / pre-SM-9.0 backends every body still runs unconditionally, and the introspection-based assertions are
+guarded behind ``_is_checkpoint_if_path_native``. The host-side ``GraphStatus`` / ``step.resume(...)`` API arrives in
+slice 2.
 """
 
 import numpy as np
@@ -35,9 +33,8 @@ def _on_cuda():
 def _is_checkpoint_if_path_native():
     """The CUDA-native IF-conditional path requires SM 9.0+ / CUDA 12.4+ (slice 1c).
 
-    On other devices/backends the kernel still runs through every checkpoint body, so the
-    behavioural tests pass everywhere, but the GraphManager-introspection assertions only
-    apply on the native path.
+    On other devices and backends the kernel still runs through every checkpoint body, so the behavioural tests pass
+    everywhere, but the GraphManager-introspection assertions only apply on the native path.
     """
     return _on_cuda() and qd.lang.impl.get_cuda_compute_capability() >= 90
 
@@ -45,37 +42,34 @@ def _is_checkpoint_if_path_native():
 def _supports_checkpoint_yield_resume():
     """Backends that implement the checkpoint yield/resume host contract.
 
-    Wider than `_is_checkpoint_if_path_native()`: also includes the CPU/x64 path (slice 6)
-    and the AMDGPU host-orchestrated sub-graph path (slice 4). Use this predicate for tests
-    of the behavioural yield/resume + `kernel.resume(...)` API; use
-    `_is_checkpoint_if_path_native()` only for graph-introspection counters that exist on
-    CUDA alone.
+    Wider than `_is_checkpoint_if_path_native()`: also includes the CPU/x64 path (slice 6) and AMDGPU host-orchestrated
+    sub-graph path (slice 4). Use this predicate for tests of the behavioural yield/resume + `kernel.resume(...)` API;
+    use `_is_checkpoint_if_path_native()` only for graph-introspection counters that exist on CUDA alone.
     """
     if _is_checkpoint_if_path_native():
         return True
-    # CPU backend: same `runtime/cpu/kernel_launcher.cpp` host-branch gating runs on both x64 and
-    # arm64 (the launcher is arch-agnostic; only the LLVM codegen target differs). Apple Silicon
-    # surfaces as `qd.arm64`; Linux x86 as `qd.x64`. Both go through the slice 6 path.
+    # CPU backend: same `runtime/cpu/kernel_launcher.cpp` host-branch gating runs on both x64 and arm64 (the launcher is
+    # arch-agnostic; only the LLVM codegen target differs). Apple Silicon surfaces as `qd.arm64`; Linux x86 as `qd.x64`.
+    # Both go through the slice 6 path.
     if impl.current_cfg().arch in (qd.x64, qd.arm64):
         return True
     if impl.current_cfg().arch == qd.amdgpu:
         return True
-    # GFX backends (Vulkan, Metal): per-task host gating + readback yield-check in `GfxRuntime`
-    # (slice 4 cont.); see `runtime/gfx/runtime.cpp`'s task loop.
+    # GFX backends (Vulkan, Metal): per-task host gating + readback yield-check in `GfxRuntime` (slice 4 cont.); see
+    # `runtime/gfx/runtime.cpp`'s task loop.
     if impl.current_cfg().arch in (qd.vulkan, qd.metal):
         return True
     return False
 
 
 def _supports_checkpoint_yield_resume_in_while_loop():
-    """Strict subset of `_supports_checkpoint_yield_resume`: backends where yield/resume also
-    works inside a `qd.graph_do_while` body.
+    """Strict subset of `_supports_checkpoint_yield_resume`: returns true on backends where yield/resume also works
+    inside a `qd.graph_do_while` body.
 
-    On AMDGPU these kernels fall through to the streaming launcher (HIP 7.2 has neither
-    conditional graph nodes nor indirect dispatch); slice 4 ports the CPU launcher's
-    host-branch gating + per-iter resume_point reset to that streaming path, so the AMDGPU
-    answer is now the same as the wider predicate above. CUDA SM 9.0+ uses the native IF /
-    yield-check device kernels (slice 1d). On other backends the body runs unconditionally.
+    On AMDGPU these kernels fall through to the streaming launcher (HIP 7.2 has neither conditional graph nodes nor
+    indirect dispatch); slice 4 ports the CPU launcher's host-branch gating plus per-iter resume_point reset to that
+    streaming path, so the AMDGPU answer is now the same as the wider predicate above. CUDA SM 9.0+ uses the native IF
+    / yield-check device kernels (slice 1d). On other backends the body runs unconditionally.
     """
     return _supports_checkpoint_yield_resume()
 
@@ -92,9 +86,8 @@ def _last_yield_cp_id_on_last_call():
 def test_checkpoint_is_no_op_outside_kernels():
     """At Python runtime (outside kernels) qd.checkpoint must be a usable no-op context manager.
 
-    Lets downstream consumers import the symbol unconditionally and use it inside helpers that
-    are sometimes called from Python and sometimes from kernels. Mirrors how qd.stream_parallel
-    behaves outside of @qd.kernel.
+    Lets downstream consumers import the symbol unconditionally and use it inside helpers that are sometimes called
+    from Python and sometimes from kernels. Mirrors how qd.stream_parallel behaves outside of @qd.kernel.
     """
     sentinel = []
     with qd.checkpoint():
@@ -108,8 +101,8 @@ def test_checkpoint_is_no_op_outside_kernels():
 def test_checkpoint_kernel_runs_all_bodies():
     """Slice 1a: a graph kernel with checkpoints runs every body kernel (no IF / yield yet).
 
-    Three checkpoints, each increments x by 1. Without the runtime-side IF mechanism we expect
-    every body to execute on every launch, so x ends at 3.
+    Three checkpoints, each increments x by 1. Without the runtime-side IF mechanism we expect every body to execute
+    on every launch, so x ends at 3.
     """
     N = 16
 
@@ -138,8 +131,8 @@ def test_checkpoint_kernel_runs_all_bodies():
 def test_checkpoint_records_yield_on_metadata():
     """The kernel object records one cp_id entry per `with qd.checkpoint(...)` in source order.
 
-    This is the metadata that slice 1b will read when assigning cp_id to each for-loop and
-    that the runtime (slices 1c/1d) reads to wire up yield-check kernels per checkpoint.
+    This is the metadata that slice 1b will read when assigning cp_id to each for-loop and that the runtime (slices
+    1c/1d) reads to wire up yield-check kernels per checkpoint.
     """
     N = 4
 
@@ -178,10 +171,9 @@ def test_checkpoint_records_yield_on_metadata():
 def test_checkpoint_inside_graph_do_while_runs():
     """A checkpoint inside a qd.graph_do_while body is the canonical qipc pattern.
 
-    Slice 1a doesn't yet enforce IF / yield, so this is just a smoke test that parsing the
-    combination succeeds and the body kernels run as expected for the configured iteration
-    count. The runtime semantics (skipping checkpoints below resume_point, yielding on flag)
-    arrive in slices 1c/1d.
+    Slice 1a doesn't yet enforce IF / yield, so this is just a smoke test that parsing the combination succeeds and
+    the body kernels run as expected for the configured iteration count. The runtime semantics (skipping checkpoints
+    below resume_point, yielding on flag) arrive in slices 1c/1d.
     """
     N = 8
 
@@ -246,14 +238,12 @@ def test_checkpoint_yield_on_nonexistent_arg_raises():
 
 @test_utils.test()
 def test_checkpoint_bare_assign_autowrapped():
-    """A bare `Assign` inside a checkpoint body is silently auto-wrapped in a one-iteration
-    `for` loop by the AST transformer so it picks up the checkpoint's `cp_id` and gets
-    skipped on resume.
+    """A bare `Assign` inside a checkpoint body gets silently auto-wrapped in a one-iteration `for` loop by the AST
+    transformer so it picks up the checkpoint's `cp_id` and gets skipped on resume.
 
-    Without the auto-wrap, the offloader's pending-serial bucket would emit the assignment
-    as a `serial` task with `cp_id == -1`, so it would run unconditionally even when the
-    checkpoint is skipped -- a silent correctness bug. We pin both that the body runs on a
-    fresh launch and that it is correctly skipped on a `resume(from_checkpoint=1)`.
+    Without the auto-wrap, the offloader's pending-serial bucket would emit the bare assignment as a `serial` task with
+    `cp_id == -1`, so it would run unconditionally even when the checkpoint is skipped -- a silent correctness bug. We
+    pin both that the body runs on a fresh launch and that it is correctly skipped on a `resume(from_checkpoint=1)`.
     """
 
     @qd.kernel(graph=True)
@@ -327,8 +317,8 @@ def test_checkpoint_bare_call_expr_autowrapped():
 
 @test_utils.test()
 def test_checkpoint_for_loop_wrap_accepted():
-    """An explicit one-iteration `for` wrap (the pattern the auto-wrap synthesizes) must
-    continue to compile and run, mixed alongside real for-loops."""
+    """An explicit one-iteration `for` wrap (the pattern the auto-wrap synthesizes) must continue to compile and run,
+    mixed alongside real for-loops."""
     N = 4
 
     @qd.kernel(graph=True)
@@ -418,10 +408,10 @@ def test_checkpoint_unexpected_kwarg_raises():
 def test_checkpoint_emits_if_nodes_on_cuda_native():
     """Slice 1c: on CUDA SM 9.0+, the GraphManager wires one IF conditional node per checkpoint.
 
-    Builds a kernel with three checkpoints and asserts the introspection counter sees three
-    IF nodes. On non-CUDA / pre-SM-9.0 backends the kernel still runs but reports 0 since
-    the IF path isn't available; the behavioural correctness assertion (incremented N times)
-    still holds because the body kernels run unconditionally on those backends.
+    Builds a kernel with three checkpoints and asserts the introspection counter sees three IF nodes. On non-CUDA /
+    pre-SM-9.0 backends the kernel still runs to completion but reports zero since the IF path isn't available; the
+    behavioural correctness assertion (incremented N times) still holds because the body kernels run unconditionally
+    there.
     """
     N = 8
 
@@ -454,9 +444,9 @@ def test_checkpoint_emits_if_nodes_on_cuda_native():
 def test_checkpoint_emits_if_nodes_inside_graph_do_while():
     """Slice 1c: IF conditional nodes nest correctly inside a graph_do_while body.
 
-    Two checkpoints per iteration, three iterations -- the IF nodes live inside the WHILE
-    body subgraph and get rebuilt fresh per loop iteration (CUDA semantics). Counter check
-    on the native path confirms the GraphManager doesn't accidentally hoist IFs to top level.
+    Two checkpoints per iteration, three iterations -- the IF nodes live inside the WHILE body subgraph and get rebuilt
+    fresh per loop iteration (CUDA semantics). The counter introspection on the native path confirms the GraphManager
+    doesn't accidentally hoist IFs to top level.
     """
     N = 4
 
@@ -494,9 +484,8 @@ def test_checkpoint_emits_if_nodes_inside_graph_do_while():
 def test_checkpoint_no_yield_when_flag_is_zero():
     """Slice 1d: with all yield_on flags == 0 the kernel completes normally and reports no yield.
 
-    Sanity check that the yield-check kernel doesn't fire spurious yields and that
-    `get_graph_last_yield_cp_id_on_last_call()` returns -1 on the native path when no
-    checkpoint requested a yield.
+    Sanity check: the yield-check kernel must not fire spurious yields and `get_graph_last_yield_cp_id_on_last_call()`
+    must return -1 on the native path when no checkpoint requested a yield.
     """
     N = 8
 
@@ -521,10 +510,10 @@ def test_checkpoint_no_yield_when_flag_is_zero():
 def test_checkpoint_yields_when_flag_is_set():
     """Slice 1d: a non-zero yield_on flag fires the yield-check kernel.
 
-    Pre-set the flag before launch. The yield-check kernel inside the IF body atomically
-    records cp_id into `yield_signal`, then bumps `resume_point` so every later checkpoint is
-    skipped. The third checkpoint must therefore NOT run on the native path. (On non-native
-    backends every body runs unconditionally, so we skip the resume-skip assertion there.)
+    We pre-set the flag value before launch. The yield-check kernel inside the IF body atomically records cp_id into
+    `yield_signal`, then bumps `resume_point` so every later checkpoint is skipped. The third checkpoint must therefore
+    NOT run on the native path. (On non-native backends every body runs unconditionally, so we skip the resume-skip
+    assertion there.)
     """
     if not _supports_checkpoint_yield_resume():
         pytest.skip("yield semantics require the CUDA-native IF path (slice 1d) or CPU host-branch gating (slice 6)")
@@ -551,8 +540,8 @@ def test_checkpoint_yields_when_flag_is_set():
     # cp 0 ran (+1), cp 1 ran (+10) and signalled a yield, cp 2 was skipped.
     np.testing.assert_array_equal(x.to_numpy(), np.full(N, 11, dtype=np.int32))
     assert _last_yield_cp_id_on_last_call() == 1
-    # The yield-check kernel must reset the user's flag to 0 so a follow-up call doesn't
-    # immediately yield again. Matches docs/source/user_guide/graph.md "yield mechanism".
+    # The yield-check kernel must reset the user's flag value to 0 so a follow-up call doesn't immediately yield again.
+    # Matches docs/source/user_guide/graph.md "yield mechanism".
     assert flag.to_numpy() == 0
 
 
@@ -560,12 +549,11 @@ def test_checkpoint_yields_when_flag_is_set():
 def test_checkpoint_yield_first_wins_subsequent_skipped():
     """Slice 1d: when an earlier checkpoint yields, every later checkpoint in the same launch is skipped.
 
-    Three checkpoints: cp 0 and cp 1 both have `yield_on=` set to non-zero before launch. cp 0
-    fires first, its yield-check kernel atomically writes cp_id=0 to `yield_signal` and bumps
-    `resume_point` to INT_MAX. cp 1's gate kernel then reads INT_MAX, disables the IF (so cp 1's
-    body never runs, its flag stays at 1, and its yield-check never fires). cp 2 is likewise
-    skipped. This matches the slice 1d design (`perso_hugh/doc/qipc/reentrant.md` section 5.2):
-    first yielder wins, everything past the yield point is shipped to the host as-not-run.
+    Three checkpoints: cp 0 and cp 1 both have `yield_on=` set to non-zero before launch. cp 0 fires first, and its
+    yield-check kernel atomically writes cp_id=0 to `yield_signal` and bumps `resume_point` to INT_MAX. cp 1's gate
+    kernel then reads INT_MAX, disables the IF (so cp 1's body never runs, its flag stays at 1, and its yield-check
+    never fires). cp 2 is likewise skipped. This matches the slice 1d design (`perso_hugh/doc/qipc/reentrant.md` section
+    5.2): first yielder wins, everything past the yield point is shipped to the host as-not-run.
     """
     if not _supports_checkpoint_yield_resume():
         pytest.skip("yield ordering requires the CUDA-native IF path (slice 1d) or CPU host-branch gating (slice 6)")
@@ -606,10 +594,9 @@ def test_checkpoint_yield_first_wins_subsequent_skipped():
 def test_checkpoint_yield_resets_between_launches():
     """Slice 1d: a kernel that yielded once must run cleanly on the next launch when the flag is reset.
 
-    Verifies the per-launch reset path: yield_signal goes back to -1, resume_point goes back
-    to 0, the user's yield_on ndarray was cleared by the yield-check kernel during the first
-    launch so the second launch doesn't immediately yield again. Same cached graph for both
-    launches.
+    Verifies the per-launch reset path: yield_signal goes back to -1, resume_point goes back to 0, the user's yield_on
+    ndarray was cleared by the yield-check kernel during the first launch so the second launch does not immediately
+    yield again. Same cached graph for both launches.
     """
     if not _supports_checkpoint_yield_resume():
         pytest.skip(
@@ -644,9 +631,9 @@ def test_checkpoint_yield_resets_between_launches():
 def test_checkpoint_yield_exits_graph_do_while_early():
     """Slice 1d: a yield inside a graph_do_while body terminates the WHILE loop immediately.
 
-    Without the cond-with-yield kernel, the body would re-enter on the next iteration with
-    `resume_point == INT_MAX`, skip every checkpoint, never decrement the counter, and spin
-    forever. The cond-with-yield variant checks `yield_signal != -1` and exits the WHILE.
+    Without the cond-with-yield kernel, the body would re-enter on the next iteration with `resume_point == INT_MAX`,
+    skip every checkpoint, never decrement the counter, and spin forever. The cond-with-yield kernel variant checks
+    `yield_signal != -1` and exits the WHILE.
     """
     if not _supports_checkpoint_yield_resume_in_while_loop():
         pytest.skip(
@@ -676,9 +663,8 @@ def test_checkpoint_yield_exits_graph_do_while_early():
     flag.from_numpy(np.array(1, dtype=np.int32))
 
     k(x, counter, flag)
-    # x[i] incremented once (cp 0 ran with flag set, yielded), counter NOT decremented (cp 1
-    # was skipped because resume_point bumped to INT_MAX), then the WHILE exited because
-    # yield_signal != -1.
+    # x[i] is incremented once (cp 0 ran with flag set, yielded), counter NOT decremented (cp 1 was skipped because
+    # resume_point bumped to INT_MAX), then the WHILE exited because yield_signal != -1.
     np.testing.assert_array_equal(x.to_numpy(), np.ones(N, dtype=np.int32))
     assert counter.to_numpy() == 100
     assert _last_yield_cp_id_on_last_call() == 0
@@ -744,9 +730,8 @@ def test_checkpoint_graph_status_reports_yield():
 def test_checkpoint_resume_runs_only_from_checkpoint():
     """Slice 2: `kernel.resume(..., from_checkpoint=cp)` skips every checkpoint with cp_id < cp.
 
-    Three checkpoints, each adds a distinct increment to x. Calling `resume(from_checkpoint=1)`
-    should skip cp 0 and run cp 1 + cp 2. With no `yield_on=` flags fired, the resume call
-    returns `GraphStatus(yielded=False, checkpoint=None)`.
+    Three checkpoints, each adds a distinct increment to x. Calling `resume(from_checkpoint=1)` should skip cp 0 and run
+    cp 1 + cp 2. With no `yield_on=` flags fired, the resume call returns `GraphStatus(yielded=False, checkpoint=None)`.
     """
     if not _supports_checkpoint_yield_resume():
         pytest.skip("from_checkpoint= requires the CUDA-native IF path (slice 1d) or CPU host-branch gating (slice 6)")
@@ -786,8 +771,8 @@ def test_checkpoint_resume_runs_only_from_checkpoint():
 def test_checkpoint_canonical_yield_resume_loop():
     """Slice 2: the canonical qipc-style yield/resume loop from the design doc.
 
-    Kernel runs three checkpoints; cp 1 always yields once. The host loop catches the yield,
-    resumes from cp 1, and the second launch completes cleanly.
+    Kernel runs three checkpoints; cp 1 always yields once. The host loop catches the yield, resumes from cp 1, and
+    the second launch completes cleanly.
     """
     if not _supports_checkpoint_yield_resume():
         pytest.skip("yield/resume loop requires the CUDA-native IF path (slice 1d) or CPU host-branch gating (slice 6)")
@@ -813,8 +798,8 @@ def test_checkpoint_canonical_yield_resume_loop():
     status = step(x, flag)
     yields_seen = 0
     while status.yielded:
-        # In real qipc-style code the host would grow a buffer here; in this test we just
-        # decline to re-yield on the resume launch.
+        # In real qipc-style code the host would grow a buffer here; in this test we just decline to re-yield on the
+        # resume launch.
         yields_seen += 1
         assert flag.to_numpy() == 0, "yield-check kernel should have cleared the flag"
         status = step.resume(x, flag, from_checkpoint=status.checkpoint)
@@ -852,8 +837,8 @@ def test_checkpoint_resume_invalid_args_raise():
 def test_checkpoint_non_yield_kernel_returns_none():
     """Kernels with `qd.checkpoint()` but no `yield_on=` keep returning None (no GraphStatus).
 
-    The host-side `GraphStatus` surface is opt-in via `yield_on=` so existing graph kernels
-    that just want skippable stages don't change return type out from under their callers.
+    The host-side `GraphStatus` surface is opt-in via `yield_on=` so existing graph kernels that just want skippable
+    stages don't change return type out from under their callers.
     """
     N = 4
 
@@ -874,8 +859,8 @@ def test_checkpoint_non_yield_kernel_returns_none():
 def test_checkpoint_yield_on_must_be_bare_name():
     """yield_on= must be a bare parameter name -- expressions / attributes are not supported.
 
-    Keeps the parser path symmetric with qd.graph_do_while(name) and avoids the cost of trying
-    to resolve arbitrary AST expressions to kernel parameters at compile time.
+    Keeps the parser path symmetric with qd.graph_do_while(name) and avoids the cost of trying to resolve arbitrary
+    AST expressions to kernel parameters at compile time.
     """
 
     @qd.kernel(graph=True)

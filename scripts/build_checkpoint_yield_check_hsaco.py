@@ -1,24 +1,21 @@
 #!/usr/bin/env python3
 """Builds the pre-compiled bundled HSACO for the qd.checkpoint() yield-check kernel on AMDGPU.
 
-Requires the AMD ROCm toolkit (hipcc) to be installed. Mirror of
-`scripts/build_checkpoint_yield_check_fatbin.py` (the CUDA equivalent), with the same
-"build-once, check in the generated header" pattern. The pre-Hopper CUDA / AMDGPU
-`qd.checkpoint` lowering both insert this kernel inline in a flat (CUDA / HIP) graph after
-each yielding checkpoint's last body kernel; the kernel self-gates on resume_point /
-yield_signal so the runtime does not need to host-orchestrate per-checkpoint skips.
+Requires the AMD ROCm toolkit (hipcc) to be installed. Mirror of `scripts/build_checkpoint_yield_check_fatbin.py` (the
+CUDA equivalent), with the very same "build-once, check in the generated header" pattern. The pre-Hopper CUDA / AMDGPU
+`qd.checkpoint` lowering both insert this kernel inline in a flat (CUDA / HIP) graph after each yielding checkpoint's
+last body kernel; the kernel self-gates on resume_point / yield_signal so the runtime does not need to host-orchestrate
+per-checkpoint skips.
 
-The output is a C header (checkpoint_yield_check_hsaco.h) containing the bundled HSACO
-("offload bundle" in clang parlance) as a byte array, compiled into the quadrants binary.
-At runtime `hipModuleLoadData` takes the bundle and selects the right per-arch HSACO for
-the current device, the same way `cuModuleLoadData` selects from a CUDA fatbin.
+The output is a C header (checkpoint_yield_check_hsaco.h) that contains the bundled HSACO ("offload bundle" in clang
+parlance) as a byte array, compiled into the quadrants binary. Then at runtime `hipModuleLoadData` takes the bundle and
+selects the right per-arch HSACO for the current device, the same way `cuModuleLoadData` selects from a CUDA fatbin.
 
 Usage:
     python scripts/build_checkpoint_yield_check_hsaco.py
 
-The script must run on a machine with ROCm installed (it shells out to hipcc). Quadrants'
-CUDA fatbin scripts have the same constraint: build offline on a box that has the toolkit,
-check in the generated header.
+The script must run on a machine with ROCm installed (it shells out to hipcc). Quadrants' CUDA fatbin scripts have the
+same constraint: build offline on a box that has the toolkit, check in the generated header.
 
 Default offload arches cover the main hardware quadrants currently runs on:
 
@@ -111,10 +108,9 @@ def main() -> None:
     hipcc = find_hipcc()
 
     with tempfile.TemporaryDirectory() as tmpdir:
-        # `--genco` produces a single bundled code object (offload bundle) that
-        # `hipModuleLoadData` can demultiplex at runtime. Multiple `--offload-arch` produce
-        # one HSACO per arch packed inside the bundle. The output is a single file containing
-        # all archs; the HIP runtime picks the right one for the current device.
+        # `--genco` produces a single bundled code object (offload bundle) that `hipModuleLoadData` can demultiplex at
+        # runtime. Multiple `--offload-arch` produce one HSACO per arch packed inside the bundle. The output is a single
+        # file containing all archs; the HIP runtime picks the right one for the current device.
         bundle_path = Path(tmpdir) / "checkpoint_yield_check.hsaco"
         cmd = [
             hipcc,

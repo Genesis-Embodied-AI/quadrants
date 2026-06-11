@@ -53,9 +53,8 @@ from quadrants.lang.exception import (
     handle_exception_from_cpp,
 )
 
-# `GraphStatus` is the host-facing return type for kernels that contain
-# `qd.checkpoint(yield_on=...)`. Imported from the dedicated `graph_status` module rather than
-# from `misc` to avoid a `kernel -> misc -> impl -> kernel` circular import.
+# `GraphStatus` is the host-facing return type for kernels that contain `qd.checkpoint(yield_on=...)`. Imported from the
+# dedicated `graph_status` module rather than from `misc` to avoid a `kernel -> misc -> impl -> kernel` circular import.
 from quadrants.lang.graph_status import GraphStatus as _GraphStatus
 from quadrants.lang.impl import Program
 from quadrants.lang.shell import _shell_pop_print
@@ -312,11 +311,11 @@ class Kernel(FuncBase):
         self.has_print = False
         self.use_graph: bool = False
         self.graph_do_while_arg: str | None = None
-        # Per-checkpoint metadata, one entry per `with qd.checkpoint(...)` block in declaration order. List index
-        # is the checkpoint's `cp_id` (0, 1, 2, ... flat across the kernel). Each entry is the name of the
-        # `yield_on=` kernel parameter, or `None` if the checkpoint has no `yield_on`. Populated by the AST
-        # transformer during frontend pass; empty means the kernel uses no checkpoints. Mirrors the
-        # `graph_do_while_arg` indirection but tracks one arg per checkpoint instead of one per kernel.
+        # Per-checkpoint metadata, one entry per `with qd.checkpoint(...)` block in declaration order. List index is the
+        # checkpoint's `cp_id` (0, 1, 2, ... flat across the kernel). Each entry is the name of the `yield_on=` kernel
+        # parameter, or `None` if the checkpoint has no `yield_on`. Populated by the AST transformer during frontend
+        # pass; empty means the kernel uses no checkpoints. Mirrors the `graph_do_while_arg` indirection but tracks one
+        # arg per checkpoint instead of one per kernel.
         self.checkpoint_yield_on_args: list[str | None] = []
         self.quadrants_callable: QuadrantsCallable | None = None
         self.visited_functions: set[FunctionSourceInfo] = set()
@@ -545,11 +544,10 @@ class Kernel(FuncBase):
             is_launch_ctx_cacheable = True
             template_num = 0
             i_out = 0
-            # Fresh per-launch table for `qd.checkpoint(yield_on=...)` arg resolution. Each entry
-            # defaults to -1 ("no yield_on"); the arg-iteration loop below fills in the C++ arg
-            # id when it visits the named parameter. Sized to the kernel's checkpoint count once
-            # per launch so changes to the checkpoint set (only possible via re-AST-walk) reset
-            # the table cleanly.
+            # Fresh per-launch table for `qd.checkpoint(yield_on=...)` arg resolution. Each entry defaults to -1 ("no
+            # yield_on"); the arg-iteration loop below fills in the C++ arg id when it visits the named parameter. Sized
+            # to the kernel's checkpoint count once per launch so any changes to the checkpoint set (only possible via
+            # re-AST-walk) reset the table cleanly.
             if self.checkpoint_yield_on_args:
                 self._checkpoint_yield_on_cpp_arg_ids = [-1] * len(self.checkpoint_yield_on_args)
             for i_in, val in enumerate(args):
@@ -646,13 +644,11 @@ class Kernel(FuncBase):
                 launch_ctx.graph_do_while_arg_id = self._graph_do_while_cpp_arg_id
             if self.checkpoint_yield_on_args and hasattr(self, "_checkpoint_yield_on_cpp_arg_ids"):
                 launch_ctx.checkpoint_yield_on_arg_ids = tuple(self._checkpoint_yield_on_cpp_arg_ids)
-            # `_resume_from_checkpoint` is `None` for fresh launches (host-side default 0 in
-            # `LaunchContextBuilder`, which means "run every checkpoint"). When `Kernel.resume`
-            # plumbs an int through, copy it onto the launch ctx so the GraphManager's
-            # `launch_cached_graph` memcpys it into the device-side `resume_point` slot
-            # instead of clearing to 0. Slice 2 implementation; pre-CUDA-12.4 / non-CUDA
-            # backends ignore the value since they don't have a resume_point slot today
-            # (slices 4-6 will add an indirect-dispatch equivalent).
+            # `_resume_from_checkpoint` is `None` for fresh launches (host-side default 0 in `LaunchContextBuilder`,
+            # which means "run every checkpoint"). When `Kernel.resume` plumbs an int through, copy it onto the launch
+            # context so the GraphManager's `launch_cached_graph` memcpys it into the device-side `resume_point` slot
+            # instead of clearing to 0. Slice 2 implementation; pre-CUDA-12.4 / non-CUDA backends ignore the value since
+            # they don't have a resume_point slot today (slices 4-6 will add an indirect-dispatch equivalent).
             if _resume_from_checkpoint is not None:
                 launch_ctx.resume_from_checkpoint = int(_resume_from_checkpoint)
             stream_handle = qd_stream.handle if qd_stream is not None else 0
@@ -743,11 +739,10 @@ class Kernel(FuncBase):
     @_shell_pop_print
     def __call__(self, *py_args, **kwargs) -> Any:
         qd_stream = kwargs.pop("qd_stream", None)
-        # Pop the resume cookie before anything else touches kwargs -- the AST mapper sees user
-        # parameter names only, so a stray `from_checkpoint=` would raise "unexpected kwarg".
-        # `_resume_from_checkpoint` is the resolved cp_id to copy into the device-side
-        # `resume_point` slot before launch; `None` means "fresh start, reset to 0".
-        # Plumbed via `Kernel.resume()` only; users do not pass this directly.
+        # Pop the resume cookie before anything else touches kwargs -- the AST mapper sees user parameter names only, so
+        # a stray `from_checkpoint=` would raise "unexpected kwarg". `_resume_from_checkpoint` is the resolved cp_id to
+        # copy into the device-side `resume_point` slot before launch; `None` means "fresh start, reset to 0". Plumbed
+        # via `Kernel.resume()` only; users do not pass this directly.
         _resume_from_checkpoint = kwargs.pop("_qd_from_checkpoint", None)
         if _resume_from_checkpoint is not None and not self.checkpoint_yield_on_args:
             raise RuntimeError(
@@ -826,10 +821,9 @@ class Kernel(FuncBase):
         kernel_cpp = self.materialized_kernels[key]
         compiled_kernel_data = self.compiled_kernel_data_by_key.get(key, None)
         self.launch_observations.found_kernel_in_materialize_cache = compiled_kernel_data is not None
-        # Only forward `_resume_from_checkpoint` when the caller actually supplied one
-        # (i.e. via `Kernel.resume(...)`). Otherwise omit the kwarg entirely so subclasses /
-        # monkeypatches of `launch_kernel` that pre-date this kwarg keep working unmodified.
-        # The host-side default in `LaunchContextBuilder` is 0 ("run every checkpoint"), which
+        # Only forward `_resume_from_checkpoint` when the caller actually supplied one (i.e. via `Kernel.resume(...)`).
+        # Otherwise omit the kwarg entirely so subclasses / monkeypatches of `launch_kernel` that pre-date this kwarg
+        # keep working unmodified. The host-side default in `LaunchContextBuilder` is 0 ("run every checkpoint"), which
         # matches the `None` semantics in `launch_kernel`.
         if _resume_from_checkpoint is None:
             ret = self.launch_kernel(
@@ -851,11 +845,10 @@ class Kernel(FuncBase):
         if compiled_kernel_data is None:
             assert self._last_compiled_kernel_data is not None
             self.compiled_kernel_data_by_key[key] = self._last_compiled_kernel_data
-        # Surface a GraphStatus for kernels with `qd.checkpoint(yield_on=...)` so the host can
-        # drive the qipc-style re-entrant loop. Kernels without yield-capable checkpoints keep
-        # their existing return contract (typically `None`); we don't synthesise a status from a
-        # `yielded=False` result for them because they have no `yield_on=` parameter to write
-        # to, so the value would always be `yielded=False, checkpoint=None` -- no information.
+        # Surface a GraphStatus for kernels with `qd.checkpoint(yield_on=...)` so the host can drive the qipc-style
+        # re-entrant loop. Kernels without yield-capable checkpoints keep their existing return contract (typically
+        # `None`); we don't synthesise a status from a `yielded=False` result for them because they have no `yield_on=`
+        # parameter to write to, so the value would always be `yielded=False, checkpoint=None` -- no information.
         if self.checkpoint_yield_on_args and any(n is not None for n in self.checkpoint_yield_on_args):
             cp = impl.get_runtime().prog.get_graph_last_yield_cp_id_on_last_call()
             if cp >= 0:
