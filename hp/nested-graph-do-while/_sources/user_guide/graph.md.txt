@@ -9,12 +9,11 @@ Both features run on every backend. They are *hardware accelerated* on CUDA (via
 | Feature | `qd.cuda` SM 9.0+ | `qd.cuda` < SM 9.0 | `qd.amdgpu` | `qd.metal` | `qd.vulkan` | `qd.cpu` |
 | --- | --- | --- | --- | --- | --- | --- |
 | `graph=True` | hardware accelerated | hardware accelerated | hardware accelerated | runs (no acceleration) | runs (no acceleration) | runs (no acceleration) |
-| `graph_do_while` (single) | hardware accelerated | host fallback | host fallback | host fallback | host fallback | host fallback |
-| `graph_do_while` (nested / sibling) | hardware accelerated | host fallback | host fallback | host fallback | host fallback | host fallback |
+| `graph_do_while` | hardware accelerated | host fallback | host fallback | host fallback | host fallback | host fallback |
 
 AMDGPU `graph_do_while` falls back to the host-side loop because HIP does not currently expose conditional / while graph nodes (as of ROCm 7.2).
 
-Nested and sibling `graph_do_while` loops (see [Nested loops](#nested-loops-and-mixing-with-for-loops)) work on every backend: hardware-accelerated as a single GPU-side graph on CUDA SM 9.0+, and via a host-side driver everywhere else (CPU, CUDA pre-SM 9.0, AMDGPU, Vulkan, Metal). On the host-fallback backends each loop-body pass is replayed from the host and the condition value is copied GPU → host between iterations (see [Caveats](#caveats)).
+Nested and sibling `graph_do_while` loops (and mixing `graph_do_while` with top-level `for`-loops) are **experimental** for now — see [Nested loops and mixing with for-loops](#nested-loops-and-mixing-with-for-loops).
 
 ## Basic usage
 
@@ -132,8 +131,6 @@ def converge(x: qd.types.ndarray(qd.f32, ndim=1),
 
 `graph_do_while` has **do-while** semantics: the kernel body always executes at least once before the condition is checked. This matches the behavior of CUDA conditional while nodes. The flag value must be >= 1 at launch time. Passing 0 with a kernel that decrements the counter will cause an infinite loop.
 
-> **Reset the flag outside the loop body, never inside it.** The counter / `keep_going` flag must reach a terminating value *as a result of the loop body*. If you (re)set the flag to a non-zero value **inside** the `while qd.graph_do_while(...)` body — e.g. `for _ in range(1): counter[()] = N` placed within the loop — it is re-applied on every iteration and the loop never terminates. Do the reset before the loop (a run-once top-level `for`, see [Loop-carried state](#loop-carried-state)) or on the host between launches (`counter.fill(N)`).
-
 ### ndarray vs field
 
 The parameter used by `graph_do_while` MUST be an ndarray.
@@ -142,10 +139,9 @@ However, other parameters can be any supported Quadrants kernel parameter type.
 
 ### Nested loops and mixing with for-loops
 
-`graph_do_while` loops can be **nested** inside one another, placed **side by side** (siblings),
-and freely **mixed with plain top-level for-loops**. Each loop has its own scalar `qd.i32` counter
-ndarray. On CUDA SM 9.0+ the whole nest runs entirely GPU-side as one graph of conditional while
-nodes; on the host-fallback backends the loop nest is driven from the host.
+> **Experimental.** Nested / sibling `graph_do_while` loops, and mixing `graph_do_while` with top-level `for`-loops, are experimental for now. Single-loop `graph_do_while` is the stable path.
+
+`graph_do_while` loops can be **nested** inside one another, placed **side by side** (siblings), and freely **mixed with plain top-level for-loops**. Each loop has its own scalar `qd.i32` counter ndarray. On CUDA SM 9.0+ the whole nest runs entirely GPU-side as one graph of conditional while nodes; on the host-fallback backends the loop nest is driven from the host.
 
 ```python
 @qd.kernel(graph=True)
@@ -172,17 +168,12 @@ def nested(x: qd.types.ndarray(qd.i32, ndim=1),
 
 Important points for nested loops:
 
-- **Re-arm inner counters.** An inner loop's counter is not reset automatically between outer
-  iterations. Reset it at the top of the enclosing loop body (as `inner[()] = 5` above), or the inner
-  loop will only run during the first outer iteration.
+- **Re-arm inner counters.** An inner loop's counter is not reset automatically between outer iterations. Reset it at the top of the enclosing loop body (as `inner[()] = 5` above), or the inner loop will only run during the first outer iteration.
 - **Each level needs its own counter ndarray.** Don't share one counter ndarray across two levels.
 
 ### Kernel structure restriction
 
-When a kernel uses `qd.graph_do_while()` anywhere, **every top-level statement** — both in the kernel
-body and inside each `graph_do_while` body — must be either a `for`-loop or a `qd.graph_do_while()`
-`while`-loop. Bare statements (assignments, `if`, etc.) at these levels are rejected with a
-`QuadrantsSyntaxError`. Wrap any such statement in a trivial loop:
+When a kernel uses `qd.graph_do_while()` anywhere, **every top-level statement** — both in the kernel body and inside each `graph_do_while` body — must be either a `for`-loop or a `qd.graph_do_while()` `while`-loop. Bare statements (assignments, `if`, etc.) at these levels are rejected with a `QuadrantsSyntaxError`. Wrap any such statement in a trivial loop:
 
 ```python
 # Instead of:   counter[()] = counter[()] - 1
@@ -190,23 +181,15 @@ for _ in range(1):
     counter[()] = counter[()] - 1
 ```
 
-This restriction keeps each offloaded task tagged with the exact loop level it belongs to. `for`-loops
-and `graph_do_while` loops may otherwise be freely ordered, mixed, and nested. A `graph_do_while`
-`while`-loop may only appear at the kernel top level or directly inside another `graph_do_while` body —
-it cannot be placed inside a `for`-loop.
+This restriction keeps each offloaded task tagged with the exact loop level it belongs to. A `graph_do_while` `while`-loop may only appear at the kernel top level or directly inside another `graph_do_while` body — it cannot be placed inside a `for`-loop.
 
 ### Loop-carried state
 
-A common pattern is an iterative solver that initializes some working state once, refines it across
-iterations, then reads the result back. Be deliberate about **where** each piece lives, because only
-statements *inside* the `while qd.graph_do_while(...)` body repeat:
+A common pattern is an iterative solver that initializes some working state once, refines it across iterations, then reads the result back. Be deliberate about **where** each piece lives, because only statements *inside* the `while qd.graph_do_while(...)` body repeat:
 
-- **One-time init / writeback** belong at the kernel top level (a top-level `for`-loop runs exactly
-  once — see [Nested loops and mixing with for-loops](#nested-loops-and-mixing-with-for-loops)), or in
-  a separate non-`graph` kernel.
+- **One-time init / writeback** belong at the kernel top level (a top-level `for`-loop runs exactly once — see [Nested loops and mixing with for-loops](#nested-loops-and-mixing-with-for-loops)), or in a separate non-`graph` kernel.
 - **Per-iteration work** belongs inside the `while` body.
-- **Loop-carried state** (a value that iteration `k+1` reads from iteration `k`) just works: it is held
-  in global memory and nothing outside the loop body resets it between iterations.
+- **Loop-carried state** (a value that iteration `k+1` reads from iteration `k`) just works: it is held in global memory and nothing outside the loop body resets it between iterations.
 
 ```python
 @qd.kernel(graph=True)
@@ -226,17 +209,11 @@ def newton(q_iter: qd.types.ndarray(qd.f32, ndim=1),
         q[i] = q_iter[i]
 ```
 
-If you would rather keep the `graph=True` kernel focused on just the loop, the equivalent **seed /
-iterate / writeback** split works too — move the init and writeback into their own non-`graph`
-`@qd.kernel` functions and call them around the iterate kernel on the host. Either structure is fine;
-the only hard rule is that the do-while flag must not be reset inside the loop body (see
-[Do-while semantics](#do-while-semantics)).
+If you would rather keep the `graph=True` kernel focused on just the loop, the equivalent **seed / iterate / writeback** split works too — move the init and writeback into their own non-`graph` `@qd.kernel` functions and call them around the iterate kernel on the host. Either structure is fine.
 
 ### Restrictions
 
-- The counter ndarray may be swapped between calls: the cached graph reads each counter through an
-  indirection slot that is refreshed on every launch, so passing a different ndarray (or alternating
-  between several) replays the cached graph without rebuilding it.
+- The counter ndarray may be swapped between calls: the cached graph reads each counter through an indirection slot that is refreshed on every launch, so passing a different ndarray (or alternating between several) replays the cached graph without rebuilding it.
 
 ### Caveats
 

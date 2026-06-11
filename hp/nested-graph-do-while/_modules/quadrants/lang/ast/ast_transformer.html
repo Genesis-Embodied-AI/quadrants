@@ -1874,9 +1874,9 @@
                 <span class="p">)</span>
             <span class="k">if</span> <span class="ow">not</span> <span class="n">kernel</span><span class="o">.</span><span class="n">use_graph</span><span class="p">:</span>
                 <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">&quot;qd.graph_do_while() requires @qd.kernel(graph=True)&quot;</span><span class="p">)</span>
-            <span class="c1"># graph_do_while emits no loop IR; its body&#39;s for-loops must be top-level (offloaded)</span>
-            <span class="c1"># tasks. So it may only appear at the kernel top level or directly inside another</span>
-            <span class="c1"># graph_do_while (both at loop_depth 0), never inside a real for-loop.</span>
+            <span class="c1"># graph_do_while emits no loop IR; its body&#39;s for-loops must be top-level (offloaded) tasks. So it may only</span>
+            <span class="c1"># appear at the kernel top level or directly inside another graph_do_while (both at loop_depth 0), never</span>
+            <span class="c1"># inside a real for-loop.</span>
             <span class="k">if</span> <span class="n">ctx</span><span class="o">.</span><span class="n">loop_depth</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">:</span>
                 <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span>
                     <span class="s2">&quot;qd.graph_do_while() must be at the kernel top level or directly nested inside &quot;</span>

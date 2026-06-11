@@ -599,10 +599,10 @@
             <span class="c1"># be available to use in build_Call, later.</span>
             <span class="n">tree</span> <span class="o">=</span> <span class="n">_kernel_impl_dataclass</span><span class="o">.</span><span class="n">unpack_ast_struct_expressions</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">tree</span><span class="p">,</span> <span class="n">struct_locals</span><span class="o">=</span><span class="n">struct_locals</span><span class="p">)</span>
             <span class="n">ctx</span><span class="o">.</span><span class="n">only_parse_function_def</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">only_parse_function_def</span>
-            <span class="c1"># Rebuild the graph_do_while level table from scratch each compilation pass (build_While</span>
-            <span class="c1"># appends to it as it walks the AST). Skip when only_parse_function_def: the body is not</span>
-            <span class="c1"># walked, so build_While never runs to repopulate it -- and on a fast-cache restore the table</span>
-            <span class="c1"># was already rebuilt from the cached (cond_arg_name, parent_id) pairs in _try_load_fastcache.</span>
+            <span class="c1"># Rebuild the graph_do_while level table from scratch each compilation pass (build_While appends to it as it</span>
+            <span class="c1"># walks the AST). Skip when only_parse_function_def: the body is not walked, so build_While never runs to</span>
+            <span class="c1"># repopulate it -- and on a fast-cache restore the table was already rebuilt from the cached (cond_arg_name,</span>
+            <span class="c1"># parent_id) pairs in _try_load_fastcache.</span>
             <span class="k">if</span> <span class="ow">not</span> <span class="n">ctx</span><span class="o">.</span><span class="n">only_parse_function_def</span><span class="p">:</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">current_kernel</span><span class="o">.</span><span class="n">graph_do_while_levels</span> <span class="o">=</span> <span class="p">[]</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">current_kernel</span><span class="o">.</span><span class="n">_graph_do_while_level_stack</span> <span class="o">=</span> <span class="p">[]</span>
@@ -728,14 +728,14 @@
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/kernel/index.html#quadrants.lang.kernel.Kernel.use_graph">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">use_graph</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span></div>
 
-        <span class="c1"># Legacy single-loop arg name, kept for reporting/back-compat; equals the outermost level&#39;s</span>
-        <span class="c1"># condition arg for nested kernels. The authoritative data is `graph_do_while_levels`.</span>
+        <span class="c1"># Legacy single-loop arg name, kept for reporting/back-compat; equals the outermost level&#39;s condition arg for</span>
+        <span class="c1"># nested kernels. The authoritative data is `graph_do_while_levels`.</span>
 <div class="viewcode-block" id="Kernel.graph_do_while_arg">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/kernel/index.html#quadrants.lang.kernel.Kernel.graph_do_while_arg">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">graph_do_while_arg</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span></div>
 
-        <span class="c1"># Nested graph_do_while level table, indexed by level id (outer before inner). Rebuilt each</span>
-        <span class="c1"># compilation pass by the AST transformer; serialized to the launch context at launch.</span>
+        <span class="c1"># Nested graph_do_while level table, indexed by level id (outer before inner). Rebuilt each compilation pass by</span>
+        <span class="c1"># the AST transformer; serialized to the launch context at launch.</span>
 <div class="viewcode-block" id="Kernel.graph_do_while_levels">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/kernel/index.html#quadrants.lang.kernel.Kernel.graph_do_while_levels">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">graph_do_while_levels</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">GraphDoWhileLevel</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span></div>
@@ -837,8 +837,8 @@
                 <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">compiled_kernel_data_by_key</span><span class="p">[</span><span class="n">key</span><span class="p">]:</span>
                     <span class="bp">self</span><span class="o">.</span><span class="n">src_ll_cache_observations</span><span class="o">.</span><span class="n">cache_loaded</span> <span class="o">=</span> <span class="kc">True</span>
                     <span class="bp">self</span><span class="o">.</span><span class="n">used_py_dataclass_parameters_by_key_enforcing</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">used_py_dataclass_parameters</span>
-                    <span class="c1"># Fast-cache restore skips AST transformation, so rebuild the gdw level table (and</span>
-                    <span class="c1"># the legacy outermost-arg alias) from the cached (cond_arg_name, parent_id) pairs.</span>
+                    <span class="c1"># Fast-cache restore skips AST transformation, so rebuild the gdw level table (and the legacy</span>
+                    <span class="c1"># outermost-arg alias) from the cached (cond_arg_name, parent_id) pairs.</span>
                     <span class="k">if</span> <span class="n">cached_graph_do_while_levels</span><span class="p">:</span>
                         <span class="bp">self</span><span class="o">.</span><span class="n">graph_do_while_levels</span> <span class="o">=</span> <span class="p">[</span>
                             <span class="n">GraphDoWhileLevel</span><span class="p">(</span><span class="n">cond_arg_name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span> <span class="n">parent_id</span><span class="o">=</span><span class="n">parent</span><span class="p">)</span>
