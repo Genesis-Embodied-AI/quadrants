@@ -446,6 +446,12 @@ def _scan_downsweep_phase(
     block's tile consistent, and blocks write disjoint tiles."""
     loop_config(block_dim=BLOCK_DIM)
     for i in range(total_threads):
+        # When this grid-strided loop wraps (total_threads > the codegen grid-stride cap), the block-collective
+        # below reuses the same threadgroup-shared scratch every iteration. The collective only barriers between its
+        # own shared write and read, not at the iteration boundary, so iteration k+1's shared writes would race
+        # iteration k's shared reads (a WAR data race - UB on every backend, observed as corruption on Metal /
+        # MoltenVK). This boundary barrier retires the previous iteration's shared reads before they are overwritten.
+        _block.sync()
         tid = i % BLOCK_DIM
         block_id = i // BLOCK_DIM
         ident = _scan_identity(DTYPE, OP)
@@ -674,6 +680,7 @@ def _graph_scan_reduce(buf: template(), in_off: i32, out_off: i32, n: i32, total
     """
     loop_config(block_dim=BLOCK_DIM)
     for i in range(total_threads):
+        _block.sync()  # iteration-boundary barrier: see _scan_downsweep_phase (shared-scratch WAR hazard on wrap)
         tid = i % BLOCK_DIM
         block_id = i // BLOCK_DIM
         v = u32(0)
@@ -704,6 +711,7 @@ def _graph_scan_downsweep(buf: template(), off: i32, part_off: i32, n: i32, tota
     ``buf[part_off + block_id]``, written back in place (u32 / add, ``src == dst == buf``)."""
     loop_config(block_dim=BLOCK_DIM)
     for i in range(total_threads):
+        _block.sync()  # iteration-boundary barrier: see _scan_downsweep_phase (shared-scratch WAR hazard on wrap)
         tid = i % BLOCK_DIM
         block_id = i // BLOCK_DIM
         v = u32(0)

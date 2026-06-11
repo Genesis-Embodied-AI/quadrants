@@ -173,24 +173,6 @@ def _skip_if_dtype_unsupported(dtype):
         pytest.skip(reason)
 
 
-def _skip_if_radix_sort_large_n_on_apple_gpu(N):
-    """Skip large-N ``radix_sort`` calls on Metal / MoltenVK.
-
-    *Why this skip exists.* On Apple GPUs (Metal directly, and MoltenVK / Vulkan-on-Darwin), ``radix_sort``
-    produces incorrect results once N crosses ``BLOCK_DIM**2 = 65_536``: the ``test_device_radix_sort_keys_only``
-    parametrization at N=200_000 reports 50-90% of elements in the wrong position on those backends. CUDA, AMDGPU,
-    and Linux Vulkan all pass at every tested size on the same code, so the regression is in the Apple-GPU codegen /
-    runtime path of one of the building blocks (most likely the histogram pass's threadgroup-shared atomic_or +
-    barrier sequence at high block counts), not in the radix-sort algorithm itself. Smaller N (N <= 65_536, the
-    single- and few-block paths) pass cleanly on Apple GPUs.
-
-    Tracked as a follow-up; not blocking the device-algos first land. Tests that *transitively* hit this path
-    (radix-sort-then-RBK at N=1M, ``test_scratch_round_trip_across_qd_reset`` at ~2.6M) also need this guard.
-    """
-    if N >= 200_000 and _is_apple_gpu_backend():
-        pytest.skip("radix_sort produces incorrect results on Metal / MoltenVK at N >= 200_000")
-
-
 # ---------------------------------------------------------------------------
 # Tolerance contract for f32 / f64 reduce / scan / RBK assertions.
 # ---------------------------------------------------------------------------
@@ -986,7 +968,6 @@ def _gen_keys(rng, dtype, N):
 def test_device_radix_sort_keys_only(dtype, N):
     """radix_sort matches numpy.sort for every supported key dtype ({u32, i32, f32, u64, i64, f64})."""
     _skip_if_dtype_unsupported(dtype)
-    _skip_if_radix_sort_large_n_on_apple_gpu(N)
     rng = np.random.default_rng(seed=1234)
     host = _gen_keys(rng, dtype, N)
 
@@ -1007,7 +988,6 @@ def test_device_radix_sort_key_value(dtype, N):
     """Key-value sort: values permute in lock-step with keys; sort is stable. Exercises the libuipc-shaped u64-key
     + i32-value path (``MatrixConverter::ij_hash`` sorted with ``sort_index``) among the parametrized cases."""
     _skip_if_dtype_unsupported(dtype)
-    _skip_if_radix_sort_large_n_on_apple_gpu(N)
     rng = np.random.default_rng(seed=1234)
     host = _gen_keys(rng, dtype, N)
 
@@ -1494,7 +1474,6 @@ def test_device_radix_sort_n_1m(dtype):
     (the histograms are always u32), so the same buffer covers both widths."""
     _skip_if_dtype_unsupported(dtype)
     N = 1_000_000
-    _skip_if_radix_sort_large_n_on_apple_gpu(N)
     rng = np.random.default_rng(seed=1234)
     host = _gen_keys(rng, dtype, N)
 
@@ -1510,7 +1489,6 @@ def test_device_radix_sort_n_1m(dtype):
 def test_reduce_by_key_add_n_1m():
     """N = 1_000_000 reduce-by-key with a caller-owned scratch sized via ``reduce_by_key_scratch_slots``."""
     N = 1_000_000
-    _skip_if_radix_sort_large_n_on_apple_gpu(N)
     rng = np.random.default_rng(seed=1234)
     keys_host = _gen_run_keys(rng, qd.i32, N)
     values_host = rng.integers(-100, 100, size=N, dtype=np.int32)
@@ -1820,7 +1798,6 @@ def test_caller_scratch_round_trip_across_qd_reset(req_arch):
 
     # --- Cycle 1.
     N1 = 200_000
-    _skip_if_radix_sort_large_n_on_apple_gpu(N1)
     host1 = rng.integers(0, 2**31 - 1, size=N1, dtype=np.int32)
     keys1 = qd.field(qd.i32, shape=N1)
     tmp1 = qd.field(qd.i32, shape=N1)

@@ -425,6 +425,10 @@ def _reduce_phase(
     """
     loop_config(block_dim=BLOCK_DIM)
     for i in range(total_threads):
+        # Iteration-boundary barrier so a wrapped grid-stride loop does not let the next iteration's block-reduce
+        # overwrite the shared-scratch slots while this iteration's reads are still in flight (WAR data race; UB on
+        # all backends, corrupts on Metal / MoltenVK). See _scan._scan_downsweep_phase for the full rationale.
+        _block.sync()
         tid = i % BLOCK_DIM
         block_id = i // BLOCK_DIM
         v = _typed_zero_expr(DTYPE)  # typed additive identity; unconditional first assignment

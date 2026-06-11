@@ -155,22 +155,28 @@ def _radix_hist(keys: template(), scratch: template(), n: i32, num_blocks: i32, 
     for i in range(total_threads):
         tid = i % BLOCK_DIM
         block_id = i // BLOCK_DIM
-        hist = _block.SharedArray((RADIX_DIGITS,), i32)
-        if tid < RADIX_DIGITS:
-            hist[tid] = i32(0)
+        # One extra "dump" slot (index RADIX_DIGITS) absorbs the increments of out-of-range lanes so the shared
+        # atomic_add below runs in *uniform* control flow. A guarded `if i < n: atomic_add(...)` would put the atomic
+        # - and the acquire-release memory barrier the codegen emits in front of every native atomic - inside
+        # thread-divergent control flow; on Metal / MoltenVK spirv-cross lowers that barrier to a full
+        # threadgroup_barrier, which is undefined behaviour when only some lanes of the tail block reach it and
+        # silently drops histogram counts. Keeping the atomic unconditional sidesteps that entirely.
+        hist = _block.SharedArray((RADIX_DIGITS + 1,), i32)
+        hist[tid] = i32(0)
+        if tid == 0:
+            hist[RADIX_DIGITS] = i32(0)
         _block.sync()
+        digit = i32(RADIX_DIGITS)  # default to the dump slot for out-of-range lanes (unconditional first assignment)
         if i < n:
             if static(KEY_WIDTH == 32):
                 key32 = bit_cast(keys[i], u32)
                 digit = i32((key32 >> u32(bit_start)) & u32(RADIX_DIGITS - 1))
-                atomic_add(hist[digit], i32(1))
             else:
                 key64 = bit_cast(keys[i], u64)
                 digit = i32((key64 >> u64(bit_start)) & u64(RADIX_DIGITS - 1))
-                atomic_add(hist[digit], i32(1))
+        atomic_add(hist[digit], i32(1))
         _block.sync()
-        if tid < RADIX_DIGITS:
-            scratch[tid * num_blocks + block_id] = bit_cast(hist[tid], u32)
+        scratch[tid * num_blocks + block_id] = bit_cast(hist[tid], u32)
 
 
 @_func
