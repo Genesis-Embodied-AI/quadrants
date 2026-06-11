@@ -645,7 +645,7 @@ class Kernel(FuncBase):
             if self.graph_do_while_arg is not None and hasattr(self, "_graph_do_while_cpp_arg_id"):
                 launch_ctx.graph_do_while_arg_id = self._graph_do_while_cpp_arg_id
             if self.checkpoint_yield_on_args and hasattr(self, "_checkpoint_yield_on_cpp_arg_ids"):
-                launch_ctx.checkpoint_yield_on_arg_ids = self._checkpoint_yield_on_cpp_arg_ids
+                launch_ctx.checkpoint_yield_on_arg_ids = tuple(self._checkpoint_yield_on_cpp_arg_ids)
             # `_resume_from_checkpoint` is `None` for fresh launches (host-side default 0 in
             # `LaunchContextBuilder`, which means "run every checkpoint"). When `Kernel.resume`
             # plumbs an int through, copy it onto the launch ctx so the GraphManager's
@@ -826,14 +826,28 @@ class Kernel(FuncBase):
         kernel_cpp = self.materialized_kernels[key]
         compiled_kernel_data = self.compiled_kernel_data_by_key.get(key, None)
         self.launch_observations.found_kernel_in_materialize_cache = compiled_kernel_data is not None
-        ret = self.launch_kernel(
-            key,
-            kernel_cpp,
-            compiled_kernel_data,
-            *py_args,
-            qd_stream=qd_stream,
-            _resume_from_checkpoint=_resume_from_checkpoint,
-        )
+        # Only forward `_resume_from_checkpoint` when the caller actually supplied one
+        # (i.e. via `Kernel.resume(...)`). Otherwise omit the kwarg entirely so subclasses /
+        # monkeypatches of `launch_kernel` that pre-date this kwarg keep working unmodified.
+        # The host-side default in `LaunchContextBuilder` is 0 ("run every checkpoint"), which
+        # matches the `None` semantics in `launch_kernel`.
+        if _resume_from_checkpoint is None:
+            ret = self.launch_kernel(
+                key,
+                kernel_cpp,
+                compiled_kernel_data,
+                *py_args,
+                qd_stream=qd_stream,
+            )
+        else:
+            ret = self.launch_kernel(
+                key,
+                kernel_cpp,
+                compiled_kernel_data,
+                *py_args,
+                qd_stream=qd_stream,
+                _resume_from_checkpoint=_resume_from_checkpoint,
+            )
         if compiled_kernel_data is None:
             assert self._last_compiled_kernel_data is not None
             self.compiled_kernel_data_by_key[key] = self._last_compiled_kernel_data

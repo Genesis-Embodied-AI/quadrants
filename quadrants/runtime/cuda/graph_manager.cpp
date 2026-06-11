@@ -666,11 +666,11 @@ bool GraphManager::try_launch(int launch_id,
                            &cached.yield_signal_dev_ptr, &cached.resume_point_dev_ptr};
     if (use_pre_hopper_flat_graph) {
       prev_outer = add_kernel_node(kernel_target_graph, prev_outer, yield_check_kernel_func_,
-                                   /*grid=*/1, /*block=*/1, /*smem=*/0, yield_args);
+                                   /*grid_dim=*/1, /*block_dim=*/1, /*shared_mem=*/0, yield_args);
     } else {
       QD_ASSERT(current_body_graph);
       prev_inner = add_kernel_node(current_body_graph, prev_inner, yield_check_kernel_func_,
-                                   /*grid=*/1, /*block=*/1, /*smem=*/0, yield_args);
+                                   /*grid_dim=*/1, /*block_dim=*/1, /*shared_mem=*/0, yield_args);
     }
     ++total_nodes;
   };
@@ -710,7 +710,7 @@ bool GraphManager::try_launch(int launch_id,
           // 2. Gate kernel BEFORE the IF: writes (cp_id_val >= *resume_point) into the handle.
           void *gate_args[3] = {&if_handle, &cp_id_val, &cached.resume_point_dev_ptr};
           prev_outer = add_kernel_node(kernel_target_graph, prev_outer, gate_kernel_func_,
-                                       /*grid=*/1, /*block=*/1, /*smem=*/0, gate_args);
+                                       /*grid_dim=*/1, /*block_dim=*/1, /*shared_mem=*/0, gate_args);
           ++total_nodes;
           // 3. IF conditional node depending on the gate.
           GraphNodeParams cond_node_params{};
