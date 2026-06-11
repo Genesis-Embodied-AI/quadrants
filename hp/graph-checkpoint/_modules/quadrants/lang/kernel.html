@@ -385,6 +385,7 @@
     <span class="n">QuadrantsSyntaxError</span><span class="p">,</span>
     <span class="n">handle_exception_from_cpp</span><span class="p">,</span>
 <span class="p">)</span>
+
 <span class="c1"># `GraphStatus` is the host-facing return type for kernels that contain</span>
 <span class="c1"># `qd.checkpoint(yield_on=...)`. Imported from the dedicated `graph_status` module rather than</span>
 <span class="c1"># from `misc` to avoid a `kernel -&gt; misc -&gt; impl -&gt; kernel` circular import.</span>
@@ -1269,7 +1270,11 @@
         <span class="n">compiled_kernel_data</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">compiled_kernel_data_by_key</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">launch_observations</span><span class="o">.</span><span class="n">found_kernel_in_materialize_cache</span> <span class="o">=</span> <span class="n">compiled_kernel_data</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
         <span class="n">ret</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">launch_kernel</span><span class="p">(</span>
-            <span class="n">key</span><span class="p">,</span> <span class="n">kernel_cpp</span><span class="p">,</span> <span class="n">compiled_kernel_data</span><span class="p">,</span> <span class="o">*</span><span class="n">py_args</span><span class="p">,</span> <span class="n">qd_stream</span><span class="o">=</span><span class="n">qd_stream</span><span class="p">,</span>
+            <span class="n">key</span><span class="p">,</span>
+            <span class="n">kernel_cpp</span><span class="p">,</span>
+            <span class="n">compiled_kernel_data</span><span class="p">,</span>
+            <span class="o">*</span><span class="n">py_args</span><span class="p">,</span>
+            <span class="n">qd_stream</span><span class="o">=</span><span class="n">qd_stream</span><span class="p">,</span>
             <span class="n">_resume_from_checkpoint</span><span class="o">=</span><span class="n">_resume_from_checkpoint</span><span class="p">,</span>
         <span class="p">)</span>
         <span class="k">if</span> <span class="n">compiled_kernel_data</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>

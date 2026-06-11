@@ -2180,6 +2180,41 @@
                     <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">kernel</span><span class="o">.</span><span class="n">func</span><span class="o">.</span><span class="vm">__name__</span><span class="si">!r}</span><span class="s2">. Available parameters: </span><span class="si">{</span><span class="n">arg_names</span><span class="si">}</span><span class="s2">&quot;</span>
                 <span class="p">)</span>
 
+        <span class="c1"># Auto-wrap bare top-level statements in the checkpoint body in a one-iteration</span>
+        <span class="c1"># `for` loop. The offloader&#39;s pending-serial bucket loses the surrounding</span>
+        <span class="c1"># `checkpoint_id` and emits such statements as `serial` tasks with `cp_id == -1`,</span>
+        <span class="c1"># meaning they would run unconditionally even when the checkpoint is skipped -- a</span>
+        <span class="c1"># silent correctness bug. The fix is to lower them as `range_for` tasks instead by</span>
+        <span class="c1"># wrapping each bare statement in `for _ in range(1): &lt;stmt&gt;`. We target the specific</span>
+        <span class="c1"># statement kinds known to hit the footgun (Assign / AugAssign / AnnAssign /</span>
+        <span class="c1"># non-docstring Expr) and leave everything else (For, While, If, With, Pass,</span>
+        <span class="c1"># docstring) untouched so they keep working transparently; nested</span>
+        <span class="c1"># `with qd.checkpoint(...)` in particular still falls through to the existing</span>
+        <span class="c1"># nested-checkpoint check at the start of this method.</span>
+        <span class="n">new_body</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">ast</span><span class="o">.</span><span class="n">stmt</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">stmt</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">body</span><span class="p">):</span>
+            <span class="n">needs_wrap</span> <span class="o">=</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">stmt</span><span class="p">,</span> <span class="p">(</span><span class="n">ast</span><span class="o">.</span><span class="n">Assign</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">AugAssign</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">AnnAssign</span><span class="p">))</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">needs_wrap</span> <span class="ow">and</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">stmt</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Expr</span><span class="p">):</span>
+                <span class="n">is_docstring</span> <span class="o">=</span> <span class="n">i</span> <span class="o">==</span> <span class="mi">0</span> <span class="ow">and</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">stmt</span><span class="o">.</span><span class="n">value</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Constant</span><span class="p">)</span>
+                <span class="n">needs_wrap</span> <span class="o">=</span> <span class="ow">not</span> <span class="n">is_docstring</span>
+            <span class="k">if</span> <span class="n">needs_wrap</span><span class="p">:</span>
+                <span class="n">wrapped</span> <span class="o">=</span> <span class="n">ast</span><span class="o">.</span><span class="n">For</span><span class="p">(</span>
+                    <span class="n">target</span><span class="o">=</span><span class="n">ast</span><span class="o">.</span><span class="n">Name</span><span class="p">(</span><span class="nb">id</span><span class="o">=</span><span class="s2">&quot;_&quot;</span><span class="p">,</span> <span class="n">ctx</span><span class="o">=</span><span class="n">ast</span><span class="o">.</span><span class="n">Store</span><span class="p">()),</span>
+                    <span class="nb">iter</span><span class="o">=</span><span class="n">ast</span><span class="o">.</span><span class="n">Call</span><span class="p">(</span>
+                        <span class="n">func</span><span class="o">=</span><span class="n">ast</span><span class="o">.</span><span class="n">Name</span><span class="p">(</span><span class="nb">id</span><span class="o">=</span><span class="s2">&quot;range&quot;</span><span class="p">,</span> <span class="n">ctx</span><span class="o">=</span><span class="n">ast</span><span class="o">.</span><span class="n">Load</span><span class="p">()),</span>
+                        <span class="n">args</span><span class="o">=</span><span class="p">[</span><span class="n">ast</span><span class="o">.</span><span class="n">Constant</span><span class="p">(</span><span class="n">value</span><span class="o">=</span><span class="mi">1</span><span class="p">)],</span>
+                        <span class="n">keywords</span><span class="o">=</span><span class="p">[],</span>
+                    <span class="p">),</span>
+                    <span class="n">body</span><span class="o">=</span><span class="p">[</span><span class="n">stmt</span><span class="p">],</span>
+                    <span class="n">orelse</span><span class="o">=</span><span class="p">[],</span>
+                <span class="p">)</span>
+                <span class="n">ast</span><span class="o">.</span><span class="n">copy_location</span><span class="p">(</span><span class="n">wrapped</span><span class="p">,</span> <span class="n">stmt</span><span class="p">)</span>
+                <span class="n">ast</span><span class="o">.</span><span class="n">fix_missing_locations</span><span class="p">(</span><span class="n">wrapped</span><span class="p">)</span>
+                <span class="n">new_body</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">wrapped</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">new_body</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">stmt</span><span class="p">)</span>
+        <span class="n">node</span><span class="o">.</span><span class="n">body</span> <span class="o">=</span> <span class="n">new_body</span>
+
         <span class="n">kernel</span><span class="o">.</span><span class="n">checkpoint_yield_on_args</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">yield_on_name</span><span class="p">)</span>
         <span class="c1"># Hand control to the C++ ASTBuilder so that every for-loop emitted by `build_stmts`</span>
         <span class="c1"># below is tagged with this checkpoint&#39;s `cp_id` on its `ForLoopConfig.checkpoint_id`.</span>
