@@ -23,9 +23,8 @@ device scan). The scratch is *always* u32 regardless of the element dtype, becau
 flags-as-counts (i32) which always fit in u32; the element dtype only shows up at scatter time as
 ``dst[idx] = src[i]``, which lowers per-field for struct dtypes without any scratch reinterpretation.
 
-This is why ``select`` works on any element dtype Quadrants supports for field assignment - scalars
-(``i32`` / ``u32`` / ``f32`` / ``i64`` / ``u64`` / ``f64``) and structs (libuipc ``Vector{2,3,4}i``,
-``LinearBVHAABB``, etc.).
+This is why ``select`` works on any element dtype Quadrants supports for field assignment - scalars (``i32`` / ``u32`` /
+``f32`` / ``i64`` / ``u64`` / ``f64``) and structs (libuipc ``Vector{2,3,4}i``, ``LinearBVHAABB``, etc.).
 
 **Scratch.** ``select`` needs a **caller-owned** 1-D ``u32`` scratch buffer of
 :func:`select_scratch_slots` ``(N)`` slots (the per-element indices ``scratch[0:N]`` plus the scan partials
@@ -42,8 +41,8 @@ from quadrants.types.annotations import template
 from quadrants.types.primitive_types import i32, u32
 
 from ._reduce import (
-    BLOCK_DIM,
     _OP_ADD,
+    BLOCK_DIM,
     _reduce_depth_for_n,
     _reduce_phase,
     _validate_caller_scratch,
@@ -118,7 +117,9 @@ def _emit_select_scan(flags, scratch, n, LOG256_MAX_N):
     part_off = n  # indices occupy scratch[0:n]; the level-0 partials start right above them
     _reduce_phase(flags, scratch, 0, part_off, n, B0 * BLOCK_DIM, i32, u32, _OP_ADD, _bin_add, False, True)
     _emit_scan_inplace(scratch, part_off, B0, LOG256_MAX_N - 2, i32, u32, _OP_ADD, _bin_add)
-    _scan_downsweep_phase(flags, scratch, scratch, 0, part_off, 0, n, B0 * BLOCK_DIM, i32, u32, _OP_ADD, _bin_add, False, True)
+    _scan_downsweep_phase(
+        flags, scratch, scratch, 0, part_off, 0, n, B0 * BLOCK_DIM, i32, u32, _OP_ADD, _bin_add, False, True
+    )
 
 
 @_func
@@ -199,8 +200,8 @@ def select(arr, flags, out, num_out, scratch):
         scratch: caller-owned 1-D ``u32`` workspace of :func:`select_scratch_slots` ``(N)`` slots. There is no
             module-level shared scratch; a too-small buffer raises :class:`InsufficientScratchError`.
 
-    Same async / no-implicit-sync contract as ``reduce_*`` and ``exclusive_scan_*``: ``num_out`` is a
-    tensor, not a Python scalar - call ``num_out.to_numpy()[0]`` explicitly to get the count host-side.
+    Same async / no-implicit-sync contract as ``reduce_*`` and ``exclusive_scan_*``: ``num_out`` is a tensor, not a
+    Python scalar - call ``num_out.to_numpy()[0]`` explicitly to get the count host-side.
 
     See the design doc at ``perso_hugh/doc/qipc/qipc_device_algos_design.md`` for the scratch-into-indices layout and
     the algorithm reference.

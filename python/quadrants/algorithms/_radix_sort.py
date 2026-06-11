@@ -58,13 +58,13 @@ fallback - the caller always owns the buffer (graph- / multi-stream-safe, no glo
 DtoH would defeat graph capture), so size ``scratch`` correctly up front when composing the func directly.
 """
 
+from quadrants._tensor_wrapper import Tensor
 from quadrants.lang.impl import ndarray, static
 from quadrants.lang.kernel_impl import func as _func
 from quadrants.lang.kernel_impl import kernel
 from quadrants.lang.misc import loop_config
 from quadrants.lang.ops import atomic_add, bit_cast
 from quadrants.lang.simt import block as _block
-from quadrants._tensor_wrapper import Tensor
 from quadrants.types import ndarray as ndarray_ann
 from quadrants.types.annotations import template
 from quadrants.types.primitive_types import f32, f64, i32, i64, u32, u64
@@ -238,8 +238,21 @@ def _radix_scatter(
                     values_out[dst] = values_in[i]
 
 
-def _emit_pass(keys, tmp_keys, values, tmp_values, scratch, n, num_blocks, hist_len, p, KEY_DTYPE, HAS_VALUES,
-               KEY_WIDTH, LOG256_MAX_N):
+def _emit_pass(
+    keys,
+    tmp_keys,
+    values,
+    tmp_values,
+    scratch,
+    n,
+    num_blocks,
+    hist_len,
+    p,
+    KEY_DTYPE,
+    HAS_VALUES,
+    KEY_WIDTH,
+    LOG256_MAX_N,
+):
     """Emit one digit pass (histogram -> scan staircase -> scatter) at compile time.
 
     Pure-Python (runs during kernel compilation): ``p`` is a Python int from the static pass loop, so the src/dst
@@ -278,20 +291,20 @@ def radix_sort_func(
     Call it at the **top level** of your own ``@qd.kernel`` (e.g. :func:`radix_sort` below, or a qipc ``graph=True``
     parent that chains it with other phases). Each phase helper's single top-level ``for`` stays its own offloaded GPU
     launch, so the inter-phase grid-wide synchronization survives and every phase is captured as a node in the parent's
-    graph. **A ``while qd.graph_do_while(...):`` body counts as top level** - the loops directly inside it still lower as
-    separate offloaded launches with grid-wide barriers between them, so calling this func directly in a
+    graph. **A ``while qd.graph_do_while(...):`` body counts as top level** - the loops directly inside it still lower
+    as separate offloaded launches with grid-wide barriers between them, so calling this func directly in a
     ``graph_do_while`` body is supported and re-sorts correctly every iteration (verified for ``n`` spanning many
     blocks). What you **must not** do is nest the call inside *ordinary* runtime control flow - another ``for``, an
     ``if``, or a plain ``while`` - which demotes the phase loops out of top-level position, collapses the per-phase
     grid-wide barriers and corrupts the sort. Compile-time ``static`` loops (like the pass loop here) are also fine.
 
-    Compile-time params: ``KEY_DTYPE`` (the key element dtype, one of ``{u32, i32, f32, u64, i64, f64}``), ``HAS_VALUES``
-    (whether ``values`` / ``tmp_values`` are real buffers or placeholders), ``END_BIT`` (low key bits to sort - positive
-    even multiple of ``8``, ``<=`` key width), and ``LOG256_MAX_N`` (scan depth ``D``; the emitted sort handles any
-    count ``<= 256 ** D``). The width, pass count and twiddle need are derived from ``KEY_DTYPE`` + ``END_BIT`` at
-    compile time. ``KEY_DTYPE`` is an explicit param because an ``ndarray`` kernel argument (the qipc path) exposes no
-    ``.dtype`` inside the kernel - pass the dtype you already know (the :func:`radix_sort` wrapper derives it from its
-    field / ndarray argument for you).
+    Compile-time params: ``KEY_DTYPE`` (the key element dtype, one of ``{u32, i32, f32, u64, i64, f64}``),
+    ``HAS_VALUES`` (whether ``values`` / ``tmp_values`` are real buffers or placeholders), ``END_BIT`` (low key bits to
+    sort - positive even multiple of ``8``, ``<=`` key width), and ``LOG256_MAX_N`` (scan depth ``D``; the emitted sort
+    handles any count ``<= 256 ** D``). The width, pass count and twiddle need are derived from ``KEY_DTYPE`` +
+    ``END_BIT`` at compile time. ``KEY_DTYPE`` is an explicit param because an ``ndarray`` kernel argument (the qipc
+    path) exposes no ``.dtype`` inside the kernel - pass the dtype you already know (the :func:`radix_sort` wrapper
+    derives it from its field / ndarray argument for you).
 
     ``n`` is a 0-d ``i32`` ndarray handle read once as ``n[()]``; ``num_blocks`` / ``hist_len`` are derived on-device.
     The pass loop and scan staircase are statically unrolled, so the launch topology is fixed regardless of ``n``;
@@ -309,8 +322,21 @@ def radix_sort_func(
     if static(NEEDS_TWIDDLE):
         _radix_twiddle(keys, count, KEY_DTYPE, KEY_WIDTH, True)
     for p in static(range(NUM_PASSES)):
-        _emit_pass(keys, tmp_keys, values, tmp_values, scratch, count, num_blocks, hist_len, p, KEY_DTYPE, HAS_VALUES,
-                   KEY_WIDTH, LOG256_MAX_N)
+        _emit_pass(
+            keys,
+            tmp_keys,
+            values,
+            tmp_values,
+            scratch,
+            count,
+            num_blocks,
+            hist_len,
+            p,
+            KEY_DTYPE,
+            HAS_VALUES,
+            KEY_WIDTH,
+            LOG256_MAX_N,
+        )
     if static(NEEDS_TWIDDLE):
         _radix_twiddle(keys, count, KEY_DTYPE, KEY_WIDTH, False)
 
@@ -376,10 +402,19 @@ def _validate_radix_inputs(keys, tmp_keys, values, tmp_values, end_bit):
         if values is tmp_values:
             raise ValueError("radix_sort needs a distinct tmp_values buffer; got values is tmp_values")
     if end_bit is not None:
-        if end_bit <= 0 or end_bit % RADIX_BITS != 0 or end_bit > _key_width_bits(keys.dtype):
+        width = _key_width_bits(keys.dtype)
+        if end_bit <= 0 or end_bit % RADIX_BITS != 0 or end_bit > width:
             raise ValueError(
                 f"radix_sort end_bit must be a positive multiple of {RADIX_BITS} and <= the key width "
-                f"({_key_width_bits(keys.dtype)} bits); got {end_bit}"
+                f"({width} bits); got {end_bit}"
+            )
+        # The pass loop ping-pongs keys <-> tmp_keys, so an even pass count is required for the sorted result
+        # (and the final untwiddle) to land back in keys; an odd count would leave it in tmp_keys.
+        if (end_bit // RADIX_BITS) % 2 != 0:
+            raise ValueError(
+                f"radix_sort needs an even number of {RADIX_BITS}-bit digit passes so the in-place ping-pong lands "
+                f"back in keys; end_bit={end_bit} gives {end_bit // RADIX_BITS} pass(es). Use a multiple of "
+                f"{2 * RADIX_BITS} bits."
             )
 
 
@@ -400,7 +435,8 @@ def radix_sort(keys, tmp_keys, scratch, *, values=None, tmp_values=None, end_bit
             :class:`InsufficientScratchError`.
         values / tmp_values: optional parallel payload tensors (same shape as ``keys``); pass **both** to sort
             key-value pairs, or neither for keys-only. Permuted in lock-step with the keys.
-        end_bit: low key bits to sort - a positive multiple of 8, ``<=`` the key width. Defaults to the full key width.
+        end_bit: low key bits to sort - a positive multiple of 16 (an even number of 8-bit digit passes, so the
+            in-place ping-pong lands back in ``keys``), ``<=`` the key width. Defaults to the full key width.
         log256_max_n: scan depth ``D`` (the emitted sort handles any count ``<= 256 ** D``). Defaults to the minimal
             depth for ``N`` (see ``n``). Pass an explicit ``D`` (sized against a provisioned upper bound) to keep a
             fixed launch topology across calls with varying counts; size ``scratch`` with the same ``D``.

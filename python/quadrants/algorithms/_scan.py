@@ -29,26 +29,27 @@ The ``PrefixSumExecutor`` class in ``_algorithms.py`` predates this work; it is 
 functional API is preferred for new code - see ``docs/source/user_guide/algorithms.md``.
 """
 
+from quadrants._tensor_wrapper import Tensor
 from quadrants.lang.impl import static
 from quadrants.lang.kernel_impl import func as _func
 from quadrants.lang.kernel_impl import kernel
 from quadrants.lang.misc import loop_config
 from quadrants.lang.ops import bit_cast
 from quadrants.lang.simt import block as _block
-from quadrants.lang.simt.reductions import _bin_add, _typed_max_identity, _typed_min_identity
-from quadrants._tensor_wrapper import Tensor
+from quadrants.lang.simt.reductions import (
+    _bin_add,
+    _typed_max_identity,
+    _typed_min_identity,
+)
 from quadrants.types.annotations import template
 from quadrants.types.primitive_types import i32, u32, u64
 
 from ._reduce import (
-    _SUPPORTED_DTYPES as _REDUCE_SUPPORTED_DTYPES,
-)
-from ._reduce import (
-    BLOCK_DIM,
     _OP_ADD,
     _OP_BINS,
     _OP_MAX,
     _OP_MIN,
+    BLOCK_DIM,
     _dtype_width_bytes,
     _level_partials_slots,
     _reduce_depth_for_n,
@@ -58,6 +59,9 @@ from ._reduce import (
     _scratch_dtype_for_width,
     _typed_zero_expr,
     _validate_caller_scratch,
+)
+from ._reduce import (
+    _SUPPORTED_DTYPES as _REDUCE_SUPPORTED_DTYPES,
 )
 
 _SUPPORTED_DTYPES = _REDUCE_SUPPORTED_DTYPES  # {i32, u32, f32, i64, u64, f64}
@@ -518,7 +522,8 @@ def exclusive_scan_min_func(
     arr: template(), out: template(), scratch: template(), n: i32, DTYPE: template(), LOG256_MAX_N: template()
 ):
     """Graph-composable ``out[i] = min(arr[0:i])`` (identity ``+extremum`` from ``DTYPE``) - the @qd.func form of
-    :func:`exclusive_scan_min`. See :func:`exclusive_scan_add_func` for the top-level-call contract and arg semantics."""
+    :func:`exclusive_scan_min`. See :func:`exclusive_scan_add_func` for the top-level-call contract and arg
+    semantics."""
     WIDE = _scratch_dtype_for_width(_dtype_width_bytes(DTYPE))
     _emit_scan(arr, out, scratch, n, LOG256_MAX_N, DTYPE, WIDE, _OP_MIN)
 
@@ -528,7 +533,8 @@ def exclusive_scan_max_func(
     arr: template(), out: template(), scratch: template(), n: i32, DTYPE: template(), LOG256_MAX_N: template()
 ):
     """Graph-composable ``out[i] = max(arr[0:i])`` (identity ``-extremum`` from ``DTYPE``) - the @qd.func form of
-    :func:`exclusive_scan_max`. See :func:`exclusive_scan_add_func` for the top-level-call contract and arg semantics."""
+    :func:`exclusive_scan_max`. See :func:`exclusive_scan_add_func` for the top-level-call contract and arg
+    semantics."""
     WIDE = _scratch_dtype_for_width(_dtype_width_bytes(DTYPE))
     _emit_scan(arr, out, scratch, n, LOG256_MAX_N, DTYPE, WIDE, _OP_MAX)
 
@@ -556,7 +562,8 @@ def _exclusive_scan_kernel(
 
 
 def _exclusive_scan_host(arr, *, out, scratch, OP, n=None):
-    """Shared host entry for ``exclusive_scan_{add,min,max}``: validate, size, and launch :func:`_exclusive_scan_kernel`.
+    """Shared host entry for ``exclusive_scan_{add,min,max}``: validate, size, and launch
+    :func:`_exclusive_scan_kernel`.
 
     Keeps the friendly host contract (dtype / shape / no-in-place / scratch validation up front, depth + ``N`` derived
     from ``arr.shape`` or the explicit ``n``) while the device work is the single-launch graph-composable staircase.
@@ -652,8 +659,8 @@ def exclusive_scan_max(arr, out, scratch, *, n=None):
 # The host-launched ``exclusive_scan_{add,min,max}`` above branch on ``N = arr.shape[0]`` on the *host* and launch
 # ``template()`` kernels, so they cannot be composed at the top level of a ``@qd.kernel(graph=True)`` parent driven by a
 # device-resident count. This block is the graph-composable building block they lack: a fixed-depth staircase of
-# ``@qd.func`` phases (``u32`` / add, in place) emitted at kernel-compile time, so ``n`` flows as a device ``Expr`` while
-# the recursion depth is a compile-time Python int (constant launch topology). ``radix_sort`` reuses it for its
+# ``@qd.func`` phases (``u32`` / add, in place) emitted at kernel-compile time, so ``n`` flows as a device ``Expr``
+# while the recursion depth is a compile-time Python int (constant launch topology). ``radix_sort`` reuses it for its
 # digit-histogram scan; it is kept private until a public graph-composable scan entry point lands. See
 # ``perso_hugh/doc/qipc/qipc_device_algos_design.md``.
 

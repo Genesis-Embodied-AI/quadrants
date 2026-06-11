@@ -339,9 +339,9 @@ def _reduce_pass_u64(
 # The friendly host entries ``reduce_{add,min,max}`` below validate + size on the host and launch ``_reduce_kernel``
 # (one launch; the staircase is emitted *inside* the kernel). The ``reduce_{add,min,max}_func`` @qd.func forms are the
 # graph-composable counterparts (the exact pattern ``radix_sort_func`` uses): call them at the **top level** of your own
-# ``@qd.kernel`` (e.g. a qipc ``graph=True`` parent), passing the live count ``n`` as a device ``Expr`` and the recursion
-# depth as a compile-time ``LOG256_MAX_N``. ``n`` flows dynamically while ``LOG256_MAX_N`` fixes the launch topology, so
-# one captured graph serves every count ``<= BLOCK_DIM ** LOG256_MAX_N``. Same op-tree, identity, and
+# ``@qd.kernel`` (e.g. a qipc ``graph=True`` parent), passing the live count ``n`` as a device ``Expr`` and the
+# recursion depth as a compile-time ``LOG256_MAX_N``. ``n`` flows dynamically while ``LOG256_MAX_N`` fixes the launch
+# topology, so one captured graph serves every count ``<= BLOCK_DIM ** LOG256_MAX_N``. Same op-tree, identity, and
 # ``bit_cast``-into-scratch staging as the old host driver - see ``perso_hugh/doc/qipc/qipc_device_algos_design.md``.
 
 _OP_ADD = 0
@@ -416,11 +416,12 @@ def _reduce_phase(
     ``_bin_*`` binary op).
 
     ``@qd.func`` phase of :func:`_emit_reduce` - its single top-level ``for`` becomes its own offloaded GPU launch (and
-    graph node) when inlined into a kernel. ``SRC_WIDE`` / ``DST_WIDE`` switch between the ``qd.bit_cast``-through-``WIDE``
-    (``u32`` / ``u64``) scratch path and the direct caller-tensor path (the input on the first phase, ``out`` on the
-    last). Out-of-range lanes contribute the ``OP`` identity (``0`` / ``+extremum`` / ``-extremum``), derived in-kernel
-    from ``DTYPE`` so no runtime identity arg is needed. ``v`` is initialised to that identity *before* any branch
-    (Quadrants requires a variable's first assignment at the outer scope; later ``if`` branches only reassign it).
+    graph node) when inlined into a kernel. ``SRC_WIDE`` / ``DST_WIDE`` switch between the
+    ``qd.bit_cast``-through-``WIDE`` (``u32`` / ``u64``) scratch path and the direct caller-tensor path (the input on
+    the first phase, ``out`` on the last). Out-of-range lanes contribute the ``OP`` identity (``0`` / ``+extremum`` /
+    ``-extremum``), derived in-kernel from ``DTYPE`` so no runtime identity arg is needed. ``v`` is initialised to that
+    identity *before* any branch (Quadrants requires a variable's first assignment at the outer scope; later ``if``
+    branches only reassign it).
     """
     loop_config(block_dim=BLOCK_DIM)
     for i in range(total_threads):
