@@ -54,14 +54,6 @@ Module Contents
       Returns the shape of this view as a tuple, e.g. ``(16,)``.
 
 
-   .. py:property:: dtype
-
-      Element dtype of the backing ndarray (a view shares its array's dtype).
-
-      Lets a host-constructed view be passed wherever an ndarray's ``.dtype`` is read - e.g. the
-      ``qd.algorithms.*`` host entries that derive their compile-time element type from the buffer argument.
-
-
    .. py:method:: subview(offset, size)
 
       Create a sub-range view within this view, with bounds checking.

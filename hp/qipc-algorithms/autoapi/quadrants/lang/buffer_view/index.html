@@ -420,14 +420,6 @@
 <dd><p>Returns the shape of this view as a tuple, e.g. <code class="docutils literal notranslate"><span class="pre">(16,)</span></code>.</p>
 </dd></dl>
 
-<dl class="py property">
-<dt class="sig sig-object py" id="quadrants.lang.buffer_view.BufferView.dtype">
-<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">dtype</span></span><a class="reference internal" href="../../../../_modules/quadrants/lang/buffer_view.html#BufferView.dtype"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.buffer_view.BufferView.dtype" title="Link to this definition">#</a></dt>
-<dd><p>Element dtype of the backing ndarray (a view shares its array’s dtype).</p>
-<p>Lets a host-constructed view be passed wherever an ndarray’s <code class="docutils literal notranslate"><span class="pre">.dtype</span></code> is read - e.g. the
-<code class="docutils literal notranslate"><span class="pre">qd.algorithms.*</span></code> host entries that derive their compile-time element type from the buffer argument.</p>
-</dd></dl>
-
 <dl class="py method">
 <dt class="sig sig-object py" id="quadrants.lang.buffer_view.BufferView.subview">
 <span class="sig-name descname"><span class="pre">subview</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">offset</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">size</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/buffer_view.html#BufferView.subview"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.buffer_view.BufferView.subview" title="Link to this definition">#</a></dt>
@@ -509,7 +501,6 @@
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.buffer_view.BufferView.offset"><code class="docutils literal notranslate"><span class="pre">BufferView.offset</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.buffer_view.BufferView.size"><code class="docutils literal notranslate"><span class="pre">BufferView.size</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.buffer_view.BufferView.shape"><code class="docutils literal notranslate"><span class="pre">BufferView.shape</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.buffer_view.BufferView.dtype"><code class="docutils literal notranslate"><span class="pre">BufferView.dtype</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.buffer_view.BufferView.subview"><code class="docutils literal notranslate"><span class="pre">BufferView.subview()</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.buffer_view.BufferView.subscript"><code class="docutils literal notranslate"><span class="pre">BufferView.subscript()</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.buffer_view.BufferView.get_ndarray"><code class="docutils literal notranslate"><span class="pre">BufferView.get_ndarray()</span></code></a></li>
