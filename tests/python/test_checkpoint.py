@@ -339,6 +339,40 @@ def test_checkpoint_for_loop_wrap_accepted():
 
 
 @test_utils.test()
+def test_checkpoint_yield_with_intervening_serial_task():
+    """Pin the fix for the offload-pass cp_id propagation: a yielding checkpoint whose body emits an intervening serial-
+    offloaded task (e.g., an auto-wrapped bare statement before a real for-loop, or a kernel-coverage probe inserted by
+    `_kernel_coverage.py`) must still yield AFTER the entire body has run -- not after the first task of the body.
+
+    Without the fix `transforms/offload.cpp` would tag the synthesized serial task with the default `cp_id=-1`, breaking
+    the contiguous run of `cp_id=N` tasks and confusing the launcher's "last task in cp" detection. The launcher /
+    graph-manager would then close the checkpoint after the first for-loop, fire the yield-check, set yield_signal, and
+    skip every subsequent task in the SAME checkpoint -- the body never finishes. This was the deterministic Linux x64
+    CI failure when `QD_KERNEL_COVERAGE=1` (the coverage probe injects the intervening bare statement).
+    """
+    if not _supports_checkpoint_yield_resume():
+        pytest.skip("yield with intervening serial requires CUDA-native IF or CPU host-branch gating")
+    N = 4
+
+    @qd.kernel(graph=True)
+    def k(x: qd.types.ndarray(qd.i32, ndim=1), flag: qd.types.ndarray(qd.i32, ndim=0)):
+        with qd.checkpoint(yield_on=flag):
+            x[0] = x[0] + 100  # bare assign -> auto-wrapped one-iter for-loop, then a synthesized serial prelude
+            for i in range(x.shape[0]):  # the second for-loop in the same cp must still run before the yield-check
+                x[i] = x[i] + 1
+
+    x = qd.ndarray(qd.i32, shape=(N,))
+    flag = qd.ndarray(qd.i32, shape=())
+    x.from_numpy(np.zeros(N, dtype=np.int32))
+    flag.from_numpy(np.array(1, dtype=np.int32))
+    k(x, flag)
+    # The full body must run: x[0] gets +100 (auto-wrapped) then +1 (real loop) = 101; x[1..3] get +1 each.
+    expected = np.array([101, 1, 1, 1], dtype=np.int32)
+    np.testing.assert_array_equal(x.to_numpy(), expected)
+    assert flag.to_numpy() == 0  # yield-check cleared the flag after the body ran
+
+
+@test_utils.test()
 def test_checkpoint_docstring_allowed():
     """A docstring at the top of a checkpoint body is allowed (it's a no-op `Expr(Constant)`)."""
     N = 4

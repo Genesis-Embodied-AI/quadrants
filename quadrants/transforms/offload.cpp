@@ -78,8 +78,22 @@ class Offloader {
     pending_serial_statements->grid_dim = 1;
     pending_serial_statements->block_dim = 1;
 
-    auto assemble_serial_statements = [&]() {
+    // Track the checkpoint_id of the most-recently emitted for-loop OffloadedStmt. When the next
+    // for-loop in the same checkpoint is emitted, any pending serial OffloadedStmt sandwiched
+    // between them inherits this cp_id (rather than the default -1) so the whole checkpoint body
+    // remains a single contiguous run of same-cp_id tasks at the launcher / graph-manager layer.
+    // Without this propagation, an intervening serial (e.g., an AST-coverage probe wrap or
+    // shape-extraction prelude for the next for-loop) breaks the run, causing the yield-check to
+    // fire mid-checkpoint and skip the rest of the body. The kernel prologue serial (before any
+    // for-loop in a checkpoint) keeps cp_id=-1 so a resume(from_checkpoint=N) launch still runs
+    // it.
+    int prev_for_checkpoint_id = -1;
+
+    auto assemble_serial_statements = [&](int next_checkpoint_id) {
       if (!pending_serial_statements->body->statements.empty()) {
+        if (prev_for_checkpoint_id >= 0 && next_checkpoint_id == prev_for_checkpoint_id) {
+          pending_serial_statements->checkpoint_id = prev_for_checkpoint_id;
+        }
         root_block->insert(std::move(pending_serial_statements));
         pending_serial_statements = Stmt::make_typed<OffloadedStmt>(OffloadedStmt::TaskType::serial, arch, kernel);
         pending_serial_statements->grid_dim = 1;
@@ -91,7 +105,7 @@ class Offloader {
       auto &stmt = root_statements[i];
       // Note that stmt->parent is root_block, which doesn't contain stmt now.
       if (auto s = stmt->cast<RangeForStmt>(); s && !s->strictly_serialized) {
-        assemble_serial_statements();
+        assemble_serial_statements(s->checkpoint_id);
         auto offloaded = Stmt::make_typed<OffloadedStmt>(OffloadedStmt::TaskType::range_for, arch, kernel);
         // offloaded->body is an empty block now.
         offloaded->grid_dim = config.saturating_grid_dim;
@@ -129,12 +143,14 @@ class Offloader {
         offloaded->stream_parallel_group_id = s->stream_parallel_group_id;
         offloaded->checkpoint_id = s->checkpoint_id;
         offloaded->loop_name = s->loop_name;
+        prev_for_checkpoint_id = s->checkpoint_id;
         root_block->insert(std::move(offloaded));
       } else if (auto st = stmt->cast<StructForStmt>()) {
-        assemble_serial_statements();
+        assemble_serial_statements(st->checkpoint_id);
         emit_struct_for(st, root_block, config, st->mem_access_opt);
+        prev_for_checkpoint_id = st->checkpoint_id;
       } else if (auto st = stmt->cast<MeshForStmt>()) {
-        assemble_serial_statements();
+        assemble_serial_statements(/*next_checkpoint_id=*/-1);
         auto offloaded = Stmt::make_typed<OffloadedStmt>(OffloadedStmt::TaskType::mesh_for, arch, kernel);
         offloaded->grid_dim = config.saturating_grid_dim;
         if (st->block_dim == 0) {
@@ -157,7 +173,7 @@ class Offloader {
         pending_serial_statements->body->insert(std::move(stmt));
       }
     }
-    assemble_serial_statements();
+    assemble_serial_statements(/*next_checkpoint_id=*/-1);
     return offloaded_ranges;
   }
 
