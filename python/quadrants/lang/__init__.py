@@ -35,6 +35,7 @@ __all__ = [
         "enums",
         "exception",
         "expr",
+        "graph_status",
         "impl",
         "inspect",
         "kernel_arguments",
