@@ -13,6 +13,7 @@ import pytest
 
 import quadrants as qd
 from quadrants.lang.exception import QuadrantsSyntaxError
+from quadrants.types.annotations import template
 
 from tests import test_utils
 
@@ -22,7 +23,7 @@ def test_top_level_call_is_allowed():
     """Calling a requires_top_level func directly at the kernel top level compiles and runs."""
 
     @qd.func(requires_top_level=True)
-    def bump(x, n):
+    def bump(x: template(), n):
         for i in range(n):
             x[i] = x[i] + 1
 
@@ -41,7 +42,7 @@ def test_static_loop_is_allowed():
     """A ``qd.static`` loop is compile-time unrolled, so the call stays top level and is allowed."""
 
     @qd.func(requires_top_level=True)
-    def bump(x, n):
+    def bump(x: template(), n):
         for i in range(n):
             x[i] = x[i] + 1
 
@@ -59,7 +60,7 @@ def test_static_loop_is_allowed():
 @test_utils.test(arch=qd.cpu)
 def test_nested_in_runtime_for_is_rejected():
     @qd.func(requires_top_level=True)
-    def bump(x, n):
+    def bump(x: template(), n):
         for i in range(n):
             x[i] = x[i] + 1
 
@@ -76,7 +77,7 @@ def test_nested_in_runtime_for_is_rejected():
 @test_utils.test(arch=qd.cpu)
 def test_nested_in_runtime_if_is_rejected():
     @qd.func(requires_top_level=True)
-    def bump(x, n):
+    def bump(x: template(), n):
         for i in range(n):
             x[i] = x[i] + 1
 
@@ -93,7 +94,7 @@ def test_nested_in_runtime_if_is_rejected():
 @test_utils.test(arch=qd.cpu)
 def test_nested_in_runtime_while_is_rejected():
     @qd.func(requires_top_level=True)
-    def bump(x, n):
+    def bump(x: template(), n):
         for i in range(n):
             x[i] = x[i] + 1
 
@@ -114,7 +115,7 @@ def test_unmarked_func_is_unaffected():
     """A plain ``@qd.func`` (the default) may still be nested in runtime control flow."""
 
     @qd.func
-    def bump(x, n):
+    def bump(x: template(), n):
         for i in range(n):
             x[i] = x[i] + 1
 
@@ -174,7 +175,7 @@ def test_graph_do_while_body_counts_as_top_level():
     directly inside it."""
 
     @qd.func(requires_top_level=True)
-    def bump(x, n):
+    def bump(x: template(), n):
         for i in range(n):
             x[i] = x[i] + 1
 
