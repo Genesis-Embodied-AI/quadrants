@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# errexit so setup commands (notably `pip install torch ...`) fail the step; run_phase is intentionally
-# non-aborting so pytest failures in one phase don't prevent later phases from running (see _run_test_phases.sh).
+# errexit so any failure -- a setup command (e.g. `pip install torch`) or a failing test phase -- fails the step
+# immediately.  Failing fast keeps attribution clear: the failing phase's pytest output is the last thing in the log.
 set -ex
 
 source "$(dirname "$0")/_run_test_phases.sh"
@@ -21,4 +21,3 @@ run_phase "kernel-coverage" env QD_KERNEL_COVERAGE=1 \
   python tests/run_tests.py -v -r 1 --arch cuda --coverage --cov-append test_kernel_coverage.py
 
 # Coverage data is combined/uploaded by the dedicated "Collect CUDA coverage" workflow step (if: always()).
-report_failed_phases

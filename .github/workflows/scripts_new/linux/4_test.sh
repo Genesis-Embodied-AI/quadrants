@@ -22,4 +22,3 @@ run_phase "no-coverage-extras" env QD_KERNEL_COVERAGE=0 \
   python tests/run_tests.py -v -r 3 -m "not needs_torch"
 
 # Coverage data is combined/uploaded by the dedicated "Collect CPU coverage" workflow step (if: always()).
-report_failed_phases
