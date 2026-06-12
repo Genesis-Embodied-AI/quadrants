@@ -126,8 +126,6 @@ N, D = 8, 1   # 8 elements; D = LOG256_MAX_N = 1 → capacity 256**1 = 256 ≥ N
 
 **Tensor polymorphism.** Every 1-D tensor argument is an `ndarray` kernel parameter, so it is polymorphic over `qd.field`, `qd.ndarray`, and `qd.Tensor`.
 
-**Output scalars are async.** Single-element outputs (`out`, `num_out`, `num_runs`) are caller-supplied, so the call stays fully asynchronous with no implicit device→host sync. To read one as a Python scalar, do e.g. `out.to_numpy()[0]` explicitly once the enclosing kernel has run; this keeps the host hop visible at the call site rather than hidden inside the algorithm.
-
 **Scalar dtypes & scratch width (`reduce` / `exclusive_scan`).** The element dtype is one of `{qd.i32, qd.u32, qd.f32, qd.i64, qd.u64, qd.f64}`; narrower / wider scalar dtypes (`qd.i16`, `qd.f16`, …) and struct dtypes raise `NotImplementedError`. 4-byte dtypes stage their partials through a `u32` scratch and 8-byte dtypes through a `u64` scratch (same slot count either way; see [Scratch space](#scratch-space)).
 
 **Identity value (`reduce` / `exclusive_scan`, min / max).** The *identity* is the value that leaves a result unchanged when combined under the op — `add` → `0`, `min` → the largest representable value, `max` → the smallest. It pads out-of-range lanes and seeds `exclusive_scan`'s `out[0]`. It is derived in-kernel from the element dtype, so there is no runtime identity argument (mirroring the `block.reduce_min` / `subgroup.reduce_min` typed wrappers): `0` for `add`; for `min`, `+inf` (floats) / `INT{32,64}_MAX` (signed ints) / `UINT{32,64}_MAX` (unsigned); for `max`, `-inf` (floats) / `INT{32,64}_MIN` (signed ints) / `0` (unsigned).
