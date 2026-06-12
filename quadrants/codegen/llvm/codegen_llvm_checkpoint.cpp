@@ -1,9 +1,9 @@
 #ifdef QD_WITH_LLVM
 // GPU-side `qd.checkpoint` gating prologue for the LLVM-IR-generating backends (CUDA / AMDGPU).
 //
-// Lives in its own translation unit so `codegen_llvm.cpp` doesn't have to grow per-feature.
-// Shared by `codegen_cuda.cpp` (pre-Hopper flat-graph path and the in-flight-yield safety net on
-// SM 9.0+) and `codegen_amdgpu.cpp` (flat HIP graph path; no conditional-graph-node API).
+// Lives in its own translation unit so `codegen_llvm.cpp` doesn't have to grow per-feature. Shared by
+// `codegen_cuda.cpp` (pre-Hopper flat-graph path and the in-flight-yield safety net on SM 9.0+) and
+// `codegen_amdgpu.cpp` (flat HIP graph path; no conditional-graph-node API).
 //
 // See `docs/source/user_guide/graph.md` for the user-facing surface and `perso_hugh/doc/qipc/reentrant.md` for the
 // design.
