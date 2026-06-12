@@ -284,6 +284,20 @@ class CallTransformer:
         func_type = type(func)
 
         is_func_base_wrapper = func_type in {QuadrantsCallable, BoundQuadrantsCallable}
+
+        # A ``@qd.func(requires_top_level=True)`` may only be called at the top level of a kernel (or
+        # directly inside a ``graph_do_while`` body). Nesting it in a runtime for / if / while demotes
+        # its phase loops out of top-level position, collapsing the per-phase grid-wide barriers and
+        # corrupting the result, so reject it here at trace time rather than miscompiling silently.
+        # ``qd.static`` (compile-time) loops do not set ``is_in_non_static_control_flow``.
+        if getattr(func, "_qd_requires_top_level", False) and ctx.is_in_non_static_control_flow():
+            func_name = getattr(func, "__name__", None) or "this @qd.func"
+            raise QuadrantsSyntaxError(
+                f"`{func_name}` is decorated with requires_top_level=True and must be called at the top "
+                f"level of a @qd.kernel (or directly inside a `while qd.graph_do_while(...)` body). It "
+                f"cannot be nested inside a runtime for / if / while: that demotes its phase loops out of "
+                f"top-level position, collapsing the per-phase grid-wide barriers and corrupting the result."
+            )
         pruning = ctx.global_context.pruning
         called_needed = None
         if pruning.enforcing and is_func_base_wrapper:
