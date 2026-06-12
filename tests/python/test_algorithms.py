@@ -569,9 +569,7 @@ def test_sort_composition(dtype, N):
     ):
         # Compile-time params (dtype / end_bit / depth) are captured Python constants, exactly as qipc's graph sort
         # bakes ``qd.u32, True, SORT_END_BIT, SORT_LOG256_MAX_N`` into ``sort``.
-        qd.algorithms.sort(
-            keys, tmp_keys, values, tmp_values, scratch, n, dtype, True, end_bit, log256_max_n
-        )
+        qd.algorithms.sort(keys, tmp_keys, values, tmp_values, scratch, n, dtype, True, end_bit, log256_max_n)
 
     keys = qd.ndarray(dtype, shape=(N,))
     tmp_keys = qd.ndarray(dtype, shape=(N,))
