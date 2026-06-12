@@ -95,8 +95,8 @@ Fastcache supports the following parameter types:
 | `qd.types.NDArray` (scalar, vector, matrix) | Yes | dtype, ndim, layout |
 | `torch.Tensor` | Yes | dtype, ndim |
 | `numpy.ndarray` | Yes | dtype, ndim |
-| `dataclasses.dataclass` | Yes | member types recursively; member values if annotated with `FIELD_METADATA_CACHE_VALUE` (see [Advanced — compound-type cache keying](#compound-type-cache-keying)) |
-| `@qd.data_oriented` objects | Yes | member types recursively, narrowed to only members accessed by the kernel (see [How the cache key is computed](#how-the-cache-key-is-computed)); primitive member types and values baked into kernel (see [Advanced — compound-type cache keying](#compound-type-cache-keying)) |
+| `dataclasses.dataclass` | Yes | member types recursively (narrowed to members the kernel reads or writes); member values if annotated with `FIELD_METADATA_CACHE_VALUE` (see [Advanced — compound-type cache keying](#compound-type-cache-keying)) |
+| `@qd.data_oriented` objects | Yes | member types recursively (narrowed to members the kernel reads or writes); primitive member types and values baked into kernel (see [Advanced — compound-type cache keying](#compound-type-cache-keying)) |
 | `qd.Template` primitives (int, float, bool) | Yes | type and value (baked into kernel) |
 | Non-template primitives (int, float, bool) | Yes | type only |
 | `enum.Enum` | Yes | name and value |
@@ -105,7 +105,7 @@ Fastcache supports the following parameter types:
 
 If any kernel-used parameter is of an unsupported type, fastcache is disabled for that call and the kernel falls back to normal compilation. For `qd.field` / `ScalarField` / `MatrixField` arriving through a `qd.Tensor`-annotated parameter, this is silent — no warning is emitted. For other unsupported types, a warning is logged at the `warn` level identifying the offending parameter.
 
-Kernel-unused members of any type — including unrecognised ones — do **not** disable fastcache. The args hasher skips them entirely, so opaque metadata (UUIDs, Pydantic configs, parent back-pointers) attached to a `@qd.data_oriented` instance is harmless as long as the kernel doesn't read it.
+Kernel-unused members of any type — including unrecognised ones — do **not** disable fastcache. Fastcache skips them entirely, so opaque metadata (UUIDs, Pydantic configs, parent back-pointers) attached to a `@qd.data_oriented` or `dataclasses.dataclass` instance is harmless as long as the kernel doesn't read it.
 
 ### 3. Source code must be available
 
@@ -123,20 +123,11 @@ Each compiled artifact is stored under a key derived from all of the following:
 
 When any of these change, the resulting key is different, so a new compilation occurs and a new entry is stored. Previous entries remain on disk — multiple cached versions coexist. You do not need to manually clear the cache when making code changes — the hash mismatch causes a transparent recompilation.
 
-### How the cache key is computed
-
-Fastcache uses a **two-level cache**:
-
-- **L1** (source + config only): identifies which kernel-arg variables the kernel actually reads or writes.
-- **L2** (L1 + narrow argument hash): stores the compiled artifact under a key that only hashes those variables.
-
-#### Two rules
-
-The args hasher enforces two strict invariants:
+### Two strict invariants
 
 1. **If the kernel does not read or write a variable, it is entirely ignored by fastcache.** It will not cause fastcache to fail, nor emit a warning, nor emit an error.
 
-2. **Unrecognised types at variables the kernel reads or writes must not be silently dropped or hashed by type-name.** If the value at such a variable has a type the args hasher doesn't explicitly handle (Pydantic models, UUIDs, third-party tensor wrappers, …), fastcache is disabled for the call with a one-shot `[FASTCACHE][UNKNOWN_TYPE]` warning identifying the offending type plus an `[INVALID_FUNC]` log line confirming the cache is off.
+2. **Unrecognised types at variables the kernel reads or writes must not be silently dropped or hashed by type-name.** If the value at such a variable has a type fastcache doesn't explicitly handle (Pydantic models, UUIDs, third-party tensor wrappers, …), fastcache is disabled for the call with a one-shot `[FASTCACHE][UNKNOWN_TYPE]` warning identifying the offending type plus an `[INVALID_FUNC]` log line confirming the cache is off.
 
 ## Advanced
 
@@ -163,28 +154,23 @@ On the first run you'll see `cache_stored=True` but `cache_loaded=False`. On the
 
 ### Compound-type cache keying
 
-The args hasher walks compound-type kernel parameters recursively. For each leaf member it decides what (if anything) contributes to the cache key. The headline rules:
+For `@qd.data_oriented` and `dataclasses.dataclass` kernel parameters, fastcache walks members recursively, only descending into members the kernel actually reads or writes (per the [strict invariants](#two-strict-invariants) above). Member-by-member behavior:
 
-**`@qd.data_oriented`:** the walker descends into `vars(obj)`, narrowed to only include variables accessed by the kernel. For each walked child:
+- **`qd.ndarray` member** — `(dtype, ndim, layout)` is included in the cache key. Element values are not.
+- **Primitive (`int` / `float` / `bool` / `enum.Enum`) member.** The handling depends on the enclosing container:
+  - In a `@qd.data_oriented` instance — value is baked into the kernel, same as a `qd.Template` primitive. Two instances of the same class with different primitive member values get different cache entries.
+  - In a `dataclasses.dataclass` instance — only the type is included by default. To include the value too, annotate the field with `FIELD_METADATA_CACHE_VALUE`:
 
-- `qd.ndarray` member — `(dtype, ndim, layout)` is included in the cache key. Element values are not.
-- Primitive (`int` / `float` / `bool` / `enum.Enum`) member — value is baked into the kernel (same semantics as a `qd.Template` primitive). Two instances of the same class with different primitive member values get different cache entries.
-- Nested `@qd.data_oriented` member — recurses.
-- Nested `dataclasses.dataclass` member — recurses (with the dataclass rules below).
-- `qd.field` member — fastcache is disabled for the entire kernel call. The kernel still runs via normal compilation; a warn-level log line is emitted.
+    ```python
+    import dataclasses
+    from quadrants.lang._fast_caching import FIELD_METADATA_CACHE_VALUE
 
-**`dataclasses.dataclass`:** the walker descends into the declared members. For each member, only the *type* is included in the cache key by default — **not** the value. To include a member's value, annotate it:
+    @dataclasses.dataclass
+    class SimConfig:
+        num_layers: int = dataclasses.field(metadata={FIELD_METADATA_CACHE_VALUE: True})
+        dt: float = dataclasses.field(metadata={FIELD_METADATA_CACHE_VALUE: True})
+    ```
 
-```python
-import dataclasses
-from quadrants.lang._fast_caching import FIELD_METADATA_CACHE_VALUE
-
-@dataclasses.dataclass
-class SimConfig:
-    num_layers: int = dataclasses.field(metadata={FIELD_METADATA_CACHE_VALUE: True})
-    dt: float = dataclasses.field(metadata={FIELD_METADATA_CACHE_VALUE: True})
-```
-
-This is necessary whenever the compiled kernel depends on the member's *value* rather than just its type (for example, when the value is used as a loop bound that the compiler bakes into the generated code). Without the annotation, two `SimConfig` instances with different `num_layers` values would share a fastcache key, and the second instance would silently load a kernel compiled for the wrong value.
-
-Note the asymmetry: `@qd.data_oriented` primitive members are baked into the kernel automatically (same semantics as `qd.Template`); `dataclasses.dataclass` members contribute only their *type* to the cache key unless you opt in per-member.
+    Annotate any member whose *value* (not just type) affects the compiled kernel — for example, an `int` used as a loop bound the compiler bakes into generated code. Without the annotation, two `SimConfig` instances with different `num_layers` values share a fastcache key, and the second silently loads a kernel compiled for the wrong value.
+- **Nested `@qd.data_oriented` or `dataclasses.dataclass` member** — recurses with the same rules (so an `int` inside a nested `@qd.data_oriented` is still baked into the kernel; an `int` inside a nested `dataclasses.dataclass` still needs `FIELD_METADATA_CACHE_VALUE` to bake its value).
+- **`qd.field` member** — fastcache is disabled for the entire kernel call. The kernel still runs via normal compilation; a warn-level log line is emitted.
