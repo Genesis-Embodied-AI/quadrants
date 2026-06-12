@@ -15,12 +15,11 @@ class KernelLauncher : public LLVM::KernelLauncher {
 
   struct Context {
     std::vector<TaskFunc> task_funcs;
-    // Parallel vector to `task_funcs`: cp_id of the `qd.checkpoint(...)` block the task lives in,
-    // or `-1` if the task is outside every checkpoint. Populated at register time off
-    // `OffloadedTask::checkpoint_id` (which the CPU codegen now propagates from
-    // `OffloadedStmt::checkpoint_id`, slice 6 change in codegen_cpu.cpp). Consumed by the
-    // launcher's host-branch gating to skip checkpoint bodies whose cp_id sits below the
-    // current resume point or that follow a yielding checkpoint within the same launch.
+    // Parallel vector to `task_funcs`: cp_id of the `qd.checkpoint(...)` block the task lives in, or `-1` if the
+    // task is outside every checkpoint. Populated at register time off `OffloadedTask::checkpoint_id` (which the CPU
+    // codegen now propagates from `OffloadedStmt::checkpoint_id`, slice 6 change in codegen_cpu.cpp). Consumed by
+    // the launcher's host-branch gating to skip checkpoint bodies whose cp_id sits below the current resume point or
+    // that follow a yielding checkpoint within the same launch.
     std::vector<int32_t> checkpoint_id_per_task;
     // Parallel vector to `task_funcs`: `true` iff this is the last task in a contiguous run of
     // same-cp_id tasks for a checkpoint that declared `yield_on=`. Used by the host-branch

@@ -40,10 +40,9 @@ namespace quadrants::lang {
 // per-kernel `dim3` buffers, not a per-thread early-return inside the body kernel.
 void TaskCodeGenLLVM::emit_checkpoint_gate_prologue(int cp_id) {
   auto *runtime_context_type = get_runtime_type("RuntimeContext");
-  // Field indices into RuntimeContext: 0=arg_buffer, 1=runtime, 2=cpu_thread_id,
-  // 3=result_buffer, 4=cpu_assert_failed, 5=checkpoint_resume_point_ptr,
-  // 6=checkpoint_yield_signal_ptr. The runtime LLVM bitcode is rebuilt whenever
-  // `context.h` changes; the indices here must mirror the field order in that struct.
+  // Field indices into RuntimeContext: 0=arg_buffer, 1=runtime, 2=cpu_thread_id, 3=result_buffer,
+  // 4=cpu_assert_failed, 5=checkpoint_resume_point_ptr, 6=checkpoint_yield_signal_ptr. The runtime LLVM bitcode is
+  // rebuilt whenever `context.h` changes; the indices here must mirror the field order in that struct.
   constexpr unsigned kFieldCheckpointResumePoint = 5;
   constexpr unsigned kFieldCheckpointYieldSignal = 6;
   auto *i32_ty = llvm::Type::getInt32Ty(*llvm_context);
