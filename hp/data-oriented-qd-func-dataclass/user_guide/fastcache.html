@@ -615,7 +615,7 @@
 <h3>Two strict invariants<a class="headerlink" href="#two-strict-invariants" title="Link to this heading">#</a></h3>
 <ol class="arabic simple">
 <li><p><strong>If the kernel does not read or write a variable, it is entirely ignored by fastcache.</strong> It will not cause fastcache to fail, nor emit a warning, nor emit an error.</p></li>
-<li><p><strong>Unrecognised types at variables the kernel reads or writes must not be silently dropped or hashed by type-name.</strong> If the value at such a variable has a type fastcache doesn’t explicitly handle (Pydantic models, UUIDs, third-party tensor wrappers, …), fastcache is disabled for the call with a one-shot <code class="docutils literal notranslate"><span class="pre">[FASTCACHE][UNKNOWN_TYPE]</span></code> warning identifying the offending type plus an <code class="docutils literal notranslate"><span class="pre">[INVALID_FUNC]</span></code> log line confirming the cache is off.</p></li>
+<li><p><strong>Unrecognised types at variables the kernel reads or writes must not be silently dropped or hashed by type-name.</strong> If the value of such a variable has a type fastcache doesn’t explicitly handle (Pydantic models, UUIDs, third-party tensor wrappers, …), fastcache is disabled for the call with a one-shot <code class="docutils literal notranslate"><span class="pre">[FASTCACHE][UNKNOWN_TYPE]</span></code> warning identifying the offending type plus an <code class="docutils literal notranslate"><span class="pre">[INVALID_FUNC]</span></code> log line confirming the cache is off.</p></li>
 </ol>
 </section>
 </section>
@@ -642,7 +642,7 @@
 </section>
 <section id="compound-type-cache-keying">
 <h3>Compound-type cache keying<a class="headerlink" href="#compound-type-cache-keying" title="Link to this heading">#</a></h3>
-<p>For <code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code> and <code class="docutils literal notranslate"><span class="pre">dataclasses.dataclass</span></code> kernel parameters, fastcache walks members recursively, only descending into members the kernel actually reads or writes (per the <a class="reference internal" href="#two-strict-invariants">strict invariants</a> above). Member-by-member behavior:</p>
+<p>For <code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code> and <code class="docutils literal notranslate"><span class="pre">dataclasses.dataclass</span></code> kernel parameters, fastcache walks members recursively. Any members that are not themselves read or written by the kernel, nor contain members read or written by the kernel, are skipped during the walk (per the <a class="reference internal" href="#two-strict-invariants">strict invariants</a> above). Member-by-member behavior:</p>
 <ul>
 <li><p><strong><code class="docutils literal notranslate"><span class="pre">qd.ndarray</span></code> member</strong> — <code class="docutils literal notranslate"><span class="pre">(dtype,</span> <span class="pre">ndim,</span> <span class="pre">layout)</span></code> is included in the cache key. Element values are not.</p></li>
 <li><p><strong>Primitive (<code class="docutils literal notranslate"><span class="pre">int</span></code> / <code class="docutils literal notranslate"><span class="pre">float</span></code> / <code class="docutils literal notranslate"><span class="pre">bool</span></code> / <code class="docutils literal notranslate"><span class="pre">enum.Enum</span></code>) member.</strong> The handling depends on the enclosing container:</p>
@@ -658,7 +658,7 @@
     <span class="n">dt</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">dataclasses</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">metadata</span><span class="o">=</span><span class="p">{</span><span class="n">FIELD_METADATA_CACHE_VALUE</span><span class="p">:</span> <span class="kc">True</span><span class="p">})</span>
 </pre></div>
 </div>
-<p>Annotate any member whose <em>value</em> (not just type) affects the compiled kernel — for example, an <code class="docutils literal notranslate"><span class="pre">int</span></code> used as a loop bound the compiler bakes into generated code. Without the annotation, two <code class="docutils literal notranslate"><span class="pre">SimConfig</span></code> instances with different <code class="docutils literal notranslate"><span class="pre">num_layers</span></code> values share a fastcache key, and the second silently loads a kernel compiled for the wrong value.</p>
+<p>Annotate any member whose <em>value</em> (not just type) affects the compiled kernel. Primarily this means any variable used inside <a class="reference internal" href="static.html"><span class="std std-doc"><code class="docutils literal notranslate"><span class="pre">qd.static</span></code></span></a>.</p>
 </li>
 </ul>
 </li>

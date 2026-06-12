@@ -595,7 +595,7 @@ my_struct.b[37] 5
 <li><p>arbitrary nesting depth (<code class="docutils literal notranslate"><span class="pre">f(s.a.b.c)</span></code> where each level is a dataclass)</p></li>
 <li><p>positional and keyword call sites (<code class="docutils literal notranslate"><span class="pre">f(s.inner)</span></code> and <code class="docutils literal notranslate"><span class="pre">f(inner=s.inner)</span></code>)</p></li>
 <li><p>call sites both directly inside <code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel</span></code> bodies and inside other <code class="docutils literal notranslate"><span class="pre">&#64;qd.func</span></code> bodies</p></li>
-<li><p>skipping of the sub-struct’s leaf members that the callee never reads</p></li>
+<li><p>pruning of the sub-struct’s leaf members that the callee never reads</p></li>
 </ul>
 <p>Note: assigning a sub-struct to a local variable and then passing it (<code class="docutils literal notranslate"><span class="pre">t</span> <span class="pre">=</span> <span class="pre">s.inner;</span> <span class="pre">touch_inner(t)</span></code>) is <strong>not</strong> supported. Pass the attribute access directly at the call site.</p>
 </section>

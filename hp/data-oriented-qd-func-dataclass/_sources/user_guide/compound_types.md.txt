@@ -136,7 +136,7 @@ Sub-struct passing supports:
 - arbitrary nesting depth (`f(s.a.b.c)` where each level is a dataclass)
 - positional and keyword call sites (`f(s.inner)` and `f(inner=s.inner)`)
 - call sites both directly inside `@qd.kernel` bodies and inside other `@qd.func` bodies
-- skipping of the sub-struct's leaf members that the callee never reads
+- pruning of the sub-struct's leaf members that the callee never reads
 
 Note: assigning a sub-struct to a local variable and then passing it (`t = s.inner; touch_inner(t)`) is **not** supported. Pass the attribute access directly at the call site.
 
