@@ -95,28 +95,50 @@ class CheckpointTransformer:
         # AnnAssign / non-docstring Expr) and leave everything else (For, While, If, With, Pass, docstring) untouched so
         # they keep working transparently; nested `with qd.checkpoint(...)` in particular still falls through to the
         # existing nested-checkpoint check at the start of this method.
+        #
+        # Adjacent wrappable statements are fused into a *single* `for _ in range(1):` wrapper rather than one wrapper
+        # per statement. Without this, a checkpoint body that's just a sequence of field writes like `a[()] = 0; b[()]
+        # = 1; c[()] = 2` would lower to N single-iteration `range_for` `OffloadedStmt`s and pay N kernel launches + N
+        # graph nodes for a workload that's morally one tiny serial kernel. Fusing collapses the run into one task
+        # without changing semantics: statements execute in program order inside the wrapper exactly as they would
+        # outside it, and the wrapper's `cp_id` covers all of them uniformly. Runs break on any non-wrappable stmt
+        # (For / While / If / With / Pass / docstring / Return / ...) which then becomes its own task as before, and
+        # the cp_id propagation in `quadrants/transforms/offload.cpp` handles the residual case of a coverage-probe
+        # style serial task sneaking between two for-loops of the same checkpoint after this transformer has run. See
+        # `docs/source/user_guide/graph.md` ("Advanced: statement fusing inside checkpoint bodies") for the user-facing
+        # note.
         new_body: list[ast.stmt] = []
+        fused_run: list[ast.stmt] = []
+
+        def flush_fused_run() -> None:
+            if not fused_run:
+                return
+            wrapper = ast.For(
+                target=ast.Name(id="_", ctx=ast.Store()),
+                iter=ast.Call(
+                    func=ast.Name(id="range", ctx=ast.Load()),
+                    args=[ast.Constant(value=1)],
+                    keywords=[],
+                ),
+                body=list(fused_run),
+                orelse=[],
+            )
+            ast.copy_location(wrapper, fused_run[0])
+            ast.fix_missing_locations(wrapper)
+            new_body.append(wrapper)
+            fused_run.clear()
+
         for i, stmt in enumerate(node.body):
             needs_wrap = isinstance(stmt, (ast.Assign, ast.AugAssign, ast.AnnAssign))
             if not needs_wrap and isinstance(stmt, ast.Expr):
                 is_docstring = i == 0 and isinstance(stmt.value, ast.Constant)
                 needs_wrap = not is_docstring
             if needs_wrap:
-                wrapped = ast.For(
-                    target=ast.Name(id="_", ctx=ast.Store()),
-                    iter=ast.Call(
-                        func=ast.Name(id="range", ctx=ast.Load()),
-                        args=[ast.Constant(value=1)],
-                        keywords=[],
-                    ),
-                    body=[stmt],
-                    orelse=[],
-                )
-                ast.copy_location(wrapped, stmt)
-                ast.fix_missing_locations(wrapped)
-                new_body.append(wrapped)
+                fused_run.append(stmt)
             else:
+                flush_fused_run()
                 new_body.append(stmt)
+        flush_fused_run()
         node.body = new_body
 
         kernel.checkpoint_yield_on_args.append(yield_on_name)

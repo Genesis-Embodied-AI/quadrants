@@ -373,6 +373,61 @@ def test_checkpoint_yield_with_intervening_serial_task():
 
 
 @test_utils.test()
+def test_checkpoint_adjacent_bare_stmts_fuse_into_one_task():
+    """Pin the bare-statement fusing in `CheckpointTransformer.build_checkpoint_with`.
+
+    A run of adjacent bare statements (`Assign` / `AugAssign` / `AnnAssign` / non-docstring `Expr`) in the same
+    `qd.checkpoint` body must lower to ONE one-iteration `for _ in range(1):` wrapper -- and so ONE `range_for`
+    `OffloadedStmt` -- rather than N wrappers / N tasks / N kernel launches. Without the fuse a checkpoint body that's
+    just a sequence of scalar / 0-d writes would pay N graph nodes and N kernel-launch latencies for a workload that's
+    morally one tiny serial kernel. The lowering is observable through `prog.get_num_offloaded_tasks_on_last_call()`;
+    see `docs/source/user_guide/graph.md` ("Advanced: statement fusing inside checkpoint bodies") for the user-facing
+    note. A real for-loop (or any other control-flow stmt) inside the same body breaks the run -- the for-loop becomes
+    its own task, and any bare statements after it form a fresh fused wrapper.
+
+    The assertion compares the task count of a 1-bare-stmt kernel against a 3-bare-stmt kernel with the same control-
+    flow shape. With the fuse, both lower to the same task count (one fused wrapper + one real for-loop, plus whatever
+    prologue the offloader emits for shape extraction etc.); without it, the 3-bare variant would emit two extra
+    `range_for` tasks. Comparing counts (rather than pinning an absolute number) keeps the test robust to future
+    changes in offloader prologue emission.
+    """
+    K = 5
+
+    @qd.kernel(graph=True)
+    def k_one_bare(buf: qd.types.ndarray(qd.i32, ndim=1)):
+        with qd.checkpoint():
+            buf[0] = 7
+            for i in range(2):
+                buf[3 + i] = 100 + i
+
+    @qd.kernel(graph=True)
+    def k_three_bare(buf: qd.types.ndarray(qd.i32, ndim=1)):
+        with qd.checkpoint():
+            buf[0] = 7
+            buf[1] = 11
+            buf[2] = 13
+            for i in range(2):
+                buf[3 + i] = 100 + i
+
+    buf_one = qd.ndarray(qd.i32, shape=(K,))
+    buf_three = qd.ndarray(qd.i32, shape=(K,))
+    buf_one.from_numpy(np.zeros(K, dtype=np.int32))
+    buf_three.from_numpy(np.zeros(K, dtype=np.int32))
+
+    k_one_bare(buf_one)
+    n_tasks_one = impl.get_runtime().prog.get_num_offloaded_tasks_on_last_call()
+    k_three_bare(buf_three)
+    n_tasks_three = impl.get_runtime().prog.get_num_offloaded_tasks_on_last_call()
+
+    np.testing.assert_array_equal(buf_one.to_numpy(), np.array([7, 0, 0, 100, 101], dtype=np.int32))
+    np.testing.assert_array_equal(buf_three.to_numpy(), np.array([7, 11, 13, 100, 101], dtype=np.int32))
+    assert n_tasks_three == n_tasks_one, (
+        f"adjacent bare stmts in qd.checkpoint must fuse into one wrapper: 1-bare kernel got {n_tasks_one} tasks, "
+        f"3-bare kernel got {n_tasks_three} (would be n_tasks_one + 2 without the fuse)"
+    )
+
+
+@test_utils.test()
 def test_checkpoint_docstring_allowed():
     """A docstring at the top of a checkpoint body is allowed (it's a no-op `Expr(Constant)`)."""
     N = 4
