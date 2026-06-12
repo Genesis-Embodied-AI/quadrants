@@ -96,11 +96,9 @@ scratch = qd.ndarray(qd.u32, shape=max(qd.algorithms.reduce_scratch_slots(N, D),
 scratch64 = qd.ndarray(qd.u64, shape=max(qd.algorithms.reduce_scratch_slots(N, D), 1))
 ```
 
-Several sizing functions return `0` for the trivial / single-tile case (e.g. `reduce_scratch_slots(N)` for `N <= 1`, `exclusive_scan_scratch_slots(N)` for `N <= 256`); wrap the count in `max(..., 1)` so the `qd.Tensor` allocation stays legal, since the algorithm won't touch the buffer in those cases anyway.
+Several sizing functions return `0` for the trivial / single-tile case (e.g. `reduce_scratch_slots(N)` for `N <= 1`, `exclusive_scan_scratch_slots(N)` for `N <= 256`); wrap the count in `max(..., 1)` so the `qd.Tensor` allocation stays legal, since the algorithm won't touch the buffer in those cases anyway. [FIXME: fix this so we dont have to do this]
 
-**No on-device check.** The composable `@qd.func` forms run directly as device code, so they do **no** scratch-sufficiency check (a host-side check would force an `N` device-to-host read that defeats graph capture). Size `scratch` correctly up front with the matching helper — `reduce_scratch_slots(N, log256_max_n)`, `exclusive_scan_scratch_slots(N, log256_max_n)`, `select_scratch_slots(N)`, `reduce_by_key_scratch_slots(N)`, or `sort_scratch_slots(N, log256_max_n)` — for the capacity you compile the op against. An undersized buffer corrupts the output (or reads / writes out of bounds) rather than raising.
-
-The per-algorithm sections below restate the sizing function and footprint for each op.
+**No on-device check.** The composable `@qd.func` forms run directly as device code, so they do **no** scratch-sufficiency check. Size `scratch` correctly up front with the matching helper — `reduce_scratch_slots(N, log256_max_n)`, `exclusive_scan_scratch_slots(N, log256_max_n)`, `select_scratch_slots(N)`, `reduce_by_key_scratch_slots(N)`, or `sort_scratch_slots(N, log256_max_n)` — for the capacity you compile the op against. An undersized buffer corrupts the output (or reads / writes out of bounds) rather than raising.
 
 ## Semantics
 
@@ -420,6 +418,8 @@ sort_indices(keys, tmp_keys, indices, tmp_idx, scratch, n)
 ```
 
 ### Compact-array offsets via prefix sum
+
+[FIXME: migrate this to not use a deprecated function...]
 
 ```python
 N = 100_000
