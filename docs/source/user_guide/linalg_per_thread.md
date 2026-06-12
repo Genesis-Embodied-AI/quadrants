@@ -1,6 +1,6 @@
 # Per-thread linear algebra
 
-Small matrix decompositions and linear solvers that run **per thread, in registers, with no cross-thread cooperation** — every thread independently decomposes / solves its own 2×2 .. 12×12 matrix. No shared memory, no syncs, no atomics on shared state, no warp / subgroup primitives. A 1000-element kernel runs 1000 copies of the algorithm in parallel, each on its own data.
+Small matrix decompositions and linear solvers that run **per thread, in registers, with no cross-thread cooperation** — every thread independently decomposes / solves its own 2×2 .. 6×6 matrix. No shared memory, no syncs, no atomics on shared state, no warp / subgroup primitives. A 1000-element kernel runs 1000 copies of the algorithm in parallel, each on its own data.
 
 This is a different category from the element-wise / arithmetic matrix operations covered in [matrix_vector_per_thread](matrix_vector_per_thread.md) (also per-thread, but closed-form rather than iterative), and from the cross-thread / sparse linear algebra under `qd.linalg.*` (CG, sparse direct solvers — covered separately).
 
@@ -13,8 +13,8 @@ All ops live at the top level (`qd.svd`, `qd.sym_eig`, `qd.make_spd`, `qd.polar_
 | Op                              | Operates on            | Shapes               | Returns                                                |
 |---------------------------------|------------------------|----------------------|--------------------------------------------------------|
 | `qd.svd(A)`                     | square real matrix     | 2×2, 3×3             | `(U, S, V)` such that `A = U @ S @ V.transpose()`      |
-| `qd.sym_eig(A)`                 | symmetric real matrix  | 2×2 .. 12×12         | `(eigenvalues, eigenvectors)` (real)                   |
-| `qd.make_spd(A)`                | symmetric real matrix  | 4×4 .. 12×12         | `M` — the closest positive semi-definite matrix to `A` |
+| `qd.sym_eig(A)`                 | symmetric real matrix  | 2×2 .. 6×6           | `(eigenvalues, eigenvectors)` (real)                   |
+| `qd.make_spd(A)`                | symmetric real matrix  | 4×4 .. 6×6           | `M` — the closest positive semi-definite matrix to `A` |
 | `qd.polar_decompose(A)`         | square real matrix     | 2×2, 3×3             | `(R, S)` such that `A = R @ S`, `R` orthogonal, `S` SPD |
 | `qd.eig(A)`                     | square real matrix     | 2×2                  | `(eigenvalues, eigenvectors)` (complex, packed)        |
 | `qd.solve(A, b)`                | square `A` + vector `b`| 2×2, 3×3             | `x` such that `A @ x = b`                              |
@@ -51,13 +51,11 @@ Symmetric eigendecomposition — for a real symmetric `A`, returns `(eigenvalues
 
 Eigenvalues come back sorted **ascending** (`eigvals[0] <= eigvals[1] <= ...`) for every shape, with column `i` of `eigenvectors` being the eigenvector for `eigvals[i]`. This matches NumPy / LAPACK's `eigh` (note that `qd.svd` sorts σ *descending*, also matching its NumPy / LAPACK counterpart — the cross-op disagreement is the standard convention, not an inconsistency).
 
-Three implementations dispatch by size:
+A single implementation handles every supported size:
 
-- **2×2** — closed-form via the trace / determinant identity.
-- **3×3** — closed-form Cardano method (Eigen3 `computeDirect`).
-- **4×4 .. 12×12** — cyclic Jacobi: 12 sweeps of Givens rotations zeroing every off-diagonal `(p, q)` pair, with `Q := Q · J` accumulated as eigenvectors. ~6 digits of accuracy in `f32`, ~12 digits in `f64`.
+- **2×2 .. 6×6** — cyclic Jacobi: 12 sweeps of Givens rotations zeroing every off-diagonal `(p, q)` pair, with `Q := Q · J` accumulated as eigenvectors. ~6 digits of accuracy in `f32`, ~12 digits in `f64`.
 
-Calling at `N >= 13` raises (`"Symmetric eigen solver currently supports sizes up to 12×12."`).
+Calling at `N >= 7` raises (`"Symmetric eigen solver currently supports sizes up to 6×6."`).
 
 `A` is *assumed* symmetric; the implementation does not symmetrize first. If your matrix is only approximately symmetric (e.g. accumulated floating-point error), explicitly compute `(A + A.transpose()) * 0.5` before calling.
 
@@ -65,7 +63,7 @@ Calling at `N >= 13` raises (`"Symmetric eigen solver currently supports sizes u
 
 Project a symmetric matrix `A` to the closest positive semi-definite matrix in the Frobenius-norm sense. Implemented as `Q · diag(max(λ, 0)) · Qᵀ` where `A = Q · diag(λ) · Qᵀ` is the symmetric eigendecomposition computed by `qd.sym_eig`.
 
-Available for shapes 4×4 .. 12×12 (it shares the cyclic-Jacobi path with `qd.sym_eig`; for 2×2 / 3×3 you can write the same projection by hand using `qd.sym_eig` directly — see the example below).
+Available for shapes 4×4 .. 6×6 (it shares the cyclic-Jacobi path with `qd.sym_eig`; for 2×2 / 3×3 you can write the same projection by hand using `qd.sym_eig` directly — see the example below).
 
 Use cases:
 
@@ -121,22 +119,22 @@ The `R.determinant() < 0.0` branch fixes the handedness when SVD's sign conventi
 
 ### Project to symmetric positive semi-definite
 
-For shapes 4×4 .. 12×12 (a typical qipc 12×12 contact Hessian), use `qd.make_spd` directly:
+For shapes 4×4 .. 6×6 (e.g. a small element Hessian block), use `qd.make_spd` directly:
 
 ```python
-mat12 = qd.types.matrix(12, 12, qd.f64)
+mat6 = qd.types.matrix(6, 6, qd.f64)
 
 
 @qd.kernel
 def project_each(
-    H_field: qd.types.NDArray[mat12, 1],
-    H_spd_field: qd.types.NDArray[mat12, 1],
+    H_field: qd.types.NDArray[mat6, 1],
+    H_spd_field: qd.types.NDArray[mat6, 1],
 ) -> None:
     for i in range(H_field.shape[0]):
         H_spd_field[i] = qd.make_spd(H_field[i], dt=qd.f64)
 ```
 
-Each thread eigen-decomposes its own 12×12 Hessian, clamps negative eigenvalues to zero, and reconstructs.
+Each thread eigen-decomposes its own 6×6 Hessian, clamps negative eigenvalues to zero, and reconstructs.
 
 For 2×2 / 3×3 there is no `qd.make_spd` entry point (it shares the cyclic-Jacobi path that only kicks in at N≥4). Inline the projection using `qd.sym_eig` directly:
 
@@ -180,10 +178,9 @@ The rotation factor `R` from `A = R @ S` is the rigid alignment that minimises `
 ## Shapes, performance, portability
 
 - **Compile time.**
-  - **Closed-form ops** (`qd.svd`, `qd.sym_eig` 2×2/3×3, `qd.polar_decompose`, `qd.eig`, `qd.solve`) — each call is unrolled per thread into a moderately large block of straight-line code; compile time is generally fine at these shapes.
-  - **Cyclic Jacobi** (`qd.sym_eig` ≥4×4, `qd.make_spd`) — the per-pair Givens step is unrolled but the outer sweep loop is a runtime `range`, so compile time is roughly proportional to `N²` (number of `(p, q)` pairs per sweep) rather than `N² · MAX_SWEEPS`. Concrete numbers on CUDA + LLVM 22.1: ~3 s at N=4, ~30 s at N=6, ~3 min at N=9, ~2 min at N=12 (yes, faster than N=9 — the per-pair body is dominated by `if static(p < q):` filtering).
-- **Runtime cost.** Cyclic Jacobi at N=12 with `MAX_SWEEPS=12` does roughly `12 · 66 · 12 ≈ 9500` per-thread arithmetic ops — fast on any modern GPU, but if you're calling it inside a hot kernel for a million elements that's still ~10 GFLOP-equivalent. For larger matrices use a different algorithm (or call quadrants `linalg.*` for a sparse-aware path).
-- **Backend portability.** All ops compile cleanly on CUDA, AMDGPU, Vulkan, and Metal — they are pure register arithmetic with no SIMT primitives, so there is no codegen split. The `qd.sym_eig` ≥4×4 / `qd.make_spd` paths have been verified at N ∈ {4,5,6,9,12} × {f32, f64} × five symmetric-matrix factories on CUDA + Vulkan + AMDGPU; Metal coverage is via the same parametrized tests.
+  - **Closed-form ops** (`qd.svd`, `qd.polar_decompose`, `qd.eig`, `qd.solve`) — each call is unrolled per thread into a moderately large block of straight-line code; compile time is generally fine at these shapes.
+  - **Cyclic Jacobi** (`qd.sym_eig`, `qd.make_spd`) — compile times for a single `qd.sym_eig` call on CUDA + LLVM 22.1 (`QD_OFFLINE_CACHE=0`): ~11 s at N=4, ~4 s at N=6. Sizes above 6×6 are intentionally not supported to keep compile time reasonable (it grows steeply with N: ~26 s at N=9, ~125 s at N=12).
+- **Runtime cost.** Cyclic Jacobi at N=6 with `MAX_SWEEPS=12` does roughly `12 · 15 · 6 ≈ 1080` per-thread arithmetic ops — fast on any modern GPU, but if you're calling it inside a hot kernel for a million elements that's still ~1 GFLOP-equivalent. For larger matrices use a different algorithm (or call quadrants `linalg.*` for a sparse-aware path).
 
 ## Related
 
