@@ -41,6 +41,10 @@ jobs:
       - name: Linux test
         run: |
           bash .github/workflows/scripts_new/linux/4_test.sh
+      - name: Collect CPU coverage
+        if: always()
+        run: |
+          python tests/coverage_report.py --collect-only
       - name: Upload wheel for CUDA job
         if: always()
         uses: actions/upload-artifact@v4
@@ -86,9 +90,13 @@ jobs:
       - name: Install test requirements
         run: |
           pip install --group test
-      - name: Run CUDA tests with coverage
+      - name: Run CUDA tests
         run: |
           bash .github/workflows/scripts_new/linux/4_test_cuda.sh
+      - name: Collect CUDA coverage
+        if: always()
+        run: |
+          python tests/coverage_report.py --collect-only
       - name: Upload CUDA coverage data
         if: always()
         uses: actions/upload-artifact@v4
