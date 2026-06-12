@@ -626,6 +626,41 @@ my_struct.b[37] 5
 </pre></div>
 </div>
 <p><code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code> objects can also be passed as <code class="docutils literal notranslate"><span class="pre">qd.Template</span></code> parameters to kernels defined outside the class, and they support nesting (one <code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code> struct containing another).</p>
+<section id="stable-members">
+<h3>stable_members<a class="headerlink" href="#stable-members" title="Link to this heading">#</a></h3>
+<p><strong>Recommended for any <code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code> class whose ndarray members are allocated once (typically in <code class="docutils literal notranslate"><span class="pre">__init__</span></code>) and not subsequently rebound — the common case.</strong> Decorate with <code class="docutils literal notranslate"><span class="pre">stable_members=True</span></code>:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">data_oriented</span><span class="p">(</span><span class="n">stable_members</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">Simulation</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">n</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">x</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="n">n</span><span class="p">,))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">v</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="n">n</span><span class="p">,))</span>
+        <span class="c1"># ... more ndarray / field / primitive members</span>
+</pre></div>
+</div>
+<p>(Equivalent: set <code class="docutils literal notranslate"><span class="pre">_qd_stable_members</span> <span class="pre">=</span> <span class="pre">True</span></code> as a class attribute.)</p>
+<p>This skips a per-call walk that Quadrants otherwise runs to detect ndarray member rebinding between kernel launches. The walk is O(number of ndarray members) per kernel call, so the savings scale with the container’s size.</p>
+<p>Microbenchmark on an RTX PRO 6000 Blackwell with a container holding 30 <code class="docutils literal notranslate"><span class="pre">qd.ndarray</span></code> members across two nesting levels, calling a trivial kernel that takes the container as a <code class="docutils literal notranslate"><span class="pre">qd.template()</span></code> arg:</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p></p></th>
+<th class="head"><p>Per-launch Python overhead</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">stable_members=False</span></code> (default)</p></td>
+<td><p>18.5 µs/call</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">stable_members=True</span></code></p></td>
+<td><p>13.5 µs/call</p></td>
+</tr>
+<tr class="row-even"><td><p></p></td>
+<td><p><strong>−5 µs/call (−28%)</strong></p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p><strong>Trade-off:</strong> with <code class="docutils literal notranslate"><span class="pre">stable_members=True</span></code>, reassigning an ndarray member on an instance is undefined behavior — the previously compiled kernel will be reused even if the new ndarray has a different <code class="docutils literal notranslate"><span class="pre">dtype</span></code>, <code class="docutils literal notranslate"><span class="pre">ndim</span></code>, or layout, silently bit-reinterpreting the new array’s storage. Set it only on classes whose ndarray members are allocated once (typically in <code class="docutils literal notranslate"><span class="pre">__init__</span></code>) and never rebound. See <a class="reference internal" href="#reassigning-ndarray-members">Reassigning ndarray members</a> below for the supported alternative.</p>
+</section>
 <section id="primitive-members">
 <h3>Primitive members<a class="headerlink" href="#primitive-members" title="Link to this heading">#</a></h3>
 <p>Primitive members on <code class="docutils literal notranslate"><span class="pre">self</span></code> (e.g. <code class="docutils literal notranslate"><span class="pre">int</span></code>, <code class="docutils literal notranslate"><span class="pre">float</span></code>, <code class="docutils literal notranslate"><span class="pre">bool</span></code>, <code class="docutils literal notranslate"><span class="pre">enum.Enum</span></code>) are supported, but they are treated as <strong>template values</strong>: each distinct primitive value across instances triggers a new kernel compilation, with the value baked into the kernel IR.</p>
@@ -814,6 +849,7 @@ my_struct.b[37] 5
 <section id="reassigning-ndarray-members">
 <h3>Reassigning ndarray members<a class="headerlink" href="#reassigning-ndarray-members" title="Link to this heading">#</a></h3>
 <p>For <code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code> containers passed via <code class="docutils literal notranslate"><span class="pre">qd.Template</span></code>, reassigning an ndarray member between kernel launches is supported, including changes to <code class="docutils literal notranslate"><span class="pre">dtype</span></code>, <code class="docutils literal notranslate"><span class="pre">ndim</span></code>, or layout. A new specialised kernel is compiled and cached for the new shape; subsequent launches with the original shape continue to use the original cached kernel. (For <code class="docutils literal notranslate"><span class="pre">&#64;dataclasses.dataclass</span></code> containers — passed via the dataclass-type annotation — the member binding follows the standard dataclass mutability rules: frozen dataclasses can’t rebind, non-frozen ones can, and a rebind triggers a fresh kernel arg setup on the next launch.)</p>
+<p>This support is only available on <code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code> classes <em>without</em> the <a class="reference internal" href="#stable-members"><code class="docutils literal notranslate"><span class="pre">stable_members=True</span></code></a> opt-in. Setting <code class="docutils literal notranslate"><span class="pre">stable_members=True</span></code> is a promise that ndarray members on instances of the class are never reassigned; if you break that promise the previously compiled kernel is silently reused against the new ndarray.</p>
 </section>
 <section id="restrictions">
 <h3>Restrictions<a class="headerlink" href="#restrictions" title="Link to this heading">#</a></h3>
@@ -889,6 +925,7 @@ my_struct.b[37] 5
 </ul>
 </li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#qd-data-oriented">qd.data_oriented</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#stable-members">stable_members</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#primitive-members">Primitive members</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#tensor-members">Tensor members</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#fastcache">Fastcache</a></li>
