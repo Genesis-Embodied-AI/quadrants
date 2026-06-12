@@ -5,8 +5,8 @@
 // Shared by `codegen_cuda.cpp` (pre-Hopper flat-graph path and the in-flight-yield safety net on
 // SM 9.0+) and `codegen_amdgpu.cpp` (flat HIP graph path; no conditional-graph-node API).
 //
-// See `docs/source/user_guide/graph.md` for the user-facing surface and
-// `perso_hugh/doc/qipc/reentrant.md` for the design.
+// See `docs/source/user_guide/graph.md` for the user-facing surface and `perso_hugh/doc/qipc/reentrant.md` for the
+// design.
 
 #include "quadrants/codegen/llvm/codegen_llvm.h"
 
