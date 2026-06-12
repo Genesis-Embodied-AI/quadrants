@@ -39,6 +39,7 @@ from ._reduce import (
     _OP_MAX,
     _OP_MIN,
     BLOCK_DIM,
+    _at_least_one,
     _dtype_width_bytes,
     _level_partials_slots,
     _reduce_depth_for_n,
@@ -323,23 +324,24 @@ def exclusive_scan_scratch_slots(n, log256_max_n: int = None) -> int:
     this many slots::
 
         slots = qd.algorithms.exclusive_scan_scratch_slots(N)
-        scratch = qd.field(qd.u32, shape=max(slots, 1))   # u64 for i64 / u64 / f64 inputs
+        scratch = qd.field(qd.u32, shape=slots)   # u64 for i64 / u64 / f64 inputs
 
     Two ways to call it: **explicit depth** ``exclusive_scan_scratch_slots(n, D)`` is host- **and** kernel-callable
     (branch-free arithmetic over the unrolled ``D`` loop); **auto depth** ``exclusive_scan_scratch_slots(n)`` derives
-    the minimal ``D`` from ``n`` (host-only). Returns ``0`` for ``depth <= 1`` (``n <= BLOCK_DIM``: a single tile
-    scans straight to ``out`` with no scratch).
+    the minimal ``D`` from ``n`` (host-only). Always returns **at least 1** so the result can size an allocation
+    directly; the depth ``<= 1`` case (``n <= BLOCK_DIM``: a single tile scans straight to ``out`` with no scratch)
+    returns ``1`` (the lone slot is never touched).
     """
     if log256_max_n is None:
         log256_max_n = _reduce_depth_for_n(n)
     if log256_max_n <= 1:
-        return 0
+        return 1
     cursor = (n + (BLOCK_DIM - 1)) // BLOCK_DIM  # B0 partials from pass 1
     cur = cursor
     for _ in range(log256_max_n - 2):
         cur = (cur + (BLOCK_DIM - 1)) // BLOCK_DIM
         cursor = cursor + cur
-    return cursor
+    return _at_least_one(cursor)
 
 
 # ---------------------------------------------------------------------------------------------------------------------

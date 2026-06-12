@@ -284,7 +284,7 @@ def test_reduce_composition(op, dtype, N):
     arr = qd.field(dtype, shape=N)
     out = qd.field(dtype, shape=1)
     sdt = qd.u32 if dtype in _FOURBYTE_DTYPES else qd.u64
-    scratch = qd.field(sdt, shape=max(qd.algorithms.reduce_scratch_slots(N, log256_max_n), 1))
+    scratch = qd.field(sdt, shape=qd.algorithms.reduce_scratch_slots(N, log256_max_n))
     count = qd.field(qd.i32, shape=1)
     _fill_field(arr, host)
     count.from_numpy(np.asarray([N], dtype=np.int32))
@@ -421,7 +421,7 @@ def test_exclusive_scan_composition(op, dtype, N):
 
     arr, out = _alloc_scan_input_out(dtype, N)
     sdt = qd.u32 if dtype in _FOURBYTE_DTYPES else qd.u64
-    scratch = qd.field(sdt, shape=max(qd.algorithms.exclusive_scan_scratch_slots(N, log256_max_n), 1))
+    scratch = qd.field(sdt, shape=qd.algorithms.exclusive_scan_scratch_slots(N, log256_max_n))
     count = qd.field(qd.i32, shape=1)
     _fill_field(arr, host)
     count.from_numpy(np.asarray([N], dtype=np.int32))
@@ -481,7 +481,7 @@ def test_select_composition(dtype, N):
     flags = qd.field(qd.i32, shape=N)
     out = qd.field(dtype, shape=max(N, 1))
     num_out = qd.field(qd.i32, shape=1)
-    scratch = qd.field(qd.u32, shape=max(qd.algorithms.select_scratch_slots(N), 1))
+    scratch = qd.field(qd.u32, shape=qd.algorithms.select_scratch_slots(N))
     count = qd.field(qd.i32, shape=1)
     _fill_field(arr, host)
     _fill_field(flags, flags_host)
@@ -575,7 +575,7 @@ def test_sort_composition(dtype, N):
     tmp_keys = qd.ndarray(dtype, shape=(N,))
     values = qd.ndarray(qd.u32, shape=(N,))
     tmp_values = qd.ndarray(qd.u32, shape=(N,))
-    scratch = qd.ndarray(qd.u32, shape=(max(qd.algorithms.sort_scratch_slots(N, log256_max_n), 1),))
+    scratch = qd.ndarray(qd.u32, shape=(qd.algorithms.sort_scratch_slots(N, log256_max_n),))
     n_dev = qd.ndarray(qd.i32, shape=())
     keys.from_numpy(host)
     values.from_numpy(np.arange(N, dtype=np.uint32))
@@ -657,7 +657,7 @@ def test_reduce_by_key_add_composition(key_dtype, val_dtype, N):
     keys_out = qd.field(key_dtype, shape=N)
     values_out = qd.field(val_dtype, shape=N)
     num_runs = qd.field(qd.i32, shape=1)
-    scratch = qd.field(qd.u32, shape=max(qd.algorithms.reduce_by_key_scratch_slots(N), 1))
+    scratch = qd.field(qd.u32, shape=qd.algorithms.reduce_by_key_scratch_slots(N))
     count = qd.field(qd.i32, shape=1)
     _fill_field(keys_in, keys_host)
     _fill_field(values_in, values_host)
@@ -687,6 +687,30 @@ def test_reduce_by_key_add_composition(key_dtype, val_dtype, N):
         np.testing.assert_array_equal(
             values_out.to_numpy()[:nr], want_vals, err_msg=f"{key_dtype}/{val_dtype} N={N}: values"
         )
+
+
+# ---------------------------------------------------------------------------
+# Scratch-slot sizing contract: every public ``*_scratch_slots`` helper returns at least 1 so its result can size a
+# ``qd.field`` / ``qd.ndarray`` allocation directly (zero-sized allocations are illegal). The trivial / single-tile
+# cases that used to return 0 (and forced callers to wrap the count in ``max(..., 1)``) must now return 1.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("n", [0, 1, 2, 256])
+@test_utils.test(arch=qd.cpu)
+def test_scratch_slots_are_at_least_one(n):
+    a = qd.algorithms
+    # Auto-depth (host-only) forms.
+    assert a.reduce_scratch_slots(n) >= 1
+    assert a.exclusive_scan_scratch_slots(n) >= 1
+    assert a.select_scratch_slots(n) >= 1
+    assert a.reduce_by_key_scratch_slots(n) >= 1
+    assert a.sort_scratch_slots(n) >= 1
+    # Explicit-depth forms, including an over-specified depth where the staircase is forced past its natural bottom.
+    for depth in (1, 2, 3):
+        assert a.reduce_scratch_slots(n, depth) >= 1
+        assert a.exclusive_scan_scratch_slots(n, depth) >= 1
+        assert a.sort_scratch_slots(n, depth) >= 1
 
 
 # ---------------------------------------------------------------------------

@@ -50,6 +50,7 @@ from quadrants.types.primitive_types import i32, u32
 from ._reduce import (
     _OP_ADD,
     BLOCK_DIM,
+    _at_least_one,
 )
 from ._scan import _emit_scan_inplace, _scan_total_scratch_slots
 
@@ -177,15 +178,16 @@ def reduce_by_key_scratch_slots(n: int) -> int:
     ``u32``). Layout: ``scratch[0:n]`` holds the run positions, ``scratch[n:]`` the scan partials (plus deeper
     recursion levels for ``n > BLOCK_DIM``). Allocate up front::
 
-        scratch = qd.Tensor(qd.ndarray(qd.u32, shape=max(qd.algorithms.reduce_by_key_scratch_slots(N), 1)))
+        scratch = qd.Tensor(qd.ndarray(qd.u32, shape=qd.algorithms.reduce_by_key_scratch_slots(N)))
 
-    Returns ``0`` for ``n <= 0`` and ``n`` for ``n <= BLOCK_DIM`` (single-tile in-place scan).
+    Always returns **at least 1** so the result can size an allocation directly: ``n`` for ``n <= BLOCK_DIM``
+    (single-tile in-place scan) and ``1`` for ``n <= 0`` (no real scratch; the lone slot is never touched).
     """
     pos = n > 0
     big = n > BLOCK_DIM
     small_pos = pos * (1 - big)
     B0 = (n + BLOCK_DIM - 1) // BLOCK_DIM
-    return n * small_pos + _scan_total_scratch_slots(B0, partials_cursor=n + B0) * big
+    return _at_least_one(n * small_pos + _scan_total_scratch_slots(B0, partials_cursor=n + B0) * big)
 
 
 __all__ = ["reduce_by_key_add", "reduce_by_key_scratch_slots"]

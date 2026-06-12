@@ -60,7 +60,7 @@ from quadrants.lang.simt import block as _block
 from quadrants.types.annotations import template
 from quadrants.types.primitive_types import f32, f64, i32, i64, u32, u64
 
-from ._reduce import BLOCK_DIM
+from ._reduce import BLOCK_DIM, _at_least_one
 from ._scan import _emit_exclusive_scan_add
 
 RADIX_BITS = 8
@@ -361,7 +361,7 @@ def sort_scratch_slots(n, log256_max_n: int = None):
     buffer up front::
 
         D = log256_max_n  # the same depth you pass to the sort
-        scratch = qd.Tensor(qd.ndarray(qd.u32, shape=max(qd.algorithms.sort_scratch_slots(N, D), 1)))
+        scratch = qd.Tensor(qd.ndarray(qd.u32, shape=qd.algorithms.sort_scratch_slots(N, D)))
 
     ``log256_max_n`` is the compile-time scan depth ``D``. The staircase is forced to ``D - 1`` reduce levels (even
     when ``n`` would naturally bottom out sooner), so for small ``n`` at an over-specified ``D`` this can be a few slots
@@ -377,9 +377,10 @@ def sort_scratch_slots(n, log256_max_n: int = None):
     - **auto depth** ``sort_scratch_slots(n)`` - host-only convenience: derives the minimal depth from ``n`` via
       :func:`_min_log256_for_n` (a data-dependent loop that cannot compile device-side).
 
-    Returns the real footprint for every ``n >= 0`` (``n = 0`` -> 0; ``n = 1`` -> one tile histogram = ``RADIX_DIGITS``
-    slots). There is no ``n <= 1`` early-out: the kernel always runs all phases, so a length-1 sort still needs its
-    histogram slots. Multiply by 4 for the byte size.
+    Returns the real footprint for every ``n >= 1`` (``n = 1`` -> one tile histogram = ``RADIX_DIGITS`` slots). There
+    is no ``n <= 1`` early-out: the kernel always runs all phases, so a length-1 sort still needs its histogram slots.
+    The only case with no real scratch is ``n = 0``, which returns ``1`` (the lone slot is never touched) so the result
+    can size an allocation directly. Multiply by 4 for the byte size.
     """
     if log256_max_n is None:
         log256_max_n = _min_log256_for_n(n)
@@ -391,7 +392,7 @@ def sort_scratch_slots(n, log256_max_n: int = None):
         B = (nn + (BLOCK_DIM - 1)) // BLOCK_DIM
         cursor = cursor + B  # ``+=`` would lower to atomic_add on a non-writable Expr in kernel scope
         nn = B
-    return cursor
+    return _at_least_one(cursor)
 
 
 __all__ = [

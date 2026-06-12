@@ -41,6 +41,7 @@ from quadrants.types.primitive_types import i32, u32
 from ._reduce import (
     _OP_ADD,
     BLOCK_DIM,
+    _at_least_one,
     _reduce_phase,
 )
 from ._scan import (
@@ -151,13 +152,14 @@ def select_scratch_slots(n: int) -> int:
     ``u32``). Layout: ``scratch[0:n]`` holds the per-element write indices, ``scratch[n:]`` the scan partials (plus
     any deeper recursion levels). Allocate up front::
 
-        scratch = qd.Tensor(qd.ndarray(qd.u32, shape=max(qd.algorithms.select_scratch_slots(N), 1)))
+        scratch = qd.Tensor(qd.ndarray(qd.u32, shape=qd.algorithms.select_scratch_slots(N)))
 
-    Returns ``0`` for ``n <= 0``.
+    Always returns **at least 1** so the result can size an allocation directly; ``n <= 0`` needs no real scratch and
+    returns ``1`` (the lone slot is never touched).
     """
     pos = n > 0
     B0 = (n + BLOCK_DIM - 1) // BLOCK_DIM
-    return _scan_total_scratch_slots(B0, partials_cursor=n + B0) * pos
+    return _at_least_one(_scan_total_scratch_slots(B0, partials_cursor=n + B0) * pos)
 
 
 __all__ = ["select", "select_scratch_slots"]

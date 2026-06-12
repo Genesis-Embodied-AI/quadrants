@@ -90,13 +90,13 @@ N = 1_000_000   # capacity: an upper bound on the live count you will feed the c
 D = 3           # LOG256_MAX_N: 256**3 = 16,777,216 >= N
 
 # 4-byte reduce: u32 scratch, sized for the same depth D the func is compiled for.
-scratch = qd.ndarray(qd.u32, shape=max(qd.algorithms.reduce_scratch_slots(N, D), 1))
+scratch = qd.ndarray(qd.u32, shape=qd.algorithms.reduce_scratch_slots(N, D))
 
 # 8-byte reduce: same slot count, u64 buffer.
-scratch64 = qd.ndarray(qd.u64, shape=max(qd.algorithms.reduce_scratch_slots(N, D), 1))
+scratch64 = qd.ndarray(qd.u64, shape=qd.algorithms.reduce_scratch_slots(N, D))
 ```
 
-Several sizing functions return `0` for the trivial / single-tile case (e.g. `reduce_scratch_slots(N)` for `N <= 1`, `exclusive_scan_scratch_slots(N)` for `N <= 256`); wrap the count in `max(..., 1)` so the `qd.Tensor` allocation stays legal, since the algorithm won't touch the buffer in those cases anyway. [FIXME: fix this so we dont have to do this]
+Every sizing function returns **at least 1**, so you can pass the result straight to an allocation. For the trivial / single-tile cases (e.g. `reduce_scratch_slots(N)` for `N <= BLOCK_DIM`, `exclusive_scan_scratch_slots(N)` for `N <= 256`, any helper for `N <= 0`) the algorithm needs no real scratch and the helper returns `1`; that lone slot is never touched, so the one-slot allocation is free and always legal.
 
 **No on-device check.** The composable `@qd.func` forms run directly as device code, so they do **no** scratch-sufficiency check. Size `scratch` correctly up front with the matching helper — `reduce_scratch_slots(N, log256_max_n)`, `exclusive_scan_scratch_slots(N, log256_max_n)`, `select_scratch_slots(N)`, `reduce_by_key_scratch_slots(N)`, or `sort_scratch_slots(N, log256_max_n)` — for the capacity you compile the op against. An undersized buffer corrupts the output (or reads / writes out of bounds) rather than raising.
 
@@ -394,7 +394,7 @@ keys     = qd.ndarray(qd.f32, shape=(N,))
 tmp_keys = qd.ndarray(qd.f32, shape=(N,))
 indices  = qd.ndarray(qd.i32, shape=(N,))
 tmp_idx  = qd.ndarray(qd.i32, shape=(N,))
-scratch  = qd.ndarray(qd.u32, shape=max(qd.algorithms.sort_scratch_slots(N, D), 1))
+scratch  = qd.ndarray(qd.u32, shape=qd.algorithms.sort_scratch_slots(N, D))
 n        = qd.ndarray(qd.i32, shape=())
 n.fill(N)
 

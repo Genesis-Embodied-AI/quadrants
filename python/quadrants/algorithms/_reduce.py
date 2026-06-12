@@ -298,6 +298,23 @@ def _reduce_depth_for_n(n: int) -> int:
     return depth
 
 
+def _at_least_one(slots):
+    """Clamp a (non-negative) scratch-slot count up to a minimum of ``1``.
+
+    The ``*_scratch_slots`` helpers legitimately compute ``0`` for the trivial / single-tile cases (a depth-1 reduce
+    writes straight to ``out``, an ``n <= BLOCK_DIM`` scan needs no partials, ``n <= 0`` needs nothing). Zero-sized
+    ``qd.field`` / ``qd.ndarray`` allocations are illegal, so we return at least one slot here rather than make every
+    caller wrap the result in ``max(..., 1)``. The op never touches that lone slot in those cases, so over-allocating
+    by one is free.
+
+    Branch-free and dual host-/kernel-callable, matching the rest of this arithmetic: ``slots < 1`` is ``0`` / ``1``
+    as a Python ``int`` (host) and an ``Expr`` (kernel, where ``n`` is a device-read count), whereas the builtin
+    ``max`` would need a Python ``bool`` an ``Expr`` cannot provide. ``slots`` is always ``>= 0``, so ``slots + (slots
+    < 1)`` equals ``max(slots, 1)``.
+    """
+    return slots + (slots < 1)
+
+
 def reduce_scratch_slots(n, log256_max_n: int = None) -> int:
     """Number of scratch slots ``reduce_{add,min,max}`` need to reduce a length-``n`` input.
 
@@ -307,12 +324,13 @@ def reduce_scratch_slots(n, log256_max_n: int = None) -> int:
     through ``u64``, both of this many slots)::
 
         slots = qd.algorithms.reduce_scratch_slots(N)
-        scratch = qd.field(qd.u32, shape=max(slots, 1))   # u64 for i64 / u64 / f64 inputs
+        scratch = qd.field(qd.u32, shape=slots)   # u64 for i64 / u64 / f64 inputs
 
     Two ways to call it: **explicit depth** ``reduce_scratch_slots(n, D)`` is host- **and** kernel-callable (branch-free
     arithmetic over the unrolled ``D`` loop, so ``n`` may be a Python ``int`` or a device-read ``Expr``); **auto depth**
-    ``reduce_scratch_slots(n)`` derives the minimal ``D`` from ``n`` (host-only). Returns ``0`` for ``depth == 1``
-    (``n <= BLOCK_DIM``: the single phase writes straight to ``out``).
+    ``reduce_scratch_slots(n)`` derives the minimal ``D`` from ``n`` (host-only). Always returns **at least 1** so the
+    result can size an allocation directly; the depth-1 case (``n <= BLOCK_DIM``, single phase writes straight to
+    ``out``) needs no real scratch and returns ``1`` (the lone slot is never touched).
     """
     if log256_max_n is None:
         log256_max_n = _reduce_depth_for_n(n)
@@ -321,7 +339,7 @@ def reduce_scratch_slots(n, log256_max_n: int = None) -> int:
     for _ in range(log256_max_n - 1):
         cur = (cur + (BLOCK_DIM - 1)) // BLOCK_DIM
         cursor = cursor + cur  # ``+=`` would lower to atomic_add on a non-writable Expr in kernel scope
-    return cursor
+    return _at_least_one(cursor)
 
 
 @_func
