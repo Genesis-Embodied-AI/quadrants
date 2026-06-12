@@ -21,6 +21,9 @@ Default offload arches cover the main hardware quadrants currently runs on:
 
   - gfx90a  -- CDNA2  (MI200 / MI210 / MI250(X)).
   - gfx942  -- CDNA3  (MI300A / MI300X) -- the amdcloud box.
+  - gfx1010 -- RDNA1  (Radeon RX 5700 / 5700 XT / Navi 10).
+  - gfx1011 -- RDNA1  (Radeon Pro V520 / Navi 12) -- the AWS g4ad CI runner.
+  - gfx1012 -- RDNA1  (Radeon RX 5500 XT / Navi 14).
   - gfx1030 -- RDNA2  (Radeon RX 6800 / 6900).
   - gfx1100 -- RDNA3  (Radeon RX 7900 XTX) -- the amddesktop box.
   - gfx1101 -- RDNA3  (Radeon RX 7800 XT / 7700 XT).
@@ -43,6 +46,9 @@ OUT_HEADER = REPO_ROOT / "quadrants" / "runtime" / "amdgpu" / "checkpoint_yield_
 OFFLOAD_ARCHES = [
     "gfx90a",
     "gfx942",
+    "gfx1010",
+    "gfx1011",
+    "gfx1012",
     "gfx1030",
     "gfx1100",
     "gfx1101",
