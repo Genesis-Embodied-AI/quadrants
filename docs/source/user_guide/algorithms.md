@@ -130,7 +130,7 @@ N, D = 8, 1   # 8 elements; D = LOG256_MAX_N = 1 → capacity 256**1 = 256 ≥ N
 
 **Scalar dtypes & scratch width (`reduce` / `exclusive_scan`).** The element dtype is one of `{qd.i32, qd.u32, qd.f32, qd.i64, qd.u64, qd.f64}`; narrower / wider scalar dtypes (`qd.i16`, `qd.f16`, …) and struct dtypes raise `NotImplementedError`. 4-byte dtypes stage their partials through a `u32` scratch and 8-byte dtypes through a `u64` scratch (same slot count either way; see [Scratch space](#scratch-space)).
 
-**Monoid identity (`reduce` / `exclusive_scan`, min / max).** The identity is derived in-kernel from the element dtype — no runtime identity argument, mirroring the `block.reduce_min` / `subgroup.reduce_min` typed wrappers: `0` for `add`; the largest representable value for `min` (`+inf` for floats, `INT{32,64}_MAX` for signed ints, `UINT{32,64}_MAX` for unsigned); the smallest representable value for `max` (`-inf` for floats, `INT{32,64}_MIN` for signed ints, `0` for unsigned).
+**Identity value (`reduce` / `exclusive_scan`, min / max).** The *identity* is the value that leaves a result unchanged when combined under the op — `add` → `0`, `min` → the largest representable value, `max` → the smallest. It pads out-of-range lanes and seeds `exclusive_scan`'s `out[0]`. It is derived in-kernel from the element dtype, so there is no runtime identity argument (mirroring the `block.reduce_min` / `subgroup.reduce_min` typed wrappers): `0` for `add`; for `min`, `+inf` (floats) / `INT{32,64}_MAX` (signed ints) / `UINT{32,64}_MAX` (unsigned); for `max`, `-inf` (floats) / `INT{32,64}_MIN` (signed ints) / `0` (unsigned).
 
 **Floating-point non-associativity.** For `add` on `f32` / `f64`, the device combine order differs from a left-to-right host pass, so results are **not** bitwise-equal to `numpy.sum` / `numpy.cumsum` (nor reproducible across `N` changes). Tests tolerate a small relative error rather than asserting bitwise equality.
 
@@ -190,7 +190,7 @@ print(out.to_numpy()[0])   # 31   (3 + 1 + 4 + 1 + 5 + 9 + 2 + 6)
 
 ### `qd.algorithms.exclusive_scan_{add,min,max}`
 
-Device-wide exclusive prefix scan over a 1-D tensor: `out[i]` holds the reduction (`sum` / `min` / `max`) of `arr[0:i]`, and `out[0]` is always the monoid identity. Signature `exclusive_scan_{add,min,max}(arr, out, scratch, n, DTYPE, LOG256_MAX_N)`.
+Device-wide exclusive prefix scan over a 1-D tensor: `out[i]` holds the reduction (`sum` / `min` / `max`) of `arr[0:i]`, and `out[0]` is always the op's [identity value](#common-conventions) (`0` for `add`). Signature `exclusive_scan_{add,min,max}(arr, out, scratch, n, DTYPE, LOG256_MAX_N)`.
 
 Arguments (see [Common conventions](#common-conventions) for `n` / `DTYPE` / `LOG256_MAX_N`):
 
@@ -430,7 +430,7 @@ Implementation detail for the curious — not needed to *use* the ops. In every 
 
 ### `reduce_{add,min,max}`
 
-- Fixed-depth tree reduction. Each phase uses `BLOCK_DIM = 256` threads per block and reduces 256 elements per block via `block.reduce_{add,min,max}`. `LOG256_MAX_N = 1` covers `N <= 256`; `2` covers up to `256² = 65536`; and so on. Out-of-range lanes contribute the monoid identity.
+- Fixed-depth tree reduction. Each phase uses `BLOCK_DIM = 256` threads per block and reduces 256 elements per block via `block.reduce_{add,min,max}`. `LOG256_MAX_N = 1` covers `N <= 256`; `2` covers up to `256² = 65536`; and so on. Out-of-range lanes contribute the [identity value](#common-conventions).
 - Per-phase partials are written to the caller's `scratch`; the final phase writes `out[0]` directly.
 
 ### `exclusive_scan_{add,min,max}`
