@@ -663,6 +663,26 @@ device pointer is baked into the graph at creation time.</p></li>
 <li><p>Checkpoints cannot be nested inside other checkpoints.</p></li>
 </ul>
 </section>
+<section id="advanced-statement-fusing-inside-checkpoint-bodies">
+<h3>Advanced: statement fusing inside checkpoint bodies<a class="headerlink" href="#advanced-statement-fusing-inside-checkpoint-bodies" title="Link to this heading">#</a></h3>
+<p>Quadrants offloads each top-level <code class="docutils literal notranslate"><span class="pre">for</span></code>-loop inside a kernel as a separate GPU task / graph node. A bare straight-line statement at the top level of a <code class="docutils literal notranslate"><span class="pre">qd.checkpoint(...)</span></code> body (e.g. <code class="docutils literal notranslate"><span class="pre">a[()]</span> <span class="pre">=</span> <span class="pre">7</span></code>) does not naturally fit that mould, so the compiler auto-wraps it in a single-iteration <code class="docutils literal notranslate"><span class="pre">for</span> <span class="pre">_</span> <span class="pre">in</span> <span class="pre">range(1):</span></code> so that it becomes a <code class="docutils literal notranslate"><span class="pre">range_for</span></code> task with the correct <code class="docutils literal notranslate"><span class="pre">cp_id</span></code> — otherwise it would silently run unconditionally even when its checkpoint is skipped.</p>
+<p>To avoid paying one kernel launch + one graph node per such statement, a <strong>run of adjacent bare statements is fused into one wrapper</strong>. Concretely, this body:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">with</span> <span class="n">qd</span><span class="o">.</span><span class="n">checkpoint</span><span class="p">():</span>
+    <span class="n">foo</span><span class="p">[()]</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="n">blah</span><span class="p">[()]</span> <span class="o">=</span> <span class="mi">3</span>
+    <span class="n">bar</span><span class="p">[()]</span> <span class="o">=</span> <span class="mi">5</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">arr</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>
+        <span class="n">arr</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">arr</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">+</span> <span class="mi">1</span>
+</pre></div>
+</div>
+<p>lowers to exactly two offloaded tasks: one for the fused <code class="docutils literal notranslate"><span class="pre">foo</span> <span class="pre">/</span> <span class="pre">blah</span> <span class="pre">/</span> <span class="pre">bar</span></code> writes, and one for the real <code class="docutils literal notranslate"><span class="pre">for</span></code> loop — not four. The fuse stops at any control-flow statement (<code class="docutils literal notranslate"><span class="pre">for</span></code>, <code class="docutils literal notranslate"><span class="pre">while</span></code>, <code class="docutils literal notranslate"><span class="pre">if</span></code>, <code class="docutils literal notranslate"><span class="pre">with</span></code>, <code class="docutils literal notranslate"><span class="pre">return</span></code>, <code class="docutils literal notranslate"><span class="pre">pass</span></code>, …) and resumes for any bare statements that follow.</p>
+<p>Practical implications:</p>
+<ul class="simple">
+<li><p><strong>Sequential straight-line writes are cheap.</strong> A handful of scalar / 0-d field assignments inside a checkpoint costs one kernel launch, not one per statement. Don’t refactor them into a manual <code class="docutils literal notranslate"><span class="pre">for</span> <span class="pre">_</span> <span class="pre">in</span> <span class="pre">range(1):</span></code> to “fuse them yourself” — the compiler already does.</p></li>
+<li><p><strong>Scope is shared across a fused run.</strong> Any IR-local introduced by one fused statement is visible to the next. This matches what most users expect.</p></li>
+<li><p><strong>Control flow breaks the run.</strong> If you have a one-off bare write that must be its own task for unrelated reasons, wrap a real (data-dependent) <code class="docutils literal notranslate"><span class="pre">for</span></code>/<code class="docutils literal notranslate"><span class="pre">if</span></code> around it or move it out of the checkpoint.</p></li>
+</ul>
+</section>
 </section>
 </section>
 
@@ -732,6 +752,7 @@ device pointer is baked into the graph at creation time.</p></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#yield-mechanism">Yield mechanism</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#host-side-yield-resume-loop">Host-side yield / resume loop</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id2">Restrictions</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#advanced-statement-fusing-inside-checkpoint-bodies">Advanced: statement fusing inside checkpoint bodies</a></li>
 </ul>
 </li>
 </ul>

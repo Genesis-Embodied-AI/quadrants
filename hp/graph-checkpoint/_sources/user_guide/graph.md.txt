@@ -213,3 +213,26 @@ Kernels with `qd.checkpoint()` but no `yield_on=` keep their previous return con
 - Must be used inside `@qd.kernel(graph=True)`.
 - `yield_on=` (when supplied) must be a kernel parameter that is a 0-d `qd.types.ndarray(qd.i32, ndim=0)`.
 - Checkpoints cannot be nested inside other checkpoints.
+
+### Advanced: statement fusing inside checkpoint bodies
+
+Quadrants offloads each top-level `for`-loop inside a kernel as a separate GPU task / graph node. A bare straight-line statement at the top level of a `qd.checkpoint(...)` body (e.g. `a[()] = 7`) does not naturally fit that mould, so the compiler auto-wraps it in a single-iteration `for _ in range(1):` so that it becomes a `range_for` task with the correct `cp_id` — otherwise it would silently run unconditionally even when its checkpoint is skipped.
+
+To avoid paying one kernel launch + one graph node per such statement, a **run of adjacent bare statements is fused into one wrapper**. Concretely, this body:
+
+```python
+with qd.checkpoint():
+    foo[()] = 0
+    blah[()] = 3
+    bar[()] = 5
+    for i in range(arr.shape[0]):
+        arr[i] = arr[i] + 1
+```
+
+lowers to exactly two offloaded tasks: one for the fused `foo / blah / bar` writes, and one for the real `for` loop — not four. The fuse stops at any control-flow statement (`for`, `while`, `if`, `with`, `return`, `pass`, ...) and resumes for any bare statements that follow.
+
+Practical implications:
+
+- **Sequential straight-line writes are cheap.** A handful of scalar / 0-d field assignments inside a checkpoint costs one kernel launch, not one per statement. Don't refactor them into a manual `for _ in range(1):` to "fuse them yourself" — the compiler already does.
+- **Scope is shared across a fused run.** Any IR-local introduced by one fused statement is visible to the next. This matches what most users expect.
+- **Control flow breaks the run.** If you have a one-off bare write that must be its own task for unrelated reasons, wrap a real (data-dependent) `for`/`if` around it or move it out of the checkpoint.

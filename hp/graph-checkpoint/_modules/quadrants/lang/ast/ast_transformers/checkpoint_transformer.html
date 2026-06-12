@@ -435,28 +435,50 @@
         <span class="c1"># AnnAssign / non-docstring Expr) and leave everything else (For, While, If, With, Pass, docstring) untouched so</span>
         <span class="c1"># they keep working transparently; nested `with qd.checkpoint(...)` in particular still falls through to the</span>
         <span class="c1"># existing nested-checkpoint check at the start of this method.</span>
+        <span class="c1">#</span>
+        <span class="c1"># Adjacent wrappable statements are fused into a *single* `for _ in range(1):` wrapper rather than one wrapper</span>
+        <span class="c1"># per statement. Without this, a checkpoint body that&#39;s just a sequence of field writes like `a[()] = 0; b[()]</span>
+        <span class="c1"># = 1; c[()] = 2` would lower to N single-iteration `range_for` `OffloadedStmt`s and pay N kernel launches + N</span>
+        <span class="c1"># graph nodes for a workload that&#39;s morally one tiny serial kernel. Fusing collapses the run into one task</span>
+        <span class="c1"># without changing semantics: statements execute in program order inside the wrapper exactly as they would</span>
+        <span class="c1"># outside it, and the wrapper&#39;s `cp_id` covers all of them uniformly. Runs break on any non-wrappable stmt</span>
+        <span class="c1"># (For / While / If / With / Pass / docstring / Return / ...) which then becomes its own task as before, and</span>
+        <span class="c1"># the cp_id propagation in `quadrants/transforms/offload.cpp` handles the residual case of a coverage-probe</span>
+        <span class="c1"># style serial task sneaking between two for-loops of the same checkpoint after this transformer has run. See</span>
+        <span class="c1"># `docs/source/user_guide/graph.md` (&quot;Advanced: statement fusing inside checkpoint bodies&quot;) for the user-facing</span>
+        <span class="c1"># note.</span>
         <span class="n">new_body</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">ast</span><span class="o">.</span><span class="n">stmt</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">fused_run</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">ast</span><span class="o">.</span><span class="n">stmt</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+
+        <span class="k">def</span><span class="w"> </span><span class="nf">flush_fused_run</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">fused_run</span><span class="p">:</span>
+                <span class="k">return</span>
+            <span class="n">wrapper</span> <span class="o">=</span> <span class="n">ast</span><span class="o">.</span><span class="n">For</span><span class="p">(</span>
+                <span class="n">target</span><span class="o">=</span><span class="n">ast</span><span class="o">.</span><span class="n">Name</span><span class="p">(</span><span class="nb">id</span><span class="o">=</span><span class="s2">&quot;_&quot;</span><span class="p">,</span> <span class="n">ctx</span><span class="o">=</span><span class="n">ast</span><span class="o">.</span><span class="n">Store</span><span class="p">()),</span>
+                <span class="nb">iter</span><span class="o">=</span><span class="n">ast</span><span class="o">.</span><span class="n">Call</span><span class="p">(</span>
+                    <span class="n">func</span><span class="o">=</span><span class="n">ast</span><span class="o">.</span><span class="n">Name</span><span class="p">(</span><span class="nb">id</span><span class="o">=</span><span class="s2">&quot;range&quot;</span><span class="p">,</span> <span class="n">ctx</span><span class="o">=</span><span class="n">ast</span><span class="o">.</span><span class="n">Load</span><span class="p">()),</span>
+                    <span class="n">args</span><span class="o">=</span><span class="p">[</span><span class="n">ast</span><span class="o">.</span><span class="n">Constant</span><span class="p">(</span><span class="n">value</span><span class="o">=</span><span class="mi">1</span><span class="p">)],</span>
+                    <span class="n">keywords</span><span class="o">=</span><span class="p">[],</span>
+                <span class="p">),</span>
+                <span class="n">body</span><span class="o">=</span><span class="nb">list</span><span class="p">(</span><span class="n">fused_run</span><span class="p">),</span>
+                <span class="n">orelse</span><span class="o">=</span><span class="p">[],</span>
+            <span class="p">)</span>
+            <span class="n">ast</span><span class="o">.</span><span class="n">copy_location</span><span class="p">(</span><span class="n">wrapper</span><span class="p">,</span> <span class="n">fused_run</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+            <span class="n">ast</span><span class="o">.</span><span class="n">fix_missing_locations</span><span class="p">(</span><span class="n">wrapper</span><span class="p">)</span>
+            <span class="n">new_body</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">wrapper</span><span class="p">)</span>
+            <span class="n">fused_run</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span>
+
         <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">stmt</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">body</span><span class="p">):</span>
             <span class="n">needs_wrap</span> <span class="o">=</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">stmt</span><span class="p">,</span> <span class="p">(</span><span class="n">ast</span><span class="o">.</span><span class="n">Assign</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">AugAssign</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">AnnAssign</span><span class="p">))</span>
             <span class="k">if</span> <span class="ow">not</span> <span class="n">needs_wrap</span> <span class="ow">and</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">stmt</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Expr</span><span class="p">):</span>
                 <span class="n">is_docstring</span> <span class="o">=</span> <span class="n">i</span> <span class="o">==</span> <span class="mi">0</span> <span class="ow">and</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">stmt</span><span class="o">.</span><span class="n">value</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Constant</span><span class="p">)</span>
                 <span class="n">needs_wrap</span> <span class="o">=</span> <span class="ow">not</span> <span class="n">is_docstring</span>
             <span class="k">if</span> <span class="n">needs_wrap</span><span class="p">:</span>
-                <span class="n">wrapped</span> <span class="o">=</span> <span class="n">ast</span><span class="o">.</span><span class="n">For</span><span class="p">(</span>
-                    <span class="n">target</span><span class="o">=</span><span class="n">ast</span><span class="o">.</span><span class="n">Name</span><span class="p">(</span><span class="nb">id</span><span class="o">=</span><span class="s2">&quot;_&quot;</span><span class="p">,</span> <span class="n">ctx</span><span class="o">=</span><span class="n">ast</span><span class="o">.</span><span class="n">Store</span><span class="p">()),</span>
-                    <span class="nb">iter</span><span class="o">=</span><span class="n">ast</span><span class="o">.</span><span class="n">Call</span><span class="p">(</span>
-                        <span class="n">func</span><span class="o">=</span><span class="n">ast</span><span class="o">.</span><span class="n">Name</span><span class="p">(</span><span class="nb">id</span><span class="o">=</span><span class="s2">&quot;range&quot;</span><span class="p">,</span> <span class="n">ctx</span><span class="o">=</span><span class="n">ast</span><span class="o">.</span><span class="n">Load</span><span class="p">()),</span>
-                        <span class="n">args</span><span class="o">=</span><span class="p">[</span><span class="n">ast</span><span class="o">.</span><span class="n">Constant</span><span class="p">(</span><span class="n">value</span><span class="o">=</span><span class="mi">1</span><span class="p">)],</span>
-                        <span class="n">keywords</span><span class="o">=</span><span class="p">[],</span>
-                    <span class="p">),</span>
-                    <span class="n">body</span><span class="o">=</span><span class="p">[</span><span class="n">stmt</span><span class="p">],</span>
-                    <span class="n">orelse</span><span class="o">=</span><span class="p">[],</span>
-                <span class="p">)</span>
-                <span class="n">ast</span><span class="o">.</span><span class="n">copy_location</span><span class="p">(</span><span class="n">wrapped</span><span class="p">,</span> <span class="n">stmt</span><span class="p">)</span>
-                <span class="n">ast</span><span class="o">.</span><span class="n">fix_missing_locations</span><span class="p">(</span><span class="n">wrapped</span><span class="p">)</span>
-                <span class="n">new_body</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">wrapped</span><span class="p">)</span>
+                <span class="n">fused_run</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">stmt</span><span class="p">)</span>
             <span class="k">else</span><span class="p">:</span>
+                <span class="n">flush_fused_run</span><span class="p">()</span>
                 <span class="n">new_body</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">stmt</span><span class="p">)</span>
+        <span class="n">flush_fused_run</span><span class="p">()</span>
         <span class="n">node</span><span class="o">.</span><span class="n">body</span> <span class="o">=</span> <span class="n">new_body</span>
 
         <span class="n">kernel</span><span class="o">.</span><span class="n">checkpoint_yield_on_args</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">yield_on_name</span><span class="p">)</span>
