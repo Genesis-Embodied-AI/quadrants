@@ -1,6 +1,11 @@
 # Algorithms
 
-Device-wide algorithms operate on whole arrays — reductions, scans, radix sort, stream compaction, and reduce-by-key — built on the block and subgroup primitives one tier below. Each op is a composable `@qd.func` you call at the **top level** of your own kernel, so the op is captured into the same kernel / graph as your surrounding phases, with the live element count supplied as a device-resident value. Every op requires caller-owned **scratch**, sized with a companion `*_scratch_slots` helper and covered below.
+The algorithms here operate at device-level, using all available gpu cores, and contrast with:
+- [Per-thread linear algorithms](linalg_per_thread.md): operate on per-thread level
+- [Subgroup-level operations](subgroup.md): operate on per-subgroup level
+- [Block-level operations](block.md): operate on per-block level
+
+Each function is a kernel-side qd.func functions, which must be launched from inside a qd.kernel. They are fully compatible with graph. Every op requires caller-owned **scratch**, covered in a later section.
 
 ## What's available
 
@@ -19,18 +24,20 @@ Device-wide algorithms operate on whole arrays — reductions, scans, radix sort
 
 ## Composable `@qd.func` ops
 
-Every algorithm is a composable `@qd.func` (e.g. `reduce_add`, `sort`): call it at the **top level** of your own `@qd.kernel`, so the op is captured into the same kernel / graph as your surrounding phases. A `while qd.graph_do_while(...):` body counts as top level; never nest the call in ordinary runtime `for` / `if` / `while` control flow, which demotes the phase loops, collapses the per-phase grid-wide barriers, and corrupts the result.
+Every algorithm is a composable `@qd.func` (e.g. `reduce_add`, `sort`): call it at the **top level** of your own `@qd.kernel`, so the op is captured into the same kernel / graph as your surrounding phases. The function is annotated with `requires_top_level=True`, so attempting to use it outside of top level will throw an exception [FIXME: implement this]. Note that within a `qd.checkpoint`, `qd.loop_do_while` both count as being at top-level.
+
+## Key sizing parameters
 
 Two parameters control sizing:
 
-- The **live element count** is a **device-resident** value (named `n`), so it can be data-dependent and never has to be read back to the host — which is what lets the op be captured into a graph that replays without re-tracing.
-- The **maximum capacity** is a **compile-time** constant, `LOG256_MAX_N`: one captured graph replays for any live count up to that capacity — see [Capacity (`LOG256_MAX_N`)](#capacity-log256_max_n).
+- **live element count**, `n`: , the number of elements that will actually be handled by the algorithm. This is a runtime value, provided in a scalar tensor. It can be modified without recompiling the kernel.
+- **maximum capacity**, `LOG256_MAX_N`: a **compile-time** constant. One compiled kernel can by used for any live count up to that capacity — see [Capacity (`LOG256_MAX_N`)](#capacity-log256_max_n).
 
 Because each op runs entirely as device code it does no host-side validation (a size check would force a device→host read of the count that defeats graph capture), so you must size its `scratch` correctly up front — see [Scratch space](#scratch-space).
 
 ## Capacity (`LOG256_MAX_N`)
 
-These ops bake their **maximum capacity** in as a compile-time constant, `LOG256_MAX_N`. An op compiled for a given `LOG256_MAX_N` correctly handles any live count `n` with `0 <= n <= 256 ** LOG256_MAX_N`: every op fans in `BLOCK_DIM = 256` elements per staircase level, so the capacity is base-256 in the number of levels (for the reduce / scan family `LOG256_MAX_N` is the number of phases; for the radix sort it is the histogram-scan depth — same base-256 capacity either way). The template parameter spells it `LOG256_MAX_N` (uppercase, because it is a compile-time `qd.template()`); the `*_scratch_slots` host helpers take the same value as a lowercase `log256_max_n` argument.
+These functions bake their **maximum capacity** in as a compile-time constant, `LOG256_MAX_N`. An op compiled for a given `LOG256_MAX_N` correctly handles any live count `n` with `0 <= n <= 256 ** LOG256_MAX_N`. Passing in an `n` outside of these bounds is unchecked undefined behavior.
 
 The capacity grows fast — each level multiplies it by 256:
 
@@ -62,9 +69,9 @@ Size `scratch` with the **same** `LOG256_MAX_N` you compile the op for — `redu
 
 ## Scratch space
 
-Every device-wide algorithm in this module decomposes into "per-block partial → cross-block combine → finalize" passes (tree reduction, three-pass Blelloch scan, four-pass radix sort, scan-then-scatter compaction). The per-block partials need somewhere to live between kernel launches - that buffer is called **scratch**, and **the caller owns it**. Every algorithm takes a mandatory `scratch` argument.
+The algorithms need scratch space in order to run. This is temporary space used by the algorithms. The caller owns the scratch space. It does not need to be initialized in any way. It does need to exist, and be correctly sized, and typed. Every algorithm takes a mandatory `scratch` argument, to receive the scratch space.
 
-**Ask first, then allocate.** Each algorithm ships a companion `*_scratch_slots(N)` function - branch-free integer arithmetic, no device round-trip - that returns the minimum number of slots needed for a length-`N` input. Allocate at least that many; allocating more is fine. These functions are **host- and kernel-callable**: pass a Python `int` to size an allocation up front, or call the same function inside a `@qd.kernel` on a device-read `N` to recompute the requirement on-device and validate it against `scratch.shape[0]` (e.g. raise an overflow flag for a yield-and-realloc loop) without ever reading `N` back to the host. The fixed-depth ops follow the same convention: `reduce_scratch_slots(N, log256_max_n)`, `exclusive_scan_scratch_slots(N, log256_max_n)`, and `sort_scratch_slots(N, log256_max_n)` are host- and kernel-callable when you pass the compile-time depth the op is compiled for; called as `reduce_scratch_slots(N)` / `exclusive_scan_scratch_slots(N)` / `sort_scratch_slots(N)` (depth omitted) they auto-pick the minimal depth from `N` and are host-only.
+**Ask first, then allocate.** Each algorithm ships a companion `*_scratch_slots(N)` function - branch-free integer arithmetic, no device round-trip - that returns the minimum number of slots needed for a length-`N` input. Allocate at least that many; allocating more is fine. These functions are both **host- and kernel-callable**: pass a Python `int` to size an allocation up front, or call the same function inside a `@qd.kernel` on a device-read `N` to recompute the requirement on-device and validate it against `scratch.shape[0]` without ever reading `N` back to the host..
 
 | Algorithm | Sizing function | Scratch dtype |
 |-----------|-----------------|---------------|
