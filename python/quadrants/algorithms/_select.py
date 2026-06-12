@@ -1,15 +1,15 @@
 # type: ignore
 """Device-wide stream compaction (``select`` / ``compact``).
 
-``qd.algorithms.select(arr, flags, out, num_out)`` packs the elements of ``arr`` for which the corresponding
-``flags`` entry is set into a dense prefix of ``out``, in stable input order, and writes the count of selected
-elements to ``num_out[0]``. Each ``flags[i]`` must be exactly ``0`` or ``1`` (``1`` selects); the algorithm
-prefix-sums ``flags`` directly as counts, so non-0/1 values produce wrong indices and counts (caller's responsibility,
-no normalization pass).
+``qd.algorithms.select(arr, flags, out, num_out, scratch, n, LOG256_MAX_N)`` packs the elements of ``arr`` for
+which the corresponding ``flags`` entry is set into a dense prefix of ``out``, in stable input order, and writes the
+count of selected elements to ``num_out[0]``. Each ``flags[i]`` must be exactly ``0`` or ``1`` (``1`` selects); the
+algorithm prefix-sums ``flags`` directly as counts, so non-0/1 values produce wrong indices and counts (caller's
+responsibility, no normalization pass).
 
-Algorithm (textbook scan-based compaction), emitted as a fixed-depth staircase of ``@qd.func`` phases inside a
-single kernel launch (``select`` validates + sizes on the host, then launches ``_select_kernel`` -> ``select_func``;
-``select_func`` is also public so qipc can compose the compaction at the top level of its own ``graph=True`` kernel):
+Algorithm (textbook scan-based compaction), emitted as a fixed-depth staircase of ``@qd.func`` phases (call
+``select`` at the **top level** of your own ``@qd.kernel`` - e.g. a qipc ``graph=True`` parent - with the live
+count ``n`` as a device ``Expr`` and the compile-time ``LOG256_MAX_N`` phase count):
 
 1. Exclusive prefix-sum the ``flags`` (treated as 0 / 1) into the caller's ``u32`` scratch, producing per-element
    write indices. This reuses the same staircase phases (:func:`_reduce_phase` / :func:`_scan_downsweep_phase`) as
@@ -29,11 +29,10 @@ This is why ``select`` works on any element dtype Quadrants supports for field a
 **Scratch.** ``select`` needs a **caller-owned** 1-D ``u32`` scratch buffer of :func:`select_scratch_slots` ``(N)``
 slots (the per-element indices ``scratch[0:N]`` plus the scan partials above them). ``u32`` regardless of the element
 dtype (the scan operates on flags-as-counts). There is no module-level shared scratch - the caller always owns the
-buffer; a too-small buffer raises :class:`InsufficientScratchError`.
+buffer.
 """
 
 from quadrants.lang.kernel_impl import func as _func
-from quadrants.lang.kernel_impl import kernel
 from quadrants.lang.ops import bit_cast
 from quadrants.lang.simt.reductions import _bin_add
 from quadrants.types.annotations import template
@@ -42,9 +41,7 @@ from quadrants.types.primitive_types import i32, u32
 from ._reduce import (
     _OP_ADD,
     BLOCK_DIM,
-    _reduce_depth_for_n,
     _reduce_phase,
-    _validate_caller_scratch,
 )
 from ._scan import (
     _emit_scan_inplace,
@@ -103,7 +100,7 @@ def _emit_select_scan(flags, scratch, n, LOG256_MAX_N):
     """Emit the exclusive prefix-sum of ``flags`` (0/1 counts) into the ``u32`` index slice ``scratch[0:n]`` at
     kernel-compile time, with the per-tile partials staircase stacked at ``scratch[n:]``.
 
-    The select-specific layout of the same out-of-place staircase that backs :func:`exclusive_scan_add_func`: the
+    The select-specific layout of the same out-of-place staircase that backs :func:`exclusive_scan_add`: the
     indices and the partials live in one ``u32`` buffer (indices at offset 0, partials at offset ``n``), so it can't
     reuse ``_emit_scan`` directly (that takes a separate ``out``). ``flags`` is read-only (the scatter / count phases
     re-read it), so the scan is out-of-place into ``scratch``. ``DTYPE`` is ``i32`` (flags-as-counts) staged through a
@@ -122,7 +119,7 @@ def _emit_select_scan(flags, scratch, n, LOG256_MAX_N):
 
 
 @_func
-def select_func(
+def select(
     arr: template(),
     flags: template(),
     out: template(),
@@ -131,7 +128,7 @@ def select_func(
     n: i32,
     LOG256_MAX_N: template(),
 ):
-    """Graph-composable stream compaction - the ``@qd.func`` form of :func:`select`.
+    """Graph-composable stream compaction.
 
     Call at the **top level** of your own ``@qd.kernel`` (e.g. a qipc ``graph=True`` parent); never nest it in
     ordinary runtime ``for`` / ``if`` / ``while`` control flow. ``n`` is the live element count as a device ``Expr``;
@@ -143,21 +140,6 @@ def select_func(
     _emit_select_scan(flags, scratch, n, LOG256_MAX_N)
     _select_scatter_phase(arr, flags, scratch, 0, out, n)
     _select_count_phase(flags, scratch, 0, n, num_out)
-
-
-@kernel
-def _select_kernel(
-    arr: template(),
-    flags: template(),
-    out: template(),
-    num_out: template(),
-    scratch: template(),
-    n: i32,
-    LOG256_MAX_N: template(),
-):
-    """Host-launch wrapper for :func:`select_func` (one launch; the scan + scatter + count phases are emitted inside).
-    ``n`` is a plain runtime count (the host knows ``N``). Private - the public host entry is :func:`select`."""
-    select_func(arr, flags, out, num_out, scratch, n, LOG256_MAX_N)
 
 
 def select_scratch_slots(n: int) -> int:
@@ -178,63 +160,4 @@ def select_scratch_slots(n: int) -> int:
     return _scan_total_scratch_slots(B0, partials_cursor=n + B0) * pos
 
 
-def select(arr, flags, out, num_out, scratch):
-    """Stream-compact ``arr`` by ``flags``: copy ``arr[i]`` to a dense prefix of ``out`` for every ``i`` where
-    ``flags[i] == 1``, in stable input order. Write the count of selected elements to ``num_out[0]``.
-
-    Args:
-        arr: 1-D tensor of any element dtype that Quadrants supports field-element assignment for: scalars
-            (``i32`` / ``u32`` / ``f32`` / ``i64`` / ``u64`` / ``f64``) and structs (``qd.Struct.field({...})`` or
-            ``qd.types.struct(...)`` - e.g. the libuipc ``Vector{2,3,4}i`` shapes). The scatter is
-            ``dst[idx] = src[i]``, which lowers per-field for struct dtypes, so no scratch reinterpretation is
-            needed for wider / composite element types.
-        flags: 1-D ``i32`` tensor, same shape as ``arr``. **Every entry must be exactly ``0`` or ``1``** (``1``
-            selects). Non-0/1 values produce incorrect results - the algorithm prefix-sums ``flags`` directly as
-            counts, so a stray ``2`` would advance the destination cursor by 2 and break the dense-output / count
-            contract. Caller-built: populate with a separate kernel that applies your predicate, writing exactly
-            ``1`` for selected and ``0`` otherwise.
-        out: 1-D tensor with the same dtype as ``arr``. Must hold at least ``N`` elements (so a
-            worst-case-everyone-selected run fits); only the prefix ``out[0 : num_out[0]]`` is meaningful on return.
-        num_out: 1-element ``i32`` tensor receiving the selected count.
-        scratch: caller-owned 1-D ``u32`` workspace of :func:`select_scratch_slots` ``(N)`` slots. There is no
-            module-level shared scratch; a too-small buffer raises :class:`InsufficientScratchError`.
-
-    Same async / no-implicit-sync contract as ``reduce_*`` and ``exclusive_scan_*``: ``num_out`` is a tensor, not a
-    Python scalar - call ``num_out.to_numpy()[0]`` explicitly to get the count host-side.
-
-    See the design doc at ``perso_hugh/doc/qipc/qipc_device_algos_design.md`` for the scratch-into-indices layout and
-    the algorithm reference.
-    """
-    if not hasattr(arr, "shape") or len(arr.shape) != 1:
-        raise TypeError(f"select expects a 1-D arr; got shape {getattr(arr, 'shape', None)}")
-    if not hasattr(flags, "shape") or flags.shape != arr.shape:
-        raise TypeError(f"select expects flags.shape == arr.shape; got arr={arr.shape}, flags={flags.shape}")
-    if flags.dtype != i32:
-        raise TypeError(f"select expects flags.dtype == qd.i32; got {flags.dtype}")
-    if not hasattr(out, "shape") or len(out.shape) != 1:
-        raise TypeError(f"select expects a 1-D out; got shape {getattr(out, 'shape', None)}")
-    if out.dtype != arr.dtype:
-        raise TypeError(f"select dtype mismatch: arr={arr.dtype}, out={out.dtype}")
-    if out.shape[0] < arr.shape[0]:
-        raise ValueError(
-            f"select out.shape[0]={out.shape[0]} < arr.shape[0]={arr.shape[0]}; "
-            "out must hold at least the input size to be safe in the all-selected case"
-        )
-    if not hasattr(num_out, "shape") or num_out.shape != (1,):
-        raise TypeError(f"select expects num_out.shape == (1,); got {num_out.shape}")
-    if num_out.dtype != i32:
-        raise TypeError(f"select expects num_out.dtype == qd.i32; got {num_out.dtype}")
-
-    N = arr.shape[0]
-    if N == 0:
-        return
-
-    # Scratch layout: scratch[0:N] = indices, scratch[N : N + B0] = level-0 partials, then deeper levels above.
-    _validate_caller_scratch("select", N, scratch, select_scratch_slots(N), u32)
-    log256_max_n = _reduce_depth_for_n(N)
-    # One launch: the scan-of-flags staircase + scatter + count are emitted inside _select_kernel as @qd.func phases
-    # (the same fixed-depth scan that backs exclusive_scan_add). N == 1 falls out of the single-tile base case.
-    _select_kernel(arr, flags, out, num_out, scratch, N, log256_max_n)
-
-
-__all__ = ["select", "select_func", "select_scratch_slots"]
+__all__ = ["select", "select_scratch_slots"]

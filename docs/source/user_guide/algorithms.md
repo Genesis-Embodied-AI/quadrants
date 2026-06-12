@@ -1,43 +1,36 @@
 # Algorithms
 
-Device-wide algorithms operate on whole arrays — reductions, scans, radix sort, stream compaction, and reduce-by-key — built on the block and subgroup primitives one tier below. Each op has a friendly host (Python) entry that validates its inputs, sizes the work, and launches it standalone. Most also ship a composable `@qd.func` variant (the `_func` suffix) you can call at the **top level** of your own kernel, so the op is captured into the same kernel / graph as your surrounding phases. Every op requires caller-owned **scratch**, covered in the next section.
+Device-wide algorithms operate on whole arrays — reductions, scans, radix sort, stream compaction, and reduce-by-key — built on the block and subgroup primitives one tier below. Each op is a composable `@qd.func` you call at the **top level** of your own kernel, so the op is captured into the same kernel / graph as your surrounding phases, with the live element count supplied as a device-resident value. Every op requires caller-owned **scratch**, sized with a companion `*_scratch_slots` helper and covered below.
 
 ## What's available
 
 | Op                                                          | What it does                                                       | CUDA | AMDGPU | Vulkan | Metal |
 |-------------------------------------------------------------|--------------------------------------------------------------------|------|--------|--------|-------|
-| `qd.algorithms.reduce_{add,min,max}(arr, out, scratch)`         | `out[0] = sum/min/max(arr)` (fixed-depth tree reduction, one launch; identity derived from `arr.dtype` for min / max). Friendly host entry. | yes  | yes\*  | yes    | yes\* |
-| `qd.algorithms.reduce_{add,min,max}_func(arr, out, scratch, n, DTYPE, LOG256_MAX_N)` | Same reduce as a `@qd.func`, to compose at the top level of your own kernel (device-resident count `n`, compile-time `LOG256_MAX_N`). | yes  | yes\*  | yes    | yes\* |
-| `qd.algorithms.exclusive_scan_{add,min,max}(arr, out, scratch)` | `out[i] = sum/min/max(arr[0:i])` (three-pass Blelloch-style scan, one launch; 32-bit + 64-bit scalars; identity derived from `arr.dtype` for min / max). Friendly host entry. | yes  | yes\*  | yes    | yes\* |
-| `qd.algorithms.exclusive_scan_{add,min,max}_func(arr, out, scratch, n, DTYPE, LOG256_MAX_N)` | Same scan as a `@qd.func`, to compose at the top level of your own kernel (device-resident count `n`, compile-time `LOG256_MAX_N`). | yes  | yes\*  | yes    | yes\* |
-| `qd.algorithms.select(arr, flags, out, num_out, scratch)`     | Stream compaction: copy `arr[i]` to a dense prefix of `out` for every `flags[i] == 1` (`flags` must be exactly 0/1). Friendly host entry. | yes  | yes\*  | yes    | yes\* |
-| `qd.algorithms.select_func(arr, flags, out, num_out, scratch, n, LOG256_MAX_N)` | Same compaction as a `@qd.func`, to compose at the top level of your own kernel (device-resident count `n`, compile-time `LOG256_MAX_N`; no `DTYPE` - the scatter is dtype-agnostic). | yes  | yes\*  | yes    | yes\* |
-| `qd.algorithms.radix_sort(keys, tmp_keys, scratch, *, values=None, tmp_values=None, end_bit=None, log256_max_n=None)` | LSB radix sort (32-bit / 64-bit scalar keys, optional key-value). Friendly host entry (derives passes / depth / device-`N`, validates scratch). | yes  | yes\*  | yes    | yes\* |
-| `qd.algorithms.radix_sort_func(keys, tmp_keys, values, tmp_values, scratch, n, KEY_DTYPE, HAS_VALUES, END_BIT, LOG256_MAX_N)` | Same sort as a `@qd.func`, to compose at the top level of your own kernel. | yes  | yes\*  | yes    | yes\* |
-| `qd.algorithms.reduce_by_key_add(keys_in, values_in, keys_out, values_out, num_runs, scratch)` | Collapse each consecutive run of equal keys into `(key, sum_of_values)`. Friendly host entry. | yes  | yes\*  | yes    | yes\* |
-| `qd.algorithms.reduce_by_key_add_func(keys_in, values_in, keys_out, values_out, num_runs, scratch, n, VALUE_DTYPE, LOG256_MAX_N)` | Same reduce-by-key as a `@qd.func`, to compose at the top level of your own kernel (device-resident count `n`, compile-time `LOG256_MAX_N`; `VALUE_DTYPE` only for the `values_out` zero-init). | yes  | yes\*  | yes    | yes\* |
-| `qd.algorithms.parallel_sort`                               | Odd-even merge sort (in-place, key or key-value). **Deprecated**: prefer `radix_sort`. | yes  | yes\*  | yes    | yes\* |
+| `qd.algorithms.reduce_{add,min,max}(arr, out, scratch, n, DTYPE, LOG256_MAX_N)` | `out[0] = sum/min/max(arr[0:n])` (fixed-depth tree reduction; identity derived from `DTYPE` for min / max). Composed at the top level of your own kernel (device-resident count `n`, compile-time `LOG256_MAX_N`). | yes  | yes\*  | yes    | yes\* |
+| `qd.algorithms.exclusive_scan_{add,min,max}(arr, out, scratch, n, DTYPE, LOG256_MAX_N)` | `out[i] = sum/min/max(arr[0:i])` (three-pass Blelloch-style scan; 32-bit + 64-bit scalars; identity derived from `DTYPE` for min / max). | yes  | yes\*  | yes    | yes\* |
+| `qd.algorithms.select(arr, flags, out, num_out, scratch, n, LOG256_MAX_N)` | Stream compaction: copy `arr[i]` to a dense prefix of `out` for every `flags[i] == 1` (`flags` must be exactly 0/1; no `DTYPE` - the scatter is dtype-agnostic). | yes  | yes\*  | yes    | yes\* |
+| `qd.algorithms.sort(keys, tmp_keys, values, tmp_values, scratch, n, KEY_DTYPE, HAS_VALUES, END_BIT, LOG256_MAX_N)` | LSB radix sort (32-bit / 64-bit scalar keys, optional key-value). | yes  | yes\*  | yes    | yes\* |
+| `qd.algorithms.reduce_by_key_add(keys_in, values_in, keys_out, values_out, num_runs, scratch, n, VALUE_DTYPE, LOG256_MAX_N)` | Collapse each consecutive run of equal keys into `(key, sum_of_values)` (`VALUE_DTYPE` only for the `values_out` zero-init). | yes  | yes\*  | yes    | yes\* |
+| `qd.algorithms.{reduce,exclusive_scan,select,reduce_by_key,sort}_scratch_slots(...)` | Host- and kernel-callable helpers returning the scratch slot count each op needs. | —    | —      | —      | —     |
+| `qd.algorithms.parallel_sort`                               | Odd-even merge sort (in-place, key or key-value). **Deprecated**: prefer `sort`. | yes  | yes\*  | yes    | yes\* |
 | `qd.algorithms.PrefixSumExecutor`                           | Inclusive in-place prefix sum (i32 only). **Deprecated**: prefer `exclusive_scan_add`. | yes  | no     | yes    | no    |
 
-\* `reduce_*`, `exclusive_scan_*`, `select`, `radix_sort` / `radix_sort_func`, `reduce_by_key_add`, and `parallel_sort` run anywhere a Quadrants kernel runs; portability is inherited from the underlying block / subgroup primitives.
+\* `reduce_{add,min,max}`, `exclusive_scan_{add,min,max}`, `select`, `sort`, `reduce_by_key_add`, and `parallel_sort` run anywhere a Quadrants kernel runs; portability is inherited from the underlying block / subgroup primitives.
 
-## Host entries and composable `_func` forms
+## Composable `@qd.func` ops
 
-Each algorithm comes in two forms:
+Every algorithm is a composable `@qd.func` (e.g. `reduce_add`, `sort`): call it at the **top level** of your own `@qd.kernel`, so the op is captured into the same kernel / graph as your surrounding phases. A `while qd.graph_do_while(...):` body counts as top level; never nest the call in ordinary runtime `for` / `if` / `while` control flow, which demotes the phase loops, collapses the per-phase grid-wide barriers, and corrupts the result.
 
-- **Host entry** (e.g. `reduce_add`, `radix_sort`) — called from Python. It validates its inputs, derives the recursion depth from the input length, and launches the work standalone. Use this unless you specifically need to fuse the op into your own captured graph.
-- **Composable `@qd.func`** (the `_func` suffix, e.g. `reduce_add_func`, `radix_sort_func`) — called at the **top level** of your own `@qd.kernel`, so the op is captured into the same kernel / graph as your surrounding phases.
+Two parameters control sizing:
 
-The two forms differ in how the input size is supplied:
+- The **live element count** is a **device-resident** value (named `n`), so it can be data-dependent and never has to be read back to the host — which is what lets the op be captured into a graph that replays without re-tracing.
+- The **maximum capacity** is a **compile-time** constant, `LOG256_MAX_N`: one captured graph replays for any live count up to that capacity — see [Capacity (`LOG256_MAX_N`)](#capacity-log256_max_n).
 
-- For a `_func` form the **live element count** is a **device-resident** scalar (named `n`), so it can be data-dependent and never has to be read back to the host — which is what lets the op be captured into a graph that replays without re-tracing. The host entries read the count on the host instead.
-- The **maximum capacity** of a `_func` form is a **compile-time** constant, `LOG256_MAX_N`: one captured graph replays for any live count up to that capacity. The host entries derive it for you; on the `_func` path you supply it — see [Capacity (`LOG256_MAX_N`)](#capacity-log256_max_n).
-
-Because a `_func` form runs entirely as device code it does no host-side validation (a size check would force a device→host read of the count that defeats graph capture), so you must size its `scratch` correctly up front — see [Scratch space](#scratch-space).
+Because each op runs entirely as device code it does no host-side validation (a size check would force a device→host read of the count that defeats graph capture), so you must size its `scratch` correctly up front — see [Scratch space](#scratch-space).
 
 ## Capacity (`LOG256_MAX_N`)
 
-The `_func` forms bake their **maximum capacity** in as a compile-time constant, `LOG256_MAX_N`. An op compiled for a given `LOG256_MAX_N` correctly handles any live count `n` with `0 <= n <= 256 ** LOG256_MAX_N`: every op fans in `BLOCK_DIM = 256` elements per staircase level, so the capacity is base-256 in the number of levels (for the reduce / scan family `LOG256_MAX_N` is the number of phases; for the radix sort it is the histogram-scan depth — same base-256 capacity either way). The `_func` template spells it `LOG256_MAX_N` (uppercase, because it is a compile-time `qd.template()`); the `*_scratch_slots` host helpers take the same value as a lowercase `log256_max_n` argument.
+These ops bake their **maximum capacity** in as a compile-time constant, `LOG256_MAX_N`. An op compiled for a given `LOG256_MAX_N` correctly handles any live count `n` with `0 <= n <= 256 ** LOG256_MAX_N`: every op fans in `BLOCK_DIM = 256` elements per staircase level, so the capacity is base-256 in the number of levels (for the reduce / scan family `LOG256_MAX_N` is the number of phases; for the radix sort it is the histogram-scan depth — same base-256 capacity either way). The template parameter spells it `LOG256_MAX_N` (uppercase, because it is a compile-time `qd.template()`); the `*_scratch_slots` host helpers take the same value as a lowercase `log256_max_n` argument.
 
 The capacity grows fast — each level multiplies it by 256:
 
@@ -63,81 +56,57 @@ def log256_max_n(capacity: int) -> int:
 ```
 
 - **Over-specifying is safe.** A capacity larger than the live count just adds staircase levels that operate on length-1 buffers — harmless identity no-ops. The only cost is a few extra empty launches and marginally larger scratch, so when in doubt, round up.
-- **Under-specifying is a bug.** If `256 ** LOG256_MAX_N < n` the op cannot address the tail of the input, and the `_func` path has no host-side guard to catch it. Always cover your worst case.
+- **Under-specifying is a bug.** If `256 ** LOG256_MAX_N < n` the op cannot address the tail of the input, and there is no host-side guard to catch it. Always cover your worst case.
 
-Size `scratch` with the **same** `LOG256_MAX_N` you compile the op for — `reduce_scratch_slots(capacity, log256_max_n)`, `exclusive_scan_scratch_slots(capacity, log256_max_n)`, `radix_sort_scratch_slots(capacity, log256_max_n)` — see [Scratch space](#scratch-space).
-
-The **host entries** (`reduce_add`, `exclusive_scan_add`, `select`, `reduce_by_key_add`, `radix_sort`) never take this argument: they read the input length on the host and derive the minimal capacity for you. `LOG256_MAX_N` is only something you supply on the composable `_func` path.
+Size `scratch` with the **same** `LOG256_MAX_N` you compile the op for — `reduce_scratch_slots(capacity, log256_max_n)`, `exclusive_scan_scratch_slots(capacity, log256_max_n)`, `sort_scratch_slots(capacity, log256_max_n)` — see [Scratch space](#scratch-space). (The `*_scratch_slots` helpers can also derive the minimal depth from `N` for you when you omit the argument — but that path is host-only, so when composing the op into a kernel always pass the explicit depth.)
 
 ## Scratch space
 
 Every device-wide algorithm in this module decomposes into "per-block partial → cross-block combine → finalize" passes (tree reduction, three-pass Blelloch scan, four-pass radix sort, scan-then-scatter compaction). The per-block partials need somewhere to live between kernel launches - that buffer is called **scratch**, and **the caller owns it**. Every algorithm takes a mandatory `scratch` argument.
 
-**Ask first, then allocate.** Each algorithm ships a companion `*_scratch_slots(N)` function - branch-free integer arithmetic, no device round-trip - that returns the minimum number of slots needed for a length-`N` input. Allocate at least that many; allocating more is fine. These functions are **host- and kernel-callable**: pass a Python `int` to size an allocation up front, or call the same function inside a `@qd.kernel` on a device-read `N` to recompute the requirement on-device and validate it against `scratch.shape[0]` (e.g. raise an overflow flag for a yield-and-realloc loop) without ever reading `N` back to the host. The fixed-depth ops follow the same convention: `reduce_scratch_slots(N, log256_max_n)`, `exclusive_scan_scratch_slots(N, log256_max_n)`, and `radix_sort_scratch_slots(N, log256_max_n)` are host- and kernel-callable when you pass the compile-time depth the op is compiled for; called as `reduce_scratch_slots(N)` / `exclusive_scan_scratch_slots(N)` / `radix_sort_scratch_slots(N)` (depth omitted) they auto-pick the minimal depth from `N` and are host-only.
+**Ask first, then allocate.** Each algorithm ships a companion `*_scratch_slots(N)` function - branch-free integer arithmetic, no device round-trip - that returns the minimum number of slots needed for a length-`N` input. Allocate at least that many; allocating more is fine. These functions are **host- and kernel-callable**: pass a Python `int` to size an allocation up front, or call the same function inside a `@qd.kernel` on a device-read `N` to recompute the requirement on-device and validate it against `scratch.shape[0]` (e.g. raise an overflow flag for a yield-and-realloc loop) without ever reading `N` back to the host. The fixed-depth ops follow the same convention: `reduce_scratch_slots(N, log256_max_n)`, `exclusive_scan_scratch_slots(N, log256_max_n)`, and `sort_scratch_slots(N, log256_max_n)` are host- and kernel-callable when you pass the compile-time depth the op is compiled for; called as `reduce_scratch_slots(N)` / `exclusive_scan_scratch_slots(N)` / `sort_scratch_slots(N)` (depth omitted) they auto-pick the minimal depth from `N` and are host-only.
 
 | Algorithm | Sizing function | Scratch dtype |
 |-----------|-----------------|---------------|
-| `reduce_{add,min,max}` / `reduce_*_func` | `reduce_scratch_slots(N[, log256_max_n])` | `u32` (4-byte `arr`) / `u64` (8-byte `arr`) |
-| `exclusive_scan_{add,min,max}` / `exclusive_scan_*_func` | `exclusive_scan_scratch_slots(N[, log256_max_n])` | `u32` (4-byte `arr`) / `u64` (8-byte `arr`) |
+| `reduce_{add,min,max}` | `reduce_scratch_slots(N[, log256_max_n])` | `u32` (4-byte `arr`) / `u64` (8-byte `arr`) |
+| `exclusive_scan_{add,min,max}` | `exclusive_scan_scratch_slots(N[, log256_max_n])` | `u32` (4-byte `arr`) / `u64` (8-byte `arr`) |
 | `select` | `select_scratch_slots(N)` | `u32` (always) |
 | `reduce_by_key_add` | `reduce_by_key_scratch_slots(N)` | `u32` (always) |
-| `radix_sort` / `radix_sort_func` | `radix_sort_scratch_slots(N[, log256_max_n])` | `u32` (always, regardless of key width) |
+| `sort` | `sort_scratch_slots(N[, log256_max_n])` | `u32` (always, regardless of key width) |
 
 The slot count is **dtype-width-independent** (it is a count, not a byte count). For the 4-byte / 8-byte algorithms (`reduce`, `scan`) you allocate the *same number of slots* but in a `u32` buffer for 4-byte element dtypes and a `u64` buffer for 8-byte ones - the partials are `bit_cast` to / from the element dtype. `select`, `reduce_by_key_add`, and the radix sort always use `u32` scratch (they stage counts / indices / tile histograms, which are `u32` regardless of the element / key dtype).
 
 ```python
 import quadrants as qd
 
-N = 1_000_000
+N = 1_000_000   # capacity: an upper bound on the live count you will feed the captured graph
+D = 3           # LOG256_MAX_N: 256**3 = 16,777,216 >= N
 
-# 4-byte reduce: u32 scratch.
-scratch = qd.Tensor(qd.ndarray(qd.u32, shape=max(qd.algorithms.reduce_scratch_slots(N), 1)))
-qd.algorithms.reduce_add(inp_i32, out=out_i32, scratch=scratch)
+# 4-byte reduce: u32 scratch, sized for the same depth D the func is compiled for.
+scratch = qd.ndarray(qd.u32, shape=max(qd.algorithms.reduce_scratch_slots(N, D), 1))
 
 # 8-byte reduce: same slot count, u64 buffer.
-scratch64 = qd.Tensor(qd.ndarray(qd.u64, shape=max(qd.algorithms.reduce_scratch_slots(N), 1)))
-qd.algorithms.reduce_add(inp_f64, out=out_f64, scratch=scratch64)
+scratch64 = qd.ndarray(qd.u64, shape=max(qd.algorithms.reduce_scratch_slots(N, D), 1))
 ```
 
 Several sizing functions return `0` for the trivial / single-tile case (e.g. `reduce_scratch_slots(N)` for `N <= 1`, `exclusive_scan_scratch_slots(N)` for `N <= 256`); wrap the count in `max(..., 1)` so the `qd.Tensor` allocation stays legal, since the algorithm won't touch the buffer in those cases anyway.
 
-**Too-small buffer.** The host-launched algorithms (`reduce_*`, `exclusive_scan_*`, `select`, `reduce_by_key_add`) validate the supplied `scratch` against `*_scratch_slots(N)` and raise `qd.algorithms.InsufficientScratchError` (a `RuntimeError` subclass) **before** launching anything, so a failed call never corrupts the caller's inputs. The exception carries the sizes programmatically:
-
-```python
-try:
-    qd.algorithms.reduce_add(arr, out=out, scratch=scratch)
-except qd.algorithms.InsufficientScratchError as err:
-    scratch = qd.Tensor(qd.ndarray(qd.u32, shape=err.required_slots))   # err.required_bytes / err.provided_slots also available
-    qd.algorithms.reduce_add(arr, out=out, scratch=scratch)
-```
-
-This is the "try and fail with the size" path; `*_scratch_slots` is the "ask first" path. Either is fine; pick whichever fits your control flow. The composable `@qd.func` forms are the exception: `reduce_*_func`, `exclusive_scan_*_func`, `select_func`, `reduce_by_key_add_func`, and `radix_sort_func` run directly as device code (a host-side scratch check would force an `N` device-to-host read that defeats graph capture), so they do **no** such check - size `scratch` correctly up front with `reduce_scratch_slots(N, log256_max_n)` / `exclusive_scan_scratch_slots(N, log256_max_n)` / `select_scratch_slots(N)` / `reduce_by_key_scratch_slots(N)` / `radix_sort_scratch_slots(N, log256_max_n)`. The host entries (`reduce_*`, `exclusive_scan_*`, `select`, `reduce_by_key_add`) keep the up-front check.
+**No on-device check.** The composable `@qd.func` forms run directly as device code, so they do **no** scratch-sufficiency check (a host-side check would force an `N` device-to-host read that defeats graph capture). Size `scratch` correctly up front with the matching helper — `reduce_scratch_slots(N, log256_max_n)`, `exclusive_scan_scratch_slots(N, log256_max_n)`, `select_scratch_slots(N)`, `reduce_by_key_scratch_slots(N)`, or `sort_scratch_slots(N, log256_max_n)` — for the capacity you compile the op against. An undersized buffer corrupts the output (or reads / writes out of bounds) rather than raising.
 
 The per-algorithm sections below restate the sizing function and footprint for each op.
 
 ## Semantics
 
-### `qd.algorithms.reduce_{add,min,max}(arr, out, scratch)`
+### `qd.algorithms.reduce_{add,min,max}`
 
-Device-wide tree reduction over a 1-D tensor: `out[0]` holds `sum(arr)` / `min(arr)` / `max(arr)`. The monoid identity is derived from `arr.dtype` automatically (`0` for `add`; largest representable value for `min` - `+inf` for floats, `INT{32,64}_MAX` for signed ints, `UINT{32,64}_MAX` for unsigned; smallest representable value for `max` - `-inf` for floats, `INT{32,64}_MIN` for signed ints, `0` for unsigned), mirroring the `block.reduce_min` / `subgroup.reduce_min` typed wrappers which don't take an identity for the same reason.
-
-```python
-import quadrants as qd
-
-inp = qd.field(qd.f32, shape=N)
-out = qd.field(qd.f32, shape=1)
-scratch = qd.Tensor(qd.ndarray(qd.u32, shape=max(qd.algorithms.reduce_scratch_slots(N), 1)))
-# ... fill inp ...
-
-qd.algorithms.reduce_add(inp, out=out, scratch=scratch)
-total = float(out.to_numpy()[0])   # explicit device->host hop
-```
+Device-wide tree reduction over a 1-D tensor, called at the **top level** of your own `@qd.kernel`: `out[0]` holds `sum(arr[0:n])` / `min(arr[0:n])` / `max(arr[0:n])`. The monoid identity is derived from the `DTYPE` template automatically — the element dtype, which the op takes explicitly because an `ndarray` kernel argument exposes no in-kernel `.dtype` (`0` for `add`; largest representable value for `min` - `+inf` for floats, `INT{32,64}_MAX` for signed ints, `UINT{32,64}_MAX` for unsigned; smallest representable value for `max` - `-inf` for floats, `INT{32,64}_MIN` for signed ints, `0` for unsigned), mirroring the `block.reduce_min` / `subgroup.reduce_min` typed wrappers which don't take an identity for the same reason.
 
 Arguments:
 
-- `arr`: 1-D input tensor. Pass a `qd.field`, `qd.ndarray`, or `qd.Tensor` wrapper around either - the kernels are polymorphic via the `qd.Tensor` annotation.
-- `out`: 1-element tensor with the same dtype as `arr`. Caller-supplied so the call is fully asynchronous - there is no implicit device→host sync. To get a Python scalar, do `out.to_numpy()[0]` explicitly after the call. This makes the host hop visible at the call site rather than hidden inside the algorithm.
-- `scratch`: caller-owned 1-D workspace of `reduce_scratch_slots(N)` slots, `u32` for 4-byte `arr` dtypes and `u64` for 8-byte ones. See [Scratch space](#scratch-space).
+- `arr`: 1-D input tensor. As an `ndarray` kernel argument it is polymorphic over `qd.field`, `qd.ndarray`, and `qd.Tensor`.
+- `out`: 1-element tensor with the same dtype as `arr`. Caller-supplied so the call is fully asynchronous - there is no implicit device→host sync. To get a Python scalar, do `out.to_numpy()[0]` explicitly once the enclosing kernel has run; this makes the host hop visible at the call site rather than hidden inside the algorithm.
+- `scratch`: caller-owned 1-D workspace of `reduce_scratch_slots(N, LOG256_MAX_N)` slots, `u32` for 4-byte `arr` dtypes and `u64` for 8-byte ones. See [Scratch space](#scratch-space).
+- `n`, `DTYPE`, `LOG256_MAX_N`: the device-resident live count, the element dtype, and the compile-time capacity — see "Composing the func inside your own kernel" below.
 
 Constraints:
 
@@ -147,10 +116,10 @@ Constraints:
 
 Implementation:
 
-- Fixed-depth tree reduction emitted as a single kernel launch. The host entry derives the minimal depth `D` (smallest `D` with `256**D >= N`) from `N` and launches one `@qd.kernel` that emits `D` phases internally; each phase uses `BLOCK_DIM = 256` threads per block and reduces 256 elements per block via `block.reduce_{add,min,max}`. For `N <= 256` one phase suffices; up to `256^2 = 65536`, two; and so on. Out-of-range lanes contribute the monoid identity, derived in-kernel from the element dtype (no runtime identity argument).
-- Per-phase partials are written to the caller's `scratch` buffer (u32 for 4-byte dtypes, u64 for 8-byte dtypes; see [Scratch space](#scratch-space)); the final phase writes `out[0]` directly. The phases are separate offloaded launches inside the one kernel, so correctness relies on the same launch-boundary serialization as before.
+- Fixed-depth tree reduction. The func emits a fixed-depth (`LOG256_MAX_N`) staircase of phases inside the enclosing kernel; each phase uses `BLOCK_DIM = 256` threads per block and reduces 256 elements per block via `block.reduce_{add,min,max}`. `LOG256_MAX_N = 1` covers `N <= 256`; `2` covers up to `256^2 = 65536`; and so on. Out-of-range lanes contribute the monoid identity, derived in-kernel from the `DTYPE` template (no runtime identity argument).
+- Per-phase partials are written to the caller's `scratch` buffer (u32 for 4-byte dtypes, u64 for 8-byte dtypes; see [Scratch space](#scratch-space)); the final phase writes `out[0]` directly. The phases are separate offloaded launches inside the enclosing kernel, so correctness relies on the same launch-boundary serialization as the surrounding phases.
 
-Composing the func inside your own kernel (qipc-style): call `reduce_{add,min,max}_func(arr, out, scratch, n, DTYPE, LOG256_MAX_N)` at the **top level** of your `@qd.kernel`. `n` is the live count read **on-device** (e.g. `count[0]`); `DTYPE` is the element dtype (an `ndarray` kernel argument exposes no `.dtype` inside the kernel, so pass it explicitly); `LOG256_MAX_N` is the compile-time phase count - the emitted reduce handles any count `<= 256**LOG256_MAX_N`, so a graph captured for a given `LOG256_MAX_N` is reusable across all such counts. Size `scratch` with `reduce_scratch_slots(capacity_n, LOG256_MAX_N)`. Never nest the call in ordinary runtime `for` / `if` / `while` control flow (that demotes the phase loops and drops the per-phase grid-wide barriers).
+Composing the func inside your own kernel (qipc-style): call `reduce_{add,min,max}(arr, out, scratch, n, DTYPE, LOG256_MAX_N)` at the **top level** of your `@qd.kernel`. `n` is the live count read **on-device** (e.g. `count[0]`); `DTYPE` is the element dtype (an `ndarray` kernel argument exposes no `.dtype` inside the kernel, so pass it explicitly); `LOG256_MAX_N` is the compile-time phase count - the emitted reduce handles any count `<= 256**LOG256_MAX_N`, so a graph captured for a given `LOG256_MAX_N` is reusable across all such counts. Size `scratch` with `reduce_scratch_slots(capacity_n, LOG256_MAX_N)`. Never nest the call in ordinary runtime `for` / `if` / `while` control flow (that demotes the phase loops and drops the per-phase grid-wide barriers).
 
 ```python
 @qd.kernel
@@ -161,33 +130,21 @@ def my_pipeline(
     count: qd.types.ndarray(dtype=qd.i32, ndim=1),
 ):
     # ... other top-level phases ...
-    qd.algorithms.reduce_add_func(arr, out, scratch, count[0], qd.f32, LOG256_MAX_N)
+    qd.algorithms.reduce_add(arr, out, scratch, count[0], qd.f32, LOG256_MAX_N)
     # ... more top-level phases ...
 ```
 
 Scratch footprint: `reduce_scratch_slots(N)` ≈ `ceil(N / BLOCK_DIM)` slots, where `BLOCK_DIM = 256` (`N = 1G` is ~4M slots). See [Scratch space](#scratch-space).
 
-### `qd.algorithms.exclusive_scan_{add,min,max}(arr, out, scratch)`
+### `qd.algorithms.exclusive_scan_{add,min,max}`
 
-Device-wide exclusive prefix scan over a 1-D tensor: `out[i]` holds the reduction (`sum` / `min` / `max`) of `arr[0:i]`. `out[0]` is always the monoid identity, which is derived from `arr.dtype` automatically (`0` for `add`; largest representable value for `min` - `+inf` for floats, `INT{32,64}_MAX` for signed ints, `UINT{32,64}_MAX` for unsigned; smallest representable value for `max` - `-inf` for floats, `INT{32,64}_MIN` for signed ints, `0` for unsigned), mirroring the `block.exclusive_min` / `subgroup.exclusive_min_tiled` typed wrappers.
-
-```python
-import quadrants as qd
-
-N = 1_000_000
-inp = qd.field(qd.f32, shape=N)
-out = qd.field(qd.f32, shape=N)
-scratch = qd.Tensor(qd.ndarray(qd.u32, shape=max(qd.algorithms.exclusive_scan_scratch_slots(N), 1)))
-# ... fill inp ...
-
-qd.algorithms.exclusive_scan_add(inp, out=out, scratch=scratch)
-# out[0] == 0.0; out[i] == sum(inp[0:i]) for i > 0.
-```
+Device-wide exclusive prefix scan over a 1-D tensor, called at the **top level** of your own `@qd.kernel`: `out[i]` holds the reduction (`sum` / `min` / `max`) of `arr[0:i]`. `out[0]` is always the monoid identity, which is derived from the `DTYPE` template automatically — the element dtype, which the op takes explicitly because an `ndarray` kernel argument exposes no in-kernel `.dtype` (`0` for `add`; largest representable value for `min` - `+inf` for floats, `INT{32,64}_MAX` for signed ints, `UINT{32,64}_MAX` for unsigned; smallest representable value for `max` - `-inf` for floats, `INT{32,64}_MIN` for signed ints, `0` for unsigned), mirroring the `block.exclusive_min` / `subgroup.exclusive_min_tiled` typed wrappers.
 
 Arguments:
 
 - `arr` / `out`: 1-D input / output tensors, same shape and dtype; `out` must be a distinct buffer (see constraints).
-- `scratch`: caller-owned 1-D workspace of `exclusive_scan_scratch_slots(N)` slots, `u32` for 4-byte `arr` dtypes and `u64` for 8-byte ones. See [Scratch space](#scratch-space).
+- `scratch`: caller-owned 1-D workspace of `exclusive_scan_scratch_slots(N, LOG256_MAX_N)` slots, `u32` for 4-byte `arr` dtypes and `u64` for 8-byte ones. See [Scratch space](#scratch-space).
+- `n`, `DTYPE`, `LOG256_MAX_N`: the device-resident live count, the element dtype, and the compile-time capacity — see "Composing the func inside your own kernel" below.
 
 Constraints:
 
@@ -198,13 +155,13 @@ Constraints:
 
 Implementation:
 
-- Blelloch 1990 three-pass exclusive scan, emitted as a fixed-depth staircase inside a single kernel launch (the host entry derives the minimal depth `D` from `N`, the same way `reduce` does, then launches one `@qd.kernel`):
+- Blelloch 1990 three-pass exclusive scan, emitted as a fixed-depth (`LOG256_MAX_N`) staircase inside the enclosing kernel:
   1. **Pass 1** - per-block tile reduce of `arr` into the caller's `scratch` (one slot per block).
   2. **Pass 2** - exclusive-scan the partials buffer in place. For `N ≤ BLOCK_DIM²` (= 65536) a single block does this. For larger `N`, the staircase recurses `D - 2` further levels: another tile-reduce on the partials, a recursive scan, then a downsweep that applies the higher-level prefixes.
   3. **Pass 3** - per-block tile scan + add the block prefix from scratch. Each block re-reads its tile from `arr`, runs `block.exclusive_scan` to get per-thread tile prefixes, and adds its `block_prefix` from the scanned partials.
 - `BLOCK_DIM = 256`. Total scratch usage at `N = 1M` is `exclusive_scan_scratch_slots(N)` = `4096 + 16 = 4112` slots (~16 KB for 4-byte dtypes, ~32 KB for 8-byte). See [Scratch space](#scratch-space).
 
-Composing the func inside your own kernel (qipc-style): call `exclusive_scan_{add,min,max}_func(arr, out, scratch, n, DTYPE, LOG256_MAX_N)` at the **top level** of your `@qd.kernel`. Like `reduce_*_func`, `n` is the live count read **on-device** (e.g. `count[0]`); `DTYPE` is the element dtype (an `ndarray` kernel argument exposes no `.dtype` inside the kernel, so pass it explicitly); `LOG256_MAX_N` is the compile-time phase count - the emitted scan handles any count `<= 256**LOG256_MAX_N`, so a graph captured for a given `LOG256_MAX_N` is reusable across all such counts. The scan is out-of-place (`out` distinct from `arr`); size `scratch` with `exclusive_scan_scratch_slots(capacity_n, LOG256_MAX_N)`. Never nest the call in ordinary runtime `for` / `if` / `while` control flow (that demotes the phase loops and drops the per-phase grid-wide barriers).
+Composing the func inside your own kernel (qipc-style): call `exclusive_scan_{add,min,max}(arr, out, scratch, n, DTYPE, LOG256_MAX_N)` at the **top level** of your `@qd.kernel`. Like `reduce_{add,min,max}`, `n` is the live count read **on-device** (e.g. `count[0]`); `DTYPE` is the element dtype (an `ndarray` kernel argument exposes no `.dtype` inside the kernel, so pass it explicitly); `LOG256_MAX_N` is the compile-time phase count - the emitted scan handles any count `<= 256**LOG256_MAX_N`, so a graph captured for a given `LOG256_MAX_N` is reusable across all such counts. The scan is out-of-place (`out` distinct from `arr`); size `scratch` with `exclusive_scan_scratch_slots(capacity_n, LOG256_MAX_N)`. Never nest the call in ordinary runtime `for` / `if` / `while` control flow (that demotes the phase loops and drops the per-phase grid-wide barriers).
 
 ```python
 @qd.kernel
@@ -215,32 +172,13 @@ def my_pipeline(
     count: qd.types.ndarray(dtype=qd.i32, ndim=1),
 ):
     # ... other top-level phases ...
-    qd.algorithms.exclusive_scan_add_func(arr, out, scratch, count[0], qd.f32, LOG256_MAX_N)
+    qd.algorithms.exclusive_scan_add(arr, out, scratch, count[0], qd.f32, LOG256_MAX_N)
     # ... more top-level phases ...
 ```
 
-### `qd.algorithms.select(arr, flags, out, num_out, scratch)`
+### `qd.algorithms.select`
 
-Stream compaction. Copy every `arr[i]` whose corresponding `flags[i]` is `1` into a dense prefix of `out`, in stable input order, and write the count of selected elements to `num_out[0]`. Flags must be exactly `0` or `1` - see the constraints below.
-
-```python
-import quadrants as qd
-
-N = 100_000
-inp     = qd.field(qd.f32, shape=N)
-flags   = qd.field(qd.i32, shape=N)         # caller fills with 0 / 1
-out     = qd.field(qd.f32, shape=N)         # large enough for worst case
-num_out = qd.field(qd.i32, shape=1)
-scratch = qd.Tensor(qd.ndarray(qd.u32, shape=max(qd.algorithms.select_scratch_slots(N), 1)))
-
-# ... fill inp + flags via a separate kernel ...
-
-qd.algorithms.select(inp, flags, out=out, num_out=num_out, scratch=scratch)
-
-# Only out[0 : count] is meaningful; copy out the count host-side explicitly:
-count = int(num_out.to_numpy()[0])
-selected = out.to_numpy()[:count]
-```
+Stream compaction, called at the **top level** of your own `@qd.kernel`. Copy every `arr[i]` whose corresponding `flags[i]` is `1` into a dense prefix of `out`, in stable input order, and write the count of selected elements to `num_out[0]`. Flags must be exactly `0` or `1` - see the constraints below.
 
 Constraints:
 
@@ -250,13 +188,13 @@ Constraints:
 - **`num_out`:** 1-element `qd.i32` tensor. Same explicit-host-hop rule: do `int(num_out.to_numpy()[0])` after the call to get the count as a Python scalar.
 - **`scratch`:** caller-owned 1-D `qd.u32` tensor of `select_scratch_slots(N)` slots (always `u32`, regardless of `arr.dtype`). See [Scratch space](#scratch-space).
 
-Algorithm: the textbook scan-based compaction, emitted as a fixed-depth staircase inside a single kernel launch (the host entry derives the minimal depth from `N`, like `reduce` / `exclusive_scan`, then launches one `@qd.kernel`).
+Algorithm: the textbook scan-based compaction, emitted as a fixed-depth (`LOG256_MAX_N`) staircase inside the enclosing kernel.
 
 1. **Exclusive scan of `flags`** into the caller's `u32` scratch, producing per-element write indices. Same staircase phases as `exclusive_scan_add` (out-of-place: `flags` stays intact for the scatter / count, the indices land in `scratch[0:N]` and the partials above them).
 2. **Scatter:** a phase reads each `(arr[i], flags[i], indices[i])` and, if the flag is set, writes `out[indices[i]] = arr[i]`. No races by construction of the exclusive scan over 0 / 1 flags.
 3. **Count tail:** a one-thread phase computes `indices[N-1] + flags[N-1]` and stores it in `num_out[0]`.
 
-Composing the func inside your own kernel (qipc-style): call `select_func(arr, flags, out, num_out, scratch, n, LOG256_MAX_N)` at the **top level** of your `@qd.kernel`. Like the other `_func` forms, `n` is the live count read **on-device** (e.g. `count[0]`) and `LOG256_MAX_N` is the compile-time phase count (the compaction handles any count `<= 256**LOG256_MAX_N`). Unlike `reduce_*_func` / `exclusive_scan_*_func` there is **no `DTYPE` argument** - the scatter `out[idx] = arr[i]` lowers per-field, so `select_func` works for scalar *and* struct element dtypes unchanged. Size `scratch` with `select_scratch_slots(capacity_n)`. Never nest the call in ordinary runtime `for` / `if` / `while` control flow.
+Composing the func inside your own kernel (qipc-style): call `select(arr, flags, out, num_out, scratch, n, LOG256_MAX_N)` at the **top level** of your `@qd.kernel`. Like the other ops, `n` is the live count read **on-device** (e.g. `count[0]`) and `LOG256_MAX_N` is the compile-time phase count (the compaction handles any count `<= 256**LOG256_MAX_N`). Unlike `reduce_{add,min,max}` / `exclusive_scan_{add,min,max}` there is **no `DTYPE` argument** - the scatter `out[idx] = arr[i]` lowers per-field, so `select` works for scalar *and* struct element dtypes unchanged. Size `scratch` with `select_scratch_slots(capacity_n)`. Never nest the call in ordinary runtime `for` / `if` / `while` control flow.
 
 ```python
 @qd.kernel
@@ -269,40 +207,19 @@ def my_pipeline(
     count: qd.types.ndarray(dtype=qd.i32, ndim=1),
 ):
     # ... a phase that fills flags via your predicate ...
-    qd.algorithms.select_func(arr, flags, out, num_out, scratch, count[0], LOG256_MAX_N)
+    qd.algorithms.select(arr, flags, out, num_out, scratch, count[0], LOG256_MAX_N)
     # ... more top-level phases ...
 ```
 
 Scratch footprint: `select_scratch_slots(N)` ≈ `N` u32 slots (one write index per input element). See [Scratch space](#scratch-space).
 
-### `qd.algorithms.radix_sort(...)` / `radix_sort_func(...)`
+### `qd.algorithms.sort`
 
-Ascending in-place LSB radix sort over a 1-D tensor of 32-bit or 64-bit scalar keys (`u32` / `i32` / `f32` / `u64` / `i64` / `f64`), with optional lock-step permutation of a `values` tensor (key-value sort). Same design B split as the other algorithms - a friendly host entry plus a composable func:
+Ascending in-place LSB radix sort over a 1-D tensor of 32-bit or 64-bit scalar keys (`u32` / `i32` / `f32` / `u64` / `i64` / `f64`), with optional lock-step permutation of a `values` tensor (key-value sort). Called as a `@qd.func` at the **top level** of your own `@qd.kernel` (the qipc path) so the sort composes with your other phases into one compiled kernel / captured graph:
 
-- `radix_sort(keys, tmp_keys, scratch, *, values=None, tmp_values=None, end_bit=None, log256_max_n=None)` - the friendly **host (Python) entry**. Validates inputs, derives the pass count / scan depth / twiddle and the device-resident count, validates `scratch`, and launches the sort as one capturable kernel chain. Pass **both** `values` and `tmp_values` for a key-value sort, or neither for keys-only; `end_bit` defaults to the key width and `log256_max_n` to the minimal depth for `N`.
-- `radix_sort_func(keys, tmp_keys, values, tmp_values, scratch, n, KEY_DTYPE, HAS_VALUES, END_BIT, LOG256_MAX_N)` - a `@qd.func`, called at the **top level** of your own `@qd.kernel` (the qipc path) so the sort composes with your other phases into one compiled kernel / captured graph. Here `n` is a 0-d `i32` ndarray (the count lives **on-device**, so one captured graph replays for any count `<= 256 ** LOG256_MAX_N`), the compile-time flags (`KEY_DTYPE`, `HAS_VALUES`, `END_BIT`, `LOG256_MAX_N`) are passed explicitly, and **for a keys-only sort you pass `keys` / `tmp_keys` again in the `values` / `tmp_values` slots** as placeholders (every value access is `HAS_VALUES`-guarded). The func does **no** host-side validation or scratch-sufficiency check (a DtoH would defeat graph capture).
+`sort(keys, tmp_keys, values, tmp_values, scratch, n, KEY_DTYPE, HAS_VALUES, END_BIT, LOG256_MAX_N)`
 
-```python
-import quadrants as qd
-
-N = 100_000
-keys     = qd.field(qd.f32, shape=N)
-tmp_keys = qd.field(qd.f32, shape=N)   # workspace; contents on return are garbage
-# ... fill keys ...
-
-scratch = qd.field(qd.u32, shape=max(qd.algorithms.radix_sort_scratch_slots(N), 1))
-
-# Keys-only: the host entry derives end_bit (32 for f32), depth, and the device-resident N for you.
-qd.algorithms.radix_sort(keys, tmp_keys, scratch)
-# keys is now ascending; tmp_keys holds intermediate state.
-
-# Key-value sort: pass both values and tmp_values.
-values     = qd.field(qd.i32, shape=N)
-tmp_values = qd.field(qd.i32, shape=N)
-# ... fill values (e.g. with original indices) ...
-qd.algorithms.radix_sort(keys, tmp_keys, scratch, values=values, tmp_values=tmp_values)
-# keys ascending; values permuted so values[k] corresponds to keys[k].
-```
+Here `n` is a 0-d `i32` ndarray (the count lives **on-device**, so one captured graph replays for any count `<= 256 ** LOG256_MAX_N`), and the compile-time flags (`KEY_DTYPE`, `HAS_VALUES`, `END_BIT`, `LOG256_MAX_N`) are passed explicitly. Pass real `values` / `tmp_values` with `HAS_VALUES=True` for a key-value sort; **for a keys-only sort pass `keys` / `tmp_keys` again in the `values` / `tmp_values` slots** as placeholders and set `HAS_VALUES=False` (every value access is `HAS_VALUES`-guarded). The func does **no** host-side validation or scratch-sufficiency check (a DtoH would defeat graph capture), so size `scratch` correctly up front.
 
 Composing the func inside your own kernel (qipc-style; `KEY_DTYPE` is the key element dtype you already know):
 
@@ -317,29 +234,26 @@ def my_pipeline(
     n: ndarray_ann(dtype=qd.i32, ndim=0),
 ):
     # ... other top-level phases ...
-    qd.algorithms.radix_sort_func(keys, tmp, keys, tmp, scratch, n, qd.u32, False, 32, D)
+    qd.algorithms.sort(keys, tmp, keys, tmp, scratch, n, qd.u32, False, 32, D)
     # ... more top-level phases ...
 ```
 
 Arguments:
 
-- `keys`: 1-D tensor. Sorted **in place**. For `radix_sort`, pass `qd.field`, `qd.ndarray`, or `qd.Tensor`.
+- `keys`: 1-D tensor (`qd.field`, `qd.ndarray`, or `qd.Tensor`). Sorted **in place**.
 - `tmp_keys`: ping-pong workspace, same shape & dtype as `keys`, distinct buffer. Contents on return are intermediate and should be considered garbage.
-- `scratch`: required caller-owned 1-D `qd.u32` tensor used as the per-pass tile-histogram + scan workspace. Size it with `qd.algorithms.radix_sort_scratch_slots(N[, log256_max_n])` (the footprint is dtype-independent — tile histograms are `u32` regardless of key width). The host `radix_sort` validates it for you and raises `InsufficientScratchError` if it is too small. See [Scratch space](#scratch-space).
-- `values`, `tmp_values` (`radix_sort` keyword args; positional for the func): the key-value buffers (any supported scalar dtype, independent of the key dtype, same shape as `keys`, distinct from each other). For the host `radix_sort`, pass **both** (key-value) or **neither** (keys-only); for `radix_sort_func`, pass `keys` / `tmp_keys` here as placeholders for a keys-only sort and set `HAS_VALUES=False`.
-- `end_bit` (`radix_sort` keyword; `END_BIT` template for the func): number of low key bits to sort. Defaults (host) to the full key width (32 for 4-byte keys, 64 for 8-byte). Must be a positive multiple of `8` that yields an even number of digit passes so the result lands back in `keys`. Pass a smaller value when the high bits are known to be zero (e.g. `16` for keys `< 2**16`) to save passes.
-- `log256_max_n` (`radix_sort` keyword; `LOG256_MAX_N` template for the func): scan depth `D`; the emitted sort handles any element count `<= 256**D`, so a graph captured for a given `D` is reusable across all such counts. The host `radix_sort` defaults it to the minimal depth for `N`; size `scratch` with the same `D`.
-
-Func-only arguments (passed explicitly to `radix_sort_func`; the host `radix_sort` derives them):
-
-- `n`: 0-d `i32` ndarray (`shape=()`) holding the element count **on-device**. The host entry builds and fills this from `keys.shape[0]`.
-- `KEY_DTYPE`: the key element dtype (one of the supported set). The host entry reads this off `keys`; the func takes it explicitly because an `ndarray` kernel argument exposes no `.dtype` inside the kernel.
-- `HAS_VALUES`: compile-time bool — whether `values` / `tmp_values` are real buffers (`True`) or placeholders (`False`). The host entry sets it from whether you passed `values`.
+- `values`, `tmp_values`: the key-value buffers (any supported scalar dtype, independent of the key dtype, same shape as `keys`, distinct from each other) when `HAS_VALUES=True`. For a keys-only sort pass `keys` / `tmp_keys` here as placeholders and set `HAS_VALUES=False`.
+- `scratch`: required caller-owned 1-D `qd.u32` tensor used as the per-pass tile-histogram + scan workspace. Size it with `qd.algorithms.sort_scratch_slots(N, LOG256_MAX_N)` (the footprint is dtype-independent — tile histograms are `u32` regardless of key width). The func does no sufficiency check, so size it correctly up front. See [Scratch space](#scratch-space).
+- `n`: 0-d `i32` ndarray (`shape=()`) holding the element count **on-device**.
+- `KEY_DTYPE`: the key element dtype (one of the supported set). Passed explicitly because an `ndarray` kernel argument exposes no `.dtype` inside the kernel.
+- `HAS_VALUES`: compile-time bool — whether `values` / `tmp_values` are real buffers (`True`) or placeholders (`False`).
+- `END_BIT`: number of low key bits to sort. Use the full key width (32 for 4-byte keys, 64 for 8-byte) unless the high bits are known to be zero (e.g. `16` for keys `< 2**16`, to save passes). Must be a positive multiple of `8` that yields an even number of digit passes so the result lands back in `keys`.
+- `LOG256_MAX_N`: scan depth `D`; the emitted sort handles any element count `<= 256**D`, so a graph captured for a given `D` is reusable across all such counts. Size `scratch` with the same `D`.
 
 Constraints:
 
 - **Dtypes:** the key dtype and value dtype are each independently one of `{qd.u32, qd.i32, qd.f32, qd.u64, qd.i64, qd.f64}`. Narrower scalar dtypes (`qd.i16`, `qd.f16`, ...) and struct dtypes raise `NotImplementedError` at compile time. 8-byte keys run 8 digit passes per sort; 4-byte keys run 4. Scratch footprint is the same for both widths (the per-tile histograms are `u32` regardless).
-- **Aliasing:** `keys` and `tmp_keys` must be distinct buffers; same for real `values` / `tmp_values`. The host `radix_sort` rejects aliased buffers with a `ValueError`; `radix_sort_func` does not check (passing the same buffer corrupts the sort).
+- **Aliasing:** `keys` and `tmp_keys` must be distinct buffers; same for real `values` / `tmp_values`. `sort` does not check this (passing the same buffer corrupts the sort).
 - **Stability:** stable sort - equal keys keep their original input order in the output.
 - **NaN handling (f32):** matches `numpy.sort` (NaNs land at the end). NaNs are not tested separately and should not be relied on for ordering invariants beyond `numpy.sort`.
 
@@ -352,34 +266,11 @@ Implementation:
 - After each pass we swap `keys` ↔ `tmp_keys`. Four passes is even, so the sorted keys end up back in `keys`.
 - Signed-integer (`i32` / `i64`) and floating-point (`f32` / `f64`) keys are mapped to a sortable unsigned representation (`u32` / `u64`) before the first pass and mapped back after the last pass via in-place "twiddle" kernels (signed: XOR sign bit; float: flip sign bit on positives, flip all bits on negatives - the standard sortable-key transform). `u32` / `u64` keys are sorted directly with no twiddle.
 
-Scratch footprint: `num_blocks * 256 + ...` u32 slots (where `num_blocks = ceil(N / 256)`), plus the scan staircase. Call `qd.algorithms.radix_sort_scratch_slots(N, LOG256_MAX_N)` to get the exact slot count (pure host arithmetic, no device round-trip). See [Scratch space](#scratch-space).
+Scratch footprint: `num_blocks * 256 + ...` u32 slots (where `num_blocks = ceil(N / 256)`), plus the scan staircase. Call `qd.algorithms.sort_scratch_slots(N, LOG256_MAX_N)` to get the exact slot count (pure host arithmetic, no device round-trip). See [Scratch space](#scratch-space).
 
-### `qd.algorithms.reduce_by_key_add(keys_in, values_in, keys_out, values_out, num_runs, scratch)`
+### `qd.algorithms.reduce_by_key_add`
 
-Collapse every **consecutive run of equal keys** into a single output entry `(unique_key, sum_of_values_in_run)`. Keys that compare equal but are separated by other keys form separate runs. For a global per-key sum, sort by key first (e.g. with `qd.algorithms.radix_sort`) and then reduce-by-key.
-
-```python
-import quadrants as qd
-
-N = 100_000
-keys_in    = qd.field(qd.i32, shape=N)       # sorted by key beforehand
-values_in  = qd.field(qd.f32, shape=N)
-keys_out   = qd.field(qd.i32, shape=N)       # capacity = N (worst case: all unique)
-values_out = qd.field(qd.f32, shape=N)
-num_runs   = qd.field(qd.i32, shape=1)
-scratch    = qd.Tensor(qd.ndarray(qd.u32, shape=max(qd.algorithms.reduce_by_key_scratch_slots(N), 1)))
-
-# ... fill keys_in + values_in ...
-
-qd.algorithms.reduce_by_key_add(
-    keys_in, values_in, keys_out=keys_out, values_out=values_out, num_runs=num_runs,
-    scratch=scratch,
-)
-
-count    = int(num_runs.to_numpy()[0])
-uniq_k   = keys_out.to_numpy()[:count]
-sums     = values_out.to_numpy()[:count]
-```
+Collapse every **consecutive run of equal keys** into a single output entry `(unique_key, sum_of_values_in_run)`, called at the **top level** of your own `@qd.kernel`. Keys that compare equal but are separated by other keys form separate runs. For a global per-key sum, sort by key first (e.g. with `qd.algorithms.sort`) and then reduce-by-key.
 
 Arguments:
 
@@ -389,6 +280,7 @@ Arguments:
 - `values_out`: 1-D tensor of the same dtype as `values_in`, same length requirement. The first `num_runs[0]` slots are overwritten; the tail past that prefix is left untouched.
 - `num_runs`: 1-element `qd.i32` tensor receiving the number of runs. Same explicit-host-hop rule: do `int(num_runs.to_numpy()[0])` after the call to get the count as a Python scalar.
 - `scratch`: caller-owned 1-D `qd.u32` tensor of `reduce_by_key_scratch_slots(N)` slots (always `u32`, regardless of key / value dtype). See [Scratch space](#scratch-space).
+- `n`, `VALUE_DTYPE`, `LOG256_MAX_N`: the device-resident live count, the values dtype (used only to write the typed zero into `values_out` before the scatter's `atomic_add`), and the compile-time capacity — see "Composing the func inside your own kernel" below.
 
 Constraints:
 
@@ -397,7 +289,7 @@ Constraints:
 - **f32 non-associativity:** the order of additions inside a run is set by hardware atomic ordering, not host order, so `f32` results are *not* bitwise-equal to a serial scan. Tests tolerate a small relative error.
 - **NaN handling (f32 keys):** `NaN != NaN` is true, so each NaN-keyed element becomes its own run. Consistent with treating NaN as "different from everything", which matches the run-length-encoding spirit.
 
-Algorithm: scan + scatter + atomic_add - no segmented-scan primitive needed. Emitted as a fixed-depth staircase inside a single kernel launch (the host entry derives the minimal depth from `N`, like the other algorithms, then launches one `@qd.kernel`).
+Algorithm: scan + scatter + atomic_add - no segmented-scan primitive needed. Emitted as a fixed-depth (`LOG256_MAX_N`) staircase inside the enclosing kernel.
 
 1. **Head-flag pass.** `head_flags[i] = 1` if `i == 0` or `keys[i] != keys[i-1]`, else `0`. Written to the caller's `u32` scratch (bit-cast from `i32`).
 2. **In-place exclusive scan** of `head_flags` (using the same staircase phases as `exclusive_scan_add`). After this, `scratch[i] = sum(head_flags[0:i])`.
@@ -405,7 +297,7 @@ Algorithm: scan + scatter + atomic_add - no segmented-scan primitive needed. Emi
 4. **Scatter.** For each `i`, recompute `head_flag(i)` from `keys[i]` / `keys[i-1]`, derive the run index `pos = scratch[i] + head_flag(i) - 1` (inclusive scan minus 1), and write `keys_out[pos] = keys[i]` + `atomic_add(values_out[pos], values[i])`.
 5. **Count.** `num_runs[0] = scratch[N-1] + head_flag(N-1)`.
 
-Composing the func inside your own kernel (qipc-style): call `reduce_by_key_add_func(keys_in, values_in, keys_out, values_out, num_runs, scratch, n, VALUE_DTYPE, LOG256_MAX_N)` at the **top level** of your `@qd.kernel`. `n` is the live count read **on-device** (e.g. `count[0]`); `LOG256_MAX_N` is the compile-time phase count (any count `<= 256**LOG256_MAX_N`); `VALUE_DTYPE` is the values dtype - needed only to write the typed zero into `values_out` before the scatter's `atomic_add` (keys are handled generically). Size `scratch` with `reduce_by_key_scratch_slots(capacity_n)`. Never nest the call in ordinary runtime `for` / `if` / `while` control flow.
+Composing the func inside your own kernel (qipc-style): call `reduce_by_key_add(keys_in, values_in, keys_out, values_out, num_runs, scratch, n, VALUE_DTYPE, LOG256_MAX_N)` at the **top level** of your `@qd.kernel`. `n` is the live count read **on-device** (e.g. `count[0]`); `LOG256_MAX_N` is the compile-time phase count (any count `<= 256**LOG256_MAX_N`); `VALUE_DTYPE` is the values dtype - needed only to write the typed zero into `values_out` before the scatter's `atomic_add` (keys are handled generically). Size `scratch` with `reduce_by_key_scratch_slots(capacity_n)`. Never nest the call in ordinary runtime `for` / `if` / `while` control flow.
 
 ```python
 @qd.kernel
@@ -419,7 +311,7 @@ def my_pipeline(
     count: qd.types.ndarray(dtype=qd.i32, ndim=1),
 ):
     # ... (typically sort keys_in / values_in by key first) ...
-    qd.algorithms.reduce_by_key_add_func(keys_in, values_in, keys_out, values_out, num_runs, scratch, count[0], qd.f32, LOG256_MAX_N)
+    qd.algorithms.reduce_by_key_add(keys_in, values_in, keys_out, values_out, num_runs, scratch, count[0], qd.f32, LOG256_MAX_N)
     # ... more top-level phases ...
 ```
 
@@ -427,7 +319,7 @@ Scratch footprint: `reduce_by_key_scratch_slots(N)` ≈ `1.004 * N` u32 slots. S
 
 ### `qd.algorithms.parallel_sort(keys, values=None)`
 
-> **Deprecated.** New code should call the LSB radix sort `qd.algorithms.radix_sort` (the host entry) or `qd.algorithms.radix_sort_func` (a `@qd.func`) instead. The radix sort is asymptotically `O(N log_radix N)` rather than `O(N log^2 N)`, is **stable** (odd-even merge sort is not), supports 32-bit and 64-bit scalar keys across CUDA / AMDGPU / Vulkan / Metal, and accepts `qd.field`, `qd.ndarray`, and `qd.Tensor` (`parallel_sort` is field-only). The only thing `parallel_sort` is competitive on is very small N (~4K and below); even there the radix path is comparable on modern hardware. To migrate, allocate `tmp_keys` of the same shape and dtype as `keys` plus a `u32` `scratch` buffer, then call `radix_sort` (see its section above for the full signature). `parallel_sort` is kept for one release cycle for backward compat and will be removed thereafter.
+> **Deprecated.** New code should call the LSB radix sort `qd.algorithms.sort` (a `@qd.func`) instead. The radix sort is asymptotically `O(N log_radix N)` rather than `O(N log^2 N)`, is **stable** (odd-even merge sort is not), supports 32-bit and 64-bit scalar keys across CUDA / AMDGPU / Vulkan / Metal, and accepts `qd.field`, `qd.ndarray`, and `qd.Tensor` (`parallel_sort` is field-only). The only thing `parallel_sort` is competitive on is very small N (~4K and below); even there the radix path is comparable on modern hardware. To migrate, allocate `tmp_keys` of the same shape and dtype as `keys` plus a `u32` `scratch` buffer, then call `sort` at the top level of a kernel (see its section above for the full signature). `parallel_sort` is kept for one release cycle for backward compat and will be removed thereafter.
 
 In-place sort. Reorders `keys` ascending; if `values` is provided, applies the same permutation to `values` (key-value sort). Both arguments must be 1-D `qd.field` - `parallel_sort` reaches into `snode.ptr.offset` internally, so `ndarray` is **not** supported and will fail at compile time with an `AttributeError`.
 
@@ -452,7 +344,7 @@ qd.algorithms.parallel_sort(keys, vals)
 
 ### `qd.algorithms.PrefixSumExecutor`
 
-> **Deprecated.** New code should call `qd.algorithms.exclusive_scan_add(arr, out)` instead. `PrefixSumExecutor` is **inclusive**-only, **`i32`**-only, and **CUDA / Vulkan**-only; the new functional API covers `{i32, u32, f32, i64, u64, f64}` on every supported backend and runs the exclusive variant directly. To migrate from inclusive in-place to exclusive out-of-place, drop the `Executor` wrapper, allocate a distinct `out` field, and post-process if you actually need the inclusive form (`inclusive[i] = exclusive[i] + arr[i]`). `PrefixSumExecutor` is kept for one release cycle for backward compat and will be removed in a future release.
+> **Deprecated.** New code should call `qd.algorithms.exclusive_scan_add` instead. `PrefixSumExecutor` is **inclusive**-only, **`i32`**-only, and **CUDA / Vulkan**-only; the new functional API covers `{i32, u32, f32, i64, u64, f64}` on every supported backend and runs the exclusive variant directly. To migrate from inclusive in-place to exclusive out-of-place, drop the `Executor` wrapper, allocate a distinct `out` field, and post-process if you actually need the inclusive form (`inclusive[i] = exclusive[i] + arr[i]`). `PrefixSumExecutor` is kept for one release cycle for backward compat and will be removed in a future release.
 
 Inclusive in-place prefix sum (scan) over a 1-D `i32` field. Construct once with the array length, then call `.run(field)` to scan.
 
@@ -489,25 +381,34 @@ No explicit fence is required between a kernel that writes the input and the sub
 
 ```python
 N = 1000
-keys       = qd.field(qd.f32, shape=(N,))
-tmp_keys   = qd.field(qd.f32, shape=(N,))
-indices    = qd.field(qd.i32, shape=(N,))
-tmp_idx    = qd.field(qd.i32, shape=(N,))
-
-@qd.kernel
-def init() -> None:
-    for i in range(N):
-        keys[i] = qd.random()
-        indices[i] = i
-
-init()
 D = 1
 while 256 ** D < N:
     D += 1
-scratch = qd.field(qd.u32, shape=max(qd.algorithms.radix_sort_scratch_slots(N, D), 1))
-nd = qd.ndarray(qd.i32, shape=())
-nd.fill(N)
-qd.algorithms.radix_sort(keys, tmp_keys, indices, tmp_idx, scratch, nd, True, 32, D)
+
+keys     = qd.ndarray(qd.f32, shape=(N,))
+tmp_keys = qd.ndarray(qd.f32, shape=(N,))
+indices  = qd.ndarray(qd.i32, shape=(N,))
+tmp_idx  = qd.ndarray(qd.i32, shape=(N,))
+scratch  = qd.ndarray(qd.u32, shape=max(qd.algorithms.sort_scratch_slots(N, D), 1))
+n        = qd.ndarray(qd.i32, shape=())
+n.fill(N)
+
+@qd.kernel
+def sort_indices(
+    keys: qd.types.ndarray(dtype=qd.f32, ndim=1),
+    tmp_keys: qd.types.ndarray(dtype=qd.f32, ndim=1),
+    indices: qd.types.ndarray(dtype=qd.i32, ndim=1),
+    tmp_idx: qd.types.ndarray(dtype=qd.i32, ndim=1),
+    scratch: qd.types.ndarray(dtype=qd.u32, ndim=1),
+    n: qd.types.ndarray(dtype=qd.i32, ndim=0),
+) -> None:
+    for i in range(N):
+        keys[i] = qd.random()
+        indices[i] = i
+    # Key-value radix sort at the top level: keys carry the order, indices ride along.
+    qd.algorithms.sort(keys, tmp_keys, indices, tmp_idx, scratch, n, qd.f32, True, 32, D)
+
+sort_indices(keys, tmp_keys, indices, tmp_idx, scratch, n)
 # keys is now ascending; indices[k] is the original index of the k-th smallest key. (Stable: ties between equal keys preserve their input-order indices.)
 ```
 

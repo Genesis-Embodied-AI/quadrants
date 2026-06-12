@@ -20,12 +20,11 @@ def parallel_sort(keys, values=None):
     """Odd-even merge sort (deprecated).
 
     .. deprecated::
-        Prefer the LSB radix sort ``qd.algorithms.radix_sort`` (a ``@qd.kernel``) or ``qd.algorithms.radix_sort_func``
-        (a ``@qd.func`` for in-kernel composition). The new API is asymptotically ``O(N log_radix N)`` rather than
-        ``O(N log^2 N)``, supports ``{u32, i32, f32, u64, i64, f64}`` keys across CUDA / AMDGPU / Vulkan / Metal, and
-        takes caller-supplied tmp + scratch buffers so the call stays fully async. ``parallel_sort`` is kept for one
-        release cycle for backward compat and will be removed thereafter. See ``docs/source/user_guide/algorithms.md``
-        for the migration recipe.
+        Prefer the LSB radix sort ``qd.algorithms.sort`` (a ``@qd.func`` for in-kernel composition). The new
+        API is asymptotically ``O(N log_radix N)`` rather than ``O(N log^2 N)``, supports
+        ``{u32, i32, f32, u64, i64, f64}`` keys across CUDA / AMDGPU / Vulkan / Metal, and takes caller-supplied tmp +
+        scratch buffers so the call stays fully async. ``parallel_sort`` is kept for one release cycle for backward
+        compat and will be removed thereafter. See ``docs/source/user_guide/algorithms.md`` for the migration recipe.
 
     References:
         https://developer.nvidia.com/gpugems/gpugems2/part-vi-simulation-and-numerical-algorithms/chapter-46-improved-gpu-sorting
@@ -34,8 +33,7 @@ def parallel_sort(keys, values=None):
     import warnings  # pylint: disable=import-outside-toplevel
 
     warnings.warn(
-        "qd.algorithms.parallel_sort is deprecated. Use qd.algorithms.radix_sort (the @qd.kernel) or "
-        "qd.algorithms.radix_sort_func (the @qd.func) instead. "
+        "qd.algorithms.parallel_sort is deprecated. Use qd.algorithms.sort (the @qd.func) instead. "
         "See docs/source/user_guide/algorithms.md for migration.",
         DeprecationWarning,
         stacklevel=2,
@@ -63,10 +61,11 @@ class PrefixSumExecutor:
     """Parallel Prefix Sum (Scan) Helper.
 
     .. deprecated::
-        Prefer ``qd.algorithms.exclusive_scan_add(arr, out)``. The new functional API supports ``{i32, u32, f32}``
-        on every backend (CUDA, AMDGPU, Vulkan, Metal) and runs the exclusive variant directly. ``PrefixSumExecutor``
-        is inclusive-only, ``i32``-only, and limited to CUDA / Vulkan; it is kept for one release cycle for backward
-        compat and will be removed thereafter. See ``docs/source/user_guide/algorithms.md`` for the migration recipe.
+        Prefer ``qd.algorithms.exclusive_scan_add`` (a ``@qd.func`` for in-kernel composition). The new
+        functional API supports ``{i32, u32, f32, i64, u64, f64}`` on every backend (CUDA, AMDGPU, Vulkan, Metal) and
+        runs the exclusive variant directly. ``PrefixSumExecutor`` is inclusive-only, ``i32``-only, and limited to
+        CUDA / Vulkan; it is kept for one release cycle for backward compat and will be removed thereafter. See
+        ``docs/source/user_guide/algorithms.md`` for the migration recipe.
 
     Use this helper to perform an inclusive in-place's parallel prefix sum.
 
@@ -80,7 +79,7 @@ class PrefixSumExecutor:
 
         warnings.warn(
             "qd.algorithms.PrefixSumExecutor is deprecated. Use "
-            "qd.algorithms.exclusive_scan_add(arr, out) instead. "
+            "qd.algorithms.exclusive_scan_add (the @qd.func) instead. "
             "See docs/source/user_guide/algorithms.md for migration.",
             DeprecationWarning,
             stacklevel=2,
