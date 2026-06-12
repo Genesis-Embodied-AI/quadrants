@@ -93,9 +93,8 @@ void TaskCodeGenLLVM::emit_checkpoint_gate_prologue(int cp_id) {
   builder->SetInsertPoint(skip_bb);
   builder->CreateBr(final_block);
 
-  // Pick up codegen in the body block. Existing task-body codegen will insert into the
-  // current builder insertion point; pointing it at `body_bb` continues that flow as if
-  // the prologue never inserted itself.
+  // Pick up codegen in the body block. Existing task-body codegen will insert into the current builder insertion
+  // point; pointing it at `body_bb` continues that flow as if the prologue never inserted itself.
   builder->SetInsertPoint(body_bb);
 }
 

@@ -10,19 +10,17 @@
 
 namespace quadrants::lang::spirv {
 
-// Builds the SPIR-V compute shader that implements GPU-side per-checkpoint gating for
-// `qd.checkpoint(...)` blocks on Vulkan / Metal. One gate dispatch runs in the same cmdlist
-// before each checkpoint's body kernels. It reads `(resume_point, yield_signal)` from the
-// per-launch control SSBO and writes either the active workgroup-count triple or `(0, 0, 0)`
-// into each body kernel's slot of the shared dim3 buffer; body kernels then issue via
-// `CommandList::dispatch_indirect` so a skipped checkpoint dispatches zero workgroups (no GPU
-// work beyond the indirect-dispatch issue itself, ~1 us / kernel).
+// Builds the SPIR-V compute shader that implements GPU-side per-checkpoint gating for `qd.checkpoint(...)` blocks on
+// Vulkan / Metal. One gate dispatch runs in the same cmdlist before each checkpoint's body kernels. It reads
+// `(resume_point, yield_signal)` from the per-launch control SSBO and writes either the active workgroup-count triple
+// or `(0, 0, 0)` into each body kernel's slot of the shared dim3 buffer; body kernels then issue via
+// `CommandList::dispatch_indirect` so a skipped checkpoint dispatches zero workgroups (no GPU work beyond the
+// indirect-dispatch issue itself, ~1 us / kernel).
 //
-// Mirror of the CUDA SM 9.0+ `_qd_checkpoint_if_gate` kernel in `runtime/cuda/checkpoint_gate.cu`,
-// adapted for the indirect-dispatch backends that lack conditional-graph-node hardware. The
-// CUDA path can flip a single conditional handle; we have to write per-body-kernel grid dims
-// because indirect dispatch is the only device-side dispatch-mode primitive Vulkan / Metal
-// expose. See `perso_hugh/doc/qipc/reentrant.md` section 6.2 for the design.
+// Mirror of the CUDA SM 9.0+ `_qd_checkpoint_if_gate` kernel in `runtime/cuda/checkpoint_gate.cu`, adapted for the
+// indirect-dispatch backends that lack conditional-graph-node hardware. The CUDA path can flip a single conditional
+// handle; we have to write per-body-kernel grid dims because indirect dispatch is the only device-side
+// dispatch-mode primitive Vulkan / Metal expose. See `perso_hugh/doc/qipc/reentrant.md` section 6.2 for the design.
 //
 // Compiled once per `GfxRuntime` (generic in cp_id / n_kernels / active dims) and reused across
 // every yielding-capable kernel launch. Per-checkpoint specialization is carried in the params
