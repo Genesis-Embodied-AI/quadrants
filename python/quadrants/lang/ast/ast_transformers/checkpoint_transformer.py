@@ -16,8 +16,28 @@ import ast
 from quadrants.lang.ast.ast_transformer_utils import ASTTransformerFuncContext
 from quadrants.lang.exception import QuadrantsSyntaxError
 
+# Sentinel name used by `_kernel_coverage.py` (`FIELD_VAR_NAME`) for the probe-tracking field. The checkpoint
+# validator hard-codes the literal so coverage probes can be exempted without taking a runtime dep on the optional
+# `_kernel_coverage` module (it is only imported when `QD_KERNEL_COVERAGE=1`). The two must stay in sync; if
+# `FIELD_VAR_NAME` ever changes, update this constant and the corresponding test.
+_KERNEL_COVERAGE_FIELD_NAME = "_qd_cov"
+
 
 class CheckpointTransformer:
+    @staticmethod
+    def _is_coverage_probe_assign(stmt: ast.stmt) -> bool:
+        """Return True iff *stmt* is the synthesized ``_qd_cov[<probe_id>] = 1`` assignment inserted by
+        ``_kernel_coverage.py`` when ``QD_KERNEL_COVERAGE=1``. Keeping these out of the bare-statement rejection in
+        ``build_checkpoint_with`` lets coverage CI exercise every checkpoint kernel without the user having to wrap
+        the synthetic probes themselves.
+        """
+        if not isinstance(stmt, ast.Assign) or len(stmt.targets) != 1:
+            return False
+        tgt = stmt.targets[0]
+        if not isinstance(tgt, ast.Subscript):
+            return False
+        return isinstance(tgt.value, ast.Name) and tgt.value.id == _KERNEL_COVERAGE_FIELD_NAME
+
     @staticmethod
     def is_checkpoint_call(node: ast.expr) -> tuple[bool, str | None]:
         """If *node* is a ``qd.checkpoint(...)`` call return ``(True, yield_on_arg_name)``; otherwise ``(False, None)``.
@@ -87,59 +107,51 @@ class CheckpointTransformer:
                     f"{kernel.func.__name__!r}. Available parameters: {arg_names}"
                 )
 
-        # Auto-wrap bare top-level statements in the checkpoint body in a one-iteration `for` loop. The offloader's
-        # pending-serial bucket loses the surrounding `checkpoint_id` and emits such statements as `serial` tasks with
-        # `cp_id == -1`, meaning that they would run unconditionally even when the checkpoint is skipped -- a silent
-        # correctness bug. The fix is to lower them as `range_for` tasks instead by wrapping each bare statement in `for
-        # _ in range(1): <stmt>`. We target the specific statement kinds known to hit the footgun (Assign / AugAssign /
-        # AnnAssign / non-docstring Expr) and leave everything else (For, While, If, With, Pass, docstring) untouched so
-        # they keep working transparently; nested `with qd.checkpoint(...)` in particular still falls through to the
-        # existing nested-checkpoint check at the start of this method.
+        # Reject bare top-level statements (Assign / AugAssign / AnnAssign / non-docstring Expr) at the top of the
+        # checkpoint body and ask the user to wrap them in their own for-loop. The offloader's pending-serial bucket
+        # loses the surrounding `checkpoint_id` and emits such statements as `serial` tasks with `cp_id == -1`, so they
+        # would run unconditionally even when the checkpoint is skipped -- a silent correctness bug. Rather than
+        # auto-wrapping them transparently (which hides the fact that each bare stmt becomes its own kernel / graph
+        # node and surprises users when they look at the lowered IR or `prog.get_num_offloaded_tasks_on_last_call()`),
+        # we surface a clear compile-time error and have the user write `for _ in range(1): <stmt>` themselves. This
+        # also keeps the `qd.checkpoint` body shape uniform with the design assumption that every top-level statement
+        # in a checkpoint is its own offloaded task with a known `cp_id`. Control-flow stmts (For / While / If / With /
+        # Pass / Return) and the docstring slot are passed through. See `docs/source/user_guide/graph.md` for the
+        # user-facing rule.
         #
-        # Adjacent wrappable statements are fused into a *single* `for _ in range(1):` wrapper rather than one wrapper
-        # per statement. Without this, a checkpoint body that's just a sequence of field writes like `a[()] = 0; b[()]
-        # = 1; c[()] = 2` would lower to N single-iteration `range_for` `OffloadedStmt`s and pay N kernel launches + N
-        # graph nodes for a workload that's morally one tiny serial kernel. Fusing collapses the run into one task
-        # without changing semantics: statements execute in program order inside the wrapper exactly as they would
-        # outside it, and the wrapper's `cp_id` covers all of them uniformly. Runs break on any non-wrappable stmt
-        # (For / While / If / With / Pass / docstring / Return / ...) which then becomes its own task as before, and
-        # the cp_id propagation in `quadrants/transforms/offload.cpp` handles the residual case of a coverage-probe
-        # style serial task sneaking between two for-loops of the same checkpoint after this transformer has run. See
-        # `docs/source/user_guide/graph.md` ("Advanced: statement fusing inside checkpoint bodies") for the user-facing
-        # note.
-        new_body: list[ast.stmt] = []
-        fused_run: list[ast.stmt] = []
-
-        def flush_fused_run() -> None:
-            if not fused_run:
-                return
-            wrapper = ast.For(
-                target=ast.Name(id="_", ctx=ast.Store()),
-                iter=ast.Call(
-                    func=ast.Name(id="range", ctx=ast.Load()),
-                    args=[ast.Constant(value=1)],
-                    keywords=[],
-                ),
-                body=list(fused_run),
-                orelse=[],
+        # `QD_KERNEL_COVERAGE=1` instruments every executable line in the kernel AST with a bare `_qd_cov[<id>] = 1`
+        # probe assignment (see `_kernel_coverage.py`). Those probes are inserted by an earlier AST pass and would
+        # otherwise trip the check at the top of every checkpoint kernel under coverage CI, so probes are explicitly
+        # exempt -- the `cp_id` propagation in `quadrants/transforms/offload.cpp` (`assemble_serial_statements`)
+        # ensures the synthesized coverage-probe serial task still inherits the surrounding checkpoint's `cp_id` and
+        # so does not break the launcher's "last task in checkpoint" detection.
+        for stmt in node.body:
+            is_bare = isinstance(stmt, (ast.Assign, ast.AugAssign, ast.AnnAssign))
+            if not is_bare and isinstance(stmt, ast.Expr):
+                # Any `Expr(Constant)` is a no-op (Python's docstring pattern, e.g. a leading triple-quoted string).
+                # We accept it anywhere in the body rather than only at position 0 because the kernel-coverage AST
+                # transformer (see `_kernel_coverage.py`) prepends a `_qd_cov[...] = 1` probe under
+                # `QD_KERNEL_COVERAGE=1`, which would otherwise push the docstring to position 1 and have us flag it
+                # as a bare top-level statement.
+                is_constant_expr = isinstance(stmt.value, ast.Constant)
+                is_bare = not is_constant_expr
+            if not is_bare:
+                continue
+            if CheckpointTransformer._is_coverage_probe_assign(stmt):
+                continue
+            stmt_kind = type(stmt).__name__
+            raise QuadrantsSyntaxError(
+                f"qd.checkpoint() body cannot contain a bare top-level {stmt_kind} statement "
+                f"(line {getattr(stmt, 'lineno', '?')}): every top-level statement in a checkpoint must be inside a "
+                f"for-loop (or other control-flow construct), so the compiler can lower it as its own offloaded task "
+                f"with the correct cp_id. Wrap the statement in `for _ in range(1):` to keep the original intent:\n"
+                f"\n"
+                f"    with qd.checkpoint():\n"
+                f"        for _ in range(1):\n"
+                f"            <your statement here>\n"
+                f"        for i in range(arr.shape[0]):\n"
+                f"            ...\n"
             )
-            ast.copy_location(wrapper, fused_run[0])
-            ast.fix_missing_locations(wrapper)
-            new_body.append(wrapper)
-            fused_run.clear()
-
-        for i, stmt in enumerate(node.body):
-            needs_wrap = isinstance(stmt, (ast.Assign, ast.AugAssign, ast.AnnAssign))
-            if not needs_wrap and isinstance(stmt, ast.Expr):
-                is_docstring = i == 0 and isinstance(stmt.value, ast.Constant)
-                needs_wrap = not is_docstring
-            if needs_wrap:
-                fused_run.append(stmt)
-            else:
-                flush_fused_run()
-                new_body.append(stmt)
-        flush_fused_run()
-        node.body = new_body
 
         kernel.checkpoint_yield_on_args.append(yield_on_name)
         # Hand control to the C++ ASTBuilder so that every for-loop emitted by `build_stmts` below is tagged with this

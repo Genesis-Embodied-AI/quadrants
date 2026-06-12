@@ -82,11 +82,15 @@ class Offloader {
     // for-loop in the same checkpoint is emitted, any pending serial OffloadedStmt sandwiched
     // between them inherits this cp_id (rather than the default -1) so the whole checkpoint body
     // remains a single contiguous run of same-cp_id tasks at the launcher / graph-manager layer.
-    // Without this propagation, an intervening serial (e.g., an AST-coverage probe wrap or
-    // shape-extraction prelude for the next for-loop) breaks the run, causing the yield-check to
-    // fire mid-checkpoint and skip the rest of the body. The kernel prologue serial (before any
+    // Without this propagation, an intervening serial (e.g., an AST-coverage probe `_qd_cov[i] = 1`
+    // injected by `_kernel_coverage.py` under `QD_KERNEL_COVERAGE=1`, or a shape-extraction
+    // prelude emitted for the next for-loop) would break the run, causing the yield-check to fire
+    // mid-checkpoint and skip the rest of the body. The kernel prologue serial (before any
     // for-loop in a checkpoint) keeps cp_id=-1 so a resume(from_checkpoint=N) launch still runs
-    // it.
+    // it. User-written bare statements at the top level of a `qd.checkpoint(...)` body are now
+    // rejected at compile time in `CheckpointTransformer.build_checkpoint_with` (see
+    // `docs/source/user_guide/graph.md`); coverage probes are the remaining producer of these
+    // mid-checkpoint serial tasks and are explicitly exempted from that rejection.
     int prev_for_checkpoint_id = -1;
 
     auto assemble_serial_statements = [&](int next_checkpoint_id) {

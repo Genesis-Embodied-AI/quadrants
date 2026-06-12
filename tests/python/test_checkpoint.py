@@ -237,88 +237,9 @@ def test_checkpoint_yield_on_nonexistent_arg_raises():
 
 
 @test_utils.test()
-def test_checkpoint_bare_assign_autowrapped():
-    """A bare `Assign` inside a checkpoint body gets silently auto-wrapped in a one-iteration `for` loop by the AST
-    transformer so it picks up the checkpoint's `cp_id` and gets skipped on resume.
-
-    Without the auto-wrap, the offloader's pending-serial bucket would emit the bare assignment as a `serial` task with
-    `cp_id == -1`, so it would run unconditionally even when the checkpoint is skipped -- a silent correctness bug. We
-    pin both that the body runs on a fresh launch and that it is correctly skipped on a `resume(from_checkpoint=1)`.
-    """
-
-    @qd.kernel(graph=True)
-    def k(c: qd.types.ndarray(qd.i32, ndim=0), yo: qd.types.ndarray(qd.i32, ndim=0)):
-        with qd.checkpoint(yield_on=yo):  # cp_id 0 -- bare assign, auto-wrapped
-            c[()] = c[()] + 1
-        with qd.checkpoint():  # cp_id 1 -- sentinel for the resume path
-            for _ in range(1):
-                c[()] = c[()] + 10
-
-    c = qd.ndarray(qd.i32, shape=())
-    yo = qd.ndarray(qd.i32, shape=())
-    c.from_numpy(np.array(0, dtype=np.int32))
-    yo.from_numpy(np.array(0, dtype=np.int32))
-    k(c, yo)  # fresh launch: both cp_id 0 (auto-wrapped) and cp_id 1 run -> c == 11
-    assert c.to_numpy() == 11
-
-    c.from_numpy(np.array(0, dtype=np.int32))
-    yo.from_numpy(np.array(0, dtype=np.int32))
-    k.resume(c, yo, from_checkpoint=1)  # cp_id 0 must be skipped; only cp_id 1 runs -> c == 10
-    assert c.to_numpy() == 10
-
-
-@test_utils.test()
-def test_checkpoint_bare_augassign_autowrapped():
-    """Same as `_bare_assign_autowrapped` for `+=` / `-=` etc. (`AugAssign`)."""
-
-    @qd.kernel(graph=True)
-    def k(c: qd.types.ndarray(qd.i32, ndim=0)):
-        with qd.checkpoint():
-            c[()] += 1
-        with qd.checkpoint():
-            for _ in range(1):
-                c[()] += 10
-
-    c = qd.ndarray(qd.i32, shape=())
-    c.from_numpy(np.array(0, dtype=np.int32))
-    k(c)
-    assert c.to_numpy() == 11
-
-    c.from_numpy(np.array(0, dtype=np.int32))
-    k.resume(c, from_checkpoint=1)
-    assert c.to_numpy() == 10
-
-
-@test_utils.test()
-def test_checkpoint_bare_call_expr_autowrapped():
-    """A bare top-level `Expr` (function call) inside a checkpoint is auto-wrapped too."""
-
-    @qd.func
-    def bump(c: qd.types.ndarray(qd.i32, ndim=0)) -> None:
-        c[()] = c[()] + 1
-
-    @qd.kernel(graph=True)
-    def k(c: qd.types.ndarray(qd.i32, ndim=0)):
-        with qd.checkpoint():
-            bump(c)
-        with qd.checkpoint():
-            for _ in range(1):
-                c[()] += 10
-
-    c = qd.ndarray(qd.i32, shape=())
-    c.from_numpy(np.array(0, dtype=np.int32))
-    k(c)
-    assert c.to_numpy() == 11
-
-    c.from_numpy(np.array(0, dtype=np.int32))
-    k.resume(c, from_checkpoint=1)
-    assert c.to_numpy() == 10
-
-
-@test_utils.test()
 def test_checkpoint_for_loop_wrap_accepted():
-    """An explicit one-iteration `for` wrap (the pattern the auto-wrap synthesizes) must continue to compile and run,
-    mixed alongside real for-loops."""
+    """A user-written one-iteration `for` wrap (the pattern users substitute for bare statements once the bare-stmt
+    rejection fires) compiles and runs correctly, mixed alongside real for-loops."""
     N = 4
 
     @qd.kernel(graph=True)
@@ -339,92 +260,72 @@ def test_checkpoint_for_loop_wrap_accepted():
 
 
 @test_utils.test()
-def test_checkpoint_yield_with_intervening_serial_task():
-    """Pin the fix for the offload-pass cp_id propagation: a yielding checkpoint whose body emits an intervening serial-
-    offloaded task (e.g., an auto-wrapped bare statement before a real for-loop, or a kernel-coverage probe inserted by
-    `_kernel_coverage.py`) must still yield AFTER the entire body has run -- not after the first task of the body.
+def test_checkpoint_bare_assign_raises():
+    """A bare `Assign` at the top level of a `qd.checkpoint(...)` body must raise `QuadrantsSyntaxError` at compile
+    time, not be silently wrapped. The user should be steered to `for _ in range(1): <stmt>` explicitly so they can
+    see that each top-level statement in a checkpoint becomes its own offloaded task -- otherwise a sequence of
+    scalar writes would balloon into N kernel launches / N graph nodes with no indication anything was implicit.
 
-    Without the fix `transforms/offload.cpp` would tag the synthesized serial task with the default `cp_id=-1`, breaking
-    the contiguous run of `cp_id=N` tasks and confusing the launcher's "last task in cp" detection. The launcher /
-    graph-manager would then close the checkpoint after the first for-loop, fire the yield-check, set yield_signal, and
-    skip every subsequent task in the SAME checkpoint -- the body never finishes. This was the deterministic Linux x64
-    CI failure when `QD_KERNEL_COVERAGE=1` (the coverage probe injects the intervening bare statement).
+    See the rejection logic in `CheckpointTransformer.build_checkpoint_with` and the `Restrictions` section of
+    `docs/source/user_guide/graph.md`.
     """
-    if not _supports_checkpoint_yield_resume():
-        pytest.skip("yield with intervening serial requires CUDA-native IF or CPU host-branch gating")
-    N = 4
 
     @qd.kernel(graph=True)
-    def k(x: qd.types.ndarray(qd.i32, ndim=1), flag: qd.types.ndarray(qd.i32, ndim=0)):
-        with qd.checkpoint(yield_on=flag):
-            x[0] = x[0] + 100  # bare assign -> auto-wrapped one-iter for-loop, then a synthesized serial prelude
-            for i in range(x.shape[0]):  # the second for-loop in the same cp must still run before the yield-check
-                x[i] = x[i] + 1
+    def k(c: qd.types.ndarray(qd.i32, ndim=0)):
+        with qd.checkpoint():
+            c[()] = c[()] + 1  # bare Assign -- must be wrapped explicitly
 
-    x = qd.ndarray(qd.i32, shape=(N,))
-    flag = qd.ndarray(qd.i32, shape=())
-    x.from_numpy(np.zeros(N, dtype=np.int32))
-    flag.from_numpy(np.array(1, dtype=np.int32))
-    k(x, flag)
-    # The full body must run: x[0] gets +100 (auto-wrapped) then +1 (real loop) = 101; x[1..3] get +1 each.
-    expected = np.array([101, 1, 1, 1], dtype=np.int32)
-    np.testing.assert_array_equal(x.to_numpy(), expected)
-    assert flag.to_numpy() == 0  # yield-check cleared the flag after the body ran
+    c = qd.ndarray(qd.i32, shape=())
+    with pytest.raises(qd.QuadrantsSyntaxError, match=r"bare top-level Assign statement"):
+        k(c)
 
 
 @test_utils.test()
-def test_checkpoint_adjacent_bare_stmts_fuse_into_one_task():
-    """Pin the bare-statement fusing in `CheckpointTransformer.build_checkpoint_with`.
-
-    A run of adjacent bare statements (`Assign` / `AugAssign` / `AnnAssign` / non-docstring `Expr`) in the same
-    `qd.checkpoint` body must lower to ONE one-iteration `for _ in range(1):` wrapper -- and so ONE `range_for`
-    `OffloadedStmt` -- rather than N wrappers / N tasks / N kernel launches. Without the fuse a checkpoint body that's
-    just a sequence of scalar / 0-d writes would pay N graph nodes and N kernel-launch latencies for a workload that's
-    morally one tiny serial kernel. The lowering is observable through `prog.get_num_offloaded_tasks_on_last_call()`;
-    see `docs/source/user_guide/graph.md` ("Advanced: statement fusing inside checkpoint bodies") for the user-facing
-    note. A real for-loop (or any other control-flow stmt) inside the same body breaks the run -- the for-loop becomes
-    its own task, and any bare statements after it form a fresh fused wrapper.
-
-    The assertion compares the task count of a 1-bare-stmt kernel against a 3-bare-stmt kernel with the same control-
-    flow shape. With the fuse, both lower to the same task count (one fused wrapper + one real for-loop, plus whatever
-    prologue the offloader emits for shape extraction etc.); without it, the 3-bare variant would emit two extra
-    `range_for` tasks. Comparing counts (rather than pinning an absolute number) keeps the test robust to future
-    changes in offloader prologue emission.
-    """
-    K = 5
+def test_checkpoint_bare_augassign_raises():
+    """Same as `_bare_assign_raises` but for `AugAssign` (`+=` / `-=` / ...)."""
 
     @qd.kernel(graph=True)
-    def k_one_bare(buf: qd.types.ndarray(qd.i32, ndim=1)):
+    def k(c: qd.types.ndarray(qd.i32, ndim=0)):
         with qd.checkpoint():
-            buf[0] = 7
-            for i in range(2):
-                buf[3 + i] = 100 + i
+            c[()] += 1
+
+    c = qd.ndarray(qd.i32, shape=())
+    with pytest.raises(qd.QuadrantsSyntaxError, match=r"bare top-level AugAssign statement"):
+        k(c)
+
+
+@test_utils.test()
+def test_checkpoint_bare_call_expr_raises():
+    """Same as `_bare_assign_raises` but for a bare top-level `Expr` (a function call statement). Docstrings (the only
+    other `Expr` shape we accept) are exempt via `is_docstring` -- see `test_checkpoint_docstring_allowed`."""
+
+    @qd.func
+    def bump(c: qd.types.ndarray(qd.i32, ndim=0)) -> None:
+        c[()] = c[()] + 1
 
     @qd.kernel(graph=True)
-    def k_three_bare(buf: qd.types.ndarray(qd.i32, ndim=1)):
+    def k(c: qd.types.ndarray(qd.i32, ndim=0)):
         with qd.checkpoint():
-            buf[0] = 7
-            buf[1] = 11
-            buf[2] = 13
-            for i in range(2):
-                buf[3 + i] = 100 + i
+            bump(c)
 
-    buf_one = qd.ndarray(qd.i32, shape=(K,))
-    buf_three = qd.ndarray(qd.i32, shape=(K,))
-    buf_one.from_numpy(np.zeros(K, dtype=np.int32))
-    buf_three.from_numpy(np.zeros(K, dtype=np.int32))
+    c = qd.ndarray(qd.i32, shape=())
+    with pytest.raises(qd.QuadrantsSyntaxError, match=r"bare top-level Expr statement"):
+        k(c)
 
-    k_one_bare(buf_one)
-    n_tasks_one = impl.get_runtime().prog.get_num_offloaded_tasks_on_last_call()
-    k_three_bare(buf_three)
-    n_tasks_three = impl.get_runtime().prog.get_num_offloaded_tasks_on_last_call()
 
-    np.testing.assert_array_equal(buf_one.to_numpy(), np.array([7, 0, 0, 100, 101], dtype=np.int32))
-    np.testing.assert_array_equal(buf_three.to_numpy(), np.array([7, 11, 13, 100, 101], dtype=np.int32))
-    assert n_tasks_three == n_tasks_one, (
-        f"adjacent bare stmts in qd.checkpoint must fuse into one wrapper: 1-bare kernel got {n_tasks_one} tasks, "
-        f"3-bare kernel got {n_tasks_three} (would be n_tasks_one + 2 without the fuse)"
-    )
+@test_utils.test()
+def test_checkpoint_bare_assign_error_message_suggests_for_wrap():
+    """The rejection message must show the user the exact `for _ in range(1):` rewrite. Pin a representative subset of
+    the message so a future copy-edit can't silently drop the actionable fix-it hint."""
+
+    @qd.kernel(graph=True)
+    def k(c: qd.types.ndarray(qd.i32, ndim=0)):
+        with qd.checkpoint():
+            c[()] = c[()] + 1
+
+    c = qd.ndarray(qd.i32, shape=())
+    with pytest.raises(qd.QuadrantsSyntaxError, match=r"for _ in range\(1\):"):
+        k(c)
 
 
 @test_utils.test()
