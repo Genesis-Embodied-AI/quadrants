@@ -213,26 +213,14 @@ Kernels with `qd.checkpoint()` but no `yield_on=` keep their previous return con
 - Must be used inside `@qd.kernel(graph=True)`.
 - `yield_on=` (when supplied) must be a kernel parameter that is a 0-d `qd.types.ndarray(qd.i32, ndim=0)`.
 - Checkpoints cannot be nested inside other checkpoints.
+- The body of a `with qd.checkpoint(...)` block cannot contain bare top-level statements (assignments, augmented assignments, or bare call/expression statements). Every top-level statement must be inside a `for`-loop (or other control-flow construct) so the compiler can lower it as its own offloaded task with the correct `cp_id`. A docstring as the first statement is allowed. Bare statements raise `QuadrantsSyntaxError` at compile time with a fix-it pointing at the explicit one-iteration `for`-wrap:
 
-### Advanced: statement fusing inside checkpoint bodies
+  ```python
+  with qd.checkpoint():
+      for _ in range(1):
+          c[()] = c[()] + 1
+      for i in range(arr.shape[0]):
+          arr[i] = arr[i] + 1
+  ```
 
-Quadrants offloads each top-level `for`-loop inside a kernel as a separate GPU task / graph node. A bare straight-line statement at the top level of a `qd.checkpoint(...)` body (e.g. `a[()] = 7`) does not naturally fit that mould, so the compiler auto-wraps it in a single-iteration `for _ in range(1):` so that it becomes a `range_for` task with the correct `cp_id` — otherwise it would silently run unconditionally even when its checkpoint is skipped.
-
-To avoid paying one kernel launch + one graph node per such statement, a **run of adjacent bare statements is fused into one wrapper**. Concretely, this body:
-
-```python
-with qd.checkpoint():
-    foo[()] = 0
-    blah[()] = 3
-    bar[()] = 5
-    for i in range(arr.shape[0]):
-        arr[i] = arr[i] + 1
-```
-
-lowers to exactly two offloaded tasks: one for the fused `foo / blah / bar` writes, and one for the real `for` loop — not four. The fuse stops at any control-flow statement (`for`, `while`, `if`, `with`, `return`, `pass`, ...) and resumes for any bare statements that follow.
-
-Practical implications:
-
-- **Sequential straight-line writes are cheap.** A handful of scalar / 0-d field assignments inside a checkpoint costs one kernel launch, not one per statement. Don't refactor them into a manual `for _ in range(1):` to "fuse them yourself" — the compiler already does.
-- **Scope is shared across a fused run.** Any IR-local introduced by one fused statement is visible to the next. This matches what most users expect.
-- **Control flow breaks the run.** If you have a one-off bare write that must be its own task for unrelated reasons, wrap a real (data-dependent) `for`/`if` around it or move it out of the checkpoint.
+  The restriction is by design: each top-level statement inside a checkpoint becomes its own GPU task / graph node, so silently auto-wrapping bare statements would hide a sequence of N field writes ballooning into N kernel launches. Forcing the user to write the `for`-wrap themselves keeps the lowering visible and gives a single obvious place to fuse multiple writes into one task by sharing a single wrapper.

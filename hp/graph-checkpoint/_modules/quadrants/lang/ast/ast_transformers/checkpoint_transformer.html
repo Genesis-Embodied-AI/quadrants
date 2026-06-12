@@ -349,10 +349,30 @@
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.ast.ast_transformer_utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">ASTTransformerFuncContext</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.exception</span><span class="w"> </span><span class="kn">import</span> <span class="n">QuadrantsSyntaxError</span>
 
+<span class="c1"># Sentinel name used by `_kernel_coverage.py` (`FIELD_VAR_NAME`) for the probe-tracking field. The checkpoint</span>
+<span class="c1"># validator hard-codes the literal so coverage probes can be exempted without taking a runtime dep on the optional</span>
+<span class="c1"># `_kernel_coverage` module (it is only imported when `QD_KERNEL_COVERAGE=1`). The two must stay in sync; if</span>
+<span class="c1"># `FIELD_VAR_NAME` ever changes, update this constant and the corresponding test.</span>
+<span class="n">_KERNEL_COVERAGE_FIELD_NAME</span> <span class="o">=</span> <span class="s2">&quot;_qd_cov&quot;</span>
+
 
 <div class="viewcode-block" id="CheckpointTransformer">
 <a class="viewcode-back" href="../../../../../autoapi/quadrants/lang/ast/ast_transformers/checkpoint_transformer/index.html#quadrants.lang.ast.ast_transformers.checkpoint_transformer.CheckpointTransformer">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">CheckpointTransformer</span><span class="p">:</span>
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_is_coverage_probe_assign</span><span class="p">(</span><span class="n">stmt</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">stmt</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return True iff *stmt* is the synthesized ``_qd_cov[&lt;probe_id&gt;] = 1`` assignment inserted by</span>
+<span class="sd">        ``_kernel_coverage.py`` when ``QD_KERNEL_COVERAGE=1``. Keeping these out of the bare-statement rejection in</span>
+<span class="sd">        ``build_checkpoint_with`` lets coverage CI exercise every checkpoint kernel without the user having to wrap</span>
+<span class="sd">        the synthetic probes themselves.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">stmt</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Assign</span><span class="p">)</span> <span class="ow">or</span> <span class="nb">len</span><span class="p">(</span><span class="n">stmt</span><span class="o">.</span><span class="n">targets</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">False</span>
+        <span class="n">tgt</span> <span class="o">=</span> <span class="n">stmt</span><span class="o">.</span><span class="n">targets</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">tgt</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Subscript</span><span class="p">):</span>
+            <span class="k">return</span> <span class="kc">False</span>
+        <span class="k">return</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">tgt</span><span class="o">.</span><span class="n">value</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Name</span><span class="p">)</span> <span class="ow">and</span> <span class="n">tgt</span><span class="o">.</span><span class="n">value</span><span class="o">.</span><span class="n">id</span> <span class="o">==</span> <span class="n">_KERNEL_COVERAGE_FIELD_NAME</span>
+
     <span class="nd">@staticmethod</span>
 <div class="viewcode-block" id="CheckpointTransformer.is_checkpoint_call">
 <a class="viewcode-back" href="../../../../../autoapi/quadrants/lang/ast/ast_transformers/checkpoint_transformer/index.html#quadrants.lang.ast.ast_transformers.checkpoint_transformer.CheckpointTransformer.is_checkpoint_call">[docs]</a>
@@ -427,59 +447,51 @@
                     <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">kernel</span><span class="o">.</span><span class="n">func</span><span class="o">.</span><span class="vm">__name__</span><span class="si">!r}</span><span class="s2">. Available parameters: </span><span class="si">{</span><span class="n">arg_names</span><span class="si">}</span><span class="s2">&quot;</span>
                 <span class="p">)</span>
 
-        <span class="c1"># Auto-wrap bare top-level statements in the checkpoint body in a one-iteration `for` loop. The offloader&#39;s</span>
-        <span class="c1"># pending-serial bucket loses the surrounding `checkpoint_id` and emits such statements as `serial` tasks with</span>
-        <span class="c1"># `cp_id == -1`, meaning that they would run unconditionally even when the checkpoint is skipped -- a silent</span>
-        <span class="c1"># correctness bug. The fix is to lower them as `range_for` tasks instead by wrapping each bare statement in `for</span>
-        <span class="c1"># _ in range(1): &lt;stmt&gt;`. We target the specific statement kinds known to hit the footgun (Assign / AugAssign /</span>
-        <span class="c1"># AnnAssign / non-docstring Expr) and leave everything else (For, While, If, With, Pass, docstring) untouched so</span>
-        <span class="c1"># they keep working transparently; nested `with qd.checkpoint(...)` in particular still falls through to the</span>
-        <span class="c1"># existing nested-checkpoint check at the start of this method.</span>
+        <span class="c1"># Reject bare top-level statements (Assign / AugAssign / AnnAssign / non-docstring Expr) at the top of the</span>
+        <span class="c1"># checkpoint body and ask the user to wrap them in their own for-loop. The offloader&#39;s pending-serial bucket</span>
+        <span class="c1"># loses the surrounding `checkpoint_id` and emits such statements as `serial` tasks with `cp_id == -1`, so they</span>
+        <span class="c1"># would run unconditionally even when the checkpoint is skipped -- a silent correctness bug. Rather than</span>
+        <span class="c1"># auto-wrapping them transparently (which hides the fact that each bare stmt becomes its own kernel / graph</span>
+        <span class="c1"># node and surprises users when they look at the lowered IR or `prog.get_num_offloaded_tasks_on_last_call()`),</span>
+        <span class="c1"># we surface a clear compile-time error and have the user write `for _ in range(1): &lt;stmt&gt;` themselves. This</span>
+        <span class="c1"># also keeps the `qd.checkpoint` body shape uniform with the design assumption that every top-level statement</span>
+        <span class="c1"># in a checkpoint is its own offloaded task with a known `cp_id`. Control-flow stmts (For / While / If / With /</span>
+        <span class="c1"># Pass / Return) and the docstring slot are passed through. See `docs/source/user_guide/graph.md` for the</span>
+        <span class="c1"># user-facing rule.</span>
         <span class="c1">#</span>
-        <span class="c1"># Adjacent wrappable statements are fused into a *single* `for _ in range(1):` wrapper rather than one wrapper</span>
-        <span class="c1"># per statement. Without this, a checkpoint body that&#39;s just a sequence of field writes like `a[()] = 0; b[()]</span>
-        <span class="c1"># = 1; c[()] = 2` would lower to N single-iteration `range_for` `OffloadedStmt`s and pay N kernel launches + N</span>
-        <span class="c1"># graph nodes for a workload that&#39;s morally one tiny serial kernel. Fusing collapses the run into one task</span>
-        <span class="c1"># without changing semantics: statements execute in program order inside the wrapper exactly as they would</span>
-        <span class="c1"># outside it, and the wrapper&#39;s `cp_id` covers all of them uniformly. Runs break on any non-wrappable stmt</span>
-        <span class="c1"># (For / While / If / With / Pass / docstring / Return / ...) which then becomes its own task as before, and</span>
-        <span class="c1"># the cp_id propagation in `quadrants/transforms/offload.cpp` handles the residual case of a coverage-probe</span>
-        <span class="c1"># style serial task sneaking between two for-loops of the same checkpoint after this transformer has run. See</span>
-        <span class="c1"># `docs/source/user_guide/graph.md` (&quot;Advanced: statement fusing inside checkpoint bodies&quot;) for the user-facing</span>
-        <span class="c1"># note.</span>
-        <span class="n">new_body</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">ast</span><span class="o">.</span><span class="n">stmt</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
-        <span class="n">fused_run</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">ast</span><span class="o">.</span><span class="n">stmt</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
-
-        <span class="k">def</span><span class="w"> </span><span class="nf">flush_fused_run</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-            <span class="k">if</span> <span class="ow">not</span> <span class="n">fused_run</span><span class="p">:</span>
-                <span class="k">return</span>
-            <span class="n">wrapper</span> <span class="o">=</span> <span class="n">ast</span><span class="o">.</span><span class="n">For</span><span class="p">(</span>
-                <span class="n">target</span><span class="o">=</span><span class="n">ast</span><span class="o">.</span><span class="n">Name</span><span class="p">(</span><span class="nb">id</span><span class="o">=</span><span class="s2">&quot;_&quot;</span><span class="p">,</span> <span class="n">ctx</span><span class="o">=</span><span class="n">ast</span><span class="o">.</span><span class="n">Store</span><span class="p">()),</span>
-                <span class="nb">iter</span><span class="o">=</span><span class="n">ast</span><span class="o">.</span><span class="n">Call</span><span class="p">(</span>
-                    <span class="n">func</span><span class="o">=</span><span class="n">ast</span><span class="o">.</span><span class="n">Name</span><span class="p">(</span><span class="nb">id</span><span class="o">=</span><span class="s2">&quot;range&quot;</span><span class="p">,</span> <span class="n">ctx</span><span class="o">=</span><span class="n">ast</span><span class="o">.</span><span class="n">Load</span><span class="p">()),</span>
-                    <span class="n">args</span><span class="o">=</span><span class="p">[</span><span class="n">ast</span><span class="o">.</span><span class="n">Constant</span><span class="p">(</span><span class="n">value</span><span class="o">=</span><span class="mi">1</span><span class="p">)],</span>
-                    <span class="n">keywords</span><span class="o">=</span><span class="p">[],</span>
-                <span class="p">),</span>
-                <span class="n">body</span><span class="o">=</span><span class="nb">list</span><span class="p">(</span><span class="n">fused_run</span><span class="p">),</span>
-                <span class="n">orelse</span><span class="o">=</span><span class="p">[],</span>
+        <span class="c1"># `QD_KERNEL_COVERAGE=1` instruments every executable line in the kernel AST with a bare `_qd_cov[&lt;id&gt;] = 1`</span>
+        <span class="c1"># probe assignment (see `_kernel_coverage.py`). Those probes are inserted by an earlier AST pass and would</span>
+        <span class="c1"># otherwise trip the check at the top of every checkpoint kernel under coverage CI, so probes are explicitly</span>
+        <span class="c1"># exempt -- the `cp_id` propagation in `quadrants/transforms/offload.cpp` (`assemble_serial_statements`)</span>
+        <span class="c1"># ensures the synthesized coverage-probe serial task still inherits the surrounding checkpoint&#39;s `cp_id` and</span>
+        <span class="c1"># so does not break the launcher&#39;s &quot;last task in checkpoint&quot; detection.</span>
+        <span class="k">for</span> <span class="n">stmt</span> <span class="ow">in</span> <span class="n">node</span><span class="o">.</span><span class="n">body</span><span class="p">:</span>
+            <span class="n">is_bare</span> <span class="o">=</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">stmt</span><span class="p">,</span> <span class="p">(</span><span class="n">ast</span><span class="o">.</span><span class="n">Assign</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">AugAssign</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">AnnAssign</span><span class="p">))</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">is_bare</span> <span class="ow">and</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">stmt</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Expr</span><span class="p">):</span>
+                <span class="c1"># Any `Expr(Constant)` is a no-op (Python&#39;s docstring pattern, e.g. a leading triple-quoted string).</span>
+                <span class="c1"># We accept it anywhere in the body rather than only at position 0 because the kernel-coverage AST</span>
+                <span class="c1"># transformer (see `_kernel_coverage.py`) prepends a `_qd_cov[...] = 1` probe under</span>
+                <span class="c1"># `QD_KERNEL_COVERAGE=1`, which would otherwise push the docstring to position 1 and have us flag it</span>
+                <span class="c1"># as a bare top-level statement.</span>
+                <span class="n">is_constant_expr</span> <span class="o">=</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">stmt</span><span class="o">.</span><span class="n">value</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Constant</span><span class="p">)</span>
+                <span class="n">is_bare</span> <span class="o">=</span> <span class="ow">not</span> <span class="n">is_constant_expr</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">is_bare</span><span class="p">:</span>
+                <span class="k">continue</span>
+            <span class="k">if</span> <span class="n">CheckpointTransformer</span><span class="o">.</span><span class="n">_is_coverage_probe_assign</span><span class="p">(</span><span class="n">stmt</span><span class="p">):</span>
+                <span class="k">continue</span>
+            <span class="n">stmt_kind</span> <span class="o">=</span> <span class="nb">type</span><span class="p">(</span><span class="n">stmt</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span>
+            <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;qd.checkpoint() body cannot contain a bare top-level </span><span class="si">{</span><span class="n">stmt_kind</span><span class="si">}</span><span class="s2"> statement &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;(line </span><span class="si">{</span><span class="nb">getattr</span><span class="p">(</span><span class="n">stmt</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;lineno&#39;</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;?&#39;</span><span class="p">)</span><span class="si">}</span><span class="s2">): every top-level statement in a checkpoint must be inside a &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;for-loop (or other control-flow construct), so the compiler can lower it as its own offloaded task &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;with the correct cp_id. Wrap the statement in `for _ in range(1):` to keep the original intent:</span><span class="se">\n</span><span class="s2">&quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;    with qd.checkpoint():</span><span class="se">\n</span><span class="s2">&quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;        for _ in range(1):</span><span class="se">\n</span><span class="s2">&quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;            &lt;your statement here&gt;</span><span class="se">\n</span><span class="s2">&quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;        for i in range(arr.shape[0]):</span><span class="se">\n</span><span class="s2">&quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;            ...</span><span class="se">\n</span><span class="s2">&quot;</span>
             <span class="p">)</span>
-            <span class="n">ast</span><span class="o">.</span><span class="n">copy_location</span><span class="p">(</span><span class="n">wrapper</span><span class="p">,</span> <span class="n">fused_run</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
-            <span class="n">ast</span><span class="o">.</span><span class="n">fix_missing_locations</span><span class="p">(</span><span class="n">wrapper</span><span class="p">)</span>
-            <span class="n">new_body</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">wrapper</span><span class="p">)</span>
-            <span class="n">fused_run</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span>
-
-        <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">stmt</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">body</span><span class="p">):</span>
-            <span class="n">needs_wrap</span> <span class="o">=</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">stmt</span><span class="p">,</span> <span class="p">(</span><span class="n">ast</span><span class="o">.</span><span class="n">Assign</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">AugAssign</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">AnnAssign</span><span class="p">))</span>
-            <span class="k">if</span> <span class="ow">not</span> <span class="n">needs_wrap</span> <span class="ow">and</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">stmt</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Expr</span><span class="p">):</span>
-                <span class="n">is_docstring</span> <span class="o">=</span> <span class="n">i</span> <span class="o">==</span> <span class="mi">0</span> <span class="ow">and</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">stmt</span><span class="o">.</span><span class="n">value</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Constant</span><span class="p">)</span>
-                <span class="n">needs_wrap</span> <span class="o">=</span> <span class="ow">not</span> <span class="n">is_docstring</span>
-            <span class="k">if</span> <span class="n">needs_wrap</span><span class="p">:</span>
-                <span class="n">fused_run</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">stmt</span><span class="p">)</span>
-            <span class="k">else</span><span class="p">:</span>
-                <span class="n">flush_fused_run</span><span class="p">()</span>
-                <span class="n">new_body</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">stmt</span><span class="p">)</span>
-        <span class="n">flush_fused_run</span><span class="p">()</span>
-        <span class="n">node</span><span class="o">.</span><span class="n">body</span> <span class="o">=</span> <span class="n">new_body</span>
 
         <span class="n">kernel</span><span class="o">.</span><span class="n">checkpoint_yield_on_args</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">yield_on_name</span><span class="p">)</span>
         <span class="c1"># Hand control to the C++ ASTBuilder so that every for-loop emitted by `build_stmts` below is tagged with this</span>
