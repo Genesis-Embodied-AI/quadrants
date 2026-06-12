@@ -1,6 +1,8 @@
 #!/bin/bash
 
-set -x
+# errexit so setup commands (notably `pip install torch ...`) fail the step; run_phase is intentionally
+# non-aborting so pytest failures in one phase don't prevent later phases from running (see _run_test_phases.sh).
+set -ex
 
 source "$(dirname "$0")/_run_test_phases.sh"
 
