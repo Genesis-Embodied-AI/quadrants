@@ -1177,52 +1177,86 @@ void TaskCodeGenLLVM::visit(LocalStoreStmt *stmt) {
 
 void TaskCodeGenLLVM::visit(AssertStmt *stmt) {
   QD_ASSERT((int)stmt->args.size() <= quadrants_error_message_max_num_arguments);
-  auto argument_buffer_size = llvm::ArrayType::get(llvm::Type::getInt64Ty(*llvm_context), stmt->args.size());
 
-  // TODO: maybe let all asserts in a single offload share a single buffer?
-  auto arguments = create_entry_block_alloca(argument_buffer_size);
+  // Emit the test inline and keep argument marshalling plus the runtime call in a cold block reached only on
+  // failure. An unconditional runtime call at every site puts an ABI call (with its argument buffer and stores) on
+  // the hot path of every checked access; on GPU the resulting register spills are backed by a per-resident-thread
+  // local-memory reservation across the whole device, which multiplies to gigabytes for bounds-checked kernels.
+  //
+  // On CPU, use the context-aware variant that returns non-zero on failure so we can emit an early return and
+  // avoid the subsequent out-of-bounds memory access. On GPU, asm("exit;") kills the thread directly when asserts
+  // are enabled at runtime; otherwise the cold block falls through to the access, as before.
+  bool use_ctx_variant = arch_is_cpu(current_arch());
+  auto *test = builder->CreateIsNotNull(llvm_val[stmt->cond]);
+
+  auto *assert_fail = llvm::BasicBlock::Create(*llvm_context, "assert_fail", func);
+  auto *assert_cont = llvm::BasicBlock::Create(*llvm_context, "assert_cont", func);
+  builder->CreateCondBr(test, assert_cont, assert_fail);
+  builder->SetInsertPoint(assert_fail);
 
   std::vector<llvm::Value *> args;
-  // On CPU, use the context-aware variant that returns non-zero on failure
-  // so we can emit an early return and avoid the subsequent out-of-bounds
-  // memory access.  On GPU, asm("exit;") kills the thread directly.
-  bool use_ctx_variant = arch_is_cpu(current_arch());
   args.emplace_back(use_ctx_variant ? get_context() : get_runtime());
-  args.emplace_back(builder->CreateIsNotNull(llvm_val[stmt->cond]));
-  args.emplace_back(builder->CreateGlobalStringPtr(stmt->text));
 
-  for (int i = 0; i < stmt->args.size(); i++) {
-    auto arg = stmt->args[i];
-    QD_ASSERT(llvm_val[arg]);
+  constexpr int max_args_by_value = 8;
+  llvm::Value *result = nullptr;
+  if ((int)stmt->args.size() <= max_args_by_value) {
+    // Fast path: pass the arguments by value, so that no per-site argument buffer is ever allocated.
+    args.emplace_back(builder->CreateGlobalStringPtr(stmt->text));
+    args.emplace_back(tlctx->get_constant((int)stmt->args.size()));
+    for (int i = 0; i < max_args_by_value; i++) {
+      if (i < (int)stmt->args.size()) {
+        auto arg = stmt->args[i];
+        QD_ASSERT(llvm_val[arg]);
+        auto cast_type = llvm::Type::getIntNTy(*llvm_context, 8 * (std::size_t)data_type_size(arg->ret_type));
+        auto cast_int = builder->CreateBitCast(llvm_val[arg], cast_type);
+        args.emplace_back(builder->CreateZExt(cast_int, llvm::Type::getInt64Ty(*llvm_context)));
+      } else {
+        args.emplace_back(tlctx->get_constant((uint64)0));
+      }
+    }
+    result =
+        call(use_ctx_variant ? "quadrants_assert_format_ctx_args8" : "quadrants_assert_format_args8", std::move(args));
+  } else {
+    auto argument_buffer_size = llvm::ArrayType::get(llvm::Type::getInt64Ty(*llvm_context), stmt->args.size());
+    auto arguments = create_entry_block_alloca(argument_buffer_size);
 
-    // First convert the argument to an integral type with the same number of
-    // bits:
-    auto cast_type = llvm::Type::getIntNTy(*llvm_context, 8 * (std::size_t)data_type_size(arg->ret_type));
-    auto cast_int = builder->CreateBitCast(llvm_val[arg], cast_type);
+    args.emplace_back(test);
+    args.emplace_back(builder->CreateGlobalStringPtr(stmt->text));
 
-    // Then zero-extend the conversion result into int64:
-    auto cast_int64 = builder->CreateZExt(cast_int, llvm::Type::getInt64Ty(*llvm_context));
+    for (int i = 0; i < stmt->args.size(); i++) {
+      auto arg = stmt->args[i];
+      QD_ASSERT(llvm_val[arg]);
 
-    // Finally store the int64 value to the argument buffer:
-    builder->CreateStore(cast_int64, builder->CreateGEP(argument_buffer_size, arguments,
-                                                        {tlctx->get_constant(0), tlctx->get_constant(i)}));
+      // First convert the argument to an integral type with the same number of bits:
+      auto cast_type = llvm::Type::getIntNTy(*llvm_context, 8 * (std::size_t)data_type_size(arg->ret_type));
+      auto cast_int = builder->CreateBitCast(llvm_val[arg], cast_type);
+
+      // Then zero-extend the conversion result into int64:
+      auto cast_int64 = builder->CreateZExt(cast_int, llvm::Type::getInt64Ty(*llvm_context));
+
+      // Finally store the int64 value to the argument buffer:
+      builder->CreateStore(cast_int64, builder->CreateGEP(argument_buffer_size, arguments,
+                                                          {tlctx->get_constant(0), tlctx->get_constant(i)}));
+    }
+
+    args.emplace_back(tlctx->get_constant((int)stmt->args.size()));
+    args.emplace_back(
+        builder->CreateGEP(argument_buffer_size, arguments, {tlctx->get_constant(0), tlctx->get_constant(0)}));
+
+    result = call(use_ctx_variant ? "quadrants_assert_format_ctx" : "quadrants_assert_format", std::move(args));
   }
-
-  args.emplace_back(tlctx->get_constant((int)stmt->args.size()));
-  args.emplace_back(
-      builder->CreateGEP(argument_buffer_size, arguments, {tlctx->get_constant(0), tlctx->get_constant(0)}));
-
-  llvm_val[stmt] = call(use_ctx_variant ? "quadrants_assert_format_ctx" : "quadrants_assert_format", std::move(args));
+  llvm_val[stmt] = result;
 
   if (use_ctx_variant) {
     auto *assert_abort = llvm::BasicBlock::Create(*llvm_context, "assert_abort", func);
-    auto *assert_cont = llvm::BasicBlock::Create(*llvm_context, "assert_cont", func);
-    auto *failed = builder->CreateICmpNE(llvm_val[stmt], tlctx->get_constant(0));
+    auto *failed = builder->CreateICmpNE(result, tlctx->get_constant(0));
     builder->CreateCondBr(failed, assert_abort, assert_cont);
     builder->SetInsertPoint(assert_abort);
     builder->CreateRetVoid();
-    builder->SetInsertPoint(assert_cont);
+  } else {
+    builder->CreateBr(assert_cont);
   }
+  builder->SetInsertPoint(assert_cont);
 }
 
 void TaskCodeGenLLVM::visit(SNodeOpStmt *stmt) {
