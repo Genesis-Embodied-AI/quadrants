@@ -429,6 +429,8 @@ def reduce_add(
 ):
     """Graph-composable ``out[0] = sum(arr[0:n])``.
 
+    **Experimental** - this API is new and may change in a future release.
+
     Call at the **top level** of your own ``@qd.kernel`` (e.g. a qipc ``graph=True`` parent); never nest it in ordinary
     runtime ``for`` / ``if`` / ``while`` control flow (that demotes the phase loops and drops the per-phase grid-wide
     barriers). ``n`` is a device ``Expr`` (the live count, read on-device); ``DTYPE`` is the element dtype (an ndarray
@@ -449,8 +451,8 @@ def reduce_min(
     DTYPE: template(),
     LOG256_MAX_N: template(),
 ):
-    """Graph-composable ``out[0] = min(arr[0:n])`` (identity derived from ``DTYPE``). See :func:`reduce_add` for the
-    top-level-call contract and arg semantics."""
+    """Graph-composable ``out[0] = min(arr[0:n])`` (identity derived from ``DTYPE``). **Experimental** (new API, may
+    change). See :func:`reduce_add` for the top-level-call contract and arg semantics."""
     WIDE = _scratch_dtype_for_width(_dtype_width_bytes(DTYPE))  # compile-time (from the DTYPE template); not a static()
     _emit_reduce(arr, out, scratch, n, LOG256_MAX_N, DTYPE, WIDE, _OP_MIN)
 
@@ -464,8 +466,8 @@ def reduce_max(
     DTYPE: template(),
     LOG256_MAX_N: template(),
 ):
-    """Graph-composable ``out[0] = max(arr[0:n])`` (identity derived from ``DTYPE``). See :func:`reduce_add` for the
-    top-level-call contract and arg semantics."""
+    """Graph-composable ``out[0] = max(arr[0:n])`` (identity derived from ``DTYPE``). **Experimental** (new API, may
+    change). See :func:`reduce_add` for the top-level-call contract and arg semantics."""
     WIDE = _scratch_dtype_for_width(_dtype_width_bytes(DTYPE))  # compile-time (from the DTYPE template); not a static()
     _emit_reduce(arr, out, scratch, n, LOG256_MAX_N, DTYPE, WIDE, _OP_MAX)
 

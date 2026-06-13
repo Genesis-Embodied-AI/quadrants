@@ -290,6 +290,8 @@ def sort(
 ):
     """Whole LSB radix sort as one ``@qd.func`` - the composable form; see module docstring.
 
+    **Experimental** - this API is new and may change in a future release.
+
     Call it at the **top level** of your own ``@qd.kernel`` (e.g. a qipc ``graph=True``
     parent that chains it with other phases). Each phase helper's single top-level ``for`` stays its own offloaded GPU
     launch, so the inter-phase grid-wide synchronization survives and every phase is captured as a node in the parent's

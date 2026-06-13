@@ -7,6 +7,8 @@ The algorithms here operate at device-level, using all available gpu cores, and 
 
 Each function is a kernel-side qd.func functions, which must be launched from inside a qd.kernel. They are fully compatible with graph. Every op requires caller-owned **scratch**, covered in a later section.
 
+> **Experimental.** These device-wide algorithms are a new addition and should be considered experimental: their signatures and semantics may change in a future release. (This does not apply to the **deprecated** `parallel_sort` and `PrefixSumExecutor`, which are on their own removal track.)
+
 ## What's available
 
 | Op | What it does | Call from kernel | Call from host |

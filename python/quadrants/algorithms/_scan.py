@@ -497,6 +497,8 @@ def exclusive_scan_add(
 ):
     """Graph-composable ``out[i] = sum(arr[0:i])`` (exclusive prefix sum).
 
+    **Experimental** - this API is new and may change in a future release.
+
     Call at the **top level** of your own ``@qd.kernel`` (e.g. a qipc ``graph=True`` parent); never nest it in ordinary
     runtime ``for`` / ``if`` / ``while`` control flow. ``n`` is a device ``Expr`` (the live count); ``DTYPE`` is the
     element dtype (pass it explicitly - an ndarray kernel arg has no in-kernel ``.dtype``); ``LOG256_MAX_N`` is the
@@ -510,8 +512,8 @@ def exclusive_scan_add(
 def exclusive_scan_min(
     arr: template(), out: template(), scratch: template(), n: i32, DTYPE: template(), LOG256_MAX_N: template()
 ):
-    """Graph-composable ``out[i] = min(arr[0:i])`` (identity ``+extremum`` from ``DTYPE``). See
-    :func:`exclusive_scan_add` for the top-level-call contract and arg semantics."""
+    """Graph-composable ``out[i] = min(arr[0:i])`` (identity ``+extremum`` from ``DTYPE``). **Experimental** (new API,
+    may change). See :func:`exclusive_scan_add` for the top-level-call contract and arg semantics."""
     WIDE = _scratch_dtype_for_width(_dtype_width_bytes(DTYPE))
     _emit_scan(arr, out, scratch, n, LOG256_MAX_N, DTYPE, WIDE, _OP_MIN)
 
@@ -520,8 +522,8 @@ def exclusive_scan_min(
 def exclusive_scan_max(
     arr: template(), out: template(), scratch: template(), n: i32, DTYPE: template(), LOG256_MAX_N: template()
 ):
-    """Graph-composable ``out[i] = max(arr[0:i])`` (identity ``-extremum`` from ``DTYPE``). See
-    :func:`exclusive_scan_add` for the top-level-call contract and arg semantics."""
+    """Graph-composable ``out[i] = max(arr[0:i])`` (identity ``-extremum`` from ``DTYPE``). **Experimental** (new API,
+    may change). See :func:`exclusive_scan_add` for the top-level-call contract and arg semantics."""
     WIDE = _scratch_dtype_for_width(_dtype_width_bytes(DTYPE))
     _emit_scan(arr, out, scratch, n, LOG256_MAX_N, DTYPE, WIDE, _OP_MAX)
 

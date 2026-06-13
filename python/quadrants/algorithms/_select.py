@@ -131,6 +131,8 @@ def select(
 ):
     """Graph-composable stream compaction.
 
+    **Experimental** - this API is new and may change in a future release.
+
     Call at the **top level** of your own ``@qd.kernel`` (e.g. a qipc ``graph=True`` parent); never nest it in
     ordinary runtime ``for`` / ``if`` / ``while`` control flow. ``n`` is the live element count as a device ``Expr``;
     ``LOG256_MAX_N`` is the compile-time phase count - select handles any count ``<= BLOCK_DIM ** LOG256_MAX_N``.
