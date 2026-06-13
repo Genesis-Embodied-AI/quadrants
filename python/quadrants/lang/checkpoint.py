@@ -16,6 +16,13 @@ from contextlib import contextmanager
 def checkpoint(*, yield_on=None):
     """Marks a section of a graph kernel as a skippable, optionally yieldable stage.
 
+    .. warning::
+
+        **Experimental.** ``qd.checkpoint`` (together with ``qd.GraphStatus`` and ``kernel.resume(from_checkpoint=...)``)
+        is an experimental API. The signature, the lowering across backends, the error messages, and the host-side
+        yield/resume contract may change in any future release without a deprecation cycle. Pin Quadrants to an exact
+        version if you depend on the current behaviour.
+
     Used as ``with qd.checkpoint():`` or ``with qd.checkpoint(yield_on=flag):`` inside a ``@qd.kernel(graph=True)``
     kernel body. Each ``with`` block becomes a checkpoint with an auto-assigned ``cp_id`` (0, 1, 2, ... by declaration
     order, flat across the kernel, independent of whether the checkpoint is inside or outside a ``qd.graph_do_while``).

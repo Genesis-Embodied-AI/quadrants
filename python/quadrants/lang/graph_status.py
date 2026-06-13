@@ -12,6 +12,11 @@ from __future__ import annotations
 class GraphStatus:
     """Result returned by a graph kernel that contains ``qd.checkpoint(yield_on=...)`` blocks.
 
+    .. warning::
+
+        **Experimental.** ``GraphStatus`` is part of the experimental ``qd.checkpoint`` surface; its attributes and
+        the conditions under which it is returned may change in any future release without a deprecation cycle.
+
     Returned from ``kernel(...)`` and ``kernel.resume(..., from_checkpoint=cp)`` whenever the kernel was decorated with
     ``@qd.kernel(graph=True)`` and contains at least one checkpoint that has declared a ``yield_on=`` parameter. Read
     ``status.yielded`` to decide whether to keep running the host loop, and ``status.checkpoint`` to find out which

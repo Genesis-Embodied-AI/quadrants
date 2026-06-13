@@ -98,6 +98,12 @@ class QuadrantsCallable:
     def resume(self, *args, from_checkpoint: int, **kwargs):
         """Re-launches the kernel, skipping every ``qd.checkpoint`` with ``cp_id < from_checkpoint``.
 
+        .. warning::
+
+            **Experimental.** ``kernel.resume`` is part of the experimental ``qd.checkpoint`` surface; the signature
+            (in particular the ``from_checkpoint=`` kwarg) and behaviour may change in any future release without a
+            deprecation cycle.
+
         Use only on ``@qd.kernel(graph=True)`` kernels with at least one ``qd.checkpoint(yield_on=...)`` block. The host
         loop pattern is::
 
