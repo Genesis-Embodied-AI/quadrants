@@ -424,7 +424,7 @@ No explicit fence is required between a kernel that writes the input and the sub
 
 ## Under the hood
 
-Implementation detail for the curious — not needed to *use* the ops. In every case the func emits a fixed-depth (`LOG256_MAX_N`) staircase of phases inside your kernel; each phase is a separate offloaded launch, so correctness relies on the same launch-boundary serialization as your surrounding top-level loops. `BLOCK_DIM = 256` throughout.
+Implementation detail for the curious — not needed to *use* the ops. In every case the func emits a fixed-depth (`LOG256_MAX_N`) staircase of phases inside your kernel; each phase is a separate offloaded launch, so correctness relies on the same launch-boundary serialization as your surrounding top-level loops. `BLOCK_DIM = 256` throughout. Each op is implemented from scratch in Quadrants; the classical design it follows is cited in its subsection.
 
 ### `reduce_{add,min,max}`
 
@@ -433,7 +433,7 @@ Implementation detail for the curious — not needed to *use* the ops. In every 
 
 ### `exclusive_scan_{add,min,max}`
 
-[Blelloch's 1990](https://www.cs.cmu.edu/~scandal/papers/CMU-CS-90-190.html) three-pass exclusive scan:
+[Blelloch's 1990](https://www.cs.cmu.edu/~scandal/papers/CMU-CS-90-190.html) work-efficient three-pass exclusive scan, realized on the GPU as a balanced per-block tree in the style of [Harris, Sengupta & Owens (GPU Gems 3, ch. 39)](https://developer.nvidia.com/gpugems/gpugems3/part-vi-gpu-computing/chapter-39-parallel-prefix-sum-scan-cuda):
 
 1. **Pass 1** — per-block tile reduce of `arr` into the caller's `scratch` (one slot per block).
 2. **Pass 2** — exclusive-scan the partials buffer in place. For `N ≤ BLOCK_DIM²` (= 65536) a single block does this. For larger `N`, the staircase recurses `D - 2` further levels: another tile-reduce on the partials, a recursive scan, then a downsweep that applies the higher-level prefixes.
@@ -443,7 +443,7 @@ Total scratch at `N = 1M` is `exclusive_scan_scratch_slots(N)` = `4096 + 16 = 41
 
 ### `select`
 
-The textbook scan-based compaction:
+The textbook scan-based compaction (a [Blelloch 1990](https://www.cs.cmu.edu/~scandal/papers/CMU-CS-90-190.html) application of scan):
 
 1. **Exclusive scan of `flags`** into the caller's `u32` scratch, producing per-element write indices. Same staircase phases as `exclusive_scan_add` (out-of-place: `flags` stays intact for the scatter / count, the indices land in `scratch[0:N]` and the partials above them).
 2. **Scatter:** a phase reads each `(arr[i], flags[i], indices[i])` and, if the flag is set, writes `out[indices[i]] = arr[i]`. No races, by construction of the exclusive scan over 0 / 1 flags.
@@ -451,7 +451,7 @@ The textbook scan-based compaction:
 
 ### `sort`
 
-- Classical histogram-scan-scatter LSB radix sort with 8-bit digits, four passes for `u32` / `i32` / `f32` (eight for the 64-bit dtypes). Each digit pass is three internal kernels:
+- Classical histogram-scan-scatter LSB radix sort ([Knuth, *TAOCP* Vol. 3 §5.2.5](https://www-cs-faculty.stanford.edu/~knuth/taocp.html); the per-pass digit-histogram scan is [Blelloch's](https://www.cs.cmu.edu/~scandal/papers/CMU-CS-90-190.html)) with 8-bit digits, four passes for `u32` / `i32` / `f32` (eight for the 64-bit dtypes). Each digit pass is three internal kernels:
   1. **Histogram** — every block computes its per-digit count into shared memory, then publishes the 256-bin tile histogram to the shared u32 scratch (digit-major layout: `tile_histograms[d * num_blocks + b]`).
   2. **Scan** — in-place exclusive scan over the flat tile_histograms buffer. The digit-major layout makes a single 1-D scan enough to produce per-(digit, block) global offsets.
   3. **Scatter** — each block ranks its keys via `block.radix_rank_match_atomic_or` (wave32 + wave64 clean), looks up the per-(digit, block) global offset from the scan output, and scatters keys (and values, if provided) to the destination buffer.
@@ -460,21 +460,13 @@ The textbook scan-based compaction:
 
 ### `reduce_by_key_add`
 
-Scan + scatter + atomic_add — no segmented-scan primitive needed:
+Scan + scatter + atomic_add over head flags — no segmented-scan primitive needed; the scan is [Blelloch's](https://www.cs.cmu.edu/~scandal/papers/CMU-CS-90-190.html) (same staircase as `exclusive_scan_add`):
 
 1. **Head-flag pass.** `head_flags[i] = 1` if `i == 0` or `keys[i] != keys[i-1]`, else `0`. Written to the caller's `u32` scratch (bit-cast from `i32`).
 2. **In-place exclusive scan** of `head_flags` (same staircase phases as `exclusive_scan_add`). After this, `scratch[i] = sum(head_flags[0:i])`.
 3. **Zero-init `values_out[0:N]`.** The scatter uses `atomic_add`; slots must start at the additive identity `0`.
 4. **Scatter.** For each `i`, recompute `head_flag(i)` from `keys[i]` / `keys[i-1]`, derive the run index `pos = scratch[i] + head_flag(i) - 1` (inclusive scan minus 1), and write `keys_out[pos] = keys[i]` + `atomic_add(values_out[pos], values[i])`.
 5. **Count.** `num_runs[0] = scratch[N-1] + head_flag(N-1)`.
-
-### References
-
-These ops are implemented from scratch for Quadrants — not wrappers over CUB / Thrust / etc. The classical designs they follow:
-
-- **Prefix sums / scan** — G. E. Blelloch, *Prefix Sums and Their Applications*, Tech. Report CMU-CS-90-190, 1990. [[link]](https://www.cs.cmu.edu/~scandal/papers/CMU-CS-90-190.html) — the work-efficient exclusive scan behind `exclusive_scan`, the scan-based recipes for `select` (stream compaction) and `reduce_by_key`, and the digit-histogram scan inside `sort`.
-- **Scan on the GPU** — M. Harris, S. Sengupta, J. D. Owens, *Parallel Prefix Sum (Scan) with CUDA*, [GPU Gems 3, ch. 39](https://developer.nvidia.com/gpugems/gpugems3/part-vi-gpu-computing/chapter-39-parallel-prefix-sum-scan-cuda), 2007 — the balanced-tree, per-block GPU realization of Blelloch's scan.
-- **Radix sort** — D. E. Knuth, *The Art of Computer Programming, Vol. 3: Sorting and Searching*, §5.2.5 (sorting by distribution) — the classical histogram → scan → scatter LSB radix sort that `sort` implements.
 
 ## Related
 
