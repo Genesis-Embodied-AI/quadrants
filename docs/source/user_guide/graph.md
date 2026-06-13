@@ -153,8 +153,7 @@ def nested(x: qd.types.ndarray(qd.i32, ndim=1),
         x[i] = x[i] + 100
 
     while qd.graph_do_while(outer):
-        # Re-initialise the inner counter at the start of every outer iteration, otherwise the
-        # inner loop only runs on the first outer pass.
+        # Reset the inner counter at the start of each outer iteration, else it only runs on the first outer pass.
         for _ in range(1):
             inner[()] = 5
         while qd.graph_do_while(inner):
