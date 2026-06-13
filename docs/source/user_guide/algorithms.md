@@ -52,7 +52,7 @@ The capacity grows fast - each level multiplies it by 256:
 
 It must be compile-time because it fixes the number and order of the internal launches. Each op runs as a *staircase*: a fixed ladder of `LOG256_MAX_N` levels where every level is a separate launch that shrinks the working set by a factor of `BLOCK_DIM = 256` (a level handling `k` elements feeds `ceil(k / 256)` to the next, until one element remains). Statically unrolling that staircase to `LOG256_MAX_N` levels gives a fixed launch topology, which is exactly what lets **one captured graph replay for any count up to the capacity** without re-tracing. The live count `n` flows as a device value while `LOG256_MAX_N` is frozen at trace time.
 
-**Pick it from an upper bound, not the current count.** Use the smallest `LOG256_MAX_N` whose capacity covers the largest count you will ever feed the captured graph - `LOG256_MAX_N = ceil(log256(capacity))`, floored at `1`. Size it against a *provisioned* upper bound (a buffer capacity, qipc's `padded_N`, ...), not today's `n`, so the same graph serves the whole range below it:
+**Pick it from an upper bound, not the current count.** Use the smallest `LOG256_MAX_N` whose capacity covers the largest count you will ever feed the captured graph - `LOG256_MAX_N = ceil(log256(capacity))`, floored at `1`. Size it against a *provisioned* upper bound (a buffer capacity, a padded element count, ...), not today's `n`, so the same graph serves the whole range below it:
 
 ```python
 def log256_max_n(capacity: int) -> int:
@@ -261,7 +261,7 @@ print(out.to_numpy()[:k])   # [10 12 13 16]   (the flagged elements, in input or
 
 ### `qd.algorithms.sort`
 
-Ascending in-place LSB radix sort over a 1-D tensor of 32-bit or 64-bit scalar keys (`u32` / `i32` / `f32` / `u64` / `i64` / `f64`), with optional lock-step permutation of a `values` tensor (key-value sort). Called as a `@qd.func` at the **top level** of your own `@qd.kernel` (the qipc path) so the sort composes with your other phases into one compiled kernel / captured graph:
+Ascending in-place LSB radix sort over a 1-D tensor of 32-bit or 64-bit scalar keys (`u32` / `i32` / `f32` / `u64` / `i64` / `f64`), with optional lock-step permutation of a `values` tensor (key-value sort). Called as a `@qd.func` at the **top level** of your own `@qd.kernel` so the sort composes with your other phases into one compiled kernel / captured graph:
 
 `sort(keys, tmp_keys, values, tmp_values, scratch, n, KEY_DTYPE, HAS_VALUES, END_BIT, LOG256_MAX_N)`
 
@@ -332,7 +332,7 @@ Arguments (see [Common conventions](#common-conventions) for `n` / `LOG256_MAX_N
 Constraints:
 
 - **Dtypes (first land):** `keys_in.dtype` and `values_in.dtype` in {`qd.i32`, `qd.u32`, `qd.f32`}. Other dtypes raise `NotImplementedError`.
-- **Reduction:** only `add` is exposed for first land. `min` / `max` variants need `atomic_min` / `atomic_max` for `f32`, which has spottier cross-backend support; defer to a follow-up gated on real qipc usage.
+- **Reduction:** only `add` is exposed for first land. `min` / `max` variants need `atomic_min` / `atomic_max` for `f32`, which has spottier cross-backend support; deferred to a follow-up gated on real-world demand.
 - **f32 non-associativity:** the order of additions inside a run is set by hardware atomic ordering, not host order, so `f32` results are *not* bitwise-equal to a serial scan. Tests tolerate a small relative error.
 - **NaN handling (f32 keys):** `NaN != NaN` is true, so each NaN-keyed element becomes its own run. Consistent with treating NaN as "different from everything", which matches the run-length-encoding spirit.
 
