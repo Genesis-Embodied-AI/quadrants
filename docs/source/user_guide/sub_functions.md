@@ -39,6 +39,8 @@ def compute(a: qd.Template) -> None:
 
 ## Restricting a func to the top level (`requires_top_level=True`)
 
+**Experimental.** `requires_top_level` is an experimental feature and its behaviour or API may change in a future release.
+
 Some functions contain top-level for-loops, and thus must not be called from within top-level for-loops.
 
 To both enforce this, and to signal to potential users/AIs that a func must not be called from within a top-level for-loop, you can annotate a `qd.func` with `qd.func(requires_top_level=True)`. This will throws `QuadrantsSyntaxError` at compile time if used within a for-loop.
