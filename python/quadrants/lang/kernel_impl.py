@@ -70,7 +70,7 @@ def func(fn=None, *, is_real_function=False, requires_top_level=False):
         >>>     print(foo(40))  # 42
     """
 
-    def decorator(fn, _bare=False):
+    def decorator(fn: F, _bare: bool = False) -> F:
         # Bare ``@qd.func`` reaches ``decorator`` from inside ``func`` (one extra stack frame); the
         # factory form ``@qd.func(...)`` is invoked directly by Python. Add the extra level in the
         # bare case so ``_inside_class`` inspects the user's class/def frame in both forms (mirrors
@@ -85,11 +85,11 @@ def func(fn=None, *, is_real_function=False, requires_top_level=False):
         quadrants_callable._qd_requires_top_level = requires_top_level
 
         update_wrapper(quadrants_callable, fn)
-        return quadrants_callable
+        return cast(F, quadrants_callable)
 
     if fn is None:
         return decorator
-    return cast(F, decorator(fn, _bare=True))
+    return decorator(fn, _bare=True)
 
 
 def real_func(fn: Callable) -> QuadrantsCallable:
