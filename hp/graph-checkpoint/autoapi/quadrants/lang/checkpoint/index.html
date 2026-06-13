@@ -388,8 +388,7 @@ implementation work; this file is just the public API entry point.</p>
 <p class="admonition-title">Warning</p>
 <p><strong>Experimental.</strong> <code class="docutils literal notranslate"><span class="pre">qd.checkpoint</span></code> (together with <code class="docutils literal notranslate"><span class="pre">qd.GraphStatus</span></code> and <code class="docutils literal notranslate"><span class="pre">kernel.resume(from_checkpoint=...)</span></code>)
 is an experimental API. The signature, the lowering across backends, the error messages, and the host-side
-yield/resume contract may change in any future release without a deprecation cycle. Pin Quadrants to an exact
-version if you depend on the current behaviour.</p>
+yield/resume contract may change in any future release without a deprecation cycle.</p>
 </div>
 <p>Used as <code class="docutils literal notranslate"><span class="pre">with</span> <span class="pre">qd.checkpoint():</span></code> or <code class="docutils literal notranslate"><span class="pre">with</span> <span class="pre">qd.checkpoint(yield_on=flag):</span></code> inside a <code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel(graph=True)</span></code>
 kernel body. Each <code class="docutils literal notranslate"><span class="pre">with</span></code> block becomes a checkpoint with an auto-assigned <code class="docutils literal notranslate"><span class="pre">cp_id</span></code> (0, 1, 2, … by declaration
