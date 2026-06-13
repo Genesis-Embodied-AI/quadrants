@@ -21,8 +21,8 @@ namespace quadrants::lang::spirv {
 //
 // Bindings (descriptor set 0):
 //   0: rw       uint32_t[2]      - control:  [resume_point: i32, yield_signal: i32]
-//                                            (shared with `checkpoint_gate_shader`; see
-//                                            `CheckpointControlBuf` for the layout)
+//                                            (shared with `checkpoint_gate_shader`; see `CheckpointControlBuf` for the
+//                                            layout)
 //   1: rw       uint32_t[1]      - yield_on: the user's `yield_on=` ndarray, single i32 element
 //   2: readonly uint32_t[1]      - params:   [cp_id: u32]
 //
@@ -32,8 +32,8 @@ namespace quadrants::lang::spirv {
 // OpAtomicCompareExchange which is universally supported on the Quadrants-targeted Vulkan / Metal surface).
 std::vector<uint32_t> build_checkpoint_yield_check_spirv(Arch arch, const DeviceCapabilityConfig *caps);
 
-// Word offsets within the params SSBO (binding 2). Layout fixed; host populates once at graph-build time matching
-// these offsets.
+// Word offsets within the params SSBO (binding 2). Layout fixed; host populates once at graph-build time matching these
+// offsets.
 struct CheckpointYieldCheckParams {
   static constexpr uint32_t kWordOffsetCpId = 0;
   static constexpr uint32_t kNumWords = 1;

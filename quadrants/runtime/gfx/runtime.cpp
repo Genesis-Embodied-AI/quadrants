@@ -613,8 +613,8 @@ void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_c
     if (attribs.range_for_attribs && !attribs.range_for_attribs->end_shape_product.empty()) {
       const auto &range = *attribs.range_for_attribs;
       // `const_begin` is asserted true at codegen whenever `end_stmt` is populated (see the
-      // `QD_ASSERT(stmt->const_begin)` in the `if (stmt->end_stmt)` branch of
-      // `spirv_codegen.cpp`), so `range.begin` is the literal begin value, not a gtmp offset.
+      // `QD_ASSERT(stmt->const_begin)` in the `if (stmt->end_stmt)` branch of `spirv_codegen.cpp`), so `range.begin` is
+      // the literal begin value, not a gtmp offset.
       int64_t iter_end = 1;
       for (const auto &ref : range.end_shape_product) {
         std::vector<int> indices = ref.arg_id;

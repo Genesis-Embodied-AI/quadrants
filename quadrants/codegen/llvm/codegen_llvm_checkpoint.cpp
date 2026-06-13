@@ -14,10 +14,8 @@ namespace quadrants::lang {
 
 // Emits the LLVM-IR equivalent of:
 //
-//   int32_t *rp = runtime->checkpoint_resume_point_ptr;
-//   if (rp != nullptr && *rp > cp_id) goto final_block;
-//   int32_t *ys = runtime->checkpoint_yield_signal_ptr;
-//   if (ys != nullptr && *ys != -1) goto final_block;
+//   int32_t *rp = runtime->checkpoint_resume_point_ptr; if (rp != nullptr && *rp > cp_id) goto final_block; int32_t *ys
+//   = runtime->checkpoint_yield_signal_ptr; if (ys != nullptr && *ys != -1) goto final_block;
 //
 // at the top of `func_body_bb` (after `init_offloaded_task_function` opens it). The two
 // null-checks let the prologue stay inert for callers that don't populate the RuntimeContext slots (e.g. the non-graph
@@ -76,8 +74,8 @@ void TaskCodeGenLLVM::emit_checkpoint_gate_prologue(int cp_id) {
     builder->CreateCondBr(should_skip_rp, skip_bb, check_yield_bb);
   }
 
-  // Stage 2: yield_signal check. Null pointer -> treat as "no skip" (kernel has cp >= 0 but
-  // no yield_on= on any checkpoint, so the launcher only populated resume_point).
+  // Stage 2: yield_signal check. Null pointer -> treat as "no skip" (kernel has cp >= 0 but no yield_on= on any
+  // checkpoint, so the launcher only populated resume_point).
   builder->SetInsertPoint(check_yield_bb);
   {
     auto *ys_ptr = load_rt_ctx_ptr(kFieldCheckpointYieldSignal);
@@ -93,8 +91,8 @@ void TaskCodeGenLLVM::emit_checkpoint_gate_prologue(int cp_id) {
   builder->SetInsertPoint(skip_bb);
   builder->CreateBr(final_block);
 
-  // Pick up codegen in the body block. Existing task-body codegen will insert into the current builder insertion
-  // point; pointing it at `body_bb` continues that flow as if the prologue never inserted itself.
+  // Pick up codegen in the body block. Existing task-body codegen will insert into the current builder insertion point;
+  // pointing it at `body_bb` continues that flow as if the prologue never inserted itself.
   builder->SetInsertPoint(body_bb);
 }
 

@@ -13,8 +13,7 @@
 // Builds the checkpoint yield-check SPIR-V binary with a vanilla compute-capability set and writes the word stream to
 // a temporary file. The CI doesn't run `spirv-val` automatically -- but dumping the binary makes it trivial to
 // validate / disassemble the output during local debugging:
-//   spirv-val /tmp/checkpoint_yield_check.spv
-//   spirv-dis /tmp/checkpoint_yield_check.spv | head -200
+//   spirv-val /tmp/checkpoint_yield_check.spv spirv-dis /tmp/checkpoint_yield_check.spv | head -200
 // Parity with `adstack_bound_reducer_shader_test.cpp` / `adstack_sizer_shader_test.cpp` -- every SPIR-V shader builder
 // in `quadrants/codegen/spirv/` has a matching `DumpBinary` test that guards the IR-builder from regressions which
 // would otherwise only surface at runtime on a Vulkan / Metal device.
@@ -35,9 +34,9 @@ TEST(CheckpointYieldCheckShader, DumpBinary) {
                binary.size() * sizeof(uint32_t), out_path);
 }
 
-// The yield-check shader uses `OpAtomicCompareExchange` on a u32 in an SSBO, which is in the universally
-// supported Vulkan / Metal compute capability set (no extra Atomic-Float / Atomic-Int64 caps). Pins that the
-// builder returns a non-empty binary on a minimum-cap caller, matching the header doc-comment guarantee.
+// The yield-check shader uses `OpAtomicCompareExchange` on a u32 in an SSBO, which is in the universally supported
+// Vulkan / Metal compute capability set (no extra Atomic-Float / Atomic-Int64 caps). Pins that the builder returns a
+// non-empty binary on a minimum-cap caller, matching the header doc-comment guarantee.
 TEST(CheckpointYieldCheckShader, NoExtraCapabilityRequired) {
   DeviceCapabilityConfig caps;
   caps.set(DeviceCapability::spirv_version, 0x10400);
