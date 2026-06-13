@@ -588,8 +588,7 @@
         <span class="n">x</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">x</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">+</span> <span class="mi">100</span>
 
     <span class="k">while</span> <span class="n">qd</span><span class="o">.</span><span class="n">graph_do_while</span><span class="p">(</span><span class="n">outer</span><span class="p">):</span>
-        <span class="c1"># Re-initialise the inner counter at the start of every outer iteration, otherwise the</span>
-        <span class="c1"># inner loop only runs on the first outer pass.</span>
+        <span class="c1"># Reset the inner counter at the start of each outer iteration, else it only runs on the first outer pass.</span>
         <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">):</span>
             <span class="n">inner</span><span class="p">[()]</span> <span class="o">=</span> <span class="mi">5</span>
         <span class="k">while</span> <span class="n">qd</span><span class="o">.</span><span class="n">graph_do_while</span><span class="p">(</span><span class="n">inner</span><span class="p">):</span>
