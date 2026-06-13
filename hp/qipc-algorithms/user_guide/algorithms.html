@@ -431,6 +431,9 @@
 <li><p><a class="reference internal" href="block.html"><span class="std std-doc">Block-level operations</span></a>: operate on per-block level</p></li>
 </ul>
 <p>Each function is a kernel-side qd.func functions, which must be launched from inside a qd.kernel. They are fully compatible with graph. Every op requires caller-owned <strong>scratch</strong>, covered in a later section.</p>
+<blockquote>
+<div><p><strong>Experimental.</strong> These device-wide algorithms are a new addition and should be considered experimental: their signatures and semantics may change in a future release. (This does not apply to the <strong>deprecated</strong> <code class="docutils literal notranslate"><span class="pre">parallel_sort</span></code> and <code class="docutils literal notranslate"><span class="pre">PrefixSumExecutor</span></code>, which are on their own removal track.)</p>
+</div></blockquote>
 <section id="what-s-available">
 <h2>What’s available<a class="headerlink" href="#what-s-available" title="Link to this heading">#</a></h2>
 <div class="pst-scrollable-table-container"><table class="table">
