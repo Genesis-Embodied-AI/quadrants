@@ -9,18 +9,18 @@ Each function is a kernel-side qd.func functions, which must be launched from in
 
 ## What's available
 
-| Op                                                          | What it does                                                       | CUDA | AMDGPU | Vulkan | Metal |
-|-------------------------------------------------------------|--------------------------------------------------------------------|------|--------|--------|-------|
-| `qd.algorithms.reduce_{add,min,max}(arr, out, scratch, n, DTYPE, LOG256_MAX_N)` | `out[0] = sum/min/max(arr[0:n])` (fixed-depth tree reduction; identity derived from `DTYPE` for min / max). Composed at the top level of your own kernel (device-resident count `n`, compile-time `LOG256_MAX_N`). | yes  | yes\*  | yes    | yes\* |
-| `qd.algorithms.exclusive_scan_{add,min,max}(arr, out, scratch, n, DTYPE, LOG256_MAX_N)` | `out[i] = sum/min/max(arr[0:i])` (three-pass Blelloch-style scan; 32-bit + 64-bit scalars; identity derived from `DTYPE` for min / max). | yes  | yes\*  | yes    | yes\* |
-| `qd.algorithms.select(arr, flags, out, num_out, scratch, n, LOG256_MAX_N)` | Stream compaction: copy `arr[i]` to a dense prefix of `out` for every `flags[i] == 1` (`flags` must be exactly 0/1; no `DTYPE` - the scatter is dtype-agnostic). | yes  | yes\*  | yes    | yes\* |
-| `qd.algorithms.sort(keys, tmp_keys, values, tmp_values, scratch, n, KEY_DTYPE, HAS_VALUES, END_BIT, LOG256_MAX_N)` | LSB radix sort (32-bit / 64-bit scalar keys, optional key-value). | yes  | yes\*  | yes    | yes\* |
-| `qd.algorithms.reduce_by_key_add(keys_in, values_in, keys_out, values_out, num_runs, scratch, n, VALUE_DTYPE, LOG256_MAX_N)` | Collapse each consecutive run of equal keys into `(key, sum_of_values)` (`VALUE_DTYPE` only for the `values_out` zero-init). | yes  | yes\*  | yes    | yes\* |
-| `qd.algorithms.{reduce,exclusive_scan,select,reduce_by_key,sort}_scratch_slots(...)` | Host- and kernel-callable helpers returning the scratch slot count each op needs. | —    | —      | —      | —     |
-| `qd.algorithms.parallel_sort`                               | Odd-even merge sort (in-place, key or key-value). **Deprecated**: prefer `sort`. | yes  | yes\*  | yes    | yes\* |
-| `qd.algorithms.PrefixSumExecutor`                           | Inclusive in-place prefix sum (i32 only). **Deprecated**: prefer `exclusive_scan_add`. | yes  | no     | yes    | no    |
+| Op | What it does | Call from kernel | Call from host |
+|----|--------------|:----------------:|:--------------:|
+| `qd.algorithms.reduce_{add,min,max}(arr, out, scratch, n, DTYPE, LOG256_MAX_N)` | `out[0] = sum/min/max(arr[0:n])` (fixed-depth tree reduction; identity derived from `DTYPE` for min / max). Composed at the top level of your own kernel (device-resident count `n`, compile-time `LOG256_MAX_N`). | yes | no |
+| `qd.algorithms.exclusive_scan_{add,min,max}(arr, out, scratch, n, DTYPE, LOG256_MAX_N)` | `out[i] = sum/min/max(arr[0:i])` (three-pass Blelloch-style scan; 32-bit + 64-bit scalars; identity derived from `DTYPE` for min / max). | yes | no |
+| `qd.algorithms.select(arr, flags, out, num_out, scratch, n, LOG256_MAX_N)` | Stream compaction: copy `arr[i]` to a dense prefix of `out` for every `flags[i] == 1` (`flags` must be exactly 0/1; no `DTYPE` - the scatter is dtype-agnostic). | yes | no |
+| `qd.algorithms.sort(keys, tmp_keys, values, tmp_values, scratch, n, KEY_DTYPE, HAS_VALUES, END_BIT, LOG256_MAX_N)` | LSB radix sort (32-bit / 64-bit scalar keys, optional key-value). | yes | no |
+| `qd.algorithms.reduce_by_key_add(keys_in, values_in, keys_out, values_out, num_runs, scratch, n, VALUE_DTYPE, LOG256_MAX_N)` | Collapse each consecutive run of equal keys into `(key, sum_of_values)` (`VALUE_DTYPE` only for the `values_out` zero-init). | yes | no |
+| `qd.algorithms.{reduce,exclusive_scan,select,reduce_by_key,sort}_scratch_slots(...)` | Host- and kernel-callable helpers returning the scratch slot count each op needs. | yes | yes |
+| `qd.algorithms.parallel_sort` | Odd-even merge sort (in-place, key or key-value). **Deprecated**: prefer `sort`. | no | yes |
+| `qd.algorithms.PrefixSumExecutor` | Inclusive in-place prefix sum (i32 only). **Deprecated**: prefer `exclusive_scan_add`. | no | yes |
 
-\* `reduce_{add,min,max}`, `exclusive_scan_{add,min,max}`, `select`, `sort`, `reduce_by_key_add`, and `parallel_sort` run anywhere a Quadrants kernel runs; portability is inherited from the underlying block / subgroup primitives.
+These algorithms run on all of Quadrants' GPU backends (CUDA, AMDGPU, Vulkan, Metal); they are GPU-only and are not available on the CPU backend. (On Metal / MoltenVK only 32-bit dtypes are supported — no `i64` / `u64` / `f64`; `PrefixSumExecutor` is CUDA / Vulkan only.) The `*_scratch_slots` helpers are plain integer arithmetic, so they also run on the host / CPU.
 
 ## Composable `@qd.func` ops
 
