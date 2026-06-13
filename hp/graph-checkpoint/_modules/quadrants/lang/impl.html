@@ -811,12 +811,17 @@
 
     <span class="k">def</span><span class="w"> </span><span class="nf">set_default_fp</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">fp</span><span class="p">):</span>
         <span class="k">assert</span> <span class="n">fp</span> <span class="ow">in</span> <span class="p">[</span><span class="n">f16</span><span class="p">,</span> <span class="n">f32</span><span class="p">,</span> <span class="n">f64</span><span class="p">]</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">default_fp</span> <span class="o">=</span> <span class="n">fp</span>
+        <span class="c1"># qd.init() deep-copies the default_fp arg (misc.py), yielding a DataType that is == but not identical to</span>
+        <span class="c1"># the registered primitive singleton -- its id is then absent from primitive_types.type_ids, which silently</span>
+        <span class="c1"># breaks id-based type recognition for anything that resolves a dtype via get_runtime().default_fp (e.g. the</span>
+        <span class="c1"># simt tile proxies). Re-bind to the canonical singleton so identity is preserved.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">default_fp</span> <span class="o">=</span> <span class="p">{</span><span class="n">f16</span><span class="p">:</span> <span class="n">f16</span><span class="p">,</span> <span class="n">f32</span><span class="p">:</span> <span class="n">f32</span><span class="p">,</span> <span class="n">f64</span><span class="p">:</span> <span class="n">f64</span><span class="p">}[</span><span class="n">fp</span><span class="p">]</span>
         <span class="n">default_cfg</span><span class="p">()</span><span class="o">.</span><span class="n">default_fp</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">default_fp</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">set_default_ip</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ip</span><span class="p">):</span>
         <span class="k">assert</span> <span class="n">ip</span> <span class="ow">in</span> <span class="p">[</span><span class="n">i32</span><span class="p">,</span> <span class="n">i64</span><span class="p">]</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">default_ip</span> <span class="o">=</span> <span class="n">ip</span>
+        <span class="c1"># See set_default_fp: canonicalize to the registered singleton so id-based type checks keep working.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">default_ip</span> <span class="o">=</span> <span class="p">{</span><span class="n">i32</span><span class="p">:</span> <span class="n">i32</span><span class="p">,</span> <span class="n">i64</span><span class="p">:</span> <span class="n">i64</span><span class="p">}[</span><span class="n">ip</span><span class="p">]</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">default_up</span> <span class="o">=</span> <span class="n">u32</span> <span class="k">if</span> <span class="n">ip</span> <span class="o">==</span> <span class="n">i32</span> <span class="k">else</span> <span class="n">u64</span>
         <span class="n">default_cfg</span><span class="p">()</span><span class="o">.</span><span class="n">default_ip</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">default_ip</span>
         <span class="n">default_cfg</span><span class="p">()</span><span class="o">.</span><span class="n">default_up</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">default_up</span>

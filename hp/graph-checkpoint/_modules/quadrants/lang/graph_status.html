@@ -347,6 +347,11 @@
 <span class="k">class</span><span class="w"> </span><span class="nc">GraphStatus</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Result returned by a graph kernel that contains ``qd.checkpoint(yield_on=...)`` blocks.</span>
 
+<span class="sd">    .. warning::</span>
+
+<span class="sd">        **Experimental.** ``GraphStatus`` is part of the experimental ``qd.checkpoint`` surface; its attributes and</span>
+<span class="sd">        the conditions under which it is returned may change in any future release without a deprecation cycle.</span>
+
 <span class="sd">    Returned from ``kernel(...)`` and ``kernel.resume(..., from_checkpoint=cp)`` whenever the kernel was decorated with</span>
 <span class="sd">    ``@qd.kernel(graph=True)`` and contains at least one checkpoint that has declared a ``yield_on=`` parameter. Read</span>
 <span class="sd">    ``status.yielded`` to decide whether to keep running the host loop, and ``status.checkpoint`` to find out which</span>

@@ -351,6 +351,13 @@
 <span class="k">def</span><span class="w"> </span><span class="nf">checkpoint</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">yield_on</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Marks a section of a graph kernel as a skippable, optionally yieldable stage.</span>
 
+<span class="sd">    .. warning::</span>
+
+<span class="sd">        **Experimental.** ``qd.checkpoint`` (together with ``qd.GraphStatus`` and ``kernel.resume(from_checkpoint=...)``)</span>
+<span class="sd">        is an experimental API. The signature, the lowering across backends, the error messages, and the host-side</span>
+<span class="sd">        yield/resume contract may change in any future release without a deprecation cycle. Pin Quadrants to an exact</span>
+<span class="sd">        version if you depend on the current behaviour.</span>
+
 <span class="sd">    Used as ``with qd.checkpoint():`` or ``with qd.checkpoint(yield_on=flag):`` inside a ``@qd.kernel(graph=True)``</span>
 <span class="sd">    kernel body. Each ``with`` block becomes a checkpoint with an auto-assigned ``cp_id`` (0, 1, 2, ... by declaration</span>
 <span class="sd">    order, flat across the kernel, independent of whether the checkpoint is inside or outside a ``qd.graph_do_while``).</span>
