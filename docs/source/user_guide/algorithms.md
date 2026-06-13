@@ -451,7 +451,7 @@ The textbook scan-based compaction:
 
 ### `sort`
 
-- Classical LSB radix sort with 8-bit digits ([Merrill & Grimshaw 2011](https://hgpu.org/?p=6689)), four passes for `u32` / `i32` / `f32` (eight for the 64-bit dtypes). Each digit pass is three internal kernels:
+- Classical histogram-scan-scatter LSB radix sort with 8-bit digits, four passes for `u32` / `i32` / `f32` (eight for the 64-bit dtypes). Each digit pass is three internal kernels:
   1. **Histogram** — every block computes its per-digit count into shared memory, then publishes the 256-bin tile histogram to the shared u32 scratch (digit-major layout: `tile_histograms[d * num_blocks + b]`).
   2. **Scan** — in-place exclusive scan over the flat tile_histograms buffer. The digit-major layout makes a single 1-D scan enough to produce per-(digit, block) global offsets.
   3. **Scatter** — each block ranks its keys via `block.radix_rank_match_atomic_or` (wave32 + wave64 clean), looks up the per-(digit, block) global offset from the scan output, and scatters keys (and values, if provided) to the destination buffer.
@@ -470,13 +470,11 @@ Scan + scatter + atomic_add — no segmented-scan primitive needed:
 
 ### References
 
-These ops are textbook GPU data-parallel primitives; for the original designs and background:
+These ops are implemented from scratch for Quadrants — not wrappers over CUB / Thrust / etc. The classical designs they follow:
 
-- **Scan / prefix sums** — G. E. Blelloch, *Prefix Sums and Their Applications*, Tech. Report CMU-CS-90-190, 1990. [[link]](https://www.cs.cmu.edu/~scandal/papers/CMU-CS-90-190.html) — the work-efficient exclusive-scan formulation behind `exclusive_scan`, and the scan-based recipes for `select` (stream compaction) and `reduce_by_key`.
-- **GPU scan** — S. Sengupta, M. Harris, Y. Zhang, J. D. Owens, *Scan Primitives for GPU Computing*, Graphics Hardware 2007. [[link]](https://doi.org/10.2312/EGGH/EGGH07/097-106) — with the hands-on companion M. Harris, S. Sengupta, J. D. Owens, *Parallel Prefix Sum (Scan) with CUDA*, [GPU Gems 3, ch. 39](https://developer.nvidia.com/gpugems/gpugems3/part-vi-gpu-computing/chapter-39-parallel-prefix-sum-scan-cuda), 2007.
-- **Radix sort** — D. Merrill, A. Grimshaw, *High Performance and Scalable Radix Sorting*, Parallel Processing Letters 21(2):245–272, 2011. [[link]](https://hgpu.org/?p=6689) — the per-tile-histogram → scan → scatter design `sort` follows.
-- **Decoupled look-back scan** — D. Merrill, M. Garland, *Single-pass Parallel Prefix Scan with Decoupled Look-back*, NVIDIA Tech. Report NVR-2016-002, 2016. [[link]](https://research.nvidia.com/publication/2016-03_single-pass-parallel-prefix-scan-decoupled-look-back) — the single-pass alternative to the staircase scan, noted under [Related](#related).
-- **Kogge-Stone** — P. M. Kogge, H. S. Stone, *A Parallel Algorithm for the Efficient Solution of a General Class of Recurrence Equations*, IEEE Trans. Computers C-22(8):786–793, 1973. [[link]](https://doi.org/10.1109/TC.1973.5009159) — the hierarchical scan used by the deprecated `PrefixSumExecutor`.
+- **Prefix sums / scan** — G. E. Blelloch, *Prefix Sums and Their Applications*, Tech. Report CMU-CS-90-190, 1990. [[link]](https://www.cs.cmu.edu/~scandal/papers/CMU-CS-90-190.html) — the work-efficient exclusive scan behind `exclusive_scan`, the scan-based recipes for `select` (stream compaction) and `reduce_by_key`, and the digit-histogram scan inside `sort`.
+- **Scan on the GPU** — M. Harris, S. Sengupta, J. D. Owens, *Parallel Prefix Sum (Scan) with CUDA*, [GPU Gems 3, ch. 39](https://developer.nvidia.com/gpugems/gpugems3/part-vi-gpu-computing/chapter-39-parallel-prefix-sum-scan-cuda), 2007 — the balanced-tree, per-block GPU realization of Blelloch's scan.
+- **Radix sort** — D. E. Knuth, *The Art of Computer Programming, Vol. 3: Sorting and Searching*, §5.2.5 (sorting by distribution) — the classical histogram → scan → scatter LSB radix sort that `sort` implements.
 
 ## Related
 
