@@ -228,18 +228,20 @@ void *GraphManager::add_conditional_while_node(void *graph, unsigned long long *
 }
 
 bool GraphManager::launch_cached_graph(CachedGraph &cached, LaunchContextBuilder &ctx, bool use_graph_do_while) {
-  // TODO: these two memcpy_host_to_device calls could be async
-  // (cuMemcpyHtoDAsync) on the launch stream for better CPU-GPU overlap.
+  // The counter-slot copy is tiny (<= 8 bytes) and kept synchronous; the arg buffer copy is issued
+  // async on the launch stream (below) so it overlaps the host work of building the next launch.
   if (use_graph_do_while && cached.counter_ptr_slot) {
     void *flag_ptr = ctx.graph_do_while_flag_dev_ptr;
     CUDADriver::get_instance().memcpy_host_to_device(cached.counter_ptr_slot, &flag_ptr, sizeof(void *));
   }
 
-  if (ctx.arg_buffer_size > 0) {
-    CUDADriver::get_instance().memcpy_host_to_device(cached.persistent_device_arg_buffer, ctx.get_context().arg_buffer,
-                                                     cached.arg_buffer_size);
-  }
   auto *stream = CUDAContext::get_instance().get_stream();
+  if (ctx.arg_buffer_size > 0) {
+    // Async on the launch stream: stream-ordered before graph_launch below, so the graph still sees the
+    // copied args, but the host no longer blocks on the HtoD copy completing.
+    CUDADriver::get_instance().memcpy_host_to_device_async(cached.persistent_device_arg_buffer,
+                                                           ctx.get_context().arg_buffer, cached.arg_buffer_size, stream);
+  }
   CUDADriver::get_instance().graph_launch(cached.graph_exec, stream);
   used_on_last_call_ = true;
   num_nodes_on_last_call_ = cached.num_nodes;
