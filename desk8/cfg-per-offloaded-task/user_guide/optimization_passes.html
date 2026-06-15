@@ -428,7 +428,8 @@
                   
   <section class="tex2jax_ignore mathjax_ignore" id="optimization-passes">
 <h1>Optimization passes<a class="headerlink" href="#optimization-passes" title="Link to this heading">#</a></h1>
-<p>When you call a <code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel</span></code> function, Quadrants first translates the kernel into an internal form then rewrites it, step by step, into something equivalent but cheaper to run. This page explains, at a high level, what those rewrite steps (the <em>optimization passes</em>) do, which ones cost compile time, and how to control and inspect them. You do not need to understand any of this to use Quadrants but it helps when you are trading compile time against runtime, or debugging a surprising result.</p>
+<p>When you call a <code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel</span></code> function, Quadrants first translates the kernel into an internal form then rewrites it, step by step, into something equivalent but cheaper to run. “Equivalent” here means that they yield the exact same observable behavior and produce the exact same outputs [*1] for all valid inputs, regardless of how they are restructured. This page explains, at a high level, what those rewrite steps (the <em>optimization passes</em>) do, which ones cost compile time, and how to control and inspect them. You do not need to understand any of this to use Quadrants but it helps when you are trading compile time against runtime, or debugging a surprising result.</p>
+<p>[*1] To within floating-point precision, not bit exact. In particular, fast maths optimizations are fairly approximate.</p>
 <section id="key-terms">
 <h2>Key terms<a class="headerlink" href="#key-terms" title="Link to this heading">#</a></h2>
 <p>Let’s start by defining terms that will be used throughout the page and are necessary in order to be able to understand it.</p>

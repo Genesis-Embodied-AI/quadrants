@@ -1,6 +1,8 @@
 # Optimization passes
 
-When you call a `@qd.kernel` function, Quadrants first translates the kernel into an internal form then rewrites it, step by step, into something equivalent but cheaper to run. This page explains, at a high level, what those rewrite steps (the *optimization passes*) do, which ones cost compile time, and how to control and inspect them. You do not need to understand any of this to use Quadrants but it helps when you are trading compile time against runtime, or debugging a surprising result.
+When you call a `@qd.kernel` function, Quadrants first translates the kernel into an internal form then rewrites it, step by step, into something equivalent but cheaper to run. "Equivalent" here means that they yield the exact same observable behavior and produce the exact same outputs [*1] for all valid inputs, regardless of how they are restructured. This page explains, at a high level, what those rewrite steps (the *optimization passes*) do, which ones cost compile time, and how to control and inspect them. You do not need to understand any of this to use Quadrants but it helps when you are trading compile time against runtime, or debugging a surprising result.
+
+[*1] To within floating-point precision, not bit exact. In particular, fast maths optimizations are fairly approximate.
 
 ## Key terms
 
