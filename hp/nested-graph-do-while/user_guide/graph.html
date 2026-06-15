@@ -27,8 +27,8 @@
   </noscript>
   
   <!-- Loaded before other Sphinx assets -->
-  <link href="../_static/styles/theme.css?digest=0790524f97105ba85085" rel="stylesheet" />
-<link href="../_static/styles/pydata-sphinx-theme.css?digest=0790524f97105ba85085" rel="stylesheet" />
+  <link href="../_static/styles/theme.css?digest=a95f357e85573c9b56d5" rel="stylesheet" />
+<link href="../_static/styles/pydata-sphinx-theme.css?digest=a95f357e85573c9b56d5" rel="stylesheet" />
 
     <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=8f2a1f02" />
     <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
@@ -38,10 +38,10 @@
     <link rel="stylesheet" type="text/css" href="../_static/css/custom.css" />
   
   <!-- So that users can add custom icons -->
-  <script defer src="../_static/scripts/fontawesome.js?digest=0790524f97105ba85085"></script>
+  <script defer src="../_static/scripts/fontawesome.js?digest=a95f357e85573c9b56d5"></script>
   <!-- Pre-loaded scripts that we'll load fully later -->
-  <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=0790524f97105ba85085" />
-<link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=0790524f97105ba85085" />
+  <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5" />
+<link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5" />
 
     <script src="../_static/documentation_options.js?v=baaebd52"></script>
     <script src="../_static/doctools.js?v=9bcbadda"></script>
@@ -616,33 +616,6 @@
 </div>
 <p>This restriction keeps each offloaded task tagged with the exact loop level it belongs to. A <code class="docutils literal notranslate"><span class="pre">graph_do_while</span></code> <code class="docutils literal notranslate"><span class="pre">while</span></code>-loop may only appear at the kernel top level or directly inside another <code class="docutils literal notranslate"><span class="pre">graph_do_while</span></code> body — it cannot be placed inside a <code class="docutils literal notranslate"><span class="pre">for</span></code>-loop.</p>
 </section>
-<section id="loop-carried-state">
-<h3>Loop-carried state<a class="headerlink" href="#loop-carried-state" title="Link to this heading">#</a></h3>
-<p>A common pattern is an iterative solver that initializes some working state once, refines it across iterations, then reads the result back. Be deliberate about <strong>where</strong> each piece lives, because only statements <em>inside</em> the <code class="docutils literal notranslate"><span class="pre">while</span> <span class="pre">qd.graph_do_while(...)</span></code> body repeat:</p>
-<ul class="simple">
-<li><p><strong>One-time init / writeback</strong> belong at the kernel top level (a top-level <code class="docutils literal notranslate"><span class="pre">for</span></code>-loop runs exactly once — see <a class="reference internal" href="#nested-loops-and-mixing-with-for-loops">Nested loops and mixing with for-loops</a>), or in a separate non-<code class="docutils literal notranslate"><span class="pre">graph</span></code> kernel.</p></li>
-<li><p><strong>Per-iteration work</strong> belongs inside the <code class="docutils literal notranslate"><span class="pre">while</span></code> body.</p></li>
-<li><p><strong>Loop-carried state</strong> (a value that iteration <code class="docutils literal notranslate"><span class="pre">k+1</span></code> reads from iteration <code class="docutils literal notranslate"><span class="pre">k</span></code>) just works: it is held in global memory and nothing outside the loop body resets it between iterations.</p></li>
-</ul>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span><span class="p">(</span><span class="n">graph</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-<span class="k">def</span><span class="w"> </span><span class="nf">newton</span><span class="p">(</span><span class="n">q_iter</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">ndim</span><span class="o">=</span><span class="mi">1</span><span class="p">),</span>
-           <span class="n">q</span><span class="p">:</span>      <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">ndim</span><span class="o">=</span><span class="mi">1</span><span class="p">),</span>
-           <span class="n">ncond</span><span class="p">:</span>  <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">,</span> <span class="n">ndim</span><span class="o">=</span><span class="mi">0</span><span class="p">)):</span>
-    <span class="c1"># One-time seed: top-level for-loop, runs exactly once.</span>
-    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">q</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>
-        <span class="n">q_iter</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">q</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
-    <span class="c1"># Iterative refinement: repeats while ncond != 0. q_iter carries between iterations.</span>
-    <span class="k">while</span> <span class="n">qd</span><span class="o">.</span><span class="n">graph_do_while</span><span class="p">(</span><span class="n">ncond</span><span class="p">):</span>
-        <span class="c1"># ... update q_iter from its previous-iteration value ...</span>
-        <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">):</span>
-            <span class="n">ncond</span><span class="p">[()]</span> <span class="o">=</span> <span class="n">ncond</span><span class="p">[()]</span> <span class="o">-</span> <span class="mi">1</span>
-    <span class="c1"># One-time writeback: top-level for-loop, runs exactly once.</span>
-    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">q</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>
-        <span class="n">q</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">q_iter</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
-</pre></div>
-</div>
-<p>If you would rather keep the <code class="docutils literal notranslate"><span class="pre">graph=True</span></code> kernel focused on just the loop, the equivalent <strong>seed / iterate / writeback</strong> split works too — move the init and writeback into their own non-<code class="docutils literal notranslate"><span class="pre">graph</span></code> <code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel</span></code> functions and call them around the iterate kernel on the host. Either structure is fine.</p>
-</section>
 <section id="id1">
 <h3>Restrictions<a class="headerlink" href="#id1" title="Link to this heading">#</a></h3>
 <ul class="simple">
@@ -728,7 +701,6 @@
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#ndarray-vs-field">ndarray vs field</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#nested-loops-and-mixing-with-for-loops">Nested loops and mixing with for-loops</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#kernel-structure-restriction">Kernel structure restriction</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#loop-carried-state">Loop-carried state</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id1">Restrictions</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#caveats">Caveats</a></li>
 </ul>
@@ -758,8 +730,8 @@
   </div>
   
   <!-- Scripts loaded after <body> so the DOM is not blocked -->
-  <script defer src="../_static/scripts/bootstrap.js?digest=0790524f97105ba85085"></script>
-<script defer src="../_static/scripts/pydata-sphinx-theme.js?digest=0790524f97105ba85085"></script>
+  <script defer src="../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5"></script>
+<script defer src="../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5"></script>
 
   <footer class="bd-footer">
 <div class="bd-footer__inner bd-page-width">
@@ -793,7 +765,7 @@
         <div class="footer-item">
 <p class="theme-version">
   <!-- # L10n: Setting the PST URL as an argument as this does not need to be localized -->
-  Built with the <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a> 0.18.0.
+  Built with the <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a> 0.19.0.
 </p></div>
       
     </div>

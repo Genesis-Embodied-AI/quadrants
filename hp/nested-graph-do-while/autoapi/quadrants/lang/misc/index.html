@@ -27,8 +27,8 @@
   </noscript>
   
   <!-- Loaded before other Sphinx assets -->
-  <link href="../../../../_static/styles/theme.css?digest=0790524f97105ba85085" rel="stylesheet" />
-<link href="../../../../_static/styles/pydata-sphinx-theme.css?digest=0790524f97105ba85085" rel="stylesheet" />
+  <link href="../../../../_static/styles/theme.css?digest=a95f357e85573c9b56d5" rel="stylesheet" />
+<link href="../../../../_static/styles/pydata-sphinx-theme.css?digest=a95f357e85573c9b56d5" rel="stylesheet" />
 
     <link rel="stylesheet" type="text/css" href="../../../../_static/pygments.css?v=8f2a1f02" />
     <link rel="stylesheet" type="text/css" href="../../../../_static/copybutton.css?v=76b2166b" />
@@ -38,10 +38,10 @@
     <link rel="stylesheet" type="text/css" href="../../../../_static/css/custom.css" />
   
   <!-- So that users can add custom icons -->
-  <script defer src="../../../../_static/scripts/fontawesome.js?digest=0790524f97105ba85085"></script>
+  <script defer src="../../../../_static/scripts/fontawesome.js?digest=a95f357e85573c9b56d5"></script>
   <!-- Pre-loaded scripts that we'll load fully later -->
-  <link rel="preload" as="script" href="../../../../_static/scripts/bootstrap.js?digest=0790524f97105ba85085" />
-<link rel="preload" as="script" href="../../../../_static/scripts/pydata-sphinx-theme.js?digest=0790524f97105ba85085" />
+  <link rel="preload" as="script" href="../../../../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5" />
+<link rel="preload" as="script" href="../../../../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5" />
 
     <script src="../../../../_static/documentation_options.js?v=baaebd52"></script>
     <script src="../../../../_static/doctools.js?v=9bcbadda"></script>
@@ -872,8 +872,7 @@ nothing outside the loop body resets it.</p>
 <p class="admonition-title">Warning</p>
 <p>Reset the condition flag <strong>outside</strong> the loop body, never inside it. A reset such as <code class="docutils literal notranslate"><span class="pre">for</span> <span class="pre">_</span> <span class="pre">in</span> <span class="pre">range(1):</span>
 <span class="pre">counter[()]</span> <span class="pre">=</span> <span class="pre">N</span></code> placed within the <code class="docutils literal notranslate"><span class="pre">while</span></code> block is re-applied every iteration and the loop never terminates.
-Reset it before the loop (a run-once top-level <code class="docutils literal notranslate"><span class="pre">for</span></code>) or on the host between launches (<code class="docutils literal notranslate"><span class="pre">counter.fill(N)</span></code>).
-See <code class="docutils literal notranslate"><span class="pre">docs/source/user_guide/graph.md</span></code> for the loop-carried-state idiom.</p>
+Reset it before the loop (a run-once top-level <code class="docutils literal notranslate"><span class="pre">for</span></code>) or on the host between launches (<code class="docutils literal notranslate"><span class="pre">counter.fill(N)</span></code>).</p>
 </div>
 <p>A kernel that uses <code class="docutils literal notranslate"><span class="pre">qd.graph_do_while</span></code> may contain only <code class="docutils literal notranslate"><span class="pre">for</span></code>-loops and <code class="docutils literal notranslate"><span class="pre">qd.graph_do_while</span></code> <code class="docutils literal notranslate"><span class="pre">while</span></code>-loops at
 each top level; bare statements are rejected at compile time with a <code class="docutils literal notranslate"><span class="pre">QuadrantsSyntaxError</span></code>.</p>
@@ -1042,8 +1041,8 @@ the fastcache cache keys depend on the compile config.</p>
   </div>
   
   <!-- Scripts loaded after <body> so the DOM is not blocked -->
-  <script defer src="../../../../_static/scripts/bootstrap.js?digest=0790524f97105ba85085"></script>
-<script defer src="../../../../_static/scripts/pydata-sphinx-theme.js?digest=0790524f97105ba85085"></script>
+  <script defer src="../../../../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5"></script>
+<script defer src="../../../../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5"></script>
 
   <footer class="bd-footer">
 <div class="bd-footer__inner bd-page-width">
@@ -1077,7 +1076,7 @@ the fastcache cache keys depend on the compile config.</p>
         <div class="footer-item">
 <p class="theme-version">
   <!-- # L10n: Setting the PST URL as an argument as this does not need to be localized -->
-  Built with the <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a> 0.18.0.
+  Built with the <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a> 0.19.0.
 </p></div>
       
     </div>
