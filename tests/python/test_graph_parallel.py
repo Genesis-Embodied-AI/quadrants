@@ -549,3 +549,95 @@ def test_branch_takes_no_arguments():
     x = qd.ndarray(qd.f32, shape=(16,))
     with pytest.raises(qd.QuadrantsSyntaxError, match="qd.branch.. takes no arguments"):
         k(x)
+
+
+@test_utils.test()
+def test_graph_parallel_static_loop_body_non_branch_raises():
+    """A static loop body must still be branch-only: serial work inside the loop (outside any branch)
+    would silently fall outside a branch, so it is rejected (the validator recurses into the loop body)."""
+
+    @qd.kernel(graph=True)
+    def k(x: qd.types.ndarray(qd.f32, ndim=2)):
+        with qd.graph_parallel():
+            for b in qd.static(range(2)):
+                x[b, 0] = 1.0  # serial work outside any branch
+                with qd.branch():
+                    for i in range(x.shape[1]):
+                        x[b, i] = x[b, i] + 1.0
+
+    x = qd.ndarray(qd.f32, shape=(2, 16))
+    with pytest.raises(qd.QuadrantsSyntaxError, match="may contain only .with qd.branch"):
+        k(x)
+
+
+@test_utils.test()
+def test_graph_parallel_static_loop_runtime_inner_loop_raises():
+    """Staticness is re-checked at every nesting level: a *runtime* loop nested inside a static loop and
+    wrapping a branch is still rejected (only the static unroll yields independent branches)."""
+
+    @qd.kernel(graph=True)
+    def k(x: qd.types.ndarray(qd.f32, ndim=2), m: qd.i32):
+        with qd.graph_parallel():
+            for b in qd.static(range(2)):
+                for _j in range(m):  # runtime loop around a branch -> rejected
+                    with qd.branch():
+                        for i in range(x.shape[1]):
+                            x[b, i] = x[b, i] + 1.0
+
+    x = qd.ndarray(qd.f32, shape=(2, 16))
+    with pytest.raises(qd.QuadrantsSyntaxError, match="may contain only .with qd.branch"):
+        k(x, 2)
+
+
+@test_utils.test()
+def test_graph_parallel_static_loop_inside_graph_do_while():
+    """A static branch loop composes with qd.graph_do_while: each iteration runs all unrolled branches,
+    then decrements the counter."""
+    nb = 2
+    n = 64
+    iters = 4
+
+    @qd.kernel(graph=True)
+    def k(x: qd.types.ndarray(qd.i32, ndim=2), counter: qd.types.ndarray(qd.i32, ndim=0)):
+        while qd.graph_do_while(counter):
+            with qd.graph_parallel():
+                for b in qd.static(range(nb)):
+                    with qd.branch():
+                        for i in range(x.shape[1]):
+                            x[b, i] = x[b, i] + (b + 1)
+            for _ in range(1):
+                counter[()] = counter[()] - 1
+
+    x = qd.ndarray(qd.i32, shape=(nb, n))
+    counter = qd.ndarray(qd.i32, shape=())
+    x.from_numpy(np.zeros((nb, n), dtype=np.int32))
+    counter.from_numpy(np.array(iters, dtype=np.int32))
+
+    k(x, counter)
+
+    assert counter.to_numpy() == 0
+    out = x.to_numpy()
+    np.testing.assert_array_equal(out[0], np.full(n, iters, dtype=np.int32))
+    np.testing.assert_array_equal(out[1], np.full(n, 2 * iters, dtype=np.int32))
+
+
+@test_utils.test()
+def test_graph_parallel_static_loop_branch_body_in_gdw_rejects_bare_stmt():
+    """Inside qd.graph_do_while, a bare assignment in a branch body re-executes every iteration (the E25
+    footgun). The graph_do_while structure validator descends into static branch loops, so such a bare
+    statement is rejected for static-loop branches just as it is for hand-written ones."""
+
+    @qd.kernel(graph=True)
+    def k(x: qd.types.ndarray(qd.i32, ndim=2), counter: qd.types.ndarray(qd.i32, ndim=0)):
+        while qd.graph_do_while(counter):
+            with qd.graph_parallel():
+                for b in qd.static(range(2)):
+                    with qd.branch():
+                        x[b, 0] = 1  # bare assignment in a branch body -> rejected inside graph_do_while
+            for _ in range(1):
+                counter[()] = counter[()] - 1
+
+    x = qd.ndarray(qd.i32, shape=(2, 8))
+    counter = qd.ndarray(qd.i32, shape=())
+    with pytest.raises(qd.QuadrantsSyntaxError, match="may contain only for-loops"):
+        k(x, counter)

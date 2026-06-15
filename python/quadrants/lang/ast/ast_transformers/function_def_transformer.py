@@ -661,6 +661,11 @@ class FunctionDefTransformer:
                     elif isinstance(member, ast.If):
                         pending.extend(member.body)
                         pending.extend(member.orelse)
+                    elif isinstance(member, ast.For):
+                        # `for ... in qd.static(...)` generates branches; descend so each unrolled branch
+                        # body is still validated with the in-loop rules. (A runtime for here is rejected
+                        # later by ASTTransformer._build_graph_parallel_with.)
+                        pending.extend(member.body)
                 continue
             if not is_kernel_top:
                 # Inside a graph_do_while body (or a checkpoint within one) every statement already runs on
