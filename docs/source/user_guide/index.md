@@ -75,6 +75,7 @@ graph
 streams
 perf_dispatch
 init_options
+optimization_passes
 ```
 
 ```{toctree}
