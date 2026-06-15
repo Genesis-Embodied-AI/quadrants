@@ -63,7 +63,7 @@ A **control-flow graph** is a map of your kernel's basic blocks together with th
 
 Building and analysing the CFG is the most expensive optimization in the pipeline, which is why it runs at most once per simplify stage rather than every round.
 
-**Per-task scoping.** The CFG optimization runs **once per offloaded task**, on that task alone, rather than across the whole kernel. This is both faster to analyse and safe: because each task is a separate device launch, a value held in a register in one task cannot survive into the next one, so there is never anything to forward across a task boundary anyway. Anything written to global memory is treated as potentially read by a later task, so no store another task might need is dropped.
+**One CFG per offloaded task.** The CFG optimization is built and run separately for each offloaded task, over that task's IR alone — never over the whole `qd.kernel` at once. This is both faster to analyse and safe: because each task is a separate device launch, a value held in a register in one task cannot survive into the next one, so there is never anything to forward across a task boundary anyway. Anything written to global memory is treated as potentially read by a later task, so no store another task might need is dropped.
 
 ## Controlling the passes
 
