@@ -1,16 +1,16 @@
 # Optimization passes
 
-When you call a `@qd.kernel` function, Quadrants does not ship your Python straight to the GPU. It first translates the kernel into an internal form and rewrites it, step by step, into something equivalent but cheaper to run. This page explains, at a high level, what those rewrite steps (the *optimization passes*) do, which ones cost compile time, and how to control and inspect them. You do not need to understand any of this to use Quadrants — the defaults are good — but it helps when you are trading compile time against runtime, or debugging a surprising result.
+When you call a `@qd.kernel` function, Quadrants first translates the kernel into an internal form then rewrites it, step by step, into something equivalent but cheaper to run. This page explains, at a high level, what those rewrite steps (the *optimization passes*) do, which ones cost compile time, and how to control and inspect them. You do not need to understand any of this to use Quadrants but it helps when you are trading compile time against runtime, or debugging a surprising result.
 
 ## Key terms
 
-A handful of words show up throughout this page. They are defined once here and used freely below.
+A handful of technical terms show up throughout this page. They are defined once here and used freely below.
 
-- **Kernel** — a function you decorate with `@qd.kernel`. It is the unit that Quadrants compiles and launches.
-- **IR (intermediate representation)** — the compiler's internal version of your kernel: a flat list of small, explicitly-typed instructions, sitting between your Python source and the final machine code. Every pass reads and rewrites the IR; none of it is something you write by hand.
-- **Pass** — one transformation step over the IR. An *optimization* pass rewrites the IR into a form that produces the **same results** but runs faster or uses less memory. (Some passes are not optimizations but *lowering* steps — they translate high-level constructs into lower-level ones; this page focuses on the optimizations.)
-- **Basic block** — a straight-line run of instructions with no branches into or out of the middle. Control flow (`if`, loops) connects blocks together.
-- **Offloaded task** — after the *offload* step, your kernel is split into one or more tasks, and each task becomes a single device launch: one GPU grid launch on a GPU backend, or one parallel loop on CPU. A simple kernel is usually one task; a kernel with, say, a short serial preamble followed by a big parallel loop becomes several tasks that run back to back.
+- **Kernel** - a function you decorate with `@qd.kernel`. It is the unit that Quadrants compiles and launches.
+- **IR (intermediate representation)** - the compiler's internal version of your kernel: a flat list of small, explicitly-typed instructions, sitting between your Python source and the final machine code. Every pass reads and rewrites the IR; none of it is something you write by hand.
+- **Pass** - one transformation step over the IR. An *optimization* pass rewrites the IR into a form that produces the **same results** but runs faster or uses less memory. (Some passes are not optimizations but *lowering* steps - they translate high-level constructs into lower-level ones; this page focuses on the optimizations.)
+- **Basic block** - a straight-line run of instructions with no branches into or out of the middle. Control flow (`if`, loops) connects blocks together.
+- **Offloaded task** - after the *offload* step, your kernel is split into one or more tasks, and each task becomes a single device launch: one GPU grid launch on a GPU backend, or one parallel loop on CPU. A simple kernel is usually one task; a kernel with, say, a short serial preamble followed by a big parallel loop becomes several tasks that run back to back.
 
 ## The compile pipeline at a glance
 
@@ -52,18 +52,18 @@ In the order they run each round:
 | Common-subexpression elimination (**CSE**) | Finds an identical expression computed more than once and computes it a single time, reusing the result. |
 | Control-flow-graph (**CFG**) optimization | Memory-focused optimizations that need a whole-task view; see the next section. Runs only once per stage (it is the most expensive pass). |
 
-Two of these — CSE and CFG optimization — run only when `opt_level > 0` (the default is `1`).
+Two of these - CSE and CFG optimization - run only when `opt_level > 0` (the default is `1`).
 
 ## Control-flow-graph (CFG) optimization
 
-A **control-flow graph** is a map of your kernel's basic blocks together with the branches connecting them. It lets the compiler answer questions of the form "if execution reaches *here*, what must already have happened?" — which is exactly what is needed to optimize reads and writes to memory. Two such optimizations run on the CFG:
+A **control-flow graph** is a map of your kernel's basic blocks together with the branches connecting them. It lets the compiler answer questions of the form "if execution reaches *here*, what must already have happened?" - which is exactly what is needed to optimize reads and writes to memory. Two such optimizations run on the CFG:
 
-- **Store-to-load forwarding** — if a value is written to a location and then read again before anything overwrites it, the read is replaced with the value directly, skipping the round trip through memory.
-- **Dead-store elimination** — if a write is overwritten before anyone reads it, the write is removed.
+- **Store-to-load forwarding** - if a value is written to a location and then read again before anything overwrites it, the read is replaced with the value directly, skipping the round trip through memory.
+- **Dead-store elimination** - if a write is overwritten before anyone reads it, the write is removed.
 
 Building and analysing the CFG is the most expensive optimization in the pipeline, which is why it runs at most once per simplify stage rather than every round.
 
-**One CFG per offloaded task.** The CFG optimization is built and run separately for each offloaded task, over that task's IR alone — never over the whole `qd.kernel` at once. This is both faster to analyse and safe: because each task is a separate device launch, a value held in a register in one task cannot survive into the next one, so there is never anything to forward across a task boundary anyway. Anything written to global memory is treated as potentially read by a later task, so no store another task might need is dropped.
+**One CFG per offloaded task.** The CFG optimization is built and run separately for each offloaded task, over that task's IR alone - never over the whole `qd.kernel` at once. This is both faster to analyse and safe: because each task is a separate device launch, a value held in a register in one task cannot survive into the next one, so there is never anything to forward across a task boundary anyway. Anything written to global memory is treated as potentially read by a later task, so no store another task might need is dropped.
 
 ## Controlling the passes
 
@@ -71,20 +71,20 @@ All of these are fields of `CompileConfig`, so you set them at `qd.init(...)` (o
 
 | Option | Default | Effect |
 |--------|---------|--------|
-| `cfg_optimization` | `True` | Turn the CFG optimization on/off. Turning it **off** makes compilation up to ~6× faster while costing ~1–5% of runtime speed — worth it when compile time dominates and the runtime delta is acceptable. |
+| `cfg_optimization` | `True` | Turn the CFG optimization on/off. Turning it **off** makes compilation up to ~6× faster while costing ~1–5% of runtime speed - worth it when compile time dominates and the runtime delta is acceptable. |
 | `opt_level` | `1` | `0` disables the two heavier passes (CSE and CFG optimization). |
-| `advanced_optimization` | `True` | The fixed-point simplify loop above. Set to `False` to run just a single basic cleanup pass instead — much faster to compile, much less optimized. |
+| `advanced_optimization` | `True` | The fixed-point simplify loop above. Set to `False` to run just a single basic cleanup pass instead - much faster to compile, much less optimized. |
 | `constant_folding` | `True` | Enables the constant-folding pass. |
 | `fast_math` | `True` | Allows IEEE-relaxed floating-point rewrites (e.g. fusing a multiply and add). Covered in [qd.init options](./init_options.md#fast_math). |
 
-For everyday use, leave them at their defaults. The most common deliberate change is `cfg_optimization=False` when iterating on a kernel whose compile time is in your way.
+For everyday use, leave them at their defaults. The most common deliberate change is `cfg_optimization=False` when iterating on a kernel whose compile time is in your way. Note that, in general, changing these options is relatively fragile since the Quadrants tests run assuming the default values.
 
 ## Inspecting what the compiler did
 
 These environment variables dump the IR so you can see the effect of each pass. Files are written to `debug_dump_path` (default `/tmp/ir/`):
 
-- `QD_DUMP_IR=1` — writes an IR snapshot at each major pipeline stage (after lowering, before/after each simplify, after offload).
-- `QD_DUMP_SIMPLIFY=1` — writes an IR snapshot after every individual pass on every iteration of the simplify loop. Verbose, but it shows exactly which pass changed what.
-- `QD_DUMP_CFG=1` — writes the control-flow graph itself. (This also forces the CFG pass back onto the whole-kernel path so the complete graph can be dumped.)
+- `QD_DUMP_IR=1` - writes an IR snapshot at each major pipeline stage (after lowering, before/after each simplify, after offload).
+- `QD_DUMP_SIMPLIFY=1` - writes an IR snapshot after every individual pass on every iteration of the simplify loop. Verbose, but it shows exactly which pass changed what.
+- `QD_DUMP_CFG=1` - writes the control-flow graph itself. (This also forces the CFG pass back onto the whole-kernel path so the complete graph can be dumped.)
 
 Setting `qd.init(print_ir=True)` prints the IR to the console at pipeline stages instead of writing files.

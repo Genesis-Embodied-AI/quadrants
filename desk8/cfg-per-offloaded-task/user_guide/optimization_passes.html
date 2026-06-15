@@ -428,16 +428,16 @@
                   
   <section class="tex2jax_ignore mathjax_ignore" id="optimization-passes">
 <h1>Optimization passes<a class="headerlink" href="#optimization-passes" title="Link to this heading">#</a></h1>
-<p>When you call a <code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel</span></code> function, Quadrants does not ship your Python straight to the GPU. It first translates the kernel into an internal form and rewrites it, step by step, into something equivalent but cheaper to run. This page explains, at a high level, what those rewrite steps (the <em>optimization passes</em>) do, which ones cost compile time, and how to control and inspect them. You do not need to understand any of this to use Quadrants — the defaults are good — but it helps when you are trading compile time against runtime, or debugging a surprising result.</p>
+<p>When you call a <code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel</span></code> function, Quadrants first translates the kernel into an internal form then rewrites it, step by step, into something equivalent but cheaper to run. This page explains, at a high level, what those rewrite steps (the <em>optimization passes</em>) do, which ones cost compile time, and how to control and inspect them. You do not need to understand any of this to use Quadrants but it helps when you are trading compile time against runtime, or debugging a surprising result.</p>
 <section id="key-terms">
 <h2>Key terms<a class="headerlink" href="#key-terms" title="Link to this heading">#</a></h2>
-<p>A handful of words show up throughout this page. They are defined once here and used freely below.</p>
+<p>A handful of technical terms show up throughout this page. They are defined once here and used freely below.</p>
 <ul class="simple">
-<li><p><strong>Kernel</strong> — a function you decorate with <code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel</span></code>. It is the unit that Quadrants compiles and launches.</p></li>
-<li><p><strong>IR (intermediate representation)</strong> — the compiler’s internal version of your kernel: a flat list of small, explicitly-typed instructions, sitting between your Python source and the final machine code. Every pass reads and rewrites the IR; none of it is something you write by hand.</p></li>
-<li><p><strong>Pass</strong> — one transformation step over the IR. An <em>optimization</em> pass rewrites the IR into a form that produces the <strong>same results</strong> but runs faster or uses less memory. (Some passes are not optimizations but <em>lowering</em> steps — they translate high-level constructs into lower-level ones; this page focuses on the optimizations.)</p></li>
-<li><p><strong>Basic block</strong> — a straight-line run of instructions with no branches into or out of the middle. Control flow (<code class="docutils literal notranslate"><span class="pre">if</span></code>, loops) connects blocks together.</p></li>
-<li><p><strong>Offloaded task</strong> — after the <em>offload</em> step, your kernel is split into one or more tasks, and each task becomes a single device launch: one GPU grid launch on a GPU backend, or one parallel loop on CPU. A simple kernel is usually one task; a kernel with, say, a short serial preamble followed by a big parallel loop becomes several tasks that run back to back.</p></li>
+<li><p><strong>Kernel</strong> - a function you decorate with <code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel</span></code>. It is the unit that Quadrants compiles and launches.</p></li>
+<li><p><strong>IR (intermediate representation)</strong> - the compiler’s internal version of your kernel: a flat list of small, explicitly-typed instructions, sitting between your Python source and the final machine code. Every pass reads and rewrites the IR; none of it is something you write by hand.</p></li>
+<li><p><strong>Pass</strong> - one transformation step over the IR. An <em>optimization</em> pass rewrites the IR into a form that produces the <strong>same results</strong> but runs faster or uses less memory. (Some passes are not optimizations but <em>lowering</em> steps - they translate high-level constructs into lower-level ones; this page focuses on the optimizations.)</p></li>
+<li><p><strong>Basic block</strong> - a straight-line run of instructions with no branches into or out of the middle. Control flow (<code class="docutils literal notranslate"><span class="pre">if</span></code>, loops) connects blocks together.</p></li>
+<li><p><strong>Offloaded task</strong> - after the <em>offload</em> step, your kernel is split into one or more tasks, and each task becomes a single device launch: one GPU grid launch on a GPU backend, or one parallel loop on CPU. A simple kernel is usually one task; a kernel with, say, a short serial preamble followed by a big parallel loop becomes several tasks that run back to back.</p></li>
 </ul>
 </section>
 <section id="the-compile-pipeline-at-a-glance">
@@ -501,17 +501,17 @@ backend codegen  (LLVM → PTX/SASS, or SPIR-V, …)
 </tbody>
 </table>
 </div>
-<p>Two of these — CSE and CFG optimization — run only when <code class="docutils literal notranslate"><span class="pre">opt_level</span> <span class="pre">&gt;</span> <span class="pre">0</span></code> (the default is <code class="docutils literal notranslate"><span class="pre">1</span></code>).</p>
+<p>Two of these - CSE and CFG optimization - run only when <code class="docutils literal notranslate"><span class="pre">opt_level</span> <span class="pre">&gt;</span> <span class="pre">0</span></code> (the default is <code class="docutils literal notranslate"><span class="pre">1</span></code>).</p>
 </section>
 <section id="control-flow-graph-cfg-optimization">
 <h2>Control-flow-graph (CFG) optimization<a class="headerlink" href="#control-flow-graph-cfg-optimization" title="Link to this heading">#</a></h2>
-<p>A <strong>control-flow graph</strong> is a map of your kernel’s basic blocks together with the branches connecting them. It lets the compiler answer questions of the form “if execution reaches <em>here</em>, what must already have happened?” — which is exactly what is needed to optimize reads and writes to memory. Two such optimizations run on the CFG:</p>
+<p>A <strong>control-flow graph</strong> is a map of your kernel’s basic blocks together with the branches connecting them. It lets the compiler answer questions of the form “if execution reaches <em>here</em>, what must already have happened?” - which is exactly what is needed to optimize reads and writes to memory. Two such optimizations run on the CFG:</p>
 <ul class="simple">
-<li><p><strong>Store-to-load forwarding</strong> — if a value is written to a location and then read again before anything overwrites it, the read is replaced with the value directly, skipping the round trip through memory.</p></li>
-<li><p><strong>Dead-store elimination</strong> — if a write is overwritten before anyone reads it, the write is removed.</p></li>
+<li><p><strong>Store-to-load forwarding</strong> - if a value is written to a location and then read again before anything overwrites it, the read is replaced with the value directly, skipping the round trip through memory.</p></li>
+<li><p><strong>Dead-store elimination</strong> - if a write is overwritten before anyone reads it, the write is removed.</p></li>
 </ul>
 <p>Building and analysing the CFG is the most expensive optimization in the pipeline, which is why it runs at most once per simplify stage rather than every round.</p>
-<p><strong>One CFG per offloaded task.</strong> The CFG optimization is built and run separately for each offloaded task, over that task’s IR alone — never over the whole <code class="docutils literal notranslate"><span class="pre">qd.kernel</span></code> at once. This is both faster to analyse and safe: because each task is a separate device launch, a value held in a register in one task cannot survive into the next one, so there is never anything to forward across a task boundary anyway. Anything written to global memory is treated as potentially read by a later task, so no store another task might need is dropped.</p>
+<p><strong>One CFG per offloaded task.</strong> The CFG optimization is built and run separately for each offloaded task, over that task’s IR alone - never over the whole <code class="docutils literal notranslate"><span class="pre">qd.kernel</span></code> at once. This is both faster to analyse and safe: because each task is a separate device launch, a value held in a register in one task cannot survive into the next one, so there is never anything to forward across a task boundary anyway. Anything written to global memory is treated as potentially read by a later task, so no store another task might need is dropped.</p>
 </section>
 <section id="controlling-the-passes">
 <h2>Controlling the passes<a class="headerlink" href="#controlling-the-passes" title="Link to this heading">#</a></h2>
@@ -526,7 +526,7 @@ backend codegen  (LLVM → PTX/SASS, or SPIR-V, …)
 <tbody>
 <tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">cfg_optimization</span></code></p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">True</span></code></p></td>
-<td><p>Turn the CFG optimization on/off. Turning it <strong>off</strong> makes compilation up to ~6× faster while costing ~1–5% of runtime speed — worth it when compile time dominates and the runtime delta is acceptable.</p></td>
+<td><p>Turn the CFG optimization on/off. Turning it <strong>off</strong> makes compilation up to ~6× faster while costing ~1–5% of runtime speed - worth it when compile time dominates and the runtime delta is acceptable.</p></td>
 </tr>
 <tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">opt_level</span></code></p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">1</span></code></p></td>
@@ -534,7 +534,7 @@ backend codegen  (LLVM → PTX/SASS, or SPIR-V, …)
 </tr>
 <tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">advanced_optimization</span></code></p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">True</span></code></p></td>
-<td><p>The fixed-point simplify loop above. Set to <code class="docutils literal notranslate"><span class="pre">False</span></code> to run just a single basic cleanup pass instead — much faster to compile, much less optimized.</p></td>
+<td><p>The fixed-point simplify loop above. Set to <code class="docutils literal notranslate"><span class="pre">False</span></code> to run just a single basic cleanup pass instead - much faster to compile, much less optimized.</p></td>
 </tr>
 <tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">constant_folding</span></code></p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">True</span></code></p></td>
@@ -547,15 +547,15 @@ backend codegen  (LLVM → PTX/SASS, or SPIR-V, …)
 </tbody>
 </table>
 </div>
-<p>For everyday use, leave them at their defaults. The most common deliberate change is <code class="docutils literal notranslate"><span class="pre">cfg_optimization=False</span></code> when iterating on a kernel whose compile time is in your way.</p>
+<p>For everyday use, leave them at their defaults. The most common deliberate change is <code class="docutils literal notranslate"><span class="pre">cfg_optimization=False</span></code> when iterating on a kernel whose compile time is in your way. Note that, in general, changing these options is relatively fragile since the Quadrants tests run assuming the default values.</p>
 </section>
 <section id="inspecting-what-the-compiler-did">
 <h2>Inspecting what the compiler did<a class="headerlink" href="#inspecting-what-the-compiler-did" title="Link to this heading">#</a></h2>
 <p>These environment variables dump the IR so you can see the effect of each pass. Files are written to <code class="docutils literal notranslate"><span class="pre">debug_dump_path</span></code> (default <code class="docutils literal notranslate"><span class="pre">/tmp/ir/</span></code>):</p>
 <ul class="simple">
-<li><p><code class="docutils literal notranslate"><span class="pre">QD_DUMP_IR=1</span></code> — writes an IR snapshot at each major pipeline stage (after lowering, before/after each simplify, after offload).</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">QD_DUMP_SIMPLIFY=1</span></code> — writes an IR snapshot after every individual pass on every iteration of the simplify loop. Verbose, but it shows exactly which pass changed what.</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">QD_DUMP_CFG=1</span></code> — writes the control-flow graph itself. (This also forces the CFG pass back onto the whole-kernel path so the complete graph can be dumped.)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">QD_DUMP_IR=1</span></code> - writes an IR snapshot at each major pipeline stage (after lowering, before/after each simplify, after offload).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">QD_DUMP_SIMPLIFY=1</span></code> - writes an IR snapshot after every individual pass on every iteration of the simplify loop. Verbose, but it shows exactly which pass changed what.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">QD_DUMP_CFG=1</span></code> - writes the control-flow graph itself. (This also forces the CFG pass back onto the whole-kernel path so the complete graph can be dumped.)</p></li>
 </ul>
 <p>Setting <code class="docutils literal notranslate"><span class="pre">qd.init(print_ir=True)</span></code> prints the IR to the console at pipeline stages instead of writing files.</p>
 </section>
