@@ -745,20 +745,139 @@ def test_checkpoint_non_yield_kernel_returns_none():
 
 
 @test_utils.test()
-def test_checkpoint_yield_on_must_be_bare_name():
-    """yield_on= must be a bare parameter name -- expressions / attributes are not supported.
-
-    Keeps the parser path symmetric with qd.graph_do_while(name) and avoids the cost of trying
-    to resolve arbitrary AST expressions to kernel parameters at compile time.
+def test_checkpoint_yield_on_unresolvable_expression_raises():
+    """yield_on= must resolve to an ndarray kernel argument -- a bare parameter (``flag``) or a
+    ``@qd.data_oriented`` member ndarray (``self.flag``). An expression that resolves to no such
+    ndarray (here a bogus attribute on an ndarray parameter) must error early at the with-site.
     """
 
     @qd.kernel(graph=True)
     def k(x: qd.types.ndarray(qd.i32, ndim=1), flag: qd.types.ndarray(qd.i32, ndim=0)):
-        with qd.checkpoint(yield_on=flag.something):  # type: ignore[union-attr]
+        with qd.checkpoint(yield_on=flag.not_an_attr):  # type: ignore[union-attr]
             for i in range(x.shape[0]):
                 x[i] = x[i] + 1
 
     x = qd.ndarray(qd.i32, shape=(4,))
     flag = qd.ndarray(qd.i32, shape=())
-    with pytest.raises(qd.QuadrantsSyntaxError, match="bare name of a kernel parameter"):
+    with pytest.raises(qd.QuadrantsSyntaxError, match="does not match any parameter"):
         k(x, flag)
+
+
+@test_utils.test()
+def test_checkpoint_yield_on_data_oriented_member_metadata():
+    """yield_on= accepts a ``@qd.data_oriented`` member ndarray (``self.flag``), recording the dotted
+    label in declaration order. Regression guard for the member-resolution path: a member ndarray
+    flattens to a real ndarray kernel arg, so its flat C++ arg-id is resolvable at AST-build time
+    just like a bare parameter (it just reaches the arg via ``self`` instead of a top-level name).
+    """
+    N = 4
+
+    @qd.data_oriented
+    class Stepper:
+        def __init__(self):
+            self.x = qd.ndarray(qd.i32, shape=(N,))
+            self.first_flag = qd.ndarray(qd.i32, shape=())
+            self.second_flag = qd.ndarray(qd.i32, shape=())
+
+        @qd.kernel(graph=True)
+        def step(self):
+            with qd.checkpoint():
+                for i in range(N):
+                    self.x[i] = 1
+            with qd.checkpoint(yield_on=self.first_flag):
+                for i in range(N):
+                    self.x[i] = 2
+            with qd.checkpoint(yield_on=self.second_flag):
+                for i in range(N):
+                    self.x[i] = 3
+
+    s = Stepper()
+    s.first_flag.fill(0)
+    s.second_flag.fill(0)
+    s.step()
+
+    # `Stepper.step` is the @qd.data_oriented indirection wrapper; functools.update_wrapper copies the
+    # inner @qd.kernel callable's __dict__ (including `_primal`) onto it, so the Kernel that records the
+    # metadata is reachable directly as `Stepper.step._primal`.
+    primal = Stepper.step._primal
+    assert primal.checkpoint_yield_on_args == [None, "self.first_flag", "self.second_flag"]
+
+
+@test_utils.test()
+def test_checkpoint_yields_when_data_oriented_member_flag_set():
+    """Slice 1d + member yield_on: a ``@qd.data_oriented`` member ndarray drives the yield-check.
+
+    Mirrors ``test_checkpoint_yields_when_flag_is_set`` but the data (``self.x``) and the flag
+    (``self.flag``) live on ``self``. cp 0 runs (+1), cp 1 runs (+10) and its ``self.flag`` fires
+    the yield, cp 2 is skipped on the native/host-gated path; the flag is reset to 0.
+    """
+    if not _supports_checkpoint_yield_resume():
+        pytest.skip("yield semantics require the CUDA-native IF path (slice 1d) or CPU host-branch gating (slice 6)")
+    N = 8
+
+    @qd.data_oriented
+    class Stepper:
+        def __init__(self):
+            self.x = qd.ndarray(qd.i32, shape=(N,))
+            self.flag = qd.ndarray(qd.i32, shape=())
+
+        @qd.kernel(graph=True)
+        def step(self):
+            with qd.checkpoint():
+                for i in range(N):
+                    self.x[i] = self.x[i] + 1
+            with qd.checkpoint(yield_on=self.flag):
+                for i in range(N):
+                    self.x[i] = self.x[i] + 10
+            with qd.checkpoint():
+                for i in range(N):
+                    self.x[i] = self.x[i] + 100
+
+    s = Stepper()
+    s.x.from_numpy(np.zeros(N, dtype=np.int32))
+    s.flag.from_numpy(np.array(1, dtype=np.int32))
+
+    s.step()
+    np.testing.assert_array_equal(s.x.to_numpy(), np.full(N, 11, dtype=np.int32))
+    assert _last_yield_cp_id_on_last_call() == 1
+    assert s.flag.to_numpy() == 0
+
+
+@test_utils.test()
+def test_checkpoint_yields_with_member_flag_and_bare_param():
+    """Member yield_on (self.flag) resolves to the correct flat arg-id even when the kernel also takes a
+    bare ndarray parameter. self is a template arg and the member ndarray interleaves with the bare
+    parameter in the flattened arg list, so this guards the member arg-id resolution against off-by-one
+    mix-ups. cp 1 fires self.flag and yields; cp 2 is skipped, and the earlier writes are visible.
+    """
+    if not _supports_checkpoint_yield_resume():
+        pytest.skip("yield semantics require the CUDA-native IF path (slice 1d) or CPU host-branch gating (slice 6)")
+    N = 8
+
+    @qd.data_oriented
+    class Stepper:
+        def __init__(self):
+            self.flag = qd.ndarray(qd.i32, shape=())
+
+        @qd.kernel(graph=True)
+        def step(self, payload: qd.types.ndarray(qd.i32, ndim=1)):
+            with qd.checkpoint():
+                for i in range(N):
+                    payload[i] = payload[i] + 1
+            with qd.checkpoint(yield_on=self.flag):
+                for i in range(N):
+                    payload[i] = payload[i] + 10
+            with qd.checkpoint():
+                for i in range(N):
+                    payload[i] = payload[i] + 100
+
+    s = Stepper()
+    s.flag.from_numpy(np.array(1, dtype=np.int32))
+    payload = qd.ndarray(qd.i32, shape=(N,))
+    payload.from_numpy(np.zeros(N, dtype=np.int32))
+
+    s.step(payload)
+    np.testing.assert_array_equal(payload.to_numpy(), np.full(N, 11, dtype=np.int32))
+    assert _last_yield_cp_id_on_last_call() == 1
+    assert s.flag.to_numpy() == 0
+    assert Stepper.step._primal.checkpoint_yield_on_args == [None, "self.flag", None]

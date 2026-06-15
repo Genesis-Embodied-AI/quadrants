@@ -735,7 +735,8 @@ def checkpoint(*, yield_on=None):
     rewrites per-kernel indirect-dispatch grid dimensions to ``(0, 0, 0)`` to skip the
     checkpoint body. CPU runs checkpoint bodies behind a host branch.
 
-    If ``yield_on`` is a scalar ``qd.i32`` ndarray that is also a kernel parameter, an
+    If ``yield_on`` references a scalar ``qd.i32`` ndarray -- either a bare kernel parameter
+    (``yield_on=flag``) or a ``@qd.data_oriented`` member ndarray (``yield_on=self.flag``) -- an
     auto-inserted yield-check kernel runs after the checkpoint body. If the user wrote a
     non-zero value into ``yield_on`` during the body, the framework records this checkpoint
     as the yielding one, disables downstream checkpoints in the enclosing
@@ -746,8 +747,8 @@ def checkpoint(*, yield_on=None):
 
     Restrictions (enforced at kernel compile time):
       - Must be used inside ``@qd.kernel(graph=True)``.
-      - ``yield_on``, when supplied, must name a kernel parameter that is a 0-d
-        ``qd.types.ndarray(qd.i32, ndim=0)``.
+      - ``yield_on``, when supplied, must reference a 0-d ``qd.types.ndarray(qd.i32, ndim=0)`` --
+        either a bare kernel parameter or a ``@qd.data_oriented`` member ndarray (``self.flag``).
       - Checkpoints cannot be nested inside other checkpoints. Checkpoints inside a
         ``qd.graph_do_while`` body are fine and are the expected pattern.
       - Cannot be combined with ``qd.stream_parallel()`` in the same kernel.
@@ -767,7 +768,9 @@ def graph_do_while(condition) -> bool:
 
     Used as ``while qd.graph_do_while(flag):`` inside a
     ``@qd.kernel(graph=True)`` kernel. The loop body repeats while
-    ``flag`` (a scalar ``qd.i32`` ndarray) is non-zero.
+    ``flag`` (a scalar ``qd.i32`` ndarray) is non-zero. ``flag`` may be a
+    bare kernel parameter (``counter``) or a ``@qd.data_oriented`` member
+    ndarray accessed through ``self`` (``self.counter``).
 
     On SM 9.0+ (Hopper) GPUs this compiles to a native CUDA graph
     conditional while node. On older CUDA GPUs and non-CUDA backends

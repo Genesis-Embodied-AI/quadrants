@@ -98,7 +98,23 @@ solve(x, counter)
 # x is now incremented 10 times; counter is 0
 ```
 
-The argument to `qd.graph_do_while()` must be the name of a scalar `qd.i32` ndarray parameter. The loop body repeats while this value is non-zero.
+The argument to `qd.graph_do_while()` must reference a scalar `qd.i32` ndarray: either a bare kernel parameter (e.g. `counter`) or a `@qd.data_oriented` member ndarray accessed through `self` (e.g. `self.counter`). The loop body repeats while this value is non-zero.
+
+```python
+@qd.data_oriented
+class Solver:
+    def __init__(self):
+        self.x = qd.ndarray(qd.f32, shape=(N,))
+        self.counter = qd.ndarray(qd.i32, shape=())
+
+    @qd.kernel(graph=True)
+    def solve(self):
+        while qd.graph_do_while(self.counter):   # member ndarray as the loop condition
+            for i in range(N):
+                self.x[i] = self.x[i] + 1.0
+            for i in range(1):
+                self.counter[()] = self.counter[()] - 1
+```
 
 - On CUDA SM 9.0+ (Hopper), this uses CUDA conditional while nodes — the entire iteration runs on the GPU with no host involvement.
 - On older CUDA GPUs, AMDGPU, and non-GPU backends, it falls back to a host-side do-while loop (see [Caveats](#caveats) and the [backend support table](#backend-support)).
@@ -141,7 +157,7 @@ def converge(x: qd.types.ndarray(qd.f32, ndim=1),
 
 ### ndarray vs field
 
-The parameter used by `graph_do_while` MUST be an ndarray.
+The condition used by `graph_do_while` MUST be an ndarray — either a bare kernel parameter or a `@qd.data_oriented` member ndarray (`self.flag`).
 
 However, other parameters can be any supported Quadrants kernel parameter type.
 
@@ -302,7 +318,7 @@ Each `with qd.checkpoint(...)` block gets a `cp_id` assigned by declaration orde
 
 ### Yield mechanism (CUDA, Vulkan, Metal, CPU/x64)
 
-If `yield_on=foo` is supplied, the body may write a non-zero value into the `foo` ndarray to signal "the host needs to handle something" (typically: pre-allocated buffer too small). At the end of the checkpoint body the framework injects a small yield-check step that:
+If `yield_on=foo` is supplied, the body may write a non-zero value into the `foo` ndarray to signal "the host needs to handle something" (typically: pre-allocated buffer too small). `yield_on=` accepts either a bare scalar `qd.i32` ndarray kernel parameter (`yield_on=overflow_flag`) or a `@qd.data_oriented` member ndarray accessed through `self` (`yield_on=self.overflow_flag`). At the end of the checkpoint body the framework injects a small yield-check step that:
 
 1. Reads `*foo` and skips out early if it's `0`.
 2. Atomically claims `yield_signal` with this checkpoint's `cp_id` (first yielder in declaration order wins).
@@ -342,7 +358,7 @@ Kernels with `qd.checkpoint()` but no `yield_on=` keep their previous return con
 ### Restrictions (enforced at kernel compile time)
 
 - Must be used inside `@qd.kernel(graph=True)`.
-- `yield_on=` (when supplied) must be the bare name of a kernel parameter that is a 0-d `qd.types.ndarray(qd.i32, ndim=0)`.
+- `yield_on=` (when supplied) must reference a 0-d `qd.types.ndarray(qd.i32, ndim=0)` — either a bare kernel parameter (`yield_on=flag`) or a `@qd.data_oriented` member ndarray (`yield_on=self.flag`).
 - Checkpoints cannot be nested inside other checkpoints — **not even through an intervening `qd.graph_do_while`**. A `checkpoint → graph_do_while → checkpoint` chain is still a nested checkpoint and is rejected (otherwise bare work in the outer checkpoint would silently re-execute on resume). A checkpoint inside a `qd.graph_do_while` body — at the top level, or in a **nested / sibling** loop that is not itself inside a checkpoint — is fine and is the expected pattern; the checkpoints at every level form one flat `cp_id` sequence.
 - Cannot be combined with `qd.stream_parallel()` in the same kernel.
 

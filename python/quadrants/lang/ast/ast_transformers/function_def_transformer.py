@@ -509,8 +509,10 @@ class FunctionDefTransformer:
             if kernel is not None:
                 # Reset before walking the body so re-materialisations (e.g. when a templated kernel is compiled
                 # with a different argument shape) start from an empty list. Mirrors how `graph_do_while_arg`
-                # gets overwritten unconditionally during AST traversal.
+                # gets overwritten unconditionally during AST traversal. The resolved per-checkpoint arg-id list
+                # is rebuilt in lockstep (one entry appended per `with qd.checkpoint(...)` in `build_With`).
                 kernel.checkpoint_yield_on_args = []
+                kernel.checkpoint_yield_on_cpp_arg_ids = []
 
         with ctx.variable_scope_guard():
             build_stmts(ctx, node.body)

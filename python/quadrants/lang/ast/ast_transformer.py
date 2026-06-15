@@ -1349,28 +1349,37 @@ class ASTTransformer(Builder):
                 return ASTTransformer.build_struct_for(ctx, node, is_grouped=False)
 
     @staticmethod
-    def _is_graph_do_while_call(node: ast.expr) -> str | None:
-        """If *node* is ``qd.graph_do_while(var)`` return the arg name, else None."""
+    def _is_graph_do_while_call(node: ast.expr) -> ast.expr | None:
+        """If *node* is ``qd.graph_do_while(arg)`` return the arg AST node, else None.
+
+        ``arg`` may be an ``ast.Name`` (a bare kernel parameter, e.g. ``counter``) or an ``ast.Attribute``
+        chain (a ``@qd.data_oriented`` member ndarray, e.g. ``self.counter``). It is resolved to a kernel
+        ndarray argument in ``build_While``.
+        """
         if not isinstance(node, ast.Call):
             return None
         func = node.func
-        if isinstance(func, ast.Attribute) and func.attr == "graph_do_while":
-            if len(node.args) == 1 and isinstance(node.args[0], ast.Name):
-                return node.args[0].id
-        if isinstance(func, ast.Name) and func.id == "graph_do_while":
-            if len(node.args) == 1 and isinstance(node.args[0], ast.Name):
-                return node.args[0].id
+        is_gdw = (isinstance(func, ast.Attribute) and func.attr == "graph_do_while") or (
+            isinstance(func, ast.Name) and func.id == "graph_do_while"
+        )
+        if not is_gdw:
+            return None
+        if len(node.args) == 1 and isinstance(node.args[0], (ast.Name, ast.Attribute)):
+            return node.args[0]
         return None
 
     @staticmethod
-    def _is_checkpoint_call(node: ast.expr) -> tuple[bool, str | None]:
-        """If *node* is a ``qd.checkpoint(...)`` call return ``(True, yield_on_arg_name)``; otherwise
-        ``(False, None)``. ``yield_on_arg_name`` is ``None`` when the user wrote
-        ``qd.checkpoint()`` with no ``yield_on`` kwarg.
+    def _is_checkpoint_call(node: ast.expr) -> tuple[bool, ast.expr | None]:
+        """If *node* is a ``qd.checkpoint(...)`` call return ``(True, yield_on_node)``; otherwise
+        ``(False, None)``. ``yield_on_node`` is the AST expression passed to ``yield_on=`` (an
+        ``ast.Name`` like ``flag`` or an ``ast.Attribute`` chain like ``self.flag``), or ``None`` when
+        the user wrote ``qd.checkpoint()`` with no ``yield_on`` (or an explicit ``yield_on=None``).
 
-        Validates the call shape (no positional args, only ``yield_on=`` as a bare ``ast.Name``)
-        and raises ``QuadrantsSyntaxError`` for misuse so the user gets a clear message at the
-        ``with`` site rather than a vague "not stream_parallel" error later.
+        Validates the call shape (no positional args, only ``yield_on=``) and raises
+        ``QuadrantsSyntaxError`` for misuse so the user gets a clear message at the ``with`` site rather
+        than a vague "not stream_parallel" error later. The actual resolution of ``yield_on_node`` to a
+        kernel ndarray argument happens in ``_build_checkpoint_with`` by building the expression, which
+        transparently supports both bare parameters and ``@qd.data_oriented`` member ndarrays.
         """
         if not isinstance(node, ast.Call):
             return False, None
@@ -1384,19 +1393,19 @@ class ASTTransformer(Builder):
             raise QuadrantsSyntaxError(
                 "qd.checkpoint() takes no positional arguments; use qd.checkpoint(yield_on=flag) instead"
             )
-        yield_on_name: str | None = None
+        yield_on_node: ast.expr | None = None
         for kw in node.keywords:
             if kw.arg != "yield_on":
                 raise QuadrantsSyntaxError(
                     f"qd.checkpoint() got unexpected keyword argument {kw.arg!r}; only 'yield_on' is supported"
                 )
-            if not isinstance(kw.value, ast.Name):
-                raise QuadrantsSyntaxError(
-                    "qd.checkpoint(yield_on=...) must be the bare name of a kernel parameter "
-                    "(e.g. `yield_on=overflow_flag`); expressions are not supported"
-                )
-            yield_on_name = kw.value.id
-        return True, yield_on_name
+            # An explicit ``yield_on=None`` is equivalent to omitting it (no yield), matching the
+            # no-op context-manager semantics outside kernels.
+            if isinstance(kw.value, ast.Constant) and kw.value.value is None:
+                yield_on_node = None
+            else:
+                yield_on_node = kw.value
+        return True, yield_on_node
 
     @staticmethod
     def _is_graph_parallel_call(node: ast.expr) -> bool:
@@ -1436,18 +1445,11 @@ class ASTTransformer(Builder):
         if node.orelse:
             raise QuadrantsSyntaxError("'else' clause for 'while' not supported in Quadrants kernels")
 
-        graph_do_while_arg = ASTTransformer._is_graph_do_while_call(node.test)
-        if graph_do_while_arg is not None:
+        graph_do_while_node = ASTTransformer._is_graph_do_while_call(node.test)
+        if graph_do_while_node is not None:
             from quadrants.lang.kernel import GraphDoWhileLevel  # pylint: disable=C0415
 
             kernel = ctx.global_context.current_kernel
-            arg_names = [m.name for m in kernel.arg_metas]
-            if graph_do_while_arg not in arg_names:
-                raise QuadrantsSyntaxError(
-                    f"qd.graph_do_while({graph_do_while_arg!r}) does not match any "
-                    f"parameter of kernel {kernel.func.__name__!r}. "
-                    f"Available parameters: {arg_names}"
-                )
             if not kernel.use_graph:
                 raise QuadrantsSyntaxError("qd.graph_do_while() requires @qd.kernel(graph=True)")
             # graph_do_while emits no loop IR; its body's for-loops must be top-level (offloaded)
@@ -1458,15 +1460,22 @@ class ASTTransformer(Builder):
                     "qd.graph_do_while() must be at the kernel top level or directly nested inside "
                     "another qd.graph_do_while(); it cannot appear inside a for-loop."
                 )
+            # Resolve the condition ndarray (bare parameter or @qd.data_oriented member) to its flat C++
+            # arg-id at AST-build time -- the same id the runtime needs -- so the launch path forwards it
+            # directly with no name matching. `cond_arg_name` keeps the readable label (e.g. "counter" or
+            # "self.counter") for introspection and the legacy `graph_do_while_arg` alias.
+            cond_label, cond_cpp_arg_id = ASTTransformer._resolve_ndarray_kernel_arg_id(
+                ctx, kernel, graph_do_while_node, "qd.graph_do_while(...)"
+            )
             # Register this loop as a new nesting level (the body restriction is validated up-front in
             # FunctionDefTransformer). Outer loops get lower ids than the inner loops they contain.
             parent_id = kernel._graph_do_while_level_stack[-1] if kernel._graph_do_while_level_stack else -1
             level_id = len(kernel.graph_do_while_levels)
             kernel.graph_do_while_levels.append(
-                GraphDoWhileLevel(cond_arg_name=graph_do_while_arg, parent_id=parent_id)
+                GraphDoWhileLevel(cond_arg_name=cond_label, parent_id=parent_id, cond_cpp_arg_id=cond_cpp_arg_id)
             )
             if level_id == 0:
-                kernel.graph_do_while_arg = graph_do_while_arg
+                kernel.graph_do_while_arg = cond_label
             kernel._graph_do_while_level_stack.append(level_id)
             ctx.ast_builder.set_graph_do_while_level_id(level_id)
             try:
@@ -1670,9 +1679,9 @@ class ASTTransformer(Builder):
         if not isinstance(item.context_expr, ast.Call):
             raise QuadrantsSyntaxError("'with' in Quadrants kernels requires a call expression")
 
-        is_checkpoint, yield_on_name = ASTTransformer._is_checkpoint_call(item.context_expr)
+        is_checkpoint, yield_on_node = ASTTransformer._is_checkpoint_call(item.context_expr)
         if is_checkpoint:
-            return ASTTransformer._build_checkpoint_with(ctx, node, yield_on_name)
+            return ASTTransformer._build_checkpoint_with(ctx, node, yield_on_node)
 
         if ASTTransformer._is_graph_parallel_call(item.context_expr):
             return ASTTransformer._build_graph_parallel_with(ctx, node)
@@ -1693,18 +1702,63 @@ class ASTTransformer(Builder):
         return None
 
     @staticmethod
+    def _resolve_ndarray_kernel_arg_id(
+        ctx: ASTTransformerFuncContext,
+        kernel,
+        node: ast.expr,
+        usage: str,
+    ) -> tuple[str, int]:
+        """Resolve an ndarray-referencing expression to ``(label, flat_cpp_arg_id)``.
+
+        Used by both ``qd.checkpoint(yield_on=...)`` and ``qd.graph_do_while(...)`` to turn the
+        control-flag argument into the flat C++ arg-id the runtime matches against. ``node`` is an
+        ``ast.Name`` (a bare kernel parameter, e.g. ``flag``) or an ``ast.Attribute`` chain (a
+        ``@qd.data_oriented`` member ndarray, e.g. ``self.flag``). We build the expression through the
+        normal AST machinery and read the arg-id off the resulting external-tensor expression -- this
+        unifies the bare-param and member-ndarray cases, since both flatten to a real ndarray kernel
+        argument carrying its arg-id on the ``ExternalTensorExpression``.
+
+        ``usage`` is the call form (e.g. ``"qd.checkpoint(yield_on=...)"``) used in the error message.
+        Raises ``QuadrantsSyntaxError`` if the expression does not resolve to an ndarray kernel argument.
+        """
+        from quadrants.lang.any_array import AnyArray  # pylint: disable=C0415
+
+        label = ast.unparse(node)
+        bad_arg = QuadrantsSyntaxError(
+            f"{usage} ({label}) does not match any parameter of kernel {kernel.func.__name__!r}. "
+            f"It must reference an ndarray kernel parameter or a @qd.data_oriented member ndarray "
+            f"(e.g. `self.flag`)."
+        )
+        try:
+            built = build_stmt(ctx, node)
+        except Exception as e:  # noqa: BLE001 - any resolution failure is a user-facing misuse of the flag arg
+            raise bad_arg from e
+        expr = built.ptr if isinstance(built, AnyArray) else built
+        if not (hasattr(expr, "is_external_tensor_expr") and expr.is_external_tensor_expr()):
+            raise bad_arg
+        arg_id = _qd_core.get_external_tensor_arg_id(expr)
+        if not arg_id:
+            raise bad_arg
+        return label, int(arg_id[0])
+
+    @staticmethod
     def _build_checkpoint_with(
         ctx: ASTTransformerFuncContext,
         node: ast.With,
-        yield_on_name: str | None,
+        yield_on_node: ast.expr | None,
     ) -> None:
         """Handles ``with qd.checkpoint(yield_on=arg):`` blocks.
 
-        Slice 1a: validates the use-site (kernel must be graph=True, no nesting, yield_on must be a kernel
-        parameter) and records the checkpoint's ``yield_on`` arg on the kernel object. Walks the body
-        transparently -- for-loops inside the ``with`` become normal top-level for-loops in the kernel's
-        frontend IR. The ``cp_id`` is assigned by declaration order (list index in
+        Slice 1a: validates the use-site (kernel must be graph=True, no nesting, yield_on must resolve to an
+        ndarray kernel argument) and records the checkpoint's resolved ``yield_on`` arg-id on the kernel
+        object. Walks the body transparently -- for-loops inside the ``with`` become normal top-level
+        for-loops in the kernel's frontend IR. The ``cp_id`` is assigned by declaration order (list index in
         ``kernel.checkpoint_yield_on_args``).
+
+        ``yield_on=`` is resolved here, at AST-build time, by building the expression and reading the flat
+        C++ arg-id off the resulting external-tensor expression (see ``_resolve_checkpoint_yield_on``). This
+        supports both bare kernel parameters and ``@qd.data_oriented`` member ndarrays (``self.flag``), and
+        means the launch path needs no per-launch name matching -- it just forwards the precomputed arg-ids.
 
         Later slices wire ``cp_id`` through ForLoopConfig → OffloadedTask so the GraphManager can wrap
         each checkpoint's body kernels in an IF conditional node and insert the yield-check kernel.
@@ -1719,15 +1773,15 @@ class ASTTransformer(Builder):
                 "qd.checkpoint() cannot be nested inside another qd.checkpoint(); checkpoints in the "
                 "same kernel must be flat siblings (a checkpoint inside qd.graph_do_while is fine)"
             )
-        if yield_on_name is not None:
-            arg_names = [m.name for m in kernel.arg_metas]
-            if yield_on_name not in arg_names:
-                raise QuadrantsSyntaxError(
-                    f"qd.checkpoint(yield_on={yield_on_name!r}) does not match any parameter of kernel "
-                    f"{kernel.func.__name__!r}. Available parameters: {arg_names}"
-                )
+        if yield_on_node is not None:
+            label, cpp_arg_id = ASTTransformer._resolve_ndarray_kernel_arg_id(
+                ctx, kernel, yield_on_node, "qd.checkpoint(yield_on=...)"
+            )
+        else:
+            label, cpp_arg_id = None, -1
 
-        kernel.checkpoint_yield_on_args.append(yield_on_name)
+        kernel.checkpoint_yield_on_args.append(label)
+        kernel.checkpoint_yield_on_cpp_arg_ids.append(cpp_arg_id)
         # Hand control to the C++ ASTBuilder so that every for-loop emitted by `build_stmts`
         # below is tagged with this checkpoint's `cp_id` on its `ForLoopConfig.checkpoint_id`.
         # The C++ counter is the source of truth for cp_id; we cross-check it against the
