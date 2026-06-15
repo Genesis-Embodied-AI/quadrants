@@ -397,10 +397,30 @@ def step(...):
 - **Fork / join.** Every `qd.branch()` in the region forks from the work that precedes the region. All branches must finish before any work *after* the region begins (the join). On CUDA the join is a single empty graph node depending on every branch's last kernel.
 - **Branches are independent — you guarantee it.** Calls *within* a branch keep their program order, but calls in *different* branches have no ordering. The branches must be data-race free with respect to one another: no branch may read what another writes, and no two branches may write the same memory. Quadrants does not check this; getting it wrong gives nondeterministic results, exactly like `qd.stream_parallel()`.
 
+### Generating branches from a compile-time sequence
+
+Branches do not have to be written out one by one. A `for ... in qd.static(...)` loop is unrolled at compile time, so each iteration that contains a `with qd.branch():` becomes its own branch — handy for forking one branch per element of a static list (e.g. per contact type):
+
+```python
+@qd.data_oriented
+class Solver:
+    def __init__(self):
+        self.funcs = [self._assemble_pt, self._assemble_ee]   # static list of @qd.func members
+
+    @qd.kernel(graph=True)
+    def step(self):
+        with qd.graph_parallel():
+            for i in qd.static(range(len(self.funcs))):        # unrolls to one branch per func
+                with qd.branch():
+                    self.funcs[i]()
+```
+
+The loop **must** be a `qd.static(...)` loop (its trip count is known at compile time). A plain runtime `for i in range(n):` is rejected — a runtime loop cannot be unrolled into independent branches.
+
 ### Restrictions (enforced at kernel compile time)
 
 - Must be used inside `@qd.kernel(graph=True)`.
-- A region body may contain only `with qd.branch():` blocks, optionally wrapped in `if qd.static(...)` (so an optional branch can be compiled in or out — e.g. enabling edge-edge contacts only when a feature flag is set). A single-branch region is allowed and lowers to a plain chain (no fork/join overhead).
+- A region body may contain only `with qd.branch():` blocks, optionally wrapped in `if qd.static(...)` (compile a branch in or out — e.g. enabling edge-edge contacts only when a feature flag is set) or `for ... in qd.static(...)` loops (generate one branch per element of a compile-time sequence). A single-branch region (including a static loop that unrolls to one or zero branches) is allowed and lowers to a plain chain (no fork/join overhead).
 - `qd.branch()` may appear only directly inside a `qd.graph_parallel()` region.
 - Regions cannot be nested, and a branch body must be straight-line task work — no `qd.graph_do_while`, `qd.checkpoint`, or nested `qd.graph_parallel` inside a branch (a region may, however, sit inside a `qd.graph_do_while` body, as shown above).
 
