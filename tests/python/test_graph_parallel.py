@@ -334,3 +334,196 @@ def test_graph_parallel_nested_region_raises():
     x = qd.ndarray(qd.f32, shape=(16,))
     with pytest.raises(qd.QuadrantsSyntaxError):
         k(x)
+
+
+# --- static-loop-generated branches (qd.static for-loop inside qd.graph_parallel) ---------------------
+# These document the desired behaviour for the "generate branches from a compile-time sequence" pattern.
+# They are xfail until the validator learns to recurse into `for ... in qd.static(...)` loops; the current
+# validator rejects any For node in a region body with QuadrantsSyntaxError. Once implemented, remove the
+# xfail markers (strict=True turns an unexpected pass into a failure so we cannot forget).
+_STATIC_LOOP_XFAIL = dict(
+    reason="static for-loop branches inside qd.graph_parallel not yet supported",
+    raises=qd.QuadrantsSyntaxError,
+    strict=True,
+)
+
+
+@pytest.mark.xfail(**_STATIC_LOOP_XFAIL)
+@test_utils.test()
+def test_graph_parallel_static_loop_two_branches():
+    """`for b in qd.static(range(NB))` unrolls into NB literal branches, each writing a disjoint row."""
+    nb = 2
+    n = 256
+
+    @qd.kernel(graph=True)
+    def k(x: qd.types.ndarray(qd.f32, ndim=2)):
+        with qd.graph_parallel():
+            for b in qd.static(range(nb)):
+                with qd.branch():
+                    for i in range(x.shape[1]):
+                        x[b, i] = x[b, i] + (b + 1)
+
+    x = qd.ndarray(qd.f32, shape=(nb, n))
+    x.from_numpy(np.zeros((nb, n), dtype=np.float32))
+
+    k(x)
+    num_tasks = _num_offloaded_tasks()
+    if _on_cuda():
+        assert _graph_num_nodes() == num_tasks + 1  # nb branches + one join
+
+    out = x.to_numpy()
+    np.testing.assert_allclose(out[0], 1.0)
+    np.testing.assert_allclose(out[1], 2.0)
+
+
+@pytest.mark.xfail(**_STATIC_LOOP_XFAIL)
+@test_utils.test()
+def test_graph_parallel_static_loop_over_funcs():
+    """The motivating pattern: a @qd.data_oriented class iterates a static list of @qd.func members,
+    one branch each (mirrors qipc's per-contact-type assembly funcs)."""
+    n = 4
+
+    @qd.data_oriented
+    class Demo:
+        def __init__(self):
+            self.a = qd.field(qd.i32, shape=(n,))
+            self.b = qd.field(qd.i32, shape=(n,))
+            self.funcs = [self._fill_a, self._fill_b]
+
+        @qd.func
+        def _fill_a(self):
+            for i in range(n):
+                self.a[i] += 1
+
+        @qd.func
+        def _fill_b(self):
+            for i in range(n):
+                self.b[i] += 10
+
+        @qd.kernel(graph=True)
+        def step(self):
+            with qd.graph_parallel():
+                for i in qd.static(range(len(self.funcs))):
+                    with qd.branch():
+                        self.funcs[i]()
+
+    d = Demo()
+    d.a.from_numpy(np.zeros(n, dtype=np.int32))
+    d.b.from_numpy(np.zeros(n, dtype=np.int32))
+    d.step()
+    np.testing.assert_array_equal(d.a.to_numpy(), np.ones(n, dtype=np.int32))
+    np.testing.assert_array_equal(d.b.to_numpy(), np.full(n, 10, dtype=np.int32))
+
+
+@pytest.mark.xfail(**_STATIC_LOOP_XFAIL)
+@test_utils.test()
+def test_graph_parallel_static_loop_single_branch():
+    """A static loop of one iteration is a single-branch region: a plain chain, no join node."""
+    n = 256
+
+    @qd.kernel(graph=True)
+    def k(x: qd.types.ndarray(qd.f32, ndim=1)):
+        with qd.graph_parallel():
+            for _b in qd.static(range(1)):
+                with qd.branch():
+                    for i in range(x.shape[0]):
+                        x[i] = x[i] + 5.0
+
+    x = qd.ndarray(qd.f32, shape=(n,))
+    x.from_numpy(np.zeros(n, dtype=np.float32))
+
+    k(x)
+    num_tasks = _num_offloaded_tasks()
+    if _on_cuda():
+        assert _graph_num_nodes() == num_tasks  # single branch -> no join node
+
+    np.testing.assert_allclose(x.to_numpy(), 5.0)
+
+
+@pytest.mark.xfail(**_STATIC_LOOP_XFAIL)
+@test_utils.test()
+def test_graph_parallel_static_loop_empty_range():
+    """An empty static range produces zero branches: the region is a no-op (consistent with wrapping the
+    only branch in `if qd.static(False)`). Serial work after it still runs."""
+    n = 128
+
+    @qd.kernel(graph=True)
+    def k(x: qd.types.ndarray(qd.f32, ndim=1)):
+        with qd.graph_parallel():
+            for _b in qd.static(range(0)):
+                with qd.branch():
+                    for i in range(x.shape[0]):
+                        x[i] = x[i] + 1.0
+        for i in range(x.shape[0]):
+            x[i] = x[i] + 5.0
+
+    x = qd.ndarray(qd.f32, shape=(n,))
+    x.from_numpy(np.zeros(n, dtype=np.float32))
+
+    k(x)
+    np.testing.assert_allclose(x.to_numpy(), 5.0)  # region did nothing; only the serial +5 applied
+
+
+@pytest.mark.xfail(**_STATIC_LOOP_XFAIL)
+@test_utils.test()
+def test_graph_parallel_static_loop_nested():
+    """Nested static loops fan out to N*M branches, each writing a disjoint row."""
+    ni, nj = 2, 2
+    nrows = ni * nj
+    n = 64
+
+    @qd.kernel(graph=True)
+    def k(x: qd.types.ndarray(qd.f32, ndim=2)):
+        with qd.graph_parallel():
+            for i in qd.static(range(ni)):
+                for j in qd.static(range(nj)):
+                    with qd.branch():
+                        for c in range(x.shape[1]):
+                            x[i * nj + j, c] = x[i * nj + j, c] + (i * nj + j + 1)
+
+    x = qd.ndarray(qd.f32, shape=(nrows, n))
+    x.from_numpy(np.zeros((nrows, n), dtype=np.float32))
+
+    k(x)
+    num_tasks = _num_offloaded_tasks()
+    if _on_cuda():
+        assert _graph_num_nodes() == num_tasks + 1  # nrows branches + one join
+
+    out = x.to_numpy()
+    for r in range(nrows):
+        np.testing.assert_allclose(out[r], float(r + 1))
+
+
+@pytest.mark.xfail(**_STATIC_LOOP_XFAIL)
+@test_utils.test()
+def test_graph_parallel_static_loop_mixed_with_static_if():
+    """A static branch loop and an `if qd.static(...)` optional branch coexist in one region."""
+    nb = 2
+    n = 64
+
+    @qd.kernel(graph=True)
+    def k(x: qd.types.ndarray(qd.f32, ndim=2), y: qd.types.ndarray(qd.f32, ndim=1)):
+        with qd.graph_parallel():
+            for b in qd.static(range(nb)):
+                with qd.branch():
+                    for i in range(x.shape[1]):
+                        x[b, i] = x[b, i] + (b + 1)
+            if qd.static(True):
+                with qd.branch():
+                    for i in range(y.shape[0]):
+                        y[i] = y[i] + 7.0
+
+    x = qd.ndarray(qd.f32, shape=(nb, n))
+    y = qd.ndarray(qd.f32, shape=(n,))
+    x.from_numpy(np.zeros((nb, n), dtype=np.float32))
+    y.from_numpy(np.zeros(n, dtype=np.float32))
+
+    k(x, y)
+    num_tasks = _num_offloaded_tasks()
+    if _on_cuda():
+        assert _graph_num_nodes() == num_tasks + 1  # nb + 1 branches + one join
+
+    out = x.to_numpy()
+    np.testing.assert_allclose(out[0], 1.0)
+    np.testing.assert_allclose(out[1], 2.0)
+    np.testing.assert_allclose(y.to_numpy(), 7.0)
