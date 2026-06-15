@@ -845,6 +845,14 @@ void export_lang(py::module &m) {
     }
   });
 
+  // The (post-template) C++ arg-id vector of an external-tensor (ndarray) expression. For a top-level ndarray
+  // parameter or a flattened `@qd.data_oriented` member ndarray this is a single-element vector whose `[0]`
+  // entry is the flat arg-id the runtime matches against (e.g. for `qd.checkpoint(yield_on=...)` resolution).
+  m.def("get_external_tensor_arg_id", [](const Expr &expr) {
+    QD_ASSERT(expr.is<ExternalTensorExpression>());
+    return expr.cast<ExternalTensorExpression>()->arg_id;
+  });
+
   m.def("get_external_tensor_shape_along_axis",
         Expr::make<ExternalTensorShapeAlongAxisExpression, const Expr &, int, const DebugInfo &>);
 

@@ -342,6 +342,16 @@ class Kernel(FuncBase):
         # transformer during frontend pass; empty means the kernel uses no checkpoints. Mirrors the
         # `graph_do_while_arg` indirection but tracks one arg per checkpoint instead of one per kernel.
         self.checkpoint_yield_on_args: list[str | None] = []
+        # Parallel to `checkpoint_yield_on_args`, one entry per checkpoint in declaration order. Each entry is
+        # the resolved flat C++ arg-id of the `yield_on=` ndarray (bare parameter or `@qd.data_oriented` member),
+        # or `-1` for checkpoints without a `yield_on=`. Resolved at AST-build time (see
+        # `_build_checkpoint_with`), so the launch path forwards these directly with no per-launch name matching.
+        # Transient: rebuilt each AST pass; snapshotted per compiled key into `_checkpoint_yield_on_cpp_arg_ids_by_key`.
+        self.checkpoint_yield_on_cpp_arg_ids: list[int] = []
+        # Per-compiled-key snapshot of `checkpoint_yield_on_cpp_arg_ids`, captured at materialize time. The flat
+        # arg-id of a `yield_on=` ndarray can in principle differ across spec-keys (template expansion / different
+        # data_oriented instances), so it is keyed like `_struct_ndarray_launch_info_by_key`.
+        self._checkpoint_yield_on_cpp_arg_ids_by_key: dict[CompiledKernelKeyType, list[int]] = {}
         self.quadrants_callable: QuadrantsCallable | None = None
         self.visited_functions: set[FunctionSourceInfo] = set()
         self.kernel_function_info: FunctionSourceInfo | None = None
@@ -502,6 +512,8 @@ class Kernel(FuncBase):
                     self._struct_ndarray_launch_info_by_key[key] = getattr(
                         ctx.global_context, "struct_ndarray_launch_info", []
                     )
+                    # Snapshot the AST-resolved `yield_on=` arg-ids for this key (see `checkpoint_yield_on_cpp_arg_ids`).
+                    self._checkpoint_yield_on_cpp_arg_ids_by_key[key] = list(self.checkpoint_yield_on_cpp_arg_ids)
                 else:
                     for used_parameters in pruning.used_vars_by_func_id.values():
                         new_used_parameters = set()
@@ -575,13 +587,6 @@ class Kernel(FuncBase):
             is_launch_ctx_cacheable = True
             template_num = 0
             i_out = 0
-            # Fresh per-launch table for `qd.checkpoint(yield_on=...)` arg resolution. Each entry
-            # defaults to -1 ("no yield_on"); the arg-iteration loop below fills in the C++ arg
-            # id when it visits the named parameter. Sized to the kernel's checkpoint count once
-            # per launch so changes to the checkpoint set (only possible via re-AST-walk) reset
-            # the table cleanly.
-            if self.checkpoint_yield_on_args:
-                self._checkpoint_yield_on_cpp_arg_ids = [-1] * len(self.checkpoint_yield_on_args)
             for i_in, val in enumerate(args):
                 needed_ = self.arg_metas[i_in].annotation
                 if needed_ is template or type(needed_) is template:
@@ -599,10 +604,6 @@ class Kernel(FuncBase):
                     for _gdw_level in self.graph_do_while_levels:
                         if self.arg_metas[i_in].name == _gdw_level.cond_arg_name:
                             _gdw_level.cond_cpp_arg_id = i_out - template_num
-                if self.checkpoint_yield_on_args:
-                    for cp_idx, yield_name in enumerate(self.checkpoint_yield_on_args):
-                        if yield_name is not None and self.arg_metas[i_in].name == yield_name:
-                            self._checkpoint_yield_on_cpp_arg_ids[cp_idx] = i_out - template_num
                 num_args_, is_launch_ctx_cacheable_ = self._recursive_set_args(
                     self.used_py_dataclass_parameters_by_key_enforcing[key],
                     self.arg_metas[i_in].name,
@@ -678,8 +679,9 @@ class Kernel(FuncBase):
                 )
             for _gdw_level in self.graph_do_while_levels:
                 launch_ctx.add_graph_do_while_level(_gdw_level.cond_cpp_arg_id, _gdw_level.parent_id)
-            if self.checkpoint_yield_on_args and hasattr(self, "_checkpoint_yield_on_cpp_arg_ids"):
-                launch_ctx.checkpoint_yield_on_arg_ids = self._checkpoint_yield_on_cpp_arg_ids
+            cp_yield_arg_ids = self._checkpoint_yield_on_cpp_arg_ids_by_key.get(key)
+            if cp_yield_arg_ids:
+                launch_ctx.checkpoint_yield_on_arg_ids = cp_yield_arg_ids
             # `_resume_from_checkpoint` is `None` for fresh launches (host-side default 0 in
             # `LaunchContextBuilder`, which means "run every checkpoint"). When `Kernel.resume`
             # plumbs an int through, copy it onto the launch ctx so the GraphManager's
