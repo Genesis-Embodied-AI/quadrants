@@ -52,7 +52,7 @@ The capacity grows fast - each level multiplies it by 256:
 
 `LOG256_MAX_N = 4` already exceeds what a 32-bit index can address (`256 ** 4 == 2 ** 32`), so in practice you rarely need more than 3-4.
 
-It must be compile-time because it fixes the number and order of the internal launches. Each op runs as a *staircase*: a fixed ladder of `LOG256_MAX_N` levels where every level is a separate launch that shrinks the working set by a factor of `BLOCK_DIM = 256` (a level handling `k` elements feeds `ceil(k / 256)` to the next, until one element remains). Statically unrolling that staircase to `LOG256_MAX_N` levels gives a fixed launch topology, which is exactly what lets **one captured graph replay for any count up to the capacity** without re-tracing. The live count `n` flows as a device value while `LOG256_MAX_N` is frozen at trace time.
+It must be compile-time because it fixes the number and order of the internal launches.
 
 **Pick it from an upper bound, not the current count.** Use the smallest `LOG256_MAX_N` whose capacity covers the largest count you will ever feed the captured graph - `LOG256_MAX_N = ceil(log256(capacity))`, floored at `1`. Size it against a *provisioned* upper bound (a buffer capacity, a padded element count, ...), not today's `n`, so the same graph serves the whole range below it:
 
