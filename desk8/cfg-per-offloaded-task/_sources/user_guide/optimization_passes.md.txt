@@ -4,7 +4,7 @@ When you call a `@qd.kernel` function, Quadrants first translates the kernel int
 
 ## Key terms
 
-A handful of technical terms show up throughout this page. They are defined once here and used freely below.
+Let's start by defining terms that will be used throughout the page and are necessary in order to be able to understand it.
 
 - **Kernel** - a function you decorate with `@qd.kernel`. It is the unit that Quadrants compiles and launches.
 - **IR (intermediate representation)** - the compiler's internal version of your kernel: a flat list of small, explicitly-typed instructions, sitting between your Python source and the final machine code. Every pass reads and rewrites the IR; none of it is something you write by hand.
