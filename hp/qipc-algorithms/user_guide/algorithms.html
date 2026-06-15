@@ -27,8 +27,8 @@
   </noscript>
   
   <!-- Loaded before other Sphinx assets -->
-  <link href="../_static/styles/theme.css?digest=0790524f97105ba85085" rel="stylesheet" />
-<link href="../_static/styles/pydata-sphinx-theme.css?digest=0790524f97105ba85085" rel="stylesheet" />
+  <link href="../_static/styles/theme.css?digest=a95f357e85573c9b56d5" rel="stylesheet" />
+<link href="../_static/styles/pydata-sphinx-theme.css?digest=a95f357e85573c9b56d5" rel="stylesheet" />
 
     <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=8f2a1f02" />
     <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
@@ -38,10 +38,10 @@
     <link rel="stylesheet" type="text/css" href="../_static/css/custom.css" />
   
   <!-- So that users can add custom icons -->
-  <script defer src="../_static/scripts/fontawesome.js?digest=0790524f97105ba85085"></script>
+  <script defer src="../_static/scripts/fontawesome.js?digest=a95f357e85573c9b56d5"></script>
   <!-- Pre-loaded scripts that we'll load fully later -->
-  <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=0790524f97105ba85085" />
-<link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=0790524f97105ba85085" />
+  <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5" />
+<link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5" />
 
     <script src="../_static/documentation_options.js?v=baaebd52"></script>
     <script src="../_static/doctools.js?v=9bcbadda"></script>
@@ -488,7 +488,7 @@
 </tbody>
 </table>
 </div>
-<p>These algorithms run on all of Quadrants’ GPU backends (CUDA, AMDGPU, Vulkan, Metal); they are GPU-only and are not available on the CPU backend. (On Metal / MoltenVK only 32-bit dtypes are supported - no <code class="docutils literal notranslate"><span class="pre">i64</span></code> / <code class="docutils literal notranslate"><span class="pre">u64</span></code> / <code class="docutils literal notranslate"><span class="pre">f64</span></code>; <code class="docutils literal notranslate"><span class="pre">PrefixSumExecutor</span></code> is CUDA / Vulkan only.) The <code class="docutils literal notranslate"><span class="pre">*_scratch_slots</span></code> helpers are plain integer arithmetic, so they also run on the host / CPU.</p>
+<p>These algorithms run on all of Quadrants’ GPU backends (CUDA, AMDGPU, Vulkan, Metal); they are GPU-only and are not available on the CPU backend. (On Metal only 32-bit dtypes are supported - no <code class="docutils literal notranslate"><span class="pre">i64</span></code> / <code class="docutils literal notranslate"><span class="pre">u64</span></code> / <code class="docutils literal notranslate"><span class="pre">f64</span></code>; <code class="docutils literal notranslate"><span class="pre">PrefixSumExecutor</span></code> is CUDA / Vulkan only.) The <code class="docutils literal notranslate"><span class="pre">*_scratch_slots</span></code> helpers are plain integer arithmetic, so they also run on the host / CPU.</p>
 </section>
 <section id="composable-qd-func-ops">
 <h2>Composable <code class="docutils literal notranslate"><span class="pre">&#64;qd.func</span></code> ops<a class="headerlink" href="#composable-qd-func-ops" title="Link to this heading">#</a></h2>
@@ -530,7 +530,7 @@
 </table>
 </div>
 <p><code class="docutils literal notranslate"><span class="pre">LOG256_MAX_N</span> <span class="pre">=</span> <span class="pre">4</span></code> already exceeds what a 32-bit index can address (<code class="docutils literal notranslate"><span class="pre">256</span> <span class="pre">**</span> <span class="pre">4</span> <span class="pre">==</span> <span class="pre">2</span> <span class="pre">**</span> <span class="pre">32</span></code>), so in practice you rarely need more than 3-4.</p>
-<p>It must be compile-time because it fixes the number and order of the internal launches. Each op runs as a <em>staircase</em>: a fixed ladder of <code class="docutils literal notranslate"><span class="pre">LOG256_MAX_N</span></code> levels where every level is a separate launch that shrinks the working set by a factor of <code class="docutils literal notranslate"><span class="pre">BLOCK_DIM</span> <span class="pre">=</span> <span class="pre">256</span></code> (a level handling <code class="docutils literal notranslate"><span class="pre">k</span></code> elements feeds <code class="docutils literal notranslate"><span class="pre">ceil(k</span> <span class="pre">/</span> <span class="pre">256)</span></code> to the next, until one element remains). Statically unrolling that staircase to <code class="docutils literal notranslate"><span class="pre">LOG256_MAX_N</span></code> levels gives a fixed launch topology, which is exactly what lets <strong>one captured graph replay for any count up to the capacity</strong> without re-tracing. The live count <code class="docutils literal notranslate"><span class="pre">n</span></code> flows as a device value while <code class="docutils literal notranslate"><span class="pre">LOG256_MAX_N</span></code> is frozen at trace time.</p>
+<p>It must be compile-time because it fixes the number and order of the internal launches.</p>
 <p><strong>Pick it from an upper bound, not the current count.</strong> Use the smallest <code class="docutils literal notranslate"><span class="pre">LOG256_MAX_N</span></code> whose capacity covers the largest count you will ever feed the captured graph - <code class="docutils literal notranslate"><span class="pre">LOG256_MAX_N</span> <span class="pre">=</span> <span class="pre">ceil(log256(capacity))</span></code>, floored at <code class="docutils literal notranslate"><span class="pre">1</span></code>. Size it against a <em>provisioned</em> upper bound (a buffer capacity, a padded element count, …), not today’s <code class="docutils literal notranslate"><span class="pre">n</span></code>, so the same graph serves the whole range below it:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">log256_max_n</span><span class="p">(</span><span class="n">capacity</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
     <span class="n">d</span> <span class="o">=</span> <span class="mi">1</span>
@@ -1053,8 +1053,8 @@
   </div>
   
   <!-- Scripts loaded after <body> so the DOM is not blocked -->
-  <script defer src="../_static/scripts/bootstrap.js?digest=0790524f97105ba85085"></script>
-<script defer src="../_static/scripts/pydata-sphinx-theme.js?digest=0790524f97105ba85085"></script>
+  <script defer src="../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5"></script>
+<script defer src="../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5"></script>
 
   <footer class="bd-footer">
 <div class="bd-footer__inner bd-page-width">
@@ -1088,7 +1088,7 @@
         <div class="footer-item">
 <p class="theme-version">
   <!-- # L10n: Setting the PST URL as an argument as this does not need to be localized -->
-  Built with the <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a> 0.18.0.
+  Built with the <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a> 0.19.0.
 </p></div>
       
     </div>
