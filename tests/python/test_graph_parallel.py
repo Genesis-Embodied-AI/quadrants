@@ -45,7 +45,7 @@ def test_graph_parallel_is_no_op_outside_kernels():
     with qd.graph_parallel():
         with qd.branch():
             sentinel.append("a")
-        with qd.branch(name="b"):
+        with qd.branch():
             sentinel.append("b")
     assert sentinel == ["a", "b"]
 
@@ -64,10 +64,10 @@ def test_graph_parallel_two_branches():
         z: qd.types.ndarray(qd.f32, ndim=1),
     ):
         with qd.graph_parallel():
-            with qd.branch(name="bx"):
+            with qd.branch():
                 for i in range(x.shape[0]):
                     x[i] = x[i] + 1.0
-            with qd.branch(name="by"):
+            with qd.branch():
                 for i in range(y.shape[0]):
                     y[i] = y[i] + 2.0
         for i in range(z.shape[0]):

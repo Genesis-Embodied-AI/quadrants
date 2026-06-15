@@ -1414,32 +1414,22 @@ class ASTTransformer(Builder):
         return True
 
     @staticmethod
-    def _is_branch_call(node: ast.expr) -> tuple[bool, str | None]:
-        """If *node* is ``qd.branch(...)`` return ``(True, name)``; otherwise ``(False, None)``.
+    def _is_branch_call(node: ast.expr) -> bool:
+        """If *node* is ``qd.branch(...)`` return True, else False.
 
-        ``name`` is the value of the optional ``name=`` kwarg (a string literal) or ``None``. The call
-        shape is validated here so misuse raises at the ``with`` site rather than later.
+        The call shape is validated here so misuse raises at the ``with`` site rather than later.
         """
         if not isinstance(node, ast.Call):
-            return False, None
+            return False
         func = node.func
         is_branch = (isinstance(func, ast.Attribute) and func.attr == "branch") or (
             isinstance(func, ast.Name) and func.id == "branch"
         )
         if not is_branch:
-            return False, None
-        if node.args:
-            raise QuadrantsSyntaxError("qd.branch() takes no positional arguments; use qd.branch(name='...') instead")
-        name: str | None = None
-        for kw in node.keywords:
-            if kw.arg != "name":
-                raise QuadrantsSyntaxError(
-                    f"qd.branch() got unexpected keyword argument {kw.arg!r}; only 'name' is supported"
-                )
-            if not (isinstance(kw.value, ast.Constant) and isinstance(kw.value.value, str)):
-                raise QuadrantsSyntaxError("qd.branch(name=...) must be a string literal")
-            name = kw.value.value
-        return True, name
+            return False
+        if node.args or node.keywords:
+            raise QuadrantsSyntaxError("qd.branch() takes no arguments")
+        return True
 
     @staticmethod
     def build_While(ctx: ASTTransformerFuncContext, node: ast.While) -> None:
@@ -1687,9 +1677,8 @@ class ASTTransformer(Builder):
         if ASTTransformer._is_graph_parallel_call(item.context_expr):
             return ASTTransformer._build_graph_parallel_with(ctx, node)
 
-        is_branch, branch_name = ASTTransformer._is_branch_call(item.context_expr)
-        if is_branch:
-            return ASTTransformer._build_branch_with(ctx, node, branch_name)
+        if ASTTransformer._is_branch_call(item.context_expr):
+            return ASTTransformer._build_branch_with(ctx, node)
 
         if not FunctionDefTransformer._is_stream_parallel_with(node, ctx.global_vars):
             raise QuadrantsSyntaxError(
@@ -1796,8 +1785,7 @@ class ASTTransformer(Builder):
             if isinstance(stmt, ast.Pass):
                 continue
             if isinstance(stmt, ast.With) and stmt.items:
-                is_branch, _ = ASTTransformer._is_branch_call(stmt.items[0].context_expr)
-                if is_branch:
+                if ASTTransformer._is_branch_call(stmt.items[0].context_expr):
                     continue
             if isinstance(stmt, ast.If):
                 ASTTransformer._validate_graph_parallel_body(stmt.body)
@@ -1810,12 +1798,12 @@ class ASTTransformer(Builder):
             )
 
     @staticmethod
-    def _build_branch_with(ctx: ASTTransformerFuncContext, node: ast.With, name: str | None) -> None:
+    def _build_branch_with(ctx: ASTTransformerFuncContext, node: ast.With) -> None:
         """Handles ``with qd.branch():`` members of a ``qd.graph_parallel()`` region.
 
         Reuses the stream-parallel tagging: begin_stream_parallel() assigns this branch a fresh
         ``stream_parallel_group_id`` that every for-loop in the body inherits, so the offloaded tasks
-        carry the branch id all the way to the graph builder. ``name`` is currently a label only."""
+        carry the branch id all the way to the graph builder."""
         if not getattr(ctx, "_in_graph_parallel", False):
             raise QuadrantsSyntaxError("qd.branch() can only be used directly inside a qd.graph_parallel() region")
         ctx._in_branch = True

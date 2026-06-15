@@ -381,10 +381,10 @@ def step(...):
         assemble_shared(...)                 # serial: feeds both branches
 
         with qd.graph_parallel():            # fork: branches run concurrently
-            with qd.branch(name="pt"):       # point-triangle contacts
+            with qd.branch():                # point-triangle contacts
                 pt_assemble(...)
                 pt_hessian(...)
-            with qd.branch(name="ee"):       # edge-edge contacts (independent of pt)
+            with qd.branch():                # edge-edge contacts (independent of pt)
                 ee_assemble(...)
                 ee_hessian(...)
         # join: everything below waits for BOTH branches to finish
@@ -396,7 +396,6 @@ def step(...):
 
 - **Fork / join.** Every `qd.branch()` in the region forks from the work that precedes the region. All branches must finish before any work *after* the region begins (the join). On CUDA the join is a single empty graph node depending on every branch's last kernel.
 - **Branches are independent — you guarantee it.** Calls *within* a branch keep their program order, but calls in *different* branches have no ordering. The branches must be data-race free with respect to one another: no branch may read what another writes, and no two branches may write the same memory. Quadrants does not check this; getting it wrong gives nondeterministic results, exactly like `qd.stream_parallel()`.
-- **`name=` is optional** and used only as a label for profiling / graph introspection.
 
 ### Restrictions (enforced at kernel compile time)
 
