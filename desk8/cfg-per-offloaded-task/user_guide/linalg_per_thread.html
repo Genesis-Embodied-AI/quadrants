@@ -27,8 +27,8 @@
   </noscript>
   
   <!-- Loaded before other Sphinx assets -->
-  <link href="../_static/styles/theme.css?digest=0790524f97105ba85085" rel="stylesheet" />
-<link href="../_static/styles/pydata-sphinx-theme.css?digest=0790524f97105ba85085" rel="stylesheet" />
+  <link href="../_static/styles/theme.css?digest=a95f357e85573c9b56d5" rel="stylesheet" />
+<link href="../_static/styles/pydata-sphinx-theme.css?digest=a95f357e85573c9b56d5" rel="stylesheet" />
 
     <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=8f2a1f02" />
     <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
@@ -38,10 +38,10 @@
     <link rel="stylesheet" type="text/css" href="../_static/css/custom.css" />
   
   <!-- So that users can add custom icons -->
-  <script defer src="../_static/scripts/fontawesome.js?digest=0790524f97105ba85085"></script>
+  <script defer src="../_static/scripts/fontawesome.js?digest=a95f357e85573c9b56d5"></script>
   <!-- Pre-loaded scripts that we'll load fully later -->
-  <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=0790524f97105ba85085" />
-<link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=0790524f97105ba85085" />
+  <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5" />
+<link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5" />
 
     <script src="../_static/documentation_options.js?v=baaebd52"></script>
     <script src="../_static/doctools.js?v=9bcbadda"></script>
@@ -424,7 +424,7 @@
                   
   <section class="tex2jax_ignore mathjax_ignore" id="per-thread-linear-algebra">
 <h1>Per-thread linear algebra<a class="headerlink" href="#per-thread-linear-algebra" title="Link to this heading">#</a></h1>
-<p>Small matrix decompositions and linear solvers that run <strong>per thread, in registers, with no cross-thread cooperation</strong> — every thread independently decomposes / solves its own 2×2 .. 12×12 matrix. No shared memory, no syncs, no atomics on shared state, no warp / subgroup primitives. A 1000-element kernel runs 1000 copies of the algorithm in parallel, each on its own data.</p>
+<p>Small matrix decompositions and linear solvers that run <strong>per thread, in registers, with no cross-thread cooperation</strong> — every thread independently decomposes / solves its own 2×2 .. 6×6 matrix. No shared memory, no syncs, no atomics on shared state, no warp / subgroup primitives. A 1000-element kernel runs 1000 copies of the algorithm in parallel, each on its own data.</p>
 <p>This is a different category from the element-wise / arithmetic matrix operations covered in <a class="reference internal" href="matrix_vector_per_thread.html"><span class="std std-doc">matrix_vector_per_thread</span></a> (also per-thread, but closed-form rather than iterative), and from the cross-thread / sparse linear algebra under <code class="docutils literal notranslate"><span class="pre">qd.linalg.*</span></code> (CG, sparse direct solvers — covered separately).</p>
 <p>Each entry point here implements an <em>iterative or multi-step numerical algorithm</em> (Jacobi sweeps, Gauss elimination, Givens rotations) rather than a single closed-form formula.</p>
 <p>All ops live at the top level (<code class="docutils literal notranslate"><span class="pre">qd.svd</span></code>, <code class="docutils literal notranslate"><span class="pre">qd.sym_eig</span></code>, <code class="docutils literal notranslate"><span class="pre">qd.make_spd</span></code>, <code class="docutils literal notranslate"><span class="pre">qd.polar_decompose</span></code>, <code class="docutils literal notranslate"><span class="pre">qd.eig</span></code>, <code class="docutils literal notranslate"><span class="pre">qd.solve</span></code>) and are intended to be called from inside a <code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel</span></code> or <code class="docutils literal notranslate"><span class="pre">&#64;qd.func</span></code>.</p>
@@ -446,12 +446,12 @@
 </tr>
 <tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">qd.sym_eig(A)</span></code></p></td>
 <td><p>symmetric real matrix</p></td>
-<td><p>2×2 .. 12×12</p></td>
+<td><p>2×2 .. 6×6</p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">(eigenvalues,</span> <span class="pre">eigenvectors)</span></code> (real)</p></td>
 </tr>
 <tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">qd.make_spd(A)</span></code></p></td>
 <td><p>symmetric real matrix</p></td>
-<td><p>4×4 .. 12×12</p></td>
+<td><p>4×4 .. 6×6</p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">M</span></code> — the closest positive semi-definite matrix to <code class="docutils literal notranslate"><span class="pre">A</span></code></p></td>
 </tr>
 <tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">qd.polar_decompose(A)</span></code></p></td>
@@ -502,19 +502,17 @@
 <li><p><code class="docutils literal notranslate"><span class="pre">eigenvectors</span></code>: a <code class="docutils literal notranslate"><span class="pre">Matrix(n,</span> <span class="pre">n)</span></code> whose columns are the corresponding orthonormal eigenvectors.</p></li>
 </ul>
 <p>Eigenvalues come back sorted <strong>ascending</strong> (<code class="docutils literal notranslate"><span class="pre">eigvals[0]</span> <span class="pre">&lt;=</span> <span class="pre">eigvals[1]</span> <span class="pre">&lt;=</span> <span class="pre">...</span></code>) for every shape, with column <code class="docutils literal notranslate"><span class="pre">i</span></code> of <code class="docutils literal notranslate"><span class="pre">eigenvectors</span></code> being the eigenvector for <code class="docutils literal notranslate"><span class="pre">eigvals[i]</span></code>. This matches NumPy / LAPACK’s <code class="docutils literal notranslate"><span class="pre">eigh</span></code> (note that <code class="docutils literal notranslate"><span class="pre">qd.svd</span></code> sorts σ <em>descending</em>, also matching its NumPy / LAPACK counterpart — the cross-op disagreement is the standard convention, not an inconsistency).</p>
-<p>Three implementations dispatch by size:</p>
+<p>A single implementation handles every supported size:</p>
 <ul class="simple">
-<li><p><strong>2×2</strong> — closed-form via the trace / determinant identity.</p></li>
-<li><p><strong>3×3</strong> — closed-form Cardano method (Eigen3 <code class="docutils literal notranslate"><span class="pre">computeDirect</span></code>).</p></li>
-<li><p><strong>4×4 .. 12×12</strong> — cyclic Jacobi: 12 sweeps of Givens rotations zeroing every off-diagonal <code class="docutils literal notranslate"><span class="pre">(p,</span> <span class="pre">q)</span></code> pair, with <code class="docutils literal notranslate"><span class="pre">Q</span> <span class="pre">:=</span> <span class="pre">Q</span> <span class="pre">·</span> <span class="pre">J</span></code> accumulated as eigenvectors. ~6 digits of accuracy in <code class="docutils literal notranslate"><span class="pre">f32</span></code>, ~12 digits in <code class="docutils literal notranslate"><span class="pre">f64</span></code>.</p></li>
+<li><p><strong>2×2 .. 6×6</strong> — cyclic Jacobi: 12 sweeps of Givens rotations zeroing every off-diagonal <code class="docutils literal notranslate"><span class="pre">(p,</span> <span class="pre">q)</span></code> pair, with <code class="docutils literal notranslate"><span class="pre">Q</span> <span class="pre">:=</span> <span class="pre">Q</span> <span class="pre">·</span> <span class="pre">J</span></code> accumulated as eigenvectors. ~6 digits of accuracy in <code class="docutils literal notranslate"><span class="pre">f32</span></code>, ~12 digits in <code class="docutils literal notranslate"><span class="pre">f64</span></code>.</p></li>
 </ul>
-<p>Calling at <code class="docutils literal notranslate"><span class="pre">N</span> <span class="pre">&gt;=</span> <span class="pre">13</span></code> raises (<code class="docutils literal notranslate"><span class="pre">&quot;Symmetric</span> <span class="pre">eigen</span> <span class="pre">solver</span> <span class="pre">currently</span> <span class="pre">supports</span> <span class="pre">sizes</span> <span class="pre">up</span> <span class="pre">to</span> <span class="pre">12×12.&quot;</span></code>).</p>
+<p>Calling at <code class="docutils literal notranslate"><span class="pre">N</span> <span class="pre">&gt;=</span> <span class="pre">7</span></code> raises (<code class="docutils literal notranslate"><span class="pre">&quot;Symmetric</span> <span class="pre">eigen</span> <span class="pre">solver</span> <span class="pre">currently</span> <span class="pre">supports</span> <span class="pre">sizes</span> <span class="pre">up</span> <span class="pre">to</span> <span class="pre">6×6.&quot;</span></code>).</p>
 <p><code class="docutils literal notranslate"><span class="pre">A</span></code> is <em>assumed</em> symmetric; the implementation does not symmetrize first. If your matrix is only approximately symmetric (e.g. accumulated floating-point error), explicitly compute <code class="docutils literal notranslate"><span class="pre">(A</span> <span class="pre">+</span> <span class="pre">A.transpose())</span> <span class="pre">*</span> <span class="pre">0.5</span></code> before calling.</p>
 </section>
 <section id="qd-make-spd-a-dt-none">
 <h3><code class="docutils literal notranslate"><span class="pre">qd.make_spd(A,</span> <span class="pre">dt=None)</span></code><a class="headerlink" href="#qd-make-spd-a-dt-none" title="Link to this heading">#</a></h3>
 <p>Project a symmetric matrix <code class="docutils literal notranslate"><span class="pre">A</span></code> to the closest positive semi-definite matrix in the Frobenius-norm sense. Implemented as <code class="docutils literal notranslate"><span class="pre">Q</span> <span class="pre">·</span> <span class="pre">diag(max(λ,</span> <span class="pre">0))</span> <span class="pre">·</span> <span class="pre">Qᵀ</span></code> where <code class="docutils literal notranslate"><span class="pre">A</span> <span class="pre">=</span> <span class="pre">Q</span> <span class="pre">·</span> <span class="pre">diag(λ)</span> <span class="pre">·</span> <span class="pre">Qᵀ</span></code> is the symmetric eigendecomposition computed by <code class="docutils literal notranslate"><span class="pre">qd.sym_eig</span></code>.</p>
-<p>Available for shapes 4×4 .. 12×12 (it shares the cyclic-Jacobi path with <code class="docutils literal notranslate"><span class="pre">qd.sym_eig</span></code>; for 2×2 / 3×3 you can write the same projection by hand using <code class="docutils literal notranslate"><span class="pre">qd.sym_eig</span></code> directly — see the example below).</p>
+<p>Available for shapes 4×4 .. 6×6 (it shares the cyclic-Jacobi path with <code class="docutils literal notranslate"><span class="pre">qd.sym_eig</span></code>; for 2×2 / 3×3 you can write the same projection by hand using <code class="docutils literal notranslate"><span class="pre">qd.sym_eig</span></code> directly — see the example below).</p>
 <p>Use cases:</p>
 <ul class="simple">
 <li><p>Projecting an indefinite contact / element Hessian to its closest SPD approximation before assembly (qipc-style).</p></li>
@@ -570,20 +568,20 @@
 </section>
 <section id="project-to-symmetric-positive-semi-definite">
 <h3>Project to symmetric positive semi-definite<a class="headerlink" href="#project-to-symmetric-positive-semi-definite" title="Link to this heading">#</a></h3>
-<p>For shapes 4×4 .. 12×12 (a typical qipc 12×12 contact Hessian), use <code class="docutils literal notranslate"><span class="pre">qd.make_spd</span></code> directly:</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">mat12</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">matrix</span><span class="p">(</span><span class="mi">12</span><span class="p">,</span> <span class="mi">12</span><span class="p">,</span> <span class="n">qd</span><span class="o">.</span><span class="n">f64</span><span class="p">)</span>
+<p>For shapes 4×4 .. 6×6 (e.g. a small element Hessian block), use <code class="docutils literal notranslate"><span class="pre">qd.make_spd</span></code> directly:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">mat6</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">matrix</span><span class="p">(</span><span class="mi">6</span><span class="p">,</span> <span class="mi">6</span><span class="p">,</span> <span class="n">qd</span><span class="o">.</span><span class="n">f64</span><span class="p">)</span>
 
 
 <span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">project_each</span><span class="p">(</span>
-    <span class="n">H_field</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">NDArray</span><span class="p">[</span><span class="n">mat12</span><span class="p">,</span> <span class="mi">1</span><span class="p">],</span>
-    <span class="n">H_spd_field</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">NDArray</span><span class="p">[</span><span class="n">mat12</span><span class="p">,</span> <span class="mi">1</span><span class="p">],</span>
+    <span class="n">H_field</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">NDArray</span><span class="p">[</span><span class="n">mat6</span><span class="p">,</span> <span class="mi">1</span><span class="p">],</span>
+    <span class="n">H_spd_field</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">NDArray</span><span class="p">[</span><span class="n">mat6</span><span class="p">,</span> <span class="mi">1</span><span class="p">],</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
     <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">H_field</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>
         <span class="n">H_spd_field</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">make_spd</span><span class="p">(</span><span class="n">H_field</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="n">dt</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">f64</span><span class="p">)</span>
 </pre></div>
 </div>
-<p>Each thread eigen-decomposes its own 12×12 Hessian, clamps negative eigenvalues to zero, and reconstructs.</p>
+<p>Each thread eigen-decomposes its own 6×6 Hessian, clamps negative eigenvalues to zero, and reconstructs.</p>
 <p>For 2×2 / 3×3 there is no <code class="docutils literal notranslate"><span class="pre">qd.make_spd</span></code> entry point (it shares the cyclic-Jacobi path that only kicks in at N≥4). Inline the projection using <code class="docutils literal notranslate"><span class="pre">qd.sym_eig</span></code> directly:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">func</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">make_spd_3x3</span><span class="p">(</span><span class="n">H</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">matrix</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="n">qd</span><span class="o">.</span><span class="n">f64</span><span class="p">))</span> <span class="o">-&gt;</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">matrix</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="n">qd</span><span class="o">.</span><span class="n">f64</span><span class="p">):</span>
@@ -626,12 +624,11 @@
 <ul class="simple">
 <li><p><strong>Compile time.</strong></p>
 <ul>
-<li><p><strong>Closed-form ops</strong> (<code class="docutils literal notranslate"><span class="pre">qd.svd</span></code>, <code class="docutils literal notranslate"><span class="pre">qd.sym_eig</span></code> 2×2/3×3, <code class="docutils literal notranslate"><span class="pre">qd.polar_decompose</span></code>, <code class="docutils literal notranslate"><span class="pre">qd.eig</span></code>, <code class="docutils literal notranslate"><span class="pre">qd.solve</span></code>) — each call is unrolled per thread into a moderately large block of straight-line code; compile time is generally fine at these shapes.</p></li>
-<li><p><strong>Cyclic Jacobi</strong> (<code class="docutils literal notranslate"><span class="pre">qd.sym_eig</span></code> ≥4×4, <code class="docutils literal notranslate"><span class="pre">qd.make_spd</span></code>) — the per-pair Givens step is unrolled but the outer sweep loop is a runtime <code class="docutils literal notranslate"><span class="pre">range</span></code>, so compile time is roughly proportional to <code class="docutils literal notranslate"><span class="pre">N²</span></code> (number of <code class="docutils literal notranslate"><span class="pre">(p,</span> <span class="pre">q)</span></code> pairs per sweep) rather than <code class="docutils literal notranslate"><span class="pre">N²</span> <span class="pre">·</span> <span class="pre">MAX_SWEEPS</span></code>. Concrete numbers on CUDA + LLVM 22.1: ~3 s at N=4, ~30 s at N=6, ~3 min at N=9, ~2 min at N=12 (yes, faster than N=9 — the per-pair body is dominated by <code class="docutils literal notranslate"><span class="pre">if</span> <span class="pre">static(p</span> <span class="pre">&lt;</span> <span class="pre">q):</span></code> filtering).</p></li>
+<li><p><strong>Closed-form ops</strong> (<code class="docutils literal notranslate"><span class="pre">qd.svd</span></code>, <code class="docutils literal notranslate"><span class="pre">qd.polar_decompose</span></code>, <code class="docutils literal notranslate"><span class="pre">qd.eig</span></code>, <code class="docutils literal notranslate"><span class="pre">qd.solve</span></code>) — each call is unrolled per thread into a moderately large block of straight-line code; compile time is generally fine at these shapes.</p></li>
+<li><p><strong>Cyclic Jacobi</strong> (<code class="docutils literal notranslate"><span class="pre">qd.sym_eig</span></code>, <code class="docutils literal notranslate"><span class="pre">qd.make_spd</span></code>) — compile times for a single <code class="docutils literal notranslate"><span class="pre">qd.sym_eig</span></code> call on CUDA + LLVM 22.1 (<code class="docutils literal notranslate"><span class="pre">QD_OFFLINE_CACHE=0</span></code>): ~11 s at N=4, ~4 s at N=6. Sizes above 6×6 are intentionally not supported to keep compile time reasonable (it grows steeply with N: ~26 s at N=9, ~125 s at N=12).</p></li>
 </ul>
 </li>
-<li><p><strong>Runtime cost.</strong> Cyclic Jacobi at N=12 with <code class="docutils literal notranslate"><span class="pre">MAX_SWEEPS=12</span></code> does roughly <code class="docutils literal notranslate"><span class="pre">12</span> <span class="pre">·</span> <span class="pre">66</span> <span class="pre">·</span> <span class="pre">12</span> <span class="pre">≈</span> <span class="pre">9500</span></code> per-thread arithmetic ops — fast on any modern GPU, but if you’re calling it inside a hot kernel for a million elements that’s still ~10 GFLOP-equivalent. For larger matrices use a different algorithm (or call quadrants <code class="docutils literal notranslate"><span class="pre">linalg.*</span></code> for a sparse-aware path).</p></li>
-<li><p><strong>Backend portability.</strong> All ops compile cleanly on CUDA, AMDGPU, Vulkan, and Metal — they are pure register arithmetic with no SIMT primitives, so there is no codegen split. The <code class="docutils literal notranslate"><span class="pre">qd.sym_eig</span></code> ≥4×4 / <code class="docutils literal notranslate"><span class="pre">qd.make_spd</span></code> paths have been verified at N ∈ {4,5,6,9,12} × {f32, f64} × five symmetric-matrix factories on CUDA + Vulkan + AMDGPU; Metal coverage is via the same parametrized tests.</p></li>
+<li><p><strong>Runtime cost.</strong> Cyclic Jacobi at N=6 with <code class="docutils literal notranslate"><span class="pre">MAX_SWEEPS=12</span></code> does roughly <code class="docutils literal notranslate"><span class="pre">12</span> <span class="pre">·</span> <span class="pre">15</span> <span class="pre">·</span> <span class="pre">6</span> <span class="pre">≈</span> <span class="pre">1080</span></code> per-thread arithmetic ops — fast on any modern GPU, but if you’re calling it inside a hot kernel for a million elements that’s still ~1 GFLOP-equivalent. For larger matrices use a different algorithm (or call quadrants <code class="docutils literal notranslate"><span class="pre">linalg.*</span></code> for a sparse-aware path).</p></li>
 </ul>
 </section>
 <section id="related">
@@ -736,8 +733,8 @@
   </div>
   
   <!-- Scripts loaded after <body> so the DOM is not blocked -->
-  <script defer src="../_static/scripts/bootstrap.js?digest=0790524f97105ba85085"></script>
-<script defer src="../_static/scripts/pydata-sphinx-theme.js?digest=0790524f97105ba85085"></script>
+  <script defer src="../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5"></script>
+<script defer src="../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5"></script>
 
   <footer class="bd-footer">
 <div class="bd-footer__inner bd-page-width">
@@ -771,7 +768,7 @@
         <div class="footer-item">
 <p class="theme-version">
   <!-- # L10n: Setting the PST URL as an argument as this does not need to be localized -->
-  Built with the <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a> 0.18.0.
+  Built with the <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a> 0.19.0.
 </p></div>
       
     </div>
