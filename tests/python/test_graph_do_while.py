@@ -173,11 +173,9 @@ def test_graph_do_while_multiple_loops():
 def test_graph_do_while_swap_counter_ndarray():
     """Swapping the counter ndarray between calls should work correctly.
 
-    Creates one counter c1, runs the kernel with counter=3, verifies x is all
-    3s. Then creates a new ndarray c2 (different device pointer), runs the same
-    kernel with counter=7, verifies x is all 7s. Confirms cache size stays 1 --
-    the graph wasn't rebuilt, it just updated the indirection slot with c2's
-    pointer.
+    Creates one counter c1, runs the kernel with counter=3, verifies x is all 3s. Then creates a new ndarray c2
+    (different device pointer), runs the same kernel with counter=7, verifies x is all 7s. Confirms cache size stays 1
+    -- the graph wasn't rebuilt, it just updated the indirection slot with c2's pointer.
     """
     N = 32
 
@@ -218,10 +216,9 @@ def test_graph_do_while_swap_counter_ndarray():
 def test_graph_do_while_alternate_counter_ndarrays():
     """Alternating between two counter ndarrays should work correctly.
 
-    Creates c1 and c2 upfront, then alternates between them for 3 rounds (6
-    kernel calls). Each call uses a different iteration count (count and
-    count+10). Confirms the slot update works back and forth, not just as a
-    one-time swap. Cache size is checked once at the end -- still 1.
+    Creates c1 and c2 upfront, then alternates between them for 3 rounds (6 kernel calls). Each call uses a different
+    iteration count (count and count+10). Confirms the slot update works back and forth, not just as a one-time swap.
+    Cache size is checked once at the end -- still 1.
     """
     N = 16
 
@@ -359,6 +356,100 @@ def test_graph_do_while_fastcache_restores_arg(tmp_path: pathlib.Path):
         )
         args_json = args_obj.model_dump_json()
         cmd_line = [sys.executable, __file__, _fastcache_do_while_child.__name__, args_json]
+        proc = subprocess.run(cmd_line, capture_output=True, text=True, env=env)
+        if proc.returncode != RET_SUCCESS:
+            print(" ".join(cmd_line))
+            print(proc.stdout)
+            print("-" * 100)
+            print(proc.stderr)
+        assert TEST_RAN in proc.stdout
+        assert proc.returncode == RET_SUCCESS
+
+
+@qd.kernel(graph=True, fastcache=True)
+def _fastcache_nested_do_while_kernel(
+    x: qd.types.ndarray(qd.i32, ndim=1),
+    outer: qd.types.ndarray(qd.i32, ndim=0),
+    inner: qd.types.ndarray(qd.i32, ndim=0),
+    inner_start: qd.types.ndarray(qd.i32, ndim=0),
+):
+    while qd.graph_do_while(outer):
+        for _ in range(1):
+            inner[()] = inner_start[()]
+        while qd.graph_do_while(inner):
+            for i in range(x.shape[0]):
+                x[i] = x[i] + 1
+            for _ in range(1):
+                inner[()] = inner[()] - 1
+        for _ in range(1):
+            outer[()] = outer[()] - 1
+
+
+class _FastcacheNestedDoWhileArgs(pydantic.BaseModel):
+    arch: str
+    offline_cache_file_path: str
+    outer_iters: int
+    inner_iters: int
+    expect_loaded_from_fastcache: bool
+
+
+def _fastcache_nested_do_while_child(args: list[str]) -> None:
+    args_obj = _FastcacheNestedDoWhileArgs.model_validate_json(args[0])
+    qd.init(
+        arch=getattr(qd, args_obj.arch),
+        offline_cache=True,
+        offline_cache_file_path=args_obj.offline_cache_file_path,
+        src_ll_cache=True,
+    )
+
+    N = 16
+    x = qd.ndarray(qd.i32, shape=(N,))
+    outer = qd.ndarray(qd.i32, shape=())
+    inner = qd.ndarray(qd.i32, shape=())
+    inner_start = qd.ndarray(qd.i32, shape=())
+    x.from_numpy(np.zeros(N, dtype=np.int32))
+    outer.from_numpy(np.array(args_obj.outer_iters, dtype=np.int32))
+    inner.from_numpy(np.array(args_obj.inner_iters, dtype=np.int32))
+    inner_start.from_numpy(np.array(args_obj.inner_iters, dtype=np.int32))
+
+    _fastcache_nested_do_while_kernel(x, outer, inner, inner_start)
+
+    primal = _fastcache_nested_do_while_kernel._primal
+    cond_args = [lvl.cond_arg_name for lvl in primal.graph_do_while_levels]
+    parent_ids = [lvl.parent_id for lvl in primal.graph_do_while_levels]
+    assert cond_args == ["outer", "inner"], f"expected nested levels [outer, inner], got {cond_args!r}"
+    assert parent_ids == [-1, 0], f"expected parent ids [-1, 0], got {parent_ids!r}"
+    assert primal.graph_do_while_arg == "outer", f"legacy alias should be 'outer', got {primal.graph_do_while_arg!r}"
+    assert primal.src_ll_cache_observations.cache_loaded == args_obj.expect_loaded_from_fastcache
+
+    expected = args_obj.outer_iters * args_obj.inner_iters
+    np.testing.assert_array_equal(x.to_numpy(), np.full(N, expected))
+    assert outer.to_numpy() == 0
+    assert inner.to_numpy() == 0
+
+    print(TEST_RAN)
+    sys.exit(RET_SUCCESS)
+
+
+@test_utils.test()
+def test_graph_do_while_fastcache_restores_nested_levels(tmp_path: pathlib.Path):
+    """After fastcache restore in a fresh process, a nested graph_do_while kernel's multi-level table must be rebuilt
+    from cache (AST transform is skipped on restore). Covers the multi-element graph_do_while_levels round-trip."""
+    assert qd.lang is not None
+    arch = qd.lang.impl.current_cfg().arch.name
+    env = dict(os.environ)
+    env["PYTHONPATH"] = "."
+
+    for (outer_iters, inner_iters), expect_loaded in [((3, 4), False), ((2, 5), True)]:
+        args_obj = _FastcacheNestedDoWhileArgs(
+            arch=arch,
+            offline_cache_file_path=str(tmp_path / "cache"),
+            outer_iters=outer_iters,
+            inner_iters=inner_iters,
+            expect_loaded_from_fastcache=expect_loaded,
+        )
+        args_json = args_obj.model_dump_json()
+        cmd_line = [sys.executable, __file__, _fastcache_nested_do_while_child.__name__, args_json]
         proc = subprocess.run(cmd_line, capture_output=True, text=True, env=env)
         if proc.returncode != RET_SUCCESS:
             print(" ".join(cmd_line))
@@ -527,8 +618,8 @@ def test_graph_do_while_siblings():
 
 @test_utils.test()
 def test_graph_do_while_mixed_with_top_level_for_loops():
-    """Mix plain top-level for-loops (run once) with a graph_do_while loop. This is the headline
-    case: a for-loop before and after the loop, both executed exactly once."""
+    """Mix plain top-level for-loops (run once) with a graph_do_while loop. This is the headline case: a for-loop before
+    and after the loop, both executed exactly once."""
     N = 20
     ITERS = 5
 
@@ -709,6 +800,25 @@ def test_graph_do_while_bare_statement_raises():
     c = qd.ndarray(qd.i32, shape=())
     c.from_numpy(np.array(1, dtype=np.int32))
     with pytest.raises(qd.QuadrantsSyntaxError, match="may contain only for-loops"):
+        k(x, c)
+
+
+@test_utils.test()
+def test_graph_do_while_bare_statement_in_nested_body_raises():
+    """A bare (non-for) statement inside a nested graph_do_while body (not the kernel top level) must raise, exercising
+    the recursive is_kernel_top=False validation path and its distinct 'a qd.graph_do_while() body' error message."""
+
+    @qd.kernel(graph=True)
+    def k(x: qd.types.ndarray(qd.i32, ndim=1), c: qd.types.ndarray(qd.i32, ndim=0)):
+        while qd.graph_do_while(c):
+            x[0] = 1
+            for _ in range(1):
+                c[()] = c[()] - 1
+
+    x = qd.ndarray(qd.i32, shape=(4,))
+    c = qd.ndarray(qd.i32, shape=())
+    c.from_numpy(np.array(1, dtype=np.int32))
+    with pytest.raises(qd.QuadrantsSyntaxError, match=r"qd\.graph_do_while\(\) body may contain only"):
         k(x, c)
 
 
