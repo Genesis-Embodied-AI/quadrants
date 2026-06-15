@@ -337,18 +337,11 @@ def test_graph_parallel_nested_region_raises():
 
 
 # --- static-loop-generated branches (qd.static for-loop inside qd.graph_parallel) ---------------------
-# These document the desired behaviour for the "generate branches from a compile-time sequence" pattern.
-# They are xfail until the validator learns to recurse into `for ... in qd.static(...)` loops; the current
-# validator rejects any For node in a region body with QuadrantsSyntaxError. Once implemented, remove the
-# xfail markers (strict=True turns an unexpected pass into a failure so we cannot forget).
-_STATIC_LOOP_XFAIL = dict(
-    reason="static for-loop branches inside qd.graph_parallel not yet supported",
-    raises=qd.QuadrantsSyntaxError,
-    strict=True,
-)
+# The validator recurses into `for ... in qd.static(...)` loops, which unroll at trace time into literal
+# `with qd.branch():` blocks (each with a fresh stream_parallel_group_id). This lets branches be generated
+# from a compile-time sequence. Runtime for-loops stay rejected (see test_..._runtime_loop_raises).
 
 
-@pytest.mark.xfail(**_STATIC_LOOP_XFAIL)
 @test_utils.test()
 def test_graph_parallel_static_loop_two_branches():
     """`for b in qd.static(range(NB))` unrolls into NB literal branches, each writing a disjoint row."""
@@ -376,7 +369,6 @@ def test_graph_parallel_static_loop_two_branches():
     np.testing.assert_allclose(out[1], 2.0)
 
 
-@pytest.mark.xfail(**_STATIC_LOOP_XFAIL)
 @test_utils.test()
 def test_graph_parallel_static_loop_over_funcs():
     """The motivating pattern: a @qd.data_oriented class iterates a static list of @qd.func members,
@@ -415,7 +407,6 @@ def test_graph_parallel_static_loop_over_funcs():
     np.testing.assert_array_equal(d.b.to_numpy(), np.full(n, 10, dtype=np.int32))
 
 
-@pytest.mark.xfail(**_STATIC_LOOP_XFAIL)
 @test_utils.test()
 def test_graph_parallel_static_loop_single_branch():
     """A static loop of one iteration is a single-branch region: a plain chain, no join node."""
@@ -440,7 +431,6 @@ def test_graph_parallel_static_loop_single_branch():
     np.testing.assert_allclose(x.to_numpy(), 5.0)
 
 
-@pytest.mark.xfail(**_STATIC_LOOP_XFAIL)
 @test_utils.test()
 def test_graph_parallel_static_loop_empty_range():
     """An empty static range produces zero branches: the region is a no-op (consistent with wrapping the
@@ -464,7 +454,6 @@ def test_graph_parallel_static_loop_empty_range():
     np.testing.assert_allclose(x.to_numpy(), 5.0)  # region did nothing; only the serial +5 applied
 
 
-@pytest.mark.xfail(**_STATIC_LOOP_XFAIL)
 @test_utils.test()
 def test_graph_parallel_static_loop_nested():
     """Nested static loops fan out to N*M branches, each writing a disjoint row."""
@@ -494,7 +483,6 @@ def test_graph_parallel_static_loop_nested():
         np.testing.assert_allclose(out[r], float(r + 1))
 
 
-@pytest.mark.xfail(**_STATIC_LOOP_XFAIL)
 @test_utils.test()
 def test_graph_parallel_static_loop_mixed_with_static_if():
     """A static branch loop and an `if qd.static(...)` optional branch coexist in one region."""
@@ -527,3 +515,37 @@ def test_graph_parallel_static_loop_mixed_with_static_if():
     np.testing.assert_allclose(out[0], 1.0)
     np.testing.assert_allclose(out[1], 2.0)
     np.testing.assert_allclose(y.to_numpy(), 7.0)
+
+
+@test_utils.test()
+def test_graph_parallel_runtime_loop_raises():
+    """A *runtime* for-loop in a region body stays rejected: only `qd.static(...)` loops unroll to literal
+    branches; a runtime range would nest the branch tagging inside a parallel range_for (malformed)."""
+
+    @qd.kernel(graph=True)
+    def k(x: qd.types.ndarray(qd.f32, ndim=2), nb: qd.i32):
+        with qd.graph_parallel():
+            for b in range(nb):
+                with qd.branch():
+                    for i in range(x.shape[1]):
+                        x[b, i] = x[b, i] + 1.0
+
+    x = qd.ndarray(qd.f32, shape=(2, 16))
+    with pytest.raises(qd.QuadrantsSyntaxError, match="may contain only .with qd.branch"):
+        k(x, 2)
+
+
+@test_utils.test()
+def test_branch_takes_no_arguments():
+    """qd.branch() no longer accepts name= (the kwarg was parsed then dropped). Any argument raises."""
+
+    @qd.kernel(graph=True)
+    def k(x: qd.types.ndarray(qd.f32, ndim=1)):
+        with qd.graph_parallel():
+            with qd.branch(name="bx"):
+                for i in range(x.shape[0]):
+                    x[i] = x[i] + 1.0
+
+    x = qd.ndarray(qd.f32, shape=(16,))
+    with pytest.raises(qd.QuadrantsSyntaxError, match="qd.branch.. takes no arguments"):
+        k(x)

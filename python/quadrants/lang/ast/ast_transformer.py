@@ -1765,7 +1765,7 @@ class ASTTransformer(Builder):
             raise QuadrantsSyntaxError("qd.graph_parallel() regions cannot be nested")
         if getattr(ctx, "_in_branch", False):
             raise QuadrantsSyntaxError("qd.graph_parallel() cannot appear inside a qd.branch() body")
-        ASTTransformer._validate_graph_parallel_body(node.body)
+        ASTTransformer._validate_graph_parallel_body(ctx, node.body)
         ctx._in_graph_parallel = True
         try:
             build_stmts(ctx, node.body)
@@ -1774,11 +1774,19 @@ class ASTTransformer(Builder):
         return None
 
     @staticmethod
-    def _validate_graph_parallel_body(stmts: list[ast.stmt]) -> None:
+    def _validate_graph_parallel_body(ctx: ASTTransformerFuncContext, stmts: list[ast.stmt]) -> None:
         """A qd.graph_parallel() region body may contain only `with qd.branch():` blocks, optionally
         wrapped in compile-time `if qd.static(...)` branches (the optional-branch pattern, e.g. qipc's
-        ENABLE_EE). Docstrings / coverage probes / `pass` are allowed. Anything else (a bare for-loop,
-        assignment, etc.) is a serial task that would silently fall outside any branch, so reject it."""
+        ENABLE_EE) or `for ... in qd.static(...)` loops (generate one branch per element of a compile-time
+        sequence). Docstrings / coverage probes / `pass` are allowed. Anything else (a runtime for-loop, a
+        bare assignment, etc.) is a serial task that would silently fall outside any branch, so reject it.
+
+        The `for` case is restricted to `qd.static(...)` loops on purpose: a static loop is unrolled at
+        trace time into its body repeated, so it lowers to literal `with qd.branch():` blocks (each gets a
+        fresh stream_parallel_group_id). A *runtime* for-loop would instead trace a single parallel
+        range_for with the branch tagging nested inside it -- malformed (silently serial or an offload
+        crash). Staticness is checked with `get_decorator` (the same resolution `build_For` uses) at every
+        nesting level, so a runtime loop nested under a static one is still rejected."""
         for i, stmt in enumerate(stmts):
             if FunctionDefTransformer._is_docstring(stmt, i) or FunctionDefTransformer._is_coverage_probe(stmt):
                 continue
@@ -1788,13 +1796,16 @@ class ASTTransformer(Builder):
                 if ASTTransformer._is_branch_call(stmt.items[0].context_expr):
                     continue
             if isinstance(stmt, ast.If):
-                ASTTransformer._validate_graph_parallel_body(stmt.body)
-                ASTTransformer._validate_graph_parallel_body(stmt.orelse)
+                ASTTransformer._validate_graph_parallel_body(ctx, stmt.body)
+                ASTTransformer._validate_graph_parallel_body(ctx, stmt.orelse)
+                continue
+            if isinstance(stmt, ast.For) and not stmt.orelse and get_decorator(ctx, stmt.iter) == "static":
+                ASTTransformer._validate_graph_parallel_body(ctx, stmt.body)
                 continue
             raise QuadrantsSyntaxError(
                 "A qd.graph_parallel() region may contain only 'with qd.branch():' blocks (optionally "
-                "inside 'if qd.static(...)'). Move other work outside the region. "
-                f"[offending stmt {i}: {type(stmt).__name__}]"
+                "inside 'if qd.static(...)' or 'for ... in qd.static(...)'). Move other work outside the "
+                f"region. [offending stmt {i}: {type(stmt).__name__}]"
             )
 
     @staticmethod
