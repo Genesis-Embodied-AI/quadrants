@@ -796,9 +796,10 @@ def test_checkpoint_yield_on_data_oriented_member_metadata():
     s.second_flag.fill(0)
     s.step()
 
-    # `Stepper.step` is the @qd.data_oriented indirection wrapper; `.fn` is the original
-    # @qd.kernel callable and `.fn._primal` is the Kernel that records the metadata.
-    primal = Stepper.step.fn._primal
+    # `Stepper.step` is the @qd.data_oriented indirection wrapper; functools.update_wrapper copies the
+    # inner @qd.kernel callable's __dict__ (including `_primal`) onto it, so the Kernel that records the
+    # metadata is reachable directly as `Stepper.step._primal`.
+    primal = Stepper.step._primal
     assert primal.checkpoint_yield_on_args == [None, "self.first_flag", "self.second_flag"]
 
 
