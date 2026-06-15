@@ -15,7 +15,7 @@ namespace {
 // Collect the top-level offloaded tasks of |root| iff |root| is an already-offloaded kernel body, i.e. a Block
 // whose statements are all OffloadedStmt. Returns an empty vector otherwise (pre-offload IR, function bodies,
 // non-Block roots). This is what lets the caller tell "post-offload" (run per-task cfg) from "pre-offload /
-// other" (ditch cfg, under cfg_optimization_per_task), since "an offloaded task" only exists post-offload.
+// other" (ditch cfg), since "an offloaded task" only exists post-offload.
 std::vector<OffloadedStmt *> collect_offloaded_tasks(IRNode *root) {
   std::vector<OffloadedStmt *> tasks;
   auto *block = root->cast<Block>();
@@ -100,7 +100,7 @@ bool cfg_optimization(const CompileConfig &config,
   // is an optimization, not a correctness pass, so dropping it pre-offload is safe; the only thing lost is
   // cross-task forwarding/DSE on the monolithic IR, which is invalid across separate device launches anyway.
   // QD_DUMP_CFG forces the whole-kernel path so the full graph can still be dumped for debugging.
-  if (config.cfg_optimization_per_task && !dump_cfg) {
+  if (!dump_cfg) {
     auto tasks = collect_offloaded_tasks(root);
     if (!tasks.empty()) {
       // Post-offload: per-task store-to-load forwarding + dead-store elimination (skipped for the real-matrix

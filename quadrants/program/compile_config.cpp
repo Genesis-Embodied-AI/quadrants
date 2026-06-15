@@ -21,7 +21,6 @@ CompileConfig::CompileConfig() {
   max_vector_width = 8;
   debug = false;
   cfg_optimization = true;
-  cfg_optimization_per_task = true;
   check_out_of_bound = false;
   serial_schedule = false;
   simplify_before_lower_access = true;
