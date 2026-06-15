@@ -75,7 +75,6 @@ graph
 streams
 perf_dispatch
 init_options
-optimization_passes
 ```
 
 ```{toctree}
@@ -97,6 +96,14 @@ python_backend
 debug
 quirks
 troubleshooting
+```
+
+```{toctree}
+:caption: Advanced
+:maxdepth: 1
+:titlesonly:
+
+optimization_passes
 ```
 
 ```{toctree}
