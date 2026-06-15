@@ -128,6 +128,45 @@ if(QD_WITH_LLVM)
         message(FATAL_ERROR "LLVM version < 10 is not supported")
     endif()
     message(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")
+
+    # The prebuilt Windows LLVM (quadrants-sdk-builds) bakes an absolute path to the DIA SDK
+    # diaguids.lib of the machine it was built on into LLVMDebugInfoPDB's link interface, e.g.
+    #   C:/Program Files/Microsoft Visual Studio/2022/Enterprise/DIA SDK/lib/amd64/diaguids.lib
+    # Newer GitHub runner images (e.g. windows-2025-vs2026, shipping VS 2026 Enterprise under
+    # .../Microsoft Visual Studio/18/Enterprise) no longer have that path, which breaks linking
+    # with LNK1181. Re-point the reference to a diaguids.lib that exists on this machine.
+    if(WIN32 AND TARGET LLVMDebugInfoPDB)
+        get_target_property(_qd_pdb_link LLVMDebugInfoPDB INTERFACE_LINK_LIBRARIES)
+        if(_qd_pdb_link)
+            set(_qd_pdb_link_fixed "")
+            foreach(_qd_item IN LISTS _qd_pdb_link)
+                if(_qd_item MATCHES "[Dd]iaguids\\.lib$" AND NOT EXISTS "${_qd_item}")
+                    set(_qd_dia "")
+                    if(CMAKE_GENERATOR_INSTANCE AND EXISTS "${CMAKE_GENERATOR_INSTANCE}/DIA SDK/lib/amd64/diaguids.lib")
+                        set(_qd_dia "${CMAKE_GENERATOR_INSTANCE}/DIA SDK/lib/amd64/diaguids.lib")
+                    else()
+                        file(GLOB _qd_dia_candidates
+                            "C:/Program Files/Microsoft Visual Studio/*/*/DIA SDK/lib/amd64/diaguids.lib"
+                            "C:/Program Files (x86)/Microsoft Visual Studio/*/*/DIA SDK/lib/amd64/diaguids.lib")
+                        if(_qd_dia_candidates)
+                            list(SORT _qd_dia_candidates)
+                            list(GET _qd_dia_candidates -1 _qd_dia)
+                        endif()
+                    endif()
+                    if(_qd_dia)
+                        message(STATUS "Re-pointing stale DIA SDK lib '${_qd_item}' -> '${_qd_dia}'")
+                        list(APPEND _qd_pdb_link_fixed "${_qd_dia}")
+                    else()
+                        message(WARNING "Stale DIA SDK lib '${_qd_item}' not found and no replacement diaguids.lib located; dropping it")
+                    endif()
+                else()
+                    list(APPEND _qd_pdb_link_fixed "${_qd_item}")
+                endif()
+            endforeach()
+            set_target_properties(LLVMDebugInfoPDB PROPERTIES INTERFACE_LINK_LIBRARIES "${_qd_pdb_link_fixed}")
+        endif()
+    endif()
+
     target_include_directories(${CORE_LIBRARY_NAME} PUBLIC ${LLVM_INCLUDE_DIRS})
 
     message("LLVM include dirs ${LLVM_INCLUDE_DIRS}")
