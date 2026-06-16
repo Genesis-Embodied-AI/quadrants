@@ -66,11 +66,6 @@ y2 = qd.ndarray(qd.f32, shape=(1024,))
 my_kernel(x2, y2)  # replays graph with new array pointers
 ```
 
-### Fields as arguments
-
-When different fields are passed as template arguments, each unique combination of fields produces a separately compiled kernel with its own graph cache entry. There is no interference between them.
-
-
 ## GPU-side iteration with `graph_do_while`
 
 For iterative algorithms (physics solvers, convergence loops), you often want to repeat the kernel body until a condition is met, without returning to the host each iteration. Use `while qd.graph_do_while(flag):` inside a `graph=True` kernel:
@@ -141,7 +136,7 @@ However, other parameters can be any supported Quadrants kernel parameter type.
 
 > **Experimental.** Nested / sibling `graph_do_while` loops, and mixing `graph_do_while` with top-level `for`-loops, are experimental for now. Single-loop `graph_do_while` is the stable path.
 
-`graph_do_while` loops can be **nested** inside one another, placed **side by side** (siblings), and freely **mixed with plain top-level for-loops**. Each loop has its own scalar `qd.i32` counter ndarray. On CUDA SM 9.0+ the whole nest runs entirely GPU-side as one graph of conditional while nodes; on the host-fallback backends the loop nest is driven from the host.
+`graph_do_while` loops can be **nested** inside one another, placed **side by side** (siblings), and freely **mixed with plain top-level for-loops**. Each loop has its own scalar `qd.i32` counter ndarray.
 
 ```python
 @qd.kernel(graph=True)
@@ -165,11 +160,6 @@ def nested(x: qd.types.ndarray(qd.i32, ndim=1),
             outer[()] = outer[()] - 1
 ```
 
-Important points for nested loops:
-
-- **Re-arm inner counters.** An inner loop's counter is not reset automatically between outer iterations. Reset it at the top of the enclosing loop body (as `inner[()] = 5` above), or the inner loop will only run during the first outer iteration.
-- **Each level needs its own counter ndarray.** Don't share one counter ndarray across two levels.
-
 ### Kernel structure restriction
 
 When a kernel uses `qd.graph_do_while()` anywhere, **every top-level statement** — both in the kernel body and inside each `graph_do_while` body — must be either a `for`-loop or a `qd.graph_do_while()` `while`-loop. Bare statements (assignments, `if`, etc.) at these levels are rejected with a `QuadrantsSyntaxError`. Wrap any such statement in a trivial loop:
@@ -180,22 +170,197 @@ for _ in range(1):
     counter[()] = counter[()] - 1
 ```
 
-This restriction keeps each offloaded task tagged with the exact loop level it belongs to. A `graph_do_while` `while`-loop may only appear at the kernel top level or directly inside another `graph_do_while` body — it cannot be placed inside a `for`-loop.
+A `graph_do_while` `while`-loop may only appear at the kernel top level or directly inside another `graph_do_while` body — it cannot be placed inside a `for`-loop.
 
-### Restrictions
+Note that qd.func's are inlined, so you can freely factorize these structures across qd.func boundaries.
 
-- The counter ndarray may be swapped between calls: the cached graph reads each counter through an indirection slot that is refreshed on every launch, so passing a different ndarray (or alternating between several) replays the cached graph without rebuilding it.
+## Performance
 
-### Caveats
+The hardware support for each feature (graph and graph do while) was documented in the table above. But what does this mean in practice? Let's look through some representative examples.
 
-On platforms without native device-side conditional graph nodes — currently CUDA pre-SM 9.0, **AMDGPU** (HIP has no conditional / while node API as of ROCm 7.2), Vulkan, Metal, and CPU — the value of the `graph_do_while` parameter will be copied from the GPU to the host each iteration, in order to check whether we should continue iterating. This causes a GPU pipeline stall. For nested loops this host round-trip happens once per iteration of each loop level, and each loop-body task is replayed individually, so deeply nested loops on these backends pay correspondingly more host overhead (they remain correct, just slower than the CUDA SM 9.0+ native path). At the end of each loop iteration:
-- wait for GPU async queue to finish processing
-- copy condition value to hostside
-- evaluate condition value on hostside
-- launch new kernels for next loop iteration, if not finished yet
+### qd.kernel
 
-Note: the basic `graph=True` path (without `graph_do_while`) does **not** stall the host like this on either CUDA or AMDGPU — the entire kernel sequence runs as a single GPU-side graph replay.
+Before migrating to graph, we have for example:
+```
+@qd.kernel
+def k1(a: qd.type.NDArray, b: qd.type.NDArray, c: qd.type.NDArray):
+    for i in range(a.shape[0]):
+        fn_a(a, i)
+    for i in range(b.shape[0]):
+        fn_b(b, i)
+    for i in range(c.shape[0]):
+        fn_b(c, i)
+```
+We have three top-level for loops, which we call 'offloaded tasks'. Each offloaded task is compiled into a separate GPU kernel. When we call `k1` from python, the c++ host-side code launches three gpu kernels.
 
-Therefore on unsupported platforms, you might consider creating a second implementation, which works differently. e.g.:
-- fixed number of loop iterations, so no dependency on gpu data for kernel launch; combined perhaps with:
-- make each kernel 'short-circuit', exit quickly, if the task has already been completed; to avoid running the GPU more than necessary
+We can migrate it to graph by adding `graph=True`:
+```
+@qd.kernel(graph=True)
+def k1(a: qd.type.NDArray, b: qd.type.NDArray, c: qd.type.NDArray):
+    for i in range(a.shape[0]):
+        fn_a(a, i)
+    for i in range(b.shape[0]):
+        fn_b(b, i)
+    for i in range(c.shape[0]):
+        fn_b(c, i)
+```
+
+Results:
+- on hardware-accelerated platforms, we only launch a single graph from the host, rather than 3 kernels
+- on other platforms, there is no change: we still launch 3 gpu kernels: no change: not better, not worse
+
+### A while loop, conditional on a device-side scalar tensor
+
+Before migrating to graph we have for example:
+```
+@qd.kernel
+def k1(a: qd.type.NDArray, cond: qd.type.NDArray):
+    fn_1(a, cond)
+    fn_2(a, cond)
+    fn_3(a, cond)
+
+while True:
+    k1(a, cond)
+    if cond[()] == 0:
+        break
+```
+
+So, we have:
+- a python host-side loop
+- the kernel contains device code, which will run on the gpu
+- each iteration, we copy the value of cond, from the gpu to the host, and check the value
+- this causes a gpu pipeline stall:
+    - first we wait for the entire default stream gpu work to complete/drain
+    - then we wait for the value of cond to copy from the gpu to the host
+    - then we run the python code to check the value of cond
+    - if we continue the loop, we now have to run through the python and c++ machinery to prepare the gpu kernel launch
+    - then launch the gpu kernels inside k1
+    - together, these steps can cause a noticeable delay, reducing throughput speed
+
+After migrating to graph with graph do while we have:
+
+```
+@qd.kernel(graph=True)
+def k1(a: qd.type.NDArray, cond: qd.type.NDArray):
+    while qd.graph_do_while(condition=cond):
+        fn_1(a, cond)
+        fn_2(a, cond)
+        fn_3(a, cond)
+
+k1(a, cond)
+```
+Now:
+- on supported hardware, the cond evaluation takes place on the gpu
+    - and we avoid the gpu pipeline stall
+- on unsupported hardware, we still incur the pipeline stall, as before
+    - note that there will be some small acceleration, because the condition evaluation and kernel launch will take place entirely from c++, bypassing python
+    - no worse, incrementally better
+
+### A fixed-size for loop
+
+Before migrating to graph we have for example:
+```
+@qd.kernel
+def k1(a: qd.type.NDArray):
+    fn_1(a)  # assume these each launch a single offloaded task (gpu kernel)
+    fn_2(a)
+    fn_3(a)
+
+for _ in range(num_its):
+    k1(a)
+```
+
+In this case, we have `num_its` launches of the three gpu kernels in k1
+- there is nothing on the host side that waits for anything to finish on the gpu-side
+- there is kernel launch latency associated with:
+    - running k1 from host-side python
+    - launching the gpu kernels for each of fn_1, fn_2, fn_3 from host-side c++
+
+After migrating to graph we have something like:
+```
+@qd.kernel(graph=True)
+def k1(a: qd.type.NDArray, count: qd.type.NDArray):
+    while qd.graph_do_while(count):
+        fn_1(a)
+        fn_2(a)
+        fn_3(a)
+        for _ in range(1):
+            count[()] = count[()] - 1
+
+k1(a, count)
+```
+- on supported hardware, the entire loop runs on the gpu
+    - there is a single host-side launch, of the graph, when we run the `k1(a, count)` qd.kernel function
+- we have an additional kernel, in order to decrement count
+    - this is true on both supported and unsupported hardware
+- on unsupported hardware, we now have a gpu pipeline stall that we didn't have before
+    - depending on the contents of the kernels, this might increase the per-iteration time by anything between 1% and 30% or so
+
+The recommendation is to use the graph do while here anyway, if you need it for any platform, in order to ensure the code is compact and maintainable.
+
+If you do want fixed-size for loops to run optimally on unsupported hardware platforms, we could add a specializd `qd.graph_range_for` function. This would:
+- on graph-do-while-supported hardware: handle adding the additional increment kernel
+- on graph-do-while-unsupported hardware: handle running the loop entirely on the host-side, to avoid adding a gpu pipeline stall
+
+### A while loop, conditional on a device-side scalar tensor, that has been optimized into a fixed-size for loop
+
+In code that has been extensively optimized, but doesn't yet use graph do while, we might have code like:
+```
+@qd.kernel
+def k1(cond: qd.i32, a: qd.types.NDArray):
+    for j in range(a.shape[0]):  # off-loaded task (gpu kernel)
+        if cond != 0:  # only runs main kernel body if cond != 0
+            ....
+    for j in range(a.shape[0]):  # off-loaded task (gpu kernel)
+        if cond != 0:
+            ....
+    for j in range(a.shape[0]):
+        if cond != 0:
+            ....
+
+    for _ in range(1):
+        check_cond(cond)  # check whether we should continue
+
+
+for i in range(MAX_ITER):
+    k1(cond, a)
+```
+In this case:
+- we run a fixed number of iterations
+- we update cond on the gpu
+- we run all the gpu kernels MAX_ITER times
+    - but we short-circuit their contents if cond == 0
+- this still causes all the gpu kernels to launch MAX_ITER times
+    - but they quickly exit, and don't take up too much time
+
+This formulation avoids any gpu pipeline stalls caused by checking a gpu value on the hostside, before launching more kernels
+
+When we migrate this to graph do while, we get:
+
+```
+@qd.kernel(graph=True)
+def k1(a: qd.type.NDArray, cond: qd.type.NDArray):
+    while qd.graph_do_while(condition=cond):
+        fn_1(a, cond)
+        fn_2(a, cond)
+        fn_3(a, cond)
+
+k1(a, cond)
+```
+The same as earlier.
+
+This is now optimal on gpu-do-while supported hardware, and the performance on unsupported hardware is identical to in the earlier section.
+
+HOWEVER, for unsupported hardware the baseline has changed, so the gpu pipeline stalls are now relative to a pipeline stall free baseline.
+
+The effect in reality is situation dependent:
+- when MAX_ITER is relatively high, and many kernels are being launched un-necessarily, the graph do while approach might still be faster, even significantly faster
+    - this could happen when we are using the MAX_ITER approach for consistency across many scenarios
+        - and some scenarios are a poor fit for the MAX_ITER appraoch
+- when MAX_ITER is actually a fairly close fit for the number of iterations really required, it is possible that the graph do while approach will be slower on unsupported platforms
+
+In this case, our recommendation is:
+- use graph do while anyway, if you need it on any platform
+    - this will ensure your code is compact and maintainable
+- if you need optimum 100% performance on unsupported platforms, then consider PRing onto quadrants an optimized graph implementation for your target platform
+    - for example it could somehow run MAX_ITER iterations anyway, similar to the earlier hand-rolled version, but via the graph abstraction, hence allowing the code to be compact, cross-platform, and also optimally fast
