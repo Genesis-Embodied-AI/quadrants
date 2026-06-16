@@ -355,6 +355,10 @@
 <li class="toctree-l1"><a class="reference internal" href="quirks.html">Quirks</a></li>
 <li class="toctree-l1"><a class="reference internal" href="troubleshooting.html">Troubleshooting</a></li>
 </ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Advanced</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="optimization_passes.html">Optimization passes</a></li>
+</ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Contributing</span></p>
 <ul class="nav bd-sidenav">
 <li class="toctree-l1"><a class="reference internal" href="contributing.html">Contributing to quadrants</a></li>
@@ -491,6 +495,21 @@
 <span class="k">def</span><span class="w"> </span><span class="nf">bad</span><span class="p">(</span><span class="n">arr</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">Template</span><span class="p">,</span> <span class="n">n</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">,</span> <span class="n">flag</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
     <span class="k">if</span> <span class="n">flag</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
         <span class="n">op</span><span class="p">(</span><span class="n">arr</span><span class="p">,</span> <span class="n">n</span><span class="p">)</span>              <span class="c1"># QuadrantsSyntaxError raised at compile time</span>
+</pre></div>
+</div>
+<p>The check applies <strong>transitively</strong>. Because <code class="docutils literal notranslate"><span class="pre">&#64;qd.func</span></code> bodies are inlined into the caller, reaching a <code class="docutils literal notranslate"><span class="pre">requires_top_level=True</span></code> func through an intermediate ordinary <code class="docutils literal notranslate"><span class="pre">&#64;qd.func</span></code> is treated exactly as if the call were written inline at that point. So calling it through a helper that sits at the top level is allowed, while calling it through a helper that is itself nested in a runtime <code class="docutils literal notranslate"><span class="pre">for</span></code> / <code class="docutils literal notranslate"><span class="pre">if</span></code> / <code class="docutils literal notranslate"><span class="pre">while</span></code> is rejected.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">func</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">helper</span><span class="p">(</span><span class="n">arr</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">Template</span><span class="p">,</span> <span class="n">n</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="n">op</span><span class="p">(</span><span class="n">arr</span><span class="p">,</span> <span class="n">n</span><span class="p">)</span>                  <span class="c1"># `op` is requires_top_level=True</span>
+
+<span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">good_helper</span><span class="p">(</span><span class="n">arr</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">Template</span><span class="p">,</span> <span class="n">n</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="n">helper</span><span class="p">(</span><span class="n">arr</span><span class="p">,</span> <span class="n">n</span><span class="p">)</span>              <span class="c1"># OK: helper is at the kernel top level</span>
+
+<span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">bad_helper</span><span class="p">(</span><span class="n">arr</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">Template</span><span class="p">,</span> <span class="n">n</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">,</span> <span class="n">flag</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="k">if</span> <span class="n">flag</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="n">helper</span><span class="p">(</span><span class="n">arr</span><span class="p">,</span> <span class="n">n</span><span class="p">)</span>          <span class="c1"># QuadrantsSyntaxError: op is transitively nested in a runtime if</span>
 </pre></div>
 </div>
 </section>
