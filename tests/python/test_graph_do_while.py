@@ -858,34 +858,29 @@ def test_graph_do_while_top_level_func_call_keeps_parallelism():
     inside the loop body."""
     N = 16
 
-    @qd.data_oriented
-    class Stepper:
-        def __init__(self):
-            self.x = qd.ndarray(qd.i32, shape=(N,))
-            self.c = qd.ndarray(qd.i32, shape=())
+    @qd.func
+    def add_one(x: qd.types.ndarray(qd.i32, ndim=1)):
+        for i in range(N):  # parallel range_for; must NOT be demoted to a serial inner loop
+            x[i] = x[i] + 1
 
-        @qd.func
-        def add_one(self):
-            for i in range(N):  # parallel range_for; must NOT be demoted to a serial inner loop
-                self.x[i] = self.x[i] + 1
+    @qd.kernel(graph=True)
+    def step(x: qd.types.ndarray(qd.i32, ndim=1), c: qd.types.ndarray(qd.i32, ndim=0)):
+        add_one(x)  # top-level @qd.func call: runs once
+        while qd.graph_do_while(c):
+            add_one(x)  # inside the loop: runs every iteration
+            c[()] = c[()] - 1
 
-        @qd.kernel(graph=True)
-        def step(self):
-            self.add_one()  # top-level @qd.func call: runs once
-            while qd.graph_do_while(self.c):
-                self.add_one()  # inside the loop: runs every iteration
-                self.c[()] = self.c[()] - 1
-
-    s = Stepper()
-    s.x.from_numpy(np.zeros(N, dtype=np.int32))
+    x = qd.ndarray(qd.i32, shape=(N,))
+    c = qd.ndarray(qd.i32, shape=())
+    x.from_numpy(np.zeros(N, dtype=np.int32))
     iters = 4
-    s.c.from_numpy(np.array(iters, dtype=np.int32))
+    c.from_numpy(np.array(iters, dtype=np.int32))
 
-    s.step()
+    step(x, c)
 
     # add_one runs once at the top level + once per iteration -> 1 + iters.
-    np.testing.assert_array_equal(s.x.to_numpy(), np.full(N, 1 + iters, dtype=np.int32))
-    assert s.c.to_numpy() == 0
+    np.testing.assert_array_equal(x.to_numpy(), np.full(N, 1 + iters, dtype=np.int32))
+    assert c.to_numpy() == 0
 
 
 @test_utils.test()
@@ -895,38 +890,37 @@ def test_graph_do_while_trailing_serial_func_runs_once():
     loop -- the exact case a naive `task=True` validator-bypass would have miscompiled."""
     N = 8
 
-    @qd.data_oriented
-    class K:
-        def __init__(self):
-            self.x = qd.ndarray(qd.i32, shape=(N,))
-            self.acc = qd.ndarray(qd.i32, shape=())
-            self.c = qd.ndarray(qd.i32, shape=())
+    @qd.func
+    def seed(x: qd.types.ndarray(qd.i32, ndim=1), acc: qd.types.ndarray(qd.i32, ndim=0)):
+        for i in range(N):
+            x[i] = 10
+        acc[()] = acc[()] + 1  # trailing serial write inside the func
 
-        @qd.func
-        def seed(self):
+    @qd.kernel(graph=True)
+    def step(
+        x: qd.types.ndarray(qd.i32, ndim=1),
+        acc: qd.types.ndarray(qd.i32, ndim=0),
+        c: qd.types.ndarray(qd.i32, ndim=0),
+    ):
+        seed(x, acc)
+        while qd.graph_do_while(c):
             for i in range(N):
-                self.x[i] = 10
-            self.acc[()] = self.acc[()] + 1  # trailing serial write inside the func
+                x[i] = x[i] + 1
+            c[()] = c[()] - 1
 
-        @qd.kernel(graph=True)
-        def step(self):
-            self.seed()
-            while qd.graph_do_while(self.c):
-                for i in range(N):
-                    self.x[i] = self.x[i] + 1
-                self.c[()] = self.c[()] - 1
-
-    k = K()
-    k.x.from_numpy(np.zeros(N, dtype=np.int32))
-    k.acc.from_numpy(np.array(0, dtype=np.int32))
+    x = qd.ndarray(qd.i32, shape=(N,))
+    acc = qd.ndarray(qd.i32, shape=())
+    c = qd.ndarray(qd.i32, shape=())
+    x.from_numpy(np.zeros(N, dtype=np.int32))
+    acc.from_numpy(np.array(0, dtype=np.int32))
     iters = 3
-    k.c.from_numpy(np.array(iters, dtype=np.int32))
+    c.from_numpy(np.array(iters, dtype=np.int32))
 
-    k.step()
+    step(x, acc, c)
 
-    assert k.acc.to_numpy() == 1  # trailing serial write ran exactly once
-    np.testing.assert_array_equal(k.x.to_numpy(), np.full(N, 10 + iters, dtype=np.int32))
-    assert k.c.to_numpy() == 0
+    assert acc.to_numpy() == 1  # trailing serial write ran exactly once
+    np.testing.assert_array_equal(x.to_numpy(), np.full(N, 10 + iters, dtype=np.int32))
+    assert c.to_numpy() == 0
 
 
 @test_utils.test()
