@@ -888,13 +888,27 @@
         <span class="k">return</span> <span class="kc">False</span>
 
     <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_is_loop_config_call</span><span class="p">(</span><span class="n">stmt</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">stmt</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;A bare ``qd.loop_config(...)`` statement. It only configures the next for-loop (block_dim, serialize, ...) by</span>
+<span class="sd">        mutating ast_builder state and emits no offloaded task, so it does not break graph_do_while level tagging and is</span>
+<span class="sd">        allowed where bare statements otherwise are not.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">stmt</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Expr</span><span class="p">)</span> <span class="ow">or</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">stmt</span><span class="o">.</span><span class="n">value</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Call</span><span class="p">):</span>
+            <span class="k">return</span> <span class="kc">False</span>
+        <span class="n">func</span> <span class="o">=</span> <span class="n">stmt</span><span class="o">.</span><span class="n">value</span><span class="o">.</span><span class="n">func</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">func</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Attribute</span><span class="p">)</span> <span class="ow">and</span> <span class="n">func</span><span class="o">.</span><span class="n">attr</span> <span class="o">==</span> <span class="s2">&quot;loop_config&quot;</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">True</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">func</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Name</span><span class="p">)</span> <span class="ow">and</span> <span class="n">func</span><span class="o">.</span><span class="n">id</span> <span class="o">==</span> <span class="s2">&quot;loop_config&quot;</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">True</span>
+        <span class="k">return</span> <span class="kc">False</span>
+
+    <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">_validate_graph_do_while_structure</span><span class="p">(</span><span class="n">body</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">ast</span><span class="o">.</span><span class="n">stmt</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;If a kernel uses qd.graph_do_while() anywhere, enforce that every top-level statement list (the kernel body</span>
 <span class="sd">        and each graph_do_while body) contains only for-loops and graph_do_while while-loops. This keeps per-task</span>
 <span class="sd">        graph_do_while level tagging exact: the offloader tags a flushed serial (bound/listgen) task with the level of</span>
 <span class="sd">        the for-loop that flushed it, which is only correct if no bare top-level statement at a different level precedes</span>
 <span class="sd">        that for-loop. For-loops and graph_do_while loops may be freely mixed/nested; bare statements must be wrapped in</span>
-<span class="sd">        ``for _ in range(1):``.&quot;&quot;&quot;</span>
+<span class="sd">        ``for _ in range(1):``. ``qd.loop_config(...)`` is exempt: it only tunes the next for-loop and emits no task.&quot;&quot;&quot;</span>
         <span class="n">uses_gdw</span> <span class="o">=</span> <span class="nb">any</span><span class="p">(</span><span class="n">FunctionDefTransformer</span><span class="o">.</span><span class="n">_is_graph_do_while_while</span><span class="p">(</span><span class="n">n</span><span class="p">)</span> <span class="k">for</span> <span class="n">stmt</span> <span class="ow">in</span> <span class="n">body</span> <span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="n">ast</span><span class="o">.</span><span class="n">walk</span><span class="p">(</span><span class="n">stmt</span><span class="p">))</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">uses_gdw</span><span class="p">:</span>
             <span class="k">return</span>
@@ -906,6 +920,9 @@
             <span class="k">if</span> <span class="n">FunctionDefTransformer</span><span class="o">.</span><span class="n">_is_docstring</span><span class="p">(</span><span class="n">stmt</span><span class="p">,</span> <span class="n">i</span><span class="p">):</span>
                 <span class="k">continue</span>
             <span class="k">if</span> <span class="n">FunctionDefTransformer</span><span class="o">.</span><span class="n">_is_coverage_probe</span><span class="p">(</span><span class="n">stmt</span><span class="p">):</span>
+                <span class="k">continue</span>
+            <span class="k">if</span> <span class="n">FunctionDefTransformer</span><span class="o">.</span><span class="n">_is_loop_config_call</span><span class="p">(</span><span class="n">stmt</span><span class="p">):</span>
+                <span class="c1"># qd.loop_config(...) only tunes the next for-loop; it emits no serial task, so it is safe here.</span>
                 <span class="k">continue</span>
             <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">stmt</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">For</span><span class="p">):</span>
                 <span class="c1"># A for-loop is an offloaded task; its body is ordinary loop code (unrestricted).</span>

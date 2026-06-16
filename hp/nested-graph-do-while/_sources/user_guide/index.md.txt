@@ -99,6 +99,14 @@ troubleshooting
 ```
 
 ```{toctree}
+:caption: Advanced
+:maxdepth: 1
+:titlesonly:
+
+optimization_passes
+```
+
+```{toctree}
 :caption: Contributing
 :maxdepth: 1
 :titlesonly:

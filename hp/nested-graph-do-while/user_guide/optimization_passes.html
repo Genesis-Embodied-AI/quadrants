@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>Scalar tensors &#8212; Quadrants 1.0.3 documentation</title>
+    <title>Optimization passes &#8212; Quadrants 1.0.3 documentation</title>
   
   
   
@@ -55,12 +55,12 @@
     <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
     <script src="../_static/design-tabs.js?v=f930bc37"></script>
     <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
-    <script>DOCUMENTATION_OPTIONS.pagename = 'user_guide/scalar_tensors';</script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'user_guide/optimization_passes';</script>
     <script>DOCUMENTATION_OPTIONS.search_as_you_type = false;</script>
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
-    <link rel="next" title="Matrix and Vector" href="matrix_vector.html" />
-    <link rel="prev" title="Tensor types" href="tensor_types.html" />
+    <link rel="next" title="Contributing to quadrants" href="contributing.html" />
+    <link rel="prev" title="Troubleshooting" href="troubleshooting.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
   <meta name="docsearch:version" content="1.0.3" />
@@ -298,9 +298,9 @@
 <li class="toctree-l1"><a class="reference internal" href="supported_systems.html">Supported systems</a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Core concepts</span></p>
-<ul class="current nav bd-sidenav">
+<ul class="nav bd-sidenav">
 <li class="toctree-l1"><a class="reference internal" href="tensor_types.html">Tensor types</a></li>
-<li class="toctree-l1 current active"><a class="current reference internal" href="#">Scalar tensors</a></li>
+<li class="toctree-l1"><a class="reference internal" href="scalar_tensors.html">Scalar tensors</a></li>
 <li class="toctree-l1"><a class="reference internal" href="matrix_vector.html">Matrix and Vector</a></li>
 
 <li class="toctree-l1"><a class="reference internal" href="matrix_vector_per_thread.html">Per-thread matrix and vector operations</a></li>
@@ -356,8 +356,8 @@
 <li class="toctree-l1"><a class="reference internal" href="troubleshooting.html">Troubleshooting</a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Advanced</span></p>
-<ul class="nav bd-sidenav">
-<li class="toctree-l1"><a class="reference internal" href="optimization_passes.html">Optimization passes</a></li>
+<ul class="current nav bd-sidenav">
+<li class="toctree-l1 current active"><a class="current reference internal" href="#">Optimization passes</a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Contributing</span></p>
 <ul class="nav bd-sidenav">
@@ -409,7 +409,7 @@
     
     <li class="breadcrumb-item"><a href="index.html" class="nav-link">User guide</a></li>
     
-    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">Scalar tensors</span></li>
+    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">Optimization passes</span></li>
   </ul>
 </nav>
 </div>
@@ -426,56 +426,139 @@
 <div id="searchbox"></div>
                 <article class="bd-article">
                   
-  <section class="tex2jax_ignore mathjax_ignore" id="scalar-tensors">
-<h1>Scalar tensors<a class="headerlink" href="#scalar-tensors" title="Link to this heading">#</a></h1>
-<p>A scalar tensor is a field with zero dimensions — it holds a single value. This is useful for accumulators, counters, or any kernel that needs to produce a single output value.</p>
-<p>Scalar tensors can be used with both fields and ndarrays.</p>
-<section id="creating-a-scalar-tensor">
-<h2>Creating a scalar tensor<a class="headerlink" href="#creating-a-scalar-tensor" title="Link to this heading">#</a></h2>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># field</span>
-<span class="n">counter</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">())</span>
-
-<span class="c1"># ndarray</span>
-<span class="n">counter</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">())</span>
-</pre></div>
-</div>
+  <section class="tex2jax_ignore mathjax_ignore" id="optimization-passes">
+<h1>Optimization passes<a class="headerlink" href="#optimization-passes" title="Link to this heading">#</a></h1>
+<p>When you call a <code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel</span></code> function, Quadrants first translates the kernel into an internal form then rewrites it, step by step, into something equivalent but cheaper to run. “Equivalent” here means that they yield the exact same observable behavior and produce the exact same outputs [*1] for all valid inputs, regardless of how they are restructured. This page explains, at a high level, what those rewrite steps (the <em>optimization passes</em>) do, which ones cost compile time, and how to control and inspect them. You do not need to understand any of this to use Quadrants but it helps when you are trading compile time against runtime, or debugging a surprising result.</p>
+<p>[*1] To within floating-point precision, not bit exact. In particular, fast maths optimizations are fairly approximate.</p>
+<section id="key-terms">
+<h2>Key terms<a class="headerlink" href="#key-terms" title="Link to this heading">#</a></h2>
+<p>Let’s start by defining terms that will be used throughout the page and are necessary in order to be able to understand it.</p>
+<ul class="simple">
+<li><p><strong>Kernel</strong> - a function you decorate with <code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel</span></code>. It is the unit that Quadrants compiles and launches.</p></li>
+<li><p><strong>IR (intermediate representation)</strong> - the compiler’s internal version of your kernel: a flat list of small, explicitly-typed instructions, sitting between your Python source and the final machine code. Every pass reads and rewrites the IR; none of it is something you write by hand.</p></li>
+<li><p><strong>Pass</strong> - one transformation step over the IR. An <em>optimization</em> pass rewrites the IR into a form that produces the <strong>same results</strong> but runs faster or uses less memory. (Some passes are not optimizations but <em>lowering</em> steps - they translate high-level constructs into lower-level ones; this page focuses on the optimizations.)</p></li>
+<li><p><strong>Basic block</strong> - a straight-line run of instructions with no branches into or out of the middle. Control flow (<code class="docutils literal notranslate"><span class="pre">if</span></code>, loops) connects blocks together.</p></li>
+<li><p><strong>Offloaded task</strong> - after the <em>offload</em> step, your kernel is split into one or more tasks, and each task becomes a single device launch: one GPU grid launch on a GPU backend, or one parallel loop on CPU. A simple kernel is usually one task; a kernel with, say, a short serial preamble followed by a big parallel loop becomes several tasks that run back to back.</p></li>
+</ul>
 </section>
-<section id="accessing-the-value">
-<h2>Accessing the value<a class="headerlink" href="#accessing-the-value" title="Link to this heading">#</a></h2>
-<p>Index a scalar tensor with <code class="docutils literal notranslate"><span class="pre">[()]</span></code>:</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
-<span class="k">def</span><span class="w"> </span><span class="nf">increment</span><span class="p">(</span><span class="n">a</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">Template</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-    <span class="n">a</span><span class="p">[()]</span> <span class="o">+=</span> <span class="mi">1</span>
+<section id="the-compile-pipeline-at-a-glance">
+<h2>The compile pipeline at a glance<a class="headerlink" href="#the-compile-pipeline-at-a-glance" title="Link to this heading">#</a></h2>
+<p>Compilation runs as a fixed sequence of stages. Optimization passes are interleaved with the lowering steps that gradually turn high-level IR into device code:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>Python (AST)
+   │  lower to IR, type-check
+   ▼
+high-level IR  ──► simplify ──► (autodiff, if requested) ──► simplify
+   │
+   ▼
+offload  (split the kernel into offloaded tasks)
+   │
+   ▼
+per-task IR  ──► simplify ──► lower memory access ──► simplify
+   │
+   ▼
+backend codegen  (LLVM → PTX/SASS, or SPIR-V, …)
 </pre></div>
 </div>
+<p>The “simplify” boxes are all the same routine (internally <code class="docutils literal notranslate"><span class="pre">full_simplify</span></code>), invoked at several points. Most of the interesting optimization work happens inside it.</p>
 </section>
-<section id="example-summing-with-atomics">
-<h2>Example: summing with atomics<a class="headerlink" href="#example-summing-with-atomics" title="Link to this heading">#</a></h2>
-<p>A common use case is accumulating a result across many threads. Since multiple threads may write to the same scalar, use atomic operations:</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">quadrants</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">qd</span>
-
-<span class="n">qd</span><span class="o">.</span><span class="n">init</span><span class="p">(</span><span class="n">arch</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">gpu</span><span class="p">)</span>
-
-<span class="n">total</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">())</span>
-
-<span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
-<span class="k">def</span><span class="w"> </span><span class="nf">sum_range</span><span class="p">(</span><span class="n">N</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">N</span><span class="p">):</span>
-        <span class="n">qd</span><span class="o">.</span><span class="n">atomic_add</span><span class="p">(</span><span class="n">total</span><span class="p">[()],</span> <span class="n">i</span><span class="p">)</span>
-
-<span class="n">total</span><span class="p">[()]</span> <span class="o">=</span> <span class="mi">0</span>
-<span class="n">sum_range</span><span class="p">(</span><span class="mi">100</span><span class="p">)</span>
-<span class="nb">print</span><span class="p">(</span><span class="s2">&quot;sum:&quot;</span><span class="p">,</span> <span class="n">total</span><span class="p">[()])</span>  <span class="c1"># 4950</span>
-</pre></div>
+<section id="the-simplify-loop">
+<h2>The simplify loop<a class="headerlink" href="#the-simplify-loop" title="Link to this heading">#</a></h2>
+<p>Each “simplify” stage runs a small bundle of optimizations <strong>repeatedly, until the IR stops changing</strong> (a fixed point). Running to a fixed point matters because the passes feed each other: folding a constant can expose dead code, deleting that code can expose a common subexpression, and so on.</p>
+<p>In the order they run each round:</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>Pass</p></th>
+<th class="head"><p>What it does</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Extract constant</p></td>
+<td><p>Lifts constant values out of larger expressions into standalone constant instructions, so the passes below can recognise and reuse them.</p></td>
+</tr>
+<tr class="row-odd"><td><p>Unreachable-code elimination</p></td>
+<td><p>Removes branches that can never be taken (e.g. the body of an <code class="docutils literal notranslate"><span class="pre">if</span></code> whose condition is always false).</p></td>
+</tr>
+<tr class="row-even"><td><p>Binary-op / algebraic simplification</p></td>
+<td><p>Applies arithmetic identities: <code class="docutils literal notranslate"><span class="pre">x</span> <span class="pre">*</span> <span class="pre">1</span> <span class="pre">→</span> <span class="pre">x</span></code>, <code class="docutils literal notranslate"><span class="pre">x</span> <span class="pre">+</span> <span class="pre">0</span> <span class="pre">→</span> <span class="pre">x</span></code>, <code class="docutils literal notranslate"><span class="pre">x</span> <span class="pre">*</span> <span class="pre">2</span> <span class="pre">→</span> <span class="pre">x</span> <span class="pre">+</span> <span class="pre">x</span></code>, and similar peephole rewrites.</p></td>
+</tr>
+<tr class="row-odd"><td><p>Constant folding</p></td>
+<td><p>Pre-computes expressions whose inputs are all known at compile time: <code class="docutils literal notranslate"><span class="pre">2</span> <span class="pre">*</span> <span class="pre">3</span> <span class="pre">→</span> <span class="pre">6</span></code>.</p></td>
+</tr>
+<tr class="row-even"><td><p>Dead-code elimination (<strong>DIE</strong>)</p></td>
+<td><p>Drops instructions whose results are never used. Runs several times per round, after passes that tend to create newly-dead instructions.</p></td>
+</tr>
+<tr class="row-odd"><td><p>Loop-invariant code motion (<strong>LICM</strong>)</p></td>
+<td><p>Hoists a computation that produces the same value on every iteration out of the loop, so it runs once instead of N times.</p></td>
+</tr>
+<tr class="row-even"><td><p>Local simplify</p></td>
+<td><p>Peephole cleanups within a block.</p></td>
+</tr>
+<tr class="row-odd"><td><p>Common-subexpression elimination (<strong>CSE</strong>)</p></td>
+<td><p>Finds an identical expression computed more than once and computes it a single time, reusing the result.</p></td>
+</tr>
+<tr class="row-even"><td><p>Control-flow-graph (<strong>CFG</strong>) optimization</p></td>
+<td><p>Memory-focused optimizations that need a whole-task view; see the next section. Runs only once per stage (it is the most expensive pass).</p></td>
+</tr>
+</tbody>
+</table>
 </div>
+<p>Two of these - CSE and CFG optimization - run only when <code class="docutils literal notranslate"><span class="pre">opt_level</span> <span class="pre">&gt;</span> <span class="pre">0</span></code> (the default is <code class="docutils literal notranslate"><span class="pre">1</span></code>).</p>
 </section>
-<section id="reading-from-python">
-<h2>Reading from Python<a class="headerlink" href="#reading-from-python" title="Link to this heading">#</a></h2>
-<p>From Python, you can read and write the value using the same <code class="docutils literal notranslate"><span class="pre">[()]</span></code> indexing:</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">total</span><span class="p">[()]</span> <span class="o">=</span> <span class="mi">0</span>       <span class="c1"># write</span>
-<span class="nb">print</span><span class="p">(</span><span class="n">total</span><span class="p">[()])</span>    <span class="c1"># read</span>
-</pre></div>
+<section id="control-flow-graph-cfg-optimization">
+<h2>Control-flow-graph (CFG) optimization<a class="headerlink" href="#control-flow-graph-cfg-optimization" title="Link to this heading">#</a></h2>
+<p>A <strong>control-flow graph</strong> is a map of your kernel’s basic blocks together with the branches connecting them. It lets the compiler answer questions of the form “if execution reaches <em>here</em>, what must already have happened?” - which is exactly what is needed to optimize reads and writes to memory. Two such optimizations run on the CFG:</p>
+<ul class="simple">
+<li><p><strong>Store-to-load forwarding</strong> - if a value is written to a location and then read again before anything overwrites it, the read is replaced with the value directly, skipping the round trip through memory.</p></li>
+<li><p><strong>Dead-store elimination</strong> - if a write is overwritten before anyone reads it, the write is removed.</p></li>
+</ul>
+<p>Building and analysing the CFG is the most expensive optimization in the pipeline, which is why it runs at most once per simplify stage rather than every round.</p>
+<p><strong>One CFG per offloaded task.</strong> The CFG optimization is built and run separately for each offloaded task, over that task’s IR alone - never over the whole <code class="docutils literal notranslate"><span class="pre">qd.kernel</span></code> at once. This is both faster to analyse and safe: because each task is a separate device launch, a value held in a register in one task cannot survive into the next one, so there is never anything to forward across a task boundary anyway. Anything written to global memory is treated as potentially read by a later task, so no store another task might need is dropped.</p>
+</section>
+<section id="controlling-the-passes">
+<h2>Controlling the passes<a class="headerlink" href="#controlling-the-passes" title="Link to this heading">#</a></h2>
+<p>All of these are fields of <code class="docutils literal notranslate"><span class="pre">CompileConfig</span></code>, so you set them at <code class="docutils literal notranslate"><span class="pre">qd.init(...)</span></code> (or via the matching <code class="docutils literal notranslate"><span class="pre">QD_&lt;UPPERCASE_NAME&gt;</span></code> environment variable). See <a class="reference internal" href="init_options.html"><span class="std std-doc">qd.init options</span></a> for the full list and the environment-variable convention.</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>Option</p></th>
+<th class="head"><p>Default</p></th>
+<th class="head"><p>Effect</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">cfg_optimization</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">True</span></code></p></td>
+<td><p>Turn the CFG optimization on/off. Turning it <strong>off</strong> makes compilation up to ~6× faster while costing ~1–5% of runtime speed - worth it when compile time dominates and the runtime delta is acceptable.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">opt_level</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">1</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">0</span></code> disables the two heavier passes (CSE and CFG optimization).</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">advanced_optimization</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">True</span></code></p></td>
+<td><p>The fixed-point simplify loop above. Set to <code class="docutils literal notranslate"><span class="pre">False</span></code> to run just a single basic cleanup pass instead - much faster to compile, much less optimized.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">constant_folding</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">True</span></code></p></td>
+<td><p>Enables the constant-folding pass.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">fast_math</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">True</span></code></p></td>
+<td><p>Allows IEEE-relaxed floating-point rewrites (e.g. fusing a multiply and add). Covered in <a class="reference internal" href="init_options.html#fast-math"><span class="std std-ref">qd.init options</span></a>.</p></td>
+</tr>
+</tbody>
+</table>
 </div>
+<p>For everyday use, leave them at their defaults. The most common deliberate change is <code class="docutils literal notranslate"><span class="pre">cfg_optimization=False</span></code> when iterating on a kernel whose compile time is in your way. Note that, in general, changing these options is relatively fragile since the Quadrants tests run assuming the default values.</p>
+</section>
+<section id="inspecting-what-the-compiler-did">
+<h2>Inspecting what the compiler did<a class="headerlink" href="#inspecting-what-the-compiler-did" title="Link to this heading">#</a></h2>
+<p>These environment variables dump the IR so you can see the effect of each pass. Files are written to <code class="docutils literal notranslate"><span class="pre">debug_dump_path</span></code> (default <code class="docutils literal notranslate"><span class="pre">/tmp/ir/</span></code>):</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">QD_DUMP_IR=1</span></code> - writes an IR snapshot at each major pipeline stage (after lowering, before/after each simplify, after offload).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">QD_DUMP_SIMPLIFY=1</span></code> - writes an IR snapshot after every individual pass on every iteration of the simplify loop. Verbose, but it shows exactly which pass changed what.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">QD_DUMP_CFG=1</span></code> - writes the control-flow graph itself. (This also forces the CFG pass back onto the whole-kernel path so the complete graph can be dumped.)</p></li>
+</ul>
+<p>Setting <code class="docutils literal notranslate"><span class="pre">qd.init(print_ir=True)</span></code> prints the IR to the console at pipeline stages instead of writing files.</p>
 </section>
 </section>
 
@@ -490,20 +573,20 @@
                   
 <div class="prev-next-area">
     <a class="left-prev"
-       href="tensor_types.html"
+       href="troubleshooting.html"
        title="previous page">
       <i class="fa-solid fa-angle-left"></i>
       <div class="prev-next-info">
         <p class="prev-next-subtitle">previous</p>
-        <p class="prev-next-title">Tensor types</p>
+        <p class="prev-next-title">Troubleshooting</p>
       </div>
     </a>
     <a class="right-next"
-       href="matrix_vector.html"
+       href="contributing.html"
        title="next page">
       <div class="prev-next-info">
         <p class="prev-next-subtitle">next</p>
-        <p class="prev-next-title">Matrix and Vector</p>
+        <p class="prev-next-title">Contributing to quadrants</p>
       </div>
       <i class="fa-solid fa-angle-right"></i>
     </a>
@@ -526,17 +609,19 @@
   </div>
   <nav id="pst-page-toc-nav" class="page-toc" aria-labelledby="pst-page-navigation-heading-2">
     <ul class="pst-show_toc_level nav section-nav flex-column">
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#creating-a-scalar-tensor">Creating a scalar tensor</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#accessing-the-value">Accessing the value</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#example-summing-with-atomics">Example: summing with atomics</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#reading-from-python">Reading from Python</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#key-terms">Key terms</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#the-compile-pipeline-at-a-glance">The compile pipeline at a glance</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#the-simplify-loop">The simplify loop</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#control-flow-graph-cfg-optimization">Control-flow-graph (CFG) optimization</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#controlling-the-passes">Controlling the passes</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#inspecting-what-the-compiler-did">Inspecting what the compiler did</a></li>
 </ul>
   </nav></div>
 
   <div class="sidebar-secondary-item">
 
   <div class="tocsection sourcelink">
-    <a href="../_sources/user_guide/scalar_tensors.md.txt">
+    <a href="../_sources/user_guide/optimization_passes.md.txt">
       <i class="fa-solid fa-file-lines"></i> Show Source
     </a>
   </div>

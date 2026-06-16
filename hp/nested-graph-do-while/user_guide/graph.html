@@ -355,6 +355,10 @@
 <li class="toctree-l1"><a class="reference internal" href="quirks.html">Quirks</a></li>
 <li class="toctree-l1"><a class="reference internal" href="troubleshooting.html">Troubleshooting</a></li>
 </ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Advanced</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="optimization_passes.html">Optimization passes</a></li>
+</ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Contributing</span></p>
 <ul class="nav bd-sidenav">
 <li class="toctree-l1"><a class="reference internal" href="contributing.html">Contributing to quadrants</a></li>
@@ -427,7 +431,7 @@
 <p>Graphs reduce kernel launch overhead by capturing a sequence of GPU operations into a graph, then replaying it in a single launch.</p>
 <section id="backend-support">
 <h2>Backend support<a class="headerlink" href="#backend-support" title="Link to this heading">#</a></h2>
-<p>Both features run on every backend. They are <em>hardware accelerated</em> on CUDA (via CUDA graphs) and AMDGPU (via HIP graphs); <code class="docutils literal notranslate"><span class="pre">graph_do_while</span></code> additionally requires CUDA SM 9.0+ / Hopper for its hardware-accelerated path. On other backends, <code class="docutils literal notranslate"><span class="pre">graph=True</span></code> is silently ignored and the kernel runs via the normal launch path, and <code class="docutils literal notranslate"><span class="pre">graph_do_while</span></code> falls back to a host-side do-while loop that copies the condition value GPU → host each iteration (causing a pipeline stall — see <a class="reference internal" href="#caveats"><span class="xref myst">Caveats</span></a>).</p>
+<p>Both features run on every backend. They are <em>hardware accelerated</em> on CUDA (via CUDA graphs) and AMDGPU (via HIP graphs); <code class="docutils literal notranslate"><span class="pre">graph_do_while</span></code> additionally requires CUDA SM 9.0+ / Hopper for its hardware-accelerated path. On other backends, <code class="docutils literal notranslate"><span class="pre">graph=True</span></code> is silently ignored and the kernel runs via the normal launch path, and <code class="docutils literal notranslate"><span class="pre">graph_do_while</span></code> falls back to a host-side do-while loop that copies the condition value GPU → host each iteration (causing a pipeline stall).</p>
 <div class="pst-scrollable-table-container"><table class="table">
 <thead>
 <tr class="row-odd"><th class="head"><p>Feature</p></th>
@@ -531,7 +535,7 @@
 <p>The argument to <code class="docutils literal notranslate"><span class="pre">qd.graph_do_while()</span></code> must be the name of a scalar <code class="docutils literal notranslate"><span class="pre">qd.i32</span></code> ndarray parameter. The loop body repeats while this value is non-zero.</p>
 <ul class="simple">
 <li><p>On CUDA SM 9.0+ (Hopper), this uses CUDA conditional while nodes — the entire iteration runs on the GPU with no host involvement.</p></li>
-<li><p>On older CUDA GPUs, AMDGPU, and non-GPU backends, it falls back to a host-side do-while loop (see <a class="reference internal" href="#caveats"><span class="xref myst">Caveats</span></a> and the <a class="reference internal" href="#backend-support">backend support table</a>).</p></li>
+<li><p>On older CUDA GPUs, AMDGPU, and non-GPU backends, it falls back to a host-side do-while loop (see the <a class="reference internal" href="#backend-support">backend support table</a>).</p></li>
 </ul>
 <section id="patterns">
 <h3>Patterns<a class="headerlink" href="#patterns" title="Link to this heading">#</a></h3>
