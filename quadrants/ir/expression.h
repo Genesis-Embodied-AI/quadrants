@@ -22,14 +22,21 @@ class Expression {
   struct FlattenContext {
     VecStatement stmts;
     Block *current_block = nullptr;
+    // Graph-region to stamp on every statement produced while flattening one source statement, so the
+    // lowered loads / binops / stores inherit the region of the FrontendStmt they came from. Set by
+    // `lower_ast` from the source statement's `region_tag`; left at the neutral default elsewhere.
+    GraphRegionTag region_tag;
 
     inline Stmt *push_back(pStmt &&stmt) {
+      stmt->region_tag = region_tag;
       return stmts.push_back(std::move(stmt));
     }
 
     template <typename T, typename... Args>
     T *push_back(Args &&...args) {
-      return stmts.push_back<T>(std::forward<Args>(args)...);
+      Stmt *s = stmts.push_back<T>(std::forward<Args>(args)...);
+      s->region_tag = region_tag;
+      return s;
     }
 
     Stmt *back_stmt() {

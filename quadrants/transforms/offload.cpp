@@ -78,21 +78,21 @@ class Offloader {
     pending_serial_statements->grid_dim = 1;
     pending_serial_statements->block_dim = 1;
 
-    // `level_id` is the innermost graph_do_while level of the for-loop that triggered the flush; the
-    // pending serial holds that for-loop's implicit bound/listgen computations, so it belongs to the
-    // same level. The final flush (no following for-loop) passes -1 (outside all loops). The frontend
-    // restriction (gdw bodies / gdw-using kernels contain only for-loops + gdw whiles) guarantees a
-    // pending serial never mixes statements from two different levels.
-    // `sp_group_id` is the stream_parallel_group_id (qd.branch / qd.stream_parallel) of the for-loop that
-    // triggered the flush. The pending serial holds that loop's implicit bound/listgen computations, so it
-    // belongs to the same concurrency branch and must carry the same group id -- otherwise the bound task
-    // (group 0) would split the branch's contiguous run and defeat the CUDA graph builder's fork/join.
-    // The same frontend restriction that keeps a pending serial within one graph_do_while level (gdw
-    // bodies / regions contain only for-loops) keeps it within one branch, so this never mixes groups.
-    auto assemble_serial_statements = [&](int level_id = -1, int sp_group_id = 0) {
+    // `bucket_tag` is the graph-region (graph_do_while level + checkpoint cp_id + stream_parallel /
+    // branch group) of the statements currently buffered in `pending_serial_statements`. A flushed serial
+    // task is tagged with the region the work was *written* at -- read from the statements' own
+    // `region_tag` (stamped at frontend build, propagated through lowering) -- rather than the region of
+    // whatever for-loop happens to trigger the flush. This is what lets bare statements and inlined
+    // `@qd.func` calls live at the kernel top level and inside graph_do_while bodies without being swept
+    // into the wrong loop level (issue #744). A for-loop's own implicit bound/listgen computations carry
+    // that for-loop's region (same source statement), so they still flush at the for-loop's level; the
+    // `push_serial_statement` boundary check below guarantees a serial task never mixes two regions.
+    GraphRegionTag bucket_tag;
+    auto assemble_serial_statements = [&]() {
       if (!pending_serial_statements->body->statements.empty()) {
-        pending_serial_statements->graph_do_while_level_id = level_id;
-        pending_serial_statements->stream_parallel_group_id = sp_group_id;
+        pending_serial_statements->graph_do_while_level_id = bucket_tag.graph_do_while_level_id;
+        pending_serial_statements->stream_parallel_group_id = bucket_tag.stream_parallel_group_id;
+        pending_serial_statements->checkpoint_id = bucket_tag.checkpoint_id;
         root_block->insert(std::move(pending_serial_statements));
         pending_serial_statements = Stmt::make_typed<OffloadedStmt>(OffloadedStmt::TaskType::serial, arch, kernel);
         pending_serial_statements->grid_dim = 1;
@@ -100,11 +100,27 @@ class Offloader {
       }
     };
 
+    // Buffer a serial (non-for) statement, flushing first if it belongs to a different graph-region than
+    // the statements already buffered. This keeps each serial task within one region and emits it at the
+    // region it was written at. Because all lowered statements for one source statement share a region
+    // tag, a tag change only ever happens at a source-statement boundary -- never mid-computation -- so a
+    // value is never split from its consumer except across a genuine region boundary (where the offloader's
+    // global-temp promotion handles the cross-task reference).
+    auto push_serial_statement = [&](std::unique_ptr<Stmt> &&serial_stmt) {
+      if (!pending_serial_statements->body->statements.empty() && serial_stmt->region_tag != bucket_tag) {
+        assemble_serial_statements();
+      }
+      if (pending_serial_statements->body->statements.empty()) {
+        bucket_tag = serial_stmt->region_tag;
+      }
+      pending_serial_statements->body->insert(std::move(serial_stmt));
+    };
+
     for (int i = 0; i < (int)root_statements.size(); i++) {
       auto &stmt = root_statements[i];
       // Note that stmt->parent is root_block, which doesn't contain stmt now.
       if (auto s = stmt->cast<RangeForStmt>(); s && !s->strictly_serialized) {
-        assemble_serial_statements(s->graph_do_while_level_id, s->stream_parallel_group_id);
+        assemble_serial_statements();
         auto offloaded = Stmt::make_typed<OffloadedStmt>(OffloadedStmt::TaskType::range_for, arch, kernel);
         // offloaded->body is an empty block now.
         offloaded->grid_dim = config.saturating_grid_dim;
@@ -145,10 +161,10 @@ class Offloader {
         offloaded->loop_name = s->loop_name;
         root_block->insert(std::move(offloaded));
       } else if (auto st = stmt->cast<StructForStmt>()) {
-        assemble_serial_statements(st->graph_do_while_level_id, st->stream_parallel_group_id);
+        assemble_serial_statements();
         emit_struct_for(st, root_block, config, st->mem_access_opt);
       } else if (auto st = stmt->cast<MeshForStmt>()) {
-        assemble_serial_statements(st->graph_do_while_level_id);
+        assemble_serial_statements();
         auto offloaded = Stmt::make_typed<OffloadedStmt>(OffloadedStmt::TaskType::mesh_for, arch, kernel);
         offloaded->grid_dim = config.saturating_grid_dim;
         if (st->block_dim == 0) {
@@ -169,7 +185,7 @@ class Offloader {
         offloaded->graph_do_while_level_id = st->graph_do_while_level_id;
         root_block->insert(std::move(offloaded));
       } else {
-        pending_serial_statements->body->insert(std::move(stmt));
+        push_serial_statement(std::move(stmt));
       }
     }
     assemble_serial_statements();
