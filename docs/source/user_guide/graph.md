@@ -302,6 +302,8 @@ If you do want fixed-size for loops to run optimally on unsupported hardware pla
 - on graph-do-while-supported hardware: handle adding the additional increment kernel
 - on graph-do-while-unsupported hardware: handle running the loop entirely on the host-side, to avoid adding a gpu pipeline stall
 
+In practice, for our own kernels, i.e. in genesis-world, they largely fall under the do while formulation, see the previous section. However, also have some that used to be do while, but have been migrated to an optimized fixed-size, see next section.
+
 ### A while loop, conditional on a device-side scalar tensor, that has been optimized into a fixed-size for loop
 
 In code that has been extensively optimized, but doesn't yet use graph do while, we might have code like:
