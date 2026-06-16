@@ -154,22 +154,9 @@ def nested(x: qd.types.ndarray(qd.i32, ndim=1),
         outer[()] = outer[()] - 1
 ```
 
-### Bare statements and where they run
+A `graph_do_while`-loop may only appear at the kernel top level or directly inside another `graph_do_while` body.
 
-Bare statements — assignments (`counter[()] = counter[()] - 1`), `if`/`else`, and `@qd.func` calls — are allowed at the kernel top level and inside any `graph_do_while` body. Each one runs **at the level it is written at**: a bare statement at the kernel top level runs exactly once (before/after the loops, like an ordinary `graph=True` kernel), and a bare statement inside a `graph_do_while` body runs every iteration of that loop.
-
-```python
-while qd.graph_do_while(counter):
-    for i in range(x.shape[0]):
-        x[i] = x[i] + 1.0
-    counter[()] = counter[()] - 1   # bare: runs every iteration, no `for _ in range(1):` needed
-```
-
-> Earlier versions required wrapping bare statements in a one-trip `for _ in range(1):` loop. That is no longer necessary (the compiler now tags each statement with its own loop level). The old wrapping still works, but a `for _ in range(1):` around a `@qd.func` whose body is a parallel `for i in range(n):` would demote that loop to a single-thread serial inner loop and destroy its GPU parallelism — prefer a bare call, which keeps the inlined loop parallel. See quadrants issue #744.
-
-`for`-loops, `graph_do_while` loops, and bare statements may be freely ordered, mixed, and nested. The one placement rule that remains: a `graph_do_while` `while`-loop may only appear at the kernel top level or directly inside another `graph_do_while` body — it cannot be placed inside a `for`-loop.
-
-Note that qd.func's are inlined, so you can freely factorize these structures across qd.func boundaries.
+Note that `qd.func`'s are inlined, so you can freely factorize these structures across `qd.func` boundaries.
 
 ## Performance
 
