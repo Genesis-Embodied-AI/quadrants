@@ -88,8 +88,7 @@ def solve(x: qd.types.ndarray(qd.f32, ndim=1),
     while qd.graph_do_while(counter):
         for i in range(x.shape[0]):
             x[i] = x[i] + 1.0
-        for i in range(1):
-            counter[()] = counter[()] - 1
+        counter[()] = counter[()] - 1   # bare statement: runs every iteration
 
 x = qd.ndarray(qd.f32, shape=(N,))
 counter = qd.ndarray(qd.i32, shape=())
@@ -112,8 +111,7 @@ class Solver:
         while qd.graph_do_while(self.counter):   # member ndarray as the loop condition
             for i in range(N):
                 self.x[i] = self.x[i] + 1.0
-            for i in range(1):
-                self.counter[()] = self.counter[()] - 1
+            self.counter[()] = self.counter[()] - 1
 ```
 
 - On CUDA SM 9.0+ (Hopper), this uses CUDA conditional while nodes — the entire iteration runs on the GPU with no host involvement.
@@ -130,8 +128,7 @@ def iterate(x: qd.types.ndarray(qd.f32, ndim=1),
     while qd.graph_do_while(counter):
         for i in range(x.shape[0]):
             x[i] = x[i] + 1.0
-        for i in range(1):
-            counter[()] = counter[()] - 1
+        counter[()] = counter[()] - 1
 ```
 
 **Boolean flag**: set a `keep_going` flag to 1, have the kernel set it to 0 when a convergence criterion is met.
@@ -144,16 +141,15 @@ def converge(x: qd.types.ndarray(qd.f32, ndim=1),
         for i in range(x.shape[0]):
             # ... do work ...
             pass
-        for i in range(1):
-            if some_condition(x):
-                keep_going[()] = 0
+        if some_condition(x):       # bare `if` at the loop level is fine
+            keep_going[()] = 0
 ```
 
 ### Do-while semantics
 
 `graph_do_while` has **do-while** semantics: the kernel body always executes at least once before the condition is checked. This matches the behavior of CUDA conditional while nodes. The flag value must be >= 1 at launch time. Passing 0 with a kernel that decrements the counter will cause an infinite loop.
 
-> **Reset the flag outside the loop body, never inside it.** The counter / `keep_going` flag must reach a terminating value *as a result of the loop body*. If you (re)set the flag to a non-zero value **inside** the `while qd.graph_do_while(...)` body — e.g. `for _ in range(1): counter[()] = N` placed within the loop — it is re-applied on every iteration and the loop never terminates. Do the reset before the loop (a run-once top-level `for`, see [Loop-carried state](#loop-carried-state)) or on the host between launches (`counter.fill(N)`).
+> **Reset the flag outside the loop body, never inside it.** The counter / `keep_going` flag must reach a terminating value *as a result of the loop body*. If you (re)set the flag to a non-zero value **inside** the `while qd.graph_do_while(...)` body — e.g. `counter[()] = N` placed within the loop — it is re-applied on every iteration and the loop never terminates. Do the reset before the loop (a bare statement at the kernel top level runs once, see [Loop-carried state](#loop-carried-state)) or on the host between launches (`counter.fill(N)`).
 
 ### ndarray vs field
 
@@ -180,15 +176,12 @@ def nested(x: qd.types.ndarray(qd.i32, ndim=1),
     while qd.graph_do_while(outer):
         # Re-initialise the inner counter at the start of every outer iteration, otherwise the
         # inner loop only runs on the first outer pass.
-        for _ in range(1):
-            inner[()] = 5
+        inner[()] = 5
         while qd.graph_do_while(inner):
             for i in range(x.shape[0]):
                 x[i] = x[i] + 1
-            for _ in range(1):
-                inner[()] = inner[()] - 1
-        for _ in range(1):
-            outer[()] = outer[()] - 1
+            inner[()] = inner[()] - 1
+        outer[()] = outer[()] - 1
 ```
 
 Important points for nested loops:
@@ -205,23 +198,30 @@ Important points for nested loops:
   is global: a yield in any level returns control to the host and resume skips every `cp_id` below the
   resume point.
 
-### Kernel structure restriction
+### Bare statements and where they run
 
-When a kernel uses `qd.graph_do_while()` anywhere, **every top-level statement** — both in the kernel
-body and inside each `graph_do_while` body — must be either a `for`-loop or a `qd.graph_do_while()`
-`while`-loop. Bare statements (assignments, `if`, etc.) at these levels are rejected with a
-`QuadrantsSyntaxError`. Wrap any such statement in a trivial loop:
+Bare statements — assignments (`counter[()] = counter[()] - 1`), `if`/`else`, and `@qd.func` calls —
+are allowed at the kernel top level, inside any `graph_do_while` body, and inside a `qd.checkpoint()`
+body. Each one runs **at the level it is written at**: a bare statement at the kernel top level runs
+exactly once (before/after the loops, like an ordinary `graph=True` kernel), and a bare statement inside
+a `graph_do_while` body runs every iteration of that loop.
 
 ```python
-# Instead of:   counter[()] = counter[()] - 1
-for _ in range(1):
-    counter[()] = counter[()] - 1
+while qd.graph_do_while(counter):
+    for i in range(x.shape[0]):
+        x[i] = x[i] + 1.0
+    counter[()] = counter[()] - 1   # bare: runs every iteration, no `for _ in range(1):` needed
 ```
 
-This restriction keeps each offloaded task tagged with the exact loop level it belongs to. `for`-loops
-and `graph_do_while` loops may otherwise be freely ordered, mixed, and nested. A `graph_do_while`
-`while`-loop may only appear at the kernel top level or directly inside another `graph_do_while` body —
-it cannot be placed inside a `for`-loop.
+> Earlier versions required wrapping bare statements in a one-trip `for _ in range(1):` loop. That is no
+> longer necessary (the compiler now tags each statement with its own loop level). The old wrapping still
+> works, but a `for _ in range(1):` around a `@qd.func` whose body is a parallel `for i in range(n):`
+> would demote that loop to a single-thread serial inner loop and destroy its GPU parallelism — prefer a
+> bare call, which keeps the inlined loop parallel. See quadrants issue #744.
+
+`for`-loops, `graph_do_while` loops, and bare statements may be freely ordered, mixed, and nested. The
+one placement rule that remains: a `graph_do_while` `while`-loop may only appear at the kernel top level
+or directly inside another `graph_do_while` body — it cannot be placed inside a `for`-loop.
 
 ### Loop-carried state
 
@@ -247,8 +247,7 @@ def newton(q_iter: qd.types.ndarray(qd.f32, ndim=1),
     # Iterative refinement: repeats while ncond != 0. q_iter carries between iterations.
     while qd.graph_do_while(ncond):
         # ... update q_iter from its previous-iteration value ...
-        for _ in range(1):
-            ncond[()] = ncond[()] - 1
+        ncond[()] = ncond[()] - 1
     # One-time writeback: top-level for-loop, runs exactly once.
     for i in range(q.shape[0]):
         q[i] = q_iter[i]
@@ -362,19 +361,19 @@ Kernels with `qd.checkpoint()` but no `yield_on=` keep their previous return con
 - Checkpoints cannot be nested inside other checkpoints — **not even through an intervening `qd.graph_do_while`**. A `checkpoint → graph_do_while → checkpoint` chain is still a nested checkpoint and is rejected (otherwise bare work in the outer checkpoint would silently re-execute on resume). A checkpoint inside a `qd.graph_do_while` body — at the top level, or in a **nested / sibling** loop that is not itself inside a checkpoint — is fine and is the expected pattern; the checkpoints at every level form one flat `cp_id` sequence.
 - Cannot be combined with `qd.stream_parallel()` in the same kernel.
 
-### Authoring tip: every statement inside a checkpoint must live in a top-level `for` loop
+### Bare scalar statements inside a checkpoint
 
-The checkpoint gate (a CUDA-graph IF node on CUDA SM 9.0+, a codegen-emitted LLVM-IR early-return on CUDA SM < 9.0, an indirect-dispatch gate shader on Vulkan / Metal, a host task-loop branch on CPU) routes work into a checkpoint's body based on whether the statement was lowered to a `range_for` task with the matching `checkpoint_id`. Bare scalar statements (e.g. `counter[()] -= 1`) fall into the offloader's pending-serial bucket, which currently loses the surrounding `checkpoint_id` and emits the work as a `serial` task with `checkpoint_id == -1`. Tasks with `cp_id == -1` run unconditionally, outside every checkpoint gate — meaning a yielding checkpoint won't actually skip them on subsequent checkpoints in the same launch.
-
-The established workaround (used throughout the test suite) is to wrap such statements in a one-iteration `for` loop:
+The checkpoint gate (a CUDA-graph IF node on CUDA SM 9.0+, a codegen-emitted LLVM-IR early-return on CUDA SM < 9.0, an indirect-dispatch gate shader on Vulkan / Metal, a host task-loop branch on CPU) routes work into a checkpoint's body based on the task's `checkpoint_id`. A bare scalar statement (e.g. `counter[()] -= 1`) inside a `qd.checkpoint()` body now picks up the surrounding `checkpoint_id` automatically — the offloader tags each side-effecting serial statement with the region (loop level + `checkpoint_id`) it was written at — so it is gated, yielded, and resumed exactly like any `range_for` task in the same checkpoint. No wrapping is required:
 
 ```python
 with qd.checkpoint(yield_on=overflow_flag):
-    for _ in range(1):
-        counter[()] = counter[()] - 1
+    for i in range(arr.shape[0]):
+        # ...
+        pass
+    counter[()] = counter[()] - 1   # bare: gated with this checkpoint's cp_id
 ```
 
-This forces the offloader to emit a `range_for` task that picks up the surrounding `checkpoint_id`. The runtime cost of an extra 1-iteration loop is negligible compared to the kernel-launch overhead the rest of the graph saves; the proper fix (propagating `checkpoint_id` through the serial bucket) is tracked separately.
+> Earlier versions lost the `checkpoint_id` on bare scalar statements (they fell into the offloader's serial bucket and were emitted with `cp_id == -1`, running unconditionally outside every gate), so the test suite wrapped them in a one-trip `for _ in range(1):` loop. That workaround is no longer needed; it still compiles, but the bare form is preferred. (Pure loop-invariant helper computations — shared constants, loop bounds — intentionally stay at `cp_id == -1` / always-run so a `resume(from_checkpoint=...)` launch never gates away a value a later task reads.)
 
 ### Backend coverage notes
 
