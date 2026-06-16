@@ -823,6 +823,34 @@ def test_graph_do_while_bare_statement_in_nested_body_raises():
 
 
 @test_utils.test()
+def test_graph_do_while_loop_config_allowed():
+    """qd.loop_config(...) before a for-loop is allowed in a graph_do_while kernel -- both at the kernel top level and
+    inside a graph_do_while body -- because it only tunes the next loop (e.g. block_dim) and emits no task."""
+    N = 16
+    ITERS = 4
+
+    @qd.kernel(graph=True)
+    def k(x: qd.types.ndarray(qd.i32, ndim=1), c: qd.types.ndarray(qd.i32, ndim=0)):
+        qd.loop_config(block_dim=8)
+        for i in range(x.shape[0]):
+            x[i] = 0
+        while qd.graph_do_while(c):
+            qd.loop_config(block_dim=8)
+            for i in range(x.shape[0]):
+                x[i] = x[i] + 1
+            for _ in range(1):
+                c[()] = c[()] - 1
+
+    x = qd.ndarray(qd.i32, shape=(N,))
+    c = qd.ndarray(qd.i32, shape=())
+    x.from_numpy(np.full(N, 99, dtype=np.int32))
+    c.from_numpy(np.array(ITERS, dtype=np.int32))
+    k(x, c)
+    np.testing.assert_array_equal(x.to_numpy(), np.full(N, ITERS))
+    assert c.to_numpy() == 0
+
+
+@test_utils.test()
 def test_graph_do_while_inside_for_loop_raises():
     """graph_do_while nested inside a real for-loop must raise."""
 

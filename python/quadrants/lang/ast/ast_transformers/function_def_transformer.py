@@ -550,13 +550,27 @@ class FunctionDefTransformer:
         return False
 
     @staticmethod
+    def _is_loop_config_call(stmt: ast.stmt) -> bool:
+        """A bare ``qd.loop_config(...)`` statement. It only configures the next for-loop (block_dim, serialize, ...) by
+        mutating ast_builder state and emits no offloaded task, so it does not break graph_do_while level tagging and is
+        allowed where bare statements otherwise are not."""
+        if not isinstance(stmt, ast.Expr) or not isinstance(stmt.value, ast.Call):
+            return False
+        func = stmt.value.func
+        if isinstance(func, ast.Attribute) and func.attr == "loop_config":
+            return True
+        if isinstance(func, ast.Name) and func.id == "loop_config":
+            return True
+        return False
+
+    @staticmethod
     def _validate_graph_do_while_structure(body: list[ast.stmt]) -> None:
         """If a kernel uses qd.graph_do_while() anywhere, enforce that every top-level statement list (the kernel body
         and each graph_do_while body) contains only for-loops and graph_do_while while-loops. This keeps per-task
         graph_do_while level tagging exact: the offloader tags a flushed serial (bound/listgen) task with the level of
         the for-loop that flushed it, which is only correct if no bare top-level statement at a different level precedes
         that for-loop. For-loops and graph_do_while loops may be freely mixed/nested; bare statements must be wrapped in
-        ``for _ in range(1):``."""
+        ``for _ in range(1):``. ``qd.loop_config(...)`` is exempt: it only tunes the next for-loop and emits no task."""
         uses_gdw = any(FunctionDefTransformer._is_graph_do_while_while(n) for stmt in body for n in ast.walk(stmt))
         if not uses_gdw:
             return
@@ -568,6 +582,9 @@ class FunctionDefTransformer:
             if FunctionDefTransformer._is_docstring(stmt, i):
                 continue
             if FunctionDefTransformer._is_coverage_probe(stmt):
+                continue
+            if FunctionDefTransformer._is_loop_config_call(stmt):
+                # qd.loop_config(...) only tunes the next for-loop; it emits no serial task, so it is safe here.
                 continue
             if isinstance(stmt, ast.For):
                 # A for-loop is an offloaded task; its body is ordinary loop code (unrestricted).
