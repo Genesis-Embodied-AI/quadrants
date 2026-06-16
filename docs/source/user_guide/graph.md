@@ -117,7 +117,7 @@ def converge(x: qd.types.ndarray(qd.f32, ndim=1),
         for i in range(x.shape[0]):
             # ... do work ...
             pass
-        for i in range(1):
+        for i in range(1):  # top-level for loop => offloaded task, i.e. gpu kernel
             if some_condition(x):
                 keep_going[()] = 0
 ```
@@ -149,7 +149,7 @@ def nested(x: qd.types.ndarray(qd.i32, ndim=1),
 
     while qd.graph_do_while(outer):
         # Reset the inner counter at the start of each outer iteration, else it only runs on the first outer pass.
-        for _ in range(1):
+        for _ in range(1):  # top-level for loop => offloaded task, i.e. gpu kernel
             inner[()] = 5
         while qd.graph_do_while(inner):
             for i in range(x.shape[0]):
@@ -166,7 +166,7 @@ When a kernel uses `qd.graph_do_while()` anywhere, **every top-level statement**
 
 ```python
 # Instead of:   counter[()] = counter[()] - 1
-for _ in range(1):
+for _ in range(1):  # top-level for loop => offloaded task, i.e. gpu kernel
     counter[()] = counter[()] - 1
 ```
 
