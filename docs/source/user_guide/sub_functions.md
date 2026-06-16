@@ -77,3 +77,20 @@ def bad(arr: qd.Template, n: qd.i32, flag: qd.i32) -> None:
     if flag > 0:
         op(arr, n)              # QuadrantsSyntaxError raised at compile time
 ```
+
+The check applies **transitively**. Because `@qd.func` bodies are inlined into the caller, reaching a `requires_top_level=True` func through an intermediate ordinary `@qd.func` is treated exactly as if the call were written inline at that point. So calling it through a helper that sits at the top level is allowed, while calling it through a helper that is itself nested in a runtime `for` / `if` / `while` is rejected.
+
+```python
+@qd.func
+def helper(arr: qd.Template, n: qd.i32) -> None:
+    op(arr, n)                  # `op` is requires_top_level=True
+
+@qd.kernel
+def good_helper(arr: qd.Template, n: qd.i32) -> None:
+    helper(arr, n)              # OK: helper is at the kernel top level
+
+@qd.kernel
+def bad_helper(arr: qd.Template, n: qd.i32, flag: qd.i32) -> None:
+    if flag > 0:
+        helper(arr, n)          # QuadrantsSyntaxError: op is transitively nested in a runtime if
+```

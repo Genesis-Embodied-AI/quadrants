@@ -6,6 +6,10 @@ Calling it nested inside ordinary runtime ``for`` / ``if`` / ``while`` control f
 compile time with a :class:`QuadrantsSyntaxError`, because nesting demotes the func's per-phase
 top-level loops out of top-level position (collapsing the inter-phase grid-wide barriers) and would
 otherwise silently corrupt the result. ``qd.static`` (compile-time) loops do not trip the check.
+
+The check also applies *transitively*: reaching the marked func through one or more intermediate
+unmarked ``@qd.func`` helpers that were themselves called from runtime control flow is rejected too,
+since ``@qd.func`` bodies are inlined into the caller.
 """
 
 import numpy as np
@@ -127,6 +131,146 @@ def test_unmarked_func_is_unaffected():
     x = qd.ndarray(qd.i32, shape=(8,))
     x.from_numpy(np.zeros(8, dtype=np.int32))
     run(x, 8)  # no QuadrantsSyntaxError
+
+
+@test_utils.test(arch=qd.cpu)
+def test_indirect_nested_in_runtime_for_is_rejected():
+    """Reaching the marked func through an unmarked helper that is itself nested in a runtime ``for``
+    must still be rejected: the helper is inlined, so the marked func's phase loops still end up nested."""
+
+    @qd.func(requires_top_level=True)
+    def bump(x: template(), n):
+        for i in range(n):
+            x[i] = x[i] + 1
+
+    @qd.func
+    def helper(x: template(), n):
+        bump(x, n)
+
+    @qd.kernel
+    def run(x: qd.types.ndarray(qd.i32, ndim=1), n: qd.i32):
+        for _ in range(1):
+            helper(x, n)
+
+    x = qd.ndarray(qd.i32, shape=(8,))
+    with pytest.raises(QuadrantsSyntaxError, match="requires_top_level"):
+        run(x, 8)
+
+
+@test_utils.test(arch=qd.cpu)
+def test_indirect_nested_in_runtime_if_is_rejected():
+    @qd.func(requires_top_level=True)
+    def bump(x: template(), n):
+        for i in range(n):
+            x[i] = x[i] + 1
+
+    @qd.func
+    def helper(x: template(), n):
+        bump(x, n)
+
+    @qd.kernel
+    def run(x: qd.types.ndarray(qd.i32, ndim=1), n: qd.i32, flag: qd.i32):
+        if flag > 0:
+            helper(x, n)
+
+    x = qd.ndarray(qd.i32, shape=(8,))
+    with pytest.raises(QuadrantsSyntaxError, match="requires_top_level"):
+        run(x, 8, 1)
+
+
+@test_utils.test(arch=qd.cpu)
+def test_indirect_nested_in_runtime_while_is_rejected():
+    @qd.func(requires_top_level=True)
+    def bump(x: template(), n):
+        for i in range(n):
+            x[i] = x[i] + 1
+
+    @qd.func
+    def helper(x: template(), n):
+        bump(x, n)
+
+    @qd.kernel
+    def run(x: qd.types.ndarray(qd.i32, ndim=1), n: qd.i32, iters: qd.i32):
+        k = iters
+        while k > 0:
+            helper(x, n)
+            k = k - 1
+
+    x = qd.ndarray(qd.i32, shape=(8,))
+    with pytest.raises(QuadrantsSyntaxError, match="requires_top_level"):
+        run(x, 8, 1)
+
+
+@test_utils.test(arch=qd.cpu)
+def test_deeply_indirect_nesting_is_rejected():
+    """The inherited non-static-control-flow context must accumulate through multiple helper levels."""
+
+    @qd.func(requires_top_level=True)
+    def bump(x: template(), n):
+        for i in range(n):
+            x[i] = x[i] + 1
+
+    @qd.func
+    def inner(x: template(), n):
+        bump(x, n)
+
+    @qd.func
+    def outer(x: template(), n):
+        inner(x, n)
+
+    @qd.kernel
+    def run(x: qd.types.ndarray(qd.i32, ndim=1), n: qd.i32, flag: qd.i32):
+        if flag > 0:
+            outer(x, n)
+
+    x = qd.ndarray(qd.i32, shape=(8,))
+    with pytest.raises(QuadrantsSyntaxError, match="requires_top_level"):
+        run(x, 8, 1)
+
+
+@test_utils.test(arch=qd.cpu)
+def test_top_level_call_via_helper_is_allowed():
+    """Calling the marked func through an unmarked helper that is itself at the kernel top level is fine:
+    the helper inlines at top level, so the marked func's phase loops stay top level."""
+
+    @qd.func(requires_top_level=True)
+    def bump(x: template(), n):
+        for i in range(n):
+            x[i] = x[i] + 1
+
+    @qd.func
+    def helper(x: template(), n):
+        bump(x, n)
+
+    @qd.kernel
+    def run(x: qd.types.ndarray(qd.i32, ndim=1), n: qd.i32):
+        helper(x, n)
+
+    x = qd.ndarray(qd.i32, shape=(8,))
+    x.from_numpy(np.zeros(8, dtype=np.int32))
+    run(x, 8)  # no QuadrantsSyntaxError
+    assert np.all(x.to_numpy() == 1)
+
+
+@test_utils.test(arch=qd.cpu)
+def test_helper_with_top_level_return_called_in_runtime_if_is_allowed():
+    """Regression guard for the fix: the inherited non-static-control-flow context must NOT be the same flag
+    that gates ``build_Return``. A helper with a top-level ``return`` called from inside a runtime ``if`` must
+    still compile (otherwise we would spuriously raise 'Return inside non-static if/for is not supported')."""
+
+    @qd.func
+    def add2(v):
+        return v + 2  # top-level return inside a func reached from a runtime if
+
+    @qd.kernel
+    def run(x: qd.types.ndarray(qd.i32, ndim=1), flag: qd.i32):
+        if flag > 0:
+            x[0] = add2(40)
+
+    x = qd.ndarray(qd.i32, shape=(1,))
+    x.from_numpy(np.zeros(1, dtype=np.int32))
+    run(x, 1)  # no QuadrantsSyntaxError
+    assert x.to_numpy()[0] == 42
 
 
 @test_utils.test(arch=qd.cpu)
