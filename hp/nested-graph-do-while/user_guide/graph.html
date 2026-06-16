@@ -522,8 +522,7 @@
     <span class="k">while</span> <span class="n">qd</span><span class="o">.</span><span class="n">graph_do_while</span><span class="p">(</span><span class="n">counter</span><span class="p">):</span>
         <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>
             <span class="n">x</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">x</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">+</span> <span class="mf">1.0</span>
-        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">):</span>
-            <span class="n">counter</span><span class="p">[()]</span> <span class="o">=</span> <span class="n">counter</span><span class="p">[()]</span> <span class="o">-</span> <span class="mi">1</span>
+        <span class="n">counter</span><span class="p">[()]</span> <span class="o">=</span> <span class="n">counter</span><span class="p">[()]</span> <span class="o">-</span> <span class="mi">1</span>   <span class="c1"># bare statement: runs every iteration</span>
 
 <span class="n">x</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="n">N</span><span class="p">,))</span>
 <span class="n">counter</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">())</span>
@@ -546,8 +545,7 @@
     <span class="k">while</span> <span class="n">qd</span><span class="o">.</span><span class="n">graph_do_while</span><span class="p">(</span><span class="n">counter</span><span class="p">):</span>
         <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>
             <span class="n">x</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">x</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">+</span> <span class="mf">1.0</span>
-        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">):</span>
-            <span class="n">counter</span><span class="p">[()]</span> <span class="o">=</span> <span class="n">counter</span><span class="p">[()]</span> <span class="o">-</span> <span class="mi">1</span>
+        <span class="n">counter</span><span class="p">[()]</span> <span class="o">=</span> <span class="n">counter</span><span class="p">[()]</span> <span class="o">-</span> <span class="mi">1</span>
 </pre></div>
 </div>
 <p><strong>Boolean flag</strong>: set a <code class="docutils literal notranslate"><span class="pre">keep_going</span></code> flag to 1, have the kernel set it to 0 when a convergence criterion is met.</p>
@@ -558,9 +556,8 @@
         <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>
             <span class="c1"># ... do work ...</span>
             <span class="k">pass</span>
-        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">):</span>  <span class="c1"># top-level for loop =&gt; offloaded task, i.e. gpu kernel</span>
-            <span class="k">if</span> <span class="n">some_condition</span><span class="p">(</span><span class="n">x</span><span class="p">):</span>
-                <span class="n">keep_going</span><span class="p">[()]</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="k">if</span> <span class="n">some_condition</span><span class="p">(</span><span class="n">x</span><span class="p">):</span>       <span class="c1"># bare `if` at the loop level is fine</span>
+            <span class="n">keep_going</span><span class="p">[()]</span> <span class="o">=</span> <span class="mi">0</span>
 </pre></div>
 </div>
 </section>
@@ -589,28 +586,16 @@
 
     <span class="k">while</span> <span class="n">qd</span><span class="o">.</span><span class="n">graph_do_while</span><span class="p">(</span><span class="n">outer</span><span class="p">):</span>
         <span class="c1"># Reset the inner counter at the start of each outer iteration, else it only runs on the first outer pass.</span>
-        <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">):</span>  <span class="c1"># top-level for loop =&gt; offloaded task, i.e. gpu kernel</span>
-            <span class="n">inner</span><span class="p">[()]</span> <span class="o">=</span> <span class="mi">5</span>
+        <span class="n">inner</span><span class="p">[()]</span> <span class="o">=</span> <span class="mi">5</span>                  <span class="c1"># bare statement: runs every outer iteration</span>
         <span class="k">while</span> <span class="n">qd</span><span class="o">.</span><span class="n">graph_do_while</span><span class="p">(</span><span class="n">inner</span><span class="p">):</span>
             <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>
                 <span class="n">x</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">x</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">+</span> <span class="mi">1</span>
-            <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">):</span>
-                <span class="n">inner</span><span class="p">[()]</span> <span class="o">=</span> <span class="n">inner</span><span class="p">[()]</span> <span class="o">-</span> <span class="mi">1</span>
-        <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">):</span>
-            <span class="n">outer</span><span class="p">[()]</span> <span class="o">=</span> <span class="n">outer</span><span class="p">[()]</span> <span class="o">-</span> <span class="mi">1</span>
+            <span class="n">inner</span><span class="p">[()]</span> <span class="o">=</span> <span class="n">inner</span><span class="p">[()]</span> <span class="o">-</span> <span class="mi">1</span>
+        <span class="n">outer</span><span class="p">[()]</span> <span class="o">=</span> <span class="n">outer</span><span class="p">[()]</span> <span class="o">-</span> <span class="mi">1</span>
 </pre></div>
 </div>
-</section>
-<section id="kernel-structure-restriction">
-<h3>Kernel structure restriction<a class="headerlink" href="#kernel-structure-restriction" title="Link to this heading">#</a></h3>
-<p>When a kernel uses <code class="docutils literal notranslate"><span class="pre">qd.graph_do_while()</span></code> anywhere, <strong>every top-level statement</strong> — both in the kernel body and inside each <code class="docutils literal notranslate"><span class="pre">graph_do_while</span></code> body — must be either a <code class="docutils literal notranslate"><span class="pre">for</span></code>-loop or a <code class="docutils literal notranslate"><span class="pre">qd.graph_do_while()</span></code> <code class="docutils literal notranslate"><span class="pre">while</span></code>-loop. Bare statements (assignments, <code class="docutils literal notranslate"><span class="pre">if</span></code>, etc.) at these levels are rejected with a <code class="docutils literal notranslate"><span class="pre">QuadrantsSyntaxError</span></code>. Wrap any such statement in a trivial loop:</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Instead of:   counter[()] = counter[()] - 1</span>
-<span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">):</span>  <span class="c1"># top-level for loop =&gt; offloaded task, i.e. gpu kernel</span>
-    <span class="n">counter</span><span class="p">[()]</span> <span class="o">=</span> <span class="n">counter</span><span class="p">[()]</span> <span class="o">-</span> <span class="mi">1</span>
-</pre></div>
-</div>
-<p>A <code class="docutils literal notranslate"><span class="pre">graph_do_while</span></code> <code class="docutils literal notranslate"><span class="pre">while</span></code>-loop may only appear at the kernel top level or directly inside another <code class="docutils literal notranslate"><span class="pre">graph_do_while</span></code> body — it cannot be placed inside a <code class="docutils literal notranslate"><span class="pre">for</span></code>-loop.</p>
-<p>Note that qd.func’s are inlined, so you can freely factorize these structures across qd.func boundaries.</p>
+<p>A <code class="docutils literal notranslate"><span class="pre">graph_do_while</span></code>-loop may only appear at the kernel top level or directly inside another <code class="docutils literal notranslate"><span class="pre">graph_do_while</span></code> body.</p>
+<p>Note that <code class="docutils literal notranslate"><span class="pre">qd.func</span></code>’s are inlined, so you can freely factorize these structures across <code class="docutils literal notranslate"><span class="pre">qd.func</span></code> boundaries.</p>
 </section>
 </section>
 <section id="performance">
@@ -734,8 +719,7 @@
         <span class="n">fn_1</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>
         <span class="n">fn_2</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>
         <span class="n">fn_3</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>
-        <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">):</span>
-            <span class="n">count</span><span class="p">[()]</span> <span class="o">=</span> <span class="n">count</span><span class="p">[()]</span> <span class="o">-</span> <span class="mi">1</span>
+        <span class="n">count</span><span class="p">[()]</span> <span class="o">=</span> <span class="n">count</span><span class="p">[()]</span> <span class="o">-</span> <span class="mi">1</span>   <span class="c1"># bare statement: runs every iteration</span>
 
 <span class="n">k1</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">count</span><span class="p">)</span>
 </pre></div>
@@ -815,8 +799,7 @@
         <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">a</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>
             <span class="o">....</span>
 
-        <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">):</span>
-            <span class="n">check_cond</span><span class="p">(</span><span class="n">cond</span><span class="p">)</span>  <span class="c1"># check whether we should continue</span>
+        <span class="n">check_cond</span><span class="p">(</span><span class="n">cond</span><span class="p">)</span>  <span class="c1"># bare @qd.func call: runs every iteration (keeps its inner loops parallel)</span>
 
 <span class="n">k1</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">cond</span><span class="p">)</span>
 </pre></div>
@@ -912,7 +895,6 @@
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#do-while-semantics">Do-while semantics</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#ndarray-vs-field">ndarray vs field</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#nested-loops-and-mixing-with-for-loops">Nested loops and mixing with for-loops</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#kernel-structure-restriction">Kernel structure restriction</a></li>
 </ul>
 </li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#performance">Performance</a><ul class="nav section-nav flex-column">

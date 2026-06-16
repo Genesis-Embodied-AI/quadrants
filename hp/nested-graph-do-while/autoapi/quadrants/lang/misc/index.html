@@ -864,18 +864,20 @@ value untouched.</p>
 <code class="docutils literal notranslate"><span class="pre">flag</span></code> (a scalar <code class="docutils literal notranslate"><span class="pre">qd.i32</span></code> ndarray) is non-zero.</p>
 <p>On SM 9.0+ (Hopper) GPUs this compiles to a native CUDA graph conditional while node. On older CUDA GPUs and
 non-CUDA backends it falls back to a host-side do-while loop.</p>
-<p>Only statements <strong>inside</strong> the <code class="docutils literal notranslate"><span class="pre">while</span> <span class="pre">qd.graph_do_while(...):</span></code> block repeat. A top-level <code class="docutils literal notranslate"><span class="pre">for</span></code>-loop placed
-before or after the block runs exactly once, so one-time init / writeback can live in the same kernel (or in
-separate non-graph kernels). Loop-carried state held in global memory carries normally between iterations because
-nothing outside the loop body resets it.</p>
+<p>Only statements <strong>inside</strong> the <code class="docutils literal notranslate"><span class="pre">while</span> <span class="pre">qd.graph_do_while(...):</span></code> block repeat. Work placed before or after the block
+at the kernel top level – a <code class="docutils literal notranslate"><span class="pre">for</span></code>-loop or a bare statement – runs exactly once, so one-time init / writeback can
+live in the same kernel (or in separate non-graph kernels). Loop-carried state held in global memory carries
+normally between iterations because nothing outside the loop body resets it.</p>
 <div class="admonition warning">
 <p class="admonition-title">Warning</p>
-<p>Reset the condition flag <strong>outside</strong> the loop body, never inside it. A reset such as <code class="docutils literal notranslate"><span class="pre">for</span> <span class="pre">_</span> <span class="pre">in</span> <span class="pre">range(1):</span>
-<span class="pre">counter[()]</span> <span class="pre">=</span> <span class="pre">N</span></code> placed within the <code class="docutils literal notranslate"><span class="pre">while</span></code> block is re-applied every iteration and the loop never terminates.
-Reset it before the loop (a run-once top-level <code class="docutils literal notranslate"><span class="pre">for</span></code>) or on the host between launches (<code class="docutils literal notranslate"><span class="pre">counter.fill(N)</span></code>).</p>
+<p>Reset the condition flag <strong>outside</strong> the loop body, never inside it. A reset such as <code class="docutils literal notranslate"><span class="pre">counter[()]</span> <span class="pre">=</span> <span class="pre">N</span></code> placed
+within the <code class="docutils literal notranslate"><span class="pre">while</span></code> block is re-applied every iteration and the loop never terminates. Reset it before the loop
+(a bare top-level statement runs once) or on the host between launches (<code class="docutils literal notranslate"><span class="pre">counter.fill(N)</span></code>).</p>
 </div>
-<p>A kernel that uses <code class="docutils literal notranslate"><span class="pre">qd.graph_do_while</span></code> may contain only <code class="docutils literal notranslate"><span class="pre">for</span></code>-loops and <code class="docutils literal notranslate"><span class="pre">qd.graph_do_while</span></code> <code class="docutils literal notranslate"><span class="pre">while</span></code>-loops at
-each top level; bare statements are rejected at compile time with a <code class="docutils literal notranslate"><span class="pre">QuadrantsSyntaxError</span></code>.</p>
+<p>Bare statements (assignments, <code class="docutils literal notranslate"><span class="pre">if</span></code>, <code class="docutils literal notranslate"><span class="pre">&#64;qd.func</span></code> calls) are allowed at the kernel top level and inside a
+<code class="docutils literal notranslate"><span class="pre">graph_do_while</span></code> body; each runs at the loop level it is written at (top level = once, inside a loop = every
+iteration). The one structural rule is that a <code class="docutils literal notranslate"><span class="pre">qd.graph_do_while</span></code> <code class="docutils literal notranslate"><span class="pre">while</span></code>-loop may appear only at the kernel top
+level or directly inside another <code class="docutils literal notranslate"><span class="pre">graph_do_while</span></code> body, not inside a <code class="docutils literal notranslate"><span class="pre">for</span></code>-loop.</p>
 <p>This function should not be called directly at runtime; it is recognised and transformed during AST compilation.
 Requires <code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel(graph=True)</span></code>.</p>
 </dd></dl>
