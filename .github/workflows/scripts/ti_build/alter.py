@@ -12,7 +12,7 @@ import psutil
 # -- own --
 from . import misc
 from .cmake import cmake_args
-from .compiler import get_cache_home
+from .misc import get_cache_home
 from .tinysh import Command
 
 
