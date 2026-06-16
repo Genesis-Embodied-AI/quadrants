@@ -41,9 +41,9 @@ def compute(a: qd.Template) -> None:
 
 **Experimental.** `requires_top_level` is an experimental feature and its behaviour or API may change in a future release.
 
-Some functions contain top-level for-loops, and thus must not be called from within top-level for-loops.
+Some qd.func contain for-loops that are assumed and intended to be top-level for-loops, that each become separate offloaded tasks, and ultimately separate device kernels. If such qd.func's are placed inside other for-loops, the qd.func will no longer generate the structure of offloaded tasks and device kernels assumed, and might either run very slowly, or crash, or give incorrect results.
 
-To both enforce this, and to signal to potential users/AIs that a func must not be called from within a top-level for-loop, you can annotate a `qd.func` with `qd.func(requires_top_level=True)`. This will throws `QuadrantsSyntaxError` at compile time if used within a for-loop.
+To enforce that a qd.func can only be used at top-level, a `qd.func` maybe be annotated with `qd.func(requires_top_level=True)`. This will throws `QuadrantsSyntaxError` at compile time if the `qd.func` is not called from top level.
 
 ```python
 @qd.func(requires_top_level=True)
