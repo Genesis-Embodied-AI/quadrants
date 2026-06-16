@@ -77,8 +77,7 @@ def solve(x: qd.types.ndarray(qd.f32, ndim=1),
     while qd.graph_do_while(counter):
         for i in range(x.shape[0]):
             x[i] = x[i] + 1.0
-        for i in range(1):
-            counter[()] = counter[()] - 1
+        counter[()] = counter[()] - 1   # bare statement: runs every iteration
 
 x = qd.ndarray(qd.f32, shape=(N,))
 counter = qd.ndarray(qd.i32, shape=())
@@ -103,8 +102,7 @@ def iterate(x: qd.types.ndarray(qd.f32, ndim=1),
     while qd.graph_do_while(counter):
         for i in range(x.shape[0]):
             x[i] = x[i] + 1.0
-        for i in range(1):
-            counter[()] = counter[()] - 1
+        counter[()] = counter[()] - 1
 ```
 
 **Boolean flag**: set a `keep_going` flag to 1, have the kernel set it to 0 when a convergence criterion is met.
@@ -117,9 +115,8 @@ def converge(x: qd.types.ndarray(qd.f32, ndim=1),
         for i in range(x.shape[0]):
             # ... do work ...
             pass
-        for i in range(1):  # top-level for loop => offloaded task, i.e. gpu kernel
-            if some_condition(x):
-                keep_going[()] = 0
+        if some_condition(x):       # bare `if` at the loop level is fine
+            keep_going[()] = 0
 ```
 
 ### Do-while semantics
@@ -149,28 +146,28 @@ def nested(x: qd.types.ndarray(qd.i32, ndim=1),
 
     while qd.graph_do_while(outer):
         # Reset the inner counter at the start of each outer iteration, else it only runs on the first outer pass.
-        for _ in range(1):  # top-level for loop => offloaded task, i.e. gpu kernel
-            inner[()] = 5
+        inner[()] = 5                  # bare statement: runs every outer iteration
         while qd.graph_do_while(inner):
             for i in range(x.shape[0]):
                 x[i] = x[i] + 1
-            for _ in range(1):
-                inner[()] = inner[()] - 1
-        for _ in range(1):
-            outer[()] = outer[()] - 1
+            inner[()] = inner[()] - 1
+        outer[()] = outer[()] - 1
 ```
 
-### Kernel structure restriction
+### Bare statements and where they run
 
-When a kernel uses `qd.graph_do_while()` anywhere, **every top-level statement** — both in the kernel body and inside each `graph_do_while` body — must be either a `for`-loop or a `qd.graph_do_while()` `while`-loop. Bare statements (assignments, `if`, etc.) at these levels are rejected with a `QuadrantsSyntaxError`. Wrap any such statement in a trivial loop:
+Bare statements — assignments (`counter[()] = counter[()] - 1`), `if`/`else`, and `@qd.func` calls — are allowed at the kernel top level and inside any `graph_do_while` body. Each one runs **at the level it is written at**: a bare statement at the kernel top level runs exactly once (before/after the loops, like an ordinary `graph=True` kernel), and a bare statement inside a `graph_do_while` body runs every iteration of that loop.
 
 ```python
-# Instead of:   counter[()] = counter[()] - 1
-for _ in range(1):  # top-level for loop => offloaded task, i.e. gpu kernel
-    counter[()] = counter[()] - 1
+while qd.graph_do_while(counter):
+    for i in range(x.shape[0]):
+        x[i] = x[i] + 1.0
+    counter[()] = counter[()] - 1   # bare: runs every iteration, no `for _ in range(1):` needed
 ```
 
-A `graph_do_while` `while`-loop may only appear at the kernel top level or directly inside another `graph_do_while` body — it cannot be placed inside a `for`-loop.
+> Earlier versions required wrapping bare statements in a one-trip `for _ in range(1):` loop. That is no longer necessary (the compiler now tags each statement with its own loop level). The old wrapping still works, but a `for _ in range(1):` around a `@qd.func` whose body is a parallel `for i in range(n):` would demote that loop to a single-thread serial inner loop and destroy its GPU parallelism — prefer a bare call, which keeps the inlined loop parallel. See quadrants issue #744.
+
+`for`-loops, `graph_do_while` loops, and bare statements may be freely ordered, mixed, and nested. The one placement rule that remains: a `graph_do_while` `while`-loop may only appear at the kernel top level or directly inside another `graph_do_while` body — it cannot be placed inside a `for`-loop.
 
 Note that qd.func's are inlined, so you can freely factorize these structures across qd.func boundaries.
 
@@ -284,8 +281,7 @@ def k1(a: qd.type.NDArray, count: qd.type.NDArray):
         fn_1(a)
         fn_2(a)
         fn_3(a)
-        for _ in range(1):
-            count[()] = count[()] - 1
+        count[()] = count[()] - 1   # bare statement: runs every iteration
 
 k1(a, count)
 ```
@@ -350,8 +346,7 @@ def k1(a: qd.type.NDArray, cond: qd.type.NDArray):
         for j in range(a.shape[0]):
             ....
 
-        for _ in range(1):
-            check_cond(cond)  # check whether we should continue
+        check_cond(cond)  # bare @qd.func call: runs every iteration (keeps its inner loops parallel)
 
 k1(a, cond)
 ```
