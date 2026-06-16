@@ -1048,6 +1048,12 @@ class ASTBuilder {
   void create_scope(std::unique_ptr<Block> &list, LoopType tp = NotLoop);
   void pop_scope();
 
+  // Warn if `qd.loop_config(name=...)` is set on a for-loop that is lexically nested inside another
+  // for-loop. Only top-level loops become separately offloaded (and therefore separately named) GPU
+  // kernels, so a name on a nested loop is silently dropped. `qd.checkpoint` and `qd.graph_do_while`
+  // do NOT count as nesting here (they keep their inner loops top-level / offloaded).
+  void warn_if_named_nested_loop();
+
   void bit_vectorize() {
     for_loop_dec_.config.is_bit_vectorized = true;
   }
