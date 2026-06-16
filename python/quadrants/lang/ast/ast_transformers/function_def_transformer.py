@@ -565,12 +565,21 @@ class FunctionDefTransformer:
 
     @staticmethod
     def _validate_graph_do_while_structure(body: list[ast.stmt]) -> None:
-        """If a kernel uses qd.graph_do_while() anywhere, enforce that every top-level statement list (the kernel body
-        and each graph_do_while body) contains only for-loops and graph_do_while while-loops. This keeps per-task
-        graph_do_while level tagging exact: the offloader tags a flushed serial (bound/listgen) task with the level of
-        the for-loop that flushed it, which is only correct if no bare top-level statement at a different level precedes
-        that for-loop. For-loops and graph_do_while loops may be freely mixed/nested; bare statements must be wrapped in
-        ``for _ in range(1):``. ``qd.loop_config(...)`` is exempt: it only tunes the next for-loop and emits no task."""
+        """If a kernel uses qd.graph_do_while() anywhere, enforce the structural rules that remain after
+        per-statement graph-region tagging landed (see the offloader's region-boundary flushing and
+        ``GraphRegionTag`` in the C++ IR).
+
+        Bare statements -- assignments, ``@qd.func`` calls, ``qd.loop_config(...)`` directives, ``if``
+        branches -- are now legal at the kernel top level *and* inside graph_do_while bodies: each lowers to
+        a serial task tagged with the graph_do_while level it was written at, so it runs exactly once at the
+        kernel top level and every iteration inside a loop (issue #744). The old ``for _ in range(1):``
+        wrapping is no longer required (it still works, since a one-trip for-loop is just an offloaded task).
+
+        What this still checks is genuine well-formedness the offloader / runtime cannot express: a
+        graph_do_while ``while``-loop may not carry an ``else`` clause, and a bare runtime ``while`` (other
+        than ``qd.graph_do_while()``) is not a valid statement in a graph kernel. The placement rule that a
+        graph_do_while loop may only sit at the kernel top level or directly inside another graph_do_while
+        body (not inside a for-loop) is enforced elsewhere during lowering."""
         uses_gdw = any(FunctionDefTransformer._is_graph_do_while_while(n) for stmt in body for n in ast.walk(stmt))
         if not uses_gdw:
             return
@@ -594,11 +603,23 @@ class FunctionDefTransformer:
                     raise QuadrantsSyntaxError("'else' clause for 'while' not supported in Quadrants kernels")
                 FunctionDefTransformer._validate_graph_do_while_stmt_list(stmt.body, is_kernel_top=False)
                 continue
+            # Bare statements are now correctly region-tagged by the offloader, so they are permitted at the
+            # kernel top level and inside graph_do_while bodies. `@qd.func` calls (bare `Expr`) inline at the
+            # current level, keeping their internal parallel for-loops parallel; bare assignments / directives
+            # lower to a serial task tagged at this level (run-once at the top level, every iteration inside a
+            # loop).
+            if isinstance(stmt, (ast.Expr, ast.Assign, ast.AugAssign, ast.AnnAssign)):
+                continue
+            if isinstance(stmt, ast.If):
+                # Recurse so a malformed graph_do_while nested inside an `if` is still caught.
+                FunctionDefTransformer._validate_graph_do_while_stmt_list(stmt.body, is_kernel_top=is_kernel_top)
+                FunctionDefTransformer._validate_graph_do_while_stmt_list(stmt.orelse, is_kernel_top=is_kernel_top)
+                continue
             where = "the kernel body" if is_kernel_top else "a qd.graph_do_while() body"
             raise QuadrantsSyntaxError(
-                f"When a kernel uses qd.graph_do_while(), {where} may contain only for-loops and "
-                f"qd.graph_do_while() while-loops (they may be freely mixed and nested). Wrap other "
-                f"statements in 'for _ in range(1):'. [offending stmt {i}: {type(stmt).__name__}]"
+                f"When a kernel uses qd.graph_do_while(), {where} may not contain a {type(stmt).__name__} "
+                f"statement. Allowed: for-loops, qd.graph_do_while() while-loops, bare assignments, and "
+                f"@qd.func calls (freely mixed and nested). [offending stmt {i}: {type(stmt).__name__}]"
             )
 
     @staticmethod
