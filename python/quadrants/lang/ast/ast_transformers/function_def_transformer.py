@@ -609,17 +609,23 @@ class FunctionDefTransformer:
 
     @staticmethod
     def _validate_graph_do_while_structure(body: list[ast.stmt]) -> None:
-        """If a kernel uses qd.graph_do_while() anywhere, enforce structural rules that keep per-task
-        graph_do_while level tagging exact (the offloader tags a flushed serial bound/listgen task with
-        the level of the for-loop that flushed it).
+        """If a kernel uses qd.graph_do_while() anywhere, enforce the structural rules that remain after
+        per-statement graph-region tagging landed (see the offloader's region-boundary flushing and
+        ``GraphRegionTag`` in the C++ IR).
 
-        At the *kernel top level* only for-loops, graph_do_while while-loops, and qd.checkpoint() blocks
-        are allowed; a bare statement there would re-execute every iteration (the E25 footgun) and must be
-        wrapped in ``for _ in range(1):``. *Inside* a graph_do_while body (and checkpoints within one)
-        everything already runs every iteration, so bare expression statements (``@qd.func`` calls and
-        directives like ``qd.loop_config(...)``) and ``if qd.static(...)`` compile-time branches are also
-        permitted -- their inlined for-loops are built while the level is active and so stay correctly
-        tagged. Bare assignments remain rejected everywhere (wrap in ``for _ in range(1):``)."""
+        Bare statements -- assignments, ``@qd.func`` calls, ``qd.loop_config(...)`` directives, ``if``
+        branches -- are now legal at the kernel top level *and* inside graph_do_while bodies: each lowers
+        to a serial task tagged with the graph_do_while level it was written at, so it runs exactly once
+        at the kernel top level and every iteration inside a loop. The old ``for _ in range(1):`` wrapping
+        is no longer required (it still works, since a one-trip for-loop is just an offloaded task).
+
+        What this still checks is genuine well-formedness that the offloader / runtime cannot express:
+          * a graph_do_while ``while``-loop may not carry an ``else`` clause;
+          * ``qd.checkpoint()`` / ``qd.graph_parallel()`` / ``qd.branch()`` block *shapes* (descended into
+            here; the full checks live in the respective ``_build_*`` helpers);
+          * a bare runtime ``while`` (other than ``qd.graph_do_while()``) is not a valid top-level / loop
+            statement in a graph kernel.
+        """
         uses_gdw = any(
             FunctionDefTransformer._is_graph_do_while_while(n) for stmt in body for n in ast.walk(stmt)
         )
@@ -628,7 +634,14 @@ class FunctionDefTransformer:
         FunctionDefTransformer._validate_graph_do_while_stmt_list(body, is_kernel_top=True)
 
     @staticmethod
-    def _validate_graph_do_while_stmt_list(stmts: list[ast.stmt], is_kernel_top: bool) -> None:
+    def _validate_graph_do_while_stmt_list(stmts: list[ast.stmt], is_kernel_top: bool, allow_bare: bool = True) -> None:
+        """Validate one statement list of a graph_do_while-using kernel.
+
+        ``allow_bare`` is True for "task territory" levels -- the kernel top level, graph_do_while bodies,
+        and qd.checkpoint() bodies -- where bare statements (assignments, ``@qd.func`` calls, directives)
+        are now correctly region-tagged by the offloader and so are permitted. It is False inside a
+        ``qd.branch()`` body, where concurrent scheduling means each statement must still be an offloaded
+        for-loop task (wrap scalars in ``for _ in range(1):``)."""
         for i, stmt in enumerate(stmts):
             if FunctionDefTransformer._is_docstring(stmt, i):
                 continue
@@ -645,53 +658,58 @@ class FunctionDefTransformer:
             if FunctionDefTransformer._is_checkpoint_with(stmt):
                 # A `with qd.checkpoint(...)` block groups offloaded tasks; it is a legal sibling of
                 # for-loops / graph_do_while loops (the canonical qipc "checkpoint inside loop" pattern).
-                # Its body is task territory (everything runs every iteration), so validate it with the
-                # in-loop rules. Nested checkpoints are rejected later in ASTTransformer._build_checkpoint_with.
+                # Its body is task territory: bare statements now pick up the checkpoint's cp_id via region
+                # tagging. Nested checkpoints are rejected later in ASTTransformer._build_checkpoint_with.
                 FunctionDefTransformer._validate_graph_do_while_stmt_list(stmt.body, is_kernel_top=False)
                 continue
             if FunctionDefTransformer._is_graph_parallel_with(stmt):
                 # A `with qd.graph_parallel()` region groups concurrent `with qd.branch()` members; it is
                 # a legal sibling of for-loops / checkpoints. Its body must be branch blocks (optionally
                 # under `if qd.static(...)`); the full check is in ASTTransformer._build_graph_parallel_with.
-                # Each branch body is task territory, validated here with the in-loop rules. Descend through
-                # `if` members so branches inside an optional-branch `if qd.static(...)` are reached too.
+                # Descend through `if` members so branches inside an optional-branch `if qd.static(...)` are
+                # reached too. Branch bodies stay strict (allow_bare=False): a bare statement there would
+                # need concurrent-branch scheduling that this change does not cover yet.
                 pending = list(stmt.body)
                 while pending:
                     member = pending.pop()
                     if FunctionDefTransformer._is_branch_with(member):
-                        FunctionDefTransformer._validate_graph_do_while_stmt_list(member.body, is_kernel_top=False)
+                        FunctionDefTransformer._validate_graph_do_while_stmt_list(
+                            member.body, is_kernel_top=False, allow_bare=False
+                        )
                     elif isinstance(member, ast.If):
                         pending.extend(member.body)
                         pending.extend(member.orelse)
                     elif isinstance(member, ast.For):
                         # `for ... in qd.static(...)` generates branches; descend so each unrolled branch
-                        # body is still validated with the in-loop rules. (A runtime for here is rejected
-                        # later by ASTTransformer._build_graph_parallel_with.)
+                        # body is still validated. (A runtime for here is rejected later by
+                        # ASTTransformer._build_graph_parallel_with.)
                         pending.extend(member.body)
                 continue
-            if not is_kernel_top:
-                # Inside a graph_do_while body (or a checkpoint within one) every statement already runs on
-                # every iteration, so the E25 "looks like it runs once" footgun -- which is purely a
-                # kernel-top-level concern -- does not apply here. Permit the task-emitting / directive
-                # statements the qipc graph kernels rely on:
-                #   * bare expression statements -- `@qd.func` calls (inlined, so their for-loops become
-                #     offloaded tasks tagged at this level) and loop directives like `qd.loop_config(...)`;
-                #   * `if qd.static(...)` compile-time branches (only the taken branch is emitted, at this
-                #     level).
-                # Their inlined for-loops are built while this level is active, so per-task level tagging
-                # stays exact. Bare assignments are still rejected (wrap them in `for _ in range(1):`).
-                if isinstance(stmt, ast.Expr):
+            if allow_bare:
+                # Bare statements are correctly region-tagged by the offloader, so they are permitted at
+                # the kernel top level, in graph_do_while bodies, and in checkpoint bodies. `@qd.func` calls
+                # (bare `Expr`) inline at the current level, keeping their internal parallel for-loops
+                # parallel; bare assignments / aug-assignments / directives lower to a serial task tagged at
+                # this level (run-once at the top level, every iteration inside a loop).
+                if isinstance(stmt, (ast.Expr, ast.Assign, ast.AugAssign, ast.AnnAssign)):
                     continue
                 if isinstance(stmt, ast.If):
-                    FunctionDefTransformer._validate_graph_do_while_stmt_list(stmt.body, is_kernel_top=False)
-                    FunctionDefTransformer._validate_graph_do_while_stmt_list(stmt.orelse, is_kernel_top=False)
+                    # Recurse so a malformed graph_do_while / checkpoint nested inside an `if` is caught.
+                    FunctionDefTransformer._validate_graph_do_while_stmt_list(stmt.body, is_kernel_top=is_kernel_top)
+                    FunctionDefTransformer._validate_graph_do_while_stmt_list(stmt.orelse, is_kernel_top=is_kernel_top)
                     continue
+            if not allow_bare:
+                raise QuadrantsSyntaxError(
+                    f"A qd.branch() body may contain only for-loops (each branch task must be an offloaded "
+                    f"for-loop; wrap scalar statements in 'for _ in range(1):'). "
+                    f"[offending stmt {i}: {type(stmt).__name__}]"
+                )
             where = "the kernel body" if is_kernel_top else "a qd.graph_do_while() body"
             raise QuadrantsSyntaxError(
-                f"When a kernel uses qd.graph_do_while(), {where} may contain only for-loops, "
-                f"qd.graph_do_while() while-loops, and qd.checkpoint() blocks (they may be freely "
-                f"mixed and nested). Wrap other statements in 'for _ in range(1):'. "
-                f"[offending stmt {i}: {type(stmt).__name__}]"
+                f"When a kernel uses qd.graph_do_while(), {where} may not contain a {type(stmt).__name__} "
+                f"statement. Allowed: for-loops, qd.graph_do_while() while-loops, qd.checkpoint() / "
+                f"qd.graph_parallel() blocks, bare assignments, and @qd.func calls (freely mixed and "
+                f"nested). [offending stmt {i}: {type(stmt).__name__}]"
             )
 
     @staticmethod
