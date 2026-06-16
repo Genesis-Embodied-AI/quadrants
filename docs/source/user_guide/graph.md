@@ -343,9 +343,15 @@ When we migrate this to graph do while, we get:
 @qd.kernel(graph=True)
 def k1(a: qd.type.NDArray, cond: qd.type.NDArray):
     while qd.graph_do_while(condition=cond):
-        fn_1(a, cond)
-        fn_2(a, cond)
-        fn_3(a, cond)
+        for j in range(a.shape[0]):  # off-loaded task (gpu kernel)
+            ....  # no need for cond check
+        for j in range(a.shape[0]):  # off-loaded task (gpu kernel)
+            ....
+        for j in range(a.shape[0]):
+            ....
+
+        for _ in range(1):
+            check_cond(cond)  # check whether we should continue
 
 k1(a, cond)
 ```
