@@ -49,9 +49,18 @@ def setup_clang(as_compiler=True) -> None:
         clang = join(brew_prefix, "opt", "llvm@22", "bin", "clang")
         clangpp = join(brew_prefix, "opt", "llvm@22", "bin", "clang++")
     elif (u.system, u.machine) == ("Windows", "AMD64"):
-        out = get_cache_home() / "clang-22-1-0"
-        url = "https://github.com/Genesis-Embodied-AI/quadrants-sdk-builds/releases/download/llvm-22.1.0-202603120808/taichi-llvm-22.1.0-windows-amd64.zip"
-        download_dep(url, out, force=True)
+        # Keep llvm_version / build_version in sync with setup_llvm() in llvm.py.
+        # The build_version is part of the cache dir name so a rebuilt or bumped archive lands in a
+        # fresh directory; this lets download_dep's own cache check skip re-extraction on every run
+        # (previously forced via force=True, which re-extracted ~1GB on every build.py invocation).
+        llvm_version = "22.1.0"
+        build_version = "202603120808"
+        out = get_cache_home() / f"clang-{llvm_version}-{build_version}"
+        url = (
+            "https://github.com/Genesis-Embodied-AI/quadrants-sdk-builds/releases/download/"
+            f"llvm-{llvm_version}-{build_version}/taichi-llvm-{llvm_version}-windows-amd64.zip"
+        )
+        download_dep(url, out)
         clang = str(out / "bin" / "clang++.exe").replace("\\", "\\\\")
         clangpp = clang
     else:
