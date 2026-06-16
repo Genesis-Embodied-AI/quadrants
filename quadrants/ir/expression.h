@@ -34,7 +34,7 @@ class Expression {
 
     template <typename T, typename... Args>
     T *push_back(Args &&...args) {
-      Stmt *s = stmts.push_back<T>(std::forward<Args>(args)...);
+      T *s = stmts.push_back<T>(std::forward<Args>(args)...);
       s->region_tag = region_tag;
       return s;
     }
