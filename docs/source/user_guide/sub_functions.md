@@ -43,7 +43,7 @@ def compute(a: qd.Template) -> None:
 
 Some functions contain top-level for-loops, and thus must not be called from within top-level for-loops.
 
-To both enforce this, and to signal to potential users/AIs that a func must not be called from within a top-level for-loop, you can annotate a `qd.func` with `qd.func(requires_top_level=True)`. This will throws `QuadrantsSyntaxError` at compile time if used within a for-loop.
+To both enforce this, and to signal that a func must not be called from within a top-level for-loop, you can annotate a `qd.func` with `qd.func(requires_top_level=True)`. This will throws `QuadrantsSyntaxError` at compile time if used within a for-loop.
 
 ```python
 @qd.func(requires_top_level=True)
