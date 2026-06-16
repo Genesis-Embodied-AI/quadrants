@@ -28,15 +28,33 @@ _NONE, _REVERSE = (
 F = TypeVar("F", bound=Callable)
 
 
-def func(fn: F, is_real_function: bool = False) -> F:
+@overload
+def func(fn: F, *, is_real_function: bool = ..., requires_top_level: bool = ...) -> F: ...
+
+
+@overload
+def func(fn: None = ..., *, is_real_function: bool = ..., requires_top_level: bool = ...) -> Callable[[F], F]: ...
+
+
+def func(fn=None, *, is_real_function=False, requires_top_level=False):
     """Marks a function as callable in Quadrants-scope.
 
     This decorator transforms a Python function into a Quadrants one. Quadrants
     will JIT compile it into native instructions.
 
+    Can be applied bare (``@qd.func``) or with parameters (``@qd.func(requires_top_level=True)``).
+
     Args:
         fn (Callable): The Python function to be decorated
         is_real_function (bool): Whether the function is a real function
+        requires_top_level (bool): **Experimental** (behaviour/API may change). If True, the func may only
+            be called at the **top level** of a kernel (or directly inside a ``while qd.graph_do_while(...)``
+            body). Calling it nested inside ordinary runtime ``for`` / ``if`` / ``while`` control flow raises a
+            :class:`QuadrantsSyntaxError` at compile time. Intended for multi-phase device ops whose per-phase
+            top-level ``for`` loops must each lower to their own offloaded launch (e.g. the ``qd.algorithms``
+            reductions / scans / sort); nesting the call demotes those loops out of top-level position,
+            collapsing the inter-phase grid-wide barriers and silently corrupting the result. ``qd.static``
+            (compile-time) loops do not trip the check.
 
     Returns:
         Callable: The decorated function
@@ -51,15 +69,27 @@ def func(fn: F, is_real_function: bool = False) -> F:
         >>> def run():
         >>>     print(foo(40))  # 42
     """
-    is_classfunc = _inside_class(level_of_class_stackframe=3 + is_real_function)
 
-    fun = Func(fn, _classfunc=is_classfunc, is_real_function=is_real_function)
-    quadrants_callable = QuadrantsCallable(fn, fun)
-    quadrants_callable._is_quadrants_function = True
-    quadrants_callable._is_real_function = is_real_function
+    def decorator(fn: F, _bare: bool = False) -> F:
+        # Bare ``@qd.func`` reaches ``decorator`` from inside ``func`` (one extra stack frame); the
+        # factory form ``@qd.func(...)`` is invoked directly by Python. Add the extra level in the
+        # bare case so ``_inside_class`` inspects the user's class/def frame in both forms (mirrors
+        # the offset handling in ``kernel``).
+        level = (4 if _bare else 3) + is_real_function
+        is_classfunc = _inside_class(level_of_class_stackframe=level)
 
-    update_wrapper(quadrants_callable, fn)
-    return cast(F, quadrants_callable)
+        fun = Func(fn, _classfunc=is_classfunc, is_real_function=is_real_function)
+        quadrants_callable = QuadrantsCallable(fn, fun)
+        quadrants_callable._is_quadrants_function = True
+        quadrants_callable._is_real_function = is_real_function
+        quadrants_callable._qd_requires_top_level = requires_top_level
+
+        update_wrapper(quadrants_callable, fn)
+        return cast(F, quadrants_callable)
+
+    if fn is None:
+        return decorator
+    return decorator(fn, _bare=True)
 
 
 def real_func(fn: Callable) -> QuadrantsCallable:
