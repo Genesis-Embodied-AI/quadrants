@@ -78,33 +78,72 @@ class Offloader {
     pending_serial_statements->grid_dim = 1;
     pending_serial_statements->block_dim = 1;
 
-    // `level_id` is the innermost graph_do_while level of the for-loop that triggered the flush; the
-    // pending serial holds that for-loop's implicit bound/listgen computations, so it belongs to the
-    // same level. The final flush (no following for-loop) passes -1 (outside all loops). The frontend
-    // restriction (gdw bodies / gdw-using kernels contain only for-loops + gdw whiles) guarantees a
-    // pending serial never mixes statements from two different levels.
-    // `sp_group_id` is the stream_parallel_group_id (qd.branch / qd.stream_parallel) of the for-loop that
-    // triggered the flush. The pending serial holds that loop's implicit bound/listgen computations, so it
-    // belongs to the same concurrency branch and must carry the same group id -- otherwise the bound task
-    // (group 0) would split the branch's contiguous run and defeat the CUDA graph builder's fork/join.
-    // The same frontend restriction that keeps a pending serial within one graph_do_while level (gdw
-    // bodies / regions contain only for-loops) keeps it within one branch, so this never mixes groups.
-    auto assemble_serial_statements = [&](int level_id = -1, int sp_group_id = 0) {
+    // `bucket_tag` is the graph-region (graph_do_while level + checkpoint cp_id + stream_parallel /
+    // branch group) of the *side-effecting* statement(s) currently buffered in `pending_serial_statements`;
+    // `bucket_has_side_effect` records whether any such statement is present. A flushed serial task that
+    // carries real side effects is tagged with the region the work was *written* at -- read from the
+    // statement's own `region_tag` (stamped at frontend build, propagated through lowering) -- rather than
+    // borrowing the level of whatever for-loop happens to trigger the flush. This is what lets a bare
+    // statement / an inlined `@qd.func` body run at the graph_do_while level it was written at (run-once at
+    // the kernel top level, every iteration inside a loop) instead of being silently swept into the wrong
+    // loop level (issue #744).
+    //
+    // Pure (side-effect-free) buffered statements -- shared constants and for-loop bound/listgen
+    // computations that CSE / LICM hoist to the kernel root -- are deliberately NOT tagged from their own
+    // `region_tag`: hoisting leaves that tag stale (it still names the loop body the value was first
+    // written in, even though the value now lives outside all loops, and one hoisted value may be shared by
+    // loops at several different levels). A pure-only bucket instead borrows the region of the for-loop that
+    // triggers its flush (the original offloader behaviour, passed in as `fallback_tag`). That keeps a
+    // loop-invariant helper computation contiguous with -- and at the same level as -- the loop that
+    // consumes it, which the host-side graph_do_while driver requires (it rebuilds the loop nesting from a
+    // flat, contiguity-assuming task list, so a stray top-level task wedged inside a loop body's run would
+    // split the body and the loop counter would never decrement). Running such a value once per loop
+    // iteration is harmless because it is loop-invariant by construction.
+    GraphRegionTag bucket_tag;
+    bool bucket_has_side_effect = false;
+    auto assemble_serial_statements = [&](GraphRegionTag fallback_tag = GraphRegionTag{}) {
       if (!pending_serial_statements->body->statements.empty()) {
-        pending_serial_statements->graph_do_while_level_id = level_id;
-        pending_serial_statements->stream_parallel_group_id = sp_group_id;
+        const GraphRegionTag tag = bucket_has_side_effect ? bucket_tag : fallback_tag;
+        pending_serial_statements->graph_do_while_level_id = tag.graph_do_while_level_id;
+        pending_serial_statements->stream_parallel_group_id = tag.stream_parallel_group_id;
+        pending_serial_statements->checkpoint_id = tag.checkpoint_id;
         root_block->insert(std::move(pending_serial_statements));
         pending_serial_statements = Stmt::make_typed<OffloadedStmt>(OffloadedStmt::TaskType::serial, arch, kernel);
         pending_serial_statements->grid_dim = 1;
         pending_serial_statements->block_dim = 1;
+        bucket_has_side_effect = false;
+        bucket_tag = GraphRegionTag{};
       }
+    };
+
+    // Buffer a serial (non-for) statement. A side-effecting statement establishes -- and must match -- the
+    // bucket's region: if it belongs to a different region than the side effects already buffered, flush
+    // first so a serial task never mixes two regions' observable writes. Pure statements ride along in
+    // whatever bucket is current and never force a flush or change its region (their own region tag is
+    // untrustworthy after hoisting; see the note above).
+    auto push_serial_statement = [&](std::unique_ptr<Stmt> &&serial_stmt) {
+      if (serial_stmt->has_global_side_effect()) {
+        if (bucket_has_side_effect && serial_stmt->region_tag != bucket_tag) {
+          assemble_serial_statements();
+        }
+        if (!bucket_has_side_effect) {
+          bucket_tag = serial_stmt->region_tag;
+          bucket_has_side_effect = true;
+        }
+      }
+      pending_serial_statements->body->insert(std::move(serial_stmt));
     };
 
     for (int i = 0; i < (int)root_statements.size(); i++) {
       auto &stmt = root_statements[i];
       // Note that stmt->parent is root_block, which doesn't contain stmt now.
       if (auto s = stmt->cast<RangeForStmt>(); s && !s->strictly_serialized) {
-        assemble_serial_statements(s->graph_do_while_level_id, s->stream_parallel_group_id);
+        // Pure-only fallback (see push_serial_statement): keep `checkpoint_id = -1` so a hoisted
+        // bound/listgen computation always runs and is never checkpoint-gated away on a resume launch,
+        // which would leave the loop reading a stale global-temp bound. Side-effecting buckets ignore this
+        // fallback and use their own region (including their real checkpoint_id).
+        assemble_serial_statements(
+            GraphRegionTag{s->graph_do_while_level_id, /*checkpoint_id=*/-1, s->stream_parallel_group_id});
         auto offloaded = Stmt::make_typed<OffloadedStmt>(OffloadedStmt::TaskType::range_for, arch, kernel);
         // offloaded->body is an empty block now.
         offloaded->grid_dim = config.saturating_grid_dim;
@@ -145,10 +184,12 @@ class Offloader {
         offloaded->loop_name = s->loop_name;
         root_block->insert(std::move(offloaded));
       } else if (auto st = stmt->cast<StructForStmt>()) {
-        assemble_serial_statements(st->graph_do_while_level_id, st->stream_parallel_group_id);
+        assemble_serial_statements(
+            GraphRegionTag{st->graph_do_while_level_id, /*checkpoint_id=*/-1, st->stream_parallel_group_id});
         emit_struct_for(st, root_block, config, st->mem_access_opt);
       } else if (auto st = stmt->cast<MeshForStmt>()) {
-        assemble_serial_statements(st->graph_do_while_level_id);
+        assemble_serial_statements(GraphRegionTag{st->graph_do_while_level_id, /*checkpoint_id=*/-1,
+                                                  /*stream_parallel_group_id=*/0});
         auto offloaded = Stmt::make_typed<OffloadedStmt>(OffloadedStmt::TaskType::mesh_for, arch, kernel);
         offloaded->grid_dim = config.saturating_grid_dim;
         if (st->block_dim == 0) {
@@ -169,7 +210,7 @@ class Offloader {
         offloaded->graph_do_while_level_id = st->graph_do_while_level_id;
         root_block->insert(std::move(offloaded));
       } else {
-        pending_serial_statements->body->insert(std::move(stmt));
+        push_serial_statement(std::move(stmt));
       }
     }
     assemble_serial_statements();

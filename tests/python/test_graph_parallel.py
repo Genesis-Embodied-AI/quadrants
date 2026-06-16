@@ -639,5 +639,5 @@ def test_graph_parallel_static_loop_branch_body_in_gdw_rejects_bare_stmt():
 
     x = qd.ndarray(qd.i32, shape=(2, 8))
     counter = qd.ndarray(qd.i32, shape=())
-    with pytest.raises(qd.QuadrantsSyntaxError, match="may contain only for-loops"):
+    with pytest.raises(qd.QuadrantsSyntaxError, match="qd.branch\\(\\) body may contain only for-loops"):
         k(x, counter)

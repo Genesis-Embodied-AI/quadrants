@@ -383,6 +383,31 @@ class StmtFieldManager {
   mark_fields_registered(); \
   io(field_manager)
 
+// The graph-region a statement belongs to, for `@qd.kernel(graph=True)` kernels. Captures the
+// innermost `qd.graph_do_while()` nesting level, the enclosing `qd.checkpoint()` cp_id, and the
+// `qd.graph_parallel()` / `qd.branch()` concurrency group at the point in the source where the
+// statement was written. Stamped on every frontend statement by `ASTBuilder::insert`, propagated
+// onto lowered statements by `lower_ast`, and read by `offload.cpp` so that serial (non-for) work
+// is flushed into an offloaded task tagged with the level it was written at -- rather than the
+// level of whatever for-loop happens to flush the pending-serial bucket next. The defaults below
+// (`-1` / `-1` / `0`) mean "kernel top level, outside any checkpoint, no concurrency group", which
+// is the correct neutral value for ordinary (non-graph) kernels and for statements created by
+// passes outside a graph region. For-loop statements additionally carry the same three values in
+// their own dedicated fields (set from the `ForLoopConfig`); those are left in place for now.
+struct GraphRegionTag {
+  int graph_do_while_level_id{-1};
+  int checkpoint_id{-1};
+  int stream_parallel_group_id{0};
+
+  bool operator==(const GraphRegionTag &o) const {
+    return graph_do_while_level_id == o.graph_do_while_level_id && checkpoint_id == o.checkpoint_id &&
+           stream_parallel_group_id == o.stream_parallel_group_id;
+  }
+  bool operator!=(const GraphRegionTag &o) const {
+    return !(*this == o);
+  }
+};
+
 class Stmt : public IRNode {
  protected:
   std::vector<Stmt **> operands;
@@ -398,6 +423,9 @@ class Stmt : public IRNode {
   bool fields_registered;
   DataType ret_type;
   DebugInfo dbg_info;
+  // Graph-region this statement belongs to (see GraphRegionTag). Only meaningful for statements
+  // that can end up at the offloader's root level as serial work; ignored otherwise.
+  GraphRegionTag region_tag;
 
   Stmt();
   Stmt(const Stmt &stmt);
