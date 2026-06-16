@@ -202,6 +202,12 @@ Module Contents
 
 
 
+   .. py:attribute:: caller_in_non_static_control_flow
+      :type:  bool
+      :value: False
+
+
+
 .. py:class:: ASTTransformerFuncContext(global_context: ASTTransformerGlobalContext, template_slot_locations, end_lineno: int, is_kernel: bool, func: quadrants.lang._func_base.FuncBase, arg_features: list[tuple[Any, Ellipsis]] | None, global_vars: dict[str, Any], template_vars: dict[str, Any], is_pure: bool, py_args: tuple[Any, Ellipsis], file: str, src: list[str], start_lineno: int, ast_builder: quadrants._lib.core.quadrants_python.ASTBuilder | None, is_real_function: bool, autodiff_mode: AutodiffMode, raise_on_templated_floats: bool)
 
    .. py:attribute:: global_context
@@ -331,6 +337,12 @@ Module Contents
 
 
 
+   .. py:attribute:: inherited_non_static_control_flow
+      :type:  bool
+      :value: False
+
+
+
    .. py:attribute:: raise_on_templated_floats
 
 
@@ -375,6 +387,9 @@ Module Contents
 
 
    .. py:method:: is_in_non_static_control_flow() -> bool
+
+
+   .. py:method:: is_in_non_static_control_flow_including_caller() -> bool
 
 
    .. py:method:: is_in_static_scope() -> bool
