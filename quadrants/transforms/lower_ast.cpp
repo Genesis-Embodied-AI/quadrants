@@ -33,10 +33,14 @@ class LowerAST : public IRVisitor {
   std::unordered_set<Stmt *> detected_fors_with_break_;
   Block *current_block_;
   int current_block_depth_;
+  // Graph-region of the frontend statement currently being lowered. Copied into every FlattenContext
+  // so the lowered statements inherit the source statement's region (see GraphRegionTag / offload.cpp).
+  GraphRegionTag current_lowering_tag_;
 
   FlattenContext make_flatten_ctx() {
     FlattenContext fctx;
     fctx.current_block = this->current_block_;
+    fctx.region_tag = this->current_lowering_tag_;
     return fctx;
   }
 
@@ -53,9 +57,14 @@ class LowerAST : public IRVisitor {
     this->current_block_ = stmt_list;
     auto stmts = make_raw_pointer_list(stmt_list->statements);
     current_block_depth_++;
+    auto backup_tag = this->current_lowering_tag_;
     for (auto &stmt : stmts) {
+      // Carry the source statement's graph-region into lowering so the statements it expands into
+      // (loads / binops / stores, and any inlined operands) inherit it via make_flatten_ctx().
+      this->current_lowering_tag_ = stmt->region_tag;
       stmt->accept(this);
     }
+    this->current_lowering_tag_ = backup_tag;
     current_block_depth_--;
     this->current_block_ = backup_block;
   }

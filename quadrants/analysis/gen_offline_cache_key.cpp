@@ -590,6 +590,12 @@ class ASTSerializer : public IRVisitor, public ExpressionVisitor {
       emit(stmt->erased);
       emit(stmt->fields_registered);
       emit(stmt->ret_type);
+      // The graph-region (graph_do_while level / stream_parallel group) a statement sits in now affects
+      // how the offloader places it -- and graph_do_while emits no loop IR, so the region is otherwise
+      // invisible to the key. Two kernels that differ only in whether a bare statement is inside vs
+      // outside a graph_do_while loop must get distinct keys.
+      emit(stmt->region_tag.graph_do_while_level_id);
+      emit(stmt->region_tag.stream_parallel_group_id);
       stmt->accept(this);
     } else {
       emit(StmtOpCode::NIL);

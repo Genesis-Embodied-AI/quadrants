@@ -131,6 +131,7 @@ Stmt::Stmt(const Stmt &stmt) : field_manager(this), fields_registered(false) {
   erased = stmt.erased;
   dbg_info = stmt.dbg_info;
   ret_type = stmt.ret_type;
+  region_tag = stmt.region_tag;
 }
 
 Stmt::Stmt(const DebugInfo &dbg_info) : Stmt() {

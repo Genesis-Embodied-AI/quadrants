@@ -383,6 +383,42 @@ class StmtFieldManager {
   mark_fields_registered(); \
   io(field_manager)
 
+// The graph-region a statement belongs to, for `@qd.kernel(graph=True)` kernels. Captures the
+// innermost `qd.graph_do_while()` nesting level and the `qd.stream_parallel()` concurrency group at the
+// point in the source where the statement was written. Stamped on every frontend statement by
+// `ASTBuilder::insert`, propagated onto lowered statements by `lower_ast`, and read by `offload.cpp` so
+// that serial (non-for) work is flushed into an offloaded task tagged with the level it was written at --
+// rather than the level of whatever for-loop happens to flush the pending-serial bucket next. The
+// defaults below (`-1` / `0`) mean "kernel top level, no concurrency group", which is the correct
+// neutral value for ordinary (non-graph) kernels and for statements created by passes outside a graph
+// region. For-loop statements additionally carry the same two values in their own dedicated fields (set
+// from the `ForLoopConfig`); those are left in place for now.
+//
+// NOTE(checkpoint-reintroduction): this branch (hp/nested-graph-do-while) has no `qd.checkpoint()`
+// feature, so GraphRegionTag intentionally omits the `checkpoint_id` dimension that the qipc-integration
+// version of this fix carries. When the qd.checkpoint PR is merged onto this branch, reconcile against
+// `hp/qipc-integration` (commits bd499c745 + da2cdc910) as follows:
+//   * add `int checkpoint_id{-1};` here and to operator==;
+//   * stamp `current_checkpoint_id_` in `ASTBuilder::insert` (alongside the level / group);
+//   * in `offload.cpp`, tag a SIDE-EFFECTING serial task with its real `checkpoint_id` (a bare store
+//     inside a checkpoint must gate / skip on resume exactly like a range-for in that checkpoint);
+//   * BUT keep the PURE-bucket fallback at `checkpoint_id = -1` (always-run) -- a hoisted loop bound /
+//     constant that a later task reads must NOT be gated away on a `resume(from_checkpoint=...)` launch.
+//     Do NOT uniformly propagate the for-loop's checkpoint_id onto pure buckets.
+//   * emit `checkpoint_id` in `gen_offline_cache_key.cpp` alongside the other two fields.
+struct GraphRegionTag {
+  int graph_do_while_level_id{-1};
+  int stream_parallel_group_id{0};
+
+  bool operator==(const GraphRegionTag &o) const {
+    return graph_do_while_level_id == o.graph_do_while_level_id &&
+           stream_parallel_group_id == o.stream_parallel_group_id;
+  }
+  bool operator!=(const GraphRegionTag &o) const {
+    return !(*this == o);
+  }
+};
+
 class Stmt : public IRNode {
  protected:
   std::vector<Stmt **> operands;
@@ -398,6 +434,9 @@ class Stmt : public IRNode {
   bool fields_registered;
   DataType ret_type;
   DebugInfo dbg_info;
+  // Graph-region this statement belongs to (see GraphRegionTag). Only meaningful for statements
+  // that can end up at the offloader's root level as serial work; ignored otherwise.
+  GraphRegionTag region_tag;
 
   Stmt();
   Stmt(const Stmt &stmt);
