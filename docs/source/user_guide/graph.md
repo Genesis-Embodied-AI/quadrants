@@ -355,9 +355,9 @@ def k1(a: qd.type.NDArray, cond: qd.type.NDArray):
 
 k1(a, cond)
 ```
-The same as earlier.
+Similar to earlier.
 
-This is now optimal on gpu-do-while supported hardware, and the performance on unsupported hardware is identical to in the earlier section.
+This is now optimal on gpu-do-while supported hardware, and the performance on unsupported hardware is similar to in the earlier section.
 
 HOWEVER, for unsupported hardware the baseline has changed, so the gpu pipeline stalls are now relative to a pipeline stall free baseline.
 
