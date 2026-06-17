@@ -972,52 +972,22 @@
 
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_maybe_persist_l1_and_set_l2_key</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">:</span> <span class="s2">&quot;CompiledKernelKeyType&quot;</span><span class="p">,</span> <span class="n">py_args</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">Any</span><span class="p">,</span> <span class="o">...</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;After a successful materialize, persist L1 (if missing) and set ``fast_checksum`` to the L2 key.</span>
-
-<span class="sd">        Called at the end of ``materialize`` once both passes have completed (or once pass 1 has completed</span>
-<span class="sd">        with a loaded artifact). Two responsibilities:</span>
-
-<span class="sd">          1. If L1 was missing (``self._pruning_paths_from_l1 is None``), write the freshly-computed pruning info so</span>
-<span class="sd">             the next call from a new process can skip the args-walk warm-up.</span>
-
-<span class="sd">          2. If ``fast_checksum`` is still None (which means either L1 was missing, or L1 hit but phase 2 of</span>
-<span class="sd">             ``_try_load_fastcache`` saw a FIELD-related FastcacheSkip — in which case we keep ``None`` and the</span>
-<span class="sd">             post-compile ``src_hasher.store`` is skipped), compute the narrow args hash *now* using the just-</span>
-<span class="sd">             populated pruning info and derive the L2 key. The post-launch ``src_hasher.store`` call uses</span>
-<span class="sd">             ``self.fast_checksum`` as the L2 key.</span>
-
-<span class="sd">        Side-effect helper; split out from ``materialize`` to keep the compile loop readable.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
-        <span class="n">l1_key</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s2">&quot;_l1_key&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
-        <span class="k">if</span> <span class="ow">not</span> <span class="n">l1_key</span><span class="p">:</span>
-            <span class="k">return</span>  <span class="c1"># fastcache inactive for this kernel (not pure / no runtime.src_ll_cache)</span>
-        <span class="n">kernel_source_info</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s2">&quot;_kernel_source_info_cached&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
-        <span class="k">if</span> <span class="n">kernel_source_info</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-            <span class="k">return</span>
-        <span class="n">used_params</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">used_py_dataclass_parameters_by_key_enforcing</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">key</span><span class="p">)</span>
-        <span class="k">if</span> <span class="n">used_params</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-            <span class="k">return</span>
-        <span class="k">if</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s2">&quot;_pruning_paths_from_l1&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-            <span class="n">src_hasher</span><span class="o">.</span><span class="n">store_pruning_info</span><span class="p">(</span>
-                <span class="n">l1_key</span><span class="p">,</span>
-                <span class="bp">self</span><span class="o">.</span><span class="n">visited_functions</span><span class="p">,</span>
-                <span class="n">used_params</span><span class="p">,</span>
-                <span class="n">graph_do_while_arg</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">graph_do_while_arg</span><span class="p">,</span>
-            <span class="p">)</span>
-        <span class="c1"># If phase 2 didn&#39;t run (L1 cold) or returned None (FIELD encountered earlier — but in that case</span>
-        <span class="c1"># post-compile narrow hashing would also see the FIELD and produce None, which is fine: we want</span>
-        <span class="c1"># fast_checksum to stay None so no L2 entry is stored), compute the narrow args hash now.</span>
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">fast_checksum</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-            <span class="n">narrow_args_hash</span> <span class="o">=</span> <span class="n">src_hasher</span><span class="o">.</span><span class="n">compute_narrow_args_hash</span><span class="p">(</span>
-                <span class="bp">self</span><span class="o">.</span><span class="n">raise_on_templated_floats</span><span class="p">,</span>
-                <span class="n">kernel_source_info</span><span class="p">,</span>
-                <span class="n">py_args</span><span class="p">,</span>
-                <span class="bp">self</span><span class="o">.</span><span class="n">arg_metas</span><span class="p">,</span>
-                <span class="n">used_params</span><span class="p">,</span>
-            <span class="p">)</span>
-            <span class="k">if</span> <span class="n">narrow_args_hash</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-                <span class="bp">self</span><span class="o">.</span><span class="n">fast_checksum</span> <span class="o">=</span> <span class="n">src_hasher</span><span class="o">.</span><span class="n">make_full_cache_key</span><span class="p">(</span><span class="n">l1_key</span><span class="p">,</span> <span class="n">narrow_args_hash</span><span class="p">)</span>
-                <span class="bp">self</span><span class="o">.</span><span class="n">src_ll_cache_observations</span><span class="o">.</span><span class="n">cache_key_generated</span> <span class="o">=</span> <span class="kc">True</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Thin delegate to ``src_hasher.persist_l1_and_set_l2_key``; see that function&#39;s docstring for behaviour.&quot;&quot;&quot;</span>
+        <span class="n">new_fast_checksum</span><span class="p">,</span> <span class="n">generated</span> <span class="o">=</span> <span class="n">src_hasher</span><span class="o">.</span><span class="n">persist_l1_and_set_l2_key</span><span class="p">(</span>
+            <span class="n">l1_key</span><span class="o">=</span><span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s2">&quot;_l1_key&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">),</span>
+            <span class="n">kernel_source_info</span><span class="o">=</span><span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s2">&quot;_kernel_source_info_cached&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">),</span>
+            <span class="n">used_py_dataclass_parameters</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">used_py_dataclass_parameters_by_key_enforcing</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">key</span><span class="p">),</span>
+            <span class="n">visited_functions</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">visited_functions</span><span class="p">,</span>
+            <span class="n">graph_do_while_arg</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">graph_do_while_arg</span><span class="p">,</span>
+            <span class="n">pruning_paths_from_l1</span><span class="o">=</span><span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s2">&quot;_pruning_paths_from_l1&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">),</span>
+            <span class="n">fast_checksum</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">fast_checksum</span><span class="p">,</span>
+            <span class="n">raise_on_templated_floats</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">raise_on_templated_floats</span><span class="p">,</span>
+            <span class="n">py_args</span><span class="o">=</span><span class="n">py_args</span><span class="p">,</span>
+            <span class="n">arg_metas</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">arg_metas</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="k">if</span> <span class="n">generated</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">fast_checksum</span> <span class="o">=</span> <span class="n">new_fast_checksum</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">src_ll_cache_observations</span><span class="o">.</span><span class="n">cache_key_generated</span> <span class="o">=</span> <span class="kc">True</span>
 
 <div class="viewcode-block" id="Kernel.launch_kernel">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/kernel/index.html#quadrants.lang.kernel.Kernel.launch_kernel">[docs]</a>
