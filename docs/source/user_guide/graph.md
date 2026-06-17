@@ -7,7 +7,7 @@ Graphs reduce kernel launch overhead by capturing a sequence of GPU operations i
 | Feature | `qd.cuda` SM 9.0+ | `qd.cuda` < SM 9.0 | `qd.amdgpu` | `qd.metal` | `qd.vulkan` | `qd.cpu` |
 | --- | --- | --- | --- | --- | --- | --- |
 | `graph=True` | hardware accelerated | hardware accelerated | hardware accelerated | runs (no acceleration) | runs (no acceleration) | runs (no acceleration) |
-| `graph_do_while` | hardware accelerated | host fallback | host fallback | host fallback | host fallback | host fallback |
+| `qd.graph_do_while` | hardware accelerated | host fallback | host fallback | host fallback | host fallback | host fallback |
 | `qd.checkpoint` | GPU-side | GPU-side | GPU-side | GPU-side | GPU-side | host-side |
 
 ## Basic usage
@@ -156,7 +156,7 @@ Therefore on unsupported platforms, you might consider creating a second impleme
 
 > **Experimental.** `qd.checkpoint`, `qd.GraphStatus`, and `kernel.resume(from_checkpoint=...)` are experimental APIs. The shape of the public surface (the context-manager signature, the `@qd.kernel(checkpoints=True)` flag, the `GraphStatus` fields, the host-side resume loop, the error messages, and the cross-backend lowering details) may change in any future release without a deprecation cycle.
 
-`qd.checkpoint` lets a graph kernel pause partway through, surface a reason to the host, let the host fix things up, and resume from where it paused on the next launch. A typical use-case is an algorithm implemented as a graph that may need to allocate additional memory partway through, where the graph operations are in-place and simply retrying the whole graph from the start is not an option.
+`qd.checkpoint` lets a graph kernel pause partway through, surface a reason to the host, let the host fix things up, and resume from where it paused on the next launch. An example use-case is an algorithm implemented as a graph that may need to allocate additional memory partway through, where the graph operations are in-place, and therefore not idempotent, and therefore for which simply retrying the whole graph from the start is not an option.
 
 To use checkpoints:
 
@@ -237,4 +237,4 @@ while status.yielded:
           arr[i] = arr[i] + 1
   ```
 
-  The restriction is by design: each top-level statement inside a checkpoint becomes its own GPU task / graph node, so silently wrapping bare statements would hide a sequence of N field writes ballooning into N kernel launches. Forcing the user to write the `for`-wrap themselves keeps the lowering visible and gives a single obvious place to fuse multiple writes into one task by sharing a single wrapper.
+The restriction is by design: each top-level statement inside a checkpoint becomes its own GPU task / graph node, so silently wrapping bare statements would hide a sequence of N field writes ballooning into N kernel launches. Forcing the user to write the `for`-wrap themselves keeps the lowering visible and gives a single obvious place to fuse multiple writes into one task by sharing a single wrapper.
