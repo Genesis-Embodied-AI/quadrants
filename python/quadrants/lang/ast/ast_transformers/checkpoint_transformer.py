@@ -87,17 +87,14 @@ class CheckpointTransformer:
     def _resolve_cp_id(node: ast.expr, global_vars: dict) -> int:
         """Resolve the first positional arg of `qd.checkpoint(cp_id, ...)` to a Python int (or IntEnum instance).
 
-        Accepts (a) `ast.Constant` int literals (``qd.checkpoint(0, ...)``) and (b) `ast.Attribute` references to
+        Accepts (a) `ast.Constant` int literals (``qd.checkpoint(0, ...)``), (b) `ast.Attribute` references to
         `IntEnum` values resolved against the kernel's `global_vars` (``qd.checkpoint(Stage.SIM, ...)`` where ``Stage``
-        is an `IntEnum` defined at module scope). Returns the resolved value AS-IS (without re-wrapping through
-        `int(...)`) so an IntEnum member identity is preserved end-to-end -- the user writes
-        `qd.checkpoint(Stage.SIM, ...)`, then reads `status.checkpoint` and gets back `Stage.SIM`, not the raw int.
-        Bare-Name references to module-level int constants are intentionally NOT accepted: kernels marked
-        `@qd.kernel(fastcache=True)` (a.k.a. pure kernels) must not read module globals, and accepting
-        ``qd.checkpoint(CP_LOAD, ...)`` here would either silently bake the global into the cache key (wrong if the
-        constant changes) or require a per-kernel guard we don't have. Forcing int literals or IntEnum members keeps
-        the cache contract clean. Rejects everything else with a clear error so the user gets a compile-time
-        diagnostic rather than a confusing template-mapper failure later.
+        is an `IntEnum` defined at module scope), and (c) `ast.Name` references to module-level int constants
+        (``qd.checkpoint(CP_LOAD, ...)`` where ``CP_LOAD`` is an int defined at module scope). For (b) and (c) we
+        return the resolved value AS-IS (without re-wrapping through `int(...)`) so an IntEnum member identity is
+        preserved end-to-end -- the user writes `qd.checkpoint(Stage.SIM, ...)`, then reads `status.checkpoint` and
+        gets back `Stage.SIM`, not the raw int. Rejects everything else with a clear error so the user gets a
+        compile-time diagnostic rather than a confusing template-mapper failure later.
         """
         # Plain `qd.checkpoint(0, ...)` literal.
         if isinstance(node, ast.Constant) and isinstance(node.value, int) and not isinstance(node.value, bool):
@@ -111,13 +108,16 @@ class CheckpointTransformer:
                     val = getattr(container, node.attr)
                     if isinstance(val, int) and not isinstance(val, bool):
                         return val
+        # `qd.checkpoint(CP_LOAD, ...)` -- bare name referencing a module-level int constant.
+        if isinstance(node, ast.Name) and node.id in global_vars:
+            val = global_vars[node.id]
+            if isinstance(val, int) and not isinstance(val, bool):
+                return val
         raise QuadrantsSyntaxError(
             "qd.checkpoint() first argument must be an int literal or an IntEnum value (e.g. `Stage.SIM`). Got an "
             f"unresolvable expression at line {getattr(node, 'lineno', '?')}; the cp_id must be statically "
             "determinable at AST-walk time so the framework can build the label -> internal cp_id map and the "
-            "host-side resume API can refer to checkpoints by name. (Bare names referencing module-level constants "
-            "are intentionally not accepted because they conflict with `@qd.kernel(fastcache=True)`'s no-globals "
-            "contract.)"
+            "host-side resume API can refer to checkpoints by name."
         )
 
     @staticmethod
