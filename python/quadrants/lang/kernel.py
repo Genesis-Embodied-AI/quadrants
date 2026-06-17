@@ -310,13 +310,24 @@ class Kernel(FuncBase):
         self.materialized_kernels: dict[CompiledKernelKeyType, KernelCxx] = {}
         self.has_print = False
         self.use_graph: bool = False
+        # Opt-in flag set by `@qd.kernel(graph=True, checkpoints=True)`. When True, the AST transformer enables
+        # `qd.checkpoint(...)` recognition AND auto-wraps every top-level for-loop that isn't already inside a
+        # `with qd.checkpoint(...)` block in an implicit no-yield checkpoint. When False, any use of `qd.checkpoint(...)`
+        # in the kernel body is rejected at compile time with a fix-it pointing at `checkpoints=True`.
+        self.use_checkpoints: bool = False
         self.graph_do_while_arg: str | None = None
-        # Per-checkpoint metadata, one entry per `with qd.checkpoint(...)` block in declaration order. List index is the
-        # checkpoint's `cp_id` (0, 1, 2, ... flat across the kernel). Each entry is the name of the `yield_on=` kernel
-        # parameter, or `None` if the checkpoint has no `yield_on`. Populated by the AST transformer during frontend
-        # pass; empty means the kernel uses no checkpoints. Mirrors the `graph_do_while_arg` indirection but tracks one
-        # arg per checkpoint instead of one per kernel.
+        # Per-checkpoint metadata, one entry per `with qd.checkpoint(...)` block (explicit AND auto-injected implicit) in
+        # declaration order. List index is the checkpoint's internal `cp_id` (0, 1, 2, ... dense, flat across the
+        # kernel). Each entry is the name of the `yield_on=` kernel parameter, or `None` for implicit checkpoints (which
+        # never yield). Populated by the AST transformer; empty means the kernel uses no checkpoints.
         self.checkpoint_yield_on_args: list[str | None] = []
+        # User-facing labels for explicit checkpoints. Same indexing as `checkpoint_yield_on_args`: entry `i` is the int
+        # (or IntEnum value) the user passed as the first positional arg of `qd.checkpoint(cp_id, yield_on)` for the
+        # checkpoint whose internal cp_id is `i`. Implicit checkpoints (auto-wrapped) get `None` (they have no
+        # user-facing label and can never appear in `GraphStatus.checkpoint`). The label is preserved as-is so an
+        # `IntEnum` round-trips: writing `qd.checkpoint(Stage.SIM, ...)` and then reading `status.checkpoint` returns
+        # `Stage.SIM` rather than the raw int.
+        self.checkpoint_user_labels_by_cp_id: list[int | None] = []
         self.quadrants_callable: QuadrantsCallable | None = None
         self.visited_functions: set[FunctionSourceInfo] = set()
         self.kernel_function_info: FunctionSourceInfo | None = None
@@ -821,6 +832,23 @@ class Kernel(FuncBase):
         kernel_cpp = self.materialized_kernels[key]
         compiled_kernel_data = self.compiled_kernel_data_by_key.get(key, None)
         self.launch_observations.found_kernel_in_materialize_cache = compiled_kernel_data is not None
+        # Translate the user-supplied `from_checkpoint=` label into the dense, source-order internal cp_id the runtime
+        # uses. The label may be a raw int or an IntEnum value; the comparison below uses `==`, which IntEnum overloads
+        # to compare equal to its underlying int. Translation happens here (after `ensure_compiled`) because
+        # `checkpoint_user_labels_by_cp_id` is populated during AST processing inside `ensure_compiled`.
+        if _resume_from_checkpoint is not None:
+            found_internal = None
+            for internal_cp_id, label in enumerate(self.checkpoint_user_labels_by_cp_id):
+                if label is not None and label == _resume_from_checkpoint:
+                    found_internal = internal_cp_id
+                    break
+            if found_internal is None:
+                available = [lbl for lbl in self.checkpoint_user_labels_by_cp_id if lbl is not None]
+                raise RuntimeError(
+                    f"from_checkpoint={_resume_from_checkpoint!r} does not match any qd.checkpoint(cp_id=...) in kernel "
+                    f"{self.func.__name__!r}. Available cp_id labels (in source-declaration order): {available}."
+                )
+            _resume_from_checkpoint = found_internal
         # Only forward `_resume_from_checkpoint` when the caller actually supplied one (i.e. via `Kernel.resume(...)`).
         # Otherwise omit the kwarg entirely so subclasses / monkeypatches of `launch_kernel` that pre-date this kwarg
         # keep working unmodified. The host-side default in `LaunchContextBuilder` is 0 ("run every checkpoint"), which
@@ -852,6 +880,11 @@ class Kernel(FuncBase):
         if self.checkpoint_yield_on_args and any(n is not None for n in self.checkpoint_yield_on_args):
             cp = impl.get_runtime().prog.get_graph_last_yield_cp_id_on_last_call()
             if cp >= 0:
-                return _GraphStatus(yielded=True, checkpoint=cp)
+                # Translate the internal cp_id (dense, source-order, may point at an implicit checkpoint) to the
+                # user-supplied label so an IntEnum that the user passed in as the cp_id argument round-trips back into
+                # `GraphStatus.checkpoint`. Implicit checkpoints have `None` here, but they never have `yield_on=`, so
+                # the runtime can't surface them as the yielding cp -- the lookup is always to an explicit checkpoint.
+                user_label = self.checkpoint_user_labels_by_cp_id[cp] if cp < len(self.checkpoint_user_labels_by_cp_id) else None
+                return _GraphStatus(yielded=True, checkpoint=user_label if user_label is not None else cp)
             return _GraphStatus(yielded=False, checkpoint=None)
         return ret

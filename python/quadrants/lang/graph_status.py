@@ -46,5 +46,7 @@ class GraphStatus:
 
     def __repr__(self) -> str:
         if self.yielded:
-            return f"GraphStatus(yielded=True, checkpoint={self.checkpoint})"
+            # Use `!r` so an `IntEnum` cp_id is shown as `<Stage.LOAD: 0>` rather than collapsing to its raw int via
+            # `int.__format__` (which Python 3.10's `f"{IntEnum.X}"` does). Plain ints round-trip unchanged.
+            return f"GraphStatus(yielded=True, checkpoint={self.checkpoint!r})"
         return "GraphStatus(yielded=False)"

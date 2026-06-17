@@ -95,8 +95,8 @@ class QuadrantsCallable:
     def __call__(self, *args, **kwargs):
         return self.wrapper.__call__(*args, **kwargs)
 
-    def resume(self, *args, from_checkpoint: int, **kwargs):
-        """Re-launches the kernel, skipping every ``qd.checkpoint`` with ``cp_id < from_checkpoint``.
+    def resume(self, *args, from_checkpoint, **kwargs):
+        """Re-launches the kernel, skipping every ``qd.checkpoint(cp_id, ...)`` declared before ``from_checkpoint``.
 
         .. warning::
 
@@ -104,24 +104,32 @@ class QuadrantsCallable:
             (in particular the ``from_checkpoint=`` kwarg) and behaviour may change in any future release without a
             deprecation cycle.
 
-        Use only on ``@qd.kernel(graph=True)`` kernels with at least one ``qd.checkpoint(yield_on=...)`` block. The host
-        loop pattern is::
+        Use only on ``@qd.kernel(graph=True, checkpoints=True)`` kernels with at least one
+        ``qd.checkpoint(cp_id, yield_on=flag)`` block. ``from_checkpoint`` is a user-supplied ``cp_id`` label, typically
+        an ``IntEnum`` value: the framework matches it against the labels declared in source order and skips every
+        checkpoint (explicit AND auto-injected implicit) declared before the match. The host loop pattern is::
+
+            class Stage(IntEnum):
+                LOAD = 0
+                SIM = 1
+                REDUCE = 2
 
             status = step(arr, overflow_flag, newton_cond)
             while status.yielded:
-                handle_overflow_for(status.checkpoint, ...)
+                handle(status.checkpoint, ...)
                 status = step.resume(arr, overflow_flag, newton_cond,
                                      from_checkpoint=status.checkpoint)
 
         Returns the same ``GraphStatus`` shape as the plain call.
 
-        Raises ``RuntimeError`` if invoked on a kernel without any ``yield_on=`` checkpoint (there is no resume_point
-        slot to write to, so the call would be a no-op).
+        Raises ``RuntimeError`` if invoked on a kernel without any ``yield_on=`` checkpoint, or if ``from_checkpoint``
+        does not match any declared ``cp_id`` in the kernel.
         """
-        if not isinstance(from_checkpoint, int) or from_checkpoint < 0:
+        if not isinstance(from_checkpoint, int):
             raise RuntimeError(
-                f"from_checkpoint= must be a non-negative integer (typically `status.checkpoint` "
-                f"from the previous launch's GraphStatus); got {from_checkpoint!r}."
+                f"from_checkpoint= must be an int or IntEnum value matching a `qd.checkpoint(cp_id=...)` label in "
+                f"the kernel (typically `status.checkpoint` from the previous launch's GraphStatus); "
+                f"got {from_checkpoint!r}."
             )
         # Smuggle the resume cookie past the AST-mapped kwargs path; `Kernel.__call__` pops it before anything else
         # looks at kwargs.

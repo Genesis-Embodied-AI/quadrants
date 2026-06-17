@@ -26,6 +26,9 @@ from quadrants.lang._dataclass_util import create_flat_name
 from quadrants.lang.ast.ast_transformer_utils import (
     ASTTransformerFuncContext,
 )
+from quadrants.lang.ast.ast_transformers.checkpoint_transformer import (
+    CheckpointTransformer,
+)
 from quadrants.lang.ast.symbol_resolver import ASTResolver
 from quadrants.lang.buffer_view import BufferView
 from quadrants.lang.exception import (
@@ -510,6 +513,18 @@ class FunctionDefTransformer:
                 # different argument shape) start from an empty list. Mirrors how `graph_do_while_arg` gets overwritten
                 # unconditionally during AST traversal.
                 kernel.checkpoint_yield_on_args = []
+                kernel.checkpoint_user_labels_by_cp_id = []
+                # Auto-wrap pass for `@qd.kernel(graph=True, checkpoints=True)` kernels. Mutates `node.body` in place so
+                # every top-level for-loop (and every for-loop inside a `qd.graph_do_while` body) that the user did not
+                # already wrap in a `with qd.checkpoint(...)` gets wrapped in a synthetic implicit no-yield checkpoint.
+                # Implicit checkpoints share the same dense source-order internal cp_id space as explicit ones, but
+                # carry `None` in `checkpoint_user_labels_by_cp_id` so they never appear in `GraphStatus.checkpoint` /
+                # `kernel.resume(from_checkpoint=...)`. Runs here (after coverage instrumentation has already injected
+                # its top-level `_qd_cov[i] = 1` probes, which are bare assigns that the wrap pass intentionally leaves
+                # alone) so that the regular `build_stmts` walk below sees a uniform stream of `with qd.checkpoint(...)`
+                # blocks and bare prologue stmts.
+                if kernel.use_checkpoints:
+                    node.body = CheckpointTransformer.auto_wrap_for_loops(node.body)
 
         with ctx.variable_scope_guard():
             build_stmts(ctx, node.body)
