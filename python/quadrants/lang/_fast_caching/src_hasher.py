@@ -144,6 +144,66 @@ def store_pruning_info(
     cache.store(source_config_key, cache_value.model_dump_json())
 
 
+def persist_l1_and_set_l2_key(
+    *,
+    l1_key: str | None,
+    kernel_source_info: FunctionSourceInfo | None,
+    used_py_dataclass_parameters: set[str] | None,
+    visited_functions: Iterable[FunctionSourceInfo],
+    graph_do_while_arg: str | None,
+    pruning_paths_from_l1: set[str] | None,
+    fast_checksum: str | None,
+    raise_on_templated_floats: bool,
+    py_args: tuple[Any, ...],
+    arg_metas: Sequence[ArgMetadata],
+) -> tuple[str | None, bool]:
+    """After a successful materialize, persist L1 (if missing) and derive the L2 key.
+
+    Two responsibilities:
+
+      1. If L1 was missing (``pruning_paths_from_l1 is None``), write the freshly-computed pruning info so the next
+         call from a new process can skip the args-walk warm-up.
+
+      2. If ``fast_checksum`` is still ``None`` (either L1 was missing, or L1 hit but phase 2 of the warm-call load
+         path saw a FIELD-related ``FastcacheSkip`` and kept ``None``), compute the narrow args hash now using the
+         just-populated pruning info and derive the L2 key.
+
+    Returns ``(new_fast_checksum, generated)`` where ``generated`` is True iff this call freshly produced a non-None
+    L2 key (i.e. ``fast_checksum`` was ``None`` on entry and is non-None on return). The caller assigns
+    ``new_fast_checksum`` back to its kernel and uses ``generated`` to update its cache-observations counter.
+
+    Returns ``(None, False)`` if fastcache is inactive for this kernel (``l1_key`` falsy / source info missing /
+    used-params not recorded), or ``(fast_checksum, False)`` if nothing changed.
+    """
+    if not l1_key:
+        return None, False
+    if kernel_source_info is None:
+        return fast_checksum, False
+    if used_py_dataclass_parameters is None:
+        return fast_checksum, False
+    if pruning_paths_from_l1 is None:
+        store_pruning_info(
+            l1_key,
+            visited_functions,
+            used_py_dataclass_parameters,
+            graph_do_while_arg=graph_do_while_arg,
+        )
+    # If phase 2 didn't run (L1 cold) or returned None (FIELD encountered earlier — but in that case post-compile
+    # narrow hashing would also see the FIELD and produce None, which is fine: we want fast_checksum to stay None
+    # so no L2 entry is stored), compute the narrow args hash now.
+    if fast_checksum is None:
+        narrow_args_hash = compute_narrow_args_hash(
+            raise_on_templated_floats,
+            kernel_source_info,
+            py_args,
+            arg_metas,
+            used_py_dataclass_parameters,
+        )
+        if narrow_args_hash is not None:
+            return make_full_cache_key(l1_key, narrow_args_hash), True
+    return fast_checksum, False
+
+
 def load_pruning_info(
     source_config_key: str,
 ) -> tuple[set[str], str | None] | tuple[None, None]:

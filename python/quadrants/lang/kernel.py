@@ -541,52 +541,22 @@ class Kernel(FuncBase):
             self._maybe_persist_l1_and_set_l2_key(key, py_args)
 
     def _maybe_persist_l1_and_set_l2_key(self, key: "CompiledKernelKeyType", py_args: tuple[Any, ...]) -> None:
-        """After a successful materialize, persist L1 (if missing) and set ``fast_checksum`` to the L2 key.
-
-        Called at the end of ``materialize`` once both passes have completed (or once pass 1 has completed
-        with a loaded artifact). Two responsibilities:
-
-          1. If L1 was missing (``self._pruning_paths_from_l1 is None``), write the freshly-computed pruning info so
-             the next call from a new process can skip the args-walk warm-up.
-
-          2. If ``fast_checksum`` is still None (which means either L1 was missing, or L1 hit but phase 2 of
-             ``_try_load_fastcache`` saw a FIELD-related FastcacheSkip — in which case we keep ``None`` and the
-             post-compile ``src_hasher.store`` is skipped), compute the narrow args hash *now* using the just-
-             populated pruning info and derive the L2 key. The post-launch ``src_hasher.store`` call uses
-             ``self.fast_checksum`` as the L2 key.
-
-        Side-effect helper; split out from ``materialize`` to keep the compile loop readable.
-        """
-        l1_key = getattr(self, "_l1_key", None)
-        if not l1_key:
-            return  # fastcache inactive for this kernel (not pure / no runtime.src_ll_cache)
-        kernel_source_info = getattr(self, "_kernel_source_info_cached", None)
-        if kernel_source_info is None:
-            return
-        used_params = self.used_py_dataclass_parameters_by_key_enforcing.get(key)
-        if used_params is None:
-            return
-        if getattr(self, "_pruning_paths_from_l1", None) is None:
-            src_hasher.store_pruning_info(
-                l1_key,
-                self.visited_functions,
-                used_params,
-                graph_do_while_arg=self.graph_do_while_arg,
-            )
-        # If phase 2 didn't run (L1 cold) or returned None (FIELD encountered earlier — but in that case
-        # post-compile narrow hashing would also see the FIELD and produce None, which is fine: we want
-        # fast_checksum to stay None so no L2 entry is stored), compute the narrow args hash now.
-        if self.fast_checksum is None:
-            narrow_args_hash = src_hasher.compute_narrow_args_hash(
-                self.raise_on_templated_floats,
-                kernel_source_info,
-                py_args,
-                self.arg_metas,
-                used_params,
-            )
-            if narrow_args_hash is not None:
-                self.fast_checksum = src_hasher.make_full_cache_key(l1_key, narrow_args_hash)
-                self.src_ll_cache_observations.cache_key_generated = True
+        """Thin delegate to ``src_hasher.persist_l1_and_set_l2_key``; see that function's docstring for behaviour."""
+        new_fast_checksum, generated = src_hasher.persist_l1_and_set_l2_key(
+            l1_key=getattr(self, "_l1_key", None),
+            kernel_source_info=getattr(self, "_kernel_source_info_cached", None),
+            used_py_dataclass_parameters=self.used_py_dataclass_parameters_by_key_enforcing.get(key),
+            visited_functions=self.visited_functions,
+            graph_do_while_arg=self.graph_do_while_arg,
+            pruning_paths_from_l1=getattr(self, "_pruning_paths_from_l1", None),
+            fast_checksum=self.fast_checksum,
+            raise_on_templated_floats=self.raise_on_templated_floats,
+            py_args=py_args,
+            arg_metas=self.arg_metas,
+        )
+        if generated:
+            self.fast_checksum = new_fast_checksum
+            self.src_ll_cache_observations.cache_key_generated = True
 
     def launch_kernel(
         self, key, t_kernel: KernelCxx, compiled_kernel_data: CompiledKernelData | None, *args, qd_stream=None
