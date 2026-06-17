@@ -39,6 +39,7 @@ __all__ = [
         "impl",
         "inspect",
         "kernel_arguments",
+        "kernel_checkpoint",
         "kernel_impl",
         "matrix",
         "mesh",

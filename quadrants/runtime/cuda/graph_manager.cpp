@@ -506,11 +506,10 @@ bool GraphManager::try_launch(int launch_id,
   void *graph = nullptr;
   CUDADriver::get_instance().graph_create(&graph, 0);
 
-  // Target graph for kernel nodes. Without graph_do_while, work kernels go
-  // directly into the top-level graph. With graph_do_while, they go into
-  // a body graph inside a conditional while node. With qd.checkpoint() blocks, each
-  // contiguous run of same-cp_id tasks is further wrapped in an IF conditional node
-  // (gated by `resume_point`); tasks with cp_id == -1 stay siblings of the IF nodes.
+  // Target graph for kernel nodes. Without graph_do_while, work kernels go directly into the top-level graph. With
+  // graph_do_while, they go into a body graph inside a conditional while node. With qd.checkpoint() blocks, each
+  // contiguous run of same-cp_id tasks is further wrapped in an IF conditional node (gated by `resume_point`); tasks
+  // with cp_id == -1 stay siblings of the IF nodes.
   //
   //   Top-level graph
   //     └── (Conditional while node when use_graph_do_while, repeats while flag != 0)
@@ -568,13 +567,11 @@ bool GraphManager::try_launch(int launch_id,
   cp_id_storage.reserve(num_distinct_checkpoints + 1);
   std::size_t total_nodes = 0;
 
-  // Helper: emit the yield-check kernel for the just-closed checkpoint. On SM 9.0+ the node
-  // lives inside the closed IF body so it observes the body's writes to the user's yield_on
-  // ndarray; the node depends on `prev_inner`. On pre-Hopper (flat-graph path) it lives in
-  // the top-level graph chain and depends on `prev_outer`. In both cases the kernel atomic-
-  // CASes the first yielding cp_id into `yield_signal` and bumps `resume_point` to INT_MAX,
-  // which the codegen prologue / SM 9.0+ gate kernel reads to skip every subsequent
-  // checkpoint in the same launch.
+  // Helper: emit the yield-check kernel for the just-closed checkpoint. On SM 9.0+ the node lives inside the closed IF
+  // body so it observes the body's writes to the user's yield_on ndarray; the node depends on `prev_inner`. On pre-
+  // Hopper (flat-graph path) it lives in the top-level graph chain and depends on `prev_outer`. In both cases the
+  // kernel atomic-CASes the first yielding cp_id into `yield_signal` and bumps `resume_point` to INT_MAX, which the
+  // codegen prologue / SM 9.0+ gate kernel reads to skip every subsequent checkpoint in the same launch.
   auto emit_yield_check_for_closed_cp = [&]() {
     if (current_cp_id < 0)
       return;

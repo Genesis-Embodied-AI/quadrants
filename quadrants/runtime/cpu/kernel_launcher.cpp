@@ -211,11 +211,10 @@ void KernelLauncher::launch_llvm_kernel(Handle handle, LaunchContextBuilder &ctx
   bump_writes_for_kernel_llvm(executor->get_program(), &ctx, launcher_ctx.snode_writes_per_task,
                               launcher_ctx.arr_writes_per_task, launcher_ctx.arr_reads_per_task);
 
-  // Slice 6: resolve per-checkpoint `yield_on=` ndarray host pointers into
-  // `ctx.checkpoint_yield_on_dev_ptrs` so the host-branch gating in `launch_offloaded_tasks`
-  // can read the flag after each yield-bearing checkpoint body. Mirrors
-  // `cuda::GraphManager::resolve_ctx_ndarray_ptrs` but uses the already-resolved host pointers
-  // from the array_arg_ids walk above instead of separately translating DeviceAllocation handles.
+  // Slice 6: resolve per-checkpoint `yield_on=` ndarray host pointers into `ctx.checkpoint_yield_on_dev_ptrs` so the
+  // host-branch gating in `launch_offloaded_tasks` can read the flag after each yield-bearing checkpoint body. Mirrors
+  // `cuda::GraphManager::resolve_ctx_ndarray_ptrs` but uses the already-resolved host pointers from the array_arg_ids
+  // walk above instead of separately translating DeviceAllocation handles.
   ctx.checkpoint_yield_on_dev_ptrs.assign(ctx.checkpoint_yield_on_arg_ids.size(), nullptr);
   for (std::size_t cp = 0; cp < ctx.checkpoint_yield_on_arg_ids.size(); ++cp) {
     int arg_id = ctx.checkpoint_yield_on_arg_ids[cp];
