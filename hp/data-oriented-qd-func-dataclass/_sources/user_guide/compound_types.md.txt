@@ -182,8 +182,6 @@ class Simulation:
         # ... more ndarray / field / primitive members
 ```
 
-(Equivalent: set `_qd_stable_members = True` as a class attribute.)
-
 This skips a per-call walk that Quadrants otherwise runs to detect ndarray member rebinding between kernel launches. The walk is O(number of ndarray members) per kernel call, so the savings scale with the container's size.
 
 Microbenchmark on an RTX PRO 6000 Blackwell with a container holding 30 `qd.ndarray` members across two nesting levels, calling a trivial kernel that takes the container as a `qd.template()` arg:
