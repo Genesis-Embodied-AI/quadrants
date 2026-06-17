@@ -164,9 +164,7 @@ To enable the resume model, opt in at the decorator with `@qd.kernel(graph=True,
 from enum import IntEnum
 
 class Stage(IntEnum):
-    LOAD = 0
-    SIM = 1
-    REDUCE = 2
+    SIM = 0
 
 @qd.kernel(graph=True, checkpoints=True)
 def step(
@@ -175,24 +173,21 @@ def step(
     newton_cond: qd.types.ndarray(qd.i32, ndim=0),
 ):
     while qd.graph_do_while(newton_cond):
-        with qd.checkpoint(Stage.LOAD, yield_on=overflow_flag):
-            for i in range(arr.shape[0]):
-                # ...
-                pass
-        for i in range(arr.shape[0]):  # auto-wrapped implicit checkpoint, no label
+        for i in range(arr.shape[0]):  # auto-wrapped, no label
             # ...
             pass
         with qd.checkpoint(Stage.SIM, yield_on=overflow_flag):
             for i in range(arr.shape[0]):
                 # ...
                 pass
-        with qd.checkpoint(Stage.REDUCE, yield_on=overflow_flag):
-            for i in range(arr.shape[0]):
-                # ...
-                pass
+        for i in range(arr.shape[0]):  # auto-wrapped, no label
+            # ...
+            pass
 ```
 
-The `cp_id` argument is the user-facing label. It can be any int literal, an `IntEnum` value (as above), or a module-level int constant; the framework preserves the value as-is and surfaces it back through `GraphStatus.checkpoint`, so `qd.checkpoint(Stage.SIM, ...)` round-trips as `Stage.SIM` rather than the raw int `1`. Labels must be unique within a kernel.
+Only the for-loop that needs to surface a yield to the host is wrapped explicitly; the surrounding for-loops auto-wrap and run through transparently on every launch. On a `step.resume(..., from_checkpoint=Stage.SIM)`, the leading auto-wrap is skipped, `Stage.SIM` and the trailing auto-wrap run.
+
+The `cp_id` argument is the user-facing label. It can be any int literal, an `IntEnum` value (as above), or a module-level int constant; the framework preserves the value as-is and surfaces it back through `GraphStatus.checkpoint`, so `qd.checkpoint(Stage.SIM, ...)` round-trips as `Stage.SIM` rather than the raw int `0`. Labels must be unique within a kernel.
 
 ### Yield mechanism
 
