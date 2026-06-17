@@ -69,7 +69,8 @@ dev = [
     "wheel",
     "astunparse",
     "pre-commit",
-    "scikit-build",
+    "scikit-build-core>=0.10",  # build backend (was scikit-build classic)
+    "build",                    # `python -m build` / pip wheel frontend
     "setuptools_scm>=6.0",
     "numpy>=2.0.0",
     "ninja; platform_system != 'Windows'",

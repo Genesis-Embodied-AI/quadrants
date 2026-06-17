@@ -128,7 +128,7 @@ def chdir_to_root():
     root = Path("/")
     p = Path(__file__).resolve()
     while p != root:
-        if (p / "setup.py").exists():
+        if (p / "pyproject.toml").exists():
             os.chdir(p)
             break
         p = p.parent
