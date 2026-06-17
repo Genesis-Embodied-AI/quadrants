@@ -34,8 +34,9 @@ def checkpoint(cp_id, yield_on):
             the raw int.
         yield_on: Name of a kernel parameter that is a 0-d ``qd.types.ndarray(qd.i32, ndim=0)``. The body may write a
             non-zero value into it to signal "pause here, host needs to handle something". The framework never writes
-            into this buffer -- the host owns it and must clear it before ``kernel.resume(...)`` (otherwise the same
-            checkpoint will see the stale non-zero value and yield again).
+            into this buffer -- the host owns it end-to-end and must initialise it to ``0`` before the first launch
+            (``qd.ndarray`` is not zero-initialised) AND reset it to ``0`` before each ``kernel.resume(...)`` call
+            (otherwise the same checkpoint sees the stale non-zero value and yields again).
 
     Restrictions (enforced at kernel compile time):
       - Must be used inside ``@qd.kernel(graph=True, checkpoints=True)``.

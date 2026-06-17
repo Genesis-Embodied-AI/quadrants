@@ -198,7 +198,12 @@ When the body of a checkpoint writes a non-zero value into `yield_on[()]`:
 2. Everything after the yielding checkpoint in the same launch is skipped.
 3. `qd.checkpoint` will exit any surrounding `qd.graph_do_while`.
 
-The framework never writes into your `yield_on` buffer — you own it. That means you must clear it yourself before calling `kernel.resume(...)`, otherwise the body of the same checkpoint will see the stale non-zero value and yield again on the same condition, looping forever.
+The framework never writes into your `yield_on` buffer — you own it end-to-end. That means:
+
+- Before the **first** launch, initialise it to `0` (a freshly allocated `qd.ndarray` is not guaranteed to be zeroed).
+- Before each **resume** launch, reset it to `0` (otherwise the body of the same checkpoint sees the stale non-zero value and yields again on the same condition, looping forever).
+
+Alternatively, write the body so it stores into the flag unconditionally each time (e.g. `flag[()] = i32(needs_host)` where `needs_host` is a predicate the body always evaluates) — then the previous value is overwritten before the yield-check reads it and the initial / between-launch state doesn't matter.
 
 ### Host-side yield / resume loop
 
@@ -210,6 +215,7 @@ Kernels with at least one `qd.checkpoint(...)` block return a `qd.GraphStatus` f
 Resume by calling `kernel.resume(..., from_checkpoint=label)`. Everything before `label` in source order is skipped on the resume launch; everything from `label` onward runs normally. The canonical host loop:
 
 ```python
+overflow_flag[()] = 0  # initialise before the first launch
 status = step(arr, overflow_flag, newton_cond)
 while status.yielded:
     handle_overflow_for(status.checkpoint, ...)

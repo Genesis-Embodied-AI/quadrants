@@ -114,6 +114,7 @@ class QuadrantsCallable:
             class Stage(IntEnum):
                 SIM = 0
 
+            overflow_flag[()] = 0  # initialise before the first launch
             status = step(arr, overflow_flag, newton_cond)
             while status.yielded:
                 handle(status.checkpoint, ...)
