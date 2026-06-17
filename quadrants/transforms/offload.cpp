@@ -202,7 +202,7 @@ class Offloader {
         assemble_serial_statements(GraphRegionTag{st->graph_do_while_level_id, st->stream_parallel_group_id});
         emit_struct_for(st, root_block, config, st->mem_access_opt);
       } else if (auto st = stmt->cast<MeshForStmt>()) {
-        assemble_serial_statements(GraphRegionTag{st->graph_do_while_level_id, /*stream_parallel_group_id=*/0});
+        assemble_serial_statements(GraphRegionTag{st->graph_do_while_level_id, /*group=*/0});
         auto offloaded = Stmt::make_typed<OffloadedStmt>(OffloadedStmt::TaskType::mesh_for, arch, kernel);
         offloaded->grid_dim = config.saturating_grid_dim;
         if (st->block_dim == 0) {
