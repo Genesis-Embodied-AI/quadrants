@@ -644,6 +644,20 @@
 <div class="viewcode-block" id="ASTTransformerGlobalContext.caller_loop_depth">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.ASTTransformerGlobalContext.caller_loop_depth">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">caller_loop_depth</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span></div>
+
+        <span class="c1"># Caller-side &quot;am I (transitively) inside non-static control flow?&quot; snapshot for the in-flight `@qd.func`</span>
+        <span class="c1"># invocation. Each func compile creates a fresh `ASTTransformerFuncContext` whose own</span>
+        <span class="c1"># `non_static_control_flow_status` starts False, so a `@qd.func(requires_top_level=True)` reached *through* an</span>
+        <span class="c1"># unmarked helper called from a runtime for / if / while would not observe the caller&#39;s control-flow context</span>
+        <span class="c1"># and would escape the top-level check. `CallTransformer.build_Call` writes</span>
+        <span class="c1"># `ctx.is_in_non_static_control_flow() or &lt;inherited&gt;` here before invoking the func (so it accumulates down a</span>
+        <span class="c1"># multi-level call chain) and restores the previous value after; the new func ctx seeds</span>
+        <span class="c1"># `inherited_non_static_control_flow` from this field via `_func_base.py`. Kept separate from the live</span>
+        <span class="c1"># `non_static_control_flow_status` flag on purpose: that flag also gates the &quot;return inside non-static if/for&quot;</span>
+        <span class="c1"># diagnostic in `build_Return`, and seeding it True would spuriously reject a top-level `return` in a helper.</span>
+<div class="viewcode-block" id="ASTTransformerGlobalContext.caller_in_non_static_control_flow">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.ASTTransformerGlobalContext.caller_in_non_static_control_flow">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">caller_in_non_static_control_flow</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span></div>
 </div>
 
 
@@ -798,6 +812,14 @@
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext.loop_depth">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">loop_depth</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span></div>
 
+        <span class="c1"># Whether the (transitive) caller chain that reached this func compile was already inside non-static control</span>
+        <span class="c1"># flow. Seeded from `global_context.caller_in_non_static_control_flow` in `_func_base.py`; kernels start at the</span>
+        <span class="c1"># top of the call stack so they always begin False. Consulted (together with the local</span>
+        <span class="c1"># `non_static_control_flow_status`) by the `requires_top_level` guard in `CallTransformer.build_Call`.</span>
+<div class="viewcode-block" id="ASTTransformerFuncContext.inherited_non_static_control_flow">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext.inherited_non_static_control_flow">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">inherited_non_static_control_flow</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span></div>
+
 <div class="viewcode-block" id="ASTTransformerFuncContext.raise_on_templated_floats">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext.raise_on_templated_floats">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">raise_on_templated_floats</span> <span class="o">=</span> <span class="n">raise_on_templated_floats</span></div>
@@ -894,6 +916,17 @@
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext.is_in_non_static_control_flow">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">is_in_non_static_control_flow</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">non_static_control_flow_status</span><span class="o">.</span><span class="n">is_in_non_static_control_flow</span></div>
+
+
+<div class="viewcode-block" id="ASTTransformerFuncContext.is_in_non_static_control_flow_including_caller">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext.is_in_non_static_control_flow_including_caller">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">is_in_non_static_control_flow_including_caller</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+        <span class="c1"># Like `is_in_non_static_control_flow`, but also True when a (transitive) caller reached this func compile from</span>
+        <span class="c1"># within non-static control flow. Used by the `requires_top_level` guard so the check is not laundered by an</span>
+        <span class="c1"># intermediate unmarked `@qd.func`.</span>
+        <span class="k">return</span> <span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">non_static_control_flow_status</span><span class="o">.</span><span class="n">is_in_non_static_control_flow</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">inherited_non_static_control_flow</span>
+        <span class="p">)</span></div>
 
 
 <div class="viewcode-block" id="ASTTransformerFuncContext.is_in_static_scope">
