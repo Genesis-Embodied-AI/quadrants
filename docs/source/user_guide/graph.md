@@ -202,8 +202,6 @@ The framework never writes into your `yield_on` buffer — you own it end-to-end
 - Before the **first** launch, initialise it to `0` (a freshly allocated `qd.ndarray` is not guaranteed to be zeroed).
 - Before each **resume** launch, reset it to `0` (otherwise the body of the same checkpoint sees the stale non-zero value and yields again on the same condition, looping forever).
 
-Alternatively, write the body so it stores into the flag unconditionally each time (e.g. `flag[()] = i32(needs_host)` where `needs_host` is a predicate the body always evaluates) — then the previous value is overwritten before the yield-check reads it and the initial / between-launch state doesn't matter.
-
 ### Host-side yield / resume loop
 
 Kernels with at least one `qd.checkpoint(...)` block return a `qd.GraphStatus` from every launch (and from `kernel.resume(...)`). The status carries two fields:
