@@ -187,7 +187,7 @@ def step(
 
 Only the for-loop that needs to surface a yield to the host is wrapped explicitly; the surrounding for-loops auto-wrap and run through transparently on every launch. On a `step.resume(..., from_checkpoint=Stage.SIM)`, the leading auto-wrap is skipped, `Stage.SIM` and the trailing auto-wrap run.
 
-The `cp_id` argument is the user-facing label. It can be any int literal, an `IntEnum` value (as above), or a module-level int constant; the framework preserves the value as-is and surfaces it back through `GraphStatus.checkpoint`, so `qd.checkpoint(Stage.SIM, ...)` round-trips as `Stage.SIM` rather than the raw int `0`. Labels must be unique within a kernel.
+The `cp_id` argument is the user-facing label. It must be an int literal or an `IntEnum` value (as above); the framework preserves the value as-is and surfaces it back through `GraphStatus.checkpoint`, so `qd.checkpoint(Stage.SIM, ...)` round-trips as `Stage.SIM` rather than the raw int `0`. Labels must be unique within a kernel. (Bare names referencing module-level int constants are intentionally not accepted because they conflict with `@qd.kernel(fastcache=True)`'s no-globals contract.)
 
 ### Yield mechanism
 
@@ -222,7 +222,7 @@ Kernels decorated with `@qd.kernel(graph=True, checkpoints=True)` but containing
 ### Restrictions
 
 - Must be used inside `@qd.kernel(graph=True, checkpoints=True)`. Without the flag, `qd.checkpoint(...)` raises `QuadrantsSyntaxError` at compile time with a fix-it pointing at `checkpoints=True`.
-- `cp_id` must be statically determinable to an int / IntEnum value (literal, IntEnum member, or module-level int constant), and must be unique across the kernel.
+- `cp_id` must be an int literal or an `IntEnum` value, and must be unique across the kernel. Bare-Name references to module-level int constants are intentionally not accepted (they conflict with `@qd.kernel(fastcache=True)`'s no-globals rule).
 - `yield_on=` must be a kernel parameter that is a 0-d `qd.types.ndarray(qd.i32, ndim=0)`; expressions are not supported.
 - Checkpoints cannot be nested inside other checkpoints. Checkpoints inside a `qd.graph_do_while` body are fine and are the expected pattern.
 - The body of a `with qd.checkpoint(...)` block cannot contain bare top-level statements (assignments, augmented assignments, or bare call/expression statements). Every top-level statement must be inside a `for`-loop (or other control-flow construct) so the compiler can lower it as its own offloaded task with the correct `cp_id`. A docstring as the first statement is allowed. Bare statements raise `QuadrantsSyntaxError` at compile time with a fix-it pointing at the explicit one-iteration `for`-wrap:

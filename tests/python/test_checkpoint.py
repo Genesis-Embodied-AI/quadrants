@@ -184,7 +184,27 @@ def test_checkpoint_non_int_cp_id_raises():
 
     x = qd.ndarray(qd.i32, shape=(4,))
     flag = qd.ndarray(qd.i32, shape=())
-    with pytest.raises(qd.QuadrantsSyntaxError, match=r"must be an int literal, an IntEnum value"):
+    with pytest.raises(qd.QuadrantsSyntaxError, match=r"must be an int literal or an IntEnum value"):
+        k(x, flag)
+
+
+@test_utils.test()
+def test_checkpoint_bare_name_cp_id_rejected_for_fastcache_safety():
+    """A bare-Name ``cp_id`` (e.g. ``qd.checkpoint(_MODULE_LEVEL_CP_LOAD, ...)``) is rejected at compile time even when
+    the Name resolves to a real module-level int. Accepting it would silently read the kernel's module globals, which
+    conflicts with ``@qd.kernel(fastcache=True)``'s no-globals contract: a global rebind would invalidate the cached
+    compile without changing the cache key, producing stale-cache bugs. Forcing int literals or IntEnum members keeps
+    the cache contract clean and gives the user a clear compile-time message instead of a stale-cache surprise."""
+
+    @qd.kernel(graph=True, checkpoints=True)
+    def k(x: qd.types.ndarray(qd.i32, ndim=1), flag: qd.types.ndarray(qd.i32, ndim=0)):
+        with qd.checkpoint(_MODULE_LEVEL_CP_LOAD, yield_on=flag):
+            for i in range(x.shape[0]):
+                x[i] = x[i] + 1
+
+    x = qd.ndarray(qd.i32, shape=(4,))
+    flag = qd.ndarray(qd.i32, shape=())
+    with pytest.raises(qd.QuadrantsSyntaxError, match=r"int literal or an IntEnum value"):
         k(x, flag)
 
 
@@ -458,6 +478,12 @@ class _Stage(IntEnum):
     LOAD = 0
     SIM = 1
     REDUCE = 2
+
+
+# Module-level plain int constant. Used in `test_checkpoint_bare_name_cp_id_rejected_for_fastcache_safety` to pin the
+# rejection of `qd.checkpoint(<bare Name>, ...)` even when the Name *is* a real module-level int (the AST resolver
+# could look it up, but doing so would conflict with `@qd.kernel(fastcache=True)`'s no-globals contract).
+_MODULE_LEVEL_CP_LOAD = 0
 
 
 @test_utils.test()
