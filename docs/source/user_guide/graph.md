@@ -194,9 +194,8 @@ The `cp_id` argument is the label you'll use to identify the checkpoint from the
 
 When the body of a checkpoint writes a non-zero value into `yield_on[()]`:
 
-1. The kernel pauses at that checkpoint.
-2. Everything after the yielding checkpoint in the same launch is skipped.
-3. `qd.checkpoint` will exit any surrounding `qd.graph_do_while`.
+1. Everything after the yielding checkpoint in the same launch is skipped.
+2. `qd.checkpoint` will exit any surrounding `qd.graph_do_while`.
 
 The framework never writes into your `yield_on` buffer — you own it end-to-end. That means:
 
