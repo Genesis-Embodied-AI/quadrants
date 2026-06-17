@@ -24,14 +24,13 @@ struct ForLoopConfig {
   int block_dim{0};
   bool uniform{false};
   int stream_parallel_group_id{0};
-  // `cp_id` (see design doc `perso_hugh/doc/qipc/reentrant.md` section 5.1) of the enclosing
-  // `qd.checkpoint(...)` block when this for-loop is emitted, or `-1` when the for-loop is
-  // outside any checkpoint. Assigned by the AST builder's `current_checkpoint_id_` at
-  // `begin_frontend_*_for` time. Propagated through `FrontendForStmt` -> `RangeForStmt` /
-  // `StructForStmt` / `MeshForStmt` -> `OffloadedStmt` -> `OffloadedTask` so the GraphManager
-  // can group consecutive tasks by their `checkpoint_id` and wrap each group in an IF
-  // conditional node (slice 1c). Pure plumbing here in slice 1b; the runtime does not yet
-  // consume this field, so behaviour is unchanged for non-checkpoint code paths.
+  // `cp_id` (see design doc `perso_hugh/doc/qipc/reentrant.md` section 5.1) of the enclosing `qd.checkpoint(...)`
+  // block when this for-loop is emitted, or `-1` when the for-loop is outside any checkpoint. Assigned by the AST
+  // builder's `current_checkpoint_id_` at `begin_frontend_*_for` time. Propagated through `FrontendForStmt` ->
+  // `RangeForStmt` / `StructForStmt` / `MeshForStmt` -> `OffloadedStmt` -> `OffloadedTask` so the GraphManager can
+  // group consecutive tasks by their `checkpoint_id` and wrap each group in an IF conditional node (slice 1c). Pure
+  // plumbing here in slice 1b; the runtime does not yet consume this field, so behaviour is unchanged for non-
+  // checkpoint code paths.
   int checkpoint_id{-1};
   std::string loop_name{""};
 };
@@ -1089,13 +1088,12 @@ class ASTBuilder {
     current_stream_parallel_group_id_ = 0;
   }
 
-  // Open a new `qd.checkpoint(...)` scope. Each call advances `checkpoint_counter_` and
-  // returns the freshly assigned `cp_id`, which the AST transformer can echo back to the
-  // Python kernel for cross-checking against `kernel.checkpoint_yield_on_args[cp_id]`. All
-  // for-loops emitted between this call and the matching `end_checkpoint()` are tagged with
-  // this cp_id on their `ForLoopConfig.checkpoint_id` / `FrontendForStmt::checkpoint_id`.
-  // Nested checkpoints are forbidden -- the Python AST transformer raises on detection, but
-  // we re-check here so any future direct C++ caller cannot bypass it.
+  // Open a new `qd.checkpoint(...)` scope. Each call advances `checkpoint_counter_` and returns the freshly assigned
+  // `cp_id`, which the AST transformer can echo back to the Python kernel for cross-checking against
+  // `kernel.checkpoint_yield_on_args[cp_id]`. All for-loops emitted between this call and the matching
+  // `end_checkpoint()` are tagged with this cp_id on their `ForLoopConfig.checkpoint_id` /
+  // `FrontendForStmt::checkpoint_id`. Nested checkpoints are forbidden -- the Python AST transformer raises on
+  // detection, but we re-check here so any future direct C++ caller cannot bypass it.
   int begin_checkpoint() {
     QD_ERROR_IF(current_checkpoint_id_ != -1, "Nested qd.checkpoint() blocks are not supported");
     current_checkpoint_id_ = checkpoint_counter_++;

@@ -23,10 +23,9 @@ class KernelLauncher {
     return 0;
   }
 
-  // Number of `qd.checkpoint(...)` blocks (== IF conditional nodes) emitted for the most
-  // recent successful graph build / cached launch. `0` for non-CUDA backends (until slice 4/5
-  // adds the indirect-dispatch implementation), or for any kernel with no `qd.checkpoint()`
-  // blocks. Used by tests to assert the GraphManager actually wired the IF path.
+  // Number of `qd.checkpoint(...)` blocks (== IF conditional nodes) emitted for the most recent successful graph build
+  // / cached launch. `0` for non-CUDA backends (until slice 4/5 adds the indirect-dispatch implementation), or for any
+  // kernel with no `qd.checkpoint()` blocks. Used by tests to assert the GraphManager actually wired the IF path.
   virtual std::size_t get_graph_num_checkpoints_on_last_call() const {
     return 0;
   }
