@@ -27,8 +27,8 @@
   </noscript>
   
   <!-- Loaded before other Sphinx assets -->
-  <link href="../../../../_static/styles/theme.css?digest=0790524f97105ba85085" rel="stylesheet" />
-<link href="../../../../_static/styles/pydata-sphinx-theme.css?digest=0790524f97105ba85085" rel="stylesheet" />
+  <link href="../../../../_static/styles/theme.css?digest=a95f357e85573c9b56d5" rel="stylesheet" />
+<link href="../../../../_static/styles/pydata-sphinx-theme.css?digest=a95f357e85573c9b56d5" rel="stylesheet" />
 
     <link rel="stylesheet" type="text/css" href="../../../../_static/pygments.css?v=8f2a1f02" />
     <link rel="stylesheet" type="text/css" href="../../../../_static/copybutton.css?v=76b2166b" />
@@ -38,10 +38,10 @@
     <link rel="stylesheet" type="text/css" href="../../../../_static/css/custom.css" />
   
   <!-- So that users can add custom icons -->
-  <script defer src="../../../../_static/scripts/fontawesome.js?digest=0790524f97105ba85085"></script>
+  <script defer src="../../../../_static/scripts/fontawesome.js?digest=a95f357e85573c9b56d5"></script>
   <!-- Pre-loaded scripts that we'll load fully later -->
-  <link rel="preload" as="script" href="../../../../_static/scripts/bootstrap.js?digest=0790524f97105ba85085" />
-<link rel="preload" as="script" href="../../../../_static/scripts/pydata-sphinx-theme.js?digest=0790524f97105ba85085" />
+  <link rel="preload" as="script" href="../../../../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5" />
+<link rel="preload" as="script" href="../../../../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5" />
 
     <script src="../../../../_static/documentation_options.js?v=baaebd52"></script>
     <script src="../../../../_static/doctools.js?v=9bcbadda"></script>
@@ -371,7 +371,7 @@
 <div class="pst-scrollable-table-container"><table class="autosummary longtable table autosummary">
 <tbody>
 <tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.graph_status.GraphStatus" title="quadrants.lang.graph_status.GraphStatus"><code class="xref py py-obj docutils literal notranslate"><span class="pre">GraphStatus</span></code></a></p></td>
-<td><p>Result returned by a graph kernel that contains <code class="docutils literal notranslate"><span class="pre">qd.checkpoint(yield_on=...)</span></code> blocks.</p></td>
+<td><p>Result returned by a graph kernel that contains <code class="docutils literal notranslate"><span class="pre">qd.checkpoint(cp_id,</span> <span class="pre">yield_on=...)</span></code> blocks.</p></td>
 </tr>
 </tbody>
 </table>
@@ -382,20 +382,26 @@
 <dl class="py class">
 <dt class="sig sig-object py" id="quadrants.lang.graph_status.GraphStatus">
 <em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">quadrants.lang.graph_status.</span></span><span class="sig-name descname"><span class="pre">GraphStatus</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">yielded</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">checkpoint</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/graph_status.html#GraphStatus"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.graph_status.GraphStatus" title="Link to this definition">#</a></dt>
-<dd><p>Result returned by a graph kernel that contains <code class="docutils literal notranslate"><span class="pre">qd.checkpoint(yield_on=...)</span></code> blocks.</p>
+<dd><p>Result returned by a graph kernel that contains <code class="docutils literal notranslate"><span class="pre">qd.checkpoint(cp_id,</span> <span class="pre">yield_on=...)</span></code> blocks.</p>
 <div class="admonition warning">
 <p class="admonition-title">Warning</p>
 <p><strong>Experimental.</strong> <code class="docutils literal notranslate"><span class="pre">GraphStatus</span></code> is part of the experimental <code class="docutils literal notranslate"><span class="pre">qd.checkpoint</span></code> surface; its attributes and
 the conditions under which it is returned may change in any future release without a deprecation cycle.</p>
 </div>
-<p>Returned from <code class="docutils literal notranslate"><span class="pre">kernel(...)</span></code> and <code class="docutils literal notranslate"><span class="pre">kernel.resume(...,</span> <span class="pre">from_checkpoint=cp)</span></code> whenever the kernel was decorated with
-<code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel(graph=True)</span></code> and contains at least one checkpoint that has declared a <code class="docutils literal notranslate"><span class="pre">yield_on=</span></code> parameter. Read
-<code class="docutils literal notranslate"><span class="pre">status.yielded</span></code> to decide whether to keep running the host loop, and <code class="docutils literal notranslate"><span class="pre">status.checkpoint</span></code> to find out which
-checkpoint asked the host to handle something.</p>
-<p>Canonical usage (mirrors the qipc re-entrant pattern; see <code class="docutils literal notranslate"><span class="pre">graph.md</span></code>):</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">status</span> <span class="o">=</span> <span class="n">step</span><span class="p">(</span><span class="n">arr</span><span class="p">,</span> <span class="n">overflow_flag</span><span class="p">,</span> <span class="n">newton_cond</span><span class="p">)</span>
+<p>Returned from <code class="docutils literal notranslate"><span class="pre">kernel(...)</span></code> and <code class="docutils literal notranslate"><span class="pre">kernel.resume(...,</span> <span class="pre">from_checkpoint=label)</span></code> whenever the kernel was decorated
+with <code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel(graph=True,</span> <span class="pre">checkpoints=True)</span></code>. Read <code class="docutils literal notranslate"><span class="pre">status.yielded</span></code> to decide whether to keep running the
+host loop, and <code class="docutils literal notranslate"><span class="pre">status.checkpoint</span></code> to find out which checkpoint asked the host to handle something.</p>
+<p>Canonical usage (see <code class="docutils literal notranslate"><span class="pre">graph.md</span></code>):</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">enum</span><span class="w"> </span><span class="kn">import</span> <span class="n">IntEnum</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">Stage</span><span class="p">(</span><span class="n">IntEnum</span><span class="p">):</span>
+    <span class="n">SIM</span> <span class="o">=</span> <span class="mi">0</span>
+
+<span class="n">overflow_flag</span><span class="p">[()]</span> <span class="o">=</span> <span class="mi">0</span>  <span class="c1"># initialise before the first launch</span>
+<span class="n">status</span> <span class="o">=</span> <span class="n">step</span><span class="p">(</span><span class="n">arr</span><span class="p">,</span> <span class="n">overflow_flag</span><span class="p">,</span> <span class="n">newton_cond</span><span class="p">)</span>
 <span class="k">while</span> <span class="n">status</span><span class="o">.</span><span class="n">yielded</span><span class="p">:</span>
     <span class="n">handle_overflow_for</span><span class="p">(</span><span class="n">status</span><span class="o">.</span><span class="n">checkpoint</span><span class="p">,</span> <span class="o">...</span><span class="p">)</span>
+    <span class="n">overflow_flag</span><span class="p">[()]</span> <span class="o">=</span> <span class="mi">0</span>  <span class="c1"># the framework never clears your yield_on flag</span>
     <span class="n">status</span> <span class="o">=</span> <span class="n">step</span><span class="o">.</span><span class="n">resume</span><span class="p">(</span><span class="n">arr</span><span class="p">,</span> <span class="n">overflow_flag</span><span class="p">,</span> <span class="n">newton_cond</span><span class="p">,</span>
                          <span class="n">from_checkpoint</span><span class="o">=</span><span class="n">status</span><span class="o">.</span><span class="n">checkpoint</span><span class="p">)</span>
 </pre></div>
@@ -403,16 +409,16 @@ checkpoint asked the host to handle something.</p>
 <dl class="py attribute">
 <dt class="sig sig-object py" id="quadrants.lang.graph_status.GraphStatus.yielded">
 <span class="sig-name descname"><span class="pre">yielded</span></span><a class="reference internal" href="../../../../_modules/quadrants/lang/graph_status.html#GraphStatus.yielded"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.graph_status.GraphStatus.yielded" title="Link to this definition">#</a></dt>
-<dd><p><code class="docutils literal notranslate"><span class="pre">True</span></code> iff one of the kernel’s <code class="docutils literal notranslate"><span class="pre">yield_on=</span></code> checkpoints fired its flag on the most recent launch.
-<code class="docutils literal notranslate"><span class="pre">False</span></code> means the kernel completed normally and the host loop should exit.</p>
+<dd><p><code class="docutils literal notranslate"><span class="pre">True</span></code> iff one of the kernel’s checkpoints paused on the most recent launch (i.e. its <code class="docutils literal notranslate"><span class="pre">yield_on=</span></code>
+flag was non-zero). <code class="docutils literal notranslate"><span class="pre">False</span></code> means the kernel completed normally and the host loop should exit.</p>
 </dd></dl>
 
 <dl class="py attribute">
 <dt class="sig sig-object py" id="quadrants.lang.graph_status.GraphStatus.checkpoint">
 <span class="sig-name descname"><span class="pre">checkpoint</span></span><a class="reference internal" href="../../../../_modules/quadrants/lang/graph_status.html#GraphStatus.checkpoint"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.graph_status.GraphStatus.checkpoint" title="Link to this definition">#</a></dt>
-<dd><p><code class="docutils literal notranslate"><span class="pre">cp_id</span></code> of the checkpoint whose <code class="docutils literal notranslate"><span class="pre">yield_on=</span></code> flag was non-zero (or <code class="docutils literal notranslate"><span class="pre">None</span></code> when <code class="docutils literal notranslate"><span class="pre">yielded</span></code> is
-<code class="docutils literal notranslate"><span class="pre">False</span></code>). Pass it to <code class="docutils literal notranslate"><span class="pre">kernel.resume(...,</span> <span class="pre">from_checkpoint=cp)</span></code> to skip every checkpoint with a lower
-<code class="docutils literal notranslate"><span class="pre">cp_id</span></code> on the next launch.</p>
+<dd><p>The <code class="docutils literal notranslate"><span class="pre">cp_id</span></code> label of the checkpoint that paused (an <code class="docutils literal notranslate"><span class="pre">int</span></code> or the original <code class="docutils literal notranslate"><span class="pre">IntEnum</span></code> instance
+you passed to <code class="docutils literal notranslate"><span class="pre">qd.checkpoint(cp_id,</span> <span class="pre">...)</span></code>), or <code class="docutils literal notranslate"><span class="pre">None</span></code> when <code class="docutils literal notranslate"><span class="pre">yielded</span></code> is <code class="docutils literal notranslate"><span class="pre">False</span></code>. Pass it to
+<code class="docutils literal notranslate"><span class="pre">kernel.resume(...,</span> <span class="pre">from_checkpoint=...)</span></code> to continue from that point on the next launch.</p>
 </dd></dl>
 
 <dl class="py attribute">
@@ -513,8 +519,8 @@ checkpoint asked the host to handle something.</p>
   </div>
   
   <!-- Scripts loaded after <body> so the DOM is not blocked -->
-  <script defer src="../../../../_static/scripts/bootstrap.js?digest=0790524f97105ba85085"></script>
-<script defer src="../../../../_static/scripts/pydata-sphinx-theme.js?digest=0790524f97105ba85085"></script>
+  <script defer src="../../../../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5"></script>
+<script defer src="../../../../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5"></script>
 
   <footer class="bd-footer">
 <div class="bd-footer__inner bd-page-width">
@@ -548,7 +554,7 @@ checkpoint asked the host to handle something.</p>
         <div class="footer-item">
 <p class="theme-version">
   <!-- # L10n: Setting the PST URL as an argument as this does not need to be localized -->
-  Built with the <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a> 0.18.0.
+  Built with the <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a> 0.19.0.
 </p></div>
       
     </div>

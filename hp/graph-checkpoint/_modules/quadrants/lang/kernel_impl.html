@@ -26,8 +26,8 @@
   </noscript>
   
   <!-- Loaded before other Sphinx assets -->
-  <link href="../../../_static/styles/theme.css?digest=0790524f97105ba85085" rel="stylesheet" />
-<link href="../../../_static/styles/pydata-sphinx-theme.css?digest=0790524f97105ba85085" rel="stylesheet" />
+  <link href="../../../_static/styles/theme.css?digest=a95f357e85573c9b56d5" rel="stylesheet" />
+<link href="../../../_static/styles/pydata-sphinx-theme.css?digest=a95f357e85573c9b56d5" rel="stylesheet" />
 
     <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=8f2a1f02" />
     <link rel="stylesheet" type="text/css" href="../../../_static/copybutton.css?v=76b2166b" />
@@ -37,10 +37,10 @@
     <link rel="stylesheet" type="text/css" href="../../../_static/css/custom.css" />
   
   <!-- So that users can add custom icons -->
-  <script defer src="../../../_static/scripts/fontawesome.js?digest=0790524f97105ba85085"></script>
+  <script defer src="../../../_static/scripts/fontawesome.js?digest=a95f357e85573c9b56d5"></script>
   <!-- Pre-loaded scripts that we'll load fully later -->
-  <link rel="preload" as="script" href="../../../_static/scripts/bootstrap.js?digest=0790524f97105ba85085" />
-<link rel="preload" as="script" href="../../../_static/scripts/pydata-sphinx-theme.js?digest=0790524f97105ba85085" />
+  <link rel="preload" as="script" href="../../../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5" />
+<link rel="preload" as="script" href="../../../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5" />
 
     <script src="../../../_static/documentation_options.js?v=baaebd52"></script>
     <script src="../../../_static/doctools.js?v=9bcbadda"></script>
@@ -361,17 +361,36 @@
 <span class="n">F</span> <span class="o">=</span> <span class="n">TypeVar</span><span class="p">(</span><span class="s2">&quot;F&quot;</span><span class="p">,</span> <span class="n">bound</span><span class="o">=</span><span class="n">Callable</span><span class="p">)</span>
 
 
+<span class="nd">@overload</span>
 <div class="viewcode-block" id="func">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/kernel_impl/index.html#quadrants.lang.kernel_impl.func">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">func</span><span class="p">(</span><span class="n">fn</span><span class="p">:</span> <span class="n">F</span><span class="p">,</span> <span class="n">is_real_function</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">F</span><span class="p">:</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">func</span><span class="p">(</span><span class="n">fn</span><span class="p">:</span> <span class="n">F</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">is_real_function</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="o">...</span><span class="p">,</span> <span class="n">requires_top_level</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="o">...</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">F</span><span class="p">:</span> <span class="o">...</span></div>
+
+
+
+<span class="nd">@overload</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">func</span><span class="p">(</span><span class="n">fn</span><span class="p">:</span> <span class="kc">None</span> <span class="o">=</span> <span class="o">...</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">is_real_function</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="o">...</span><span class="p">,</span> <span class="n">requires_top_level</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="o">...</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Callable</span><span class="p">[[</span><span class="n">F</span><span class="p">],</span> <span class="n">F</span><span class="p">]:</span> <span class="o">...</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">func</span><span class="p">(</span><span class="n">fn</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">is_real_function</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">requires_top_level</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Marks a function as callable in Quadrants-scope.</span>
 
 <span class="sd">    This decorator transforms a Python function into a Quadrants one. Quadrants</span>
 <span class="sd">    will JIT compile it into native instructions.</span>
 
+<span class="sd">    Can be applied bare (``@qd.func``) or with parameters (``@qd.func(requires_top_level=True)``).</span>
+
 <span class="sd">    Args:</span>
 <span class="sd">        fn (Callable): The Python function to be decorated</span>
 <span class="sd">        is_real_function (bool): Whether the function is a real function</span>
+<span class="sd">        requires_top_level (bool): **Experimental** (behaviour/API may change). If True, the func may only</span>
+<span class="sd">            be called at the **top level** of a kernel (or directly inside a ``while qd.graph_do_while(...)``</span>
+<span class="sd">            body). Calling it nested inside ordinary runtime ``for`` / ``if`` / ``while`` control flow raises a</span>
+<span class="sd">            :class:`QuadrantsSyntaxError` at compile time. Intended for multi-phase device ops whose per-phase</span>
+<span class="sd">            top-level ``for`` loops must each lower to their own offloaded launch (e.g. the ``qd.algorithms``</span>
+<span class="sd">            reductions / scans / sort); nesting the call demotes those loops out of top-level position,</span>
+<span class="sd">            collapsing the inter-phase grid-wide barriers and silently corrupting the result. ``qd.static``</span>
+<span class="sd">            (compile-time) loops do not trip the check.</span>
 
 <span class="sd">    Returns:</span>
 <span class="sd">        Callable: The decorated function</span>
@@ -386,16 +405,27 @@
 <span class="sd">        &gt;&gt;&gt; def run():</span>
 <span class="sd">        &gt;&gt;&gt;     print(foo(40))  # 42</span>
 <span class="sd">    &quot;&quot;&quot;</span>
-    <span class="n">is_classfunc</span> <span class="o">=</span> <span class="n">_inside_class</span><span class="p">(</span><span class="n">level_of_class_stackframe</span><span class="o">=</span><span class="mi">3</span> <span class="o">+</span> <span class="n">is_real_function</span><span class="p">)</span>
 
-    <span class="n">fun</span> <span class="o">=</span> <span class="n">Func</span><span class="p">(</span><span class="n">fn</span><span class="p">,</span> <span class="n">_classfunc</span><span class="o">=</span><span class="n">is_classfunc</span><span class="p">,</span> <span class="n">is_real_function</span><span class="o">=</span><span class="n">is_real_function</span><span class="p">)</span>
-    <span class="n">quadrants_callable</span> <span class="o">=</span> <span class="n">QuadrantsCallable</span><span class="p">(</span><span class="n">fn</span><span class="p">,</span> <span class="n">fun</span><span class="p">)</span>
-    <span class="n">quadrants_callable</span><span class="o">.</span><span class="n">_is_quadrants_function</span> <span class="o">=</span> <span class="kc">True</span>
-    <span class="n">quadrants_callable</span><span class="o">.</span><span class="n">_is_real_function</span> <span class="o">=</span> <span class="n">is_real_function</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">decorator</span><span class="p">(</span><span class="n">fn</span><span class="p">:</span> <span class="n">F</span><span class="p">,</span> <span class="n">_bare</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">F</span><span class="p">:</span>
+        <span class="c1"># Bare ``@qd.func`` reaches ``decorator`` from inside ``func`` (one extra stack frame); the</span>
+        <span class="c1"># factory form ``@qd.func(...)`` is invoked directly by Python. Add the extra level in the</span>
+        <span class="c1"># bare case so ``_inside_class`` inspects the user&#39;s class/def frame in both forms (mirrors</span>
+        <span class="c1"># the offset handling in ``kernel``).</span>
+        <span class="n">level</span> <span class="o">=</span> <span class="p">(</span><span class="mi">4</span> <span class="k">if</span> <span class="n">_bare</span> <span class="k">else</span> <span class="mi">3</span><span class="p">)</span> <span class="o">+</span> <span class="n">is_real_function</span>
+        <span class="n">is_classfunc</span> <span class="o">=</span> <span class="n">_inside_class</span><span class="p">(</span><span class="n">level_of_class_stackframe</span><span class="o">=</span><span class="n">level</span><span class="p">)</span>
 
-    <span class="n">update_wrapper</span><span class="p">(</span><span class="n">quadrants_callable</span><span class="p">,</span> <span class="n">fn</span><span class="p">)</span>
-    <span class="k">return</span> <span class="n">cast</span><span class="p">(</span><span class="n">F</span><span class="p">,</span> <span class="n">quadrants_callable</span><span class="p">)</span></div>
+        <span class="n">fun</span> <span class="o">=</span> <span class="n">Func</span><span class="p">(</span><span class="n">fn</span><span class="p">,</span> <span class="n">_classfunc</span><span class="o">=</span><span class="n">is_classfunc</span><span class="p">,</span> <span class="n">is_real_function</span><span class="o">=</span><span class="n">is_real_function</span><span class="p">)</span>
+        <span class="n">quadrants_callable</span> <span class="o">=</span> <span class="n">QuadrantsCallable</span><span class="p">(</span><span class="n">fn</span><span class="p">,</span> <span class="n">fun</span><span class="p">)</span>
+        <span class="n">quadrants_callable</span><span class="o">.</span><span class="n">_is_quadrants_function</span> <span class="o">=</span> <span class="kc">True</span>
+        <span class="n">quadrants_callable</span><span class="o">.</span><span class="n">_is_real_function</span> <span class="o">=</span> <span class="n">is_real_function</span>
+        <span class="n">quadrants_callable</span><span class="o">.</span><span class="n">_qd_requires_top_level</span> <span class="o">=</span> <span class="n">requires_top_level</span>
 
+        <span class="n">update_wrapper</span><span class="p">(</span><span class="n">quadrants_callable</span><span class="p">,</span> <span class="n">fn</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">cast</span><span class="p">(</span><span class="n">F</span><span class="p">,</span> <span class="n">quadrants_callable</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">fn</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">decorator</span>
+    <span class="k">return</span> <span class="n">decorator</span><span class="p">(</span><span class="n">fn</span><span class="p">,</span> <span class="n">_bare</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 
 
 <div class="viewcode-block" id="real_func">
@@ -470,6 +500,7 @@
     <span class="n">level_of_class_stackframe</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
     <span class="n">verbose</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
     <span class="n">graph</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="n">checkpoints</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">QuadrantsCallable</span><span class="p">:</span>
     <span class="c1"># Can decorators determine if a function is being defined inside a class?</span>
     <span class="c1"># https://stackoverflow.com/a/8793684/12003165</span>
@@ -480,6 +511,8 @@
     <span class="n">primal</span> <span class="o">=</span> <span class="n">Kernel</span><span class="p">(</span><span class="n">_func</span><span class="p">,</span> <span class="n">autodiff_mode</span><span class="o">=</span><span class="n">_NONE</span><span class="p">,</span> <span class="n">_is_classkernel</span><span class="o">=</span><span class="n">is_classkernel</span><span class="p">)</span>
     <span class="n">adjoint</span> <span class="o">=</span> <span class="n">Kernel</span><span class="p">(</span><span class="n">_func</span><span class="p">,</span> <span class="n">autodiff_mode</span><span class="o">=</span><span class="n">_REVERSE</span><span class="p">,</span> <span class="n">_is_classkernel</span><span class="o">=</span><span class="n">is_classkernel</span><span class="p">)</span>
     <span class="n">primal</span><span class="o">.</span><span class="n">use_graph</span> <span class="o">=</span> <span class="n">graph</span>
+    <span class="n">primal</span><span class="o">.</span><span class="n">use_checkpoints</span> <span class="o">=</span> <span class="n">checkpoints</span>
+    <span class="n">adjoint</span><span class="o">.</span><span class="n">use_checkpoints</span> <span class="o">=</span> <span class="n">checkpoints</span>
     <span class="c1"># Having |primal| contains |grad| makes the tape work.</span>
     <span class="n">primal</span><span class="o">.</span><span class="n">grad</span> <span class="o">=</span> <span class="n">adjoint</span>
 
@@ -523,7 +556,9 @@
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/kernel_impl/index.html#quadrants.lang.kernel_impl.kernel">[docs]</a>
 <span class="c1"># TODO: This callable should be Callable[[F], F].</span>
 <span class="c1"># See comments below.</span>
-<span class="k">def</span><span class="w"> </span><span class="nf">kernel</span><span class="p">(</span><span class="n">_fn</span><span class="p">:</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">pure</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span> <span class="n">graph</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Callable</span><span class="p">[[</span><span class="n">Any</span><span class="p">],</span> <span class="n">Any</span><span class="p">]:</span> <span class="o">...</span></div>
+<span class="k">def</span><span class="w"> </span><span class="nf">kernel</span><span class="p">(</span>
+    <span class="n">_fn</span><span class="p">:</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">pure</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span> <span class="n">graph</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span> <span class="n">checkpoints</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Callable</span><span class="p">[[</span><span class="n">Any</span><span class="p">],</span> <span class="n">Any</span><span class="p">]:</span> <span class="o">...</span></div>
 
 
 
@@ -534,7 +569,7 @@
 <span class="c1"># However, by making it return Any, we can make the pure parameter</span>
 <span class="c1"># change now, without breaking pyright.</span>
 <span class="nd">@overload</span>
-<span class="k">def</span><span class="w"> </span><span class="nf">kernel</span><span class="p">(</span><span class="n">_fn</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">pure</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span> <span class="n">graph</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span> <span class="o">...</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">kernel</span><span class="p">(</span><span class="n">_fn</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">pure</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span> <span class="n">graph</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span> <span class="n">checkpoints</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span> <span class="o">...</span>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">kernel</span><span class="p">(</span>
@@ -543,6 +578,7 @@
     <span class="n">pure</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="n">fastcache</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
     <span class="n">graph</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="n">checkpoints</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
 <span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Marks a function as a Quadrants kernel.</span>
@@ -559,6 +595,12 @@
 <span class="sd">            into a CUDA graph on first launch and replayed on subsequent</span>
 <span class="sd">            launches, reducing per-kernel launch overhead. Non-CUDA backends</span>
 <span class="sd">            are not supported currently.</span>
+<span class="sd">        checkpoints: If True, opt into the (experimental) ``qd.checkpoint``</span>
+<span class="sd">            pause / resume model. ``with qd.checkpoint(cp_id, yield_on=flag):``</span>
+<span class="sd">            blocks in the kernel body become pause points the host can resume</span>
+<span class="sd">            from via ``kernel.resume(from_checkpoint=cp_id)``. Requires</span>
+<span class="sd">            ``graph=True``. ``qd.checkpoint(...)`` in the body is rejected</span>
+<span class="sd">            unless this flag is set.</span>
 
 <span class="sd">    Example::</span>
 
@@ -578,7 +620,12 @@
         <span class="k">else</span><span class="p">:</span>
             <span class="n">level</span> <span class="o">=</span> <span class="mi">4</span>
 
-        <span class="n">wrapped</span> <span class="o">=</span> <span class="n">_kernel_impl</span><span class="p">(</span><span class="n">fn</span><span class="p">,</span> <span class="n">level_of_class_stackframe</span><span class="o">=</span><span class="n">level</span><span class="p">,</span> <span class="n">graph</span><span class="o">=</span><span class="n">graph</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">checkpoints</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">graph</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;@qd.kernel(</span><span class="si">{</span><span class="n">fn</span><span class="o">.</span><span class="vm">__name__</span><span class="si">!r}</span><span class="s2">, checkpoints=True) requires graph=True; &quot;</span>
+                <span class="s2">&quot;the checkpoint resume model is only meaningful for graph kernels.&quot;</span>
+            <span class="p">)</span>
+        <span class="n">wrapped</span> <span class="o">=</span> <span class="n">_kernel_impl</span><span class="p">(</span><span class="n">fn</span><span class="p">,</span> <span class="n">level_of_class_stackframe</span><span class="o">=</span><span class="n">level</span><span class="p">,</span> <span class="n">graph</span><span class="o">=</span><span class="n">graph</span><span class="p">,</span> <span class="n">checkpoints</span><span class="o">=</span><span class="n">checkpoints</span><span class="p">)</span>
         <span class="n">wrapped</span><span class="o">.</span><span class="n">is_pure</span> <span class="o">=</span> <span class="n">pure</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">pure</span> <span class="ow">or</span> <span class="n">fastcache</span>
         <span class="k">if</span> <span class="n">pure</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
             <span class="n">warnings_helper</span><span class="o">.</span><span class="n">warn_once</span><span class="p">(</span>
@@ -715,8 +762,8 @@
   </div>
   
   <!-- Scripts loaded after <body> so the DOM is not blocked -->
-  <script defer src="../../../_static/scripts/bootstrap.js?digest=0790524f97105ba85085"></script>
-<script defer src="../../../_static/scripts/pydata-sphinx-theme.js?digest=0790524f97105ba85085"></script>
+  <script defer src="../../../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5"></script>
+<script defer src="../../../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5"></script>
 
   <footer class="bd-footer">
 <div class="bd-footer__inner bd-page-width">
@@ -750,7 +797,7 @@
         <div class="footer-item">
 <p class="theme-version">
   <!-- # L10n: Setting the PST URL as an argument as this does not need to be localized -->
-  Built with the <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a> 0.18.0.
+  Built with the <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a> 0.19.0.
 </p></div>
       
     </div>

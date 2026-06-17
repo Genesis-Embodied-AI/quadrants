@@ -26,8 +26,8 @@
   </noscript>
   
   <!-- Loaded before other Sphinx assets -->
-  <link href="../../../_static/styles/theme.css?digest=0790524f97105ba85085" rel="stylesheet" />
-<link href="../../../_static/styles/pydata-sphinx-theme.css?digest=0790524f97105ba85085" rel="stylesheet" />
+  <link href="../../../_static/styles/theme.css?digest=a95f357e85573c9b56d5" rel="stylesheet" />
+<link href="../../../_static/styles/pydata-sphinx-theme.css?digest=a95f357e85573c9b56d5" rel="stylesheet" />
 
     <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=8f2a1f02" />
     <link rel="stylesheet" type="text/css" href="../../../_static/copybutton.css?v=76b2166b" />
@@ -37,10 +37,10 @@
     <link rel="stylesheet" type="text/css" href="../../../_static/css/custom.css" />
   
   <!-- So that users can add custom icons -->
-  <script defer src="../../../_static/scripts/fontawesome.js?digest=0790524f97105ba85085"></script>
+  <script defer src="../../../_static/scripts/fontawesome.js?digest=a95f357e85573c9b56d5"></script>
   <!-- Pre-loaded scripts that we'll load fully later -->
-  <link rel="preload" as="script" href="../../../_static/scripts/bootstrap.js?digest=0790524f97105ba85085" />
-<link rel="preload" as="script" href="../../../_static/scripts/pydata-sphinx-theme.js?digest=0790524f97105ba85085" />
+  <link rel="preload" as="script" href="../../../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5" />
+<link rel="preload" as="script" href="../../../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5" />
 
     <script src="../../../_static/documentation_options.js?v=baaebd52"></script>
     <script src="../../../_static/doctools.js?v=9bcbadda"></script>
@@ -345,32 +345,38 @@
 <div class="viewcode-block" id="GraphStatus">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/graph_status/index.html#quadrants.lang.graph_status.GraphStatus">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">GraphStatus</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Result returned by a graph kernel that contains ``qd.checkpoint(yield_on=...)`` blocks.</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Result returned by a graph kernel that contains ``qd.checkpoint(cp_id, yield_on=...)`` blocks.</span>
 
 <span class="sd">    .. warning::</span>
 
 <span class="sd">        **Experimental.** ``GraphStatus`` is part of the experimental ``qd.checkpoint`` surface; its attributes and</span>
 <span class="sd">        the conditions under which it is returned may change in any future release without a deprecation cycle.</span>
 
-<span class="sd">    Returned from ``kernel(...)`` and ``kernel.resume(..., from_checkpoint=cp)`` whenever the kernel was decorated with</span>
-<span class="sd">    ``@qd.kernel(graph=True)`` and contains at least one checkpoint that has declared a ``yield_on=`` parameter. Read</span>
-<span class="sd">    ``status.yielded`` to decide whether to keep running the host loop, and ``status.checkpoint`` to find out which</span>
-<span class="sd">    checkpoint asked the host to handle something.</span>
+<span class="sd">    Returned from ``kernel(...)`` and ``kernel.resume(..., from_checkpoint=label)`` whenever the kernel was decorated</span>
+<span class="sd">    with ``@qd.kernel(graph=True, checkpoints=True)``. Read ``status.yielded`` to decide whether to keep running the</span>
+<span class="sd">    host loop, and ``status.checkpoint`` to find out which checkpoint asked the host to handle something.</span>
 
-<span class="sd">    Canonical usage (mirrors the qipc re-entrant pattern; see ``graph.md``)::</span>
+<span class="sd">    Canonical usage (see ``graph.md``)::</span>
 
+<span class="sd">        from enum import IntEnum</span>
+
+<span class="sd">        class Stage(IntEnum):</span>
+<span class="sd">            SIM = 0</span>
+
+<span class="sd">        overflow_flag[()] = 0  # initialise before the first launch</span>
 <span class="sd">        status = step(arr, overflow_flag, newton_cond)</span>
 <span class="sd">        while status.yielded:</span>
 <span class="sd">            handle_overflow_for(status.checkpoint, ...)</span>
+<span class="sd">            overflow_flag[()] = 0  # the framework never clears your yield_on flag</span>
 <span class="sd">            status = step.resume(arr, overflow_flag, newton_cond,</span>
 <span class="sd">                                 from_checkpoint=status.checkpoint)</span>
 
 <span class="sd">    Attributes:</span>
-<span class="sd">        yielded: ``True`` iff one of the kernel&#39;s ``yield_on=`` checkpoints fired its flag on the most recent launch.</span>
-<span class="sd">            ``False`` means the kernel completed normally and the host loop should exit.</span>
-<span class="sd">        checkpoint: ``cp_id`` of the checkpoint whose ``yield_on=`` flag was non-zero (or ``None`` when ``yielded`` is</span>
-<span class="sd">            ``False``). Pass it to ``kernel.resume(..., from_checkpoint=cp)`` to skip every checkpoint with a lower</span>
-<span class="sd">            ``cp_id`` on the next launch.</span>
+<span class="sd">        yielded: ``True`` iff one of the kernel&#39;s checkpoints paused on the most recent launch (i.e. its ``yield_on=``</span>
+<span class="sd">            flag was non-zero). ``False`` means the kernel completed normally and the host loop should exit.</span>
+<span class="sd">        checkpoint: The ``cp_id`` label of the checkpoint that paused (an ``int`` or the original ``IntEnum`` instance</span>
+<span class="sd">            you passed to ``qd.checkpoint(cp_id, ...)``), or ``None`` when ``yielded`` is ``False``. Pass it to</span>
+<span class="sd">            ``kernel.resume(..., from_checkpoint=...)`` to continue from that point on the next launch.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
     <span class="vm">__slots__</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;yielded&quot;</span><span class="p">,</span> <span class="s2">&quot;checkpoint&quot;</span><span class="p">)</span>
@@ -387,7 +393,9 @@
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">yielded</span><span class="p">:</span>
-            <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;GraphStatus(yielded=True, checkpoint=</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">checkpoint</span><span class="si">}</span><span class="s2">)&quot;</span>
+            <span class="c1"># Use `!r` so an `IntEnum` cp_id is shown as `&lt;Stage.LOAD: 0&gt;` rather than collapsing to its raw int via</span>
+            <span class="c1"># `int.__format__` (which Python 3.10&#39;s `f&quot;{IntEnum.X}&quot;` does). Plain ints round-trip unchanged.</span>
+            <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;GraphStatus(yielded=True, checkpoint=</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">checkpoint</span><span class="si">!r}</span><span class="s2">)&quot;</span>
         <span class="k">return</span> <span class="s2">&quot;GraphStatus(yielded=False)&quot;</span></div>
 
 </pre></div>
@@ -419,8 +427,8 @@
   </div>
   
   <!-- Scripts loaded after <body> so the DOM is not blocked -->
-  <script defer src="../../../_static/scripts/bootstrap.js?digest=0790524f97105ba85085"></script>
-<script defer src="../../../_static/scripts/pydata-sphinx-theme.js?digest=0790524f97105ba85085"></script>
+  <script defer src="../../../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5"></script>
+<script defer src="../../../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5"></script>
 
   <footer class="bd-footer">
 <div class="bd-footer__inner bd-page-width">
@@ -454,7 +462,7 @@
         <div class="footer-item">
 <p class="theme-version">
   <!-- # L10n: Setting the PST URL as an argument as this does not need to be localized -->
-  Built with the <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a> 0.18.0.
+  Built with the <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a> 0.19.0.
 </p></div>
       
     </div>

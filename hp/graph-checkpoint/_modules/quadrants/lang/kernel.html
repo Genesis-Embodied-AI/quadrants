@@ -26,8 +26,8 @@
   </noscript>
   
   <!-- Loaded before other Sphinx assets -->
-  <link href="../../../_static/styles/theme.css?digest=0790524f97105ba85085" rel="stylesheet" />
-<link href="../../../_static/styles/pydata-sphinx-theme.css?digest=0790524f97105ba85085" rel="stylesheet" />
+  <link href="../../../_static/styles/theme.css?digest=a95f357e85573c9b56d5" rel="stylesheet" />
+<link href="../../../_static/styles/pydata-sphinx-theme.css?digest=a95f357e85573c9b56d5" rel="stylesheet" />
 
     <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=8f2a1f02" />
     <link rel="stylesheet" type="text/css" href="../../../_static/copybutton.css?v=76b2166b" />
@@ -37,10 +37,10 @@
     <link rel="stylesheet" type="text/css" href="../../../_static/css/custom.css" />
   
   <!-- So that users can add custom icons -->
-  <script defer src="../../../_static/scripts/fontawesome.js?digest=0790524f97105ba85085"></script>
+  <script defer src="../../../_static/scripts/fontawesome.js?digest=a95f357e85573c9b56d5"></script>
   <!-- Pre-loaded scripts that we'll load fully later -->
-  <link rel="preload" as="script" href="../../../_static/scripts/bootstrap.js?digest=0790524f97105ba85085" />
-<link rel="preload" as="script" href="../../../_static/scripts/pydata-sphinx-theme.js?digest=0790524f97105ba85085" />
+  <link rel="preload" as="script" href="../../../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5" />
+<link rel="preload" as="script" href="../../../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5" />
 
     <script src="../../../_static/documentation_options.js?v=baaebd52"></script>
     <script src="../../../_static/doctools.js?v=9bcbadda"></script>
@@ -702,18 +702,36 @@
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/kernel/index.html#quadrants.lang.kernel.Kernel.use_graph">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">use_graph</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span></div>
 
+        <span class="c1"># Opt-in flag set by `@qd.kernel(graph=True, checkpoints=True)`. When True, the AST transformer enables</span>
+        <span class="c1"># `qd.checkpoint(...)` recognition AND auto-wraps every top-level for-loop that isn&#39;t already inside a</span>
+        <span class="c1"># `with qd.checkpoint(...)` block in an implicit no-yield checkpoint. When False, any use of</span>
+        <span class="c1"># `qd.checkpoint(...)` in the kernel body is rejected at compile time with a fix-it pointing at</span>
+        <span class="c1"># `checkpoints=True`.</span>
+<div class="viewcode-block" id="Kernel.use_checkpoints">
+<a class="viewcode-back" href="../../../autoapi/quadrants/lang/kernel/index.html#quadrants.lang.kernel.Kernel.use_checkpoints">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">use_checkpoints</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span></div>
+
 <div class="viewcode-block" id="Kernel.graph_do_while_arg">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/kernel/index.html#quadrants.lang.kernel.Kernel.graph_do_while_arg">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">graph_do_while_arg</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span></div>
 
-        <span class="c1"># Per-checkpoint metadata, one entry per `with qd.checkpoint(...)` block in declaration order. List index is the</span>
-        <span class="c1"># checkpoint&#39;s `cp_id` (0, 1, 2, ... flat across the kernel). Each entry is the name of the `yield_on=` kernel</span>
-        <span class="c1"># parameter, or `None` if the checkpoint has no `yield_on`. Populated by the AST transformer during frontend</span>
-        <span class="c1"># pass; empty means the kernel uses no checkpoints. Mirrors the `graph_do_while_arg` indirection but tracks one</span>
-        <span class="c1"># arg per checkpoint instead of one per kernel.</span>
+        <span class="c1"># Per-checkpoint metadata, one entry per `with qd.checkpoint(...)` block (explicit AND auto-injected implicit)</span>
+        <span class="c1"># in declaration order. List index is the checkpoint&#39;s internal `cp_id` (0, 1, 2, ... dense, flat across the</span>
+        <span class="c1"># kernel). Each entry is the name of the `yield_on=` kernel parameter, or `None` for implicit checkpoints</span>
+        <span class="c1"># (which never yield). Populated by the AST transformer; empty means the kernel uses no checkpoints.</span>
 <div class="viewcode-block" id="Kernel.checkpoint_yield_on_args">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/kernel/index.html#quadrants.lang.kernel.Kernel.checkpoint_yield_on_args">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">checkpoint_yield_on_args</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span></div>
+
+        <span class="c1"># User-facing labels for explicit checkpoints. Same indexing as `checkpoint_yield_on_args`: entry `i` is the int</span>
+        <span class="c1"># (or IntEnum value) the user passed as the first positional arg of `qd.checkpoint(cp_id, yield_on)` for the</span>
+        <span class="c1"># checkpoint whose internal cp_id is `i`. Implicit checkpoints (auto-wrapped) get `None` (they have no</span>
+        <span class="c1"># user-facing label and can never appear in `GraphStatus.checkpoint`). The label is preserved as-is so an</span>
+        <span class="c1"># `IntEnum` round-trips: writing `qd.checkpoint(Stage.SIM, ...)` and then reading `status.checkpoint` returns</span>
+        <span class="c1"># `Stage.SIM` rather than the raw int.</span>
+<div class="viewcode-block" id="Kernel.checkpoint_user_labels_by_cp_id">
+<a class="viewcode-back" href="../../../autoapi/quadrants/lang/kernel/index.html#quadrants.lang.kernel.Kernel.checkpoint_user_labels_by_cp_id">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">checkpoint_user_labels_by_cp_id</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span></div>
 
 <div class="viewcode-block" id="Kernel.quadrants_callable">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/kernel/index.html#quadrants.lang.kernel.Kernel.quadrants_callable">[docs]</a>
@@ -1264,6 +1282,23 @@
         <span class="n">kernel_cpp</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">materialized_kernels</span><span class="p">[</span><span class="n">key</span><span class="p">]</span>
         <span class="n">compiled_kernel_data</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">compiled_kernel_data_by_key</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">launch_observations</span><span class="o">.</span><span class="n">found_kernel_in_materialize_cache</span> <span class="o">=</span> <span class="n">compiled_kernel_data</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+        <span class="c1"># Translate the user-supplied `from_checkpoint=` label into the dense, source-order internal cp_id the runtime</span>
+        <span class="c1"># uses. The label may be a raw int or an IntEnum value; the comparison below uses `==`, which IntEnum overloads</span>
+        <span class="c1"># to compare equal to its underlying int. Translation happens here (after `ensure_compiled`) because</span>
+        <span class="c1"># `checkpoint_user_labels_by_cp_id` is populated during AST processing inside `ensure_compiled`.</span>
+        <span class="k">if</span> <span class="n">_resume_from_checkpoint</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">found_internal</span> <span class="o">=</span> <span class="kc">None</span>
+            <span class="k">for</span> <span class="n">internal_cp_id</span><span class="p">,</span> <span class="n">label</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">checkpoint_user_labels_by_cp_id</span><span class="p">):</span>
+                <span class="k">if</span> <span class="n">label</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">label</span> <span class="o">==</span> <span class="n">_resume_from_checkpoint</span><span class="p">:</span>
+                    <span class="n">found_internal</span> <span class="o">=</span> <span class="n">internal_cp_id</span>
+                    <span class="k">break</span>
+            <span class="k">if</span> <span class="n">found_internal</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">available</span> <span class="o">=</span> <span class="p">[</span><span class="n">lbl</span> <span class="k">for</span> <span class="n">lbl</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">checkpoint_user_labels_by_cp_id</span> <span class="k">if</span> <span class="n">lbl</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">]</span>
+                <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;from_checkpoint=</span><span class="si">{</span><span class="n">_resume_from_checkpoint</span><span class="si">!r}</span><span class="s2"> does not match any qd.checkpoint(cp_id=...) in &quot;</span>
+                    <span class="sa">f</span><span class="s2">&quot;kernel </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">func</span><span class="o">.</span><span class="vm">__name__</span><span class="si">!r}</span><span class="s2">. Available cp_id labels (source-declaration order): </span><span class="si">{</span><span class="n">available</span><span class="si">}</span><span class="s2">.&quot;</span>
+                <span class="p">)</span>
+            <span class="n">_resume_from_checkpoint</span> <span class="o">=</span> <span class="n">found_internal</span>
         <span class="c1"># Only forward `_resume_from_checkpoint` when the caller actually supplied one (i.e. via `Kernel.resume(...)`).</span>
         <span class="c1"># Otherwise omit the kwarg entirely so subclasses / monkeypatches of `launch_kernel` that pre-date this kwarg</span>
         <span class="c1"># keep working unmodified. The host-side default in `LaunchContextBuilder` is 0 (&quot;run every checkpoint&quot;), which</span>
@@ -1295,7 +1330,14 @@
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">checkpoint_yield_on_args</span> <span class="ow">and</span> <span class="nb">any</span><span class="p">(</span><span class="n">n</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">checkpoint_yield_on_args</span><span class="p">):</span>
             <span class="n">cp</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">prog</span><span class="o">.</span><span class="n">get_graph_last_yield_cp_id_on_last_call</span><span class="p">()</span>
             <span class="k">if</span> <span class="n">cp</span> <span class="o">&gt;=</span> <span class="mi">0</span><span class="p">:</span>
-                <span class="k">return</span> <span class="n">_GraphStatus</span><span class="p">(</span><span class="n">yielded</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">checkpoint</span><span class="o">=</span><span class="n">cp</span><span class="p">)</span>
+                <span class="c1"># Translate the internal cp_id (dense, source-order, may point at an implicit checkpoint) to the</span>
+                <span class="c1"># user-supplied label so an IntEnum that the user passed in as the cp_id argument round-trips back into</span>
+                <span class="c1"># `GraphStatus.checkpoint`. Implicit checkpoints have `None` here, but they never have `yield_on=`, so</span>
+                <span class="c1"># the runtime can&#39;t surface them as the yielding cp -- the lookup is always to an explicit checkpoint.</span>
+                <span class="n">user_label</span> <span class="o">=</span> <span class="p">(</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">checkpoint_user_labels_by_cp_id</span><span class="p">[</span><span class="n">cp</span><span class="p">]</span> <span class="k">if</span> <span class="n">cp</span> <span class="o">&lt;</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">checkpoint_user_labels_by_cp_id</span><span class="p">)</span> <span class="k">else</span> <span class="kc">None</span>
+                <span class="p">)</span>
+                <span class="k">return</span> <span class="n">_GraphStatus</span><span class="p">(</span><span class="n">yielded</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">checkpoint</span><span class="o">=</span><span class="n">user_label</span> <span class="k">if</span> <span class="n">user_label</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">cp</span><span class="p">)</span>
             <span class="k">return</span> <span class="n">_GraphStatus</span><span class="p">(</span><span class="n">yielded</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">checkpoint</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">ret</span></div>
 
@@ -1328,8 +1370,8 @@
   </div>
   
   <!-- Scripts loaded after <body> so the DOM is not blocked -->
-  <script defer src="../../../_static/scripts/bootstrap.js?digest=0790524f97105ba85085"></script>
-<script defer src="../../../_static/scripts/pydata-sphinx-theme.js?digest=0790524f97105ba85085"></script>
+  <script defer src="../../../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5"></script>
+<script defer src="../../../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5"></script>
 
   <footer class="bd-footer">
 <div class="bd-footer__inner bd-page-width">
@@ -1363,7 +1405,7 @@
         <div class="footer-item">
 <p class="theme-version">
   <!-- # L10n: Setting the PST URL as an argument as this does not need to be localized -->
-  Built with the <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a> 0.18.0.
+  Built with the <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a> 0.19.0.
 </p></div>
       
     </div>

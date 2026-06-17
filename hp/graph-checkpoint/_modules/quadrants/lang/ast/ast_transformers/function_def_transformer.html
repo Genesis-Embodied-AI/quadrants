@@ -26,8 +26,8 @@
   </noscript>
   
   <!-- Loaded before other Sphinx assets -->
-  <link href="../../../../../_static/styles/theme.css?digest=0790524f97105ba85085" rel="stylesheet" />
-<link href="../../../../../_static/styles/pydata-sphinx-theme.css?digest=0790524f97105ba85085" rel="stylesheet" />
+  <link href="../../../../../_static/styles/theme.css?digest=a95f357e85573c9b56d5" rel="stylesheet" />
+<link href="../../../../../_static/styles/pydata-sphinx-theme.css?digest=a95f357e85573c9b56d5" rel="stylesheet" />
 
     <link rel="stylesheet" type="text/css" href="../../../../../_static/pygments.css?v=8f2a1f02" />
     <link rel="stylesheet" type="text/css" href="../../../../../_static/copybutton.css?v=76b2166b" />
@@ -37,10 +37,10 @@
     <link rel="stylesheet" type="text/css" href="../../../../../_static/css/custom.css" />
   
   <!-- So that users can add custom icons -->
-  <script defer src="../../../../../_static/scripts/fontawesome.js?digest=0790524f97105ba85085"></script>
+  <script defer src="../../../../../_static/scripts/fontawesome.js?digest=a95f357e85573c9b56d5"></script>
   <!-- Pre-loaded scripts that we'll load fully later -->
-  <link rel="preload" as="script" href="../../../../../_static/scripts/bootstrap.js?digest=0790524f97105ba85085" />
-<link rel="preload" as="script" href="../../../../../_static/scripts/pydata-sphinx-theme.js?digest=0790524f97105ba85085" />
+  <link rel="preload" as="script" href="../../../../../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5" />
+<link rel="preload" as="script" href="../../../../../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5" />
 
     <script src="../../../../../_static/documentation_options.js?v=baaebd52"></script>
     <script src="../../../../../_static/doctools.js?v=9bcbadda"></script>
@@ -358,6 +358,9 @@
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._dataclass_util</span><span class="w"> </span><span class="kn">import</span> <span class="n">create_flat_name</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.ast.ast_transformer_utils</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
     <span class="n">ASTTransformerFuncContext</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.ast.ast_transformers.checkpoint_transformer</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">CheckpointTransformer</span><span class="p">,</span>
 <span class="p">)</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.ast.symbol_resolver</span><span class="w"> </span><span class="kn">import</span> <span class="n">ASTResolver</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.buffer_view</span><span class="w"> </span><span class="kn">import</span> <span class="n">BufferView</span>
@@ -847,6 +850,18 @@
                 <span class="c1"># different argument shape) start from an empty list. Mirrors how `graph_do_while_arg` gets overwritten</span>
                 <span class="c1"># unconditionally during AST traversal.</span>
                 <span class="n">kernel</span><span class="o">.</span><span class="n">checkpoint_yield_on_args</span> <span class="o">=</span> <span class="p">[]</span>
+                <span class="n">kernel</span><span class="o">.</span><span class="n">checkpoint_user_labels_by_cp_id</span> <span class="o">=</span> <span class="p">[]</span>
+                <span class="c1"># Auto-wrap pass for `@qd.kernel(graph=True, checkpoints=True)` kernels. Mutates `node.body` in place so</span>
+                <span class="c1"># every top-level for-loop (and every for-loop inside a `qd.graph_do_while` body) that the user did not</span>
+                <span class="c1"># already wrap in a `with qd.checkpoint(...)` gets wrapped in a synthetic implicit no-yield checkpoint.</span>
+                <span class="c1"># Implicit checkpoints share the same dense source-order internal cp_id space as explicit ones, but</span>
+                <span class="c1"># carry `None` in `checkpoint_user_labels_by_cp_id` so they never appear in `GraphStatus.checkpoint` /</span>
+                <span class="c1"># `kernel.resume(from_checkpoint=...)`. Runs here (after coverage instrumentation has already injected</span>
+                <span class="c1"># its top-level `_qd_cov[i] = 1` probes, which are bare assigns that the wrap pass intentionally leaves</span>
+                <span class="c1"># alone) so that the regular `build_stmts` walk below sees a uniform stream of `with qd.checkpoint(...)`</span>
+                <span class="c1"># blocks and bare prologue stmts.</span>
+                <span class="k">if</span> <span class="n">kernel</span><span class="o">.</span><span class="n">use_checkpoints</span><span class="p">:</span>
+                    <span class="n">node</span><span class="o">.</span><span class="n">body</span> <span class="o">=</span> <span class="n">CheckpointTransformer</span><span class="o">.</span><span class="n">auto_wrap_for_loops</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">body</span><span class="p">)</span>
 
         <span class="k">with</span> <span class="n">ctx</span><span class="o">.</span><span class="n">variable_scope_guard</span><span class="p">():</span>
             <span class="n">build_stmts</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">body</span><span class="p">)</span>
@@ -943,8 +958,8 @@
   </div>
   
   <!-- Scripts loaded after <body> so the DOM is not blocked -->
-  <script defer src="../../../../../_static/scripts/bootstrap.js?digest=0790524f97105ba85085"></script>
-<script defer src="../../../../../_static/scripts/pydata-sphinx-theme.js?digest=0790524f97105ba85085"></script>
+  <script defer src="../../../../../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5"></script>
+<script defer src="../../../../../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5"></script>
 
   <footer class="bd-footer">
 <div class="bd-footer__inner bd-page-width">
@@ -978,7 +993,7 @@
         <div class="footer-item">
 <p class="theme-version">
   <!-- # L10n: Setting the PST URL as an argument as this does not need to be localized -->
-  Built with the <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a> 0.18.0.
+  Built with the <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a> 0.19.0.
 </p></div>
       
     </div>

@@ -26,8 +26,8 @@
   </noscript>
   
   <!-- Loaded before other Sphinx assets -->
-  <link href="../../../_static/styles/theme.css?digest=0790524f97105ba85085" rel="stylesheet" />
-<link href="../../../_static/styles/pydata-sphinx-theme.css?digest=0790524f97105ba85085" rel="stylesheet" />
+  <link href="../../../_static/styles/theme.css?digest=a95f357e85573c9b56d5" rel="stylesheet" />
+<link href="../../../_static/styles/pydata-sphinx-theme.css?digest=a95f357e85573c9b56d5" rel="stylesheet" />
 
     <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=8f2a1f02" />
     <link rel="stylesheet" type="text/css" href="../../../_static/copybutton.css?v=76b2166b" />
@@ -37,10 +37,10 @@
     <link rel="stylesheet" type="text/css" href="../../../_static/css/custom.css" />
   
   <!-- So that users can add custom icons -->
-  <script defer src="../../../_static/scripts/fontawesome.js?digest=0790524f97105ba85085"></script>
+  <script defer src="../../../_static/scripts/fontawesome.js?digest=a95f357e85573c9b56d5"></script>
   <!-- Pre-loaded scripts that we'll load fully later -->
-  <link rel="preload" as="script" href="../../../_static/scripts/bootstrap.js?digest=0790524f97105ba85085" />
-<link rel="preload" as="script" href="../../../_static/scripts/pydata-sphinx-theme.js?digest=0790524f97105ba85085" />
+  <link rel="preload" as="script" href="../../../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5" />
+<link rel="preload" as="script" href="../../../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5" />
 
     <script src="../../../_static/documentation_options.js?v=baaebd52"></script>
     <script src="../../../_static/doctools.js?v=9bcbadda"></script>
@@ -348,8 +348,8 @@
 <span class="nd">@contextmanager</span>
 <div class="viewcode-block" id="checkpoint">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/checkpoint/index.html#quadrants.lang.checkpoint.checkpoint">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">checkpoint</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">yield_on</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Marks a section of a graph kernel as a skippable, optionally yieldable stage.</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">checkpoint</span><span class="p">(</span><span class="n">cp_id</span><span class="p">,</span> <span class="n">yield_on</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Marks a section of a graph kernel as a pause / resume point.</span>
 
 <span class="sd">    .. warning::</span>
 
@@ -357,34 +357,38 @@
 <span class="sd">        is an experimental API. The signature, the lowering across backends, the error messages, and the host-side</span>
 <span class="sd">        yield/resume contract may change in any future release without a deprecation cycle.</span>
 
-<span class="sd">    Used as ``with qd.checkpoint():`` or ``with qd.checkpoint(yield_on=flag):`` inside a ``@qd.kernel(graph=True)``</span>
-<span class="sd">    kernel body. Each ``with`` block becomes a checkpoint with an auto-assigned ``cp_id`` (0, 1, 2, ... by declaration</span>
-<span class="sd">    order, flat across the kernel, independent of whether the checkpoint is inside or outside a ``qd.graph_do_while``).</span>
+<span class="sd">    Used as ``with qd.checkpoint(cp_id, yield_on=flag):`` inside a ``@qd.kernel(graph=True, checkpoints=True)`` kernel</span>
+<span class="sd">    body. When the body writes a non-zero value into ``flag``, the kernel pauses at this checkpoint and returns a</span>
+<span class="sd">    ``GraphStatus`` to the host carrying ``status.checkpoint == cp_id``. The host can then fix things up and call</span>
+<span class="sd">    ``kernel.resume(..., from_checkpoint=cp_id)`` to continue from the same point on the next launch.</span>
 
-<span class="sd">    On CUDA SM 9.0+ / 12.4+ each checkpoint compiles to a CUDA graph IF conditional node around its body kernels. On</span>
-<span class="sd">    other GPU backends it lowers to a small &quot;gate&quot; kernel that rewrites per-kernel indirect-dispatch grid dimensions to</span>
-<span class="sd">    ``(0, 0, 0)`` to skip the checkpoint body. CPU runs checkpoint bodies behind a host branch.</span>
-
-<span class="sd">    If ``yield_on`` is a scalar ``qd.i32`` ndarray that is also a kernel parameter, an auto-inserted yield-check kernel</span>
-<span class="sd">    runs after the checkpoint body. If the user wrote a non-zero value into ``yield_on`` during the body, the framework</span>
-<span class="sd">    records this checkpoint as the yielding one, disables downstream checkpoints in the enclosing ``qd.graph_do_while``</span>
-<span class="sd">    body, exits the loop, and reports the ``cp_id`` to the host via the ``GraphStatus`` returned by the kernel call (see</span>
-<span class="sd">    ``graph.md``). The yield-check kernel resets ``yield_on`` back to 0 after reading it; the user does not have to</span>
-<span class="sd">    clear it from the host.</span>
+<span class="sd">    Arguments:</span>
+<span class="sd">        cp_id: User-facing label identifying this checkpoint to the host. Must be an ``int`` literal or an ``IntEnum``</span>
+<span class="sd">            value, and must be unique within the kernel. The value is preserved as-is end-to-end -- if you pass</span>
+<span class="sd">            ``Stage.SIM`` (an ``IntEnum`` member), ``status.checkpoint`` round-trips back as ``Stage.SIM`` rather than</span>
+<span class="sd">            the raw int.</span>
+<span class="sd">        yield_on: Name of a kernel parameter that is a 0-d ``qd.types.ndarray(qd.i32, ndim=0)``. The body may write a</span>
+<span class="sd">            non-zero value into it to signal &quot;pause here, host needs to handle something&quot;. The framework never writes</span>
+<span class="sd">            into this buffer -- the host owns it end-to-end and must initialise it to ``0`` before the first launch</span>
+<span class="sd">            (``qd.ndarray`` is not zero-initialised) AND reset it to ``0`` before each ``kernel.resume(...)`` call</span>
+<span class="sd">            (otherwise the same checkpoint sees the stale non-zero value and yields again).</span>
 
 <span class="sd">    Restrictions (enforced at kernel compile time):</span>
-<span class="sd">      - Must be used inside ``@qd.kernel(graph=True)``.</span>
-<span class="sd">      - ``yield_on``, when supplied, must name a kernel parameter that is a 0-d ``qd.types.ndarray(qd.i32, ndim=0)``.</span>
-<span class="sd">      - Checkpoints cannot be nested inside other checkpoints. Checkpoints inside a ``qd.graph_do_while`` body are fine</span>
-<span class="sd">        and are the expected pattern.</span>
+<span class="sd">      - Must be used inside ``@qd.kernel(graph=True, checkpoints=True)``.</span>
+<span class="sd">      - ``cp_id`` must be an ``int`` (or ``IntEnum`` value), and must be unique across the kernel.</span>
+<span class="sd">      - ``yield_on`` must name a kernel parameter that is a 0-d ``qd.types.ndarray(qd.i32, ndim=0)``.</span>
+<span class="sd">      - Checkpoints cannot be nested inside other checkpoints. Checkpoints inside a ``qd.graph_do_while`` body are fine.</span>
 <span class="sd">      - Cannot be combined with ``qd.stream_parallel()`` in the same kernel.</span>
+<span class="sd">      - The body cannot contain bare top-level statements (assignments, expressions); wrap them in</span>
+<span class="sd">        ``for _ in range(1):`` so the lowering surfaces the per-statement task cost.</span>
 
 <span class="sd">    This function should not be called directly at runtime; it is recognised and transformed during AST compilation. At</span>
 <span class="sd">    Python runtime (outside kernels), this is a no-op context manager so that doctests / type-checking can import the</span>
 <span class="sd">    symbol freely.</span>
 
-<span class="sd">    See also ``docs/source/user_guide/graph.md`` for the host-side yield/resume loop and cross-backend semantics.</span>
+<span class="sd">    See ``docs/source/user_guide/graph.md`` for the host-side yield/resume loop and cross-backend semantics.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">del</span> <span class="n">cp_id</span><span class="p">,</span> <span class="n">yield_on</span>
     <span class="k">yield</span></div>
 
 </pre></div>
@@ -416,8 +420,8 @@
   </div>
   
   <!-- Scripts loaded after <body> so the DOM is not blocked -->
-  <script defer src="../../../_static/scripts/bootstrap.js?digest=0790524f97105ba85085"></script>
-<script defer src="../../../_static/scripts/pydata-sphinx-theme.js?digest=0790524f97105ba85085"></script>
+  <script defer src="../../../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5"></script>
+<script defer src="../../../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5"></script>
 
   <footer class="bd-footer">
 <div class="bd-footer__inner bd-page-width">
@@ -451,7 +455,7 @@
         <div class="footer-item">
 <p class="theme-version">
   <!-- # L10n: Setting the PST URL as an argument as this does not need to be localized -->
-  Built with the <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a> 0.18.0.
+  Built with the <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a> 0.19.0.
 </p></div>
       
     </div>

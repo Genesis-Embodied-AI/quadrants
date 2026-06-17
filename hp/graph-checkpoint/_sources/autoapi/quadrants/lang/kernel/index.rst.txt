@@ -96,6 +96,12 @@ Module Contents
 
 
 
+   .. py:attribute:: use_checkpoints
+      :type:  bool
+      :value: False
+
+
+
    .. py:attribute:: graph_do_while_arg
       :type:  str | None
       :value: None
@@ -104,6 +110,12 @@ Module Contents
 
    .. py:attribute:: checkpoint_yield_on_args
       :type:  list[str | None]
+      :value: []
+
+
+
+   .. py:attribute:: checkpoint_user_labels_by_cp_id
+      :type:  list[int | None]
       :value: []
 
 
