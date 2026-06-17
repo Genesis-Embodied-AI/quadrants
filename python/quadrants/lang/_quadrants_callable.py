@@ -165,6 +165,6 @@ class BoundQuadrantsCallable:
         assert self.quadrants_callable._adjoint is not None
         return self.quadrants_callable._adjoint(self.instance, *args, **kwargs)
 
-    def resume(self, *args, from_checkpoint: int, **kwargs):
+    def resume(self, *args, from_checkpoint, **kwargs):
         """Bound-method form of `QuadrantsCallable.resume` (see that docstring)."""
         return self.quadrants_callable.resume(self.instance, *args, from_checkpoint=from_checkpoint, **kwargs)

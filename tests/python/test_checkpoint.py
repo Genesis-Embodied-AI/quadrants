@@ -1,21 +1,25 @@
-"""Tests for qd.checkpoint -- yield/resume stage primitive for graph kernels.
+"""Tests for ``qd.checkpoint`` -- yield/resume stage primitive for graph kernels.
 
-These tests cover slices 1a–1d of the qd.checkpoint implementation:
+These tests cover the auto-checkpoint surface:
 
-  - *Slice 1a*: Python API surface plus AST recognition. ``qd.checkpoint`` imports cleanly, works as a no-op context
-    manager outside kernels, parses inside graph kernels, and compile-time misuse raises ``QuadrantsSyntaxError``.
-  - *Slice 1b*: ``checkpoint_id`` plumbing through the IR (covered by integration tests below, since the IR threading
-    is invisible at the Python boundary).
-  - *Slice 1c*: On CUDA SM 9.0+, the GraphManager wires up one IF conditional node per checkpoint; introspection via
-    ``prog.get_graph_num_checkpoints_on_last_call()`` confirms the IF path.
-  - *Slice 1d*: ``yield_on=`` injects a yield-check kernel; on yield the framework atomically records the first yielding
-    cp_id, disables every later checkpoint in the launch, clears the user's flag, and (inside ``qd.graph_do_while``)
-    exits the WHILE early.
+  - The user-facing API is ``qd.checkpoint(cp_id, yield_on=flag)``. Both arguments are required; ``cp_id`` is a user
+    label (``int`` or ``IntEnum`` value), and ``yield_on`` is a 0-d ``qd.i32`` ndarray kernel parameter.
+  - The kernel must be decorated with ``@qd.kernel(graph=True, checkpoints=True)`` to use ``qd.checkpoint(...)``. The
+    flag opts the kernel into the resume model and enables the auto-wrap pass.
+  - Auto-wrap: every top-level for-loop in the kernel body (including inside ``while qd.graph_do_while(...):``) that
+    is not inside a ``with qd.checkpoint(...)`` becomes an implicit no-yield checkpoint. Implicit checkpoints carry no
+    user label and never appear in ``GraphStatus.checkpoint``, but they DO consume an internal cp_id slot so a resume
+    launch can skip them along with the explicit checkpoints declared earlier in source order.
+  - ``status.checkpoint`` round-trips the user-supplied label (so ``qd.checkpoint(Stage.SIM, ...)`` surfaces as
+    ``Stage.SIM`` on yield). ``kernel.resume(from_checkpoint=Stage.SIM)`` skips every checkpoint (implicit + explicit)
+    declared before ``Stage.SIM`` in source order.
 
-On non-CUDA / pre-SM-9.0 backends every body still runs unconditionally, and the introspection-based assertions are
-guarded behind ``_is_checkpoint_if_path_native``. The host-side ``GraphStatus`` / ``step.resume(...)`` API arrives in
-slice 2.
+The behavioural assertions (yield, resume, kernel completes normally on no-yield) run on every backend that implements
+the host-side yield/resume contract -- see ``_supports_checkpoint_yield_resume`` below. The CUDA-native-only counters
+(IF conditional node count) are guarded behind ``_is_checkpoint_if_path_native``.
 """
+
+from enum import IntEnum
 
 import numpy as np
 import pytest
@@ -64,13 +68,8 @@ def _supports_checkpoint_yield_resume():
 
 def _supports_checkpoint_yield_resume_in_while_loop():
     """Strict subset of `_supports_checkpoint_yield_resume`: returns true on backends where yield/resume also works
-    inside a `qd.graph_do_while` body.
-
-    On AMDGPU these kernels fall through to the streaming launcher (HIP 7.2 has neither conditional graph nodes nor
-    indirect dispatch); slice 4 ports the CPU launcher's host-branch gating plus per-iter resume_point reset to that
-    streaming path, so the AMDGPU answer is now the same as the wider predicate above. CUDA SM 9.0+ uses the native IF
-    / yield-check device kernels (slice 1d). On other backends the body runs unconditionally.
-    """
+    inside a `qd.graph_do_while` body. Same predicate today since slice 4 ported the CPU launcher's host-branch gating
+    plus per-iter resume_point reset to the AMDGPU streaming path."""
     return _supports_checkpoint_yield_resume()
 
 
@@ -82,151 +81,140 @@ def _last_yield_cp_id_on_last_call():
     return impl.get_runtime().prog.get_graph_last_yield_cp_id_on_last_call()
 
 
-@test_utils.test()
+# ----------------------------------------------------------------------------------------------------------------------
+# Python-runtime surface (works outside @qd.kernel).
+# ----------------------------------------------------------------------------------------------------------------------
+
+
 def test_checkpoint_is_no_op_outside_kernels():
-    """At Python runtime (outside kernels) qd.checkpoint must be a usable no-op context manager.
+    """At Python runtime (outside kernels) ``qd.checkpoint`` must be a usable no-op context manager.
 
     Lets downstream consumers import the symbol unconditionally and use it inside helpers that are sometimes called
-    from Python and sometimes from kernels. Mirrors how qd.stream_parallel behaves outside of @qd.kernel.
+    from Python and sometimes from kernels. The new API has two required args; both are accepted unchanged here (the
+    Python runtime stub is just ``del cp_id, yield_on; yield``).
     """
     sentinel = []
-    with qd.checkpoint():
+    with qd.checkpoint(0, None):
         sentinel.append("body ran")
-    with qd.checkpoint(yield_on=None):
+    with qd.checkpoint(7, None):
         sentinel.append("body ran")
     assert sentinel == ["body ran", "body ran"]
 
 
-@test_utils.test()
-def test_checkpoint_kernel_runs_all_bodies():
-    """Slice 1a: a graph kernel with checkpoints runs every body kernel (no IF / yield yet).
+# ----------------------------------------------------------------------------------------------------------------------
+# Decorator + opt-in flag.
+# ----------------------------------------------------------------------------------------------------------------------
 
-    Three checkpoints, each increments x by 1. Without the runtime-side IF mechanism we expect every body to execute
-    on every launch, so x ends at 3.
-    """
-    N = 16
+
+@test_utils.test()
+def test_checkpoint_in_non_checkpoints_kernel_raises():
+    """Using ``qd.checkpoint(...)`` in a ``@qd.kernel(graph=True)`` without ``checkpoints=True`` must error at compile
+    time, pointing at the fix-it (add ``checkpoints=True``)."""
 
     @qd.kernel(graph=True)
     def k(x: qd.types.ndarray(qd.i32, ndim=1), flag: qd.types.ndarray(qd.i32, ndim=0)):
-        with qd.checkpoint():
-            for i in range(x.shape[0]):
-                x[i] = x[i] + 1
-        with qd.checkpoint(yield_on=flag):
-            for i in range(x.shape[0]):
-                x[i] = x[i] + 1
-        with qd.checkpoint():
-            for i in range(x.shape[0]):
-                x[i] = x[i] + 1
-
-    x = qd.ndarray(qd.i32, shape=(N,))
-    flag = qd.ndarray(qd.i32, shape=())
-    x.from_numpy(np.zeros(N, dtype=np.int32))
-    flag.from_numpy(np.array(0, dtype=np.int32))
-
-    k(x, flag)
-    np.testing.assert_array_equal(x.to_numpy(), np.full(N, 3, dtype=np.int32))
-
-
-@test_utils.test()
-def test_checkpoint_records_yield_on_metadata():
-    """The kernel object records one cp_id entry per `with qd.checkpoint(...)` in source order.
-
-    This is the metadata that slice 1b will read when assigning cp_id to each for-loop and that the runtime (slices
-    1c/1d) reads to wire up yield-check kernels per checkpoint.
-    """
-    N = 4
-
-    @qd.kernel(graph=True)
-    def k(
-        x: qd.types.ndarray(qd.i32, ndim=1),
-        first_flag: qd.types.ndarray(qd.i32, ndim=0),
-        second_flag: qd.types.ndarray(qd.i32, ndim=0),
-    ):
-        with qd.checkpoint():
-            for i in range(x.shape[0]):
-                x[i] = 1
-        with qd.checkpoint(yield_on=first_flag):
-            for i in range(x.shape[0]):
-                x[i] = 2
-        with qd.checkpoint():
-            for i in range(x.shape[0]):
-                x[i] = 3
-        with qd.checkpoint(yield_on=second_flag):
-            for i in range(x.shape[0]):
-                x[i] = 4
-
-    x = qd.ndarray(qd.i32, shape=(N,))
-    first_flag = qd.ndarray(qd.i32, shape=())
-    second_flag = qd.ndarray(qd.i32, shape=())
-    x.from_numpy(np.zeros(N, dtype=np.int32))
-    first_flag.from_numpy(np.array(0, dtype=np.int32))
-    second_flag.from_numpy(np.array(0, dtype=np.int32))
-
-    k(x, first_flag, second_flag)
-
-    assert k._primal.checkpoint_yield_on_args == [None, "first_flag", None, "second_flag"]
-
-
-@test_utils.test()
-def test_checkpoint_inside_graph_do_while_runs():
-    """A checkpoint inside a qd.graph_do_while body is the canonical qipc pattern.
-
-    Slice 1a doesn't yet enforce IF / yield, so this is just a smoke test that parsing the combination succeeds and
-    the body kernels run as expected for the configured iteration count. The runtime semantics (skipping checkpoints
-    below resume_point, yielding on flag) arrive in slices 1c/1d.
-    """
-    N = 8
-
-    @qd.kernel(graph=True)
-    def k(
-        x: qd.types.ndarray(qd.i32, ndim=1),
-        counter: qd.types.ndarray(qd.i32, ndim=0),
-        flag: qd.types.ndarray(qd.i32, ndim=0),
-    ):
-        while qd.graph_do_while(counter):
-            with qd.checkpoint():
-                for i in range(x.shape[0]):
-                    x[i] = x[i] + 1
-            with qd.checkpoint(yield_on=flag):
-                for i in range(1):
-                    counter[()] = counter[()] - 1
-
-    x = qd.ndarray(qd.i32, shape=(N,))
-    counter = qd.ndarray(qd.i32, shape=())
-    flag = qd.ndarray(qd.i32, shape=())
-    x.from_numpy(np.zeros(N, dtype=np.int32))
-    counter.from_numpy(np.array(5, dtype=np.int32))
-    flag.from_numpy(np.array(0, dtype=np.int32))
-
-    k(x, counter, flag)
-    np.testing.assert_array_equal(x.to_numpy(), np.full(N, 5, dtype=np.int32))
-    assert counter.to_numpy() == 0
-    assert k._primal.checkpoint_yield_on_args == [None, "flag"]
-
-
-@test_utils.test()
-def test_checkpoint_without_graph_true_raises():
-    """qd.checkpoint() is only meaningful in graph kernels; outside graph mode it must error."""
-
-    @qd.kernel
-    def k(x: qd.types.ndarray(qd.i32, ndim=1), flag: qd.types.ndarray(qd.i32, ndim=0)):
-        with qd.checkpoint(yield_on=flag):
+        with qd.checkpoint(0, yield_on=flag):
             for i in range(x.shape[0]):
                 x[i] = x[i] + 1
 
     x = qd.ndarray(qd.i32, shape=(4,))
     flag = qd.ndarray(qd.i32, shape=())
-    with pytest.raises(qd.QuadrantsSyntaxError, match=r"requires @qd.kernel\(graph=True\)"):
+    with pytest.raises(qd.QuadrantsSyntaxError, match=r"checkpoints=True"):
+        k(x, flag)
+
+
+def test_kernel_checkpoints_requires_graph_true():
+    """``@qd.kernel(checkpoints=True)`` without ``graph=True`` is rejected at decorator time -- the resume model is only
+    meaningful for graph kernels (the gate / yield-check lowering, the resume_point slot, and the kernel.resume API all
+    depend on the graph-capture path)."""
+    with pytest.raises(qd.QuadrantsSyntaxError, match=r"checkpoints=True\) requires graph=True"):
+
+        @qd.kernel(checkpoints=True)
+        def k(x: qd.types.ndarray(qd.i32, ndim=1)):
+            for i in range(x.shape[0]):
+                x[i] = x[i] + 1
+
+
+# ----------------------------------------------------------------------------------------------------------------------
+# New API signature: cp_id (int or IntEnum), yield_on (required, must be parameter name).
+# ----------------------------------------------------------------------------------------------------------------------
+
+
+@test_utils.test()
+def test_checkpoint_missing_cp_id_raises():
+    """``qd.checkpoint()`` with no args (the old bare form) must raise with a message that points at the new signature
+    and explains the auto-wrap alternative."""
+
+    @qd.kernel(graph=True, checkpoints=True)
+    def k(x: qd.types.ndarray(qd.i32, ndim=1)):
+        with qd.checkpoint():
+            for i in range(x.shape[0]):
+                x[i] = x[i] + 1
+
+    x = qd.ndarray(qd.i32, shape=(4,))
+    with pytest.raises(qd.QuadrantsSyntaxError, match=r"qd\.checkpoint\(cp_id, yield_on=flag\)"):
+        k(x)
+
+
+@test_utils.test()
+def test_checkpoint_missing_yield_on_raises():
+    """``qd.checkpoint(cp_id)`` without ``yield_on=`` is rejected -- every explicit checkpoint is a yielder. (For
+    skippable-but-no-yield, the user just doesn't wrap, and the auto-wrap pass handles it.)"""
+
+    @qd.kernel(graph=True, checkpoints=True)
+    def k(x: qd.types.ndarray(qd.i32, ndim=1)):
+        with qd.checkpoint(0):
+            for i in range(x.shape[0]):
+                x[i] = x[i] + 1
+
+    x = qd.ndarray(qd.i32, shape=(4,))
+    with pytest.raises(qd.QuadrantsSyntaxError, match=r"missing required argument `yield_on`"):
+        k(x)
+
+
+@test_utils.test()
+def test_checkpoint_non_int_cp_id_raises():
+    """``cp_id`` must be statically determinable to an int / IntEnum value; a string / float / unresolved Name fails."""
+
+    @qd.kernel(graph=True, checkpoints=True)
+    def k(x: qd.types.ndarray(qd.i32, ndim=1), flag: qd.types.ndarray(qd.i32, ndim=0)):
+        with qd.checkpoint("not an int", yield_on=flag):
+            for i in range(x.shape[0]):
+                x[i] = x[i] + 1
+
+    x = qd.ndarray(qd.i32, shape=(4,))
+    flag = qd.ndarray(qd.i32, shape=())
+    with pytest.raises(qd.QuadrantsSyntaxError, match=r"must be an int literal, an IntEnum value"):
+        k(x, flag)
+
+
+@test_utils.test()
+def test_checkpoint_duplicate_cp_id_raises():
+    """Each user-supplied ``cp_id`` must be unique within a kernel so the host loop can map ``status.checkpoint`` and
+    ``kernel.resume(from_checkpoint=...)`` unambiguously."""
+
+    @qd.kernel(graph=True, checkpoints=True)
+    def k(x: qd.types.ndarray(qd.i32, ndim=1), flag: qd.types.ndarray(qd.i32, ndim=0)):
+        with qd.checkpoint(0, yield_on=flag):
+            for i in range(x.shape[0]):
+                x[i] = x[i] + 1
+        with qd.checkpoint(0, yield_on=flag):
+            for i in range(x.shape[0]):
+                x[i] = x[i] + 1
+
+    x = qd.ndarray(qd.i32, shape=(4,))
+    flag = qd.ndarray(qd.i32, shape=())
+    with pytest.raises(qd.QuadrantsSyntaxError, match=r"already used by another checkpoint"):
         k(x, flag)
 
 
 @test_utils.test()
 def test_checkpoint_yield_on_nonexistent_arg_raises():
-    """yield_on must name a kernel parameter; typos / scope mismatches must error early."""
+    """``yield_on`` must name a kernel parameter; typos / scope mismatches must error early."""
 
-    @qd.kernel(graph=True)
+    @qd.kernel(graph=True, checkpoints=True)
     def k(x: qd.types.ndarray(qd.i32, ndim=1), flag: qd.types.ndarray(qd.i32, ndim=0)):
-        with qd.checkpoint(yield_on=missing_flag):  # noqa: F821 - intentional bad reference
+        with qd.checkpoint(0, yield_on=missing_flag):  # noqa: F821 - intentional bad reference
             for i in range(x.shape[0]):
                 x[i] = x[i] + 1
 
@@ -237,154 +225,29 @@ def test_checkpoint_yield_on_nonexistent_arg_raises():
 
 
 @test_utils.test()
-def test_checkpoint_for_loop_wrap_accepted():
-    """A user-written one-iteration `for` wrap (the pattern users substitute for bare statements once the bare-stmt
-    rejection fires) compiles and runs correctly, mixed alongside real for-loops."""
-    N = 4
+def test_checkpoint_yield_on_must_be_bare_name():
+    """``yield_on=`` must be a bare ``ast.Name`` (a kernel parameter); expressions are not supported. Pinning the
+    diagnostic so the user knows to refactor."""
 
-    @qd.kernel(graph=True)
-    def k(x: qd.types.ndarray(qd.i32, ndim=1), c: qd.types.ndarray(qd.i32, ndim=0)):
-        with qd.checkpoint():
-            for i in range(x.shape[0]):
-                x[i] = x[i] + 1
-            for _ in range(1):
-                c[()] = c[()] + 1
-
-    x = qd.ndarray(qd.i32, shape=(N,))
-    c = qd.ndarray(qd.i32, shape=())
-    x.from_numpy(np.zeros(N, dtype=np.int32))
-    c.from_numpy(np.array(0, dtype=np.int32))
-    k(x, c)
-    np.testing.assert_array_equal(x.to_numpy(), np.full(N, 1, dtype=np.int32))
-    assert c.to_numpy() == 1
-
-
-@test_utils.test()
-def test_checkpoint_bare_assign_raises():
-    """A bare `Assign` at the top level of a `qd.checkpoint(...)` body must raise `QuadrantsSyntaxError` at compile
-    time, not be silently wrapped. The user should be steered to `for _ in range(1): <stmt>` explicitly so they can
-    see that each top-level statement in a checkpoint becomes its own offloaded task -- otherwise a sequence of
-    scalar writes would balloon into N kernel launches / N graph nodes with no indication anything was implicit.
-
-    See the rejection logic in `CheckpointTransformer.build_checkpoint_with` and the `Restrictions` section of
-    `docs/source/user_guide/graph.md`.
-    """
-
-    @qd.kernel(graph=True)
-    def k(c: qd.types.ndarray(qd.i32, ndim=0)):
-        with qd.checkpoint():
-            c[()] = c[()] + 1  # bare Assign -- must be wrapped explicitly
-
-    c = qd.ndarray(qd.i32, shape=())
-    with pytest.raises(qd.QuadrantsSyntaxError, match=r"bare top-level Assign statement"):
-        k(c)
-
-
-@test_utils.test()
-def test_checkpoint_bare_augassign_raises():
-    """Same as `_bare_assign_raises` but for `AugAssign` (`+=` / `-=` / ...)."""
-
-    @qd.kernel(graph=True)
-    def k(c: qd.types.ndarray(qd.i32, ndim=0)):
-        with qd.checkpoint():
-            c[()] += 1
-
-    c = qd.ndarray(qd.i32, shape=())
-    with pytest.raises(qd.QuadrantsSyntaxError, match=r"bare top-level AugAssign statement"):
-        k(c)
-
-
-@test_utils.test()
-def test_checkpoint_bare_call_expr_raises():
-    """Same as `_bare_assign_raises` but for a bare top-level `Expr` (a function call statement). Docstrings (the only
-    other `Expr` shape we accept) are exempt via `is_docstring` -- see `test_checkpoint_docstring_allowed`."""
-
-    @qd.func
-    def bump(c: qd.types.ndarray(qd.i32, ndim=0)) -> None:
-        c[()] = c[()] + 1
-
-    @qd.kernel(graph=True)
-    def k(c: qd.types.ndarray(qd.i32, ndim=0)):
-        with qd.checkpoint():
-            bump(c)
-
-    c = qd.ndarray(qd.i32, shape=())
-    with pytest.raises(qd.QuadrantsSyntaxError, match=r"bare top-level Expr statement"):
-        k(c)
-
-
-@test_utils.test()
-def test_checkpoint_bare_assign_error_message_suggests_for_wrap():
-    """The rejection message must show the user the exact `for _ in range(1):` rewrite. Pin a representative subset of
-    the message so a future copy-edit can't silently drop the actionable fix-it hint."""
-
-    @qd.kernel(graph=True)
-    def k(c: qd.types.ndarray(qd.i32, ndim=0)):
-        with qd.checkpoint():
-            c[()] = c[()] + 1
-
-    c = qd.ndarray(qd.i32, shape=())
-    with pytest.raises(qd.QuadrantsSyntaxError, match=r"for _ in range\(1\):"):
-        k(c)
-
-
-@test_utils.test()
-def test_checkpoint_docstring_allowed():
-    """A docstring at the top of a checkpoint body is allowed (it's a no-op `Expr(Constant)`)."""
-    N = 4
-
-    @qd.kernel(graph=True)
-    def k(x: qd.types.ndarray(qd.i32, ndim=1)):
-        with qd.checkpoint():
-            """This checkpoint increments x."""
-            for i in range(x.shape[0]):
-                x[i] = x[i] + 1
-
-    x = qd.ndarray(qd.i32, shape=(N,))
-    x.from_numpy(np.zeros(N, dtype=np.int32))
-    k(x)
-    np.testing.assert_array_equal(x.to_numpy(), np.full(N, 1, dtype=np.int32))
-
-
-@test_utils.test()
-def test_checkpoint_nested_raises():
-    """Per design doc 8.2: checkpoints inside other checkpoints are forbidden at compile time."""
-
-    @qd.kernel(graph=True)
-    def k(x: qd.types.ndarray(qd.i32, ndim=1)):
-        with qd.checkpoint():
-            with qd.checkpoint():
-                for i in range(x.shape[0]):
-                    x[i] = x[i] + 1
-
-    x = qd.ndarray(qd.i32, shape=(4,))
-    with pytest.raises(qd.QuadrantsSyntaxError, match="cannot be nested"):
-        k(x)
-
-
-@test_utils.test()
-def test_checkpoint_positional_arg_raises():
-    """qd.checkpoint() takes no positional args; clarify the message at the call site."""
-
-    @qd.kernel(graph=True)
+    @qd.kernel(graph=True, checkpoints=True)
     def k(x: qd.types.ndarray(qd.i32, ndim=1), flag: qd.types.ndarray(qd.i32, ndim=0)):
-        with qd.checkpoint(flag):  # type: ignore[call-arg]
+        with qd.checkpoint(0, yield_on=flag if True else flag):
             for i in range(x.shape[0]):
                 x[i] = x[i] + 1
 
     x = qd.ndarray(qd.i32, shape=(4,))
     flag = qd.ndarray(qd.i32, shape=())
-    with pytest.raises(qd.QuadrantsSyntaxError, match="takes no positional arguments"):
+    with pytest.raises(qd.QuadrantsSyntaxError, match=r"must be the bare name of a kernel parameter"):
         k(x, flag)
 
 
 @test_utils.test()
 def test_checkpoint_unexpected_kwarg_raises():
-    """Only yield_on= is accepted; other kwargs must error so typos surface immediately."""
+    """Only ``cp_id`` and ``yield_on`` are accepted; other kwargs must error so typos surface immediately."""
 
-    @qd.kernel(graph=True)
+    @qd.kernel(graph=True, checkpoints=True)
     def k(x: qd.types.ndarray(qd.i32, ndim=1), flag: qd.types.ndarray(qd.i32, ndim=0)):
-        with qd.checkpoint(when=flag):  # type: ignore[call-arg]
+        with qd.checkpoint(0, yield_on=flag, when=flag):  # type: ignore[call-arg]
             for i in range(x.shape[0]):
                 x[i] = x[i] + 1
 
@@ -395,63 +258,97 @@ def test_checkpoint_unexpected_kwarg_raises():
 
 
 @test_utils.test()
-def test_checkpoint_emits_if_nodes_on_cuda_native():
-    """Slice 1c: on CUDA SM 9.0+, the GraphManager wires one IF conditional node per checkpoint.
+def test_checkpoint_nested_raises():
+    """Checkpoints inside other checkpoints are forbidden at compile time."""
 
-    Builds a kernel with three checkpoints and asserts the introspection counter sees three IF nodes. On non-CUDA /
-    pre-SM-9.0 backends the kernel still runs to completion but reports zero since the IF path isn't available; the
-    behavioural correctness assertion (incremented N times) still holds because the body kernels run unconditionally
-    there.
-    """
-    N = 8
-
-    @qd.kernel(graph=True)
+    @qd.kernel(graph=True, checkpoints=True)
     def k(x: qd.types.ndarray(qd.i32, ndim=1), flag: qd.types.ndarray(qd.i32, ndim=0)):
-        with qd.checkpoint():
+        with qd.checkpoint(0, yield_on=flag):
+            with qd.checkpoint(1, yield_on=flag):
+                for i in range(x.shape[0]):
+                    x[i] = x[i] + 1
+
+    x = qd.ndarray(qd.i32, shape=(4,))
+    flag = qd.ndarray(qd.i32, shape=())
+    with pytest.raises(qd.QuadrantsSyntaxError, match="cannot be nested"):
+        k(x, flag)
+
+
+# ----------------------------------------------------------------------------------------------------------------------
+# Auto-wrap pass behaviour.
+# ----------------------------------------------------------------------------------------------------------------------
+
+
+@test_utils.test()
+def test_autowrap_assigns_implicit_cp_id_per_for_loop():
+    """In a ``checkpoints=True`` kernel, every top-level for-loop not inside a ``with qd.checkpoint(...)`` consumes one
+    internal cp_id slot (with a ``None`` user label). Three plain for-loops -> three implicit slots."""
+    N = 4
+
+    @qd.kernel(graph=True, checkpoints=True)
+    def k(x: qd.types.ndarray(qd.i32, ndim=1)):
+        for i in range(x.shape[0]):
+            x[i] = x[i] + 1
+        for i in range(x.shape[0]):
+            x[i] = x[i] + 1
+        for i in range(x.shape[0]):
+            x[i] = x[i] + 1
+
+    x = qd.ndarray(qd.i32, shape=(N,))
+    x.from_numpy(np.zeros(N, dtype=np.int32))
+    k(x)
+    np.testing.assert_array_equal(x.to_numpy(), np.full(N, 3, dtype=np.int32))
+    # All three are implicit (no user labels), no yield_on either.
+    assert k._primal.checkpoint_user_labels_by_cp_id == [None, None, None]
+    assert k._primal.checkpoint_yield_on_args == [None, None, None]
+
+
+@test_utils.test()
+def test_autowrap_mixes_explicit_and_implicit_in_source_order():
+    """Mix of explicit yielders and auto-wrapped for-loops produces a dense source-order internal cp_id sequence with
+    user labels interleaved with ``None`` for the implicit slots."""
+    N = 4
+
+    @qd.kernel(graph=True, checkpoints=True)
+    def k(x: qd.types.ndarray(qd.i32, ndim=1), flag: qd.types.ndarray(qd.i32, ndim=0)):
+        with qd.checkpoint(10, yield_on=flag):
             for i in range(x.shape[0]):
                 x[i] = x[i] + 1
-        with qd.checkpoint(yield_on=flag):
+        for i in range(x.shape[0]):  # implicit cp_id=1
+            x[i] = x[i] + 1
+        with qd.checkpoint(20, yield_on=flag):
             for i in range(x.shape[0]):
                 x[i] = x[i] + 1
-        with qd.checkpoint():
-            for i in range(x.shape[0]):
-                x[i] = x[i] + 1
+        for i in range(x.shape[0]):  # implicit cp_id=3
+            x[i] = x[i] + 1
 
     x = qd.ndarray(qd.i32, shape=(N,))
     flag = qd.ndarray(qd.i32, shape=())
     x.from_numpy(np.zeros(N, dtype=np.int32))
     flag.from_numpy(np.array(0, dtype=np.int32))
-
     k(x, flag)
-    np.testing.assert_array_equal(x.to_numpy(), np.full(N, 3, dtype=np.int32))
-    if _is_checkpoint_if_path_native():
-        assert _num_checkpoints_on_last_call() == 3, (
-            f"expected 3 IF conditional nodes on the native path, " f"got {_num_checkpoints_on_last_call()}"
-        )
+    np.testing.assert_array_equal(x.to_numpy(), np.full(N, 4, dtype=np.int32))
+    assert k._primal.checkpoint_user_labels_by_cp_id == [10, None, 20, None]
+    assert k._primal.checkpoint_yield_on_args == ["flag", None, "flag", None]
 
 
 @test_utils.test()
-def test_checkpoint_emits_if_nodes_inside_graph_do_while():
-    """Slice 1c: IF conditional nodes nest correctly inside a graph_do_while body.
-
-    Two checkpoints per iteration, three iterations -- the IF nodes live inside the WHILE body subgraph and get rebuilt
-    fresh per loop iteration (CUDA semantics). The counter introspection on the native path confirms the GraphManager
-    doesn't accidentally hoist IFs to top level.
-    """
+def test_autowrap_recurses_into_graph_do_while_body():
+    """The auto-wrap pass recurses into ``while qd.graph_do_while(...):`` bodies so for-loops nested inside the WHILE
+    body get the same implicit-checkpoint treatment."""
     N = 4
 
-    @qd.kernel(graph=True)
+    @qd.kernel(graph=True, checkpoints=True)
     def k(
         x: qd.types.ndarray(qd.i32, ndim=1),
         counter: qd.types.ndarray(qd.i32, ndim=0),
         flag: qd.types.ndarray(qd.i32, ndim=0),
     ):
         while qd.graph_do_while(counter):
-            with qd.checkpoint():
-                for i in range(x.shape[0]):
-                    x[i] = x[i] + 1
-            with qd.checkpoint(yield_on=flag):
-                for i in range(1):
+            for i in range(x.shape[0]):  # implicit
+                x[i] = x[i] + 1
+            with qd.checkpoint(0, yield_on=flag):
+                for _ in range(1):
                     counter[()] = counter[()] - 1
 
     x = qd.ndarray(qd.i32, shape=(N,))
@@ -460,28 +357,85 @@ def test_checkpoint_emits_if_nodes_inside_graph_do_while():
     x.from_numpy(np.zeros(N, dtype=np.int32))
     counter.from_numpy(np.array(3, dtype=np.int32))
     flag.from_numpy(np.array(0, dtype=np.int32))
-
     k(x, counter, flag)
     np.testing.assert_array_equal(x.to_numpy(), np.full(N, 3, dtype=np.int32))
     assert counter.to_numpy() == 0
-    if _is_checkpoint_if_path_native():
-        assert _num_checkpoints_on_last_call() == 2, (
-            f"expected 2 IF conditional nodes inside the WHILE body, " f"got {_num_checkpoints_on_last_call()}"
-        )
+    # One implicit (the bare for-loop) + one explicit yielder.
+    assert k._primal.checkpoint_user_labels_by_cp_id == [None, 0]
+    assert k._primal.checkpoint_yield_on_args == [None, "flag"]
 
 
 @test_utils.test()
-def test_checkpoint_no_yield_when_flag_is_zero():
-    """Slice 1d: with all yield_on flags == 0 the kernel completes normally and reports no yield.
+def test_autowrap_leaves_kernel_prologue_alone():
+    """Bare top-level statements (not inside any for-loop) stay in the kernel prologue with cp_id=-1 and run on every
+    launch -- including resume launches. Verified indirectly by the fact that the autowrap pass produces only one
+    implicit checkpoint here (for the one for-loop), not extra slots for the bare prologue stmt."""
+    N = 4
 
-    Sanity check: the yield-check kernel must not fire spurious yields and `get_graph_last_yield_cp_id_on_last_call()`
-    must return -1 on the native path when no checkpoint requested a yield.
-    """
-    N = 8
+    @qd.kernel(graph=True, checkpoints=True)
+    def k(x: qd.types.ndarray(qd.i32, ndim=1), n_local: qd.types.ndarray(qd.i32, ndim=0)):
+        n_local[()] = x.shape[0]
+        for i in range(x.shape[0]):
+            x[i] = x[i] + 1
 
-    @qd.kernel(graph=True)
+    x = qd.ndarray(qd.i32, shape=(N,))
+    n_local = qd.ndarray(qd.i32, shape=())
+    x.from_numpy(np.zeros(N, dtype=np.int32))
+    n_local.from_numpy(np.array(0, dtype=np.int32))
+    k(x, n_local)
+    np.testing.assert_array_equal(x.to_numpy(), np.full(N, 1, dtype=np.int32))
+    assert int(n_local.to_numpy()) == N
+    # One implicit cp_id for the for-loop. The bare assign is kernel prologue, cp_id=-1, not in the table.
+    assert k._primal.checkpoint_user_labels_by_cp_id == [None]
+
+
+# ----------------------------------------------------------------------------------------------------------------------
+# Bare-stmt-inside-checkpoint rule still applies to explicit blocks.
+# ----------------------------------------------------------------------------------------------------------------------
+
+
+@test_utils.test()
+def test_checkpoint_bare_assign_raises():
+    """A bare ``Assign`` at the top level of an explicit ``with qd.checkpoint(...)`` body must raise
+    ``QuadrantsSyntaxError`` at compile time, not be silently wrapped. The user should be steered to
+    ``for _ in range(1): <stmt>`` explicitly so they see each top-level statement becomes its own offloaded task."""
+
+    @qd.kernel(graph=True, checkpoints=True)
+    def k(c: qd.types.ndarray(qd.i32, ndim=0), flag: qd.types.ndarray(qd.i32, ndim=0)):
+        with qd.checkpoint(0, yield_on=flag):
+            c[()] = c[()] + 1
+
+    c = qd.ndarray(qd.i32, shape=())
+    flag = qd.ndarray(qd.i32, shape=())
+    with pytest.raises(qd.QuadrantsSyntaxError, match=r"bare top-level Assign statement"):
+        k(c, flag)
+
+
+@test_utils.test()
+def test_checkpoint_bare_assign_error_message_suggests_for_wrap():
+    """The rejection message must show the user the exact ``for _ in range(1):`` rewrite. Pin a representative subset
+    of the message so a future copy-edit can't silently drop the actionable fix-it hint."""
+
+    @qd.kernel(graph=True, checkpoints=True)
+    def k(c: qd.types.ndarray(qd.i32, ndim=0), flag: qd.types.ndarray(qd.i32, ndim=0)):
+        with qd.checkpoint(0, yield_on=flag):
+            c[()] = c[()] + 1
+
+    c = qd.ndarray(qd.i32, shape=())
+    flag = qd.ndarray(qd.i32, shape=())
+    with pytest.raises(qd.QuadrantsSyntaxError, match=r"for _ in range\(1\):"):
+        k(c, flag)
+
+
+@test_utils.test()
+def test_checkpoint_docstring_allowed():
+    """A docstring at the top of a checkpoint body is allowed (it's a no-op ``Expr(Constant)``)."""
+    N = 4
+
+    @qd.kernel(graph=True, checkpoints=True)
     def k(x: qd.types.ndarray(qd.i32, ndim=1), flag: qd.types.ndarray(qd.i32, ndim=0)):
-        with qd.checkpoint(yield_on=flag):
+        with qd.checkpoint(0, yield_on=flag):
+            """This checkpoint increments x."""
             for i in range(x.shape[0]):
                 x[i] = x[i] + 1
 
@@ -489,377 +443,437 @@ def test_checkpoint_no_yield_when_flag_is_zero():
     flag = qd.ndarray(qd.i32, shape=())
     x.from_numpy(np.zeros(N, dtype=np.int32))
     flag.from_numpy(np.array(0, dtype=np.int32))
-
     k(x, flag)
+    np.testing.assert_array_equal(x.to_numpy(), np.full(N, 1, dtype=np.int32))
+
+
+# ----------------------------------------------------------------------------------------------------------------------
+# IntEnum labels round-trip through GraphStatus and kernel.resume.
+# ----------------------------------------------------------------------------------------------------------------------
+
+
+# Module-level IntEnum so the AST resolver can find it via the kernel's module globals (matches the canonical user
+# pattern, and is the only one the resolver supports).
+class _Stage(IntEnum):
+    LOAD = 0
+    SIM = 1
+    REDUCE = 2
+
+
+@test_utils.test()
+def test_intenum_label_resolves_to_internal_cp_id():
+    """``qd.checkpoint(Stage.SIM, ...)`` resolves the IntEnum to its int value internally and stores the IntEnum
+    instance (not the raw int) in the user-label table, so the round-trip through ``GraphStatus.checkpoint`` preserves
+    enum identity."""
+    N = 4
+
+    @qd.kernel(graph=True, checkpoints=True)
+    def k(x: qd.types.ndarray(qd.i32, ndim=1), flag: qd.types.ndarray(qd.i32, ndim=0)):
+        with qd.checkpoint(_Stage.LOAD, yield_on=flag):
+            for i in range(x.shape[0]):
+                x[i] = x[i] + 1
+        with qd.checkpoint(_Stage.REDUCE, yield_on=flag):
+            for i in range(x.shape[0]):
+                x[i] = x[i] + 1
+
+    x = qd.ndarray(qd.i32, shape=(N,))
+    flag = qd.ndarray(qd.i32, shape=())
+    x.from_numpy(np.zeros(N, dtype=np.int32))
+    flag.from_numpy(np.array(0, dtype=np.int32))
+    k(x, flag)
+    labels = k._primal.checkpoint_user_labels_by_cp_id
+    assert labels == [_Stage.LOAD, _Stage.REDUCE]
+    # Identity preserved (not just int equality).
+    assert all(isinstance(lbl, _Stage) for lbl in labels)
+
+
+# ----------------------------------------------------------------------------------------------------------------------
+# Yield mechanics (still work end-to-end through the new API).
+# ----------------------------------------------------------------------------------------------------------------------
+
+
+@test_utils.test()
+def test_checkpoint_no_yield_when_flag_is_zero():
+    """With ``yield_on`` flag == 0 the kernel completes normally and reports no yield. Sanity check that the yield-check
+    kernel doesn't fire spurious yields."""
+    N = 8
+
+    @qd.kernel(graph=True, checkpoints=True)
+    def k(x: qd.types.ndarray(qd.i32, ndim=1), flag: qd.types.ndarray(qd.i32, ndim=0)):
+        with qd.checkpoint(0, yield_on=flag):
+            for i in range(x.shape[0]):
+                x[i] = x[i] + 1
+
+    x = qd.ndarray(qd.i32, shape=(N,))
+    flag = qd.ndarray(qd.i32, shape=())
+    x.from_numpy(np.zeros(N, dtype=np.int32))
+    flag.from_numpy(np.array(0, dtype=np.int32))
+    status = k(x, flag)
     np.testing.assert_array_equal(x.to_numpy(), np.ones(N, dtype=np.int32))
+    assert status is not None and not status.yielded
+    assert status.checkpoint is None
     if _is_checkpoint_if_path_native():
         assert _last_yield_cp_id_on_last_call() == -1
 
 
 @test_utils.test()
 def test_checkpoint_yields_when_flag_is_set():
-    """Slice 1d: a non-zero yield_on flag fires the yield-check kernel.
-
-    We pre-set the flag value before launch. The yield-check kernel inside the IF body atomically records cp_id into
-    `yield_signal`, then bumps `resume_point` so every later checkpoint is skipped. The third checkpoint must therefore
-    NOT run on the native path. (On non-native backends every body runs unconditionally, so we skip the resume-skip
-    assertion there.)
-    """
+    """A non-zero ``yield_on`` flag fires the yield-check kernel: the first checkpoint records its cp_id into
+    ``yield_signal``, bumps ``resume_point`` so every later checkpoint (explicit and implicit) is skipped."""
     if not _supports_checkpoint_yield_resume():
-        pytest.skip("yield semantics require the CUDA-native IF path (slice 1d) or CPU host-branch gating (slice 6)")
+        pytest.skip("yield semantics require the CUDA-native IF path or CPU host-branch gating")
     N = 8
 
-    @qd.kernel(graph=True)
+    @qd.kernel(graph=True, checkpoints=True)
     def k(x: qd.types.ndarray(qd.i32, ndim=1), flag: qd.types.ndarray(qd.i32, ndim=0)):
-        with qd.checkpoint():
+        for i in range(x.shape[0]):  # implicit cp_id=0
+            x[i] = x[i] + 1
+        with qd.checkpoint(7, yield_on=flag):  # explicit cp_id=1, label=7
             for i in range(x.shape[0]):
                 x[i] = x[i] + 1
-        with qd.checkpoint(yield_on=flag):
-            for i in range(x.shape[0]):
-                x[i] = x[i] + 10
-        with qd.checkpoint():
-            for i in range(x.shape[0]):
-                x[i] = x[i] + 100
+        for i in range(x.shape[0]):  # implicit cp_id=2 -- must be skipped on yield
+            x[i] = x[i] + 1
 
     x = qd.ndarray(qd.i32, shape=(N,))
     flag = qd.ndarray(qd.i32, shape=())
     x.from_numpy(np.zeros(N, dtype=np.int32))
     flag.from_numpy(np.array(1, dtype=np.int32))
-
-    k(x, flag)
-    # cp 0 ran (+1), cp 1 ran (+10) and signalled a yield, cp 2 was skipped.
-    np.testing.assert_array_equal(x.to_numpy(), np.full(N, 11, dtype=np.int32))
-    assert _last_yield_cp_id_on_last_call() == 1
-    # The yield-check kernel must reset the user's flag value to 0 so a follow-up call doesn't immediately yield again.
-    # Matches docs/source/user_guide/graph.md "yield mechanism".
-    assert flag.to_numpy() == 0
+    status = k(x, flag)
+    # Implicit pre-yielder ran (+1), yielder ran (+1), implicit post-yielder skipped -> total 2.
+    np.testing.assert_array_equal(x.to_numpy(), np.full(N, 2, dtype=np.int32))
+    assert status.yielded
+    assert status.checkpoint == 7
 
 
 @test_utils.test()
 def test_checkpoint_yield_first_wins_subsequent_skipped():
-    """Slice 1d: when an earlier checkpoint yields, every later checkpoint in the same launch is skipped.
-
-    Three checkpoints: cp 0 and cp 1 both have `yield_on=` set to non-zero before launch. cp 0 fires first, and its
-    yield-check kernel atomically writes cp_id=0 to `yield_signal` and bumps `resume_point` to INT_MAX. cp 1's gate
-    kernel then reads INT_MAX, disables the IF (so cp 1's body never runs, its flag stays at 1, and its yield-check
-    never fires). cp 2 is likewise skipped. This matches the slice 1d design (`perso_hugh/doc/qipc/reentrant.md` section
-    5.2): first yielder wins, everything past the yield point is shipped to the host as-not-run.
-    """
+    """When two yielders both set their flag in the same launch, the *first* (in source / declaration order) wins:
+    ``yield_signal`` is atomic-CAS'd from -1 only by the first writer, later writers see the slot already filled and
+    no-op. The second checkpoint's body is itself skipped on the gating prologue, so the test also validates that the
+    skip propagates."""
     if not _supports_checkpoint_yield_resume():
-        pytest.skip("yield ordering requires the CUDA-native IF path (slice 1d) or CPU host-branch gating (slice 6)")
+        pytest.skip("requires yield/resume support")
     N = 4
 
-    @qd.kernel(graph=True)
+    @qd.kernel(graph=True, checkpoints=True)
     def k(
         x: qd.types.ndarray(qd.i32, ndim=1),
-        flag_a: qd.types.ndarray(qd.i32, ndim=0),
-        flag_b: qd.types.ndarray(qd.i32, ndim=0),
+        first_flag: qd.types.ndarray(qd.i32, ndim=0),
+        second_flag: qd.types.ndarray(qd.i32, ndim=0),
     ):
-        with qd.checkpoint(yield_on=flag_a):
+        with qd.checkpoint(_Stage.LOAD, yield_on=first_flag):
             for i in range(x.shape[0]):
                 x[i] = x[i] + 1
-        with qd.checkpoint(yield_on=flag_b):
+        with qd.checkpoint(_Stage.SIM, yield_on=second_flag):
             for i in range(x.shape[0]):
-                x[i] = x[i] + 10
-        with qd.checkpoint():
-            for i in range(x.shape[0]):
-                x[i] = x[i] + 100
+                x[i] = x[i] + 1
 
     x = qd.ndarray(qd.i32, shape=(N,))
-    flag_a = qd.ndarray(qd.i32, shape=())
-    flag_b = qd.ndarray(qd.i32, shape=())
+    first_flag = qd.ndarray(qd.i32, shape=())
+    second_flag = qd.ndarray(qd.i32, shape=())
     x.from_numpy(np.zeros(N, dtype=np.int32))
-    flag_a.from_numpy(np.array(1, dtype=np.int32))
-    flag_b.from_numpy(np.array(1, dtype=np.int32))
-
-    k(x, flag_a, flag_b)
-    np.testing.assert_array_equal(x.to_numpy(), np.ones(N, dtype=np.int32))
-    assert _last_yield_cp_id_on_last_call() == 0
-    # cp 0's yield-check cleared its own flag; cp 1's yield-check never ran so its flag stays.
-    assert flag_a.to_numpy() == 0
-    assert flag_b.to_numpy() == 1
+    first_flag.from_numpy(np.array(1, dtype=np.int32))
+    second_flag.from_numpy(np.array(1, dtype=np.int32))
+    status = k(x, first_flag, second_flag)
+    # First checkpoint yields; second is skipped. x increments by 1 only.
+    np.testing.assert_array_equal(x.to_numpy(), np.full(N, 1, dtype=np.int32))
+    assert status.yielded
+    assert status.checkpoint == _Stage.LOAD
 
 
 @test_utils.test()
 def test_checkpoint_yield_resets_between_launches():
-    """Slice 1d: a kernel that yielded once must run cleanly on the next launch when the flag is reset.
-
-    Verifies the per-launch reset path: yield_signal goes back to -1, resume_point goes back to 0, the user's yield_on
-    ndarray was cleared by the yield-check kernel during the first launch so the second launch does not immediately
-    yield again. Same cached graph for both launches.
-    """
+    """The yield-check kernel resets ``yield_on`` back to 0 after recording a yield. The user does not have to clear
+    the flag from the host between launches."""
     if not _supports_checkpoint_yield_resume():
-        pytest.skip(
-            "yield reset semantics require the CUDA-native IF path (slice 1d) or CPU host-branch gating (slice 6)"
-        )
+        pytest.skip("requires yield/resume support")
     N = 4
 
-    @qd.kernel(graph=True)
+    @qd.kernel(graph=True, checkpoints=True)
     def k(x: qd.types.ndarray(qd.i32, ndim=1), flag: qd.types.ndarray(qd.i32, ndim=0)):
-        with qd.checkpoint(yield_on=flag):
+        with qd.checkpoint(0, yield_on=flag):
             for i in range(x.shape[0]):
                 x[i] = x[i] + 1
-        with qd.checkpoint():
-            for i in range(x.shape[0]):
-                x[i] = x[i] + 10
 
     x = qd.ndarray(qd.i32, shape=(N,))
     flag = qd.ndarray(qd.i32, shape=())
     x.from_numpy(np.zeros(N, dtype=np.int32))
     flag.from_numpy(np.array(1, dtype=np.int32))
-    k(x, flag)
-    np.testing.assert_array_equal(x.to_numpy(), np.full(N, 1, dtype=np.int32))
-    assert _last_yield_cp_id_on_last_call() == 0
-    # Second launch: flag has been cleared by the yield-check kernel; both bodies should run.
-    x.from_numpy(np.zeros(N, dtype=np.int32))
-    k(x, flag)
-    np.testing.assert_array_equal(x.to_numpy(), np.full(N, 11, dtype=np.int32))
-    assert _last_yield_cp_id_on_last_call() == -1
+    status1 = k(x, flag)
+    assert status1.yielded
+    assert int(flag.to_numpy()) == 0, "yield-check kernel should have reset the flag to 0"
+    # Second launch (flag still 0 thanks to the reset) completes normally.
+    status2 = k(x, flag)
+    assert not status2.yielded
+
+
+# ----------------------------------------------------------------------------------------------------------------------
+# Resume API: label-based, skips implicit + explicit checkpoints declared before the resume target.
+# ----------------------------------------------------------------------------------------------------------------------
 
 
 @test_utils.test()
-def test_checkpoint_yield_exits_graph_do_while_early():
-    """Slice 1d: a yield inside a graph_do_while body terminates the WHILE loop immediately.
-
-    Without the cond-with-yield kernel, the body would re-enter on the next iteration with `resume_point == INT_MAX`,
-    skip every checkpoint, never decrement the counter, and spin forever. The cond-with-yield kernel variant checks
-    `yield_signal != -1` and exits the WHILE.
-    """
-    if not _supports_checkpoint_yield_resume_in_while_loop():
-        pytest.skip(
-            "WHILE early-exit not yet covered on this backend (e.g. AMDGPU slice 4 streaming-launcher fallback)"
-        )
+def test_resume_by_int_label_skips_implicit_and_explicit_before():
+    """``kernel.resume(from_checkpoint=N)`` with a raw int label skips every checkpoint (implicit AND explicit) declared
+    earlier in source order. Three pieces of work (implicit, explicit, implicit) and resume from the explicit's label
+    skips the first implicit; resume from a later sentinel skips both implicit + the explicit."""
+    if not _supports_checkpoint_yield_resume():
+        pytest.skip("requires yield/resume support")
     N = 4
 
-    @qd.kernel(graph=True)
+    @qd.kernel(graph=True, checkpoints=True)
+    def k(x: qd.types.ndarray(qd.i32, ndim=1), flag: qd.types.ndarray(qd.i32, ndim=0)):
+        for i in range(x.shape[0]):  # implicit cp_id=0
+            x[i] = x[i] + 1
+        with qd.checkpoint(42, yield_on=flag):  # explicit cp_id=1, label=42
+            for i in range(x.shape[0]):
+                x[i] = x[i] + 10
+        for i in range(x.shape[0]):  # implicit cp_id=2
+            x[i] = x[i] + 100
+
+    x = qd.ndarray(qd.i32, shape=(N,))
+    flag = qd.ndarray(qd.i32, shape=())
+
+    # Full launch: 1 + 10 + 100 = 111.
+    x.from_numpy(np.zeros(N, dtype=np.int32))
+    flag.from_numpy(np.array(0, dtype=np.int32))
+    k(x, flag)
+    np.testing.assert_array_equal(x.to_numpy(), np.full(N, 111, dtype=np.int32))
+
+    # Resume from label=42: skip implicit cp_id=0, run explicit (+10), run trailing implicit (+100). 110.
+    x.from_numpy(np.zeros(N, dtype=np.int32))
+    flag.from_numpy(np.array(0, dtype=np.int32))
+    k.resume(x, flag, from_checkpoint=42)
+    np.testing.assert_array_equal(x.to_numpy(), np.full(N, 110, dtype=np.int32))
+
+
+@test_utils.test()
+def test_resume_by_intenum_label_round_trip():
+    """The canonical IntEnum-driven host loop: yield from one stage, resume from a later one. The IntEnum identity
+    round-trips through ``status.checkpoint``, and ``kernel.resume(from_checkpoint=Stage.X)`` is readable at the call
+    site."""
+    if not _supports_checkpoint_yield_resume():
+        pytest.skip("requires yield/resume support")
+    N = 4
+
+    @qd.kernel(graph=True, checkpoints=True)
+    def k(x: qd.types.ndarray(qd.i32, ndim=1), flag: qd.types.ndarray(qd.i32, ndim=0)):
+        with qd.checkpoint(_Stage.LOAD, yield_on=flag):
+            for i in range(x.shape[0]):
+                x[i] = x[i] + 1
+        with qd.checkpoint(_Stage.SIM, yield_on=flag):
+            for i in range(x.shape[0]):
+                x[i] = x[i] + 10
+        with qd.checkpoint(_Stage.REDUCE, yield_on=flag):
+            for i in range(x.shape[0]):
+                x[i] = x[i] + 100
+
+    x = qd.ndarray(qd.i32, shape=(N,))
+    flag = qd.ndarray(qd.i32, shape=())
+
+    # Trigger a yield from LOAD.
+    x.from_numpy(np.zeros(N, dtype=np.int32))
+    flag.from_numpy(np.array(1, dtype=np.int32))
+    status = k(x, flag)
+    assert status.yielded
+    assert status.checkpoint is _Stage.LOAD or status.checkpoint == _Stage.LOAD
+    np.testing.assert_array_equal(x.to_numpy(), np.full(N, 1, dtype=np.int32))
+
+    # Resume from SIM (skip LOAD), no further yields.
+    x.from_numpy(np.zeros(N, dtype=np.int32))
+    flag.from_numpy(np.array(0, dtype=np.int32))
+    status = k.resume(x, flag, from_checkpoint=_Stage.SIM)
+    assert not status.yielded
+    np.testing.assert_array_equal(x.to_numpy(), np.full(N, 110, dtype=np.int32))
+
+
+@test_utils.test()
+def test_resume_unknown_label_raises():
+    """``kernel.resume(from_checkpoint=<unknown>)`` raises ``RuntimeError`` listing the kernel's available labels."""
+    if not _supports_checkpoint_yield_resume():
+        pytest.skip("requires yield/resume support")
+    N = 4
+
+    @qd.kernel(graph=True, checkpoints=True)
+    def k(x: qd.types.ndarray(qd.i32, ndim=1), flag: qd.types.ndarray(qd.i32, ndim=0)):
+        with qd.checkpoint(10, yield_on=flag):
+            for i in range(x.shape[0]):
+                x[i] = x[i] + 1
+
+    x = qd.ndarray(qd.i32, shape=(N,))
+    flag = qd.ndarray(qd.i32, shape=())
+    x.from_numpy(np.zeros(N, dtype=np.int32))
+    flag.from_numpy(np.array(0, dtype=np.int32))
+    # Warm up so the kernel is compiled and the label table is populated.
+    k(x, flag)
+    with pytest.raises(RuntimeError, match=r"does not match any qd\.checkpoint\(cp_id=\.\.\.\) in kernel"):
+        k.resume(x, flag, from_checkpoint=999)
+
+
+@test_utils.test()
+def test_resume_non_int_arg_raises():
+    """``kernel.resume(from_checkpoint=<non-int>)`` is rejected at the host wrapper before reaching compilation."""
+    if not _supports_checkpoint_yield_resume():
+        pytest.skip("requires yield/resume support")
+
+    @qd.kernel(graph=True, checkpoints=True)
+    def k(x: qd.types.ndarray(qd.i32, ndim=1), flag: qd.types.ndarray(qd.i32, ndim=0)):
+        with qd.checkpoint(0, yield_on=flag):
+            for i in range(x.shape[0]):
+                x[i] = x[i] + 1
+
+    x = qd.ndarray(qd.i32, shape=(4,))
+    flag = qd.ndarray(qd.i32, shape=())
+    with pytest.raises(RuntimeError, match=r"must be an int or IntEnum value"):
+        k.resume(x, flag, from_checkpoint="bad")
+
+
+@test_utils.test()
+def test_canonical_yield_resume_loop():
+    """The canonical host loop pattern from the docs: launch -> while yielded -> resume(from=status.checkpoint)."""
+    if not _supports_checkpoint_yield_resume():
+        pytest.skip("requires yield/resume support")
+    N = 4
+
+    @qd.kernel(graph=True, checkpoints=True)
+    def step(
+        x: qd.types.ndarray(qd.i32, ndim=1),
+        overflow: qd.types.ndarray(qd.i32, ndim=0),
+    ):
+        with qd.checkpoint(_Stage.LOAD, yield_on=overflow):
+            for i in range(x.shape[0]):
+                x[i] = x[i] + 1
+        with qd.checkpoint(_Stage.SIM, yield_on=overflow):
+            for i in range(x.shape[0]):
+                x[i] = x[i] + 10
+        with qd.checkpoint(_Stage.REDUCE, yield_on=overflow):
+            for i in range(x.shape[0]):
+                x[i] = x[i] + 100
+
+    x = qd.ndarray(qd.i32, shape=(N,))
+    overflow = qd.ndarray(qd.i32, shape=())
+    x.from_numpy(np.zeros(N, dtype=np.int32))
+
+    # Simulate the canonical pattern: yield from LOAD, host "fixes" it and resumes past LOAD; on the resume launch SIM
+    # yields once, host "fixes" it and resumes past SIM; on the second resume nothing yields and the loop exits. The
+    # "fix" each round is to re-arm overflow so the *next* yielder fires (and resume past LOAD/SIM into the next
+    # stage). With the new label API the host advances by passing the next stage explicitly rather than computing
+    # `status.checkpoint + 1`.
+    resume_targets = {_Stage.LOAD: _Stage.SIM, _Stage.SIM: _Stage.REDUCE}
+    overflow.from_numpy(np.array(1, dtype=np.int32))
+    status = step(x, overflow)
+    expected_sequence = [_Stage.LOAD, _Stage.SIM]
+    actual_sequence = []
+    while status.yielded:
+        actual_sequence.append(status.checkpoint)
+        target = resume_targets[status.checkpoint]
+        # Arm overflow for the NEXT yielder if there is one left to fire, otherwise clear so the kernel can complete.
+        overflow.from_numpy(np.array(1 if target != _Stage.REDUCE else 0, dtype=np.int32))
+        status = step.resume(x, overflow, from_checkpoint=target)
+    assert actual_sequence == expected_sequence
+
+
+# ----------------------------------------------------------------------------------------------------------------------
+# graph_do_while + checkpoints interaction.
+# ----------------------------------------------------------------------------------------------------------------------
+
+
+@test_utils.test()
+def test_checkpoint_inside_graph_do_while_completes_when_no_yield():
+    """A checkpoint inside a ``qd.graph_do_while`` body is the canonical qipc pattern. With ``yield_on`` flag == 0 the
+    WHILE loop runs to completion as if there were no checkpoint."""
+    N = 8
+
+    @qd.kernel(graph=True, checkpoints=True)
     def k(
         x: qd.types.ndarray(qd.i32, ndim=1),
         counter: qd.types.ndarray(qd.i32, ndim=0),
         flag: qd.types.ndarray(qd.i32, ndim=0),
     ):
         while qd.graph_do_while(counter):
-            with qd.checkpoint(yield_on=flag):
-                for i in range(x.shape[0]):
-                    x[i] = x[i] + 1
-            with qd.checkpoint():
-                for i in range(1):
+            for i in range(x.shape[0]):
+                x[i] = x[i] + 1
+            with qd.checkpoint(0, yield_on=flag):
+                for _ in range(1):
                     counter[()] = counter[()] - 1
 
     x = qd.ndarray(qd.i32, shape=(N,))
     counter = qd.ndarray(qd.i32, shape=())
     flag = qd.ndarray(qd.i32, shape=())
     x.from_numpy(np.zeros(N, dtype=np.int32))
-    counter.from_numpy(np.array(100, dtype=np.int32))
-    flag.from_numpy(np.array(1, dtype=np.int32))
-
+    counter.from_numpy(np.array(5, dtype=np.int32))
+    flag.from_numpy(np.array(0, dtype=np.int32))
     k(x, counter, flag)
-    # x[i] is incremented once (cp 0 ran with flag set, yielded), counter NOT decremented (cp 1 was skipped because
-    # resume_point bumped to INT_MAX), then the WHILE exited because yield_signal != -1.
-    np.testing.assert_array_equal(x.to_numpy(), np.ones(N, dtype=np.int32))
-    assert counter.to_numpy() == 100
-    assert _last_yield_cp_id_on_last_call() == 0
+    np.testing.assert_array_equal(x.to_numpy(), np.full(N, 5, dtype=np.int32))
+    assert counter.to_numpy() == 0
 
 
 @test_utils.test()
-def test_checkpoint_returns_graph_status():
-    """Slice 2: kernels with `yield_on=` checkpoints return a `GraphStatus` from every launch.
-
-    No yield this launch -> `status.yielded` is False, `status.checkpoint` is None.
-    """
+def test_checkpoint_yield_exits_graph_do_while_early():
+    """When a checkpoint inside a ``graph_do_while`` body yields, the WHILE loop exits even though the user's loop
+    condition is still true."""
+    if not _supports_checkpoint_yield_resume_in_while_loop():
+        pytest.skip("requires yield/resume + graph_do_while support")
     N = 4
 
-    @qd.kernel(graph=True)
-    def k(x: qd.types.ndarray(qd.i32, ndim=1), flag: qd.types.ndarray(qd.i32, ndim=0)):
-        with qd.checkpoint(yield_on=flag):
-            for i in range(x.shape[0]):
-                x[i] = x[i] + 1
+    @qd.kernel(graph=True, checkpoints=True)
+    def k(
+        x: qd.types.ndarray(qd.i32, ndim=1),
+        counter: qd.types.ndarray(qd.i32, ndim=0),
+        flag: qd.types.ndarray(qd.i32, ndim=0),
+    ):
+        while qd.graph_do_while(counter):
+            with qd.checkpoint(0, yield_on=flag):
+                for i in range(x.shape[0]):
+                    x[i] = x[i] + 1
+            for _ in range(1):
+                counter[()] = counter[()] - 1
 
     x = qd.ndarray(qd.i32, shape=(N,))
+    counter = qd.ndarray(qd.i32, shape=())
     flag = qd.ndarray(qd.i32, shape=())
     x.from_numpy(np.zeros(N, dtype=np.int32))
-    flag.from_numpy(np.array(0, dtype=np.int32))
-
-    status = k(x, flag)
-    assert isinstance(status, qd.GraphStatus)
-    if _is_checkpoint_if_path_native():
-        assert status.yielded is False
-        assert status.checkpoint is None
-    np.testing.assert_array_equal(x.to_numpy(), np.ones(N, dtype=np.int32))
-
-
-@test_utils.test()
-def test_checkpoint_graph_status_reports_yield():
-    """Slice 2: a yielding launch returns `GraphStatus(yielded=True, checkpoint=cp_id)`."""
-    if not _supports_checkpoint_yield_resume():
-        pytest.skip(
-            "GraphStatus yield reporting requires the CUDA-native IF path (slice 1d) or CPU host-branch gating (slice 6)"
-        )
-    N = 4
-
-    @qd.kernel(graph=True)
-    def k(x: qd.types.ndarray(qd.i32, ndim=1), flag: qd.types.ndarray(qd.i32, ndim=0)):
-        with qd.checkpoint():
-            for i in range(x.shape[0]):
-                x[i] = x[i] + 1
-        with qd.checkpoint(yield_on=flag):
-            for i in range(x.shape[0]):
-                x[i] = x[i] + 10
-
-    x = qd.ndarray(qd.i32, shape=(N,))
-    flag = qd.ndarray(qd.i32, shape=())
-    x.from_numpy(np.zeros(N, dtype=np.int32))
+    counter.from_numpy(np.array(5, dtype=np.int32))
     flag.from_numpy(np.array(1, dtype=np.int32))
+    status = k(x, counter, flag)
+    # The checkpoint runs once and yields; then the WHILE exits early. So x is incremented once and counter is not
+    # decremented for that iteration (the decrement was skipped post-yield).
+    np.testing.assert_array_equal(x.to_numpy(), np.ones(N, dtype=np.int32))
+    assert status.yielded
+    assert status.checkpoint == 0
 
-    status = k(x, flag)
-    assert isinstance(status, qd.GraphStatus)
-    assert status.yielded is True
-    assert status.checkpoint == 1
+
+# ----------------------------------------------------------------------------------------------------------------------
+# CUDA-native introspection (slice 1c).
+# ----------------------------------------------------------------------------------------------------------------------
 
 
 @test_utils.test()
-def test_checkpoint_resume_runs_only_from_checkpoint():
-    """Slice 2: `kernel.resume(..., from_checkpoint=cp)` skips every checkpoint with cp_id < cp.
+def test_checkpoint_emits_if_nodes_on_cuda_native():
+    """On CUDA SM 9.0+, the GraphManager wires one IF conditional node per checkpoint (explicit AND implicit).
 
-    Three checkpoints, each adds a distinct increment to x. Calling `resume(from_checkpoint=1)` should skip cp 0 and run
-    cp 1 + cp 2. With no `yield_on=` flags fired, the resume call returns `GraphStatus(yielded=False, checkpoint=None)`.
+    Three implicit + one explicit yielder = four IF nodes on the native path. On non-CUDA / pre-SM-9.0 backends the
+    kernel still runs to completion; the body-kernel correctness assertion holds either way.
     """
-    if not _supports_checkpoint_yield_resume():
-        pytest.skip("from_checkpoint= requires the CUDA-native IF path (slice 1d) or CPU host-branch gating (slice 6)")
-    N = 4
+    N = 8
 
-    @qd.kernel(graph=True)
+    @qd.kernel(graph=True, checkpoints=True)
     def k(x: qd.types.ndarray(qd.i32, ndim=1), flag: qd.types.ndarray(qd.i32, ndim=0)):
-        with qd.checkpoint():
+        for i in range(x.shape[0]):  # implicit
+            x[i] = x[i] + 1
+        with qd.checkpoint(0, yield_on=flag):
             for i in range(x.shape[0]):
                 x[i] = x[i] + 1
-        with qd.checkpoint(yield_on=flag):
-            for i in range(x.shape[0]):
-                x[i] = x[i] + 10
-        with qd.checkpoint():
-            for i in range(x.shape[0]):
-                x[i] = x[i] + 100
-
-    x = qd.ndarray(qd.i32, shape=(N,))
-    flag = qd.ndarray(qd.i32, shape=())
-    x.from_numpy(np.zeros(N, dtype=np.int32))
-    flag.from_numpy(np.array(0, dtype=np.int32))
-
-    # Prime the cached graph with a fresh call first so resume hits a built graph.
-    status = k(x, flag)
-    assert status.yielded is False
-    # After the priming call: x == 111.
-    np.testing.assert_array_equal(x.to_numpy(), np.full(N, 111, dtype=np.int32))
-
-    x.from_numpy(np.zeros(N, dtype=np.int32))
-    status2 = k.resume(x, flag, from_checkpoint=1)
-    assert isinstance(status2, qd.GraphStatus)
-    assert status2.yielded is False
-    np.testing.assert_array_equal(x.to_numpy(), np.full(N, 110, dtype=np.int32))
-
-
-@test_utils.test()
-def test_checkpoint_canonical_yield_resume_loop():
-    """Slice 2: the canonical qipc-style yield/resume loop from the design doc.
-
-    Kernel runs three checkpoints; cp 1 always yields once. The host loop catches the yield, resumes from cp 1, and
-    the second launch completes cleanly.
-    """
-    if not _supports_checkpoint_yield_resume():
-        pytest.skip("yield/resume loop requires the CUDA-native IF path (slice 1d) or CPU host-branch gating (slice 6)")
-    N = 4
-
-    @qd.kernel(graph=True)
-    def step(x: qd.types.ndarray(qd.i32, ndim=1), flag: qd.types.ndarray(qd.i32, ndim=0)):
-        with qd.checkpoint():
-            for i in range(x.shape[0]):
-                x[i] = x[i] + 1
-        with qd.checkpoint(yield_on=flag):
-            for i in range(x.shape[0]):
-                x[i] = x[i] + 10
-        with qd.checkpoint():
-            for i in range(x.shape[0]):
-                x[i] = x[i] + 100
-
-    x = qd.ndarray(qd.i32, shape=(N,))
-    flag = qd.ndarray(qd.i32, shape=())
-    x.from_numpy(np.zeros(N, dtype=np.int32))
-    flag.from_numpy(np.array(1, dtype=np.int32))
-
-    status = step(x, flag)
-    yields_seen = 0
-    while status.yielded:
-        # In real qipc-style code the host would grow a buffer here; in this test we just decline to re-yield on the
-        # resume launch.
-        yields_seen += 1
-        assert flag.to_numpy() == 0, "yield-check kernel should have cleared the flag"
-        status = step.resume(x, flag, from_checkpoint=status.checkpoint)
-    assert yields_seen == 1
-    # First launch: cp 0 (+1), cp 1 (+10, yields). Resume: cp 1 (+10), cp 2 (+100). Total: 121.
-    np.testing.assert_array_equal(x.to_numpy(), np.full(N, 121, dtype=np.int32))
-
-
-@test_utils.test()
-def test_checkpoint_resume_invalid_args_raise():
-    """Slice 2: misuse of `kernel.resume(from_checkpoint=...)` should fail fast."""
-
-    @qd.kernel(graph=True)
-    def k(x: qd.types.ndarray(qd.i32, ndim=1), flag: qd.types.ndarray(qd.i32, ndim=0)):
-        with qd.checkpoint(yield_on=flag):
-            for i in range(x.shape[0]):
-                x[i] = x[i] + 1
-
-    @qd.kernel(graph=True)
-    def k_no_yield(x: qd.types.ndarray(qd.i32, ndim=1)):
-        for i in range(x.shape[0]):
+        for i in range(x.shape[0]):  # implicit
             x[i] = x[i] + 1
 
-    x = qd.ndarray(qd.i32, shape=(4,))
-    flag = qd.ndarray(qd.i32, shape=())
-    with pytest.raises(RuntimeError, match="non-negative integer"):
-        k.resume(x, flag, from_checkpoint=-1)
-    with pytest.raises(RuntimeError, match="non-negative integer"):
-        k.resume(x, flag, from_checkpoint="zero")  # type: ignore[arg-type]
-    with pytest.raises(RuntimeError, match="from_checkpoint.* is only valid for kernels"):
-        k_no_yield.resume(x, from_checkpoint=0)
-
-
-@test_utils.test()
-def test_checkpoint_non_yield_kernel_returns_none():
-    """Kernels with `qd.checkpoint()` but no `yield_on=` keep returning None (no GraphStatus).
-
-    The host-side `GraphStatus` surface is opt-in via `yield_on=` so existing graph kernels that just want skippable
-    stages don't change return type out from under their callers.
-    """
-    N = 4
-
-    @qd.kernel(graph=True)
-    def k(x: qd.types.ndarray(qd.i32, ndim=1)):
-        with qd.checkpoint():
-            for i in range(x.shape[0]):
-                x[i] = x[i] + 1
-
     x = qd.ndarray(qd.i32, shape=(N,))
-    x.from_numpy(np.zeros(N, dtype=np.int32))
-    ret = k(x)
-    assert ret is None
-    np.testing.assert_array_equal(x.to_numpy(), np.ones(N, dtype=np.int32))
-
-
-@test_utils.test()
-def test_checkpoint_yield_on_must_be_bare_name():
-    """yield_on= must be a bare parameter name -- expressions / attributes are not supported.
-
-    Keeps the parser path symmetric with qd.graph_do_while(name) and avoids the cost of trying to resolve arbitrary
-    AST expressions to kernel parameters at compile time.
-    """
-
-    @qd.kernel(graph=True)
-    def k(x: qd.types.ndarray(qd.i32, ndim=1), flag: qd.types.ndarray(qd.i32, ndim=0)):
-        with qd.checkpoint(yield_on=flag.something):  # type: ignore[union-attr]
-            for i in range(x.shape[0]):
-                x[i] = x[i] + 1
-
-    x = qd.ndarray(qd.i32, shape=(4,))
     flag = qd.ndarray(qd.i32, shape=())
-    with pytest.raises(qd.QuadrantsSyntaxError, match="bare name of a kernel parameter"):
-        k(x, flag)
+    x.from_numpy(np.zeros(N, dtype=np.int32))
+    flag.from_numpy(np.array(0, dtype=np.int32))
+    k(x, flag)
+    np.testing.assert_array_equal(x.to_numpy(), np.full(N, 3, dtype=np.int32))
+    if _is_checkpoint_if_path_native():
+        assert (
+            _num_checkpoints_on_last_call() == 3
+        ), f"expected 3 IF conditional nodes (2 implicit + 1 explicit), got {_num_checkpoints_on_last_call()}"

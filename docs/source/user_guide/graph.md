@@ -8,7 +8,7 @@ Graphs reduce kernel launch overhead by capturing a sequence of GPU operations i
 | --- | --- | --- | --- | --- | --- | --- |
 | `graph=True` | hardware accelerated | hardware accelerated | hardware accelerated | runs (no acceleration) | runs (no acceleration) | runs (no acceleration) |
 | `graph_do_while` | hardware accelerated | host fallback | host fallback | host fallback | host fallback | host fallback |
-| `qd.checkpoint` (skip + `yield_on=`) | GPU-side | GPU-side | GPU-side | GPU-side | GPU-side | host-side |
+| `qd.checkpoint` (skip + `yield_on=`)   | GPU-side | GPU-side | GPU-side | GPU-side | GPU-side | host-side |
 
 ## Basic usage
 
@@ -154,51 +154,63 @@ Therefore on unsupported platforms, you might consider creating a second impleme
 
 ## Checkpoints with `qd.checkpoint` *(experimental)*
 
-> **Experimental.** `qd.checkpoint`, `qd.GraphStatus`, and `kernel.resume(from_checkpoint=...)` are experimental APIs. The shape of the public surface (the context-manager signature, the `GraphStatus` fields, the host-side resume loop, the error messages, and the cross-backend lowering details) may change in any future release without a deprecation cycle.
+> **Experimental.** `qd.checkpoint`, `qd.GraphStatus`, and `kernel.resume(from_checkpoint=...)` are experimental APIs. The shape of the public surface (the context-manager signature, the `@qd.kernel(checkpoints=True)` flag, the auto-wrap pass, the `GraphStatus` fields, the host-side resume loop, the error messages, and the cross-backend lowering details) may change in any future release without a deprecation cycle.
 
-`qd.checkpoint()` marks a section of a graph kernel as a *skippable, optionally yieldable stage*. An example use-case is an algorithm implemented as a graph where you might need to allocate additional memory part-way through, the graph operations are in-place, and simply retrying the whole graph from the start is not an option. `qd.checkpoint` lets the kernel break at some point in the graph, surface the reason to the host, let the host fix things up, and resume from that point on the next launch.
+`qd.checkpoint(cp_id, yield_on=flag)` marks a section of a graph kernel as a *yieldable resume target*. An example use-case is an algorithm implemented as a graph where you might need to allocate additional memory part-way through, the graph operations are in-place, and simply retrying the whole graph from the start is not an option. `qd.checkpoint` lets the kernel break at some point in the graph, surface the reason to the host, let the host fix things up, and resume from that point on the next launch.
+
+To enable the resume model, opt in at the decorator with `@qd.kernel(graph=True, checkpoints=True)`. The `checkpoints=True` flag turns on **auto-wrap**: every top-level for-loop in the kernel body (and inside `while qd.graph_do_while(...):` bodies) that is not already inside a `with qd.checkpoint(...)` block is silently wrapped in an *implicit, no-yield* checkpoint. The user only writes explicit `with qd.checkpoint(cp_id, yield_on=flag):` blocks for the points they actually want to *yield from*. Implicit checkpoints occupy positions in the source-order checkpoint sequence (so they get skipped along with the explicit ones declared before a resume target) but they carry no user-facing label and never appear in `GraphStatus.checkpoint`.
 
 ```python
-@qd.kernel(graph=True)
+from enum import IntEnum
+
+class Stage(IntEnum):
+    LOAD = 0
+    SIM = 1
+    REDUCE = 2
+
+@qd.kernel(graph=True, checkpoints=True)
 def step(
     arr: qd.types.ndarray(qd.f32, ndim=1),
     overflow_flag: qd.types.ndarray(qd.i32, ndim=0),
     newton_cond: qd.types.ndarray(qd.i32, ndim=0),
 ):
     while qd.graph_do_while(newton_cond):
-        with qd.checkpoint():                       # cp_id 0
+        with qd.checkpoint(Stage.LOAD, yield_on=overflow_flag):
             for i in range(arr.shape[0]):
                 # ...
                 pass
-        with qd.checkpoint(yield_on=overflow_flag): # cp_id 1 (can yield)
+        for i in range(arr.shape[0]):  # auto-wrapped implicit checkpoint, no label
+            # ...
+            pass
+        with qd.checkpoint(Stage.SIM, yield_on=overflow_flag):
             for i in range(arr.shape[0]):
                 # ...
                 pass
-        with qd.checkpoint():                       # cp_id 2
+        with qd.checkpoint(Stage.REDUCE, yield_on=overflow_flag):
             for i in range(arr.shape[0]):
                 # ...
                 pass
 ```
 
-Each `with qd.checkpoint(...)` block gets a `cp_id` assigned. You can use the `cp_id` to identify which checkpoint yielded and which checkpoint to resume from — see [Host-side yield / resume loop](#host-side-yield--resume-loop) below.
+The `cp_id` argument is the user-facing label. It can be any int literal, an `IntEnum` value (as above), or a module-level int constant; the framework preserves the value as-is and surfaces it back through `GraphStatus.checkpoint`, so `qd.checkpoint(Stage.SIM, ...)` round-trips as `Stage.SIM` rather than the raw int `1`. Labels must be unique within a kernel.
 
 ### Yield mechanism
 
-If `yield_on=foo` is supplied, the body may write a non-zero value into `foo[()]` (for example, when a pre-allocated buffer is too small) to signal "the host needs to handle something before this checkpoint can complete". When that happens:
+When the body writes a non-zero value into `yield_on[()]`:
 
 1. The framework records the checkpoint that yielded (first yielder in declaration order wins).
-2. Every later checkpoint in the same launch is skipped.
+2. Every later checkpoint (implicit AND explicit) in the same launch is skipped.
 3. `qd.checkpoint` will exit any surrounding `qd.graph_do_while`.
-4. `foo[()]` is reset to `0`.
+4. `yield_on[()]` is reset to `0` so the user doesn't have to clear the flag between launches.
 
 ### Host-side yield / resume loop
 
 Kernels with at least one `yield_on=` checkpoint return a `qd.GraphStatus` from every launch (and from `kernel.resume(...)`). The status carries two fields:
 
 - `status.yielded` — `True` iff some `yield_on=` flag was non-zero during this launch.
-- `status.checkpoint` — `cp_id` of the first (in declaration order) checkpoint that fired its flag, or `None` when `yielded` is `False`.
+- `status.checkpoint` — the user-supplied `cp_id` label of the first (in declaration order) checkpoint that fired its flag, or `None` when `yielded` is `False`. The label is preserved end-to-end: passing `Stage.SIM` to `qd.checkpoint(...)` gives back `Stage.SIM` here.
 
-Resume by calling `kernel.resume(..., from_checkpoint=status.checkpoint)`. Every `qd.checkpoint` with `cp_id < from_checkpoint` is skipped on the resume launch; the rest run normally. The canonical host loop:
+Resume by calling `kernel.resume(..., from_checkpoint=label)`. Every checkpoint (implicit AND explicit) declared *before* the labelled target in source order is skipped on the resume launch; the rest run normally. The canonical host loop:
 
 ```python
 status = step(arr, overflow_flag, newton_cond)
@@ -208,21 +220,24 @@ while status.yielded:
                          from_checkpoint=status.checkpoint)
 ```
 
-Kernels with `qd.checkpoint()` but no `yield_on=` keep their previous return contract (typically `None`) — the `GraphStatus` surface is opt-in via `yield_on=`.
+If you want to *skip past* the yielding checkpoint on the resume launch (the qipc `YieldResume::Next` pattern), make the next stage an explicit `qd.checkpoint(NextStage, ...)` and pass `from_checkpoint=NextStage` instead — you can't compute `status.checkpoint + 1` because user labels are opaque and the cp slot immediately after the yielder may be an implicit (auto-wrapped) checkpoint with no addressable label.
+
+Kernels decorated with `@qd.kernel(graph=True, checkpoints=True)` but containing no `yield_on=` checkpoint return `None` rather than a `GraphStatus`; the `GraphStatus` surface is opt-in via at least one explicit `yield_on=`.
 
 ### Restrictions
 
-- Must be used inside `@qd.kernel(graph=True)`.
-- `yield_on=` (when supplied) must be a kernel parameter that is a 0-d `qd.types.ndarray(qd.i32, ndim=0)`.
-- Checkpoints cannot be nested inside other checkpoints.
+- Must be used inside `@qd.kernel(graph=True, checkpoints=True)`. Without the flag, `qd.checkpoint(...)` raises `QuadrantsSyntaxError` at compile time with a fix-it pointing at `checkpoints=True`.
+- `cp_id` must be statically determinable to an int / IntEnum value (literal, IntEnum member, or module-level int constant), and must be unique across the kernel.
+- `yield_on=` must be a kernel parameter that is a 0-d `qd.types.ndarray(qd.i32, ndim=0)`; expressions are not supported.
+- Checkpoints cannot be nested inside other checkpoints. Checkpoints inside a `qd.graph_do_while` body are fine and are the expected pattern.
 - The body of a `with qd.checkpoint(...)` block cannot contain bare top-level statements (assignments, augmented assignments, or bare call/expression statements). Every top-level statement must be inside a `for`-loop (or other control-flow construct) so the compiler can lower it as its own offloaded task with the correct `cp_id`. A docstring as the first statement is allowed. Bare statements raise `QuadrantsSyntaxError` at compile time with a fix-it pointing at the explicit one-iteration `for`-wrap:
 
   ```python
-  with qd.checkpoint():
+  with qd.checkpoint(0, yield_on=flag):
       for _ in range(1):
           c[()] = c[()] + 1
       for i in range(arr.shape[0]):
           arr[i] = arr[i] + 1
   ```
 
-  The restriction is by design: each top-level statement inside a checkpoint becomes its own GPU task / graph node, so silently auto-wrapping bare statements would hide a sequence of N field writes ballooning into N kernel launches. Forcing the user to write the `for`-wrap themselves keeps the lowering visible and gives a single obvious place to fuse multiple writes into one task by sharing a single wrapper.
+  The restriction is by design: each top-level statement inside a checkpoint becomes its own GPU task / graph node, so silently auto-wrapping bare statements would hide a sequence of N field writes ballooning into N kernel launches. Forcing the user to write the `for`-wrap themselves keeps the lowering visible and gives a single obvious place to fuse multiple writes into one task by sharing a single wrapper. (The kernel-wide *auto-wrap* of top-level for-loops described above is a different pass: it wraps an entire `for i in range(N): ...` block as one implicit checkpoint, so it does not change the per-task topology of the kernel.)

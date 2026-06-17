@@ -45,8 +45,8 @@ def checkpoint(cp_id, yield_on):
       - Checkpoints cannot be nested inside other checkpoints. Checkpoints inside a ``qd.graph_do_while`` body are fine
         and are the expected pattern.
       - Cannot be combined with ``qd.stream_parallel()`` in the same kernel.
-      - The body cannot contain bare top-level statements (assignments, expressions); wrap them in ``for _ in range(1):``
-        so the lowering surfaces the per-statement task cost.
+      - The body cannot contain bare top-level statements (assignments, expressions); wrap them in
+        ``for _ in range(1):`` so the lowering surfaces the per-statement task cost.
 
     This function should not be called directly at runtime; it is recognised and transformed during AST compilation. At
     Python runtime (outside kernels), this is a no-op context manager so that doctests / type-checking can import the

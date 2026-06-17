@@ -10,19 +10,26 @@ from __future__ import annotations
 
 
 class GraphStatus:
-    """Result returned by a graph kernel that contains ``qd.checkpoint(yield_on=...)`` blocks.
+    """Result returned by a graph kernel that contains ``qd.checkpoint(cp_id, yield_on=...)`` blocks.
 
     .. warning::
 
         **Experimental.** ``GraphStatus`` is part of the experimental ``qd.checkpoint`` surface; its attributes and
         the conditions under which it is returned may change in any future release without a deprecation cycle.
 
-    Returned from ``kernel(...)`` and ``kernel.resume(..., from_checkpoint=cp)`` whenever the kernel was decorated with
-    ``@qd.kernel(graph=True)`` and contains at least one checkpoint that has declared a ``yield_on=`` parameter. Read
-    ``status.yielded`` to decide whether to keep running the host loop, and ``status.checkpoint`` to find out which
-    checkpoint asked the host to handle something.
+    Returned from ``kernel(...)`` and ``kernel.resume(..., from_checkpoint=label)`` whenever the kernel was decorated
+    with ``@qd.kernel(graph=True, checkpoints=True)`` and contains at least one checkpoint that has declared a
+    ``yield_on=`` parameter. Read ``status.yielded`` to decide whether to keep running the host loop, and
+    ``status.checkpoint`` to find out which checkpoint asked the host to handle something.
 
     Canonical usage (mirrors the qipc re-entrant pattern; see ``graph.md``)::
+
+        from enum import IntEnum
+
+        class Stage(IntEnum):
+            LOAD = 0
+            SIM = 1
+            REDUCE = 2
 
         status = step(arr, overflow_flag, newton_cond)
         while status.yielded:
@@ -33,9 +40,11 @@ class GraphStatus:
     Attributes:
         yielded: ``True`` iff one of the kernel's ``yield_on=`` checkpoints fired its flag on the most recent launch.
             ``False`` means the kernel completed normally and the host loop should exit.
-        checkpoint: ``cp_id`` of the checkpoint whose ``yield_on=`` flag was non-zero (or ``None`` when ``yielded`` is
-            ``False``). Pass it to ``kernel.resume(..., from_checkpoint=cp)`` to skip every checkpoint with a lower
-            ``cp_id`` on the next launch.
+        checkpoint: The user-supplied ``cp_id`` label (an ``int`` or the original ``IntEnum`` instance you passed to
+            ``qd.checkpoint(cp_id, ...)``) of the first (in declaration order) checkpoint whose ``yield_on=`` flag was
+            non-zero. ``None`` when ``yielded`` is ``False``. Implicit (auto-wrapped) checkpoints never appear here.
+            Pass the label to ``kernel.resume(..., from_checkpoint=label)`` to skip every checkpoint declared before
+            that label in source order on the next launch.
     """
 
     __slots__ = ("yielded", "checkpoint")
