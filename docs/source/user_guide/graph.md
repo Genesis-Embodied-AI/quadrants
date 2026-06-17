@@ -194,7 +194,7 @@ The `cp_id` argument is the label you'll use to identify the checkpoint from the
 
 When the body of a checkpoint writes a non-zero value into `yield_on[()]`:
 
-1. The kernel pauses at that checkpoint (the first yielder in declaration order wins if several fire in the same launch).
+1. The kernel pauses at that checkpoint.
 2. Everything after the yielding checkpoint in the same launch is skipped.
 3. `qd.checkpoint` will exit any surrounding `qd.graph_do_while`.
 4. `yield_on[()]` is reset to `0` so the host doesn't have to clear the flag between launches.
