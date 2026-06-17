@@ -12,11 +12,6 @@ Value load_buf_u32(IRBuilder &ir, Value buffer, Value word_idx) {
   return ir.load_variable(ptr, ir.u32_type());
 }
 
-void store_buf_u32(IRBuilder &ir, Value buffer, Value word_idx, Value value) {
-  Value ptr = ir.struct_array_access(ir.u32_type(), buffer, word_idx);
-  ir.store_variable(ptr, value);
-}
-
 }  // namespace
 
 std::vector<uint32_t> build_checkpoint_yield_check_spirv(Arch arch, const DeviceCapabilityConfig *caps) {
@@ -32,10 +27,9 @@ std::vector<uint32_t> build_checkpoint_yield_check_spirv(Arch arch, const Device
   ir.start_function(main_func);
   ir.set_work_group_size({1, 1, 1});
 
-  // Read flag once. The CUDA-native yield-check uses a non-atomic `*yield_on` load and a non- atomic store-back to 0
-  // because the checkpoint body's writes were already serialised by the graph node dependency; on Vulkan / Metal the
-  // cmdlist's between-dispatch `memory_barrier()` call provides the same ordering, so a plain load is also sufficient
-  // here.
+  // Read flag once. The CUDA-native yield-check uses a non-atomic `*yield_on` load because the checkpoint body's writes
+  // were already serialised by the graph node dependency; on Vulkan / Metal the cmdlist's between-dispatch
+  // `memory_barrier()` call provides the same ordering, so a plain load is also sufficient here.
   Value flag = load_buf_u32(ir, yield_on_buf, ir.uint_immediate_number(ir.u32_type(), 0u));
   Value zero_u32 = ir.uint_immediate_number(ir.u32_type(), 0u);
   Value flag_set = ir.ne(flag, zero_u32);
@@ -63,9 +57,8 @@ std::vector<uint32_t> build_checkpoint_yield_check_spirv(Arch arch, const Device
                   /*scope=*/ir.const_i32_one_, /*sem_eq=*/ir.const_i32_zero_,
                   /*sem_neq=*/ir.const_i32_zero_, /*value=*/cp_id_u32, /*comparator=*/neg_one_u32);
 
-    // Reset user's `yield_on` to 0 so the next launch starts with a clean flag. Same semantics as the CUDA-native
-    // yield-check kernel; user code never has to clear the flag from host.
-    store_buf_u32(ir, yield_on_buf, ir.uint_immediate_number(ir.u32_type(), 0u), zero_u32);
+    // We deliberately do NOT clear the user's `yield_on` buffer here -- the framework never writes into user-owned
+    // ndarrays. The host loop must clear it before the resume launch (see `docs/source/user_guide/graph.md`).
     ir.make_inst(spv::OpBranch, merge_lbl);
   }
 

@@ -197,7 +197,8 @@ When the body of a checkpoint writes a non-zero value into `yield_on[()]`:
 1. The kernel pauses at that checkpoint.
 2. Everything after the yielding checkpoint in the same launch is skipped.
 3. `qd.checkpoint` will exit any surrounding `qd.graph_do_while`.
-4. `yield_on[()]` is reset to `0` so the host doesn't have to clear the flag between launches.
+
+The framework never writes into your `yield_on` buffer — you own it. That means you must clear it yourself before calling `kernel.resume(...)`, otherwise the body of the same checkpoint will see the stale non-zero value and yield again on the same condition, looping forever.
 
 ### Host-side yield / resume loop
 
@@ -212,6 +213,7 @@ Resume by calling `kernel.resume(..., from_checkpoint=label)`. Everything before
 status = step(arr, overflow_flag, newton_cond)
 while status.yielded:
     handle_overflow_for(status.checkpoint, ...)
+    overflow_flag[()] = 0  # clear before resume, otherwise the same checkpoint yields again
     status = step.resume(arr, overflow_flag, newton_cond,
                          from_checkpoint=status.checkpoint)
 ```

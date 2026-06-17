@@ -117,6 +117,7 @@ class QuadrantsCallable:
             status = step(arr, overflow_flag, newton_cond)
             while status.yielded:
                 handle(status.checkpoint, ...)
+                overflow_flag[()] = 0  # the framework never clears your yield_on flag
                 status = step.resume(arr, overflow_flag, newton_cond,
                                      from_checkpoint=status.checkpoint)
 

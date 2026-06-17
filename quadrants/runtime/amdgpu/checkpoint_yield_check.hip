@@ -18,8 +18,11 @@
 //           declaration order to yield wins (matches CUDA semantics).
 //        b. Bump `*resume_point` to INT_MAX so every subsequent checkpoint's prologue sees
 //           `*resume_point > cp_id` and skips its body.
-//        c. Reset `*yield_on` to 0 so the host doesn't have to clear it before re-launching.
 //   3. If zero, no-op.
+//
+// The framework does NOT reset `*yield_on` here. The user owns that buffer (their ndarray) and
+// is responsible for clearing it before the resume launch; the canonical host loop in
+// `docs/source/user_guide/graph.md` shows the explicit clear-before-resume.
 //
 // The indirection on `yield_on` (a pointer to a pointer) mirrors the CUDA version's
 // `flag_slot`: the slot's device address is baked into the graph at build time, but the
@@ -42,8 +45,8 @@ extern "C" __global__ void _qd_checkpoint_yield_check(int32_t **yield_on_ptr_slo
                                                       int32_t *yield_signal,
                                                       int32_t *resume_point) {
   // Self-gate: identical predicate to the codegen-emitted body-kernel prologue. On AMDGPU's
-  // flat-graph path this is what prevents a skipped checkpoint's yield-check from clearing
-  // the user's yield_on flag. Pre-Hopper CUDA uses the exact same pattern.
+  // flat-graph path it skips the yield-read when this checkpoint should not have run. Pre-
+  // Hopper CUDA uses the exact same pattern.
   if (*resume_point > cp_id) {
     return;
   }
@@ -54,6 +57,5 @@ extern "C" __global__ void _qd_checkpoint_yield_check(int32_t **yield_on_ptr_slo
   if (*yield_on != 0) {
     atomicCAS(yield_signal, -1, cp_id);
     *resume_point = 2147483647;  // INT_MAX
-    *yield_on = 0;
   }
 }

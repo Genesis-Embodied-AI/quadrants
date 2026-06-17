@@ -76,9 +76,9 @@ def test_resume_offset_sequential_this():
     """Scenario A, YieldResume::This: yielding cp re-runs from itself on the resume launch.
 
     Layout: one explicit yielder on the first counter; the second and third counters auto-wrap into implicit
-    checkpoints. cp LOAD yields once on the first launch, the host calls ``resume(from_checkpoint=LOAD)``, which re-
-    runs LOAD (this time without yielding because the yield-check kernel cleared the flag) and the trailing implicit
-    checkpoints.
+    checkpoints. cp LOAD yields once on the first launch, the host clears the flag and calls
+    ``resume(from_checkpoint=LOAD)``, which re-runs LOAD (this time without yielding because the host cleared the
+    flag) and the trailing implicit checkpoints.
 
     Expected: A hit 2x (yield + resume), B and C hit 1x each (resume launch only). One host yield callback.
     """
@@ -108,6 +108,7 @@ def test_resume_offset_sequential_this():
     host_callbacks = 0
     while status.yielded:
         host_callbacks += 1
+        flag.from_numpy(np.array(0, dtype=np.int32))
         status = step.resume(a, b, c, flag, from_checkpoint=status.checkpoint)
     np.testing.assert_array_equal(a.to_numpy(), np.full(N, 2, dtype=np.int32))
     np.testing.assert_array_equal(b.to_numpy(), np.full(N, 1, dtype=np.int32))
@@ -158,6 +159,7 @@ def test_resume_offset_sequential_next():
     host_callbacks = 0
     while status.yielded:
         host_callbacks += 1
+        flag.from_numpy(np.array(0, dtype=np.int32))
         status = step.resume(a, b, c, flag, zero, from_checkpoint=_CP.AFTER_SIM)
     np.testing.assert_array_equal(a.to_numpy(), np.full(N, 1, dtype=np.int32))
     np.testing.assert_array_equal(b.to_numpy(), np.full(N, 1, dtype=np.int32))
@@ -205,6 +207,7 @@ def test_resume_offset_loop_this():
     host_callbacks = 0
     while status.yielded:
         host_callbacks += 1
+        flag.from_numpy(np.array(0, dtype=np.int32))
         status = step.resume(a, b, c, counter, flag, from_checkpoint=status.checkpoint)
     np.testing.assert_array_equal(a.to_numpy(), np.full(N, 3, dtype=np.int32))
     np.testing.assert_array_equal(b.to_numpy(), np.full(N, 4, dtype=np.int32))
@@ -258,6 +261,7 @@ def test_resume_offset_loop_next():
     host_callbacks = 0
     while status.yielded:
         host_callbacks += 1
+        flag.from_numpy(np.array(0, dtype=np.int32))
         status = step.resume(a, b, c, counter, flag, zero, from_checkpoint=_CP.AFTER_SIM)
     np.testing.assert_array_equal(a.to_numpy(), np.full(N, 3, dtype=np.int32))
     np.testing.assert_array_equal(b.to_numpy(), np.full(N, 3, dtype=np.int32))

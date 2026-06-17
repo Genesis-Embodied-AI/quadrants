@@ -580,9 +580,10 @@ def test_checkpoint_yield_first_wins_subsequent_skipped():
 
 
 @test_utils.test()
-def test_checkpoint_yield_resets_between_launches():
-    """The yield-check kernel resets ``yield_on`` back to 0 after recording a yield. The user does not have to clear
-    the flag from the host between launches."""
+def test_checkpoint_yield_does_not_clear_user_flag():
+    """The framework never writes into the user's ``yield_on`` buffer -- after a yield the flag retains whatever
+    value the body wrote. The host loop is responsible for clearing the flag before ``resume(...)`` (the canonical
+    pattern in ``docs/source/user_guide/graph.md``)."""
     if not _supports_checkpoint_yield_resume():
         pytest.skip("requires yield/resume support")
     N = 4
@@ -599,8 +600,9 @@ def test_checkpoint_yield_resets_between_launches():
     flag.from_numpy(np.array(1, dtype=np.int32))
     status1 = k(x, flag)
     assert status1.yielded
-    assert int(flag.to_numpy()) == 0, "yield-check kernel should have reset the flag to 0"
-    # Second launch (flag still 0 thanks to the reset) completes normally.
+    assert int(flag.to_numpy()) == 1, "framework must not touch the user's yield_on buffer"
+    # Host clears the flag, then a fresh launch (not a resume) completes normally.
+    flag.from_numpy(np.array(0, dtype=np.int32))
     status2 = k(x, flag)
     assert not status2.yielded
 

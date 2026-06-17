@@ -33,8 +33,9 @@ def checkpoint(cp_id, yield_on):
             ``Stage.SIM`` (an ``IntEnum`` member), ``status.checkpoint`` round-trips back as ``Stage.SIM`` rather than
             the raw int.
         yield_on: Name of a kernel parameter that is a 0-d ``qd.types.ndarray(qd.i32, ndim=0)``. The body may write a
-            non-zero value into it to signal "pause here, host needs to handle something". The framework resets it back
-            to ``0`` after recording the pause, so the host doesn't have to clear it manually between launches.
+            non-zero value into it to signal "pause here, host needs to handle something". The framework never writes
+            into this buffer -- the host owns it and must clear it before ``kernel.resume(...)`` (otherwise the same
+            checkpoint will see the stale non-zero value and yield again).
 
     Restrictions (enforced at kernel compile time):
       - Must be used inside ``@qd.kernel(graph=True, checkpoints=True)``.

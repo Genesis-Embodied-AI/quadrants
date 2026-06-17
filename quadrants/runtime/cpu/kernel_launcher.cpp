@@ -134,9 +134,9 @@ void KernelLauncher::launch_offloaded_tasks(LaunchContextBuilder &ctx, const Con
           yield_signal = cp_id;
           last_yield_cp_id_on_last_call_ = cp_id;
         }
-        // Clear the user's flag so the next launch starts from a clean slate without the host
-        // having to remember to reset it -- matches the device-side yield-check kernel.
-        *flag = 0;
+        // We deliberately do NOT clear `*flag` here. The user owns the buffer and is responsible
+        // for clearing it before the resume launch (matches the device-side yield-check kernels;
+        // canonical pattern is in `docs/source/user_guide/graph.md`).
       }
     }
   }
