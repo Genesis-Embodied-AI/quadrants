@@ -610,7 +610,8 @@ std::unique_ptr<llvm::Module> QuadrantsLLVMContext::module_from_file(const std::
           QuadrantsLLVMContext::mark_inline(permlane64_func);
         }
       } else if (auto permlane64_func = module->getFunction("amdgpu_permlane64")) {
-        // gfx10.x RDNA1/2: LDS-based software emulation. Layout: ``[1024 x i32] addrspace(3)`` indexed by ``wave_base + lane``.
+        // gfx10.x RDNA1/2: LDS-based software emulation. Layout: ``[1024 x i32] addrspace(3)`` indexed by ``wave_base +
+        // lane``.
         auto i32_ty = llvm::Type::getInt32Ty(*ctx);
         auto buf_ty = llvm::ArrayType::get(i32_ty, 1024);
         auto lds_global = llvm::cast_or_null<llvm::GlobalVariable>(module->getNamedValue("__amdgpu_permlane64_lds"));
