@@ -1059,6 +1059,15 @@ i32 amdgpu_lane_id() {
   return amdgpu_mbcnt_hi(-1, amdgpu_mbcnt_lo(-1, 0));
 }
 
+// Lane-index mask applied to ``ds_bpermute``'s target in ``amdgpu_cross_half_shuffle_i32``. ``ds_bpermute``'s reach
+// differs by ISA, so ``llvm_context.cpp`` patches this at JIT load time: 63 on GCN/CDNA (gfx9xx), where
+// ``ds_bpermute`` addresses the full wave64 directly, and 31 on RDNA (gfx10/11/12), where it is SIMD32-scoped and the
+// top half is reached via the ``permlane64`` swap instead. Defaults to 31 so an unpatched build stays correct on
+// RDNA. (runtime.cpp is compiled at -O0 to bitcode, so this stays a real call until the JIT patches + inlines it.)
+i32 amdgpu_ds_bpermute_lane_mask() {
+  return 31;
+}
+
 // Wave64-aware "read ``value`` from lane ``target_lane``" gather for AMDGPU. Shared by every i32 shuffle variant
 // (``shuffle`` / ``shuffle_down`` / ``shuffle_up``); the f32 / i64 / f64 wrappers below decompose into i32 calls and
 // therefore inherit the wave64 fix for free.
@@ -1075,13 +1084,16 @@ i32 amdgpu_lane_id() {
 // so ``ds_bpermute(byte, permlane64(value))`` effectively reads from lanes 32-63. We always compute both reads and
 // select between them branchlessly based on the high bit of ``target_lane``: bit 5 picks the half.
 //
-// Note this is correct on every AMDGPU target we run on. On CDNA (gfx9xx, gfx940/942) ``ds_bpermute`` could in
-// principle directly address all 64 lanes, but because we always mask the byte argument to ``(target_lane & 31) * 4``
-// we never test that path -- on both ISAs the byte index is in [0, 128) and only addresses the bottom half. The
-// ``permlane64`` swap then supplies the top-half data: on hardware with the native instruction (gfx11 RDNA3 / gfx12
-// RDNA4) this is a single ``v_permlane64_b32``; on every other wave64-capable target -- all CDNA parts (gfx9xx,
-// including gfx940/gfx942 CDNA3 and gfx950 CDNA4) and gfx10.x RDNA1/2 -- the JIT patches ``amdgpu_permlane64`` to an
-// LDS roundtrip that produces the same result at higher latency (see the patching logic in ``llvm_context.cpp``).
+// The lane-index mask (``amdgpu_ds_bpermute_lane_mask()``) and ``permlane64`` are both JIT-patched per architecture
+// (see ``llvm_context.cpp``), because ``ds_bpermute``'s reach differs by ISA:
+//   * GCN / CDNA (gfx9xx, incl. gfx940/gfx942/gfx950): ``ds_bpermute`` addresses the full wave64, so the mask is 63
+//     and a single ``ds_bpermute((target_lane & 63) * 4, value)`` already returns lane ``target_lane`` for the whole
+//     wave. ``permlane64`` is patched to the identity there -- ``v_permlane64_b32`` does not exist on CDNA and
+//     emitting it crashes the backend (genesis-world #2962) -- so ``from_other_half`` equals ``from_self_half`` and
+//     the select below is a true no-op.
+//   * RDNA (gfx10/11/12): ``ds_bpermute`` is SIMD32-scoped, so the mask is 31 and ``ds_bpermute`` only reaches the
+//     issuing lane's own 32-lane half. The top half is supplied by the ``permlane64`` swap -- a single
+//     ``v_permlane64_b32`` on gfx11/gfx12, or an LDS-roundtrip emulation on gfx10.x.
 //
 // OOR target lanes (``target_lane < 0`` or ``target_lane >= 64``): we mask to ``target_lane & 31`` for the byte and
 // ``& 32`` for the half-bit. The behaviour for OOR targets is implementation-defined on every backend (CUDA's
@@ -1093,12 +1105,12 @@ i32 amdgpu_cross_half_shuffle_i32(i32 target_lane, i32 value) {
   // wave -- lifting it above the select keeps the AMDGPU backend happy and lets it issue exactly one
   // ``v_permlane64_b32``. ``ds_bpermute`` on RDNA wave64 is SIMD32-scoped with a 5-bit address (top half of the wave
   // is unreachable directly), so ``from_self_half`` handles the same-SIMD case and ``from_other_half`` handles the
-  // cross-SIMD case via the ``swapped`` payload. On CDNA the wave is one SIMD64 so both reads return the same value
-  // and the select is a no-op; we don't try to optimize that out because the dead read is cheap (LLVM CSE may fold
-  // it anyway).
+  // cross-SIMD case via the ``swapped`` payload. On CDNA the lane mask is 63 (``ds_bpermute`` is wave64-wide) and
+  // ``permlane64`` is patched to the identity, so ``swapped == value``, both reads return lane ``target_lane``, and
+  // the select is a true no-op; we don't optimize that out because the dead read is cheap (LLVM CSE may fold it).
   i32 self_lane = amdgpu_lane_id();
   i32 swapped = amdgpu_permlane64(value);
-  i32 byte = (target_lane & 31) * 4;
+  i32 byte = (target_lane & amdgpu_ds_bpermute_lane_mask()) * 4;
   // ``llvm.amdgcn.ds.bpermute`` is the real hardware ``ds_bpermute_b32`` -- but if LLVM's uniformity analysis decides
   // ``byte`` is uniform across the wave (e.g. ``target_lane`` is a compile-time constant), it sometimes lowers to a
   // ``v_readlane_b32``-style instruction that addresses lanes 0..31 wave-globally rather than SIMD32-locally. On
