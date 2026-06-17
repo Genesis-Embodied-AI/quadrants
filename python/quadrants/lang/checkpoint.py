@@ -14,7 +14,7 @@ from contextlib import contextmanager
 
 @contextmanager
 def checkpoint(cp_id, yield_on):
-    """Marks a section of a graph kernel as a yieldable resume target.
+    """Marks a section of a graph kernel as a pause / resume point.
 
     .. warning::
 
@@ -23,20 +23,18 @@ def checkpoint(cp_id, yield_on):
         yield/resume contract may change in any future release without a deprecation cycle.
 
     Used as ``with qd.checkpoint(cp_id, yield_on=flag):`` inside a ``@qd.kernel(graph=True, checkpoints=True)`` kernel
-    body. The ``cp_id`` is the user-facing label (``int`` or ``IntEnum``) that ``GraphStatus.checkpoint`` and
-    ``kernel.resume(from_checkpoint=...)`` will refer to. Labels must be unique within the kernel; values are otherwise
-    opaque (the runtime uses dense, source-declaration-order internal cp_ids and maps to/from your labels). The
-    ``yield_on`` argument must be a kernel parameter that is a 0-d ``qd.types.ndarray(qd.i32, ndim=0)``; the body may
-    write a non-zero value into it to signal "the host needs to handle something before this checkpoint can complete".
+    body. When the body writes a non-zero value into ``flag``, the kernel pauses at this checkpoint and returns a
+    ``GraphStatus`` to the host carrying ``status.checkpoint == cp_id``. The host can then fix things up and call
+    ``kernel.resume(..., from_checkpoint=cp_id)`` to continue from the same point on the next launch.
 
-    When the kernel is decorated with ``checkpoints=True``, every top-level for-loop in the kernel body that is **not**
-    inside a ``with qd.checkpoint(...)`` block is auto-wrapped in an implicit, no-yield checkpoint. On a resume launch
-    those implicit checkpoints are skipped along with the explicit ones declared earlier in source order. Implicit
-    checkpoints have no user-facing label and never appear in ``GraphStatus.checkpoint``.
-
-    On CUDA SM 9.0+ / 12.4+ each checkpoint compiles to a CUDA graph IF conditional node around its body kernels. On
-    other GPU backends it lowers to a small "gate" kernel that rewrites per-kernel indirect-dispatch grid dimensions to
-    ``(0, 0, 0)`` to skip the checkpoint body. CPU runs checkpoint bodies behind a host branch.
+    Arguments:
+        cp_id: User-facing label identifying this checkpoint to the host. Must be an ``int`` literal or an ``IntEnum``
+            value, and must be unique within the kernel. The value is preserved as-is end-to-end -- if you pass
+            ``Stage.SIM`` (an ``IntEnum`` member), ``status.checkpoint`` round-trips back as ``Stage.SIM`` rather than
+            the raw int.
+        yield_on: Name of a kernel parameter that is a 0-d ``qd.types.ndarray(qd.i32, ndim=0)``. The body may write a
+            non-zero value into it to signal "pause here, host needs to handle something". The framework resets it back
+            to ``0`` after recording the pause, so the host doesn't have to clear it manually between launches.
 
     Restrictions (enforced at kernel compile time):
       - Must be used inside ``@qd.kernel(graph=True, checkpoints=True)``.
@@ -52,7 +50,7 @@ def checkpoint(cp_id, yield_on):
     Python runtime (outside kernels), this is a no-op context manager so that doctests / type-checking can import the
     symbol freely.
 
-    See also ``docs/source/user_guide/graph.md`` for the host-side yield/resume loop and cross-backend semantics.
+    See ``docs/source/user_guide/graph.md`` for the host-side yield/resume loop and cross-backend semantics.
     """
     del cp_id, yield_on
     yield

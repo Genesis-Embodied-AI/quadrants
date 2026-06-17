@@ -96,7 +96,7 @@ class QuadrantsCallable:
         return self.wrapper.__call__(*args, **kwargs)
 
     def resume(self, *args, from_checkpoint, **kwargs):
-        """Re-launches the kernel, skipping every ``qd.checkpoint(cp_id, ...)`` declared before ``from_checkpoint``.
+        """Continues a paused graph kernel from the checkpoint labelled ``from_checkpoint``.
 
         .. warning::
 
@@ -105,14 +105,14 @@ class QuadrantsCallable:
             deprecation cycle.
 
         Use only on ``@qd.kernel(graph=True, checkpoints=True)`` kernels with at least one
-        ``qd.checkpoint(cp_id, yield_on=flag)`` block. ``from_checkpoint`` is a user-supplied ``cp_id`` label, typically
-        an ``IntEnum`` value: the framework matches it against the labels declared in source order and skips every
-        checkpoint (explicit AND auto-injected implicit) declared before the match. The host loop pattern is::
+        ``qd.checkpoint(cp_id, yield_on=flag)`` block. ``from_checkpoint`` is a ``cp_id`` label (typically an
+        ``IntEnum`` value, often ``status.checkpoint`` from the previous launch): everything before that label in
+        source order is skipped on this launch, and execution continues from there. The host loop pattern is::
+
+            from enum import IntEnum
 
             class Stage(IntEnum):
-                LOAD = 0
-                SIM = 1
-                REDUCE = 2
+                SIM = 0
 
             status = step(arr, overflow_flag, newton_cond)
             while status.yielded:

@@ -136,12 +136,7 @@ class CheckpointTransformer:
             return CheckpointCallInfo(cp_id=None, yield_on=None, is_implicit=True)
         # User-written `qd.checkpoint(cp_id, yield_on)` -- both args are required.
         if len(node.args) + len(node.keywords) == 0:
-            raise QuadrantsSyntaxError(
-                "qd.checkpoint() takes two arguments: `qd.checkpoint(cp_id, yield_on=flag)`. The bare "
-                "`qd.checkpoint()` form has been removed -- in a `@qd.kernel(graph=True, checkpoints=True)` kernel "
-                "every top-level for-loop not already inside a `with qd.checkpoint(...)` is auto-wrapped in an "
-                "implicit no-yield checkpoint, so an explicit bare `qd.checkpoint()` is never necessary."
-            )
+            raise QuadrantsSyntaxError("qd.checkpoint() takes two arguments: `qd.checkpoint(cp_id, yield_on=flag)`.")
         # Collect cp_id (positional 0 or kw `cp_id=`) and yield_on (positional 1 or kw `yield_on=`).
         cp_id_arg: ast.expr | None = None
         yield_on_arg: ast.expr | None = None
@@ -175,10 +170,8 @@ class CheckpointTransformer:
             )
         if yield_on_arg is None:
             raise QuadrantsSyntaxError(
-                "qd.checkpoint() is missing required argument `yield_on`. Every user-written `qd.checkpoint()` is a "
-                "yielder; if you just want a resume-target with no yield logic, omit the `with` -- the auto-wrap pass "
-                "in `@qd.kernel(graph=True, checkpoints=True)` already turns every unwrapped top-level for-loop into "
-                "an implicit no-yield checkpoint."
+                "qd.checkpoint() is missing required argument `yield_on` (e.g. "
+                "`qd.checkpoint(0, yield_on=overflow_flag)`)"
             )
         if not isinstance(yield_on_arg, ast.Name):
             raise QuadrantsSyntaxError(
@@ -215,9 +208,7 @@ class CheckpointTransformer:
             raise QuadrantsSyntaxError(
                 f"qd.checkpoint() found in kernel {kernel.func.__name__!r}, but this kernel was not decorated with "
                 "`checkpoints=True`. Add `checkpoints=True` to the decorator -- e.g. "
-                "`@qd.kernel(graph=True, checkpoints=True)` -- to opt into the resume model. Without this flag the "
-                "framework does not auto-wrap top-level for-loops, allocate the resume_point / yield_signal slots, or "
-                "expose `kernel.resume(from_checkpoint=...)`."
+                "`@qd.kernel(graph=True, checkpoints=True)` -- to opt into the pause / resume model."
             )
         if getattr(ctx, "_in_checkpoint", False):
             raise QuadrantsSyntaxError(

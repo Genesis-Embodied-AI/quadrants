@@ -142,8 +142,7 @@ def test_kernel_checkpoints_requires_graph_true():
 
 @test_utils.test()
 def test_checkpoint_missing_cp_id_raises():
-    """``qd.checkpoint()`` with no args (the old bare form) must raise with a message that points at the new signature
-    and explains the auto-wrap alternative."""
+    """``qd.checkpoint()`` with no args must raise with a message that points at the required signature."""
 
     @qd.kernel(graph=True, checkpoints=True)
     def k(x: qd.types.ndarray(qd.i32, ndim=1)):
@@ -158,8 +157,7 @@ def test_checkpoint_missing_cp_id_raises():
 
 @test_utils.test()
 def test_checkpoint_missing_yield_on_raises():
-    """``qd.checkpoint(cp_id)`` without ``yield_on=`` is rejected -- every explicit checkpoint is a yielder. (For
-    skippable-but-no-yield, the user just doesn't wrap, and the auto-wrap pass handles it.)"""
+    """``qd.checkpoint(cp_id)`` without ``yield_on=`` is rejected at compile time."""
 
     @qd.kernel(graph=True, checkpoints=True)
     def k(x: qd.types.ndarray(qd.i32, ndim=1)):
