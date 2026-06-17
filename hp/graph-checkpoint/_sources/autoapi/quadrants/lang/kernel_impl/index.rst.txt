@@ -92,12 +92,10 @@ Module Contents
                  into a CUDA graph on first launch and replayed on subsequent
                  launches, reducing per-kernel launch overhead. Non-CUDA backends
                  are not supported currently.
-   :param checkpoints: If True, opt into the (experimental) ``qd.checkpoint``
-                       pause / resume model. ``with qd.checkpoint(cp_id, yield_on=flag):``
-                       blocks in the kernel body become pause points the host can resume
-                       from via ``kernel.resume(from_checkpoint=cp_id)``. Requires
-                       ``graph=True``. ``qd.checkpoint(...)`` in the body is rejected
-                       unless this flag is set.
+   :param checkpoints: If True, opt into the (experimental) ``qd.checkpoint`` pause / resume model.
+                       ``with qd.checkpoint(cp_id, yield_on=flag):`` blocks in the kernel body become pause points the host can
+                       resume from via ``kernel.resume(from_checkpoint=cp_id)``. Requires ``graph=True``.
+                       ``qd.checkpoint(...)`` in the body is rejected unless this flag is set.
 
    Example::
 

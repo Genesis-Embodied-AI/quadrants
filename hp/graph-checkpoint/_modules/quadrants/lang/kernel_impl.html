@@ -595,12 +595,10 @@
 <span class="sd">            into a CUDA graph on first launch and replayed on subsequent</span>
 <span class="sd">            launches, reducing per-kernel launch overhead. Non-CUDA backends</span>
 <span class="sd">            are not supported currently.</span>
-<span class="sd">        checkpoints: If True, opt into the (experimental) ``qd.checkpoint``</span>
-<span class="sd">            pause / resume model. ``with qd.checkpoint(cp_id, yield_on=flag):``</span>
-<span class="sd">            blocks in the kernel body become pause points the host can resume</span>
-<span class="sd">            from via ``kernel.resume(from_checkpoint=cp_id)``. Requires</span>
-<span class="sd">            ``graph=True``. ``qd.checkpoint(...)`` in the body is rejected</span>
-<span class="sd">            unless this flag is set.</span>
+<span class="sd">        checkpoints: If True, opt into the (experimental) ``qd.checkpoint`` pause / resume model.</span>
+<span class="sd">            ``with qd.checkpoint(cp_id, yield_on=flag):`` blocks in the kernel body become pause points the host can</span>
+<span class="sd">            resume from via ``kernel.resume(from_checkpoint=cp_id)``. Requires ``graph=True``.</span>
+<span class="sd">            ``qd.checkpoint(...)`` in the body is rejected unless this flag is set.</span>
 
 <span class="sd">    Example::</span>
 

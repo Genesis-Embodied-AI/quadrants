@@ -60,7 +60,7 @@
     <link rel="index" title="Index" href="../../../../genindex.html" />
     <link rel="search" title="Search" href="../../../../search.html" />
     <link rel="next" title="quadrants.lang.matrix" href="../matrix/index.html" />
-    <link rel="prev" title="quadrants.lang.kernel_arguments" href="../kernel_arguments/index.html" />
+    <link rel="prev" title="quadrants.lang.kernel_checkpoint" href="../kernel_checkpoint/index.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
   <meta name="docsearch:version" content="1.0.3" />
@@ -474,12 +474,10 @@ to either a CPU thread pool or massively parallel GPUs.</p>
 into a CUDA graph on first launch and replayed on subsequent
 launches, reducing per-kernel launch overhead. Non-CUDA backends
 are not supported currently.</p></li>
-<li><p><strong>checkpoints</strong> – If True, opt into the (experimental) <code class="docutils literal notranslate"><span class="pre">qd.checkpoint</span></code>
-pause / resume model. <code class="docutils literal notranslate"><span class="pre">with</span> <span class="pre">qd.checkpoint(cp_id,</span> <span class="pre">yield_on=flag):</span></code>
-blocks in the kernel body become pause points the host can resume
-from via <code class="docutils literal notranslate"><span class="pre">kernel.resume(from_checkpoint=cp_id)</span></code>. Requires
-<code class="docutils literal notranslate"><span class="pre">graph=True</span></code>. <code class="docutils literal notranslate"><span class="pre">qd.checkpoint(...)</span></code> in the body is rejected
-unless this flag is set.</p></li>
+<li><p><strong>checkpoints</strong> – If True, opt into the (experimental) <code class="docutils literal notranslate"><span class="pre">qd.checkpoint</span></code> pause / resume model.
+<code class="docutils literal notranslate"><span class="pre">with</span> <span class="pre">qd.checkpoint(cp_id,</span> <span class="pre">yield_on=flag):</span></code> blocks in the kernel body become pause points the host can
+resume from via <code class="docutils literal notranslate"><span class="pre">kernel.resume(from_checkpoint=cp_id)</span></code>. Requires <code class="docutils literal notranslate"><span class="pre">graph=True</span></code>.
+<code class="docutils literal notranslate"><span class="pre">qd.checkpoint(...)</span></code> in the body is rejected unless this flag is set.</p></li>
 </ul>
 </dd>
 </dl>
@@ -541,12 +539,12 @@ Quadrants kernels can be defined inside a class.</p>
                   
 <div class="prev-next-area">
     <a class="left-prev"
-       href="../kernel_arguments/index.html"
+       href="../kernel_checkpoint/index.html"
        title="previous page">
       <i class="fa-solid fa-angle-left"></i>
       <div class="prev-next-info">
         <p class="prev-next-subtitle">previous</p>
-        <p class="prev-next-title">quadrants.lang.kernel_arguments</p>
+        <p class="prev-next-title">quadrants.lang.kernel_checkpoint</p>
       </div>
     </a>
     <a class="right-next"

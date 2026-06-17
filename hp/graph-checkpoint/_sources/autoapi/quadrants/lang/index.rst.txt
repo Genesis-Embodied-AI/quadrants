@@ -24,6 +24,7 @@ Submodules
    /autoapi/quadrants/lang/intrinsics/index
    /autoapi/quadrants/lang/kernel/index
    /autoapi/quadrants/lang/kernel_arguments/index
+   /autoapi/quadrants/lang/kernel_checkpoint/index
    /autoapi/quadrants/lang/kernel_impl/index
    /autoapi/quadrants/lang/matrix/index
    /autoapi/quadrants/lang/matrix_ops/index

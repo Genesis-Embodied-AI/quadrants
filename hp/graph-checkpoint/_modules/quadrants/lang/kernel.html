@@ -369,6 +369,11 @@
 <span class="p">)</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._tensor_wrapper</span><span class="w"> </span><span class="kn">import</span> <span class="n">_TENSOR_WRAPPER_TYPES</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">_kernel_impl_dataclass</span><span class="p">,</span> <span class="n">impl</span><span class="p">,</span> <span class="n">runtime_ops</span>
+
+<span class="c1"># `qd.checkpoint` pause / resume model helpers. See `kernel_checkpoint.py` for the full extracted surface; `Kernel`</span>
+<span class="c1"># delegates the resume-cookie validation, label translation, per-launch yield_on= arg-id table build, and GraphStatus</span>
+<span class="c1"># construction to those free functions so this hot file doesn&#39;t accrete checkpoint-feature-specific blocks.</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">kernel_checkpoint</span> <span class="k">as</span> <span class="n">_checkpoint_helpers</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._fast_caching</span><span class="w"> </span><span class="kn">import</span> <span class="n">src_hasher</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._template_mapper_hotpath</span><span class="w"> </span><span class="kn">import</span> <span class="n">chain_has_mutable_container</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._wrap_inspect</span><span class="w"> </span><span class="kn">import</span> <span class="n">FunctionSourceInfo</span><span class="p">,</span> <span class="n">get_source_info_and_src</span>
@@ -385,10 +390,6 @@
     <span class="n">QuadrantsSyntaxError</span><span class="p">,</span>
     <span class="n">handle_exception_from_cpp</span><span class="p">,</span>
 <span class="p">)</span>
-
-<span class="c1"># `GraphStatus` is the host-facing return type for kernels that contain `qd.checkpoint(yield_on=...)`. Imported from the</span>
-<span class="c1"># dedicated `graph_status` module rather than from `misc` to avoid a `kernel -&gt; misc -&gt; impl -&gt; kernel` circular import.</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.graph_status</span><span class="w"> </span><span class="kn">import</span> <span class="n">GraphStatus</span> <span class="k">as</span> <span class="n">_GraphStatus</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.impl</span><span class="w"> </span><span class="kn">import</span> <span class="n">Program</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.shell</span><span class="w"> </span><span class="kn">import</span> <span class="n">_shell_pop_print</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.util</span><span class="w"> </span><span class="kn">import</span> <span class="n">cook_dtype</span><span class="p">,</span> <span class="n">is_data_oriented</span>
@@ -998,12 +999,7 @@
             <span class="n">is_launch_ctx_cacheable</span> <span class="o">=</span> <span class="kc">True</span>
             <span class="n">template_num</span> <span class="o">=</span> <span class="mi">0</span>
             <span class="n">i_out</span> <span class="o">=</span> <span class="mi">0</span>
-            <span class="c1"># Fresh per-launch table for `qd.checkpoint(yield_on=...)` arg resolution. Each entry defaults to -1 (&quot;no</span>
-            <span class="c1"># yield_on&quot;); the arg-iteration loop below fills in the C++ arg id when it visits the named parameter. Sized</span>
-            <span class="c1"># to the kernel&#39;s checkpoint count once per launch so any changes to the checkpoint set (only possible via</span>
-            <span class="c1"># re-AST-walk) reset the table cleanly.</span>
-            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">checkpoint_yield_on_args</span><span class="p">:</span>
-                <span class="bp">self</span><span class="o">.</span><span class="n">_checkpoint_yield_on_cpp_arg_ids</span> <span class="o">=</span> <span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">checkpoint_yield_on_args</span><span class="p">)</span>
+            <span class="n">_checkpoint_helpers</span><span class="o">.</span><span class="n">init_yield_on_arg_id_table</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
             <span class="k">for</span> <span class="n">i_in</span><span class="p">,</span> <span class="n">val</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">args</span><span class="p">):</span>
                 <span class="n">needed_</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">arg_metas</span><span class="p">[</span><span class="n">i_in</span><span class="p">]</span><span class="o">.</span><span class="n">annotation</span>
                 <span class="k">if</span> <span class="n">needed_</span> <span class="ow">is</span> <span class="n">template</span> <span class="ow">or</span> <span class="nb">type</span><span class="p">(</span><span class="n">needed_</span><span class="p">)</span> <span class="ow">is</span> <span class="n">template</span><span class="p">:</span>
@@ -1019,10 +1015,7 @@
                     <span class="k">continue</span>
                 <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">graph_do_while_arg</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">arg_metas</span><span class="p">[</span><span class="n">i_in</span><span class="p">]</span><span class="o">.</span><span class="n">name</span> <span class="o">==</span> <span class="bp">self</span><span class="o">.</span><span class="n">graph_do_while_arg</span><span class="p">:</span>
                     <span class="bp">self</span><span class="o">.</span><span class="n">_graph_do_while_cpp_arg_id</span> <span class="o">=</span> <span class="n">i_out</span> <span class="o">-</span> <span class="n">template_num</span>
-                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">checkpoint_yield_on_args</span><span class="p">:</span>
-                    <span class="k">for</span> <span class="n">cp_idx</span><span class="p">,</span> <span class="n">yield_name</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">checkpoint_yield_on_args</span><span class="p">):</span>
-                        <span class="k">if</span> <span class="n">yield_name</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">arg_metas</span><span class="p">[</span><span class="n">i_in</span><span class="p">]</span><span class="o">.</span><span class="n">name</span> <span class="o">==</span> <span class="n">yield_name</span><span class="p">:</span>
-                            <span class="bp">self</span><span class="o">.</span><span class="n">_checkpoint_yield_on_cpp_arg_ids</span><span class="p">[</span><span class="n">cp_idx</span><span class="p">]</span> <span class="o">=</span> <span class="n">i_out</span> <span class="o">-</span> <span class="n">template_num</span>
+                <span class="n">_checkpoint_helpers</span><span class="o">.</span><span class="n">maybe_record_yield_on_arg</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">arg_metas</span><span class="p">[</span><span class="n">i_in</span><span class="p">]</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">i_out</span> <span class="o">-</span> <span class="n">template_num</span><span class="p">)</span>
                 <span class="n">num_args_</span><span class="p">,</span> <span class="n">is_launch_ctx_cacheable_</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_recursive_set_args</span><span class="p">(</span>
                     <span class="bp">self</span><span class="o">.</span><span class="n">used_py_dataclass_parameters_by_key_enforcing</span><span class="p">[</span><span class="n">key</span><span class="p">],</span>
                     <span class="bp">self</span><span class="o">.</span><span class="n">arg_metas</span><span class="p">[</span><span class="n">i_in</span><span class="p">]</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
@@ -1096,8 +1089,7 @@
                 <span class="p">)</span>
             <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">graph_do_while_arg</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="nb">hasattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s2">&quot;_graph_do_while_cpp_arg_id&quot;</span><span class="p">):</span>
                 <span class="n">launch_ctx</span><span class="o">.</span><span class="n">graph_do_while_arg_id</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_graph_do_while_cpp_arg_id</span>
-            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">checkpoint_yield_on_args</span> <span class="ow">and</span> <span class="nb">hasattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s2">&quot;_checkpoint_yield_on_cpp_arg_ids&quot;</span><span class="p">):</span>
-                <span class="n">launch_ctx</span><span class="o">.</span><span class="n">checkpoint_yield_on_arg_ids</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_checkpoint_yield_on_cpp_arg_ids</span><span class="p">)</span>
+            <span class="n">_checkpoint_helpers</span><span class="o">.</span><span class="n">forward_yield_on_table_to_ctx</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">launch_ctx</span><span class="p">)</span>
             <span class="c1"># `_resume_from_checkpoint` is `None` for fresh launches (host-side default 0 in `LaunchContextBuilder`,</span>
             <span class="c1"># which means &quot;run every checkpoint&quot;). When `Kernel.resume` plumbs an int through, copy it onto the launch</span>
             <span class="c1"># context so the GraphManager&#39;s `launch_cached_graph` memcpys it into the device-side `resume_point` slot</span>
@@ -1205,11 +1197,7 @@
         <span class="c1"># copy into the device-side `resume_point` slot before launch; `None` means &quot;fresh start, reset to 0&quot;. Plumbed</span>
         <span class="c1"># via `Kernel.resume()` only; users do not pass this directly.</span>
         <span class="n">_resume_from_checkpoint</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">&quot;_qd_from_checkpoint&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
-        <span class="k">if</span> <span class="n">_resume_from_checkpoint</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">checkpoint_yield_on_args</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span>
-                <span class="s2">&quot;`from_checkpoint=` is only valid for kernels that contain at least one &quot;</span>
-                <span class="s2">&quot;qd.checkpoint(yield_on=...) block; this kernel has none.&quot;</span>
-            <span class="p">)</span>
+        <span class="n">_checkpoint_helpers</span><span class="o">.</span><span class="n">validate_resume_cookie</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">_resume_from_checkpoint</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">qd_stream</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">autodiff_mode</span> <span class="o">!=</span> <span class="n">_NONE</span><span class="p">:</span>
             <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span>
                 <span class="s2">&quot;qd_stream is not compatible with autodiff kernels. Streams cannot be used with &quot;</span>
@@ -1283,22 +1271,12 @@
         <span class="n">compiled_kernel_data</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">compiled_kernel_data_by_key</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">launch_observations</span><span class="o">.</span><span class="n">found_kernel_in_materialize_cache</span> <span class="o">=</span> <span class="n">compiled_kernel_data</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
         <span class="c1"># Translate the user-supplied `from_checkpoint=` label into the dense, source-order internal cp_id the runtime</span>
-        <span class="c1"># uses. The label may be a raw int or an IntEnum value; the comparison below uses `==`, which IntEnum overloads</span>
-        <span class="c1"># to compare equal to its underlying int. Translation happens here (after `ensure_compiled`) because</span>
-        <span class="c1"># `checkpoint_user_labels_by_cp_id` is populated during AST processing inside `ensure_compiled`.</span>
+        <span class="c1"># uses. Translation happens here (after `ensure_compiled`) because `checkpoint_user_labels_by_cp_id` is</span>
+        <span class="c1"># populated during AST processing inside `ensure_compiled`.</span>
         <span class="k">if</span> <span class="n">_resume_from_checkpoint</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-            <span class="n">found_internal</span> <span class="o">=</span> <span class="kc">None</span>
-            <span class="k">for</span> <span class="n">internal_cp_id</span><span class="p">,</span> <span class="n">label</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">checkpoint_user_labels_by_cp_id</span><span class="p">):</span>
-                <span class="k">if</span> <span class="n">label</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">label</span> <span class="o">==</span> <span class="n">_resume_from_checkpoint</span><span class="p">:</span>
-                    <span class="n">found_internal</span> <span class="o">=</span> <span class="n">internal_cp_id</span>
-                    <span class="k">break</span>
-            <span class="k">if</span> <span class="n">found_internal</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-                <span class="n">available</span> <span class="o">=</span> <span class="p">[</span><span class="n">lbl</span> <span class="k">for</span> <span class="n">lbl</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">checkpoint_user_labels_by_cp_id</span> <span class="k">if</span> <span class="n">lbl</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">]</span>
-                <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span>
-                    <span class="sa">f</span><span class="s2">&quot;from_checkpoint=</span><span class="si">{</span><span class="n">_resume_from_checkpoint</span><span class="si">!r}</span><span class="s2"> does not match any qd.checkpoint(cp_id=...) in &quot;</span>
-                    <span class="sa">f</span><span class="s2">&quot;kernel </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">func</span><span class="o">.</span><span class="vm">__name__</span><span class="si">!r}</span><span class="s2">. Available cp_id labels (source-declaration order): </span><span class="si">{</span><span class="n">available</span><span class="si">}</span><span class="s2">.&quot;</span>
-                <span class="p">)</span>
-            <span class="n">_resume_from_checkpoint</span> <span class="o">=</span> <span class="n">found_internal</span>
+            <span class="n">_resume_from_checkpoint</span> <span class="o">=</span> <span class="n">_checkpoint_helpers</span><span class="o">.</span><span class="n">translate_user_label_to_internal_cp_id</span><span class="p">(</span>
+                <span class="bp">self</span><span class="p">,</span> <span class="n">_resume_from_checkpoint</span>
+            <span class="p">)</span>
         <span class="c1"># Only forward `_resume_from_checkpoint` when the caller actually supplied one (i.e. via `Kernel.resume(...)`).</span>
         <span class="c1"># Otherwise omit the kwarg entirely so subclasses / monkeypatches of `launch_kernel` that pre-date this kwarg</span>
         <span class="c1"># keep working unmodified. The host-side default in `LaunchContextBuilder` is 0 (&quot;run every checkpoint&quot;), which</span>
@@ -1324,22 +1302,8 @@
             <span class="k">assert</span> <span class="bp">self</span><span class="o">.</span><span class="n">_last_compiled_kernel_data</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">compiled_kernel_data_by_key</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_last_compiled_kernel_data</span>
         <span class="c1"># Surface a GraphStatus for kernels with `qd.checkpoint(yield_on=...)` so the host can drive the qipc-style</span>
-        <span class="c1"># re-entrant loop. Kernels without yield-capable checkpoints keep their existing return contract (typically</span>
-        <span class="c1"># `None`); we don&#39;t synthesise a status from a `yielded=False` result for them because they have no `yield_on=`</span>
-        <span class="c1"># parameter to write to, so the value would always be `yielded=False, checkpoint=None` -- no information.</span>
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">checkpoint_yield_on_args</span> <span class="ow">and</span> <span class="nb">any</span><span class="p">(</span><span class="n">n</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">checkpoint_yield_on_args</span><span class="p">):</span>
-            <span class="n">cp</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">prog</span><span class="o">.</span><span class="n">get_graph_last_yield_cp_id_on_last_call</span><span class="p">()</span>
-            <span class="k">if</span> <span class="n">cp</span> <span class="o">&gt;=</span> <span class="mi">0</span><span class="p">:</span>
-                <span class="c1"># Translate the internal cp_id (dense, source-order, may point at an implicit checkpoint) to the</span>
-                <span class="c1"># user-supplied label so an IntEnum that the user passed in as the cp_id argument round-trips back into</span>
-                <span class="c1"># `GraphStatus.checkpoint`. Implicit checkpoints have `None` here, but they never have `yield_on=`, so</span>
-                <span class="c1"># the runtime can&#39;t surface them as the yielding cp -- the lookup is always to an explicit checkpoint.</span>
-                <span class="n">user_label</span> <span class="o">=</span> <span class="p">(</span>
-                    <span class="bp">self</span><span class="o">.</span><span class="n">checkpoint_user_labels_by_cp_id</span><span class="p">[</span><span class="n">cp</span><span class="p">]</span> <span class="k">if</span> <span class="n">cp</span> <span class="o">&lt;</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">checkpoint_user_labels_by_cp_id</span><span class="p">)</span> <span class="k">else</span> <span class="kc">None</span>
-                <span class="p">)</span>
-                <span class="k">return</span> <span class="n">_GraphStatus</span><span class="p">(</span><span class="n">yielded</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">checkpoint</span><span class="o">=</span><span class="n">user_label</span> <span class="k">if</span> <span class="n">user_label</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">cp</span><span class="p">)</span>
-            <span class="k">return</span> <span class="n">_GraphStatus</span><span class="p">(</span><span class="n">yielded</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">checkpoint</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
-        <span class="k">return</span> <span class="n">ret</span></div>
+        <span class="c1"># re-entrant loop. Kernels without yield-capable checkpoints get `ret` (typically `None`) passed through.</span>
+        <span class="k">return</span> <span class="n">_checkpoint_helpers</span><span class="o">.</span><span class="n">maybe_build_graph_status</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ret</span><span class="p">)</span></div>
 
 </pre></div>
 
