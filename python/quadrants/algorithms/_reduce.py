@@ -5,10 +5,10 @@ Provides the graph-composable ``qd.algorithms.reduce_{add,min,max}`` on top of t
 ``block.reduce_{add,min,max}`` primitives, plus :func:`reduce_scratch_slots` for sizing the caller-owned scratch. See
 the design doc at ``perso_hugh/doc/qipc/qipc_device_algos_design.md`` for the algorithmic rationale.
 
-Each ``reduce_{add,min,max}`` is a fixed-depth staircase of ``@qd.func`` phases (:func:`_reduce_phase`): call it at the **top
-level** of your own ``@qd.kernel`` with the live element count ``n`` as a device ``Expr`` and the recursion depth as a
-compile-time ``LOG256_MAX_N``, so one captured graph replays for any count ``<= BLOCK_DIM ** LOG256_MAX_N``. The
-per-block partials stage through a **caller-owned** scratch buffer (``u32`` for 4-byte element dtypes, ``u64`` for
+Each ``reduce_{add,min,max}`` is a fixed-depth staircase of ``@qd.func`` phases (:func:`_reduce_phase`): call it at
+the **top level** of your own ``@qd.kernel`` with the live element count ``n`` as a device ``Expr`` and the recursion
+depth as a compile-time ``LOG256_MAX_N``, so one captured graph replays for any count ``<= BLOCK_DIM ** LOG256_MAX_N``.
+The per-block partials stage through a **caller-owned** scratch buffer (``u32`` for 4-byte element dtypes, ``u64`` for
 8-byte ones; ``~N / BLOCK_DIM`` slots) sized via :func:`reduce_scratch_slots`; the monoid identity (e.g. ``+inf`` for
 ``min`` over ``f32``) is derived in-kernel from the element dtype, so no runtime identity arg is needed.
 """
