@@ -556,9 +556,14 @@ std::unique_ptr<llvm::Module> QuadrantsLLVMContext::module_from_file(const std::
       // We use it to extend the SIMD32-scoped ``ds_bpermute`` (every shuffle op lowers to that) into a wave64-aware
       // cross-half shuffle on RDNA: ``ds_bpermute`` reads within the lane's own 32-lane SIMD cluster, ``permlane64``
       // brings the other SIMD's value to this lane, and we select between the two based on which half the target lane
-      // sits in. See ``amdgpu_cross_half_shuffle_i32`` in runtime.cpp. The instruction is gfx940+ (CDNA3) and gfx11+
-      // (RDNA3+) only -- on earlier wave64-capable targets (gfx9xx CDNA1/2, gfx10.x RDNA1/2) the AMDGPU LLVM backend
-      // hits "Cannot select" while lowering the intrinsic, so we have to provide a software emulation.
+      // sits in. See ``amdgpu_cross_half_shuffle_i32`` in runtime.cpp. ``v_permlane64_b32`` is an RDNA-only
+      // instruction: it exists on gfx11 (RDNA3) and gfx12 (RDNA4), but on NO CDNA part -- the AMD assembler rejects it
+      // ("instruction not supported on this GPU") for gfx908/gfx90a (CDNA1/2), gfx940/gfx941/gfx942 (CDNA3) and gfx950
+      // (CDNA4) alike. On every wave64-capable target without the native instruction (all CDNA parts, plus gfx10.x
+      // RDNA1/2) we must provide a software emulation. CDNA3 (gfx942) is especially treacherous: the backend does NOT
+      // cleanly "Cannot select" the intrinsic -- it selects the ``V_PERMLANE64_B32`` pseudo, which has no valid MC
+      // opcode for CDNA, and then crashes with a bare SIGSEGV inside ``SIInstrInfo::getInstSizeInBytes`` during the
+      // branch-relaxation pass. So we must never emit the intrinsic on CDNA.
       //
       // The emulation is a wave-local LDS roundtrip: each lane writes its ``value`` to ``lds[wave_base + lane]``,
       // a wavefront-scope acquire-release fence lowers to ``s_waitcnt lgkmcnt(0)`` (drains outstanding LDS writes),
@@ -574,17 +579,10 @@ std::unique_ptr<llvm::Module> QuadrantsLLVMContext::module_from_file(const std::
       // have to pass the explicit ``i32`` type alongside the ID -- otherwise ``CreateIntrinsic`` segfaults inside
       // ``getDeclaration()`` while resolving the mangled name.
       auto mcpu_str = AMDGPUContext::get_instance().get_mcpu();
-      bool has_permlane64 = (mcpu_str == "gfx940" || mcpu_str == "gfx941" || mcpu_str == "gfx942" ||
-                             mcpu_str.substr(0, 5) == "gfx11" || mcpu_str.substr(0, 5) == "gfx12");
-      // Escape hatch for validating the LDS software emulation on hardware that natively supports
-      // ``v_permlane64_b32``: setting ``QD_AMDGPU_FORCE_PERMLANE64_FALLBACK=1`` forces the JIT to take the LDS path
-      // even on gfx11+ / gfx940+, so we can exercise the fallback on a working AMD box (gfx1100 / gfx942) without
-      // needing a gfx10.x runner.  Has no effect on non-AMDGPU backends.
-      if (const char *force_fallback = std::getenv("QD_AMDGPU_FORCE_PERMLANE64_FALLBACK")) {
-        if (force_fallback[0] == '1') {
-          has_permlane64 = false;
-        }
-      }
+      // RDNA3+ (gfx11) and RDNA4 (gfx12) only. No CDNA part has ``v_permlane64_b32`` (see above), so every gfx9xx
+      // target takes the LDS emulation -- including gfx940/gfx941/gfx942 (CDNA3), which used to be (wrongly) listed
+      // here and made the AMDGPU backend segfault on any kernel using a cross-half subgroup shuffle.
+      bool has_permlane64 = (mcpu_str.substr(0, 5) == "gfx11" || mcpu_str.substr(0, 5) == "gfx12");
       if (has_permlane64) {
         patch_intrinsic("amdgpu_permlane64", llvm::Intrinsic::amdgcn_permlane64, true, {llvm::Type::getInt32Ty(*ctx)});
       } else if (auto permlane64_func = module->getFunction("amdgpu_permlane64")) {

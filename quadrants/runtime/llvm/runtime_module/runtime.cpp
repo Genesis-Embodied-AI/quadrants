@@ -1015,13 +1015,13 @@ i32 amdgpu_ds_bpermute(i32 byte_index, i32 value) {
 }
 
 // Exchanges a 32-bit value between lanes ``i`` and ``i ^ 32`` in a single instruction. The native instruction
-// ``v_permlane64_b32`` is only available on gfx940+ (CDNA3) and gfx11+ (RDNA3+); ``llvm_context.cpp`` detects the
-// target at JIT time and patches this stub to either the ``llvm.amdgcn.permlane64`` intrinsic (on supported
-// hardware) or an LDS-roundtrip software emulation (on gfx9xx CDNA1/2 and gfx10.x RDNA1/2). The emulation has higher
-// latency (LDS store + ``s_waitcnt`` + LDS load -- roughly tens of cycles per call vs. a few for the native swap),
-// but produces correct cross-half results on RDNA wave64 emulation hardware. Used by
-// ``amdgpu_cross_half_shuffle_i32`` below to repair the cross-half story for ``ds_bpermute``, which is SIMD32-scoped
-// on RDNA.
+// ``v_permlane64_b32`` is RDNA-only -- it exists on gfx11 (RDNA3) and gfx12 (RDNA4), but on NO CDNA part (the AMD
+// assembler rejects it on gfx908/gfx90a/gfx940/gfx941/gfx942/gfx950). ``llvm_context.cpp`` detects the target at JIT
+// time and patches this stub to either the ``llvm.amdgcn.permlane64`` intrinsic (on gfx11+/gfx12 only) or an
+// LDS-roundtrip software emulation (on every CDNA part and on gfx10.x RDNA1/2). The emulation has higher latency (LDS
+// store + ``s_waitcnt`` + LDS load -- roughly tens of cycles per call vs. a few for the native swap), but produces
+// correct cross-half results on wave64 hardware. Used by ``amdgpu_cross_half_shuffle_i32`` below to repair the
+// cross-half story for ``ds_bpermute``, which is SIMD32-scoped on RDNA.
 i32 amdgpu_permlane64(i32 value) {
   __builtin_trap();
   return 0;
@@ -1078,10 +1078,10 @@ i32 amdgpu_lane_id() {
 // Note this is correct on every AMDGPU target we run on. On CDNA (gfx9xx, gfx940/942) ``ds_bpermute`` could in
 // principle directly address all 64 lanes, but because we always mask the byte argument to ``(target_lane & 31) * 4``
 // we never test that path -- on both ISAs the byte index is in [0, 128) and only addresses the bottom half. The
-// ``permlane64`` swap then supplies the top-half data: on hardware with the native instruction (gfx940+ CDNA3 /
-// gfx11+ RDNA3+) this is a single ``v_permlane64_b32``; on older wave64-capable targets (gfx9xx CDNA1/2, gfx10.x
-// RDNA1/2) the JIT patches ``amdgpu_permlane64`` to an LDS roundtrip that produces the same result at higher latency
-// (see the patching logic in ``llvm_context.cpp``).
+// ``permlane64`` swap then supplies the top-half data: on hardware with the native instruction (gfx11 RDNA3 / gfx12
+// RDNA4) this is a single ``v_permlane64_b32``; on every other wave64-capable target -- all CDNA parts (gfx9xx,
+// including gfx940/gfx942 CDNA3 and gfx950 CDNA4) and gfx10.x RDNA1/2 -- the JIT patches ``amdgpu_permlane64`` to an
+// LDS roundtrip that produces the same result at higher latency (see the patching logic in ``llvm_context.cpp``).
 //
 // OOR target lanes (``target_lane < 0`` or ``target_lane >= 64``): we mask to ``target_lane & 31`` for the byte and
 // ``& 32`` for the half-bit. The behaviour for OOR targets is implementation-defined on every backend (CUDA's
