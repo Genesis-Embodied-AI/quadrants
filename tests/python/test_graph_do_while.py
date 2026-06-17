@@ -824,7 +824,9 @@ def test_graph_do_while_bare_top_level_statement_runs_once():
     N = 8
 
     @qd.kernel(graph=True)
-    def k(x: qd.types.ndarray(qd.i32, ndim=1), seen: qd.types.ndarray(qd.i32, ndim=0), c: qd.types.ndarray(qd.i32, ndim=0)):
+    def k(
+        x: qd.types.ndarray(qd.i32, ndim=1), seen: qd.types.ndarray(qd.i32, ndim=0), c: qd.types.ndarray(qd.i32, ndim=0)
+    ):
         # Bare top-level statements: run exactly once.
         seen[()] = seen[()] + 1  # incremented once iff this runs once (not per loop iteration)
         x[0] = 100
