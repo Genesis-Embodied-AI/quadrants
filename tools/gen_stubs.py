@@ -18,6 +18,7 @@ import pathlib
 import shutil
 import subprocess
 import sys
+import tempfile
 
 MODULE = "quadrants._lib.core.quadrants_python"
 STUB_REL = pathlib.Path("quadrants/_lib/core/quadrants_python.pyi")
@@ -48,29 +49,41 @@ def generate(package_dir: pathlib.Path, output_dir: pathlib.Path, repo_root: pat
     package_dir = pathlib.Path(package_dir).resolve()
     output_dir = pathlib.Path(output_dir).resolve()
     repo_root = pathlib.Path(repo_root).resolve()
-    stub_build_dir = pathlib.Path(stub_build_dir).resolve() if stub_build_dir else (output_dir / "_stubgen")
-    stub_build_dir.mkdir(parents=True, exist_ok=True)
 
-    env = os.environ.copy()
-    env["PYTHONPATH"] = str(package_dir) + os.pathsep + env.get("PYTHONPATH", "")
+    # Scratch dir for pybind11-stubgen's raw output. It MUST live outside the install
+    # tree: output_dir is inside the wheel staging dir, and scikit-build-core sweeps
+    # everything under it into the wheel, so leaving scratch files there would ship them.
+    owns_scratch = stub_build_dir is None
+    if owns_scratch:
+        stub_build_dir = pathlib.Path(tempfile.mkdtemp(prefix="qd_stubgen_"))
+    else:
+        stub_build_dir = pathlib.Path(stub_build_dir).resolve()
+        stub_build_dir.mkdir(parents=True, exist_ok=True)
 
-    # Invoke via `-m` on the current interpreter rather than the `pybind11-stubgen`
-    # console script, so it does not depend on the venv's bin dir being on PATH.
-    cmd = [sys.executable, "-m", "pybind11_stubgen", MODULE, "--ignore-all-errors", "-o", str(stub_build_dir)]
-    print(" ".join(cmd), flush=True)
-    subprocess.check_call(cmd, env=env)
+    try:
+        env = os.environ.copy()
+        env["PYTHONPATH"] = str(package_dir) + os.pathsep + env.get("PYTHONPATH", "")
 
-    stub_file = stub_build_dir / STUB_REL
-    postprocess_stubs(
-        stub_file,
-        repo_root / "stub_replacements_funcs.yaml",
-        repo_root / "stub_replacements_global.yaml",
-    )
+        # Invoke via `-m` on the current interpreter rather than the `pybind11-stubgen`
+        # console script, so it does not depend on the venv's bin dir being on PATH.
+        cmd = [sys.executable, "-m", "pybind11_stubgen", MODULE, "--ignore-all-errors", "-o", str(stub_build_dir)]
+        print(" ".join(cmd), flush=True)
+        subprocess.check_call(cmd, env=env)
 
-    output_dir.mkdir(parents=True, exist_ok=True)
-    shutil.copy(stub_file, output_dir / "quadrants_python.pyi")
-    (output_dir / "py.typed").touch()
-    print(f"wrote {output_dir / 'quadrants_python.pyi'} and py.typed", flush=True)
+        stub_file = stub_build_dir / STUB_REL
+        postprocess_stubs(
+            stub_file,
+            repo_root / "stub_replacements_funcs.yaml",
+            repo_root / "stub_replacements_global.yaml",
+        )
+
+        output_dir.mkdir(parents=True, exist_ok=True)
+        shutil.copy(stub_file, output_dir / "quadrants_python.pyi")
+        (output_dir / "py.typed").touch()
+        print(f"wrote {output_dir / 'quadrants_python.pyi'} and py.typed", flush=True)
+    finally:
+        if owns_scratch:
+            shutil.rmtree(stub_build_dir, ignore_errors=True)
 
 
 def main() -> None:

@@ -107,21 +107,44 @@ Homepage = "https://github.com/Genesis-Embodied-AI/quadrants"
 
 [build-system]
 requires = [
-    "setuptools>=77.0.0",
-    "wheel",
-    "numpy>=2.0.0",
-    "pybind11<3.0.0",
-    "pybind11-stubgen",
-    "cmake>=3.11",
-    "scikit-build",
-    "ninja; platform_system != 'Windows'",
-    "psutil",
-    "cffi>=1.16.0",
-    "setuptools_scm>=6.0",
+    "scikit-build-core>=0.10",
+    "pybind11<3.0.0",      # pybind11 bindings (headers + CMake config)
+    "pybind11-stubgen",    # consumed by the CMake stub-generation install hook
+    "numpy>=2.0.0",        # NumPy headers for the extension
+    "setuptools_scm>=6.0", # version from git tags (metadata provider below)
+    "ruamel.yaml",         # stub_replacements_*.yaml post-processing in tools/gen_stubs.py
 ]
-# This will be used when doing `pip install -e .`, for fast installation of python
-# things, without doing full c++ build
-build-backend = "setuptools.build_meta"
+build-backend = "scikit_build_core.build"
+
+[tool.scikit-build]
+# Track the scikit-build-core pin in [build-system].requires so default behaviours
+# stay stable as scikit-build-core evolves.
+minimum-version = "build-system.requires"
+# Persistent build dir keyed by wheel tag -> fast incremental rebuilds (esp. editable).
+build-dir = "build/{wheel_tag}"
+# Pure-Python sources live under python/quadrants; the final path element (quadrants)
+# is the importable package. The compiled core, runtime .bc and assets are added by
+# CMake install() rules under the same quadrants/ tree, so wheel + editable co-locate.
+wheel.packages = ["python/quadrants"]
+# redirect editable: compiled artifacts installed to site-packages, Python served live
+# from the source tree.
+editable.mode = "redirect"
+# Version comes from git via setuptools_scm; exposed to CMake as SKBUILD_PROJECT_VERSION.
+metadata.version.provider = "scikit_build_core.metadata.setuptools_scm"
+sdist.include = ["python/quadrants/_version.py"]
+# Drop dependency/build dev artifacts the classic manifest filter also excluded:
+# SPIRV-Tools dev headers + CMake configs install to the prefix root (include/, lib/),
+# the assets submodule's .git pointer, and the SPIRV-Tools shared lib (blacklisted).
+wheel.exclude = [
+    "include/**",
+    "lib/**",
+    "share/**",
+    "bin/**",
+    "quadrants/assets/.git",
+    "quadrants/assets/.git/**",
+    "quadrants/**/*.md",  # in-package dev docs (e.g. lang/README.md); not runtime data
+    "**/libSPIRV-Tools-shared*",
+]
 
 [tool.coverage.paths]
 source = [
