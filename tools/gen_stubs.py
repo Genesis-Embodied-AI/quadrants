@@ -44,8 +44,12 @@ def postprocess_stubs(stub_path: pathlib.Path, repl_funcs_path: pathlib.Path, re
     stub_path.write_text("\n".join(new_lines))
 
 
-def generate(package_dir: pathlib.Path, output_dir: pathlib.Path, repo_root: pathlib.Path,
-             stub_build_dir: pathlib.Path | None = None) -> None:
+def generate(
+    package_dir: pathlib.Path,
+    output_dir: pathlib.Path,
+    repo_root: pathlib.Path,
+    stub_build_dir: pathlib.Path | None = None,
+) -> None:
     package_dir = pathlib.Path(package_dir).resolve()
     output_dir = pathlib.Path(output_dir).resolve()
     repo_root = pathlib.Path(repo_root).resolve()
@@ -89,16 +93,19 @@ def generate(package_dir: pathlib.Path, output_dir: pathlib.Path, repo_root: pat
 def main() -> None:
     default_repo_root = pathlib.Path(__file__).resolve().parent.parent
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--package-dir", required=True,
-                   help="dir to put on PYTHONPATH so the compiled extension is importable")
-    p.add_argument("--output-dir", required=True,
-                   help="dir to write quadrants_python.pyi and py.typed into")
-    p.add_argument("--repo-root", default=str(default_repo_root),
-                   help="repo root holding stub_replacements_*.yaml")
+    p.add_argument(
+        "--package-dir", required=True, help="dir to put on PYTHONPATH so the compiled extension is importable"
+    )
+    p.add_argument("--output-dir", required=True, help="dir to write quadrants_python.pyi and py.typed into")
+    p.add_argument("--repo-root", default=str(default_repo_root), help="repo root holding stub_replacements_*.yaml")
     p.add_argument("--stub-build-dir", default=None, help="scratch dir for pybind11-stubgen output")
     a = p.parse_args()
-    generate(pathlib.Path(a.package_dir), pathlib.Path(a.output_dir), pathlib.Path(a.repo_root),
-             pathlib.Path(a.stub_build_dir) if a.stub_build_dir else None)
+    generate(
+        pathlib.Path(a.package_dir),
+        pathlib.Path(a.output_dir),
+        pathlib.Path(a.repo_root),
+        pathlib.Path(a.stub_build_dir) if a.stub_build_dir else None,
+    )
 
 
 if __name__ == "__main__":
