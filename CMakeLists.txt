@@ -26,12 +26,30 @@ string(STRIP ${QD_COMMIT_HASH} QD_COMMIT_HASH)
 string(STRIP ${QD_COMMIT_SHORT_HASH} QD_COMMIT_SHORT_HASH)
 
 # When built through scikit-build-core, the version is provided as SKBUILD_PROJECT_VERSION
-# (sourced from setuptools_scm). Split it into the QD_VERSION_* components consumed by
-# version.h.in and the C++ sources. The classic setup.py build passes these as -D defines.
+# (sourced from setuptools_scm). Extract the leading numeric MAJOR.MINOR.PATCH core into the
+# integer QD_VERSION_* macros consumed by version.h.in / the C++ sources, defaulting any
+# missing component to 0. setuptools_scm versions are not guaranteed to be an exact X.Y.Z:
+# they may have only two components (e.g. a tag-less "0.1" fallback) or carry .devN / +local
+# / rcN suffixes -- none of which are valid integer macro values -- so parse defensively
+# rather than assuming three dotted groups. The classic setup.py build passed these as -D.
+set(QD_VERSION_MAJOR 0)
+set(QD_VERSION_MINOR 0)
+set(QD_VERSION_PATCH 0)
 if (DEFINED SKBUILD_PROJECT_VERSION)
-    string(REGEX REPLACE "^([0-9]+)\\.([0-9]+)\\.([0-9]+).*$" "\\1" QD_VERSION_MAJOR "${SKBUILD_PROJECT_VERSION}")
-    string(REGEX REPLACE "^([0-9]+)\\.([0-9]+)\\.([0-9]+).*$" "\\2" QD_VERSION_MINOR "${SKBUILD_PROJECT_VERSION}")
-    string(REGEX REPLACE "^([0-9]+)\\.([0-9]+)\\.([0-9]+).*$" "\\3" QD_VERSION_PATCH "${SKBUILD_PROJECT_VERSION}")
+    string(REGEX MATCH "^[0-9]+(\\.[0-9]+)*" _QD_VERSION_NUM "${SKBUILD_PROJECT_VERSION}")
+    if (_QD_VERSION_NUM)
+        string(REPLACE "." ";" _QD_VERSION_LIST "${_QD_VERSION_NUM}")
+        list(LENGTH _QD_VERSION_LIST _QD_VERSION_LEN)
+        if (_QD_VERSION_LEN GREATER 0)
+            list(GET _QD_VERSION_LIST 0 QD_VERSION_MAJOR)
+        endif()
+        if (_QD_VERSION_LEN GREATER 1)
+            list(GET _QD_VERSION_LIST 1 QD_VERSION_MINOR)
+        endif()
+        if (_QD_VERSION_LEN GREATER 2)
+            list(GET _QD_VERSION_LIST 2 QD_VERSION_PATCH)
+        endif()
+    endif()
 endif()
 
 # Root of the Python package within the install tree. Under scikit-build-core,
