@@ -81,13 +81,11 @@ Module Contents
                  launches, reducing per-kernel launch overhead. Non-CUDA backends
                  are not supported currently.
    :param checkpoints: If True, opt into the (experimental) ``qd.checkpoint``
-                       resume model. Every top-level for-loop in the kernel body that
-                       isn't already inside a ``with qd.checkpoint(...)`` block is
-                       implicitly wrapped in a no-yield checkpoint, so that on
-                       ``kernel.resume(from_checkpoint=cp_id)`` the framework can skip
-                       every checkpoint declared before ``cp_id``. Requires ``graph=True``.
-                       ``qd.checkpoint(...)`` in the body is rejected unless this flag is
-                       set.
+                       pause / resume model. ``with qd.checkpoint(cp_id, yield_on=flag):``
+                       blocks in the kernel body become pause points the host can resume
+                       from via ``kernel.resume(from_checkpoint=cp_id)``. Requires
+                       ``graph=True``. ``qd.checkpoint(...)`` in the body is rejected
+                       unless this flag is set.
 
    Example::
 

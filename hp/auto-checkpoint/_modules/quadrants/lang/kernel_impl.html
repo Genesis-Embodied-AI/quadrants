@@ -566,13 +566,11 @@
 <span class="sd">            launches, reducing per-kernel launch overhead. Non-CUDA backends</span>
 <span class="sd">            are not supported currently.</span>
 <span class="sd">        checkpoints: If True, opt into the (experimental) ``qd.checkpoint``</span>
-<span class="sd">            resume model. Every top-level for-loop in the kernel body that</span>
-<span class="sd">            isn&#39;t already inside a ``with qd.checkpoint(...)`` block is</span>
-<span class="sd">            implicitly wrapped in a no-yield checkpoint, so that on</span>
-<span class="sd">            ``kernel.resume(from_checkpoint=cp_id)`` the framework can skip</span>
-<span class="sd">            every checkpoint declared before ``cp_id``. Requires ``graph=True``.</span>
-<span class="sd">            ``qd.checkpoint(...)`` in the body is rejected unless this flag is</span>
-<span class="sd">            set.</span>
+<span class="sd">            pause / resume model. ``with qd.checkpoint(cp_id, yield_on=flag):``</span>
+<span class="sd">            blocks in the kernel body become pause points the host can resume</span>
+<span class="sd">            from via ``kernel.resume(from_checkpoint=cp_id)``. Requires</span>
+<span class="sd">            ``graph=True``. ``qd.checkpoint(...)`` in the body is rejected</span>
+<span class="sd">            unless this flag is set.</span>
 
 <span class="sd">    Example::</span>
 

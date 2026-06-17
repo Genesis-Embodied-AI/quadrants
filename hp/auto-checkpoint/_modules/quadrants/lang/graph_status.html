@@ -353,33 +353,30 @@
 <span class="sd">        the conditions under which it is returned may change in any future release without a deprecation cycle.</span>
 
 <span class="sd">    Returned from ``kernel(...)`` and ``kernel.resume(..., from_checkpoint=label)`` whenever the kernel was decorated</span>
-<span class="sd">    with ``@qd.kernel(graph=True, checkpoints=True)`` and contains at least one checkpoint that has declared a</span>
-<span class="sd">    ``yield_on=`` parameter. Read ``status.yielded`` to decide whether to keep running the host loop, and</span>
-<span class="sd">    ``status.checkpoint`` to find out which checkpoint asked the host to handle something.</span>
+<span class="sd">    with ``@qd.kernel(graph=True, checkpoints=True)``. Read ``status.yielded`` to decide whether to keep running the</span>
+<span class="sd">    host loop, and ``status.checkpoint`` to find out which checkpoint asked the host to handle something.</span>
 
-<span class="sd">    Canonical usage (mirrors the qipc re-entrant pattern; see ``graph.md``)::</span>
+<span class="sd">    Canonical usage (see ``graph.md``)::</span>
 
 <span class="sd">        from enum import IntEnum</span>
 
 <span class="sd">        class Stage(IntEnum):</span>
-<span class="sd">            LOAD = 0</span>
-<span class="sd">            SIM = 1</span>
-<span class="sd">            REDUCE = 2</span>
+<span class="sd">            SIM = 0</span>
 
+<span class="sd">        overflow_flag[()] = 0  # initialise before the first launch</span>
 <span class="sd">        status = step(arr, overflow_flag, newton_cond)</span>
 <span class="sd">        while status.yielded:</span>
 <span class="sd">            handle_overflow_for(status.checkpoint, ...)</span>
+<span class="sd">            overflow_flag[()] = 0  # the framework never clears your yield_on flag</span>
 <span class="sd">            status = step.resume(arr, overflow_flag, newton_cond,</span>
 <span class="sd">                                 from_checkpoint=status.checkpoint)</span>
 
 <span class="sd">    Attributes:</span>
-<span class="sd">        yielded: ``True`` iff one of the kernel&#39;s ``yield_on=`` checkpoints fired its flag on the most recent launch.</span>
-<span class="sd">            ``False`` means the kernel completed normally and the host loop should exit.</span>
-<span class="sd">        checkpoint: The user-supplied ``cp_id`` label (an ``int`` or the original ``IntEnum`` instance you passed to</span>
-<span class="sd">            ``qd.checkpoint(cp_id, ...)``) of the first (in declaration order) checkpoint whose ``yield_on=`` flag was</span>
-<span class="sd">            non-zero. ``None`` when ``yielded`` is ``False``. Implicit (auto-wrapped) checkpoints never appear here.</span>
-<span class="sd">            Pass the label to ``kernel.resume(..., from_checkpoint=label)`` to skip every checkpoint declared before</span>
-<span class="sd">            that label in source order on the next launch.</span>
+<span class="sd">        yielded: ``True`` iff one of the kernel&#39;s checkpoints paused on the most recent launch (i.e. its ``yield_on=``</span>
+<span class="sd">            flag was non-zero). ``False`` means the kernel completed normally and the host loop should exit.</span>
+<span class="sd">        checkpoint: The ``cp_id`` label of the checkpoint that paused (an ``int`` or the original ``IntEnum`` instance</span>
+<span class="sd">            you passed to ``qd.checkpoint(cp_id, ...)``), or ``None`` when ``yielded`` is ``False``. Pass it to</span>
+<span class="sd">            ``kernel.resume(..., from_checkpoint=...)`` to continue from that point on the next launch.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
     <span class="vm">__slots__</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;yielded&quot;</span><span class="p">,</span> <span class="s2">&quot;checkpoint&quot;</span><span class="p">)</span>

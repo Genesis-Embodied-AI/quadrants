@@ -464,13 +464,11 @@ into a CUDA graph on first launch and replayed on subsequent
 launches, reducing per-kernel launch overhead. Non-CUDA backends
 are not supported currently.</p></li>
 <li><p><strong>checkpoints</strong> – If True, opt into the (experimental) <code class="docutils literal notranslate"><span class="pre">qd.checkpoint</span></code>
-resume model. Every top-level for-loop in the kernel body that
-isn’t already inside a <code class="docutils literal notranslate"><span class="pre">with</span> <span class="pre">qd.checkpoint(...)</span></code> block is
-implicitly wrapped in a no-yield checkpoint, so that on
-<code class="docutils literal notranslate"><span class="pre">kernel.resume(from_checkpoint=cp_id)</span></code> the framework can skip
-every checkpoint declared before <code class="docutils literal notranslate"><span class="pre">cp_id</span></code>. Requires <code class="docutils literal notranslate"><span class="pre">graph=True</span></code>.
-<code class="docutils literal notranslate"><span class="pre">qd.checkpoint(...)</span></code> in the body is rejected unless this flag is
-set.</p></li>
+pause / resume model. <code class="docutils literal notranslate"><span class="pre">with</span> <span class="pre">qd.checkpoint(cp_id,</span> <span class="pre">yield_on=flag):</span></code>
+blocks in the kernel body become pause points the host can resume
+from via <code class="docutils literal notranslate"><span class="pre">kernel.resume(from_checkpoint=cp_id)</span></code>. Requires
+<code class="docutils literal notranslate"><span class="pre">graph=True</span></code>. <code class="docutils literal notranslate"><span class="pre">qd.checkpoint(...)</span></code> in the body is rejected
+unless this flag is set.</p></li>
 </ul>
 </dd>
 </dl>

@@ -437,13 +437,14 @@
     <span class="k">def</span><span class="w"> </span><span class="nf">_resolve_cp_id</span><span class="p">(</span><span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">expr</span><span class="p">,</span> <span class="n">global_vars</span><span class="p">:</span> <span class="nb">dict</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Resolve the first positional arg of `qd.checkpoint(cp_id, ...)` to a Python int (or IntEnum instance).</span>
 
-<span class="sd">        Accepts (a) `ast.Constant` int literals (``qd.checkpoint(0, ...)``); (b) `ast.Attribute` references to `IntEnum`</span>
-<span class="sd">        values resolved against the kernel&#39;s `global_vars` (``qd.checkpoint(Stage.SIM, ...)`` where ``Stage`` is an</span>
-<span class="sd">        `IntEnum` defined at module scope); and (c) `ast.Name` references to plain int / IntEnum module-level constants</span>
-<span class="sd">        (``qd.checkpoint(CP_LOAD, ...)``). Returns the resolved value AS-IS (without re-wrapping through `int(...)`) so</span>
-<span class="sd">        that an IntEnum member identity is preserved end-to-end -- the user writes `qd.checkpoint(Stage.SIM, ...)`, then</span>
-<span class="sd">        reads `status.checkpoint` and gets back `Stage.SIM`, not the raw int `1`. Rejects everything else with a clear</span>
-<span class="sd">        error so the user gets a compile-time diagnostic rather than a confusing template-mapper failure later.</span>
+<span class="sd">        Accepts (a) `ast.Constant` int literals (``qd.checkpoint(0, ...)``), (b) `ast.Attribute` references to</span>
+<span class="sd">        `IntEnum` values resolved against the kernel&#39;s `global_vars` (``qd.checkpoint(Stage.SIM, ...)`` where ``Stage``</span>
+<span class="sd">        is an `IntEnum` defined at module scope), and (c) `ast.Name` references to module-level int constants</span>
+<span class="sd">        (``qd.checkpoint(CP_LOAD, ...)`` where ``CP_LOAD`` is an int defined at module scope). For (b) and (c) we</span>
+<span class="sd">        return the resolved value AS-IS (without re-wrapping through `int(...)`) so an IntEnum member identity is</span>
+<span class="sd">        preserved end-to-end -- the user writes `qd.checkpoint(Stage.SIM, ...)`, then reads `status.checkpoint` and</span>
+<span class="sd">        gets back `Stage.SIM`, not the raw int. Rejects everything else with a clear error so the user gets a</span>
+<span class="sd">        compile-time diagnostic rather than a confusing template-mapper failure later.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="c1"># Plain `qd.checkpoint(0, ...)` literal.</span>
         <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Constant</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">value</span><span class="p">,</span> <span class="nb">int</span><span class="p">)</span> <span class="ow">and</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">value</span><span class="p">,</span> <span class="nb">bool</span><span class="p">):</span>
@@ -457,17 +458,16 @@
                     <span class="n">val</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">container</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">attr</span><span class="p">)</span>
                     <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">val</span><span class="p">,</span> <span class="nb">int</span><span class="p">)</span> <span class="ow">and</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">val</span><span class="p">,</span> <span class="nb">bool</span><span class="p">):</span>
                         <span class="k">return</span> <span class="n">val</span>
-        <span class="c1"># `qd.checkpoint(CP_LOAD, ...)` -- look up a bare name in module globals.</span>
+        <span class="c1"># `qd.checkpoint(CP_LOAD, ...)` -- bare name referencing a module-level int constant.</span>
         <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Name</span><span class="p">)</span> <span class="ow">and</span> <span class="n">node</span><span class="o">.</span><span class="n">id</span> <span class="ow">in</span> <span class="n">global_vars</span><span class="p">:</span>
             <span class="n">val</span> <span class="o">=</span> <span class="n">global_vars</span><span class="p">[</span><span class="n">node</span><span class="o">.</span><span class="n">id</span><span class="p">]</span>
             <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">val</span><span class="p">,</span> <span class="nb">int</span><span class="p">)</span> <span class="ow">and</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">val</span><span class="p">,</span> <span class="nb">bool</span><span class="p">):</span>
                 <span class="k">return</span> <span class="n">val</span>
         <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span>
-            <span class="s2">&quot;qd.checkpoint() first argument must be an int literal, an IntEnum value (e.g. `Stage.SIM`), or a &quot;</span>
-            <span class="s2">&quot;module-level int constant. Got an unresolvable expression at line &quot;</span>
-            <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="nb">getattr</span><span class="p">(</span><span class="n">node</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;lineno&#39;</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;?&#39;</span><span class="p">)</span><span class="si">}</span><span class="s2">; the cp_id must be statically determinable at AST-walk time so the &quot;</span>
-            <span class="s2">&quot;framework can build the label -&gt; internal cp_id map and the host-side resume API can refer to checkpoints &quot;</span>
-            <span class="s2">&quot;by name.&quot;</span>
+            <span class="s2">&quot;qd.checkpoint() first argument must be an int literal or an IntEnum value (e.g. `Stage.SIM`). Got an &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;unresolvable expression at line </span><span class="si">{</span><span class="nb">getattr</span><span class="p">(</span><span class="n">node</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;lineno&#39;</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;?&#39;</span><span class="p">)</span><span class="si">}</span><span class="s2">; the cp_id must be statically &quot;</span>
+            <span class="s2">&quot;determinable at AST-walk time so the framework can build the label -&gt; internal cp_id map and the &quot;</span>
+            <span class="s2">&quot;host-side resume API can refer to checkpoints by name.&quot;</span>
         <span class="p">)</span>
 
     <span class="nd">@staticmethod</span>
@@ -488,12 +488,7 @@
             <span class="k">return</span> <span class="n">CheckpointCallInfo</span><span class="p">(</span><span class="n">cp_id</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">yield_on</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">is_implicit</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
         <span class="c1"># User-written `qd.checkpoint(cp_id, yield_on)` -- both args are required.</span>
         <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">args</span><span class="p">)</span> <span class="o">+</span> <span class="nb">len</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">keywords</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span>
-                <span class="s2">&quot;qd.checkpoint() takes two arguments: `qd.checkpoint(cp_id, yield_on=flag)`. The bare &quot;</span>
-                <span class="s2">&quot;`qd.checkpoint()` form has been removed -- in a `@qd.kernel(graph=True, checkpoints=True)` kernel &quot;</span>
-                <span class="s2">&quot;every top-level for-loop not already inside a `with qd.checkpoint(...)` is auto-wrapped in an &quot;</span>
-                <span class="s2">&quot;implicit no-yield checkpoint, so an explicit bare `qd.checkpoint()` is never necessary.&quot;</span>
-            <span class="p">)</span>
+            <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">&quot;qd.checkpoint() takes two arguments: `qd.checkpoint(cp_id, yield_on=flag)`.&quot;</span><span class="p">)</span>
         <span class="c1"># Collect cp_id (positional 0 or kw `cp_id=`) and yield_on (positional 1 or kw `yield_on=`).</span>
         <span class="n">cp_id_arg</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">expr</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
         <span class="n">yield_on_arg</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">expr</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
@@ -527,10 +522,8 @@
             <span class="p">)</span>
         <span class="k">if</span> <span class="n">yield_on_arg</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
             <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span>
-                <span class="s2">&quot;qd.checkpoint() is missing required argument `yield_on`. Every user-written `qd.checkpoint()` is a &quot;</span>
-                <span class="s2">&quot;yielder; if you just want a resume-target with no yield logic, omit the `with` -- the auto-wrap pass &quot;</span>
-                <span class="s2">&quot;in `@qd.kernel(graph=True, checkpoints=True)` already turns every unwrapped top-level for-loop into &quot;</span>
-                <span class="s2">&quot;an implicit no-yield checkpoint.&quot;</span>
+                <span class="s2">&quot;qd.checkpoint() is missing required argument `yield_on` (e.g. &quot;</span>
+                <span class="s2">&quot;`qd.checkpoint(0, yield_on=overflow_flag)`)&quot;</span>
             <span class="p">)</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">yield_on_arg</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Name</span><span class="p">):</span>
             <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span>
@@ -570,9 +563,7 @@
             <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span>
                 <span class="sa">f</span><span class="s2">&quot;qd.checkpoint() found in kernel </span><span class="si">{</span><span class="n">kernel</span><span class="o">.</span><span class="n">func</span><span class="o">.</span><span class="vm">__name__</span><span class="si">!r}</span><span class="s2">, but this kernel was not decorated with &quot;</span>
                 <span class="s2">&quot;`checkpoints=True`. Add `checkpoints=True` to the decorator -- e.g. &quot;</span>
-                <span class="s2">&quot;`@qd.kernel(graph=True, checkpoints=True)` -- to opt into the resume model. Without this flag the &quot;</span>
-                <span class="s2">&quot;framework does not auto-wrap top-level for-loops, allocate the resume_point / yield_signal slots, or &quot;</span>
-                <span class="s2">&quot;expose `kernel.resume(from_checkpoint=...)`.&quot;</span>
+                <span class="s2">&quot;`@qd.kernel(graph=True, checkpoints=True)` -- to opt into the pause / resume model.&quot;</span>
             <span class="p">)</span>
         <span class="k">if</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="s2">&quot;_in_checkpoint&quot;</span><span class="p">,</span> <span class="kc">False</span><span class="p">):</span>
             <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span>
