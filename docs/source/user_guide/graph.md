@@ -8,7 +8,7 @@ Graphs reduce kernel launch overhead by capturing a sequence of GPU operations i
 | --- | --- | --- | --- | --- | --- | --- |
 | `graph=True` | hardware accelerated | hardware accelerated | hardware accelerated | runs (no acceleration) | runs (no acceleration) | runs (no acceleration) |
 | `graph_do_while` | hardware accelerated | host fallback | host fallback | host fallback | host fallback | host fallback |
-| `qd.checkpoint` (skip + `yield_on=`)   | GPU-side | GPU-side | GPU-side | GPU-side | GPU-side | host-side |
+| `qd.checkpoint` | GPU-side | GPU-side | GPU-side | GPU-side | GPU-side | host-side |
 
 ## Basic usage
 
