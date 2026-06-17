@@ -16,7 +16,7 @@ set(CMAKE_VISIBILITY_INLINES_HIDDEN ON)
 # Suppress warnings from submodules introduced by the above symbol visibility change
 set(CMAKE_POLICY_DEFAULT_CMP0063 NEW)
 set(CMAKE_POLICY_DEFAULT_CMP0077 NEW)
-set(INSTALL_LIB_DIR ${CMAKE_INSTALL_PREFIX}/python/quadrants/_lib)
+set(INSTALL_LIB_DIR ${CMAKE_INSTALL_PREFIX}/${QD_PY_INSTALL_ROOT}/_lib)
 
 if (QD_WITH_AMDGPU AND QD_WITH_CUDA)
     message(WARNING "Compiling CUDA and AMDGPU backends simultaneously")
@@ -396,3 +396,8 @@ if (QD_WITH_AMDGPU)
     install(FILES ${AMDGPU_BC_FILES_ROCM70}
             DESTINATION ${INSTALL_LIB_DIR}/runtime_rocm70)
 endif()
+
+# Ship the assets submodule inside the package (replaces setup.py's copy_assets()).
+# The trailing slash installs the contents of external/assets into <pkg>/assets.
+install(DIRECTORY ${CMAKE_SOURCE_DIR}/external/assets/
+        DESTINATION ${CMAKE_INSTALL_PREFIX}/${QD_PY_INSTALL_ROOT}/assets)

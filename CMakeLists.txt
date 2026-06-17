@@ -25,6 +25,26 @@ execute_process(
 string(STRIP ${QD_COMMIT_HASH} QD_COMMIT_HASH)
 string(STRIP ${QD_COMMIT_SHORT_HASH} QD_COMMIT_SHORT_HASH)
 
+# When built through scikit-build-core, the version is provided as SKBUILD_PROJECT_VERSION
+# (sourced from setuptools_scm). Split it into the QD_VERSION_* components consumed by
+# version.h.in and the C++ sources. The classic setup.py build passes these as -D defines.
+if (DEFINED SKBUILD_PROJECT_VERSION)
+    string(REGEX REPLACE "^([0-9]+)\\.([0-9]+)\\.([0-9]+).*$" "\\1" QD_VERSION_MAJOR "${SKBUILD_PROJECT_VERSION}")
+    string(REGEX REPLACE "^([0-9]+)\\.([0-9]+)\\.([0-9]+).*$" "\\2" QD_VERSION_MINOR "${SKBUILD_PROJECT_VERSION}")
+    string(REGEX REPLACE "^([0-9]+)\\.([0-9]+)\\.([0-9]+).*$" "\\3" QD_VERSION_PATCH "${SKBUILD_PROJECT_VERSION}")
+endif()
+
+# Root of the Python package within the install tree. Under scikit-build-core,
+# CMAKE_INSTALL_PREFIX is the wheel platlib and the package is `quadrants`. The classic
+# setup.py/skbuild build installs under `python/quadrants` and packages from there.
+# NOTE: scikit-build *classic* also defines SKBUILD, so gate on a scikit-build-core-only
+# variable (SKBUILD_PROJECT_NAME) to distinguish the two backends.
+if (DEFINED SKBUILD_PROJECT_NAME)
+    set(QD_PY_INSTALL_ROOT "quadrants")
+else()
+    set(QD_PY_INSTALL_ROOT "python/quadrants")
+endif()
+
 message("Quadrants Version ${QD_VERSION_MAJOR}.${QD_VERSION_MINOR}.${QD_VERSION_PATCH}")
 message("       Commit ${QD_COMMIT_HASH}")
 
