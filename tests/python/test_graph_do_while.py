@@ -75,6 +75,38 @@ def test_graph_do_while_counter():
     np.testing.assert_array_equal(x.to_numpy(), np.full(N, 10, dtype=np.int32))
 
 
+@test_utils.test(debug=True, check_out_of_bound=True, gdb_trigger=False)
+def test_graph_do_while_with_bounds_checks_iterates_correctly():
+    """Bounds-check assertions inside a graph_do_while body must not split the offloader's per-level task run.
+
+    CheckOutOfBound (and similar post-lowering passes) inject side-effecting stmts (AssertStmt + shape-tmp
+    GlobalStoreStmt) before each indexed access; without region_tag propagation those stmts land at the kernel
+    top-level region while the actual store stays at the loop's region, interleaving tasks and stalling the host
+    driver on the first level-0 task so the counter-decrement task never runs. This in-bounds variant catches that
+    regression via "counter never reaches 0" instead of "OOB never breaks".
+    """
+    N = 8
+    ITERS = 5
+
+    @qd.kernel(graph=True)
+    def graph_loop_checked(x: qd.types.ndarray(qd.i32, ndim=1), counter: qd.types.ndarray(qd.i32, ndim=0)):
+        while qd.graph_do_while(counter):
+            for i in qd.static(range(N)):
+                x[i] = x[i] + 1
+            for i in range(1):
+                counter[()] = counter[()] - 1
+
+    x = qd.ndarray(qd.i32, shape=(N,))
+    counter = qd.ndarray(qd.i32, shape=())
+    x.from_numpy(np.zeros(N, dtype=np.int32))
+    counter.from_numpy(np.array(ITERS, dtype=np.int32))
+
+    graph_loop_checked(x, counter)
+
+    assert counter.to_numpy() == 0
+    np.testing.assert_array_equal(x.to_numpy(), np.full(N, ITERS, dtype=np.int32))
+
+
 @test_utils.test()
 def test_graph_do_while_boolean_done():
     """Test graph_do_while with a boolean 'continue' flag (non-zero = keep going)."""
