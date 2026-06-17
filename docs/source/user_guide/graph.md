@@ -206,7 +206,7 @@ The framework never writes into your `yield_on` buffer — you own it end-to-end
 
 Kernels annotated with `checkpoints=True` return a `qd.GraphStatus` from every launch (and from `kernel.resume(...)`). The status carries two fields:
 
-- `status.yielded` — `True` iff some checkpoint's `yield_on=` flag was non-zero during this launch.
+- `status.yielded` — `True` iff a checkpoint's `yield_on=` flag was non-zero during this launch.
 - `status.checkpoint` — the `cp_id` label of the yielding checkpoint (or `None` when `yielded` is `False`).
 
 Resume by calling `kernel.resume(..., from_checkpoint=label)`. Everything before `label` in source order is skipped on the resume launch; everything from `label` onward runs normally. The canonical host loop:
