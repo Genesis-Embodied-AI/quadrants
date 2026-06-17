@@ -481,8 +481,7 @@ def test_data_oriented_ndarray_fastcache_eligible():
 
 # ---------------------------------------------------------------------------
 # 10. Pure validation: a @qd.pure @qd.kernel taking a data_oriented arg with an ndarray member should compile and
-#     run, mirroring the existing ``test_pure_validation_data_oriented_as_param`` test which only covers
-#     ``qd.field``.
+#     run, mirroring the existing ``test_pure_validation_data_oriented_as_param`` test which only covers ``qd.field``.
 # ---------------------------------------------------------------------------
 
 
@@ -535,8 +534,8 @@ def test_dataclass_ndarray_sanity():
 
 
 # ---------------------------------------------------------------------------
-# 12. data_oriented holding a (frozen) dataclass that holds an ndarray. Exercises the ``else`` branch of
-#     ``_walk_obj`` recursing through a dataclass child — added by the Bug 1 fix.
+# 12. data_oriented holding a (frozen) dataclass that holds an ndarray. Exercises the ``else`` branch of ``_walk_obj``
+#     recursing through a dataclass child — added by the Bug 1 fix.
 # ---------------------------------------------------------------------------
 
 
@@ -864,9 +863,9 @@ def test_data_oriented_nested_ndarray_reassign_different_dtype():
 
 
 # ---------------------------------------------------------------------------
-# 20. No spec-key regression for data_oriented containers WITHOUT ndarrays. The Gap A fix prepends
-#     ndarray descriptors only when ndarrays are present; otherwise the original ``weakref.ref(arg)``
-#     spec key is preserved (one spec per instance). This test pins the no-ndarray case.
+# 20. No spec-key regression for data_oriented containers WITHOUT ndarrays. The Gap A fix prepends ndarray descriptors
+#     only when ndarrays are present; otherwise the original ``weakref.ref(arg)`` spec key is preserved (one spec per
+#     instance). This test pins the no-ndarray case.
 # ---------------------------------------------------------------------------
 
 
