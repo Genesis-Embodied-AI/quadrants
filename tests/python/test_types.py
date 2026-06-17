@@ -2,6 +2,7 @@ import pytest
 
 import quadrants as qd
 from quadrants.lang import impl
+from quadrants.types import primitive_types
 
 from tests import test_utils
 
@@ -163,3 +164,53 @@ def test_uint_max(dt, val):
     fs = f.to_numpy()
     for f in fs:
         assert f == val
+
+
+@test_utils.test(default_fp=qd.f32)
+def test_default_fp_canonical_identity():
+    """Regression: get_runtime().default_fp must stay identity-equal to the registered primitive singleton.
+
+    qd.init(default_fp=qd.f32) deep-copies the dtype (misc.py), so without canonicalization in set_default_fp the
+    stored default_fp is == qd.f32 (same hash) but has an id outside primitive_types.type_ids.  That silently breaks
+    id-based type recognition for any code that resolves a dtype via get_runtime().default_fp and then uses it as a
+    type -- e.g. an in-kernel type construction or a kernel/func annotation (this is what broke the simt tile
+    proxies).
+    """
+    dfp = impl.get_runtime().default_fp
+    assert dfp == qd.f32
+    assert id(dfp) in primitive_types.type_ids
+
+    @qd.kernel
+    def use_as_call() -> qd.f32:
+        return dfp(2.5)  # type construction; falls through to a raw call (and raises) if id not registered
+
+    assert use_as_call() == pytest.approx(2.5)
+
+    @qd.kernel
+    def use_as_annotation(x: dfp) -> dfp:  # annotation must be recognized as a primitive type
+        return x * 2.0
+
+    assert use_as_annotation(3.0) == pytest.approx(6.0)
+
+
+@test_utils.test(default_ip=qd.i32)
+def test_default_ip_canonical_identity():
+    """Regression: get_runtime().default_ip must stay identity-equal to the registered primitive singleton.
+
+    Same root cause as test_default_fp_canonical_identity, for the default integer type.
+    """
+    dip = impl.get_runtime().default_ip
+    assert dip == qd.i32
+    assert id(dip) in primitive_types.type_ids
+
+    @qd.kernel
+    def use_as_call() -> qd.i32:
+        return dip(7)
+
+    assert use_as_call() == 7
+
+    @qd.kernel
+    def use_as_annotation(x: dip) -> dip:
+        return x * 2
+
+    assert use_as_annotation(5) == 10

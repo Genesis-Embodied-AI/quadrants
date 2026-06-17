@@ -84,6 +84,7 @@ class QuadrantsCallable:
         self.wrapper: Callable = wrapper
         self._is_real_function: bool = False
         self._is_quadrants_function: bool = False
+        self._qd_requires_top_level: bool = False
         self._is_wrapped_kernel: bool = False
         self._is_classkernel: bool = False
         self._primal: "Kernel | None" = None

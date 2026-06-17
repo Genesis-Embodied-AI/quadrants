@@ -478,12 +478,17 @@ class PyQuadrants:
 
     def set_default_fp(self, fp):
         assert fp in [f16, f32, f64]
-        self.default_fp = fp
+        # qd.init() deep-copies the default_fp arg (misc.py), yielding a DataType that is == but not identical to
+        # the registered primitive singleton -- its id is then absent from primitive_types.type_ids, which silently
+        # breaks id-based type recognition for anything that resolves a dtype via get_runtime().default_fp (e.g. the
+        # simt tile proxies). Re-bind to the canonical singleton so identity is preserved.
+        self.default_fp = {f16: f16, f32: f32, f64: f64}[fp]
         default_cfg().default_fp = self.default_fp
 
     def set_default_ip(self, ip):
         assert ip in [i32, i64]
-        self.default_ip = ip
+        # See set_default_fp: canonicalize to the registered singleton so id-based type checks keep working.
+        self.default_ip = {i32: i32, i64: i64}[ip]
         self.default_up = u32 if ip == i32 else u64
         default_cfg().default_ip = self.default_ip
         default_cfg().default_up = self.default_up
