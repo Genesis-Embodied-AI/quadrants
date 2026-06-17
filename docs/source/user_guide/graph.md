@@ -218,8 +218,6 @@ while status.yielded:
                          from_checkpoint=status.checkpoint)
 ```
 
-If you want to *skip past* the yielding checkpoint on the resume launch (rather than re-running it), add an explicit `qd.checkpoint(NextStage, ...)` for the stage you want to resume into, and pass `from_checkpoint=NextStage`.
-
 ### Restrictions
 
 - Must be used inside `@qd.kernel(graph=True, checkpoints=True)`. Without the flag, `qd.checkpoint(...)` raises `QuadrantsSyntaxError` at compile time with a fix-it pointing at `checkpoints=True`.
