@@ -18,9 +18,8 @@ class GraphStatus:
         the conditions under which it is returned may change in any future release without a deprecation cycle.
 
     Returned from ``kernel(...)`` and ``kernel.resume(..., from_checkpoint=label)`` whenever the kernel was decorated
-    with ``@qd.kernel(graph=True, checkpoints=True)`` and contains at least one ``qd.checkpoint(...)`` block. Read
-    ``status.yielded`` to decide whether to keep running the host loop, and ``status.checkpoint`` to find out which
-    checkpoint asked the host to handle something.
+    with ``@qd.kernel(graph=True, checkpoints=True)``. Read ``status.yielded`` to decide whether to keep running the
+    host loop, and ``status.checkpoint`` to find out which checkpoint asked the host to handle something.
 
     Canonical usage (see ``graph.md``)::
 
