@@ -122,13 +122,28 @@ class Offloader {
       }
     };
 
-    // Buffer a serial (non-for) statement. A side-effecting statement establishes -- and must match -- the
-    // bucket's region: if it belongs to a different region than the side effects already buffered, flush
-    // first so a serial task never mixes two regions' observable writes. Pure statements ride along in
-    // whatever bucket is current and never force a flush or change its region (their own region tag is
-    // untrustworthy after hoisting; see the note above).
+    // Buffer a serial (non-for) statement. Only side-effecting statements with a *trusted* (non-default)
+    // region_tag drive the bucket's region: if such a statement belongs to a different region than the
+    // side effects already buffered, flush first so a serial task never mixes two regions' observable
+    // writes.
+    //
+    // Statements without a trusted region tag never force a flush and never change the bucket's region:
+    //   - PURE stmts -- shared constants and for-loop bound/listgen computations -- still ride along
+    //     because their own tag is stale after CSE/LICM hoists them (see the note above).
+    //   - SIDE-EFFECTING stmts with a default tag are stmts created by later compiler passes that don't
+    //     go through ASTBuilder::insert or the region-propagating insert_before_me / replace_with
+    //     helpers (e.g. legacy IR-builder paths inside individual passes). Treating them as
+    //     bucket-region-setting would shatter big kernels into hundreds of one-stmt OffloadedStmts as
+    //     they interleave with properly-tagged real stmts, and on Blackwell the driver's per-module
+    //     cuModuleLoadDataEx then scales catastrophically (>20min for Genesis's rigid solver kernel).
+    //     Letting them inherit the surrounding bucket region is the safe fallback -- they were going to
+    //     run at that level under the pre-#744 offloader anyway.
     auto push_serial_statement = [&](std::unique_ptr<Stmt> &&serial_stmt) {
-      if (serial_stmt->has_global_side_effect()) {
+      // `is_set` distinguishes "stamped at a known program point" from "still at the struct default
+      // because no one touched it" -- see GraphRegionTag's comment in ir.h. A bare top-level stmt
+      // legitimately has graph_do_while_level_id=-1 (matching the struct default), so checking
+      // `region_tag != GraphRegionTag{}` would wrongly demote it to untrustworthy.
+      if (serial_stmt->has_global_side_effect() && serial_stmt->region_tag.is_set) {
         if (bucket_has_side_effect && serial_stmt->region_tag != bucket_tag) {
           assemble_serial_statements();
         }

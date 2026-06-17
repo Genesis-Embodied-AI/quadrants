@@ -409,6 +409,21 @@ class StmtFieldManager {
 struct GraphRegionTag {
   int graph_do_while_level_id{-1};
   int stream_parallel_group_id{0};
+  // `is_set` distinguishes a tag that was explicitly stamped at a known program point (frontend
+  // build via ASTBuilder::insert, lowering via FlattenContext, or the region-propagating
+  // insert_before_me / replace_with helpers) from a tag that's still at its struct default because
+  // it was never touched. A bare top-level statement has graph_do_while_level_id=-1 with is_set=true,
+  // whereas a stmt manufactured by a later compiler pass that didn't go through any of those paths
+  // also reads as graph_do_while_level_id=-1 but with is_set=false; the offloader treats only the
+  // former as a trustworthy signal of where the work belongs. Excluded from operator==/!= so the
+  // bucket-region comparison in `push_serial_statement` only cares about the actual region.
+  bool is_set{false};
+
+  GraphRegionTag() = default;
+  // Use this 2-arg ctor at every place that knows the region (it stamps is_set=true). Brace-init
+  // call sites `GraphRegionTag{level, group}` resolve to this ctor.
+  GraphRegionTag(int level, int group) : graph_do_while_level_id(level), stream_parallel_group_id(group), is_set(true) {
+  }
 
   bool operator==(const GraphRegionTag &o) const {
     return graph_do_while_level_id == o.graph_do_while_level_id &&
