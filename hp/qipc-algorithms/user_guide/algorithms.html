@@ -505,7 +505,7 @@
 <li><p><strong>live element count</strong>, <code class="docutils literal notranslate"><span class="pre">n</span></code>: , the number of elements that will actually be handled by the algorithm. This is a runtime value, provided in a scalar tensor. It can be modified without recompiling the kernel.</p></li>
 <li><p><strong>maximum capacity</strong>, <code class="docutils literal notranslate"><span class="pre">log256_max_n</span></code>: a <strong>compile-time</strong> constant. One compiled kernel can by used for any live count up to that capacity - see <a class="reference internal" href="#capacity-log256-max-n">Capacity (<code class="docutils literal notranslate"><span class="pre">log256_max_n</span></code>)</a>.</p></li>
 </ul>
-<p>Because each op runs entirely as device code it does no host-side validation (a size check would force a device-&gt;host read of the count that defeats graph capture), so you must size its <code class="docutils literal notranslate"><span class="pre">scratch</span></code> correctly up front - see <a class="reference internal" href="#scratch-space">Scratch space</a>.</p>
+<p>Because each op runs entirely as device code it does no host-side validation (a size check would force a device-to-host read of the count that defeats graph capture), so you must size its <code class="docutils literal notranslate"><span class="pre">scratch</span></code> correctly up front - see <a class="reference internal" href="#scratch-space">Scratch space</a>.</p>
 </section>
 <section id="capacity-log256-max-n">
 <h2>Capacity (<code class="docutils literal notranslate"><span class="pre">log256_max_n</span></code>)<a class="headerlink" href="#capacity-log256-max-n" title="Link to this heading">#</a></h2>

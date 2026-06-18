@@ -35,7 +35,7 @@ Two parameters control sizing:
 - **live element count**, `n`: , the number of elements that will actually be handled by the algorithm. This is a runtime value, provided in a scalar tensor. It can be modified without recompiling the kernel.
 - **maximum capacity**, `log256_max_n`: a **compile-time** constant. One compiled kernel can by used for any live count up to that capacity - see [Capacity (`log256_max_n`)](#capacity-log256_max_n).
 
-Because each op runs entirely as device code it does no host-side validation (a size check would force a device->host read of the count that defeats graph capture), so you must size its `scratch` correctly up front - see [Scratch space](#scratch-space).
+Because each op runs entirely as device code it does no host-side validation (a size check would force a device-to-host read of the count that defeats graph capture), so you must size its `scratch` correctly up front - see [Scratch space](#scratch-space).
 
 ## Capacity (`log256_max_n`)
 
