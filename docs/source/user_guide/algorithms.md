@@ -64,8 +64,8 @@ def log256_max_n(capacity: int) -> int:
     return d
 ```
 
-- **Over-specifying is safe.** A capacity larger than the live count just adds staircase levels that operate on length-1 buffers - harmless identity no-ops. The only cost is a few extra empty launches and marginally larger scratch, so when in doubt, round up.
-- **Under-specifying is a bug.** If `256 ** LOG256_MAX_N < n` the op cannot address the tail of the input, and there is no host-side guard to catch it. Always cover your worst case.
+- **Over-specifying is safe.** A capacity larger than the live count just adds staircase levels that operate on length-1 buffers - harmless identity no-ops. The cost is extra launches, linear in log256_max_n.
+- **Under-specifying is a bug.** If `256 ** LOG256_MAX_N < n` the op cannot address the tail of the input, and there is no host-side guard to catch it. Undefined behavior.
 
 Size `scratch` with the **same** `LOG256_MAX_N` you compile the op for - `reduce_scratch_slots(capacity, log256_max_n)`, `exclusive_scan_scratch_slots(capacity, log256_max_n)`, `sort_scratch_slots(capacity, log256_max_n)` - see [Scratch space](#scratch-space). (The `*_scratch_slots` helpers can also derive the minimal depth from `N` for you when you omit the argument - but that path is host-only, so when composing the op into a kernel always pass the explicit depth.)
 
