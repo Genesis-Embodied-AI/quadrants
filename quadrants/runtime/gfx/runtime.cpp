@@ -403,7 +403,7 @@ GfxRuntime::KernelHandle GfxRuntime::register_quadrants_kernel(GfxRuntime::Regis
   return res;
 }
 
-void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_ctx) {
+void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_ctx, int task_begin, int task_end) {
   auto *ti_kernel = ti_kernels_[handle.get_launch_id()].get();
 
 #if defined(__APPLE__)
@@ -537,6 +537,13 @@ void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_c
   // Record commands
   const auto &task_attribs = ti_kernel->ti_kernel_attribs().tasks_attribs;
 
+  // Half-open task range to actually dispatch. `task_end == -1` means "all tasks" (the normal whole-kernel launch);
+  // the graph_do_while host driver passes a single-task range to replay one loop-body task at a time.
+  const int dispatch_task_begin = task_begin;
+  const int dispatch_task_end = (task_end < 0) ? int(task_attribs.size()) : task_end;
+  QD_ASSERT(dispatch_task_begin >= 0 && dispatch_task_end <= int(task_attribs.size()) &&
+            dispatch_task_begin <= dispatch_task_end);
+
   // Adstack-cache invalidation bump - see `bump_writes_for_kernel_spirv` in `program/adstack_size_expr_eval.{h,cpp}`.
   if (program_impl_ != nullptr) {
     bump_writes_for_kernel_spirv(program_impl_->program, &host_ctx, task_attribs,
@@ -582,7 +589,7 @@ void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_c
 
   ensure_current_cmdlist();
 
-  for (int i = 0; i < task_attribs.size(); ++i) {
+  for (int i = dispatch_task_begin; i < dispatch_task_end; ++i) {
     const auto &attribs = task_attribs[i];
     auto vp = ti_kernel->get_pipeline(i);
 
@@ -995,6 +1002,16 @@ void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_c
   }
 
   submit_current_cmdlist_if_timeout();
+}
+
+int GfxRuntime::get_num_tasks(KernelHandle handle) const {
+  auto *ti_kernel = ti_kernels_[handle.get_launch_id()].get();
+  return int(ti_kernel->ti_kernel_attribs().tasks_attribs.size());
+}
+
+int GfxRuntime::get_task_graph_do_while_level_id(KernelHandle handle, int task_idx) const {
+  auto *ti_kernel = ti_kernels_[handle.get_launch_id()].get();
+  return ti_kernel->ti_kernel_attribs().tasks_attribs[task_idx].graph_do_while_level_id;
 }
 
 void GfxRuntime::buffer_copy(DevicePtr dst, DevicePtr src, size_t size) {

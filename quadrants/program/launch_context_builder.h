@@ -7,6 +7,19 @@ namespace quadrants::lang {
 
 struct RuntimeContext;
 
+// One entry per `graph_do_while` loop in a `graph=True` kernel, indexed by level id (the order the AST transformer
+// assigns: outer levels before the inner levels they contain). For nested loops the runtime rebuilds the loop tree from
+// these entries plus the per-task `graph_do_while_level_id` tags baked into each OffloadedTask. A non-nested (depth-1)
+// kernel has exactly one entry with parent -1.
+struct GraphDoWhileLevel {
+  // Kernel parameter index (C++ arg id, post-template) of this level's condition ndarray.
+  int cond_arg_id{-1};
+  // Enclosing level id, or -1 if this level is at the kernel top level.
+  int parent_id{-1};
+  // Device pointer of the condition flag, resolved by the backend each launch from `cond_arg_id`.
+  void *flag_dev_ptr{nullptr};
+};
+
 struct ArgArrayPtrKey {
   int32_t arg_id;
   int32_t ptr_type;
@@ -158,8 +171,32 @@ class LaunchContextBuilder {
   const StructType *args_type{nullptr};
   size_t result_buffer_size{0};
   bool use_graph{false};
-  int graph_do_while_arg_id{-1};
-  void *graph_do_while_flag_dev_ptr{nullptr};
+  // Level table for nested `graph_do_while`, indexed by level id (empty if the kernel has no graph_do_while loop).
+  // Populated from Python at launch; flag_dev_ptr filled in by the backend's ndarray-resolution loop. Replaces the old
+  // single-loop scalars (arg id + flag ptr).
+  std::vector<GraphDoWhileLevel> graph_do_while_levels;
+
+  // True if this kernel has at least one graph_do_while loop.
+  bool has_graph_do_while() const {
+    return !graph_do_while_levels.empty();
+  }
+
+  // Append a graph_do_while level (called from Python at launch, in level-id order). `cond_arg_id` is the resolved C++
+  // arg index of the condition ndarray; `parent_id` is the enclosing level id or -1.
+  void add_graph_do_while_level(int cond_arg_id, int parent_id) {
+    graph_do_while_levels.push_back(GraphDoWhileLevel{cond_arg_id, parent_id, nullptr});
+  }
+
+  // Resolve the flag device pointer for any level whose condition arg matches `arg_id`. Called by each backend's
+  // per-arg ndarray-resolution loop. (A given ndarray could in principle drive more than one level, so we set all
+  // matches rather than break.)
+  void resolve_graph_do_while_flag(int arg_id, void *flag_dev_ptr) {
+    for (auto &level : graph_do_while_levels) {
+      if (level.cond_arg_id == arg_id) {
+        level.flag_dev_ptr = flag_dev_ptr;
+      }
+    }
+  }
 
   // Note that I've tried to group `array_runtime_size` and
   // `is_device_allocations` into a small struct. However, it caused some test

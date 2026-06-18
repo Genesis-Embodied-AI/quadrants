@@ -138,9 +138,7 @@ void GraphManager::resolve_ctx_ndarray_ptrs(LaunchContextBuilder &ctx,
 
       if (resolved_data) {
         ctx.set_ndarray_ptrs(arg_id, (uint64)resolved_data, (uint64) nullptr);
-        if (arg_id == ctx.graph_do_while_arg_id) {
-          ctx.graph_do_while_flag_dev_ptr = resolved_data;
-        }
+        ctx.resolve_graph_do_while_flag(arg_id, resolved_data);
       }
     }
   }

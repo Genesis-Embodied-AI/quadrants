@@ -10,7 +10,7 @@ namespace cuda {
 
 CachedGraph::CachedGraph(std::size_t arg_buf_size,
                          std::size_t result_buf_size,
-                         bool needs_counter_ptr_slot,
+                         int num_graph_do_while_levels,
                          LlvmRuntimeExecutor *executor)
     : arg_buffer_size(arg_buf_size), result_buffer_size(result_buf_size) {
   CUDADriver::get_instance().malloc((void **)&persistent_device_result_buffer,
@@ -20,8 +20,17 @@ CachedGraph::CachedGraph(std::size_t arg_buf_size,
     CUDADriver::get_instance().malloc((void **)&persistent_device_arg_buffer, arg_buffer_size);
   }
 
-  if (needs_counter_ptr_slot) {
-    CUDADriver::get_instance().malloc(&counter_ptr_slot, sizeof(void *));
+  if (num_graph_do_while_levels > 0) {
+    counter_ptr_slots.resize(num_graph_do_while_levels, nullptr);
+    for (auto &slot : counter_ptr_slots) {
+      CUDADriver::get_instance().malloc(&slot, sizeof(void *));
+    }
+    // Persistent constant-1 int + a slot pointing at it, used to re-arm nested conditional handles.
+    CUDADriver::get_instance().malloc(&const_one_dev, sizeof(int32_t));
+    int32_t one = 1;
+    CUDADriver::get_instance().memcpy_host_to_device(const_one_dev, &one, sizeof(int32_t));
+    CUDADriver::get_instance().malloc(&const_one_slot, sizeof(void *));
+    CUDADriver::get_instance().memcpy_host_to_device(const_one_slot, &const_one_dev, sizeof(void *));
   }
 
   persistent_ctx.runtime = executor->get_llvm_runtime();
@@ -40,8 +49,16 @@ CachedGraph::~CachedGraph() {
   if (persistent_device_result_buffer) {
     CUDADriver::get_instance().mem_free(persistent_device_result_buffer);
   }
-  if (counter_ptr_slot) {
-    CUDADriver::get_instance().mem_free(counter_ptr_slot);
+  for (void *slot : counter_ptr_slots) {
+    if (slot) {
+      CUDADriver::get_instance().mem_free(slot);
+    }
+  }
+  if (const_one_dev) {
+    CUDADriver::get_instance().mem_free(const_one_dev);
+  }
+  if (const_one_slot) {
+    CUDADriver::get_instance().mem_free(const_one_slot);
   }
 }
 
@@ -52,12 +69,16 @@ CachedGraph::CachedGraph(CachedGraph &&other) noexcept
       persistent_ctx(other.persistent_ctx),
       arg_buffer_size(other.arg_buffer_size),
       result_buffer_size(other.result_buffer_size),
-      counter_ptr_slot(other.counter_ptr_slot),
+      counter_ptr_slots(std::move(other.counter_ptr_slots)),
+      const_one_dev(other.const_one_dev),
+      const_one_slot(other.const_one_slot),
       num_nodes(other.num_nodes) {
   other.graph_exec = nullptr;
   other.persistent_device_arg_buffer = nullptr;
   other.persistent_device_result_buffer = nullptr;
-  other.counter_ptr_slot = nullptr;
+  other.counter_ptr_slots.clear();
+  other.const_one_dev = nullptr;
+  other.const_one_slot = nullptr;
 }
 
 CachedGraph &CachedGraph::operator=(CachedGraph &&other) noexcept {
@@ -70,7 +91,9 @@ CachedGraph &CachedGraph::operator=(CachedGraph &&other) noexcept {
   std::swap(persistent_ctx, raii_guard.persistent_ctx);
   std::swap(arg_buffer_size, raii_guard.arg_buffer_size);
   std::swap(result_buffer_size, raii_guard.result_buffer_size);
-  std::swap(counter_ptr_slot, raii_guard.counter_ptr_slot);
+  std::swap(counter_ptr_slots, raii_guard.counter_ptr_slots);
+  std::swap(const_one_dev, raii_guard.const_one_dev);
+  std::swap(const_one_slot, raii_guard.const_one_slot);
   std::swap(num_nodes, raii_guard.num_nodes);
   return *this;
 }
@@ -125,9 +148,7 @@ void GraphManager::resolve_ctx_ndarray_ptrs(LaunchContextBuilder &ctx,
 
       if (resolved_data) {
         ctx.set_ndarray_ptrs(arg_id, (uint64)resolved_data, (uint64) nullptr);
-        if (arg_id == ctx.graph_do_while_arg_id) {
-          ctx.graph_do_while_flag_dev_ptr = resolved_data;
-        }
+        ctx.resolve_graph_do_while_flag(arg_id, resolved_data);
       }
     }
   }
@@ -198,41 +219,135 @@ void *GraphManager::add_kernel_node(void *graph,
   return node;
 }
 
-void *GraphManager::add_conditional_while_node(void *graph, unsigned long long *cond_handle_out) {
+unsigned long long GraphManager::create_cond_handle(void *graph) {
+  void *cu_ctx = CUDAContext::get_instance().get_context();
+  unsigned long long handle = 0;
+  // The handle is created on the same graph the conditional node lives in (the root graph for a top-level loop, or a
+  // parent body graph for a nested loop), matching the validated structure in tmp/nested_cond_validate.cu. The default
+  // value (1) is only auto-applied at top-level graph launch; nested loops are re-armed each parent iteration by an
+  // explicit init kernel (see build_level).
+  CUDADriver::get_instance().graph_conditional_handle_create(&handle, graph, cu_ctx,
+                                                             /*defaultLaunchValue=*/1,
+                                                             /*flags=CU_GRAPH_COND_ASSIGN_DEFAULT=*/1);
+  return handle;
+}
+
+void *GraphManager::add_conditional_while_node(void *graph,
+                                               void *prev_node,
+                                               unsigned long long handle,
+                                               void **body_graph_out) {
   ensure_condition_kernel_loaded();
   QD_ASSERT(cond_kernel_func_);
 
   void *cu_ctx = CUDAContext::get_instance().get_context();
 
-  CUDADriver::get_instance().graph_conditional_handle_create(cond_handle_out, graph, cu_ctx,
-                                                             /*defaultLaunchValue=*/1,
-                                                             /*flags=CU_GRAPH_COND_ASSIGN_DEFAULT=*/1);
-
   GraphNodeParams cond_node_params{};
   cond_node_params.type = 13;  // CU_GRAPH_NODE_TYPE_CONDITIONAL
-  cond_node_params.handle = *cond_handle_out;
+  cond_node_params.handle = handle;
   cond_node_params.condType = 1;  // CU_GRAPH_COND_TYPE_WHILE
   cond_node_params.size = 1;
   cond_node_params.phGraph_out = nullptr;  // CUDA will populate this
   cond_node_params.ctx = cu_ctx;
 
   void *cond_node = nullptr;
-  CUDADriver::get_instance().graph_add_node(&cond_node, graph, nullptr, 0, &cond_node_params);
+  CUDADriver::get_instance().graph_add_node(&cond_node, graph, prev_node ? &prev_node : nullptr, prev_node ? 1 : 0,
+                                            &cond_node_params);
 
   // CUDA replaces phGraph_out with a pointer to its owned array
   void **body_graphs = (void **)cond_node_params.phGraph_out;
   QD_ASSERT(body_graphs && body_graphs[0]);
 
+  *body_graph_out = body_graphs[0];
   QD_TRACE("CUDA graph_do_while: conditional node created, body graph={}", body_graphs[0]);
-  return body_graphs[0];
+  return cond_node;
+}
+
+namespace {
+// True if `level` is `ancestor` or a (transitive) descendant of it, walking parent pointers.
+bool is_descendant_or_self(int level, int ancestor, const std::vector<GraphDoWhileLevel> &levels) {
+  for (int c = level; c != -1; c = levels[c].parent_id) {
+    if (c == ancestor) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// Given a `descendant` of `parent_id`, return the direct child of `parent_id` on the path down to it.
+int child_of(int parent_id, int descendant, const std::vector<GraphDoWhileLevel> &levels) {
+  int c = descendant;
+  while (levels[c].parent_id != parent_id) {
+    c = levels[c].parent_id;
+  }
+  return c;
+}
+}  // namespace
+
+void GraphManager::build_level(int parent_id,
+                               void *target_graph,
+                               int begin,
+                               int end,
+                               const std::vector<OffloadedTask> &tasks,
+                               const std::vector<GraphDoWhileLevel> &levels,
+                               std::vector<unsigned long long> &cond_handles,
+                               JITModule *cuda_module,
+                               CachedGraph &cached) {
+  void *prev_node = nullptr;
+  int cursor = begin;
+  while (cursor < end) {
+    const int task_level = tasks[cursor].graph_do_while_level_id;
+    if (task_level == parent_id) {
+      // A direct task of this level: emit a work-kernel node, chained after the previous node.
+      void *ctx_ptr = &cached.persistent_ctx;
+      prev_node = add_kernel_node(target_graph, prev_node, cuda_module->lookup_function(tasks[cursor].name),
+                                  (unsigned int)tasks[cursor].grid_dim, (unsigned int)tasks[cursor].block_dim,
+                                  (unsigned int)tasks[cursor].dynamic_shared_array_bytes, &ctx_ptr);
+      cursor++;
+    } else {
+      // Start of a contiguous run belonging to a child level (or its descendants).
+      const int child = child_of(parent_id, task_level, levels);
+      int run_end = cursor;
+      while (run_end < end && is_descendant_or_self(tasks[run_end].graph_do_while_level_id, child, levels)) {
+        run_end++;
+      }
+      // Create the child's conditional handle up front: the re-arm init kernel below bakes the handle value into its
+      // kernel params, so the handle must exist before that kernel node is added.
+      cond_handles[child] = create_cond_handle(target_graph);
+      // Re-arm the child handle at the start of each parent iteration. Only needed when this body itself re-executes
+      // (parent_id != -1); at the kernel top level cudaGraphCondAssignDefault already sets the handle to 1 at each
+      // graph launch. Reuses the condition kernel pointed at the constant-1 slot.
+      if (parent_id != -1) {
+        void *init_args[2] = {&cond_handles[child], &cached.const_one_slot};
+        prev_node = add_kernel_node(target_graph, prev_node, cond_kernel_func_, 1, 1, 0, init_args);
+      }
+      // Conditional WHILE node for the child, depending on the init kernel (or the previous node).
+      void *child_body = nullptr;
+      void *cond_node = add_conditional_while_node(target_graph, prev_node, cond_handles[child], &child_body);
+      build_level(child, child_body, cursor, run_end, tasks, levels, cond_handles, cuda_module, cached);
+      // Subsequent siblings in this body depend on the conditional node.
+      prev_node = cond_node;
+      cursor = run_end;
+    }
+  }
+  // For a real loop level, append its condition kernel last so it reads the flag after this iteration's work has
+  // updated it.
+  if (parent_id >= 0) {
+    void *cond_args[2] = {&cond_handles[parent_id], &cached.counter_ptr_slots[parent_id]};
+    add_kernel_node(target_graph, prev_node, cond_kernel_func_, 1, 1, 0, cond_args);
+  }
 }
 
 bool GraphManager::launch_cached_graph(CachedGraph &cached, LaunchContextBuilder &ctx, bool use_graph_do_while) {
-  // TODO: these two memcpy_host_to_device calls could be async
-  // (cuMemcpyHtoDAsync) on the launch stream for better CPU-GPU overlap.
-  if (use_graph_do_while && cached.counter_ptr_slot) {
-    void *flag_ptr = ctx.graph_do_while_flag_dev_ptr;
-    CUDADriver::get_instance().memcpy_host_to_device(cached.counter_ptr_slot, &flag_ptr, sizeof(void *));
+  // TODO: these memcpy_host_to_device calls could be async (cuMemcpyHtoDAsync) on the launch stream for better CPU-GPU
+  // overlap.
+  if (use_graph_do_while) {
+    // Refresh every level's indirection slot with this launch's resolved condition ndarray pointer, so swapping any
+    // level's counter ndarray between launches works without a rebuild.
+    QD_ASSERT(cached.counter_ptr_slots.size() == ctx.graph_do_while_levels.size());
+    for (size_t level = 0; level < ctx.graph_do_while_levels.size(); level++) {
+      void *flag_ptr = ctx.graph_do_while_levels[level].flag_dev_ptr;
+      CUDADriver::get_instance().memcpy_host_to_device(cached.counter_ptr_slots[level], &flag_ptr, sizeof(void *));
+    }
   }
 
   if (ctx.arg_buffer_size > 0) {
@@ -256,7 +371,7 @@ bool GraphManager::try_launch(int launch_id,
     return false;
   }
 
-  const bool use_graph_do_while = ctx.graph_do_while_arg_id >= 0;
+  const bool use_graph_do_while = ctx.has_graph_do_while();
 
   QD_ERROR_IF(ctx.result_buffer_size > 0,
               "graph=True is not supported for kernels with struct return "
@@ -287,7 +402,7 @@ bool GraphManager::try_launch(int launch_id,
 
   CUDAContext::get_instance().make_current();
 
-  CachedGraph cached(ctx.arg_buffer_size, ctx.result_buffer_size, use_graph_do_while, executor);
+  CachedGraph cached(ctx.arg_buffer_size, ctx.result_buffer_size, (int)ctx.graph_do_while_levels.size(), executor);
 
   if (cached.arg_buffer_size > 0) {
     CUDADriver::get_instance().memcpy_host_to_device(cached.persistent_device_arg_buffer, ctx.get_context().arg_buffer,
@@ -295,27 +410,25 @@ bool GraphManager::try_launch(int launch_id,
   }
 
   // --- Build CUDA graph ---
-  void *graph = nullptr;
-  CUDADriver::get_instance().graph_create(&graph, 0);
-
-  // Target graph for kernel nodes. Without graph_do_while, work kernels go
-  // directly into the top-level graph. With graph_do_while, they go into
-  // a body graph inside a conditional while node:
+  //
+  // Without graph_do_while, work kernels go directly into the top-level graph. With graph_do_while, each loop level
+  // becomes a conditional WHILE node whose body graph holds that level's direct work kernels, any nested conditional
+  // nodes, and finally that level's condition kernel (last, so it reads the flag after this iteration's work). Nested
+  // example:
   //
   //   Top-level graph
-  //     └── Conditional while node (repeats while flag != 0)
-  //           └── Body graph
-  //                 ├── Work kernel 1
-  //                 ├── Work kernel 2
-  //                 └── Condition kernel (reads flag, calls
-  //                 cudaGraphSetConditional)
+  //     └── Conditional while node (outer, repeats while outer flag != 0)
+  //           └── Outer body graph
+  //                 ├── init kernel (re-arm inner handle = 1)
+  //                 ├── Conditional while node (inner, repeats while inner flag != 0)
+  //                 │     └── Inner body graph: work kernels + inner condition kernel
+  //                 ├── outer-level work kernels
+  //                 └── Outer condition kernel
   //
-  // The condition kernel must be the last node in the body graph. It reads the
-  // flag after the work kernels have updated it, so the loop-continue decision
-  // reflects this iteration's result. Putting it first would cause an extra
-  // iteration: the condition would see the flag from before the work ran.
-  void *kernel_target_graph = graph;
-  unsigned long long cond_handle = 0;
+  // The recursive builder (build_level) places direct/child/condition nodes from the per-task level tags. The
+  // non-nested case is the depth-1 special case of the same routine.
+  void *graph = nullptr;
+  CUDADriver::get_instance().graph_create(&graph, 0);
 
   if (use_graph_do_while) {
     ensure_condition_kernel_loaded();
@@ -332,29 +445,24 @@ bool GraphManager::try_launch(int launch_id,
       // Pre-SM 9.0: fall back to host-side do-while loop.
       return false;
     }
-    kernel_target_graph = add_conditional_while_node(graph, &cond_handle);
-  }
-
-  void *prev_node = nullptr;
-  for (const auto &task : offloaded_tasks) {
-    void *ctx_ptr = &cached.persistent_ctx;
-    prev_node = add_kernel_node(kernel_target_graph, prev_node, cuda_module->lookup_function(task.name),
-                                (unsigned int)task.grid_dim, (unsigned int)task.block_dim,
-                                (unsigned int)task.dynamic_shared_array_bytes, &ctx_ptr);
-  }
-
-  if (use_graph_do_while) {
-    QD_ASSERT(ctx.graph_do_while_flag_dev_ptr);
-
-    // Write the initial counter address into the persistent indirection slot
-    // (allocated by the constructor). The condition kernel reads through this
-    // slot, so swapping the counter ndarray later only requires updating it.
-    void *flag_ptr = ctx.graph_do_while_flag_dev_ptr;
-    CUDADriver::get_instance().memcpy_host_to_device(cached.counter_ptr_slot, &flag_ptr, sizeof(void *));
-
-    void *cond_args[2] = {&cond_handle, &cached.counter_ptr_slot};
-
-    add_kernel_node(kernel_target_graph, prev_node, cond_kernel_func_, 1, 1, 0, cond_args);
+    // Initialise each level's indirection slot with this launch's resolved flag pointer (refreshed on every relaunch in
+    // launch_cached_graph).
+    for (size_t level = 0; level < ctx.graph_do_while_levels.size(); level++) {
+      QD_ASSERT(ctx.graph_do_while_levels[level].flag_dev_ptr);
+      void *flag_ptr = ctx.graph_do_while_levels[level].flag_dev_ptr;
+      CUDADriver::get_instance().memcpy_host_to_device(cached.counter_ptr_slots[level], &flag_ptr, sizeof(void *));
+    }
+    std::vector<unsigned long long> cond_handles(ctx.graph_do_while_levels.size(), 0);
+    build_level(/*parent_id=*/-1, graph, 0, (int)offloaded_tasks.size(), offloaded_tasks, ctx.graph_do_while_levels,
+                cond_handles, cuda_module, cached);
+  } else {
+    void *prev_node = nullptr;
+    for (const auto &task : offloaded_tasks) {
+      void *ctx_ptr = &cached.persistent_ctx;
+      prev_node =
+          add_kernel_node(graph, prev_node, cuda_module->lookup_function(task.name), (unsigned int)task.grid_dim,
+                          (unsigned int)task.block_dim, (unsigned int)task.dynamic_shared_array_bytes, &ctx_ptr);
+    }
   }
 
   // --- Instantiate and launch ---

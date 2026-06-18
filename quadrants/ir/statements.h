@@ -977,6 +977,9 @@ class RangeForStmt : public Stmt {
   bool strictly_serialized;
   std::string range_hint;
   int stream_parallel_group_id{0};
+  // Innermost enclosing `graph_do_while` level id (-1 if none). Propagated to the OffloadedStmt at offload time so the
+  // runtime can reconstruct nested graph_do_while loops. See graph_do_while docs.
+  int graph_do_while_level_id{-1};
   std::string loop_name;
 
   RangeForStmt(Stmt *begin,
@@ -1006,7 +1009,8 @@ class RangeForStmt : public Stmt {
                      num_cpu_threads,
                      block_dim,
                      strictly_serialized,
-                     stream_parallel_group_id);
+                     stream_parallel_group_id,
+                     graph_do_while_level_id);
   QD_DEFINE_ACCEPT
 };
 
@@ -1026,6 +1030,7 @@ class StructForStmt : public Stmt {
   int block_dim;
   MemoryAccessOptions mem_access_opt;
   int stream_parallel_group_id{0};
+  int graph_do_while_level_id{-1};
   std::string loop_name;
 
   StructForStmt(SNode *snode,
@@ -1046,7 +1051,8 @@ class StructForStmt : public Stmt {
                      num_cpu_threads,
                      block_dim,
                      mem_access_opt,
-                     stream_parallel_group_id);
+                     stream_parallel_group_id,
+                     graph_do_while_level_id);
   QD_DEFINE_ACCEPT
 };
 
@@ -1064,6 +1070,7 @@ class MeshForStmt : public Stmt {
   std::unordered_set<mesh::MeshElementType> major_to_types{};
   std::unordered_set<mesh::MeshRelationType> minor_relation_types{};
   MemoryAccessOptions mem_access_opt;
+  int graph_do_while_level_id{-1};
 
   MeshForStmt(mesh::Mesh *mesh,
               mesh::MeshElementType element_type,
@@ -1085,7 +1092,8 @@ class MeshForStmt : public Stmt {
                      major_from_type,
                      major_to_types,
                      minor_relation_types,
-                     mem_access_opt);
+                     mem_access_opt,
+                     graph_do_while_level_id);
   QD_DEFINE_ACCEPT
 };
 
@@ -1389,6 +1397,10 @@ class OffloadedStmt : public Stmt {
   std::size_t bls_size{0};
   MemoryAccessOptions mem_access_opt;
   int stream_parallel_group_id{0};
+  // Innermost enclosing `graph_do_while` level id (-1 if none), propagated from the source for-stmt (or, for serial
+  // bound/listgen tasks, from the for-stmt that flushed them). The runtime uses these per-task tags plus the
+  // launch-context level table to rebuild nested graph_do_while loops.
+  int graph_do_while_level_id{-1};
 
   // Pre-chunking loop trip-count `SizeExpr` captured by `determine_ad_stack_size`. Set on adstack-bearing
   // range-for tasks before `make_cpu_multithreaded_range_for` rewrites the loop into per-thread chunks, so the
@@ -1437,7 +1449,8 @@ class OffloadedStmt : public Stmt {
                      num_cpu_threads,
                      index_offsets,
                      mem_access_opt,
-                     stream_parallel_group_id);
+                     stream_parallel_group_id,
+                     graph_do_while_level_id);
   QD_DEFINE_ACCEPT
 };
 

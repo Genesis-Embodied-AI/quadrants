@@ -249,6 +249,13 @@ struct TaskAttributes {
   // `Program::get_snode_by_id` only if it ever needs to call into snode-specific APIs.
   std::vector<int> snode_writes;
 
+  // Innermost `qd.graph_do_while()` loop level this task belongs to (-1 = outside all graph_do_while loops, i.e.
+  // top-level tasks that run exactly once). Mirrors `OffloadedTask::graph_do_while_level_id` on the LLVM path and is
+  // copied straight from the `OffloadedStmt` at SPIR-V codegen time. The host-side do-while driver in the GFX kernel
+  // launcher uses it (together with the per-level table on `LaunchContextBuilder`) to reconstruct the loop nesting from
+  // this flat task list and drive (possibly nested / sibling) loops on the host.
+  int graph_do_while_level_id{-1};
+
   static std::string buffers_name(BufferInfo b);
 
   std::string debug_string() const;
@@ -260,7 +267,8 @@ struct TaskAttributes {
             buffer_binds,
             range_for_attribs,
             ad_stack,
-            snode_writes);
+            snode_writes,
+            graph_do_while_level_id);
 };
 
 /**

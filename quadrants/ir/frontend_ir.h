@@ -24,6 +24,7 @@ struct ForLoopConfig {
   int block_dim{0};
   bool uniform{false};
   int stream_parallel_group_id{0};
+  int graph_do_while_level_id{-1};
   std::string loop_name{""};
 };
 
@@ -200,6 +201,7 @@ class FrontendForStmt : public Stmt {
   MemoryAccessOptions mem_access_opt;
   int block_dim;
   int stream_parallel_group_id{0};
+  int graph_do_while_level_id{-1};
   std::string loop_name;
 
   FrontendForStmt(const ExprGroup &loop_vars,
@@ -919,6 +921,7 @@ class ASTBuilder {
       config.block_dim = 0;
       config.strictly_serialized = false;
       config.stream_parallel_group_id = 0;
+      config.graph_do_while_level_id = -1;
       config.loop_name.clear();
     }
   };
@@ -931,6 +934,10 @@ class ASTBuilder {
   int id_counter_{0};
   int stream_parallel_group_counter_{0};
   int current_stream_parallel_group_id_{0};
+  // Innermost active graph_do_while level id (-1 if not inside any). The Python AST transformer manages the stack and
+  // calls set_graph_do_while_level_id() on enter/exit; for-loops created while it is >= 0 are tagged with it (mirrors
+  // current_stream_parallel_group_id_).
+  int current_graph_do_while_level_id_{-1};
 
  public:
   ASTBuilder(Block *initial, Arch arch, bool is_kernel) : is_kernel_(is_kernel), arch_(arch) {
@@ -1069,6 +1076,12 @@ class ASTBuilder {
 
   void end_stream_parallel() {
     current_stream_parallel_group_id_ = 0;
+  }
+
+  // Set the innermost active graph_do_while level id. Pass the new level id when entering a graph_do_while loop, and
+  // the parent level id (or -1) when leaving it. The Python AST transformer owns the level stack and the level table.
+  void set_graph_do_while_level_id(int level_id) {
+    current_graph_do_while_level_id_ = level_id;
   }
 
   Identifier get_next_id(const std::string &name = "") {

@@ -420,6 +420,10 @@ class FuncBase:
             # kernel, and routing the same loop through a `@qd.func` would silently emit a wrong adjoint. Kernels
             # start at the top of the call stack so they always begin at depth 0.
             ctx.loop_depth = global_context.caller_loop_depth
+            # Likewise inherit whether the caller chain was already inside non-static control flow, so a
+            # `requires_top_level=True` func called at this func's top level is still rejected when this func was
+            # itself invoked from a runtime for / if / while. Kernels always begin False.
+            ctx.inherited_non_static_control_flow = global_context.caller_in_non_static_control_flow
         return tree, ctx
 
     def fuse_args(

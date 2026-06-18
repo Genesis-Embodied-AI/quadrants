@@ -260,3 +260,39 @@ def test_do_while_oob_does_not_loop_forever():
 
     with pytest.raises(AssertionError, match=r"Out of bound access"):
         oob_in_do_while(arr, counter)
+
+
+@test_utils.test(
+    arch=[qd.cpu],
+    require=qd.extension.assertion,
+    debug=True,
+    check_out_of_bound=True,
+    gdb_trigger=False,
+)
+def test_do_while_oob_2d_does_not_loop_forever():
+    """2-axis variant of test_do_while_oob_does_not_loop_forever.
+
+    Exercises the multi-axis branch of CheckOutOfBound::visit(ExternalPtrStmt), which inserts two ExternalTensorShape
+    + cmp + AssertStmt sequences per access. Each inserted side-effecting stmt must inherit the surrounding
+    graph_do_while region; otherwise it splits the offloader's per-level task run and the host driver loops forever.
+    """
+    import numpy as np
+
+    arr = qd.ndarray(dtype=qd.f32, shape=(2, 2))
+    counter = qd.ndarray(dtype=qd.i32, shape=())
+    counter.from_numpy(np.array(10, dtype=np.int32))
+
+    @qd.kernel(graph=True)
+    def oob_2d_in_do_while(
+        a: qd.types.ndarray(dtype=qd.f32, ndim=2),
+        c: qd.types.ndarray(dtype=qd.i32, ndim=0),
+    ):
+        while qd.graph_do_while(c):
+            for i in qd.static(range(4)):
+                for j in qd.static(range(4)):
+                    a[i, j] = 1.0
+            for i in range(1):
+                c[()] = c[()] - 1
+
+    with pytest.raises(AssertionError, match=r"Out of bound access"):
+        oob_2d_in_do_while(arr, counter)

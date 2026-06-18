@@ -118,6 +118,10 @@ class OffloadedTask {
   int grid_dim{0};
   int dynamic_shared_array_bytes{0};
   int stream_parallel_group_id{0};
+  // Innermost enclosing `graph_do_while` level id (-1 if none). Set from the OffloadedStmt at codegen time and consumed
+  // at launch to reconstruct nested graph_do_while loops (CUDA native conditional nodes / host fallback). See
+  // docs/source/user_guide/graph.md.
+  int graph_do_while_level_id{-1};
   AdStackSizingInfo ad_stack{};
 
   // Snode IDs this task writes to (read-modify-write counts as a write). Computed at codegen time
@@ -155,6 +159,7 @@ class OffloadedTask {
             grid_dim,
             dynamic_shared_array_bytes,
             stream_parallel_group_id,
+            graph_do_while_level_id,
             ad_stack,
             snode_writes,
             arr_writes,

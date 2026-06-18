@@ -312,7 +312,8 @@ void export_lang(py::module &m) {
       .def("insert_snode_access_flag", &ASTBuilder::insert_snode_access_flag)
       .def("reset_snode_access_flag", &ASTBuilder::reset_snode_access_flag)
       .def("begin_stream_parallel", &ASTBuilder::begin_stream_parallel)
-      .def("end_stream_parallel", &ASTBuilder::end_stream_parallel);
+      .def("end_stream_parallel", &ASTBuilder::end_stream_parallel)
+      .def("set_graph_do_while_level_id", &ASTBuilder::set_graph_do_while_level_id);
 
   auto device_capability_config =
       py::class_<DeviceCapabilityConfig>(m, "DeviceCapabilityConfig").def("get", &DeviceCapabilityConfig::get);
@@ -569,7 +570,7 @@ void export_lang(py::module &m) {
       .def("get_struct_ret_uint", &LaunchContextBuilder::get_struct_ret_uint)
       .def("get_struct_ret_float", &LaunchContextBuilder::get_struct_ret_float)
       .def_readwrite("use_graph", &LaunchContextBuilder::use_graph)
-      .def_readwrite("graph_do_while_arg_id", &LaunchContextBuilder::graph_do_while_arg_id);
+      .def("add_graph_do_while_level", &LaunchContextBuilder::add_graph_do_while_level);
 
   py::class_<Function>(m, "Function")
       .def("insert_scalar_param", &Function::insert_scalar_param)
