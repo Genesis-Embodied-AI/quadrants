@@ -52,6 +52,19 @@ uv pip install --group dev --group test
 * `LLVM libraries`: downloads an archive for `LLVM` libraries, decompresses it and sets `LLVM_DIR`.
 * `clang`: depending on the platform, download `clang` or just check if available with the right version.
 
+````{note}
+`build.py` is optional for an editable install. If you have not set `LLVM_DIR` (or `LLVM_ROOT`),
+the scikit-build-core build downloads the correct prebuilt `LLVM` automatically during CMake
+configure (the same archive `build.py` would fetch), so a plain editable install works on its own:
+
+```
+uv pip install -e .
+```
+
+The download is skipped whenever you provide your own `LLVM` via `LLVM_DIR`/`LLVM_ROOT`, and can be
+turned off entirely with the CMake option `-DQD_AUTO_DOWNLOAD_LLVM=OFF`.
+````
+
 `build.py` can be used at least two ways:
 
 * `build.py wheel` to build the wheel (via scikit-build-core, i.e. `pip wheel`)

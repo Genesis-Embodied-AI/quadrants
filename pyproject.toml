@@ -114,6 +114,8 @@ requires = [
     "numpy>=2.0.0",        # NumPy headers for the extension
     "setuptools_scm>=6.0", # version from git tags (metadata provider below)
     "ruamel.yaml",         # stub_replacements_*.yaml post-processing in tools/gen_stubs.py
+    "requests",            # download_llvm.py: auto-fetch prebuilt LLVM during CMake configure
+    "tqdm",                # download_llvm.py: progress bar for the LLVM download
 ]
 build-backend = "scikit_build_core.build"
 

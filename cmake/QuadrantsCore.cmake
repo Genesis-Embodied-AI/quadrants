@@ -116,6 +116,9 @@ target_include_directories(${CORE_LIBRARY_NAME} PRIVATE external/FP16/include)
 target_link_libraries(${CORE_LIBRARY_NAME} PUBLIC ti_device_api)
 
 if(QD_WITH_LLVM)
+    # For the scikit-build-core (pip/uv) build, fetch a prebuilt LLVM when the user has not supplied
+    # one, so `pip install -e .` works without a separate download_llvm.py step. No-op otherwise.
+    include(${CMAKE_CURRENT_LIST_DIR}/AutoDownloadLLVM.cmake)
     if(DEFINED ENV{LLVM_DIR})
         set(LLVM_DIR $ENV{LLVM_DIR})
         message("Getting LLVM_DIR=${LLVM_DIR} from the environment variable")
