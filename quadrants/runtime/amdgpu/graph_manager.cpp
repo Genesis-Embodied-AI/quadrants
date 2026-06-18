@@ -176,9 +176,7 @@ CachedGraph &CachedGraph::operator=(CachedGraph &&other) noexcept {
 
 // Resolves ndarray parameter handles in the launch context to raw device pointers, writing them into the arg buffer
 // via `set_ndarray_ptrs`. Unlike the normal launch path, does not handle host-resident arrays (no temporary device
-// allocation or host-to-device transfer) since graph mode bakes device pointers into the cached graph -- a host-
-// resident ndarray would force a per-launch H2D copy that the cached graph cannot encode. Errors if any external
-// array is on the host.
+// allocation or host-to-device transfer). Errors if any external array is on the host.
 void GraphManager::resolve_ctx_ndarray_ptrs(LaunchContextBuilder &ctx,
                                             const std::vector<std::pair<int, Callable::Parameter>> &parameters,
                                             LlvmRuntimeExecutor *executor) {
@@ -217,9 +215,9 @@ void GraphManager::resolve_ctx_ndarray_ptrs(LaunchContextBuilder &ctx,
 
       if (resolved_data) {
         ctx.set_ndarray_ptrs(arg_id, (uint64)resolved_data, (uint64) nullptr);
-        if (arg_id == ctx.graph_do_while_arg_id) {
-          ctx.graph_do_while_flag_dev_ptr = resolved_data;
-        }
+        // Resolve every graph_do_while level whose condition ndarray is this arg (multi-level table).
+        ctx.resolve_graph_do_while_flag(arg_id, resolved_data);
+        // Route this ndarray into the per-cp yield-flag table for every checkpoint that named it.
         for (std::size_t cp = 0; cp < ctx.checkpoint_yield_on_arg_ids.size(); ++cp) {
           if (ctx.checkpoint_yield_on_arg_ids[cp] == arg_id) {
             ctx.checkpoint_yield_on_dev_ptrs[cp] = resolved_data;
@@ -485,8 +483,6 @@ bool GraphManager::try_launch(int launch_id,
     AMDGPUDriver::get_instance().memcpy_host_to_device_async(
         cached.persistent_device_arg_buffer, ctx.get_context().arg_buffer, cached.arg_buffer_size, stream_for_setup);
   }
-  // Stage the RuntimeContext on device. Its arg_buffer / result_buffer pointers reference the persistent device
-  // buffers above; none of its fields change between graph launches so one copy is sufficient.
   AMDGPUDriver::get_instance().memcpy_host_to_device_async(cached.device_runtime_ctx, &cached.persistent_ctx,
                                                            sizeof(RuntimeContext), stream_for_setup);
   AMDGPUDriver::get_instance().stream_synchronize(stream_for_setup);
@@ -524,9 +520,6 @@ bool GraphManager::try_launch(int launch_id,
     ++total_nodes;
   };
 
-  // Each kernel node receives the device-side RuntimeContext pointer via the shared `cached.kernel_args` extra-config
-  // (see graph_manager.h for why all nodes share one). Stream-parallel groups (`stream_parallel_group_id != 0`) are
-  // silently serialized inside the graph, matching the CUDA implementation.
   for (const auto &task : offloaded_tasks) {
     if (task.checkpoint_id != current_cp_id) {
       emit_yield_check_for_closed_cp();

@@ -131,6 +131,7 @@ Stmt::Stmt(const Stmt &stmt) : field_manager(this), fields_registered(false) {
   erased = stmt.erased;
   dbg_info = stmt.dbg_info;
   ret_type = stmt.ret_type;
+  region_tag = stmt.region_tag;
 }
 
 Stmt::Stmt(const DebugInfo &dbg_info) : Stmt() {
@@ -157,6 +158,10 @@ Stmt *Stmt::insert_before_me(std::unique_ptr<Stmt> &&new_stmt) {
   QD_ASSERT(parent);
   auto iter = parent->find(this);
   QD_ASSERT(iter != parent->statements.end());
+  // Inherit the surrounding graph region so post-lowering passes (CheckOutOfBound,
+  // PromoteIntermediateToGlobalTmp, ...) don't drop side-effecting work into a default
+  // (kernel-top-level) bucket that would split the host-side graph_do_while driver's task list.
+  new_stmt->region_tag = this->region_tag;
   parent->insert_at(std::move(new_stmt), iter);
   return ret;
 }
@@ -166,6 +171,7 @@ Stmt *Stmt::insert_after_me(std::unique_ptr<Stmt> &&new_stmt) {
   QD_ASSERT(parent);
   auto iter = parent->find(this);
   QD_ASSERT(iter != parent->statements.end());
+  new_stmt->region_tag = this->region_tag;
   parent->insert_at(std::move(new_stmt), std::next(iter));
   return ret;
 }
@@ -381,10 +387,17 @@ void Block::set_statements(VecStatement &&stmts) {
 }
 
 void Block::insert_before(Stmt *old_statement, VecStatement &&new_statements) {
+  // Inherit the anchor stmt's graph region, see Stmt::insert_before_me for the rationale.
+  for (auto &s : new_statements.stmts) {
+    s->region_tag = old_statement->region_tag;
+  }
   insert_at(std::move(new_statements), find(old_statement));
 }
 
 void Block::insert_after(Stmt *old_statement, VecStatement &&new_statements) {
+  for (auto &s : new_statements.stmts) {
+    s->region_tag = old_statement->region_tag;
+  }
   insert_at(std::move(new_statements), std::next(find(old_statement)));
 }
 
@@ -393,6 +406,10 @@ void Block::replace_with(Stmt *old_statement, VecStatement &&new_statements, boo
   QD_ASSERT(iter != statements.end());
   if (replace_usages && !new_statements.stmts.empty())
     old_statement->replace_usages_with(new_statements.back().get());
+  // Inherit the replaced stmt's graph region (same rationale as insert_before / insert_after).
+  for (auto &s : new_statements.stmts) {
+    s->region_tag = old_statement->region_tag;
+  }
   trash_bin.push_back(std::move(*iter));
   if (new_statements.size() == 1) {
     // Keep all std::vector::iterator valid in this case.

@@ -313,6 +313,7 @@ void export_lang(py::module &m) {
       .def("reset_snode_access_flag", &ASTBuilder::reset_snode_access_flag)
       .def("begin_stream_parallel", &ASTBuilder::begin_stream_parallel)
       .def("end_stream_parallel", &ASTBuilder::end_stream_parallel)
+      .def("set_graph_do_while_level_id", &ASTBuilder::set_graph_do_while_level_id)
       .def("begin_checkpoint", &ASTBuilder::begin_checkpoint)
       .def("end_checkpoint", &ASTBuilder::end_checkpoint);
 
@@ -573,7 +574,7 @@ void export_lang(py::module &m) {
       .def("get_struct_ret_uint", &LaunchContextBuilder::get_struct_ret_uint)
       .def("get_struct_ret_float", &LaunchContextBuilder::get_struct_ret_float)
       .def_readwrite("use_graph", &LaunchContextBuilder::use_graph)
-      .def_readwrite("graph_do_while_arg_id", &LaunchContextBuilder::graph_do_while_arg_id)
+      .def("add_graph_do_while_level", &LaunchContextBuilder::add_graph_do_while_level)
       .def_readwrite("checkpoint_yield_on_arg_ids", &LaunchContextBuilder::checkpoint_yield_on_arg_ids)
       .def_readwrite("resume_from_checkpoint", &LaunchContextBuilder::resume_from_checkpoint);
 

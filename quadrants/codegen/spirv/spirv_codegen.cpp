@@ -187,6 +187,10 @@ TaskCodegen::Result TaskCodegen::run() {
     task_attribs_.ad_stack.bound_expr = *adstack_analysis.bound_expr;
   }
 
+  // Carry the (possibly nested) graph_do_while loop level through to the SPIR-V task attributes so the GFX host-side
+  // do-while driver can reconstruct the loop nesting from the flat task list (mirrors the LLVM OffloadedTask tag).
+  task_attribs_.graph_do_while_level_id = task_ir_->graph_do_while_level_id;
+
   if (task_ir_->task_type == OffloadedTaskType::serial) {
     generate_serial_kernel(task_ir_);
   } else if (task_ir_->task_type == OffloadedTaskType::range_for) {

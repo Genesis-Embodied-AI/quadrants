@@ -383,6 +383,10 @@ class ASTSerializer : public IRVisitor, public ExpressionVisitor {
     emit(stmt->mem_access_opt);
     emit(stmt->block_dim);
     emit(stmt->stream_parallel_group_id);
+    // graph_do_while nesting emits no loop IR (the while body is inlined), so the loop structure is otherwise invisible
+    // to the cache key. The per-for-loop level tag is the only record of which graph_do_while level a task belongs to,
+    // so it must be part of the key.
+    emit(stmt->graph_do_while_level_id);
     emit(stmt->checkpoint_id);
     emit(stmt->body.get());
   }
@@ -587,6 +591,13 @@ class ASTSerializer : public IRVisitor, public ExpressionVisitor {
       emit(stmt->erased);
       emit(stmt->fields_registered);
       emit(stmt->ret_type);
+      // The graph-region (graph_do_while level / checkpoint cp_id / stream_parallel group) a statement sits in now
+      // affects how the offloader places it -- and graph_do_while emits no loop IR, so the region is otherwise
+      // invisible to the key. Two kernels that differ only in whether a bare statement is inside vs outside a
+      // graph_do_while loop, or inside vs outside a qd.checkpoint, must get distinct keys.
+      emit(stmt->region_tag.graph_do_while_level_id);
+      emit(stmt->region_tag.stream_parallel_group_id);
+      emit(stmt->region_tag.checkpoint_id);
       stmt->accept(this);
     } else {
       emit(StmtOpCode::NIL);

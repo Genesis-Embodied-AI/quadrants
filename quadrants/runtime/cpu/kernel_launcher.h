@@ -15,11 +15,12 @@ class KernelLauncher : public LLVM::KernelLauncher {
 
   struct Context {
     std::vector<TaskFunc> task_funcs;
-    // Parallel vector to `task_funcs`: cp_id of the `qd.checkpoint(...)` block the task lives in, or `-1` if the
-    // task is outside every checkpoint. Populated at register time off `OffloadedTask::checkpoint_id` (which the CPU
-    // codegen now propagates from `OffloadedStmt::checkpoint_id`, slice 6 change in codegen_cpu.cpp). Consumed by
-    // the launcher's host-branch gating to skip checkpoint bodies whose cp_id sits below the current resume point or
-    // that follow a yielding checkpoint within the same launch.
+    // Parallel vector to `task_funcs`: cp_id of the `qd.checkpoint(...)` block the task lives in,
+    // or `-1` if the task is outside every checkpoint. Populated at register time off
+    // `OffloadedTask::checkpoint_id` (which the CPU codegen now propagates from
+    // `OffloadedStmt::checkpoint_id`, slice 6 change in codegen_cpu.cpp). Consumed by the
+    // launcher's host-branch gating to skip checkpoint bodies whose cp_id sits below the
+    // current resume point or that follow a yielding checkpoint within the same launch.
     std::vector<int32_t> checkpoint_id_per_task;
     // Parallel vector to `task_funcs`: `true` iff this is the last task in a contiguous run of
     // same-cp_id tasks for a checkpoint that declared `yield_on=`. Used by the host-branch
@@ -40,6 +41,9 @@ class KernelLauncher : public LLVM::KernelLauncher {
     std::vector<std::vector<int>> snode_writes_per_task;
     std::vector<std::vector<int>> arr_writes_per_task;
     std::vector<std::vector<int>> arr_reads_per_task;
+    // Per-task innermost graph_do_while level id (-1 if outside all loops), copied off
+    // `OffloadedTask::graph_do_while_level_id`. Used by the nested graph_do_while host driver.
+    std::vector<int> graph_do_while_level_per_task;
     const std::vector<std::pair<int, Callable::Parameter>> *parameters;
     // arg_ids of the array-typed entries in `parameters`, precomputed at register time.
     std::vector<int> array_arg_ids;
@@ -60,8 +64,30 @@ class KernelLauncher : public LLVM::KernelLauncher {
   }
 
  private:
-  void launch_offloaded_tasks(LaunchContextBuilder &ctx, const Context &launcher_ctx);
-  void launch_offloaded_tasks_with_do_while(LaunchContextBuilder &ctx, const Context &launcher_ctx);
+  void launch_offloaded_tasks(LaunchContextBuilder &ctx,
+                              const Context &launcher_ctx);
+  void launch_offloaded_tasks_with_do_while(LaunchContextBuilder &ctx,
+                                            const Context &launcher_ctx);
+  // Once-per-launch adstack setup (lazy-claim buffers + max-reducer dispatch), shared by the flat and
+  // nested graph_do_while paths.
+  void prepare_offloaded_tasks(LaunchContextBuilder &ctx,
+                               const std::vector<TaskFunc> &task_funcs,
+                               const std::vector<AdStackSizingInfo> &ad_stacks);
+  // Run a single offloaded task (per-task adstack publish + invoke). Returns false if a device-side
+  // assert fired (kernel should stop). `launch_scope` must span the whole launch.
+  bool run_one_offloaded_task(LaunchContextBuilder &ctx,
+                              std::size_t i,
+                              const std::vector<TaskFunc> &task_funcs,
+                              const std::vector<AdStackSizingInfo> &ad_stacks,
+                              const std::vector<std::size_t> &num_threads_per_task);
+  // Run a single offloaded task with host-branch checkpoint gating + yield observation, sharing the
+  // `resume_point` / `yield_signal` host scalars across a whole graph_do_while drive. Returns false
+  // only when a device-side assert fired (the caller should stop).
+  bool run_gated_task(LaunchContextBuilder &ctx,
+                      std::size_t i,
+                      const Context &launcher_ctx,
+                      int32_t &resume_point,
+                      int32_t &yield_signal);
 
   // `std::deque` so references to existing entries survive an `emplace_back` from a nested launch.
   std::deque<Context> contexts_;

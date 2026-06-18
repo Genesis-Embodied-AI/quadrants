@@ -403,7 +403,7 @@ GfxRuntime::KernelHandle GfxRuntime::register_quadrants_kernel(GfxRuntime::Regis
   return res;
 }
 
-void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_ctx) {
+void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_ctx, int task_begin, int task_end) {
   auto *ti_kernel = ti_kernels_[handle.get_launch_id()].get();
 
 #if defined(__APPLE__)
@@ -537,6 +537,13 @@ void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_c
   // Record commands
   const auto &task_attribs = ti_kernel->ti_kernel_attribs().tasks_attribs;
 
+  // Half-open task range to actually dispatch. `task_end == -1` means "all tasks" (the normal whole-kernel launch);
+  // the graph_do_while host driver passes a single-task range to replay one loop-body task at a time.
+  const int dispatch_task_begin = task_begin;
+  const int dispatch_task_end = (task_end < 0) ? int(task_attribs.size()) : task_end;
+  QD_ASSERT(dispatch_task_begin >= 0 && dispatch_task_end <= int(task_attribs.size()) &&
+            dispatch_task_begin <= dispatch_task_end);
+
   // Adstack-cache invalidation bump - see `bump_writes_for_kernel_spirv` in `program/adstack_size_expr_eval.{h,cpp}`.
   if (program_impl_ != nullptr) {
     bump_writes_for_kernel_spirv(program_impl_->program, &host_ctx, task_attribs,
@@ -581,40 +588,29 @@ void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_c
   }
 
   // GPU-side per-checkpoint gating setup (Vulkan / Metal). Replaces an earlier per-task host-branch
-  // gating loop (slice 4) with the design `reentrant.md` §6.2 specifies for non-CUDA-12.4 GPU
-  // backends: a small "gate" compute shader runs in the same cmdlist before each checkpoint's body
-  // kernels and writes either `(active_gx, 1, 1)` or `(0, 0, 0)` into a per-kernel dim3 slot; body
-  // kernels then dispatch via `CommandList::dispatch_indirect` so a skipped checkpoint dispatches
-  // zero workgroups (no GPU work). After the body, an indirect-gated yield-check shader atomic-CASes
-  // the cp_id into a shared `yield_signal` slot if the user's `yield_on=` ndarray flag is non-zero.
+  // gating loop with the design `reentrant.md` §6.2 specifies for non-CUDA-12.4 GPU backends: a small
+  // "gate" compute shader runs in the same cmdlist before each checkpoint's body kernels and writes
+  // either `(active_gx, 1, 1)` or `(0, 0, 0)` into a per-kernel dim3 slot; body kernels then dispatch
+  // via `CommandList::dispatch_indirect` so a skipped checkpoint dispatches zero workgroups (no GPU
+  // work). After the body, an indirect-gated yield-check shader atomic-CASes the cp_id into a shared
+  // `yield_signal` slot if the user's `yield_on=` ndarray flag is non-zero.
   //
   // The host reads `yield_signal` once at the end of the launch (single 8-byte D2H) and surfaces the
   // first-yielder cp_id through `last_yield_cp_id_on_last_call()`. No per-task host calls, no per-
   // task D2H stalls. See `runtime/gfx/checkpoint_launch.cpp` for the orchestration logic.
   //
   // group_x for each task is hoisted out of the per-task dispatch loop because the gate's params
-  // buffer needs to bake the active dim for every body kernel up-front (first launch only). The
-  // value is a function of the kernel's compile-time `advisory_total_num_threads` and the per-launch
-  // ndarray shape lookups; identical to the calculation inlined further down. Stored here as a
-  // dense `int[n_tasks]` so the launcher can index by task index without recomputing.
+  // buffer needs to bake the active dim for every body kernel up-front (first launch only). The value
+  // is a function of the kernel's compile-time `advisory_total_num_threads` and the per-launch ndarray
+  // shape lookups; identical to the calculation inlined in the dispatch loop. Stored as a dense
+  // `int[n_tasks]` (the full task list, not the dispatch sub-range) so the gate params stay complete
+  // even when the nested graph_do_while driver dispatches one task at a time.
   std::vector<int> per_task_group_x(task_attribs.size(), 0);
   for (int i = 0; i < (int)task_attribs.size(); ++i) {
     const auto &attribs = task_attribs[i];
-    // Cap `advisory_total_num_threads` to the ACTUAL iteration count when the codegen was able to
-    // extract the range end as a product of ndarray-shape lookups (see
-    // `RangeForAttributes::end_shape_product`). Without this cap, a grad kernel whose range is
-    // runtime-determined (`const_end = false`) inherits `kMaxNumThreadsGridStrideLoop = 131072`
-    // from the codegen fallback, and the adstack-heap sizing below multiplies that by the per-
-    // thread stride to request (e.g.) 48 GB for a 1-iteration B=1 workload - exceeding Metal's
-    // `maxBufferLength` and producing a hard RHI error. The in-shader grid-stride loop handles
-    // any dispatched thread count >= 1 correctly; a tight cap just means each dispatched thread
-    // processes fewer strides of idle work.
     int effective_advisory_threads = attribs.advisory_total_num_threads;
     if (attribs.range_for_attribs && !attribs.range_for_attribs->end_shape_product.empty()) {
       const auto &range = *attribs.range_for_attribs;
-      // `const_begin` is asserted true at codegen whenever `end_stmt` is populated (see the
-      // `QD_ASSERT(stmt->const_begin)` in the `if (stmt->end_stmt)` branch of `spirv_codegen.cpp`), so `range.begin` is
-      // the literal begin value, not a gtmp offset.
       int64_t iter_end = 1;
       for (const auto &ref : range.end_shape_product) {
         std::vector<int> indices = ref.arg_id;
@@ -626,15 +622,6 @@ void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_c
       effective_advisory_threads =
           int(std::min<int64_t>(int64_t(effective_advisory_threads), std::max<int64_t>(1, iter_count)));
     }
-    // Adstack-bearing tasks additionally cap at `kAdStackMaxConcurrentThreads`, matching the LLVM
-    // CUDA / AMDGPU launchers' `kAdStackMaxConcurrentThreads = 65536` advisory cap. The per-thread
-    // int / float adstack heap rows scale linearly with the dispatched thread count, so an
-    // uncapped 600k-thread MPM grid kernel would request ~2.5 GB just for the int heap
-    // (`linear_thread_idx * stride_int_bytes`) on every reverse-mode launch - the same kernel
-    // sizes to ~70 MB on LLVM thanks to that cap. SPIR-V's in-shader grid-stride loop handles the
-    // smaller dispatch correctly: each launched invocation walks `i += grid_dim() * block_dim()`
-    // until it has covered the full logical iteration count. Skip the cap on tasks without
-    // adstack allocas to keep forward-only and adstack-free kernels at saturating throughput.
     constexpr int kAdStackMaxConcurrentThreads = 65536;
     if (!attribs.ad_stack.allocas.empty() && effective_advisory_threads > kAdStackMaxConcurrentThreads) {
       effective_advisory_threads = kAdStackMaxConcurrentThreads;
@@ -643,23 +630,75 @@ void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_c
                           attribs.advisory_num_threads_per_group;
   }
 
-  bool kernel_has_checkpoints =
-      ensure_checkpoint_state_for_handle(handle, task_attribs, host_ctx.checkpoint_yield_on_arg_ids, per_task_group_x);
+  bool kernel_has_checkpoints = ensure_checkpoint_state_for_handle(
+      handle, task_attribs, host_ctx.checkpoint_yield_on_arg_ids, per_task_group_x);
 
-  // Per-launch checkpoint plan: slot map, yield_on_devallocs, control-buffer seed. See
-  // `runtime/gfx/checkpoint_launch.cpp::prepare_checkpoint_launch_state` for the body. Returns a
-  // zero-filled plan for non-checkpoint kernels; the per-task loop below checks
-  // `kernel_has_checkpoints` before consuming any of the plan's vectors.
-  CheckpointLaunchPlan cp_plan =
-      prepare_checkpoint_launch_state(handle, host_ctx, task_attribs, any_arrays, kernel_has_checkpoints);
-  const auto &slot_in_cp = cp_plan.slot_in_cp;
-  const auto &is_first_in_cp = cp_plan.is_first_in_cp;
-  const auto &is_last_in_cp = cp_plan.is_last_in_cp;
-  const auto &yield_on_devallocs = cp_plan.yield_on_devallocs;
+  // Per-cp slot map (cp_id -> dense slot index inside `state.per_cp[cp].out_dims`). Built once per
+  // launch since `body_task_indices` is stable. `slot_in_cp[i] == k` means task `i` reads dim3
+  // triple at byte offset `12 * k` of its checkpoint's out_dims buffer.
+  std::vector<int> slot_in_cp(task_attribs.size(), 0);
+  std::vector<bool> is_first_in_cp(task_attribs.size(), false);
+  std::vector<bool> is_last_in_cp(task_attribs.size(), false);
+  std::vector<DeviceAllocation> yield_on_devallocs(host_ctx.checkpoint_yield_on_arg_ids.size(), kDeviceNullAllocation);
+  if (kernel_has_checkpoints) {
+    const auto &state = checkpoint_handle_states_[handle.get_launch_id()];
+    for (int cp = 0; cp < (int)state.per_cp.size(); ++cp) {
+      const auto &per_cp = state.per_cp[cp];
+      for (int slot = 0; slot < (int)per_cp.body_task_indices.size(); ++slot) {
+        int ti = per_cp.body_task_indices[slot];
+        slot_in_cp[ti] = slot;
+        if (slot == 0) {
+          is_first_in_cp[ti] = true;
+        }
+        if (slot == (int)per_cp.body_task_indices.size() - 1) {
+          is_last_in_cp[ti] = true;
+        }
+      }
+    }
+    // Reset the public `last_yield_cp_id_on_last_call_` for any kernel that has at least one
+    // yielding checkpoint - matches the CPU / AMDGPU semantics. Aux launches without `yield_on=`
+    // on any cp leave it alone so the user's prior status read survives.
+    bool kernel_can_yield = false;
+    for (int aid : host_ctx.checkpoint_yield_on_arg_ids) {
+      if (aid >= 0) {
+        kernel_can_yield = true;
+        break;
+      }
+    }
+    if (kernel_can_yield) {
+      last_yield_cp_id_on_last_call_ = -1;
+    }
+    // Resolve each cp's user-supplied `yield_on=` ndarray to a DeviceAllocation by looking up its
+    // arg id in `any_arrays`. Done per-launch because the user can hand a different ndarray to the
+    // kernel each call - we don't bake the pointer into anything.
+    for (std::size_t cp = 0; cp < host_ctx.checkpoint_yield_on_arg_ids.size(); ++cp) {
+      int arg_id = host_ctx.checkpoint_yield_on_arg_ids[cp];
+      if (arg_id < 0) {
+        continue;
+      }
+      auto it = any_arrays.find(arg_id);
+      if (it != any_arrays.end()) {
+        yield_on_devallocs[cp] = it->second;
+      }
+    }
+    // Seed the per-launch control buffer with `(resume_point, -1)`. `upload_data` blocks on any
+    // in-flight stream work touching the buffer; for the control buffer that's the previous
+    // launch's yield-check shader, which `synchronize()` (called between Python-visible launches)
+    // already drained. Done before `ensure_current_cmdlist` opens this launch's cmdlist so the
+    // first gate dispatch sees the freshly-uploaded values.
+    int32_t init_words[2] = {host_ctx.resume_from_checkpoint < 0 ? 0 : host_ctx.resume_from_checkpoint, -1};
+    DevicePtr dp = state.control->get_ptr(0);
+    const void *src_ptr = init_words;
+    size_t sz = sizeof(init_words);
+    RhiResult ur = device_->upload_data(&dp, &src_ptr, &sz, 1);
+    QD_ERROR_IF(ur != RhiResult::success, "Failed to upload checkpoint control buffer: RhiResult({})", int(ur));
+  }
 
   ensure_current_cmdlist();
 
-  for (int i = 0; i < task_attribs.size(); ++i) {
+  // Dispatch only the requested task sub-range. A plain launch passes [0, num_tasks); the nested
+  // graph_do_while host driver replays one task at a time via launch_kernel(handle, ctx, i, i + 1).
+  for (int i = dispatch_task_begin; i < dispatch_task_end; ++i) {
     const auto &attribs = task_attribs[i];
     // GPU-side gating: cp_id >= 0 tasks dispatch via `dispatch_indirect` against a per-cp out_dims
     // SSBO; the gate shader (run inline below before this checkpoint's first body task) decides on
@@ -1060,10 +1099,40 @@ void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_c
     }
   }
 
-  // Single end-of-launch readback of yield_signal -- see
-  // `runtime/gfx/checkpoint_launch.cpp::finalize_checkpoint_readback` for the body. No-ops for
-  // non-checkpoint kernels and for checkpoint kernels where no checkpoint opted into `yield_on=`.
-  finalize_checkpoint_readback(handle, host_ctx, kernel_has_checkpoints);
+  // Single end-of-launch readback of yield_signal. `synchronize()` semantics: `flush()` submits
+  // the recorded cmdlist; `wait_idle()` waits for the GPU; `readback_data` then maps the host-
+  // readable control buffer and reads the 8-byte (resume_point, yield_signal) tuple. We only
+  // care about `yield_signal` here - if non-`-1`, it's the cp_id of the first checkpoint whose
+  // `yield_on=` flag fired, propagated to the Python `GraphStatus` via
+  // `last_yield_cp_id_on_last_call()`.
+  if (kernel_has_checkpoints) {
+    bool kernel_can_yield = false;
+    for (int aid : host_ctx.checkpoint_yield_on_arg_ids) {
+      if (aid >= 0) {
+        kernel_can_yield = true;
+        break;
+      }
+    }
+    if (kernel_can_yield) {
+      flush();
+      device_->wait_idle();
+      const auto &state = checkpoint_handle_states_[handle.get_launch_id()];
+      int32_t ctrl_words[2] = {0, -1};
+      DevicePtr dp = state.control->get_ptr(0);
+      void *host_ptr = ctrl_words;
+      size_t sz = sizeof(ctrl_words);
+      RhiResult rr = device_->readback_data(&dp, &host_ptr, &sz, 1);
+      QD_ERROR_IF(rr != RhiResult::success, "Checkpoint control readback failed: RhiResult({})", int(rr));
+      if (ctrl_words[1] != -1) {
+        last_yield_cp_id_on_last_call_ = ctrl_words[1];
+      }
+      // After the readback there is no `current_cmdlist_` (the flush above retired it on backends
+      // that null it out). Re-open if any downstream work (the d2h blit below) needs to record
+      // into it; `ensure_current_cmdlist()` is idempotent so the call is safe even on backends
+      // that keep the cmdlist alive across flush.
+      ensure_current_cmdlist();
+    }
+  }
 
   // Keep context buffers used in this dispatch
   if (ti_kernel->get_args_buffer_size()) {
@@ -1082,6 +1151,16 @@ void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_c
   }
 
   submit_current_cmdlist_if_timeout();
+}
+
+int GfxRuntime::get_num_tasks(KernelHandle handle) const {
+  auto *ti_kernel = ti_kernels_[handle.get_launch_id()].get();
+  return int(ti_kernel->ti_kernel_attribs().tasks_attribs.size());
+}
+
+int GfxRuntime::get_task_graph_do_while_level_id(KernelHandle handle, int task_idx) const {
+  auto *ti_kernel = ti_kernels_[handle.get_launch_id()].get();
+  return ti_kernel->ti_kernel_attribs().tasks_attribs[task_idx].graph_do_while_level_id;
 }
 
 void GfxRuntime::buffer_copy(DevicePtr dst, DevicePtr src, size_t size) {

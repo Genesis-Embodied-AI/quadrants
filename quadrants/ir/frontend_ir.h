@@ -24,6 +24,7 @@ struct ForLoopConfig {
   int block_dim{0};
   bool uniform{false};
   int stream_parallel_group_id{0};
+  int graph_do_while_level_id{-1};
   // `cp_id` (see design doc `perso_hugh/doc/qipc/reentrant.md` section 5.1) of the enclosing `qd.checkpoint(...)`
   // block when this for-loop is emitted, or `-1` when the for-loop is outside any checkpoint. Assigned by the AST
   // builder's `current_checkpoint_id_` at `begin_frontend_*_for` time. Propagated through `FrontendForStmt` ->
@@ -208,6 +209,7 @@ class FrontendForStmt : public Stmt {
   MemoryAccessOptions mem_access_opt;
   int block_dim;
   int stream_parallel_group_id{0};
+  int graph_do_while_level_id{-1};
   int checkpoint_id{-1};
   std::string loop_name;
 
@@ -928,6 +930,7 @@ class ASTBuilder {
       config.block_dim = 0;
       config.strictly_serialized = false;
       config.stream_parallel_group_id = 0;
+      config.graph_do_while_level_id = -1;
       config.checkpoint_id = -1;
       config.loop_name.clear();
     }
@@ -941,6 +944,10 @@ class ASTBuilder {
   int id_counter_{0};
   int stream_parallel_group_counter_{0};
   int current_stream_parallel_group_id_{0};
+  // Innermost active graph_do_while level id (-1 if not inside any). The Python AST transformer manages the stack and
+  // calls set_graph_do_while_level_id() on enter/exit; for-loops created while it is >= 0 are tagged with it (mirrors
+  // current_stream_parallel_group_id_).
+  int current_graph_do_while_level_id_{-1};
   // Counter handed out by `begin_checkpoint()`. Reset per kernel via fresh ASTBuilder
   // construction. Mirrors `stream_parallel_group_counter_`.
   int checkpoint_counter_{0};
@@ -1086,6 +1093,12 @@ class ASTBuilder {
 
   void end_stream_parallel() {
     current_stream_parallel_group_id_ = 0;
+  }
+
+  // Set the innermost active graph_do_while level id. Pass the new level id when entering a graph_do_while loop, and
+  // the parent level id (or -1) when leaving it. The Python AST transformer owns the level stack and the level table.
+  void set_graph_do_while_level_id(int level_id) {
+    current_graph_do_while_level_id_ = level_id;
   }
 
   // Open a new `qd.checkpoint(...)` scope. Each call advances `checkpoint_counter_` and returns the freshly assigned

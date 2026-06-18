@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdint>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -58,45 +59,50 @@ struct CachedGraph {
   RuntimeContext persistent_ctx{};
   std::size_t arg_buffer_size{0};
   std::size_t result_buffer_size{0};
-  // Device-side pointer slot for graph_do_while indirection. Holds the address
-  // of the user's counter ndarray. The condition kernel reads through this
-  // slot, allowing the counter ndarray to change between calls without
-  // rebuilding.
-  void *counter_ptr_slot{nullptr};
+  // Device-side pointer slots for graph_do_while indirection, one per nested level (indexed by level
+  // id). Each holds the address of that level's condition ndarray; the condition kernel reads through
+  // its slot, so the ndarray can change between launches without rebuilding the graph. Empty when the
+  // kernel has no graph_do_while loop. The single (non-nested) loop is the depth-1 case (one slot).
+  std::vector<void *> counter_ptr_slots;
+  // Persistent device int holding the constant 1, plus a slot pointing at it. Used to re-arm a nested
+  // conditional handle at the start of each parent iteration: the condition kernel invoked with this
+  // slot unconditionally sets the handle to 1 (cudaGraphCondAssignDefault only re-arms at top-level
+  // launch, not per child-body re-execution -- see graph_nested_design.md R1). Only allocated for
+  // kernels that have at least one nested graph_do_while level.
+  void *const_one_dev{nullptr};
+  void *const_one_slot{nullptr};
   // Framework-internal `resume_point` scalar (one int32 on device) read by every checkpoint
   // gate kernel at launch time. `nullptr` when the kernel has no `qd.checkpoint()` blocks.
-  // Initialised to `0` so all checkpoints run on the first launch. Slice 1d's yield-check
-  // kernel bumps this to INT_MAX when a checkpoint yields, so every later checkpoint's gate
+  // Initialised to `0` so all checkpoints run on the first launch. The yield-check kernel
+  // bumps this to INT_MAX when a checkpoint yields, so every later checkpoint's gate
   // sees `cp_id >= INT_MAX == false` and skips its body for the rest of the launch.
-  // Slice 2's host-side `step.resume(from_checkpoint=cp)` will memcpy the resume cp_id into
-  // this slot before relaunching the same cached graph. Lives for the lifetime of the
-  // cached graph.
+  // `step.resume(from_checkpoint=cp)` memcpys the resume cp_id into this slot before relaunching
+  // the same cached graph. Lives for the lifetime of the cached graph.
   void *resume_point_dev_ptr{nullptr};
   // Framework-internal `yield_signal` scalar (one int32 on device). `-1` (read as "no yield
   // this launch") on launch; the yield-check kernel atomically CASes the first yielding
   // checkpoint's cp_id into this slot. The cond-with-yield kernel reads this slot inside
   // `graph_do_while` bodies to exit the WHILE early on yield. After each launch the host
   // reads this back (synchronously via the launch's cudaStreamSynchronize) so the
-  // `GraphStatus` host API in slice 2 can tell the user which checkpoint yielded.
+  // `GraphStatus` host API can tell the user which checkpoint yielded.
   // `nullptr` when the kernel has no `qd.checkpoint(yield_on=...)` blocks.
   void *yield_signal_dev_ptr{nullptr};
   // Per-checkpoint indirection slots for the user's `yield_on=` ndarray pointer (one entry
   // per checkpoint, indexed by cp_id; `nullptr` for checkpoints without `yield_on=`). Same
-  // indirection trick as `counter_ptr_slot`: the slot's device address is baked into the
+  // indirection trick as `counter_ptr_slots`: the slot's device address is baked into the
   // graph (the yield-check kernel reads `*(int32_t**)slot`), but the pointer it holds is
   // re-memcpy'd from the host each launch to follow the current user ndarray. Lives for the
   // lifetime of the cached graph.
   std::vector<void *> checkpoint_yield_on_ptr_slots;
   // Per-checkpoint count (number of distinct cp_ids in this kernel's offloaded_tasks).
   // Stored here so test introspection can see whether the graph build actually emitted
-  // IF nodes -- slice 1c covers the build-time wiring before the user-visible host API
-  // arrives in slice 2. `0` for kernels without checkpoints.
+  // IF nodes. `0` for kernels without checkpoints.
   std::size_t num_checkpoints{0};
   std::size_t num_nodes{0};
 
   CachedGraph(std::size_t arg_buffer_size,
               std::size_t result_buffer_size,
-              bool needs_counter_ptr_slot,
+              int num_graph_do_while_levels,
               bool needs_resume_point_slot,
               bool needs_yield_signal_slot,
               LlvmRuntimeExecutor *executor);
@@ -163,7 +169,13 @@ class GraphManager {
   void ensure_cond_with_yield_kernel_loaded();
   void ensure_checkpoint_gate_kernel_loaded();
   void ensure_checkpoint_yield_check_kernel_loaded();
-  void *add_conditional_while_node(void *graph, unsigned long long *cond_handle_out);
+  // Create a conditional handle on `graph` with default launch value 1 (CU_GRAPH_COND_ASSIGN_DEFAULT).
+  // Must be called before any re-arm init kernel that references the handle, so the handle value is
+  // baked into that kernel's params.
+  unsigned long long create_cond_handle(void *graph);
+  // Create a conditional WHILE node in `graph` using the pre-created `handle`, depending on `prev_node`
+  // if non-null. Returns the conditional node (for chaining siblings); outputs the body graph to fill.
+  void *add_conditional_while_node(void *graph, void *prev_node, unsigned long long handle, void **body_graph_out);
   void *add_kernel_node(void *graph,
                         void *prev_node,
                         void *func,
@@ -171,6 +183,34 @@ class GraphManager {
                         unsigned int block_dim,
                         unsigned int shared_mem,
                         void **kernel_params);
+  // Recursively build the nodes for graph_do_while level `parent_id` (-1 = kernel top level) over the
+  // task range [begin, end) into `target_graph` (the body graph of `parent_id`, or the root graph for
+  // -1). Direct tasks become kernel nodes; a contiguous run of direct tasks sharing a non-negative
+  // `checkpoint_id` is wrapped in a gate-kernel + IF conditional node (SM 9.0+) or chained flat with a
+  // trailing yield-check (pre-Hopper). Each contiguous run of a child level becomes a conditional WHILE
+  // node (preceded by a re-arm init kernel when nested, i.e. parent_id != -1) whose body is filled
+  // recursively. For a real loop level (parent_id >= 0) the level's condition kernel is appended last
+  // (the cond-with-yield variant when the kernel has yielding checkpoints, so a yield breaks out of this
+  // and every enclosing loop). `cond_handles` is indexed by level id and filled as conditional nodes are
+  // created; `total_nodes` accumulates the node count for cache bookkeeping.
+  void build_level(int parent_id,
+                   void *target_graph,
+                   int begin,
+                   int end,
+                   const std::vector<OffloadedTask> &tasks,
+                   const std::vector<GraphDoWhileLevel> &levels,
+                   std::vector<unsigned long long> &cond_handles,
+                   JITModule *cuda_module,
+                   CachedGraph &cached,
+                   std::size_t &total_nodes);
+
+  // Build-time state for the checkpoint walk inside build_level (single-threaded build, reset per
+  // build in try_launch). `use_pre_hopper_flat_graph_` selects the codegen-prologue gating path
+  // (no conditional nodes) over the SM 9.0+ IF-node path. `cp_id_storage_` keeps each checkpoint's
+  // cp_id alive for the graph's lifetime (gate/yield-check kernels read it by pointer); it is
+  // reserved up front so push_back never reallocates and invalidates a baked-in pointer.
+  bool use_pre_hopper_flat_graph_{false};
+  std::vector<int32_t> cp_id_storage_;
 
   // Keyed by launch_id, which uniquely identifies a compiled kernel variant
   // (each template specialization gets its own launch_id).
