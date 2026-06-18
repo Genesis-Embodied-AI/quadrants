@@ -16,6 +16,16 @@ from .misc import get_cache_home
 from .tinysh import Command
 
 
+def _editable_install_hint():
+    # Printed (via the shell rc) right above the first prompt of the build shell, so the user sees
+    # the exact editable-install command to run without consulting the docs.
+    return (
+        r"printf '\n\033[1;36m:: Quadrants build environment ready. To do an editable install, run:\033[0m\n"
+        r"    \033[1;32mpip install --no-build-isolation -e . -Ceditable.rebuild=true\033[0m\n\n'"
+        "\n"
+    )
+
+
 def _venv_reactivation():
     # Sourcing the user's shell rc (below) can reset PATH and drop an active virtualenv, leaving
     # `python`/`pip` pointed at the system (often externally-managed) interpreter. Re-activate the
@@ -39,6 +49,7 @@ def _write_qd_bashrc():
             f"{_venv_reactivation()}"
             r'export PS1="\[\e]0;[Quadrants Build Environment]\a\]\[\033[01;31m\][Quadrants Build] \[\033[00m\]$PS1"'
             "\n"
+            f"{_editable_install_hint()}"
         )
 
     return path
@@ -58,6 +69,7 @@ def _write_qd_zshrc():
             f"{_venv_reactivation()}"
             r"export PROMPT='%{$fg_bold[red]%}[Quadrants Build] %{$reset_color%}'$PROMPT"
             "\n"
+            f"{_editable_install_hint()}"
         )
     return dotdir
 
