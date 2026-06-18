@@ -18,7 +18,8 @@ from .tinysh import Command
 
 def _editable_install_hint():
     # Printed (via the shell rc) right above the first prompt of the build shell, so the user sees
-    # the exact editable-install command to run without consulting the docs.
+    # the exact editable-install command to run without consulting the docs. setup_python_deps()
+    # seeds pip into the venv (uv venv ships none), so a bare `pip install` resolves to the venv.
     return (
         r"printf '\n\033[1;36m:: Quadrants build environment ready. To do an editable install, run:\033[0m\n"
         r"    \033[1;32mpip install --no-build-isolation -e . -Ceditable.rebuild=true\033[0m\n\n'"

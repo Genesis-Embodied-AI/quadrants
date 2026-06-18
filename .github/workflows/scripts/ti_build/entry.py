@@ -104,11 +104,13 @@ def ensure_venv() -> None:
         )
 
 
-@banner("Install Python dependency groups (dev, test)")
+@banner("Install Python deps (pip, dev, test)")
 def setup_python_deps() -> None:
-    # Convenience for the interactive `--shell` / `-w` flows: install the dev + test dependency
-    # groups into the target virtualenv so a subsequent editable install works without a manual
-    # `uv pip install --group dev --group test`. Skipped when no virtualenv could be resolved -- it
+    # Convenience for the interactive `--shell` / `-w` flows: install pip plus the dev + test
+    # dependency groups into the target virtualenv so a subsequent editable install just works.
+    # pip is installed explicitly because the project's venv is created by `uv venv`, which does not
+    # seed pip -- without this a bare `pip install -e .` in the build shell falls through PATH to the
+    # system (externally-managed) interpreter. Skipped when no virtualenv could be resolved -- it
     # never touches a system / externally-managed interpreter, and the CI `wheel` path provisions
     # deps separately.
     venv = os.environ.get("VIRTUAL_ENV")
@@ -117,16 +119,16 @@ def setup_python_deps() -> None:
     groups = ("--group", "dev", "--group", "test")
     try:
         if shutil.which("uv"):
-            # uv installs into VIRTUAL_ENV.
-            sh.uv("pip", "install", *groups)
+            # uv installs into VIRTUAL_ENV; "pip" seeds pip into the uv-created venv.
+            sh.uv("pip", "install", "pip", *groups)
         else:
             # Target the venv's interpreter explicitly: sys.executable may be the system python that
-            # launched build.py, not the resolved venv.
+            # launched build.py, not the resolved venv. A python -m venv venv already has pip.
             sh.bake(os.path.join(_venv_bindir(venv), "python"))("-m", "pip", "install", *groups)
     except CommandFailed as e:
         misc.warn(
             f"Installing dev/test dependency groups failed ({e}); continuing. "
-            "Install them manually with `uv pip install --group dev --group test`."
+            "Install them manually with `uv pip install pip --group dev --group test`."
         )
 
 
