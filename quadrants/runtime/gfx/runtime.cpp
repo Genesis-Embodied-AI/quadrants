@@ -630,8 +630,8 @@ void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_c
                           attribs.advisory_num_threads_per_group;
   }
 
-  bool kernel_has_checkpoints = ensure_checkpoint_state_for_handle(
-      handle, task_attribs, host_ctx.checkpoint_yield_on_arg_ids, per_task_group_x);
+  bool kernel_has_checkpoints =
+      ensure_checkpoint_state_for_handle(handle, task_attribs, host_ctx.checkpoint_yield_on_arg_ids, per_task_group_x);
 
   // Per-cp slot map (cp_id -> dense slot index inside `state.per_cp[cp].out_dims`). Built once per
   // launch since `body_task_indices` is stable. `slot_in_cp[i] == k` means task `i` reads dim3

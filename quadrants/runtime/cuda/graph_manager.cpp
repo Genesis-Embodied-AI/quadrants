@@ -402,8 +402,8 @@ void *GraphManager::add_conditional_while_node(void *graph,
   cond_node_params.ctx = cu_ctx;
 
   void *cond_node = nullptr;
-  CUDADriver::get_instance().graph_add_node(&cond_node, graph, prev_node ? &prev_node : nullptr,
-                                            prev_node ? 1 : 0, &cond_node_params);
+  CUDADriver::get_instance().graph_add_node(&cond_node, graph, prev_node ? &prev_node : nullptr, prev_node ? 1 : 0,
+                                            &cond_node_params);
 
   // CUDA replaces phGraph_out with a pointer to its owned array
   void **body_graphs = (void **)cond_node_params.phGraph_out;
@@ -499,8 +499,7 @@ void GraphManager::build_level(int parent_id,
     // (The try_launch guard guarantees a checkpoint's tasks stay within one level, so the run is not
     // interrupted by a nested loop.)
     int run_end = cursor;
-    while (run_end < end && tasks[run_end].graph_do_while_level_id == parent_id &&
-           tasks[run_end].checkpoint_id == cp) {
+    while (run_end < end && tasks[run_end].graph_do_while_level_id == parent_id && tasks[run_end].checkpoint_id == cp) {
       run_end++;
     }
     // Keep the cp_id alive for the graph's lifetime (gate / yield-check kernels read it by pointer);
@@ -521,8 +520,8 @@ void GraphManager::build_level(int parent_id,
         ++total_nodes;
       }
       if (cp_has_yield) {
-        void *yield_args[4] = {&cached.checkpoint_yield_on_ptr_slots[cp], &cp_id_val,
-                               &cached.yield_signal_dev_ptr, &cached.resume_point_dev_ptr};
+        void *yield_args[4] = {&cached.checkpoint_yield_on_ptr_slots[cp], &cp_id_val, &cached.yield_signal_dev_ptr,
+                               &cached.resume_point_dev_ptr};
         prev_node = add_kernel_node(target_graph, prev_node, yield_check_kernel_func_, 1, 1, 0, yield_args);
         ++total_nodes;
       }
@@ -538,7 +537,7 @@ void GraphManager::build_level(int parent_id,
       prev_node = add_kernel_node(target_graph, prev_node, gate_kernel_func_, 1, 1, 0, gate_args);
       ++total_nodes;
       GraphNodeParams cond_node_params{};
-      cond_node_params.type = 13;     // CU_GRAPH_NODE_TYPE_CONDITIONAL
+      cond_node_params.type = 13;  // CU_GRAPH_NODE_TYPE_CONDITIONAL
       cond_node_params.handle = if_handle;
       cond_node_params.condType = 0;  // CU_GRAPH_COND_TYPE_IF
       cond_node_params.size = 1;
@@ -560,8 +559,8 @@ void GraphManager::build_level(int parent_id,
         ++total_nodes;
       }
       if (cp_has_yield) {
-        void *yield_args[4] = {&cached.checkpoint_yield_on_ptr_slots[cp], &cp_id_val,
-                               &cached.yield_signal_dev_ptr, &cached.resume_point_dev_ptr};
+        void *yield_args[4] = {&cached.checkpoint_yield_on_ptr_slots[cp], &cp_id_val, &cached.yield_signal_dev_ptr,
+                               &cached.resume_point_dev_ptr};
         body_prev = add_kernel_node(if_body, body_prev, yield_check_kernel_func_, 1, 1, 0, yield_args);
         ++total_nodes;
       }
@@ -883,8 +882,8 @@ bool GraphManager::try_launch(int launch_id,
   cp_id_storage_.reserve(num_distinct_checkpoints + 1);
   std::size_t total_nodes = 0;
   std::vector<unsigned long long> cond_handles(ctx.graph_do_while_levels.size(), 0);
-  build_level(/*parent_id=*/-1, graph, 0, (int)offloaded_tasks.size(), offloaded_tasks,
-              ctx.graph_do_while_levels, cond_handles, cuda_module, cached, total_nodes);
+  build_level(/*parent_id=*/-1, graph, 0, (int)offloaded_tasks.size(), offloaded_tasks, ctx.graph_do_while_levels,
+              cond_handles, cuda_module, cached, total_nodes);
 
   // --- Instantiate ---
   CUDADriver::get_instance().graph_instantiate(&cached.graph_exec, graph, nullptr, nullptr, 0);

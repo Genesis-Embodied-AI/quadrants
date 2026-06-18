@@ -64,10 +64,8 @@ class KernelLauncher : public LLVM::KernelLauncher {
   }
 
  private:
-  void launch_offloaded_tasks(LaunchContextBuilder &ctx,
-                              const Context &launcher_ctx);
-  void launch_offloaded_tasks_with_do_while(LaunchContextBuilder &ctx,
-                                            const Context &launcher_ctx);
+  void launch_offloaded_tasks(LaunchContextBuilder &ctx, const Context &launcher_ctx);
+  void launch_offloaded_tasks_with_do_while(LaunchContextBuilder &ctx, const Context &launcher_ctx);
   // Once-per-launch adstack setup (lazy-claim buffers + max-reducer dispatch), shared by the flat and
   // nested graph_do_while paths.
   void prepare_offloaded_tasks(LaunchContextBuilder &ctx,

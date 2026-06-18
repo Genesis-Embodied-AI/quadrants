@@ -357,8 +357,7 @@ void KernelLauncher::prepare_streaming_checkpoint_state(LaunchContextBuilder &ct
       break;
     }
   }
-  if (any_yield_on && max_cp_id >= 0 &&
-      launcher_ctx.checkpoint_yield_on_slots.size() < (std::size_t)max_cp_id + 1) {
+  if (any_yield_on && max_cp_id >= 0 && launcher_ctx.checkpoint_yield_on_slots.size() < (std::size_t)max_cp_id + 1) {
     launcher_ctx.checkpoint_yield_on_slots.resize((std::size_t)max_cp_id + 1, nullptr);
     for (std::size_t cp = 0; cp < ctx.checkpoint_yield_on_dev_ptrs.size() && (int)cp <= max_cp_id; ++cp) {
       if (ctx.checkpoint_yield_on_dev_ptrs[cp] && !launcher_ctx.checkpoint_yield_on_slots[cp]) {
