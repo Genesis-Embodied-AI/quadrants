@@ -480,8 +480,7 @@
 <li><p><code class="docutils literal notranslate"><span class="pre">build.py</span> <span class="pre">wheel</span></code> to build the wheel (via scikit-build-core, i.e. <code class="docutils literal notranslate"><span class="pre">pip</span> <span class="pre">wheel</span></code>)</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">build.py</span> <span class="pre">--shell</span></code> to enter a shell with environment variables set up as with <code class="docutils literal notranslate"><span class="pre">build.py</span> <span class="pre">wheel</span></code> in order to let you invoke yourself the commands.</p></li>
 </ul>
-<p>For incremental development, do an editable install (scikit-build-core “redirect”
-mode: the compiled core is installed and rebuilt on demand, Python edits are live):</p>
+<p>For incremental development, do an editable install (scikit-build-core “redirect” mode: the compiled core is installed and rebuilt on demand, Python edits are live):</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">./</span><span class="n">build</span><span class="o">.</span><span class="n">py</span> <span class="o">--</span><span class="n">shell</span> <span class="c1"># run a new shell with environment variables</span>
 <span class="n">pip</span> <span class="n">install</span> <span class="o">--</span><span class="n">no</span><span class="o">-</span><span class="n">build</span><span class="o">-</span><span class="n">isolation</span> <span class="o">-</span><span class="n">e</span> <span class="o">.</span> <span class="o">-</span><span class="n">Ceditable</span><span class="o">.</span><span class="n">rebuild</span><span class="o">=</span><span class="n">true</span>
 </pre></div>
