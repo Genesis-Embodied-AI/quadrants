@@ -1862,6 +1862,8 @@
 
         <span class="n">graph_do_while_arg</span> <span class="o">=</span> <span class="n">ASTTransformer</span><span class="o">.</span><span class="n">_is_graph_do_while_call</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">test</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">graph_do_while_arg</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.kernel</span><span class="w"> </span><span class="kn">import</span> <span class="n">GraphDoWhileLevel</span>  <span class="c1"># pylint: disable=C0415</span>
+
             <span class="n">kernel</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">global_context</span><span class="o">.</span><span class="n">current_kernel</span>
             <span class="n">arg_names</span> <span class="o">=</span> <span class="p">[</span><span class="n">m</span><span class="o">.</span><span class="n">name</span> <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="n">kernel</span><span class="o">.</span><span class="n">arg_metas</span><span class="p">]</span>
             <span class="k">if</span> <span class="n">graph_do_while_arg</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">arg_names</span><span class="p">:</span>
@@ -1872,8 +1874,31 @@
                 <span class="p">)</span>
             <span class="k">if</span> <span class="ow">not</span> <span class="n">kernel</span><span class="o">.</span><span class="n">use_graph</span><span class="p">:</span>
                 <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">&quot;qd.graph_do_while() requires @qd.kernel(graph=True)&quot;</span><span class="p">)</span>
-            <span class="n">kernel</span><span class="o">.</span><span class="n">graph_do_while_arg</span> <span class="o">=</span> <span class="n">graph_do_while_arg</span>
-            <span class="n">build_stmts</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">body</span><span class="p">)</span>
+            <span class="c1"># graph_do_while emits no loop IR; its body&#39;s for-loops must be top-level (offloaded) tasks. So it may only</span>
+            <span class="c1"># appear at the kernel top level or directly inside another graph_do_while (both at loop_depth 0), never</span>
+            <span class="c1"># inside a real for-loop.</span>
+            <span class="k">if</span> <span class="n">ctx</span><span class="o">.</span><span class="n">loop_depth</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span>
+                    <span class="s2">&quot;qd.graph_do_while() must be at the kernel top level or directly nested inside &quot;</span>
+                    <span class="s2">&quot;another qd.graph_do_while(); it cannot appear inside a for-loop.&quot;</span>
+                <span class="p">)</span>
+            <span class="c1"># Register this loop as a new nesting level (the body restriction is validated up-front in</span>
+            <span class="c1"># FunctionDefTransformer). Outer loops get lower ids than the inner loops they contain.</span>
+            <span class="n">parent_id</span> <span class="o">=</span> <span class="n">kernel</span><span class="o">.</span><span class="n">_graph_do_while_level_stack</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="k">if</span> <span class="n">kernel</span><span class="o">.</span><span class="n">_graph_do_while_level_stack</span> <span class="k">else</span> <span class="o">-</span><span class="mi">1</span>
+            <span class="n">level_id</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">kernel</span><span class="o">.</span><span class="n">graph_do_while_levels</span><span class="p">)</span>
+            <span class="n">kernel</span><span class="o">.</span><span class="n">graph_do_while_levels</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                <span class="n">GraphDoWhileLevel</span><span class="p">(</span><span class="n">cond_arg_name</span><span class="o">=</span><span class="n">graph_do_while_arg</span><span class="p">,</span> <span class="n">parent_id</span><span class="o">=</span><span class="n">parent_id</span><span class="p">)</span>
+            <span class="p">)</span>
+            <span class="k">if</span> <span class="n">level_id</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="n">kernel</span><span class="o">.</span><span class="n">graph_do_while_arg</span> <span class="o">=</span> <span class="n">graph_do_while_arg</span>
+            <span class="n">kernel</span><span class="o">.</span><span class="n">_graph_do_while_level_stack</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">level_id</span><span class="p">)</span>
+            <span class="n">ctx</span><span class="o">.</span><span class="n">ast_builder</span><span class="o">.</span><span class="n">set_graph_do_while_level_id</span><span class="p">(</span><span class="n">level_id</span><span class="p">)</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">build_stmts</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">body</span><span class="p">)</span>
+            <span class="k">finally</span><span class="p">:</span>
+                <span class="n">kernel</span><span class="o">.</span><span class="n">_graph_do_while_level_stack</span><span class="o">.</span><span class="n">pop</span><span class="p">()</span>
+                <span class="n">restore_id</span> <span class="o">=</span> <span class="n">kernel</span><span class="o">.</span><span class="n">_graph_do_while_level_stack</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="k">if</span> <span class="n">kernel</span><span class="o">.</span><span class="n">_graph_do_while_level_stack</span> <span class="k">else</span> <span class="o">-</span><span class="mi">1</span>
+                <span class="n">ctx</span><span class="o">.</span><span class="n">ast_builder</span><span class="o">.</span><span class="n">set_graph_do_while_level_id</span><span class="p">(</span><span class="n">restore_id</span><span class="p">)</span>
             <span class="k">return</span> <span class="kc">None</span>
 
         <span class="k">with</span> <span class="n">ctx</span><span class="o">.</span><span class="n">loop_scope_guard</span><span class="p">():</span>
