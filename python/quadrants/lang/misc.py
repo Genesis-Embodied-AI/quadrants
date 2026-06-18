@@ -789,13 +789,11 @@ def graph_parallel():
 
 
 @contextmanager
-def branch(name=None):
+def branch():
     """Declares one concurrent member of an enclosing ``qd.graph_parallel()`` region.
 
-    Used as ``with qd.branch():`` or ``with qd.branch(name="pt"):`` directly inside a
-    ``with qd.graph_parallel():`` block. The branch's body is an independent sequence of work that may
-    run concurrently with the region's other branches. ``name`` is optional and used only as a label for
-    profiling / graph introspection.
+    Used as ``with qd.branch():`` directly inside a ``with qd.graph_parallel():`` block. The branch's
+    body is an independent sequence of work that may run concurrently with the region's other branches.
 
     See ``qd.graph_parallel()`` for the full contract and backend behaviour.
     """
