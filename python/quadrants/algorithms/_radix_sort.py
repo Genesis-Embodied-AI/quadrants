@@ -60,7 +60,7 @@ from quadrants.lang.simt import block as _block
 from quadrants.types.annotations import template
 from quadrants.types.primitive_types import f32, f64, i32, i64, u32, u64
 
-from ._reduce import BLOCK_DIM, _at_least_one
+from ._reduce import BLOCK_DIM, _at_least_one, _validate_log256_max_n
 from ._scan import _emit_exclusive_scan_add
 
 RADIX_BITS = 8
@@ -316,6 +316,7 @@ def sort(
     host-side validation or scratch-sufficiency check (a DtoH would defeat graph capture) - pass distinct, same-shape
     buffers and size ``scratch`` correctly up front.
     """
+    _validate_log256_max_n(LOG256_MAX_N)
     KEY_WIDTH = static(_key_width_bits(KEY_DTYPE))
     NUM_PASSES = static(END_BIT // RADIX_BITS)
     NEEDS_TWIDDLE = static(KEY_DTYPE in _TWIDDLE_KEY_DTYPES)
@@ -386,6 +387,7 @@ def sort_scratch_slots(n, log256_max_n: int = None):
     """
     if log256_max_n is None:
         log256_max_n = _min_log256_for_n(n)
+    _validate_log256_max_n(log256_max_n)
     num_blocks = (n + (BLOCK_DIM - 1)) // BLOCK_DIM
     hist_len = num_blocks * RADIX_DIGITS
     cursor = hist_len

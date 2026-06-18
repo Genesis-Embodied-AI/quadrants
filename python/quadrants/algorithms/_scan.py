@@ -48,6 +48,7 @@ from ._reduce import (
     _reduce_phase,
     _scratch_dtype_for_width,
     _typed_zero_expr,
+    _validate_log256_max_n,
 )
 
 
@@ -334,6 +335,7 @@ def exclusive_scan_scratch_slots(n, log256_max_n: int = None) -> int:
     """
     if log256_max_n is None:
         log256_max_n = _reduce_depth_for_n(n)
+    _validate_log256_max_n(log256_max_n)
     if log256_max_n <= 1:
         return 1
     cursor = (n + (BLOCK_DIM - 1)) // BLOCK_DIM  # B0 partials from pass 1
@@ -481,6 +483,7 @@ def _emit_scan(arr, out, scratch, n, LOG256_MAX_N, DTYPE, WIDE, OP):
     partials (:func:`_emit_scan_inplace`, ``LOG256_MAX_N - 2`` further levels), pass 3 downsweep ``arr`` +
     ``scratch[0:B0]`` -> ``out``. An over-specified ``LOG256_MAX_N`` bottoms out at length-1 partials that scan as
     identity rungs."""
+    _validate_log256_max_n(LOG256_MAX_N)
     OP_BIN = _OP_BINS[OP]  # resolve the binary op at trace time so the @qd.func phases receive it as a template
     if LOG256_MAX_N == 1:
         _scan_tile_phase(arr, out, 0, 0, n, DTYPE, WIDE, OP, OP_BIN, False, False)

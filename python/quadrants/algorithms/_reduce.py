@@ -56,6 +56,31 @@ levels (so it is valid both host-side and inside a compiled kernel); once the co
 contributes 0, so a generous bound costs nothing in the returned slot count.
 """
 
+_MAX_LOG256_MAX_N = 4
+"""Largest ``LOG256_MAX_N`` (reduce / scan / sort recursion depth) any device op accepts.
+
+Quadrants tensors are indexed by signed 32-bit integers, so they hold at most ``2 ** 31 - 1`` elements. Each depth
+level multiplies the addressable element count by ``BLOCK_DIM`` (256), and ``BLOCK_DIM ** 4 == 256 ** 4 == 2 ** 32``
+already exceeds that limit, so a depth above 4 can never describe a valid input - it would only inflate the launch
+topology and the scratch footprint. :func:`_validate_log256_max_n` rejects anything larger.
+"""
+
+
+def _validate_log256_max_n(log256_max_n):
+    """Reject a ``LOG256_MAX_N`` larger than any i32-indexed tensor could ever need (see :data:`_MAX_LOG256_MAX_N`).
+
+    Called at trace / sizing time (the depth is always a compile-time constant) from every public op and depth-aware
+    ``*_scratch_slots`` helper, so the error surfaces at kernel-compile time rather than as a silently over-sized
+    launch. ``log256_max_n`` is a Python ``int`` in both host and kernel scope, so the check is a plain comparison.
+    """
+    if log256_max_n > _MAX_LOG256_MAX_N:
+        raise ValueError(
+            f"LOG256_MAX_N={log256_max_n} exceeds the maximum of {_MAX_LOG256_MAX_N}. Quadrants tensors are indexed "
+            f"by signed 32-bit integers, so they hold at most 2**31 - 1 elements; BLOCK_DIM ** {_MAX_LOG256_MAX_N} "
+            f"== 256 ** {_MAX_LOG256_MAX_N} == 2**32 already covers that range, so a larger depth can never address "
+            f"a valid tensor."
+        )
+
 
 def _level_partials_slots(n, start_cursor=0):
     """Scratch slots consumed by the per-level partials of a reduce/scan over ``n`` elements, counting from
@@ -334,6 +359,7 @@ def reduce_scratch_slots(n, log256_max_n: int = None) -> int:
     """
     if log256_max_n is None:
         log256_max_n = _reduce_depth_for_n(n)
+    _validate_log256_max_n(log256_max_n)
     cursor = 0
     cur = n
     for _ in range(log256_max_n - 1):
@@ -414,6 +440,7 @@ def _emit_reduce_rec(src, src_off, SRC_WIDE, scratch, cursor, out, n, phases_rem
 def _emit_reduce(arr, out, scratch, n, LOG256_MAX_N, DTYPE, WIDE, OP):
     """Emit a fixed-depth (``LOG256_MAX_N`` phases) reduce of ``arr[0:n]`` into ``out[0]``; see
     :func:`_emit_reduce_rec`."""
+    _validate_log256_max_n(LOG256_MAX_N)
     OP_BIN = _OP_BINS[OP]  # resolve the binary op at trace time so the @qd.func receives it as a template
     _emit_reduce_rec(arr, 0, False, scratch, 0, out, n, LOG256_MAX_N, DTYPE, WIDE, OP, OP_BIN)
 

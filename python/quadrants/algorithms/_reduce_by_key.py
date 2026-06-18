@@ -51,6 +51,7 @@ from ._reduce import (
     _OP_ADD,
     BLOCK_DIM,
     _at_least_one,
+    _validate_log256_max_n,
 )
 from ._scan import _emit_scan_inplace, _scan_total_scratch_slots
 
@@ -164,6 +165,7 @@ def reduce_by_key_add(
     generically). The five phases - head flags, in-place exclusive scan of those flags (the same staircase as
     ``exclusive_scan_add``, via :func:`_emit_scan_inplace`), zero ``values_out``, scatter, count - each emit as their
     own offloaded launch. Size ``scratch`` via :func:`reduce_by_key_scratch_slots` ``(capacity_n)``."""
+    _validate_log256_max_n(LOG256_MAX_N)
     _rbk_head_flags_phase(keys_in, scratch, 0, n)
     _emit_scan_inplace(scratch, 0, n, LOG256_MAX_N - 1, i32, u32, _OP_ADD, _bin_add)
     _rbk_zero_values_out_phase(values_out, n, VALUE_DTYPE)

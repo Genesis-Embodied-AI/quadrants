@@ -50,7 +50,7 @@ The capacity grows fast - each level multiplies it by 256:
 | `3`            | `16,777,216` |
 | `4`            | `4,294,967,296` (~ 4.3 billion) |
 
-`LOG256_MAX_N = 4` already exceeds what a 32-bit index can address (`256 ** 4 == 2 ** 32`), so in practice you rarely need more than 3-4.
+`LOG256_MAX_N = 4` already exceeds what a 32-bit index can address (`256 ** 4 == 2 ** 32`), so values above `4` can never describe a valid (i32-indexed) input and are rejected with a `ValueError`; in practice you rarely need more than 3-4.
 
 It must be compile-time because it fixes the number and order of the internal launches.
 

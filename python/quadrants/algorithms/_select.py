@@ -43,6 +43,7 @@ from ._reduce import (
     BLOCK_DIM,
     _at_least_one,
     _reduce_phase,
+    _validate_log256_max_n,
 )
 from ._scan import (
     _emit_scan_inplace,
@@ -107,6 +108,7 @@ def _emit_select_scan(flags, scratch, n, LOG256_MAX_N):
     re-read it), so the scan is out-of-place into ``scratch``. ``DTYPE`` is ``i32`` (flags-as-counts) staged through a
     ``u32`` (``WIDE``) scratch. ``n`` flows as an ``Expr``; ``LOG256_MAX_N`` is the compile-time phase count.
     """
+    _validate_log256_max_n(LOG256_MAX_N)
     if LOG256_MAX_N == 1:
         _scan_tile_phase(flags, scratch, 0, 0, n, i32, u32, _OP_ADD, _bin_add, False, True)
         return

@@ -714,6 +714,30 @@ def test_scratch_slots_are_at_least_one(n):
 
 
 # ---------------------------------------------------------------------------
+# Depth cap: Quadrants tensors are i32-indexed (<= 2**31 elements) and BLOCK_DIM ** 4 == 256 ** 4 == 2**32 already
+# covers that range, so a LOG256_MAX_N above 4 can never address a valid input. The depth-aware helpers (host-callable)
+# must reject it rather than silently over-allocate; the public ops route through the same check at compile time.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("n", [0, 1, 256, 100_000])
+@test_utils.test(arch=qd.cpu)
+def test_scratch_slots_reject_depth_above_max(n):
+    a = qd.algorithms
+    for depth in (5, 6, 8):
+        with pytest.raises(ValueError, match="LOG256_MAX_N"):
+            a.reduce_scratch_slots(n, depth)
+        with pytest.raises(ValueError, match="LOG256_MAX_N"):
+            a.exclusive_scan_scratch_slots(n, depth)
+        with pytest.raises(ValueError, match="LOG256_MAX_N"):
+            a.sort_scratch_slots(n, depth)
+    # The boundary value 4 is still accepted.
+    assert a.reduce_scratch_slots(n, 4) >= 1
+    assert a.exclusive_scan_scratch_slots(n, 4) >= 1
+    assert a.sort_scratch_slots(n, 4) >= 1
+
+
+# ---------------------------------------------------------------------------
 # Deprecated surfaces
 # ---------------------------------------------------------------------------
 
