@@ -69,10 +69,12 @@ To write the environment variables to a file, use `./build.py -w [filename]`. Fo
 ```
 ./build.py -w env.sh
 source env.sh
-# scikit-build-core reads CMake args from CMAKE_ARGS, not QUADRANTS_CMAKE_ARGS:
-export CMAKE_ARGS="$QUADRANTS_CMAKE_ARGS"
 pip install --no-build-isolation -e . -Ceditable.rebuild=true
 ```
+
+`build.py` exports both the legacy `QUADRANTS_CMAKE_ARGS` and the `CMAKE_ARGS` that scikit-build-core
+actually reads, so sourcing `env.sh` (or using `--shell`) is enough -- no manual
+`export CMAKE_ARGS="$QUADRANTS_CMAKE_ARGS"` step is needed.
 
 ## Building the package for release purposes
 

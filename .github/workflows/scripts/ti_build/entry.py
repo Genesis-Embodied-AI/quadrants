@@ -22,10 +22,8 @@ from .tinysh import Command, CommandFailed, nice, sh
 # -- code --
 @banner("Build Quadrants Wheel")
 def build_wheel(python: Command) -> None:
+    # cmake_args.writeback() populates both QUADRANTS_CMAKE_ARGS and (for scikit-build-core) CMAKE_ARGS.
     cmake_args.writeback()
-    # scikit-build-core reads CMake args from CMAKE_ARGS (space-separated); bridge it from the QUADRANTS_CMAKE_ARGS
-    # env that cmake_args.writeback() populates.
-    os.environ["CMAKE_ARGS"] = os.environ.get("QUADRANTS_CMAKE_ARGS", "")
 
     plat = None
     u = platform.uname()
