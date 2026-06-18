@@ -14,7 +14,7 @@ from .alter import handle_alternate_actions
 from .cmake import cmake_args
 from .compiler import setup_clang, setup_msvc
 from .llvm import setup_llvm
-from .misc import banner
+from .misc import banner, path_prepend
 from .ospkg import setup_os_pkgs
 from .sccache import setup_sccache
 from .tinysh import Command, CommandFailed, nice, sh
@@ -79,21 +79,50 @@ def setup_basic_build_env():
     return sccache, python
 
 
+def _venv_bindir(venv: str) -> str:
+    return os.path.join(venv, "Scripts" if platform.system() == "Windows" else "bin")
+
+
+@banner("Resolve virtualenv")
+def ensure_venv() -> None:
+    # The interactive `--shell` / `-w` flows target a virtualenv so the editable install works. If
+    # the user already activated one, use it; otherwise fall back to the repo's ./.venv. Exporting
+    # VIRTUAL_ENV and putting its bin first on PATH (both captured into env.sh / the --shell rc) makes
+    # python/pip/uv resolve to it even when the user did not activate it before invoking build.py --
+    # which is the common footgun, since `./build.py` runs under whatever `python` is on PATH.
+    if os.environ.get("VIRTUAL_ENV"):
+        return
+    candidate = os.path.join(os.getcwd(), ".venv")
+    if os.path.exists(os.path.join(_venv_bindir(candidate), "activate")):
+        os.environ["VIRTUAL_ENV"] = candidate
+        path_prepend("PATH", _venv_bindir(candidate))
+        misc.info(f"No active virtualenv; using the repo virtualenv at {candidate}")
+    else:
+        misc.warn(
+            f"No active virtualenv and none found at {candidate}. The editable install would run "
+            "against the system interpreter. Create one first, e.g. `uv venv --python 3.10`."
+        )
+
+
 @banner("Install Python dependency groups (dev, test)")
 def setup_python_deps() -> None:
     # Convenience for the interactive `--shell` / `-w` flows: install the dev + test dependency
-    # groups into the active virtualenv so a subsequent editable install works without a manual
-    # `uv pip install --group dev --group test`. Only runs inside a virtualenv -- it never touches a
-    # system / externally-managed interpreter, and the CI `wheel` path provisions deps separately.
-    if not os.environ.get("VIRTUAL_ENV"):
-        misc.warn("No active virtualenv (VIRTUAL_ENV unset); skipping dev/test dependency install.")
+    # groups into the target virtualenv so a subsequent editable install works without a manual
+    # `uv pip install --group dev --group test`. Skipped when no virtualenv could be resolved -- it
+    # never touches a system / externally-managed interpreter, and the CI `wheel` path provisions
+    # deps separately.
+    venv = os.environ.get("VIRTUAL_ENV")
+    if not venv:
         return
     groups = ("--group", "dev", "--group", "test")
     try:
         if shutil.which("uv"):
+            # uv installs into VIRTUAL_ENV.
             sh.uv("pip", "install", *groups)
         else:
-            sh.bake(sys.executable)("-m", "pip", "install", *groups)
+            # Target the venv's interpreter explicitly: sys.executable may be the system python that
+            # launched build.py, not the resolved venv.
+            sh.bake(os.path.join(_venv_bindir(venv), "python"))("-m", "pip", "install", *groups)
     except CommandFailed as e:
         misc.warn(
             f"Installing dev/test dependency groups failed ({e}); continuing. "
@@ -121,8 +150,9 @@ def action_wheel():
     else:
         sccache("--start-server")
 
-    # For the interactive convenience flows, make the active venv ready for an editable install.
+    # For the interactive convenience flows, resolve + prepare a venv for the editable install.
     if misc.options.shell or misc.options.write_env:
+        ensure_venv()
         setup_python_deps()
 
     handle_alternate_actions()
