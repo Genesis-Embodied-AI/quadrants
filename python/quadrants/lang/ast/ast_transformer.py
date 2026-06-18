@@ -1352,17 +1352,23 @@ class ASTTransformer(Builder):
                 return ASTTransformer.build_struct_for(ctx, node, is_grouped=False)
 
     @staticmethod
-    def _is_graph_do_while_call(node: ast.expr) -> str | None:
-        """If *node* is ``qd.graph_do_while(var)`` return the arg name, else None."""
+    def _is_graph_do_while_call(node: ast.expr) -> ast.expr | None:
+        """If *node* is ``qd.graph_do_while(arg)`` return the arg AST node, else None.
+
+        ``arg`` may be an ``ast.Name`` (a bare kernel parameter, e.g. ``counter``) or an ``ast.Attribute``
+        chain (a ``@qd.data_oriented`` member ndarray, e.g. ``self.counter``). It is resolved to a kernel
+        ndarray argument in ``build_While``.
+        """
         if not isinstance(node, ast.Call):
             return None
         func = node.func
-        if isinstance(func, ast.Attribute) and func.attr == "graph_do_while":
-            if len(node.args) == 1 and isinstance(node.args[0], ast.Name):
-                return node.args[0].id
-        if isinstance(func, ast.Name) and func.id == "graph_do_while":
-            if len(node.args) == 1 and isinstance(node.args[0], ast.Name):
-                return node.args[0].id
+        is_gdw = (isinstance(func, ast.Attribute) and func.attr == "graph_do_while") or (
+            isinstance(func, ast.Name) and func.id == "graph_do_while"
+        )
+        if not is_gdw:
+            return None
+        if len(node.args) == 1 and isinstance(node.args[0], (ast.Name, ast.Attribute)):
+            return node.args[0]
         return None
 
     @staticmethod
@@ -1373,22 +1379,58 @@ class ASTTransformer(Builder):
         return CheckpointTransformer.is_checkpoint_call(node, global_vars)
 
     @staticmethod
+    def _is_graph_parallel_call(node: ast.expr) -> bool:
+        """If *node* is a ``qd.graph_parallel()`` call return True, else False."""
+        if not isinstance(node, ast.Call):
+            return False
+        func = node.func
+        is_gp = (isinstance(func, ast.Attribute) and func.attr == "graph_parallel") or (
+            isinstance(func, ast.Name) and func.id == "graph_parallel"
+        )
+        if not is_gp:
+            return False
+        if node.args or node.keywords:
+            raise QuadrantsSyntaxError("qd.graph_parallel() takes no arguments")
+        return True
+
+    @staticmethod
+    def _is_branch_call(node: ast.expr) -> tuple[bool, str | None]:
+        """If *node* is ``qd.branch(...)`` return ``(True, name)``; otherwise ``(False, None)``.
+
+        ``name`` is the value of the optional ``name=`` kwarg (a string literal) or ``None``. The call shape is
+        validated here so misuse raises at the ``with`` site rather than later.
+        """
+        if not isinstance(node, ast.Call):
+            return False, None
+        func = node.func
+        is_branch = (isinstance(func, ast.Attribute) and func.attr == "branch") or (
+            isinstance(func, ast.Name) and func.id == "branch"
+        )
+        if not is_branch:
+            return False, None
+        if node.args:
+            raise QuadrantsSyntaxError("qd.branch() takes no positional arguments; use qd.branch(name='...') instead")
+        name: str | None = None
+        for kw in node.keywords:
+            if kw.arg != "name":
+                raise QuadrantsSyntaxError(
+                    f"qd.branch() got unexpected keyword argument {kw.arg!r}; only 'name' is supported"
+                )
+            if not (isinstance(kw.value, ast.Constant) and isinstance(kw.value.value, str)):
+                raise QuadrantsSyntaxError("qd.branch(name=...) must be a string literal")
+            name = kw.value.value
+        return True, name
+
+    @staticmethod
     def build_While(ctx: ASTTransformerFuncContext, node: ast.While) -> None:
         if node.orelse:
             raise QuadrantsSyntaxError("'else' clause for 'while' not supported in Quadrants kernels")
 
-        graph_do_while_arg = ASTTransformer._is_graph_do_while_call(node.test)
-        if graph_do_while_arg is not None:
+        graph_do_while_node = ASTTransformer._is_graph_do_while_call(node.test)
+        if graph_do_while_node is not None:
             from quadrants.lang.kernel import GraphDoWhileLevel  # pylint: disable=C0415
 
             kernel = ctx.global_context.current_kernel
-            arg_names = [m.name for m in kernel.arg_metas]
-            if graph_do_while_arg not in arg_names:
-                raise QuadrantsSyntaxError(
-                    f"qd.graph_do_while({graph_do_while_arg!r}) does not match any "
-                    f"parameter of kernel {kernel.func.__name__!r}. "
-                    f"Available parameters: {arg_names}"
-                )
             if not kernel.use_graph:
                 raise QuadrantsSyntaxError("qd.graph_do_while() requires @qd.kernel(graph=True)")
             # graph_do_while emits no loop IR; its body's for-loops must be top-level (offloaded) tasks. So it may only
@@ -1399,15 +1441,22 @@ class ASTTransformer(Builder):
                     "qd.graph_do_while() must be at the kernel top level or directly nested inside "
                     "another qd.graph_do_while(); it cannot appear inside a for-loop."
                 )
+            # Resolve the condition ndarray (bare parameter or @qd.data_oriented member) to its flat C++ arg-id at
+            # AST-build time -- the same id the runtime needs -- so the launch path forwards it directly with no name
+            # matching. `cond_arg_name` keeps the readable label (e.g. "counter" or "self.counter") for introspection
+            # and the legacy `graph_do_while_arg` alias.
+            cond_label, cond_cpp_arg_id = ASTTransformer._resolve_ndarray_kernel_arg_id(
+                ctx, kernel, graph_do_while_node, "qd.graph_do_while(...)"
+            )
             # Register this loop as a new nesting level (the body restriction is validated up-front in
             # FunctionDefTransformer). Outer loops get lower ids than the inner loops they contain.
             parent_id = kernel._graph_do_while_level_stack[-1] if kernel._graph_do_while_level_stack else -1
             level_id = len(kernel.graph_do_while_levels)
             kernel.graph_do_while_levels.append(
-                GraphDoWhileLevel(cond_arg_name=graph_do_while_arg, parent_id=parent_id)
+                GraphDoWhileLevel(cond_arg_name=cond_label, parent_id=parent_id, cond_cpp_arg_id=cond_cpp_arg_id)
             )
             if level_id == 0:
-                kernel.graph_do_while_arg = graph_do_while_arg
+                kernel.graph_do_while_arg = cond_label
             kernel._graph_do_while_level_stack.append(level_id)
             ctx.ast_builder.set_graph_do_while_level_id(level_id)
             try:
@@ -1615,9 +1664,17 @@ class ASTTransformer(Builder):
         if checkpoint_info is not None:
             return ASTTransformer._build_checkpoint_with(ctx, node, checkpoint_info)
 
+        if ASTTransformer._is_graph_parallel_call(item.context_expr):
+            return ASTTransformer._build_graph_parallel_with(ctx, node)
+
+        is_branch, branch_name = ASTTransformer._is_branch_call(item.context_expr)
+        if is_branch:
+            return ASTTransformer._build_branch_with(ctx, node, branch_name)
+
         if not FunctionDefTransformer._is_stream_parallel_with(node, ctx.global_vars):
             raise QuadrantsSyntaxError(
-                "'with' in Quadrants kernels only supports qd.stream_parallel() or qd.checkpoint()"
+                "'with' in Quadrants kernels only supports qd.stream_parallel(), qd.checkpoint(), "
+                "qd.graph_parallel(), or qd.branch()"
             )
         if not ctx.is_kernel:
             raise QuadrantsSyntaxError("qd.stream_parallel() can only be used inside @qd.kernel, not @qd.func")
@@ -1625,6 +1682,46 @@ class ASTTransformer(Builder):
         build_stmts(ctx, node.body)
         ctx.ast_builder.end_stream_parallel()
         return None
+
+    @staticmethod
+    def _resolve_ndarray_kernel_arg_id(
+        ctx: ASTTransformerFuncContext,
+        kernel,
+        node: ast.expr,
+        usage: str,
+    ) -> tuple[str, int]:
+        """Resolve an ndarray-referencing expression to ``(label, flat_cpp_arg_id)``.
+
+        Used by both ``qd.checkpoint(yield_on=...)`` and ``qd.graph_do_while(...)`` to turn the
+        control-flag argument into the flat C++ arg-id the runtime matches against. ``node`` is an
+        ``ast.Name`` (a bare kernel parameter, e.g. ``flag``) or an ``ast.Attribute`` chain (a
+        ``@qd.data_oriented`` member ndarray, e.g. ``self.flag``). We build the expression through the
+        normal AST machinery and read the arg-id off the resulting external-tensor expression -- this
+        unifies the bare-param and member-ndarray cases, since both flatten to a real ndarray kernel
+        argument carrying its arg-id on the ``ExternalTensorExpression``.
+
+        ``usage`` is the call form (e.g. ``"qd.checkpoint(yield_on=...)"``) used in the error message.
+        Raises ``QuadrantsSyntaxError`` if the expression does not resolve to an ndarray kernel argument.
+        """
+        from quadrants.lang.any_array import AnyArray  # pylint: disable=C0415
+
+        label = ast.unparse(node)
+        bad_arg = QuadrantsSyntaxError(
+            f"{usage} ({label}) does not match any parameter of kernel {kernel.func.__name__!r}. "
+            f"It must reference an ndarray kernel parameter or a @qd.data_oriented member ndarray "
+            f"(e.g. `self.flag`)."
+        )
+        try:
+            built = build_stmt(ctx, node)
+        except Exception as e:  # noqa: BLE001 - any resolution failure is a user-facing misuse of the flag arg
+            raise bad_arg from e
+        expr = built.ptr if isinstance(built, AnyArray) else built
+        if not (hasattr(expr, "is_external_tensor_expr") and expr.is_external_tensor_expr()):
+            raise bad_arg
+        arg_id = _qd_core.get_external_tensor_arg_id(expr)
+        if not arg_id:
+            raise bad_arg
+        return label, int(arg_id[0])
 
     @staticmethod
     def _build_checkpoint_with(
@@ -1635,6 +1732,75 @@ class ASTTransformer(Builder):
         """Thin forwarding wrapper around ``CheckpointTransformer.build_checkpoint_with``; the actual logic lives in
         ``ast_transformers/checkpoint_transformer.py``."""
         return CheckpointTransformer.build_checkpoint_with(ctx, node, info, build_stmts)
+
+    @staticmethod
+    def _build_graph_parallel_with(ctx: ASTTransformerFuncContext, node: ast.With) -> None:
+        """Handles ``with qd.graph_parallel():`` fork/join regions.
+
+        Validates the use-site (kernel must be graph=True, no nesting) and that the region body contains
+        only ``with qd.branch():`` blocks, then walks the body. The region emits no IR tag of its own --
+        each ``branch`` inside lowers to a stream-parallel group (via begin/end_stream_parallel), and the
+        CUDA graph builder forks the distinct groups in a contiguous run and joins them. Regions are kept
+        apart by the serial work between them (see d3_0_graph_parallel_impl.md)."""
+        if not ctx.is_kernel:
+            raise QuadrantsSyntaxError("qd.graph_parallel() can only be used inside @qd.kernel, not @qd.func")
+        kernel = ctx.global_context.current_kernel
+        if kernel is None or not kernel.use_graph:
+            raise QuadrantsSyntaxError("qd.graph_parallel() requires @qd.kernel(graph=True)")
+        if getattr(ctx, "_in_graph_parallel", False):
+            raise QuadrantsSyntaxError("qd.graph_parallel() regions cannot be nested")
+        if getattr(ctx, "_in_branch", False):
+            raise QuadrantsSyntaxError("qd.graph_parallel() cannot appear inside a qd.branch() body")
+        ASTTransformer._validate_graph_parallel_body(node.body)
+        ctx._in_graph_parallel = True
+        try:
+            build_stmts(ctx, node.body)
+        finally:
+            ctx._in_graph_parallel = False
+        return None
+
+    @staticmethod
+    def _validate_graph_parallel_body(stmts: list[ast.stmt]) -> None:
+        """A qd.graph_parallel() region body may contain only `with qd.branch():` blocks, optionally
+        wrapped in compile-time `if qd.static(...)` branches (the optional-branch pattern, e.g. qipc's
+        ENABLE_EE). Docstrings / coverage probes / `pass` are allowed. Anything else (a bare for-loop,
+        assignment, etc.) is a serial task that would silently fall outside any branch, so reject it."""
+        for i, stmt in enumerate(stmts):
+            if FunctionDefTransformer._is_docstring(stmt, i) or FunctionDefTransformer._is_coverage_probe(stmt):
+                continue
+            if isinstance(stmt, ast.Pass):
+                continue
+            if isinstance(stmt, ast.With) and stmt.items:
+                is_branch, _ = ASTTransformer._is_branch_call(stmt.items[0].context_expr)
+                if is_branch:
+                    continue
+            if isinstance(stmt, ast.If):
+                ASTTransformer._validate_graph_parallel_body(stmt.body)
+                ASTTransformer._validate_graph_parallel_body(stmt.orelse)
+                continue
+            raise QuadrantsSyntaxError(
+                "A qd.graph_parallel() region may contain only 'with qd.branch():' blocks (optionally "
+                "inside 'if qd.static(...)'). Move other work outside the region. "
+                f"[offending stmt {i}: {type(stmt).__name__}]"
+            )
+
+    @staticmethod
+    def _build_branch_with(ctx: ASTTransformerFuncContext, node: ast.With, name: str | None) -> None:
+        """Handles ``with qd.branch():`` members of a ``qd.graph_parallel()`` region.
+
+        Reuses the stream-parallel tagging: begin_stream_parallel() assigns this branch a fresh
+        ``stream_parallel_group_id`` that every for-loop in the body inherits, so the offloaded tasks
+        carry the branch id all the way to the graph builder. ``name`` is currently a label only."""
+        if not getattr(ctx, "_in_graph_parallel", False):
+            raise QuadrantsSyntaxError("qd.branch() can only be used directly inside a qd.graph_parallel() region")
+        ctx._in_branch = True
+        ctx.ast_builder.begin_stream_parallel()
+        try:
+            build_stmts(ctx, node.body)
+        finally:
+            ctx.ast_builder.end_stream_parallel()
+            ctx._in_branch = False
+        return None
 
     @staticmethod
     def build_Pass(ctx: ASTTransformerFuncContext, node: ast.Pass) -> None:

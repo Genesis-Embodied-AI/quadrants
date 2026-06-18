@@ -1007,3 +1007,144 @@ def test_graph_do_while_inside_for_loop_raises():
 
 if __name__ == "__main__":
     globals()[sys.argv[1]](sys.argv[2:])
+@test_utils.test()
+def test_graph_do_while_unresolvable_member_attr_raises():
+    """A graph_do_while condition that does not resolve to an ndarray kernel argument (here a bogus
+    attribute on an ndarray parameter) must error at the loop site with the standard message."""
+
+    @qd.kernel(graph=True)
+    def k(x: qd.types.ndarray(qd.i32, ndim=1), c: qd.types.ndarray(qd.i32, ndim=0)):
+        while qd.graph_do_while(c.not_an_attr):  # type: ignore[union-attr]
+            for i in range(x.shape[0]):
+                x[i] = x[i] + 1
+
+    x = qd.ndarray(qd.i32, shape=(4,))
+    c = qd.ndarray(qd.i32, shape=())
+    with pytest.raises(qd.QuadrantsSyntaxError, match="does not match any parameter"):
+        k(x, c)
+
+
+@test_utils.test()
+def test_graph_do_while_data_oriented_member_counter():
+    """graph_do_while accepts a @qd.data_oriented member ndarray (self.counter) as the loop condition.
+
+    The member flattens to a real ndarray kernel argument, so its flat C++ arg-id is resolved at
+    AST-build time exactly like a bare parameter -- it just reaches the arg via self. Mirrors
+    test_graph_do_while_counter, but both the data (self.x) and the counter live on self.
+    """
+    N = 64
+
+    @qd.data_oriented
+    class Stepper:
+        def __init__(self):
+            self.x = qd.ndarray(qd.i32, shape=(N,))
+            self.counter = qd.ndarray(qd.i32, shape=())
+
+        @qd.kernel(graph=True)
+        def step(self):
+            while qd.graph_do_while(self.counter):
+                for i in range(N):
+                    self.x[i] = self.x[i] + 1
+                for i in range(1):
+                    self.counter[()] = self.counter[()] - 1
+
+    s = Stepper()
+    s.x.from_numpy(np.zeros(N, dtype=np.int32))
+    s.counter.from_numpy(np.array(5, dtype=np.int32))
+
+    s.step()
+    if _is_graph_do_while_natively_supported():
+        assert _graph_used()
+        assert _graph_cache_size() == 1
+    assert s.counter.to_numpy() == 0
+    np.testing.assert_array_equal(s.x.to_numpy(), np.full(N, 5, dtype=np.int32))
+
+    # Second launch with a different start value reuses the cached graph and still terminates.
+    s.x.from_numpy(np.zeros(N, dtype=np.int32))
+    s.counter.from_numpy(np.array(10, dtype=np.int32))
+    s.step()
+    if _is_graph_do_while_natively_supported():
+        assert _graph_used()
+        assert _graph_cache_size() == 1
+    assert s.counter.to_numpy() == 0
+    np.testing.assert_array_equal(s.x.to_numpy(), np.full(N, 10, dtype=np.int32))
+
+
+@test_utils.test()
+def test_graph_do_while_data_oriented_member_metadata():
+    """The gdw level table records the dotted label (self.counter) for a member-ndarray condition, and
+    the legacy graph_do_while_arg alias mirrors the outermost level's label."""
+    N = 8
+
+    @qd.data_oriented
+    class Stepper:
+        def __init__(self):
+            self.x = qd.ndarray(qd.i32, shape=(N,))
+            self.counter = qd.ndarray(qd.i32, shape=())
+
+        @qd.kernel(graph=True)
+        def step(self):
+            while qd.graph_do_while(self.counter):
+                for i in range(N):
+                    self.x[i] = self.x[i] + 1
+                for i in range(1):
+                    self.counter[()] = self.counter[()] - 1
+
+    s = Stepper()
+    s.x.from_numpy(np.zeros(N, dtype=np.int32))
+    s.counter.from_numpy(np.array(3, dtype=np.int32))
+    s.step()
+
+    # `Stepper.step` is the @qd.data_oriented indirection wrapper; functools.update_wrapper copies the
+    # inner @qd.kernel callable's __dict__ (including `_primal`) onto it, so the Kernel that records the
+    # gdw level table is reachable directly as `Stepper.step._primal`.
+    primal = Stepper.step._primal
+    assert primal.graph_do_while_arg == "self.counter"
+    assert [lvl.cond_arg_name for lvl in primal.graph_do_while_levels] == ["self.counter"]
+    assert s.counter.to_numpy() == 0
+
+
+@test_utils.test()
+def test_graph_do_while_data_oriented_nested_members():
+    """Two nested graph_do_while loops driven by two distinct @qd.data_oriented member ndarrays. Guards
+    against arg-id mix-ups: each member must resolve to its own flat arg-id (mirrors
+    test_graph_do_while_nested_two_levels with self.outer / self.inner)."""
+    N = 32
+    OUTER, INNER = 3, 4
+
+    @qd.data_oriented
+    class Stepper:
+        def __init__(self):
+            self.x = qd.ndarray(qd.i32, shape=(N,))
+            self.outer = qd.ndarray(qd.i32, shape=())
+            self.inner = qd.ndarray(qd.i32, shape=())
+
+        @qd.kernel(graph=True)
+        def step(self):
+            while qd.graph_do_while(self.outer):
+                for _ in range(1):
+                    self.inner[()] = INNER
+                while qd.graph_do_while(self.inner):
+                    for i in range(N):
+                        self.x[i] = self.x[i] + 1
+                    for _ in range(1):
+                        self.inner[()] = self.inner[()] - 1
+                for _ in range(1):
+                    self.outer[()] = self.outer[()] - 1
+
+    s = Stepper()
+    s.x.from_numpy(np.zeros(N, dtype=np.int32))
+    s.outer.from_numpy(np.array(OUTER, dtype=np.int32))
+    s.inner.from_numpy(np.array(0, dtype=np.int32))
+
+    s.step()
+    if _is_graph_do_while_natively_supported():
+        assert _graph_used()
+        assert _graph_cache_size() == 1
+    assert s.outer.to_numpy() == 0
+    np.testing.assert_array_equal(s.x.to_numpy(), np.full(N, OUTER * INNER, dtype=np.int32))
+
+    primal = Stepper.step._primal
+    assert [lvl.cond_arg_name for lvl in primal.graph_do_while_levels] == ["self.outer", "self.inner"]
+
+

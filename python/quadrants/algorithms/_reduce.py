@@ -1,16 +1,32 @@
 # type: ignore
 """Device-wide reduce primitives.
 
-Provides the graph-composable ``qd.algorithms.reduce_{add,min,max}`` on top of the block-tier
-``block.reduce_{add,min,max}`` primitives, plus :func:`reduce_scratch_slots` for sizing the caller-owned scratch. See
-the design doc at ``perso_hugh/doc/qipc/qipc_device_algos_design.md`` for the algorithmic rationale.
+Implements ``qd.algorithms.reduce_{add,min,max}`` on top of the block-tier ``block.reduce_{add,min,max}``
+primitives. See the design doc at ``perso_hugh/doc/qipc/qipc_device_algos_design.md`` for the algorithmic rationale.
 
-Each ``reduce_{add,min,max}`` is a fixed-depth staircase of ``@qd.func`` phases (:func:`_reduce_phase`): call it at
-the **top level** of your own ``@qd.kernel`` with the live element count ``n`` as a device ``Expr`` and the recursion
-depth as a compile-time ``log256_max_n``, so one captured graph replays for any count ``<= BLOCK_DIM ** log256_max_n``.
-The per-block partials stage through a **caller-owned** scratch buffer (``u32`` for 4-byte element dtypes, ``u64`` for
-8-byte ones; ``~N / BLOCK_DIM`` slots) sized via :func:`reduce_scratch_slots`; the monoid identity (e.g. ``+inf`` for
-``min`` over ``f32``) is derived in-kernel from the element dtype, so no runtime identity arg is needed.
+Layout (host driver builds a recursion plan, kernels are the per-pass workers):
+
+- **First pass** reads the caller's input tensor (of the algorithm's ``dtype``) and writes per-block partials to the
+  shared scratch field as ``u32`` via ``qd.bit_cast``.
+- **Intermediate passes** (only needed when ``N`` is large enough to require more than two passes total - i.e.
+  ``B0 > BLOCK_DIM``) read from one slice of scratch (``u32`` → ``dtype`` via ``qd.bit_cast``) and write to another
+  slice (``dtype`` → ``u32`` via ``qd.bit_cast``).
+- **Last pass** reduces to a single value and writes it directly to the caller's ``out`` tensor as ``dtype`` (no
+  bit_cast on the write side).
+
+A single generic kernel handles every pass; ``src_is_u32`` and ``dst_is_u32`` are compile-time template flags
+selecting between the bit_cast and direct-read / direct-write paths.
+
+**Scratch.** ``reduce_*`` needs a **caller-owned** scratch buffer sized via
+:func:`reduce_scratch_slots` (``~N / BLOCK_DIM`` slots; the per-block partials live there between launches).
+The dtype is ``u32`` for 4-byte element types and ``u64`` for 8-byte ones (the partials are ``bit_cast`` to / from
+the element dtype). There is no module-level shared scratch - the caller always owns the buffer (graph- /
+multi-stream-safe, no global state); a too-small buffer raises :class:`InsufficientScratchError`.
+
+The reduce monoid identity (e.g. ``+inf`` for ``min`` over ``f32``, ``2**31 - 1`` for ``min`` over ``i32``) is passed
+to the kernel as its raw 4-byte bit pattern in a ``u32`` runtime arg, then ``qd.bit_cast``-ed to ``dtype`` inside the
+kernel. This bypasses the ``default_ip`` overflow check that ``cast(literal, dtype)`` would otherwise hit on the wider
+unsigned identities, and keeps ``identity`` out of the kernel template key (one fewer axis of cache fragmentation).
 """
 
 import struct
@@ -55,31 +71,6 @@ Each level divides the live element count by ``BLOCK_DIM`` (256), so ``_MAX_SCRA
 levels (so it is valid both host-side and inside a compiled kernel); once the count bottoms out each remaining level
 contributes 0, so a generous bound costs nothing in the returned slot count.
 """
-
-_MAX_LOG256_MAX_N = 4
-"""Largest ``log256_max_n`` (reduce / scan / sort recursion depth) any device op accepts.
-
-Quadrants tensors are indexed by signed 32-bit integers, so they hold at most ``2 ** 31 - 1`` elements. Each depth
-level multiplies the addressable element count by ``BLOCK_DIM`` (256), and ``BLOCK_DIM ** 4 == 256 ** 4 == 2 ** 32``
-already exceeds that limit, so a depth above 4 can never describe a valid input - it would only inflate the launch
-topology and the scratch footprint. :func:`_validate_log256_max_n` rejects anything larger.
-"""
-
-
-def _validate_log256_max_n(log256_max_n):
-    """Reject a ``log256_max_n`` larger than any i32-indexed tensor could ever need (see :data:`_MAX_LOG256_MAX_N`).
-
-    Called at trace / sizing time (the depth is always a compile-time constant) from every public op and depth-aware
-    ``*_scratch_slots`` helper, so the error surfaces at kernel-compile time rather than as a silently over-sized
-    launch. ``log256_max_n`` is a Python ``int`` in both host and kernel scope, so the check is a plain comparison.
-    """
-    if log256_max_n > _MAX_LOG256_MAX_N:
-        raise ValueError(
-            f"log256_max_n={log256_max_n} exceeds the maximum of {_MAX_LOG256_MAX_N}. Quadrants tensors are indexed "
-            f"by signed 32-bit integers, so they hold at most 2**31 - 1 elements; BLOCK_DIM ** {_MAX_LOG256_MAX_N} "
-            f"== 256 ** {_MAX_LOG256_MAX_N} == 2**32 already covers that range, so a larger depth can never address "
-            f"a valid tensor."
-        )
 
 
 def _level_partials_slots(n, start_cursor=0):
@@ -128,10 +119,65 @@ def _dtype_width_bytes(dtype) -> int:
     raise NotImplementedError(f"device reduce dtype {dtype} not supported")
 
 
+class InsufficientScratchError(RuntimeError):
+    """Raised by a ``qd.algorithms.*`` device op when the caller-supplied ``scratch`` buffer is too small.
+
+    Shared by every device algorithm (reduce, scan, select, reduce-by-key, radix sort) so callers can catch a single
+    type. Subclasses ``RuntimeError`` so existing ``except RuntimeError`` / ``pytest.raises(RuntimeError)`` call sites
+    keep working, while exposing the required size programmatically:
+
+    - ``err.required_slots`` - the minimum slot count the caller must allocate (equal to the op's
+      ``*_scratch_slots(N)``).
+    - ``err.provided_slots`` - what was actually supplied.
+    - ``err.slot_bytes`` / ``err.required_bytes`` / ``err.provided_bytes`` - byte-level view (4 for ``u32`` scratch,
+      8 for ``u64`` scratch).
+
+    This is the "try and fail with the size" path; the matching ``*_scratch_slots`` function is the "ask first" path.
+    """
+
+    def __init__(self, op: str, n: int, required_slots: int, provided_slots: int, slot_bytes: int = 4):
+        self.op = op
+        self.n = n
+        self.required_slots = required_slots
+        self.provided_slots = provided_slots
+        self.slot_bytes = slot_bytes
+        self.required_bytes = required_slots * slot_bytes
+        self.provided_bytes = provided_slots * slot_bytes
+        width = slot_bytes * 8
+        super().__init__(
+            f"{op} on N={n} needs >= {required_slots} u{width} scratch slots ({required_slots * slot_bytes} bytes, "
+            f"including all recursion levels), but the supplied scratch holds only {provided_slots} slots "
+            f"({provided_slots * slot_bytes} bytes). Allocate a 1-D u{width} scratch of at least "
+            f"{op}_scratch_slots(N)={required_slots} slots (e.g. qd.field(qd.u{width}, shape={required_slots}))."
+        )
+
+
 def _scratch_dtype_for_width(width: int):
     """Return the scratch element dtype an algorithm of element-width ``width`` bytes expects: ``u32`` for 4-byte
     element dtypes, ``u64`` for 8-byte ones (the partials are ``bit_cast`` to / from the element dtype)."""
     return u32 if width == 4 else u64
+
+
+def _validate_caller_scratch(op: str, n: int, scratch, required_slots: int, expected_dtype):
+    """Validate a caller-owned ``scratch`` buffer for a device algorithm.
+
+    Enforces the shared contract: ``scratch`` is mandatory (no module-level shared fallback), 1-D, of
+    ``expected_dtype`` (``u32`` or ``u64``), and holds at least ``required_slots`` slots. A too-small buffer raises
+    :class:`InsufficientScratchError` *before* the op launches anything, so partial side effects never corrupt the
+    caller's inputs.
+    """
+    width = 4 if expected_dtype == u32 else 8
+    if scratch is None:
+        raise TypeError(
+            f"{op} requires a caller-provided scratch buffer (there is no shared-scratch fallback); "
+            f"allocate a 1-D u{width * 8} scratch of {op}_scratch_slots(N) slots"
+        )
+    if not hasattr(scratch, "shape") or len(scratch.shape) != 1:
+        raise TypeError(f"{op} scratch must be a 1-D u{width * 8} tensor; got shape {getattr(scratch, 'shape', None)}")
+    if scratch.dtype != expected_dtype:
+        raise TypeError(f"{op} scratch must have dtype u{width * 8}; got {scratch.dtype}")
+    if scratch.shape[0] < required_slots:
+        raise InsufficientScratchError(op, n, required_slots, scratch.shape[0], slot_bytes=width)
 
 
 def _identity_bits(value, dtype) -> int:
@@ -290,12 +336,13 @@ def _reduce_pass_u64(
 # Graph-composable reduce: a fixed-depth staircase of @qd.func phases (device-resident count, compile-time depth)
 # ---------------------------------------------------------------------------------------------------------------------
 #
-# The ``reduce_{add,min,max}`` @qd.func forms below are the graph-composable reduce (the exact pattern
-# ``sort`` uses): call them at the **top level** of your own ``@qd.kernel`` (e.g. a qipc ``graph=True``
-# parent), passing the live count ``n`` as a device ``Expr`` and the recursion depth as a compile-time ``log256_max_n``.
-# ``n`` flows dynamically while ``log256_max_n`` fixes the launch topology, so one captured graph serves every count
-# ``<= BLOCK_DIM ** log256_max_n``. The identity is derived in-kernel from the element dtype and the per-block partials
-# stage through ``bit_cast``-into-scratch - see ``perso_hugh/doc/qipc/qipc_device_algos_design.md``.
+# The friendly host entries ``reduce_{add,min,max}`` below validate + size on the host and launch ``_reduce_kernel``
+# (one launch; the staircase is emitted *inside* the kernel). The ``reduce_{add,min,max}_func`` @qd.func forms are the
+# graph-composable counterparts (the exact pattern ``radix_sort_func`` uses): call them at the **top level** of your own
+# ``@qd.kernel`` (e.g. a qipc ``graph=True`` parent), passing the live count ``n`` as a device ``Expr`` and the recursion
+# depth as a compile-time ``LOG256_MAX_N``. ``n`` flows dynamically while ``LOG256_MAX_N`` fixes the launch topology, so
+# one captured graph serves every count ``<= BLOCK_DIM ** LOG256_MAX_N``. Same op-tree, identity, and
+# ``bit_cast``-into-scratch staging as the old host driver - see ``perso_hugh/doc/qipc/qipc_device_algos_design.md``.
 
 _OP_ADD = 0
 _OP_MIN = 1
@@ -313,7 +360,7 @@ def _typed_zero_expr(dtype):
 
 
 def _reduce_depth_for_n(n: int) -> int:
-    """Minimal ``log256_max_n >= 1`` such that ``BLOCK_DIM ** log256_max_n >= n`` - the number of reduce phases whose
+    """Minimal ``LOG256_MAX_N >= 1`` such that ``BLOCK_DIM ** LOG256_MAX_N >= n`` - the number of reduce phases whose
     final phase lands a single value in ``out`` (the base phase consumes ``<= BLOCK_DIM`` partials)."""
     depth = 1
     cap = BLOCK_DIM
@@ -323,25 +370,8 @@ def _reduce_depth_for_n(n: int) -> int:
     return depth
 
 
-def _at_least_one(slots):
-    """Clamp a (non-negative) scratch-slot count up to a minimum of ``1``.
-
-    The ``*_scratch_slots`` helpers legitimately compute ``0`` for the trivial / single-tile cases (a depth-1 reduce
-    writes straight to ``out``, an ``n <= BLOCK_DIM`` scan needs no partials, ``n <= 0`` needs nothing). Zero-sized
-    ``qd.field`` / ``qd.ndarray`` allocations are illegal, so we return at least one slot here rather than make every
-    caller wrap the result in ``max(..., 1)``. The op never touches that lone slot in those cases, so over-allocating
-    by one is free.
-
-    Branch-free and dual host-/kernel-callable, matching the rest of this arithmetic: ``slots < 1`` is ``0`` / ``1``
-    as a Python ``int`` (host) and an ``Expr`` (kernel, where ``n`` is a device-read count), whereas the builtin
-    ``max`` would need a Python ``bool`` an ``Expr`` cannot provide. ``slots`` is always ``>= 0``, so ``slots + (slots
-    < 1)`` equals ``max(slots, 1)``.
-    """
-    return slots + (slots < 1)
-
-
 def reduce_scratch_slots(n, log256_max_n: int = None) -> int:
-    """Number of scratch slots ``reduce_{add,min,max}`` need to reduce a length-``n`` input.
+    """Number of scratch slots ``reduce_{add,min,max}`` / ``*_func`` need to reduce a length-``n`` input.
 
     The staircase stacks the per-phase partials in scratch: phase 0 writes ``ceil(n / BLOCK_DIM)`` partials, phase 1
     ``ceil(.../BLOCK_DIM)``, ... for ``depth - 1`` phases (the final phase writes the single result straight to
@@ -349,23 +379,21 @@ def reduce_scratch_slots(n, log256_max_n: int = None) -> int:
     through ``u64``, both of this many slots)::
 
         slots = qd.algorithms.reduce_scratch_slots(N)
-        scratch = qd.field(qd.u32, shape=slots)   # u64 for i64 / u64 / f64 inputs
+        scratch = qd.field(qd.u32, shape=max(slots, 1))   # u64 for i64 / u64 / f64 inputs
 
     Two ways to call it: **explicit depth** ``reduce_scratch_slots(n, D)`` is host- **and** kernel-callable (branch-free
     arithmetic over the unrolled ``D`` loop, so ``n`` may be a Python ``int`` or a device-read ``Expr``); **auto depth**
-    ``reduce_scratch_slots(n)`` derives the minimal ``D`` from ``n`` (host-only). Always returns **at least 1** so the
-    result can size an allocation directly; the depth-1 case (``n <= BLOCK_DIM``, single phase writes straight to
-    ``out``) needs no real scratch and returns ``1`` (the lone slot is never touched).
+    ``reduce_scratch_slots(n)`` derives the minimal ``D`` from ``n`` (host-only). Returns ``0`` for ``depth == 1``
+    (``n <= BLOCK_DIM``: the single phase writes straight to ``out``).
     """
     if log256_max_n is None:
         log256_max_n = _reduce_depth_for_n(n)
-    _validate_log256_max_n(log256_max_n)
     cursor = 0
     cur = n
     for _ in range(log256_max_n - 1):
         cur = (cur + (BLOCK_DIM - 1)) // BLOCK_DIM
         cursor = cursor + cur  # ``+=`` would lower to atomic_add on a non-writable Expr in kernel scope
-    return _at_least_one(cursor)
+    return cursor
 
 
 @_func
@@ -376,52 +404,47 @@ def _reduce_phase(
     dst_off: i32,
     n: i32,
     total_threads: i32,
-    dtype: template(),
-    wide: template(),
-    op: template(),
-    op_bin: template(),
-    src_wide: template(),
-    dst_wide: template(),
+    DTYPE: template(),
+    WIDE: template(),
+    OP: template(),
+    OP_BIN: template(),
+    SRC_WIDE: template(),
+    DST_WIDE: template(),
 ):
     """One reduce phase: tile-reduce ``src[src_off:src_off+n]`` -> per-tile aggregates
-    ``dst[dst_off:dst_off+ceil(n/BLOCK_DIM)]`` under ``op`` (``_OP_{ADD,MIN,MAX}``, with ``op_bin`` the matching
+    ``dst[dst_off:dst_off+ceil(n/BLOCK_DIM)]`` under ``OP`` (``_OP_{ADD,MIN,MAX}``, with ``OP_BIN`` the matching
     ``_bin_*`` binary op).
 
     ``@qd.func`` phase of :func:`_emit_reduce` - its single top-level ``for`` becomes its own offloaded GPU launch (and
-    graph node) when inlined into a kernel. ``src_wide`` / ``dst_wide`` switch between the
-    ``qd.bit_cast``-through-``wide`` (``u32`` / ``u64``) scratch path and the direct caller-tensor path (the input on
-    the first phase, ``out`` on the last). Out-of-range lanes contribute the ``op`` identity (``0`` / ``+extremum`` /
-    ``-extremum``), derived in-kernel from ``dtype`` so no runtime identity arg is needed. ``v`` is initialised to that
-    identity *before* any branch (Quadrants requires a variable's first assignment at the outer scope; later ``if``
-    branches only reassign it).
+    graph node) when inlined into a kernel. ``SRC_WIDE`` / ``DST_WIDE`` switch between the ``qd.bit_cast``-through-``WIDE``
+    (``u32`` / ``u64``) scratch path and the direct caller-tensor path (the input on the first phase, ``out`` on the
+    last). Out-of-range lanes contribute the ``OP`` identity (``0`` / ``+extremum`` / ``-extremum``), derived in-kernel
+    from ``DTYPE`` so no runtime identity arg is needed. ``v`` is initialised to that identity *before* any branch
+    (Quadrants requires a variable's first assignment at the outer scope; later ``if`` branches only reassign it).
     """
     loop_config(block_dim=BLOCK_DIM)
     for i in range(total_threads):
-        # Iteration-boundary barrier so a wrapped grid-stride loop does not let the next iteration's block-reduce
-        # overwrite the shared-scratch slots while this iteration's reads are still in flight (WAR data race; UB on
-        # all backends, corrupts on Metal / MoltenVK). See _scan._scan_downsweep_phase for the full rationale.
-        _block.sync()
         tid = i % BLOCK_DIM
         block_id = i // BLOCK_DIM
-        v = _typed_zero_expr(dtype)  # typed additive identity; unconditional first assignment
-        if static(op == _OP_MIN):
+        v = _typed_zero_expr(DTYPE)  # typed additive identity; unconditional first assignment
+        if static(OP == _OP_MIN):
             v = _typed_min_identity(v)
-        elif static(op == _OP_MAX):
+        elif static(OP == _OP_MAX):
             v = _typed_max_identity(v)
         if i < n:
-            if static(src_wide):
-                v = bit_cast(src[src_off + i], dtype)
+            if static(SRC_WIDE):
+                v = bit_cast(src[src_off + i], DTYPE)
             else:
                 v = src[src_off + i]
-        agg = _block.reduce(v, BLOCK_DIM, op_bin, dtype)
+        agg = _block.reduce(v, BLOCK_DIM, OP_BIN, DTYPE)
         if tid == 0:
-            if static(dst_wide):
-                dst[dst_off + block_id] = bit_cast(agg, wide)
+            if static(DST_WIDE):
+                dst[dst_off + block_id] = bit_cast(agg, WIDE)
             else:
                 dst[dst_off + block_id] = agg
 
 
-def _emit_reduce_rec(src, src_off, src_wide, scratch, cursor, out, n, phases_remaining, dtype, wide, op, op_bin):
+def _emit_reduce_rec(src, src_off, SRC_WIDE, scratch, cursor, out, n, phases_remaining, DTYPE, WIDE, OP, OP_BIN):
     """Emit one rung of the reduce staircase at kernel-compile time, then recurse on the partials.
 
     ``n`` / ``src_off`` / ``cursor`` are Quadrants ``Expr``s (device, runtime); ``phases_remaining`` is a Python int so
@@ -430,78 +453,175 @@ def _emit_reduce_rec(src, src_off, src_wide, scratch, cursor, out, n, phases_rem
     above ``cursor`` and recurse. An over-specified depth bottoms out at length-1 buffers that reduce as identity rungs.
     """
     if phases_remaining == 1:
-        _reduce_phase(src, out, src_off, 0, n, BLOCK_DIM, dtype, wide, op, op_bin, src_wide, False)
+        _reduce_phase(src, out, src_off, 0, n, BLOCK_DIM, DTYPE, WIDE, OP, OP_BIN, SRC_WIDE, False)
         return
     B = (n + (BLOCK_DIM - 1)) // BLOCK_DIM
-    _reduce_phase(src, scratch, src_off, cursor, n, B * BLOCK_DIM, dtype, wide, op, op_bin, src_wide, True)
-    _emit_reduce_rec(scratch, cursor, True, scratch, cursor + B, out, B, phases_remaining - 1, dtype, wide, op, op_bin)
+    _reduce_phase(src, scratch, src_off, cursor, n, B * BLOCK_DIM, DTYPE, WIDE, OP, OP_BIN, SRC_WIDE, True)
+    _emit_reduce_rec(scratch, cursor, True, scratch, cursor + B, out, B, phases_remaining - 1, DTYPE, WIDE, OP, OP_BIN)
 
 
-def _emit_reduce(arr, out, scratch, n, log256_max_n, dtype, wide, op):
-    """Emit a fixed-depth (``log256_max_n`` phases) reduce of ``arr[0:n]`` into ``out[0]``; see
+def _emit_reduce(arr, out, scratch, n, LOG256_MAX_N, DTYPE, WIDE, OP):
+    """Emit a fixed-depth (``LOG256_MAX_N`` phases) reduce of ``arr[0:n]`` into ``out[0]``; see
     :func:`_emit_reduce_rec`."""
-    _validate_log256_max_n(log256_max_n)
-    op_bin = _OP_BINS[op]  # resolve the binary op at trace time so the @qd.func receives it as a template
-    _emit_reduce_rec(arr, 0, False, scratch, 0, out, n, log256_max_n, dtype, wide, op, op_bin)
+    OP_BIN = _OP_BINS[OP]  # resolve the binary op at trace time so the @qd.func receives it as a template
+    _emit_reduce_rec(arr, 0, False, scratch, 0, out, n, LOG256_MAX_N, DTYPE, WIDE, OP, OP_BIN)
 
 
-@_func(requires_top_level=True)
-def reduce_add(
+@_func
+def reduce_add_func(
     arr: template(),
     out: template(),
     scratch: template(),
     n: i32,
-    dtype: template(),
-    log256_max_n: template(),
+    DTYPE: template(),
+    LOG256_MAX_N: template(),
 ):
-    """Graph-composable ``out[0] = sum(arr[0:n])``.
-
-    **Experimental** - this API is new and may change in a future release.
+    """Graph-composable ``out[0] = sum(arr[0:n])`` - the @qd.func form of :func:`reduce_add`.
 
     Call at the **top level** of your own ``@qd.kernel`` (e.g. a qipc ``graph=True`` parent); never nest it in ordinary
     runtime ``for`` / ``if`` / ``while`` control flow (that demotes the phase loops and drops the per-phase grid-wide
-    barriers). ``n`` is a device ``Expr`` (the live count, read on-device); ``dtype`` is the element dtype (an ndarray
-    kernel arg exposes no ``.dtype`` in-kernel, so pass it explicitly); ``log256_max_n`` is the compile-time phase
-    count - the emitted reduce handles any count ``<= BLOCK_DIM ** log256_max_n``. Size ``scratch`` via
-    :func:`reduce_scratch_slots` ``(capacity_n, log256_max_n)``.
+    barriers). ``n`` is a device ``Expr`` (the live count, read on-device); ``DTYPE`` is the element dtype (an ndarray
+    kernel arg exposes no ``.dtype`` in-kernel, so pass it explicitly); ``LOG256_MAX_N`` is the compile-time phase
+    count - the emitted reduce handles any count ``<= BLOCK_DIM ** LOG256_MAX_N``. Size ``scratch`` via
+    :func:`reduce_scratch_slots` ``(capacity_n, LOG256_MAX_N)``.
     """
-    wide = _scratch_dtype_for_width(_dtype_width_bytes(dtype))  # compile-time (from the dtype template); not a static()
-    _emit_reduce(arr, out, scratch, n, log256_max_n, dtype, wide, _OP_ADD)
+    WIDE = _scratch_dtype_for_width(_dtype_width_bytes(DTYPE))  # compile-time (from the DTYPE template); not a static()
+    _emit_reduce(arr, out, scratch, n, LOG256_MAX_N, DTYPE, WIDE, _OP_ADD)
 
 
-@_func(requires_top_level=True)
-def reduce_min(
+@_func
+def reduce_min_func(
     arr: template(),
     out: template(),
     scratch: template(),
     n: i32,
-    dtype: template(),
-    log256_max_n: template(),
+    DTYPE: template(),
+    LOG256_MAX_N: template(),
 ):
-    """Graph-composable ``out[0] = min(arr[0:n])`` (identity derived from ``dtype``). **Experimental** (new API, may
-    change). See :func:`reduce_add` for the top-level-call contract and arg semantics."""
-    wide = _scratch_dtype_for_width(_dtype_width_bytes(dtype))  # compile-time (from the dtype template); not a static()
-    _emit_reduce(arr, out, scratch, n, log256_max_n, dtype, wide, _OP_MIN)
+    """Graph-composable ``out[0] = min(arr[0:n])`` - the @qd.func form of :func:`reduce_min` (identity derived from
+    ``DTYPE``). See :func:`reduce_add_func` for the top-level-call contract and arg semantics."""
+    WIDE = _scratch_dtype_for_width(_dtype_width_bytes(DTYPE))  # compile-time (from the DTYPE template); not a static()
+    _emit_reduce(arr, out, scratch, n, LOG256_MAX_N, DTYPE, WIDE, _OP_MIN)
 
 
-@_func(requires_top_level=True)
-def reduce_max(
+@_func
+def reduce_max_func(
     arr: template(),
     out: template(),
     scratch: template(),
     n: i32,
-    dtype: template(),
-    log256_max_n: template(),
+    DTYPE: template(),
+    LOG256_MAX_N: template(),
 ):
-    """Graph-composable ``out[0] = max(arr[0:n])`` (identity derived from ``dtype``). **Experimental** (new API, may
-    change). See :func:`reduce_add` for the top-level-call contract and arg semantics."""
-    wide = _scratch_dtype_for_width(_dtype_width_bytes(dtype))  # compile-time (from the dtype template); not a static()
-    _emit_reduce(arr, out, scratch, n, log256_max_n, dtype, wide, _OP_MAX)
+    """Graph-composable ``out[0] = max(arr[0:n])`` - the @qd.func form of :func:`reduce_max` (identity derived from
+    ``DTYPE``). See :func:`reduce_add_func` for the top-level-call contract and arg semantics."""
+    WIDE = _scratch_dtype_for_width(_dtype_width_bytes(DTYPE))  # compile-time (from the DTYPE template); not a static()
+    _emit_reduce(arr, out, scratch, n, LOG256_MAX_N, DTYPE, WIDE, _OP_MAX)
+
+
+@kernel
+def _reduce_kernel(
+    arr: template(),
+    out: template(),
+    scratch: template(),
+    n: i32,
+    DTYPE: template(),
+    OP: template(),
+    LOG256_MAX_N: template(),
+):
+    """Host-launch wrapper for the reduce staircase: a thin ``@qd.kernel`` dispatching to the matching
+    ``reduce_{add,min,max}_func`` at top level. ``n`` is a plain runtime count (the host already knows ``N``, so no
+    device round-trip is needed). Private - the public host entries are :func:`reduce_add` / ``_min`` / ``_max``.
+    """
+    if static(OP == _OP_MIN):
+        reduce_min_func(arr, out, scratch, n, DTYPE, LOG256_MAX_N)
+    elif static(OP == _OP_MAX):
+        reduce_max_func(arr, out, scratch, n, DTYPE, LOG256_MAX_N)
+    else:
+        reduce_add_func(arr, out, scratch, n, DTYPE, LOG256_MAX_N)
+
+
+def _reduce_host(arr, *, out, scratch, OP):
+    """Shared host entry for ``reduce_{add,min,max}``: validate, size, and launch :func:`_reduce_kernel`.
+
+    Keeps the friendly host contract (dtype / shape / scratch validation up front, with depth and ``N`` derived from
+    ``arr.shape``) while the device work is the single-launch graph-composable staircase. The ``reduce_*_func`` forms
+    skip this host check (a DtoH would defeat graph capture). ``N == 1`` is handled by the staircase itself (a single
+    block reduces the lone element into ``out[0]``), so there is no separate trivial path.
+    """
+    if not hasattr(arr, "shape") or len(arr.shape) != 1:
+        raise TypeError(f"device reduce expects a 1-D input tensor; got shape {getattr(arr, 'shape', None)}")
+    if not hasattr(out, "shape") or out.shape != (1,):
+        raise TypeError(f"device reduce expects out.shape == (1,); got {out.shape}")
+    if arr.dtype != out.dtype:
+        raise TypeError(f"device reduce dtype mismatch: arr={arr.dtype}, out={out.dtype}")
+    dtype = arr.dtype
+    if dtype not in _SUPPORTED_DTYPES:
+        raise NotImplementedError(
+            f"device reduce dtype {dtype} not supported (need one of "
+            f"{[d for d in _SUPPORTED_DTYPES]}); see design doc dtype matrix"
+        )
+    width = _dtype_width_bytes(dtype)
+    N = arr.shape[0]
+    log256_max_n = _reduce_depth_for_n(N)
+    required = reduce_scratch_slots(N, log256_max_n)
+    _validate_caller_scratch("reduce", N, scratch, required, _scratch_dtype_for_width(width))
+    _reduce_kernel(arr, out, scratch, N, dtype, OP, log256_max_n)
+
+
+def reduce_add(arr, out, scratch):
+    """Compute ``out[0] = sum(arr)`` on the device.
+
+    Args:
+        arr: 1-D tensor of any supported scalar dtype - ``{i32, u32, f32, i64, u64, f64}``. Pass a ``qd.field``,
+            ``qd.ndarray``, or ``qd.Tensor`` wrapper around either.
+        out: 1-element tensor of the same dtype as ``arr``. Caller-supplied so the call is fully asynchronous - no
+            implicit device-to-host sync. To get a Python scalar, do ``out.to_numpy()[0]`` explicitly after this
+            call.
+        scratch: caller-owned 1-D workspace of :func:`reduce_scratch_slots` ``(N)`` slots, ``u32`` for 4-byte
+            ``arr`` dtypes and ``u64`` for 8-byte ones. There is no module-level shared scratch; a too-small buffer
+            raises :class:`InsufficientScratchError`.
+
+    A fixed-depth tree reduction built on ``block.reduce_add``, emitted as one kernel launch. To compose the reduce
+    inside your own ``graph=True`` parent kernel, call :func:`reduce_add_func` directly. See the design doc at
+    ``perso_hugh/doc/qipc/qipc_device_algos_design.md``.
+    """
+    _reduce_host(arr, out=out, scratch=scratch, OP=_OP_ADD)
+
+
+def reduce_min(arr, out, scratch):
+    """Compute ``out[0] = min(arr)`` on the device.
+
+    Args:
+        arr: see ``reduce_add`` (any of ``{i32, u32, f32, i64, u64, f64}``).
+        out: see ``reduce_add``.
+        scratch: see ``reduce_add``.
+
+    The monoid identity is derived from ``arr.dtype`` automatically (the largest representable value:
+    ``+inf`` for ``f32`` / ``f64``, ``INT32_MAX`` / ``INT64_MAX`` for signed ints, ``UINT32_MAX`` / ``UINT64_MAX``
+    for unsigned). Mirrors the ``block.reduce_min`` / ``subgroup.reduce_min`` contract: the typed reduce
+    primitives do not take an identity argument because (op, dtype) fixes it. Call :func:`reduce_min_func` to compose
+    inside your own ``graph=True`` kernel.
+    """
+    _reduce_host(arr, out=out, scratch=scratch, OP=_OP_MIN)
+
+
+def reduce_max(arr, out, scratch):
+    """Compute ``out[0] = max(arr)`` on the device. Mirror of :func:`reduce_min` with ``max`` and the
+    dtype's *negative* extremum (``-inf`` for floats, ``INT32_MIN`` / ``INT64_MIN`` for signed ints, ``0`` for
+    unsigned ints), again derived from ``arr.dtype`` automatically. Call :func:`reduce_max_func` to compose inside your
+    own ``graph=True`` kernel.
+    """
+    _reduce_host(arr, out=out, scratch=scratch, OP=_OP_MAX)
 
 
 __all__ = [
+    "InsufficientScratchError",
     "reduce_add",
+    "reduce_add_func",
     "reduce_max",
+    "reduce_max_func",
     "reduce_min",
+    "reduce_min_func",
     "reduce_scratch_slots",
 ]

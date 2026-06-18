@@ -241,8 +241,8 @@ class ASTGenerator:
             ctx.only_parse_function_def = self.only_parse_function_def
             # Rebuild the graph_do_while level table from scratch each compilation pass (build_While appends to it as it
             # walks the AST). Skip when only_parse_function_def: the body is not walked, so build_While never runs to
-            # repopulate it -- and on a fast-cache restore the table was already rebuilt from the cached (cond_arg_name,
-            # parent_id) pairs in _try_load_fastcache.
+            # repopulate it -- and on a fast-cache restore the table was already rebuilt from the cached
+            # (cond_arg_name, parent_id, cond_cpp_arg_id) triples in _try_load_fastcache.
             if not ctx.only_parse_function_def:
                 self.current_kernel.graph_do_while_levels = []
                 self.current_kernel._graph_do_while_level_stack = []
@@ -293,8 +293,12 @@ class GraphDoWhileLevel:
     """One nested ``qd.graph_do_while`` loop in a ``graph=True`` kernel, indexed by level id (assigned
     outer-before-inner by the AST transformer). Mirrors the C++ ``GraphDoWhileLevel``."""
 
+    # Readable label of the condition ndarray (e.g. "counter" for a bare parameter or "self.counter" for
+    # a @qd.data_oriented member); used for introspection and the legacy `graph_do_while_arg` alias.
     cond_arg_name: str
     parent_id: int
+    # Flat C++ arg index of the condition ndarray, resolved at AST-build time (see build_While) or
+    # restored from the fast-cache. The runtime matches this against the launch arg ids.
     cond_cpp_arg_id: int = -1
 
 
@@ -344,8 +348,9 @@ class Kernel(FuncBase):
         self._graph_do_while_level_stack: list[int] = []
         # Per-checkpoint metadata, one entry per `with qd.checkpoint(...)` block (explicit AND auto-injected implicit)
         # in declaration order. List index is the checkpoint's internal `cp_id` (0, 1, 2, ... dense, flat across the
-        # kernel). Each entry is the name of the `yield_on=` kernel parameter, or `None` for implicit checkpoints
-        # (which never yield). Populated by the AST transformer; empty means the kernel uses no checkpoints.
+        # kernel). Each entry is the name (or dotted name like "self.flag") of the `yield_on=` kernel parameter, or
+        # `None` for implicit checkpoints (which never yield). Populated by the AST transformer; empty means the
+        # kernel uses no checkpoints.
         self.checkpoint_yield_on_args: list[str | None] = []
         # User-facing labels for explicit checkpoints. Same indexing as `checkpoint_yield_on_args`: entry `i` is the int
         # (or IntEnum value) the user passed as the first positional arg of `qd.checkpoint(cp_id, yield_on)` for the
@@ -354,6 +359,16 @@ class Kernel(FuncBase):
         # `IntEnum` round-trips: writing `qd.checkpoint(Stage.SIM, ...)` and then reading `status.checkpoint` returns
         # `Stage.SIM` rather than the raw int.
         self.checkpoint_user_labels_by_cp_id: list[int | None] = []
+        # Parallel to `checkpoint_yield_on_args`, one entry per checkpoint in declaration order. Each entry is
+        # the resolved flat C++ arg-id of the `yield_on=` ndarray (bare parameter or `@qd.data_oriented` member),
+        # or `-1` for checkpoints without a `yield_on=`. Resolved at AST-build time (see
+        # `_build_checkpoint_with`), so the launch path forwards these directly with no per-launch name matching.
+        # Transient: rebuilt each AST pass; snapshotted per compiled key into `_checkpoint_yield_on_cpp_arg_ids_by_key`.
+        self.checkpoint_yield_on_cpp_arg_ids: list[int] = []
+        # Per-compiled-key snapshot of `checkpoint_yield_on_cpp_arg_ids`, captured at materialize time. The flat
+        # arg-id of a `yield_on=` ndarray can in principle differ across spec-keys (template expansion / different
+        # data_oriented instances), so it is keyed like `_struct_ndarray_launch_info_by_key`.
+        self._checkpoint_yield_on_cpp_arg_ids_by_key: dict[CompiledKernelKeyType, list[int]] = {}
         self.quadrants_callable: QuadrantsCallable | None = None
         self.visited_functions: set[FunctionSourceInfo] = set()
         self.kernel_function_info: FunctionSourceInfo | None = None
@@ -397,7 +412,7 @@ class Kernel(FuncBase):
                 self.raise_on_templated_floats, kernel_source_info, args, self.arg_metas
             )
             used_py_dataclass_parameters = None
-            cached_graph_do_while_levels: list[tuple[str, int]] | None = None
+            cached_graph_do_while_levels: list[tuple[str, int, int]] | None = None
             if self.fast_checksum:
                 self.src_ll_cache_observations.cache_key_generated = True
                 used_py_dataclass_parameters, frontend_cache_key, cached_graph_do_while_levels = src_hasher.load(  # type: ignore[reportAssignmentType]
@@ -417,11 +432,12 @@ class Kernel(FuncBase):
                     self.src_ll_cache_observations.cache_loaded = True
                     self.used_py_dataclass_parameters_by_key_enforcing[key] = used_py_dataclass_parameters
                     # Fast-cache restore skips AST transformation, so rebuild the gdw level table (and the legacy
-                    # outermost-arg alias) from the cached (cond_arg_name, parent_id) pairs.
+                    # outermost-arg alias) from the cached (cond_arg_name, parent_id, cond_cpp_arg_id) triples -- the
+                    # arg-id is restored directly since there is no AST pass to re-resolve it.
                     if cached_graph_do_while_levels:
                         self.graph_do_while_levels = [
-                            GraphDoWhileLevel(cond_arg_name=name, parent_id=parent)
-                            for name, parent in cached_graph_do_while_levels
+                            GraphDoWhileLevel(cond_arg_name=name, parent_id=parent, cond_cpp_arg_id=cond_arg_id)
+                            for name, parent, cond_arg_id in cached_graph_do_while_levels
                         ]
                         self.graph_do_while_arg = self.graph_do_while_levels[0].cond_arg_name
                     return used_py_dataclass_parameters
@@ -514,6 +530,8 @@ class Kernel(FuncBase):
                     self._struct_ndarray_launch_info_by_key[key] = getattr(
                         ctx.global_context, "struct_ndarray_launch_info", []
                     )
+                    # Snapshot the AST-resolved `yield_on=` arg-ids for this key (see `checkpoint_yield_on_cpp_arg_ids`).
+                    self._checkpoint_yield_on_cpp_arg_ids_by_key[key] = list(self.checkpoint_yield_on_cpp_arg_ids)
                 else:
                     for used_parameters in pruning.used_vars_by_func_id.values():
                         new_used_parameters = set()
@@ -668,7 +686,8 @@ class Kernel(FuncBase):
                         self.visited_functions,
                         self.used_py_dataclass_parameters_by_key_enforcing[key],
                         graph_do_while_levels=[  # type: ignore[reportCallIssue]
-                            (level.cond_arg_name, level.parent_id) for level in self.graph_do_while_levels
+                            (level.cond_arg_name, level.parent_id, level.cond_cpp_arg_id)
+                            for level in self.graph_do_while_levels
                         ],
                     )
                     self.src_ll_cache_observations.cache_stored = True

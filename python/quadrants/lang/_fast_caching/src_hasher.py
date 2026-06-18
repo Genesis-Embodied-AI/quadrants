@@ -17,9 +17,10 @@ from .fast_caching_types import HashedFunctionSourceInfo
 from .hash_utils import hash_iterable_strings
 from .python_side_cache import PythonSideCache
 
-# Bumped whenever the persisted CacheValue schema changes (see create_cache_key). v2 replaced the single
-# graph_do_while_arg string with a nested level table.
-_CACHE_VALUE_SCHEMA_VERSION = "cachevalue-v2-gdw-levels"
+# Bumped whenever the persisted CacheValue schema changes (see create_cache_key). v2 replaced the
+# single graph_do_while_arg string with a nested level table; v3 added the resolved cond_cpp_arg_id to
+# each level so member-ndarray / data-oriented conditions restore without an AST pass.
+_CACHE_VALUE_SCHEMA_VERSION = "cachevalue-v3-gdw-argid"
 
 
 def create_cache_key(
@@ -57,8 +58,9 @@ def create_cache_key(
             str(kernel_source_info.start_lineno),
             "pruned",
             "kcov" if os.environ.get("QD_KERNEL_COVERAGE") == "1" else "",
-            # Fast-cache value schema version. Bump when CacheValue's stored fields change so stale entries are not
-            # mis-read. v2: graph_do_while single-arg -> nested level table.
+            # Fast-cache value schema version. Bump when CacheValue's stored fields change so stale
+            # entries are not mis-read. v2: graph_do_while single-arg -> nested level table. v3: each
+            # level also stores its resolved cond_cpp_arg_id.
             _CACHE_VALUE_SCHEMA_VERSION,
         )
     )
@@ -69,9 +71,10 @@ class CacheValue(BaseModel):
     frontend_cache_key: str
     hashed_function_source_infos: list[HashedFunctionSourceInfo]
     used_py_dataclass_parameters: set[str]
-    # Nested graph_do_while level table as (cond_arg_name, parent_id) pairs, indexed by level id. None / empty for
-    # kernels without graph_do_while.
-    graph_do_while_levels: list[tuple[str, int]] | None = None
+    # Nested graph_do_while level table as (cond_arg_name, parent_id, cond_cpp_arg_id) triples, indexed
+    # by level id. None / empty for kernels without graph_do_while. cond_cpp_arg_id is the flat C++ arg
+    # index of the condition ndarray, valid for this cache key's arg layout.
+    graph_do_while_levels: list[tuple[str, int, int]] | None = None
 
 
 def store(
@@ -79,7 +82,7 @@ def store(
     fast_cache_key: str,
     function_source_infos: Iterable[FunctionSourceInfo],
     used_py_dataclass_parameters: set[str],
-    graph_do_while_levels: list[tuple[str, int]] | None = None,
+    graph_do_while_levels: list[tuple[str, int, int]] | None = None,
 ) -> None:
     """
     Note that unlike other caches, this cache is not going to store the actual value we want.
@@ -127,7 +130,7 @@ def _try_load(cache_key: str) -> CacheValue | None:
 
 def load(
     cache_key: str,
-) -> tuple[set[str], str, list[tuple[str, int]] | None] | tuple[None, None, None]:
+) -> tuple[set[str], str, list[tuple[str, int, int]] | None] | tuple[None, None, None]:
     """
     loads function source infos from cache, if available
     checks the hashes against the current source code

@@ -7,11 +7,12 @@ Implements ``qd.algorithms.reduce_by_key_add`` on top of the existing device exc
 Reduce-by-key takes two parallel 1-D tensors - ``keys`` and ``values`` - and collapses every **consecutive run of
 equal keys** into a single output entry ``(unique_key, sum_of_values_in_run)``. Keys that are equal but separated by
 other keys are treated as separate runs. To compute a global per-key sum, sort by key first (e.g. via
-``qd.algorithms.sort``) and then reduce-by-key.
+``qd.algorithms.radix_sort``) and then reduce-by-key.
 
 Algorithm (scan + scatter; no segmented-scan primitive needed), emitted as a fixed-depth staircase of ``@qd.func``
-phases (call ``reduce_by_key_add`` at the **top level** of your own ``@qd.kernel`` - e.g. a qipc ``graph=True``
-parent - with the live count ``n`` as a device ``Expr`` and the compile-time ``log256_max_n`` phase count):
+phases inside a single kernel launch (``reduce_by_key_add`` validates + sizes on the host, then launches
+``_reduce_by_key_add_kernel`` -> ``reduce_by_key_add_func``; ``reduce_by_key_add_func`` is also public so qipc can
+compose the reduce-by-key at the top level of its own ``graph=True`` kernel):
 
 1. **Head-flag pass** (``_rbk_head_flags_phase``). Compute ``head_flags[i] = 1`` if ``i == 0 or keys[i] != keys[i-1]``,
    else ``0``, directly into the caller's ``u32`` scratch ``scratch[0:N]`` (storing the ``i32`` flag bit-cast to
@@ -37,23 +38,27 @@ This first-land scope supports only the ``add`` reduction. ``min`` / ``max`` var
 
 **Scratch.** A **caller-owned** 1-D ``u32`` buffer of :func:`reduce_by_key_scratch_slots` ``(N)`` slots
 (``positions = scratch[0:N]`` plus the scan partials above them, ≈ ``1.004 * N``). There is no module-level shared
-scratch - the caller always owns the buffer.
+scratch - the caller always owns the buffer; a too-small buffer raises :class:`InsufficientScratchError`.
 """
 
 from quadrants.lang.kernel_impl import func as _func
+from quadrants.lang.kernel_impl import kernel
 from quadrants.lang.misc import loop_config
 from quadrants.lang.ops import atomic_add, bit_cast
 from quadrants.lang.simt.reductions import _bin_add
 from quadrants.types.annotations import template
-from quadrants.types.primitive_types import i32, u32
+from quadrants.types.primitive_types import f32, i32, u32
 
 from ._reduce import (
-    _OP_ADD,
     BLOCK_DIM,
-    _at_least_one,
-    _validate_log256_max_n,
+    _OP_ADD,
+    _reduce_depth_for_n,
+    _validate_caller_scratch,
 )
 from ._scan import _emit_scan_inplace, _scan_total_scratch_slots
+
+_SUPPORTED_KEY_DTYPES = (u32, i32, f32)
+_SUPPORTED_VALUE_DTYPES = (u32, i32, f32)
 
 
 @_func
@@ -78,17 +83,17 @@ def _rbk_head_flags_phase(keys_in: template(), head_flags: template(), head_flag
 
 
 @_func
-def _rbk_zero_values_out_phase(values_out: template(), N: i32, value_dtype: template()):
+def _rbk_zero_values_out_phase(values_out: template(), N: i32, VALUE_DTYPE: template()):
     """Set ``values_out[0 : N] = 0`` so the scatter ``atomic_add`` lands onto a clean additive identity. ``N`` is the
     upper bound on ``num_runs``; the caller-supplied ``values_out`` may be longer but we only need the prefix that the
     scatter can touch.
 
-    We write ``bit_cast(u32(0), value_dtype)`` rather than relying on ``v - v == 0`` because the latter compiles to a
+    We write ``bit_cast(u32(0), VALUE_DTYPE)`` rather than relying on ``v - v == 0`` because the latter compiles to a
     real subtract for ``f32`` (and yields NaN if the slot held NaN garbage from a prior allocation), whereas the
     bit-cast lowers to a plain store.
     """
     for i in range(N):
-        values_out[i] = bit_cast(u32(0), value_dtype)
+        values_out[i] = bit_cast(u32(0), VALUE_DTYPE)
 
 
 @_func
@@ -142,8 +147,8 @@ def _rbk_count_phase(keys_in: template(), positions: template(), positions_off: 
         num_runs[0] = pos_last + head_last
 
 
-@_func(requires_top_level=True)
-def reduce_by_key_add(
+@_func
+def reduce_by_key_add_func(
     keys_in: template(),
     values_in: template(),
     keys_out: template(),
@@ -151,26 +156,86 @@ def reduce_by_key_add(
     num_runs: template(),
     scratch: template(),
     n: i32,
-    value_dtype: template(),
-    log256_max_n: template(),
+    VALUE_DTYPE: template(),
+    LOG256_MAX_N: template(),
 ):
-    """Graph-composable reduce-by-key (add).
-
-    **Experimental** - this API is new and may change in a future release.
+    """Graph-composable reduce-by-key (add) - the ``@qd.func`` form of :func:`reduce_by_key_add`.
 
     Call at the **top level** of your own ``@qd.kernel`` (e.g. a qipc ``graph=True`` parent); never nest it in
     ordinary runtime ``for`` / ``if`` / ``while`` control flow. ``n`` is the live element count as a device ``Expr``;
-    ``log256_max_n`` is the compile-time phase count (any count ``<= BLOCK_DIM ** log256_max_n``). ``value_dtype``
+    ``LOG256_MAX_N`` is the compile-time phase count (any count ``<= BLOCK_DIM ** LOG256_MAX_N``). ``VALUE_DTYPE``
     is the values dtype (needed only to write the typed zero before the scatter ``atomic_add``; keys are handled
     generically). The five phases - head flags, in-place exclusive scan of those flags (the same staircase as
     ``exclusive_scan_add``, via :func:`_emit_scan_inplace`), zero ``values_out``, scatter, count - each emit as their
     own offloaded launch. Size ``scratch`` via :func:`reduce_by_key_scratch_slots` ``(capacity_n)``."""
-    _validate_log256_max_n(log256_max_n)
     _rbk_head_flags_phase(keys_in, scratch, 0, n)
-    _emit_scan_inplace(scratch, 0, n, log256_max_n - 1, i32, u32, _OP_ADD, _bin_add)
-    _rbk_zero_values_out_phase(values_out, n, value_dtype)
+    _emit_scan_inplace(scratch, 0, n, LOG256_MAX_N - 1, i32, u32, _OP_ADD, _bin_add)
+    _rbk_zero_values_out_phase(values_out, n, VALUE_DTYPE)
     _rbk_scatter_phase(keys_in, values_in, scratch, 0, keys_out, values_out, n)
     _rbk_count_phase(keys_in, scratch, 0, n, num_runs)
+
+
+@kernel
+def _reduce_by_key_add_kernel(
+    keys_in: template(),
+    values_in: template(),
+    keys_out: template(),
+    values_out: template(),
+    num_runs: template(),
+    scratch: template(),
+    n: i32,
+    VALUE_DTYPE: template(),
+    LOG256_MAX_N: template(),
+):
+    """Host-launch wrapper for :func:`reduce_by_key_add_func` (one launch; all five phases emit inside). ``n`` is a
+    plain runtime count (the host knows ``N``). Private - the public host entry is :func:`reduce_by_key_add`."""
+    reduce_by_key_add_func(keys_in, values_in, keys_out, values_out, num_runs, scratch, n, VALUE_DTYPE, LOG256_MAX_N)
+
+
+def _validate_inputs(keys_in, values_in, keys_out, values_out, num_runs):
+    if not hasattr(keys_in, "shape") or len(keys_in.shape) != 1:
+        raise TypeError(f"reduce_by_key_add expects 1-D keys_in; got shape {getattr(keys_in, 'shape', None)}")
+    if not hasattr(values_in, "shape") or values_in.shape != keys_in.shape:
+        raise TypeError(
+            f"reduce_by_key_add expects values_in.shape == keys_in.shape; got "
+            f"keys_in={keys_in.shape}, values_in={values_in.shape}"
+        )
+    if not hasattr(keys_out, "shape") or len(keys_out.shape) != 1:
+        raise TypeError(f"reduce_by_key_add expects 1-D keys_out; got shape {getattr(keys_out, 'shape', None)}")
+    if keys_out.dtype != keys_in.dtype:
+        raise TypeError(f"reduce_by_key_add dtype mismatch: keys_in={keys_in.dtype}, keys_out={keys_out.dtype}")
+    if not hasattr(values_out, "shape") or len(values_out.shape) != 1:
+        raise TypeError(
+            f"reduce_by_key_add expects 1-D values_out; got shape {getattr(values_out, 'shape', None)}"
+        )
+    if values_out.dtype != values_in.dtype:
+        raise TypeError(
+            f"reduce_by_key_add dtype mismatch: values_in={values_in.dtype}, values_out={values_out.dtype}"
+        )
+    if keys_out.shape[0] < keys_in.shape[0]:
+        raise ValueError(
+            f"reduce_by_key_add keys_out.shape[0]={keys_out.shape[0]} < keys_in.shape[0]={keys_in.shape[0]}; "
+            f"keys_out must hold at least N entries (worst case: every key is unique)"
+        )
+    if values_out.shape[0] < values_in.shape[0]:
+        raise ValueError(
+            f"reduce_by_key_add values_out.shape[0]={values_out.shape[0]} < values_in.shape[0]={values_in.shape[0]}; "
+            f"values_out must hold at least N entries"
+        )
+    if not hasattr(num_runs, "shape") or num_runs.shape != (1,):
+        raise TypeError(f"reduce_by_key_add expects num_runs.shape == (1,); got {num_runs.shape}")
+    if num_runs.dtype != i32:
+        raise TypeError(f"reduce_by_key_add expects num_runs.dtype == qd.i32; got {num_runs.dtype}")
+    if keys_in.dtype not in _SUPPORTED_KEY_DTYPES:
+        raise NotImplementedError(
+            f"reduce_by_key_add keys dtype {keys_in.dtype} not in first-land set "
+            f"{[d for d in _SUPPORTED_KEY_DTYPES]}; see design doc dtype matrix"
+        )
+    if values_in.dtype not in _SUPPORTED_VALUE_DTYPES:
+        raise NotImplementedError(
+            f"reduce_by_key_add values dtype {values_in.dtype} not in first-land set "
+            f"{[d for d in _SUPPORTED_VALUE_DTYPES]}; see design doc dtype matrix"
+        )
 
 
 def reduce_by_key_scratch_slots(n: int) -> int:
@@ -182,16 +247,52 @@ def reduce_by_key_scratch_slots(n: int) -> int:
     ``u32``). Layout: ``scratch[0:n]`` holds the run positions, ``scratch[n:]`` the scan partials (plus deeper
     recursion levels for ``n > BLOCK_DIM``). Allocate up front::
 
-        scratch = qd.Tensor(qd.ndarray(qd.u32, shape=qd.algorithms.reduce_by_key_scratch_slots(N)))
+        scratch = qd.Tensor(qd.ndarray(qd.u32, shape=max(qd.algorithms.reduce_by_key_scratch_slots(N), 1)))
 
-    Always returns **at least 1** so the result can size an allocation directly: ``n`` for ``n <= BLOCK_DIM``
-    (single-tile in-place scan) and ``1`` for ``n <= 0`` (no real scratch; the lone slot is never touched).
+    Returns ``0`` for ``n <= 0`` and ``n`` for ``n <= BLOCK_DIM`` (single-tile in-place scan).
     """
     pos = n > 0
     big = n > BLOCK_DIM
     small_pos = pos * (1 - big)
-    b0 = (n + BLOCK_DIM - 1) // BLOCK_DIM
-    return _at_least_one(n * small_pos + _scan_total_scratch_slots(b0, partials_cursor=n + b0) * big)
+    B0 = (n + BLOCK_DIM - 1) // BLOCK_DIM
+    return n * small_pos + _scan_total_scratch_slots(B0, partials_cursor=n + B0) * big
 
 
-__all__ = ["reduce_by_key_add", "reduce_by_key_scratch_slots"]
+def reduce_by_key_add(keys_in, values_in, keys_out, values_out, num_runs, scratch):
+    """Collapse every consecutive run of equal ``keys_in`` into ``(key, sum_of_values)``.
+
+    Args:
+        keys_in: 1-D tensor of ``u32`` / ``i32`` / ``f32``. Sort by key beforehand (e.g. via
+            ``qd.algorithms.radix_sort``) if you need a global per-key sum rather than a per-run sum.
+        values_in: 1-D tensor of ``u32`` / ``i32`` / ``f32``, same shape as ``keys_in``.
+        keys_out: 1-D tensor of the same dtype as ``keys_in``, capacity ``>= N``. Receives the unique-run keys at
+            indices ``[0 : num_runs[0])``; the tail is left untouched.
+        values_out: 1-D tensor of the same dtype as ``values_in``, capacity ``>= N``. Receives the per-run sums. The
+            first ``num_runs[0]`` slots are overwritten; if ``values_out`` was longer, the tail past that prefix is
+            left untouched.
+        num_runs: 1-element ``i32`` tensor receiving the number of runs.
+        scratch: caller-owned 1-D ``u32`` workspace of :func:`reduce_by_key_scratch_slots` ``(N)`` slots. There
+            is no module-level shared scratch; a too-small buffer raises :class:`InsufficientScratchError`.
+
+    Same async / no-implicit-sync contract as the rest of ``qd.algorithms.*``: ``num_runs`` is a tensor (not a Python
+    int); fetch the count with ``int(num_runs.to_numpy()[0])`` after the call.
+
+    **NaN handling for f32 keys**: NaN ``!=`` NaN is true, so each NaN becomes its own run. This is consistent with
+    treating NaN as "different from everything", which matches the run-length-encoding spirit of reduce-by-key.
+    """
+    _validate_inputs(keys_in, values_in, keys_out, values_out, num_runs)
+    N = keys_in.shape[0]
+    if N == 0:
+        return
+
+    _validate_caller_scratch("reduce_by_key_add", N, scratch, reduce_by_key_scratch_slots(N), u32)
+    log256_max_n = _reduce_depth_for_n(N)
+    # One launch: head flags -> in-place exclusive scan (the same staircase as exclusive_scan_add) -> zero values_out
+    # -> scatter -> count, all emitted inside _reduce_by_key_add_kernel as @qd.func phases. N == 1 falls out of the
+    # single-tile base case of the scan.
+    _reduce_by_key_add_kernel(
+        keys_in, values_in, keys_out, values_out, num_runs, scratch, N, values_in.dtype, log256_max_n
+    )
+
+
+__all__ = ["reduce_by_key_add", "reduce_by_key_add_func", "reduce_by_key_scratch_slots"]

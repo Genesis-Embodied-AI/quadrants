@@ -164,6 +164,7 @@ void export_lang(py::module &m) {
       .def_readwrite("print_ir_dbg_info", &CompileConfig::print_ir_dbg_info)
       .def_readwrite("debug", &CompileConfig::debug)
       .def_readwrite("cfg_optimization", &CompileConfig::cfg_optimization)
+      .def_readwrite("cfg_optimization_per_task", &CompileConfig::cfg_optimization_per_task)
       .def_readwrite("check_out_of_bound", &CompileConfig::check_out_of_bound)
       .def_readwrite("print_accessor_ir", &CompileConfig::print_accessor_ir)
       .def_readwrite("use_llvm", &CompileConfig::use_llvm)
@@ -315,7 +316,8 @@ void export_lang(py::module &m) {
       .def("end_stream_parallel", &ASTBuilder::end_stream_parallel)
       .def("set_graph_do_while_level_id", &ASTBuilder::set_graph_do_while_level_id)
       .def("begin_checkpoint", &ASTBuilder::begin_checkpoint)
-      .def("end_checkpoint", &ASTBuilder::end_checkpoint);
+      .def("end_checkpoint", &ASTBuilder::end_checkpoint)
+      .def("set_graph_do_while_level_id", &ASTBuilder::set_graph_do_while_level_id);
 
   auto device_capability_config =
       py::class_<DeviceCapabilityConfig>(m, "DeviceCapabilityConfig").def("get", &DeviceCapabilityConfig::get);
@@ -842,6 +844,14 @@ void export_lang(py::module &m) {
       QD_ASSERT(false);
       return 0;
     }
+  });
+
+  // The (post-template) C++ arg-id vector of an external-tensor (ndarray) expression. For a top-level ndarray
+  // parameter or a flattened `@qd.data_oriented` member ndarray this is a single-element vector whose `[0]`
+  // entry is the flat arg-id the runtime matches against (e.g. for `qd.checkpoint(yield_on=...)` resolution).
+  m.def("get_external_tensor_arg_id", [](const Expr &expr) {
+    QD_ASSERT(expr.is<ExternalTensorExpression>());
+    return expr.cast<ExternalTensorExpression>()->arg_id;
   });
 
   m.def("get_external_tensor_shape_along_axis",
