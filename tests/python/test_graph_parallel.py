@@ -622,22 +622,35 @@ def test_graph_parallel_static_loop_inside_graph_do_while():
 
 
 @test_utils.test()
-def test_graph_parallel_static_loop_branch_body_in_gdw_rejects_bare_stmt():
-    """Inside qd.graph_do_while, a bare assignment in a branch body re-executes every iteration (the E25
-    footgun). The graph_do_while structure validator descends into static branch loops, so such a bare
-    statement is rejected for static-loop branches just as it is for hand-written ones."""
+def test_graph_parallel_static_loop_branch_body_in_gdw_bare_stmt_runs_every_iter():
+    """A bare assignment in a `qd.branch()` body inside `qd.graph_do_while()` is legal under per-statement
+    graph-region tagging (issue #744): it is tagged at the loop level (via the static for-loop descent in
+    the graph_do_while validator and the unrolled branch's region), so it runs on every iteration just like
+    a bare statement directly inside the loop body. This positive test exercises the descent path -- if the
+    validator stopped descending into static branch loops, a malformed graph_do_while nested inside a
+    branch would slip through, so we keep coverage of the path here."""
+    nb = 2
+    n = 8
+    iters = 3
 
     @qd.kernel(graph=True)
     def k(x: qd.types.ndarray(qd.i32, ndim=2), counter: qd.types.ndarray(qd.i32, ndim=0)):
         while qd.graph_do_while(counter):
             with qd.graph_parallel():
-                for b in qd.static(range(2)):
+                for b in qd.static(range(nb)):
                     with qd.branch():
-                        x[b, 0] = 1  # bare assignment in a branch body -> rejected inside graph_do_while
-            for _ in range(1):
-                counter[()] = counter[()] - 1
+                        x[b, 0] = x[b, 0] + (b + 1)  # bare assignment: runs every iteration of the gdw
+            counter[()] = counter[()] - 1
 
-    x = qd.ndarray(qd.i32, shape=(2, 8))
+    x = qd.ndarray(qd.i32, shape=(nb, n))
     counter = qd.ndarray(qd.i32, shape=())
-    with pytest.raises(qd.QuadrantsSyntaxError, match="may contain only for-loops"):
-        k(x, counter)
+    x.from_numpy(np.zeros((nb, n), dtype=np.int32))
+    counter.from_numpy(np.array(iters, dtype=np.int32))
+
+    k(x, counter)
+
+    assert counter.to_numpy() == 0
+    out = x.to_numpy()
+    assert out[0, 0] == iters  # branch b=0 ran every iteration
+    assert out[1, 0] == 2 * iters  # branch b=1 ran every iteration
+    np.testing.assert_array_equal(out[:, 1:], np.zeros((nb, n - 1), dtype=np.int32))
