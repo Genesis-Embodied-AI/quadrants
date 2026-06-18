@@ -1,15 +1,12 @@
 #!/usr/bin/env python3
 """Generate and post-process the pybind11 type stub for ``quadrants_python``.
 
-Runs ``pybind11-stubgen`` against the compiled
-``quadrants._lib.core.quadrants_python`` extension (imported from ``--package-dir``,
-where ``quadrants`` may be a namespace package containing only the compiled
-artifacts), applies the repo's YAML stub replacements, and writes
-``quadrants_python.pyi`` + ``py.typed`` into ``--output-dir``.
+Runs ``pybind11-stubgen`` against the compiled ``quadrants._lib.core.quadrants_python`` extension (imported from
+``--package-dir``, where ``quadrants`` may be a namespace package containing only the compiled artifacts), applies the
+repo's YAML stub replacements, and writes ``quadrants_python.pyi`` + ``py.typed`` into ``--output-dir``.
 
-This is invoked by the scikit-build-core CMake install step. The logic was lifted
-out of ``setup.py`` (``generate_pybind11_stubs`` / ``postprocess_stubs``) so a single
-implementation is shared by every build path.
+This is invoked by the scikit-build-core CMake install step. The logic was lifted out of ``setup.py``
+(``generate_pybind11_stubs`` / ``postprocess_stubs``) so a single implementation is shared by every build path.
 """
 
 import argparse
@@ -54,9 +51,9 @@ def generate(
     output_dir = pathlib.Path(output_dir).resolve()
     repo_root = pathlib.Path(repo_root).resolve()
 
-    # Scratch dir for pybind11-stubgen's raw output. It MUST live outside the install
-    # tree: output_dir is inside the wheel staging dir, and scikit-build-core sweeps
-    # everything under it into the wheel, so leaving scratch files there would ship them.
+    # Scratch dir for pybind11-stubgen's raw output. It MUST live outside the install tree: output_dir is inside the
+    # wheel staging dir, and scikit-build-core sweeps everything under it into the wheel, so leaving scratch files there
+    # would ship them.
     owns_scratch = stub_build_dir is None
     if owns_scratch:
         stub_build_dir = pathlib.Path(tempfile.mkdtemp(prefix="qd_stubgen_"))
@@ -68,8 +65,8 @@ def generate(
         env = os.environ.copy()
         env["PYTHONPATH"] = str(package_dir) + os.pathsep + env.get("PYTHONPATH", "")
 
-        # Invoke via `-m` on the current interpreter rather than the `pybind11-stubgen`
-        # console script, so it does not depend on the venv's bin dir being on PATH.
+        # Invoke via `-m` on the current interpreter rather than the `pybind11-stubgen` console script, so it does not
+        # depend on the venv's bin dir being on PATH.
         cmd = [sys.executable, "-m", "pybind11_stubgen", MODULE, "--ignore-all-errors", "-o", str(stub_build_dir)]
         print(" ".join(cmd), flush=True)
         subprocess.check_call(cmd, env=env)

@@ -62,13 +62,11 @@ def import_qd_python_core():
 
     if get_os_name() != "win":
         sys.setdlopenflags(old_flags)  # pylint: disable=E1101
-    # Anchor the package root on the compiled extension's location rather than this
-    # file's. Under a scikit-build-core "redirect" editable install the compiled
-    # artifacts (this .so plus the runtime .bc and assets) are installed into
-    # site-packages, while this utils.py is served live from the source tree -- so
-    # __file__ would resolve to a source dir that has no .bc/assets. `core.__file__`
-    # always sits in the install dir where those co-located artifacts actually live.
-    # For wheel and classic in-place layouts the two locations coincide.
+    # Anchor the package root on the compiled extension's location rather than this file's. Under a scikit-build-core
+    # "redirect" editable install the compiled artifacts (this .so plus the runtime .bc and assets) are installed into
+    # site-packages, while this utils.py is served live from the source tree -- so __file__ would resolve to a source
+    # dir that has no .bc/assets. `core.__file__` always sits in the install dir where those co-located artifacts
+    # actually live. For wheel and classic in-place layouts the two locations coincide.
     global package_root
     package_root = _package_root_from_core(core)
     lib_dir = os.path.join(package_root, "_lib", "runtime")
@@ -104,9 +102,8 @@ def is_ci():
 def _package_root_from_core(core):
     """Return the installed ``quadrants`` package dir given the compiled core module.
 
-    ``core.__file__`` is ``.../quadrants/_lib/core/quadrants_python.<ext>``; three
-    parent dirs up is the package root. Falls back to this file's location if the
-    extension has no ``__file__`` (should not happen for a normal build).
+    ``core.__file__`` is ``.../quadrants/_lib/core/quadrants_python.<ext>``; three parent dirs up is the package root.
+    Falls back to this file's location if the extension has no ``__file__`` (should not happen for a normal build).
     """
     origin = getattr(core, "__file__", None)
     if origin:
@@ -114,8 +111,8 @@ def _package_root_from_core(core):
     return os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
 
 
-# Default for the brief window before import_qd_python_core() overrides it with the
-# install-aware value derived from the compiled extension (see _package_root_from_core).
+# Default for the brief window before import_qd_python_core() overrides it with the install-aware value derived from the
+# compiled extension (see _package_root_from_core).
 package_root = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
 
 

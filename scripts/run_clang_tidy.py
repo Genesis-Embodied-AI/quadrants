@@ -78,11 +78,10 @@ def make_absolute(f, directory):
 
 
 def cmake_configure(source_path="."):
-    # scikit-build-core writes the CMake build tree (incl. compile_commands.json, when
-    # CMAKE_EXPORT_COMPILE_COMMANDS=ON) into build/{wheel_tag}/. The wheel build
-    # (`./build.py wheel`, run beforehand by the clang_tidy CI step) has already
-    # configured + built it, so just locate that dir rather than re-configuring via the
-    # old scikit-build-classic CMaker.
+    # scikit-build-core writes the CMake build tree (incl. compile_commands.json, when CMAKE_EXPORT_COMPILE_COMMANDS=ON)
+    # into build/{wheel_tag}/. The wheel build (`./build.py wheel`, run beforehand by the clang_tidy CI step) has
+    # already configured + built it, so just locate that dir rather than re-configuring via the old scikit-build-classic
+    # CMaker.
     candidates = sorted(glob.glob("build/*/compile_commands.json"))
     if not candidates:
         raise RuntimeError(

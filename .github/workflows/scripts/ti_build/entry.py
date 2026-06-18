@@ -23,8 +23,8 @@ from .tinysh import Command, CommandFailed, nice, sh
 @banner("Build Quadrants Wheel")
 def build_wheel(python: Command) -> None:
     cmake_args.writeback()
-    # scikit-build-core reads CMake args from CMAKE_ARGS (space-separated); bridge it
-    # from the QUADRANTS_CMAKE_ARGS env that cmake_args.writeback() populates.
+    # scikit-build-core reads CMake args from CMAKE_ARGS (space-separated); bridge it from the QUADRANTS_CMAKE_ARGS
+    # env that cmake_args.writeback() populates.
     os.environ["CMAKE_ARGS"] = os.environ.get("QUADRANTS_CMAKE_ARGS", "")
 
     plat = None
@@ -41,18 +41,17 @@ def build_wheel(python: Command) -> None:
     for whl in glob.glob("dist/quadrants-*.whl"):
         os.remove(whl)
 
-    # Build via scikit-build-core. Use `pip wheel` (not `python -m build`) because the
-    # repo ships a top-level build.py that would shadow the `build` module under `-m`.
-    # --no-build-isolation: the LLVM/clang toolchain is not pip-installable (it is
-    # provisioned by setup_basic_build_env above), so build deps come from this env.
+    # Build via scikit-build-core. Use `pip wheel` (not `python -m build`) because the repo ships a top-level build.py
+    # that would shadow the `build` module under `-m`. --no-build-isolation: the LLVM/clang toolchain is not
+    # pip-installable (it is provisioned by setup_basic_build_env above), so build deps come from this env.
     with nice():
         python("-m", "pip", "wheel", "--no-deps", "--no-build-isolation", "-w", "dist", ".")
 
     if plat:
         wheels = glob.glob("dist/quadrants-*.whl")
         assert len(wheels) == 1, f"expected exactly one freshly built wheel, got {wheels}"
-        # scikit-build-core emits a bare linux_x86_64 / macosx_* tag; stamp the
-        # distribution platform tag the project ships under (manylinux / macOS).
+        # scikit-build-core emits a bare linux_x86_64 / macosx_* tag; stamp the distribution platform tag the project
+        # ships under (manylinux / macOS).
         python("-m", "wheel", "tags", "--platform-tag", plat, "--remove", wheels[0])
 
 
