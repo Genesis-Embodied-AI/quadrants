@@ -153,7 +153,7 @@ The per-op snippets below show only the call line; drop it into a kernel like th
 
 ### `qd.algorithms.reduce_{add,min,max}`
 
-Device-wide tree reduction over a 1-D tensor: `out[0]` holds `sum(arr[0:n])` / `min(arr[0:n])` / `max(arr[0:n])`. Signature `reduce_{add,min,max}(arr, out, scratch, n, DTYPE, LOG256_MAX_N)`.
+Reduction over a 1-D tensor: `out[0]` holds `sum(arr[0:n])` / `min(arr[0:n])` / `max(arr[0:n])`. Signature `reduce_{add,min,max}(arr, out, scratch, n, DTYPE, LOG256_MAX_N)`.
 
 Arguments (see [Common conventions](#common-conventions) for `n` / `DTYPE` / `LOG256_MAX_N`, `out`, and tensor polymorphism):
 
