@@ -52,7 +52,7 @@ The capacity grows fast - each level multiplies it by 256:
 
 `log256_max_n = 4` already exceeds what a 32-bit index can address (`256 ** 4 == 2 ** 32`), so values above `4` can never describe a valid (i32-indexed) input and are rejected with a `ValueError`; in practice you rarely need more than 3-4.
 
-It must be compile-time because it fixes the number and order of the internal launches.
+Although the algorithm functions are `qd.func`s, they are top-level funcs, and contain multiple gpu/llvm kernels. The exact number that are launched is a function of `log256_max_n`, via `static` for loops. Hence `log256_max_n` must be a compile time constant.
 
 **Pick it from an upper bound, not the current count.** Use the smallest `log256_max_n` whose capacity covers the largest count you will ever feed the captured graph - `log256_max_n = ceil(log256(capacity))`, floored at `1`. Size it against a *provisioned* upper bound (a buffer capacity, a padded element count, ...), not today's `n`, so the same graph serves the whole range below it:
 
