@@ -633,7 +633,7 @@
 <blockquote>
 <div><p><strong>Experimental.</strong> <code class="docutils literal notranslate"><span class="pre">qd.checkpoint</span></code>, <code class="docutils literal notranslate"><span class="pre">qd.GraphStatus</span></code>, and <code class="docutils literal notranslate"><span class="pre">kernel.resume(from_checkpoint=...)</span></code> are experimental APIs. The shape of the public surface (the context-manager signature, the <code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel(checkpoints=True)</span></code> flag, the <code class="docutils literal notranslate"><span class="pre">GraphStatus</span></code> fields, the host-side resume loop, the error messages, and the cross-backend lowering details) may change in any future release without a deprecation cycle.</p>
 </div></blockquote>
-<p><code class="docutils literal notranslate"><span class="pre">qd.checkpoint</span></code> lets a graph kernel pause partway through, surface a reason to the host, let the host fix things up, and resume from where it paused on the next launch. An example use-case is an algorithm implemented as a graph that may need to allocate additional memory partway through, where the graph operations are in-place, and therefore not idempotent, and therefore for which simply retrying the whole graph from the start is not an option.</p>
+<p><code class="docutils literal notranslate"><span class="pre">qd.checkpoint</span></code> lets a graph kernel break partway through, surface a reason to the host, let the host fix things up, and resume from the same location on the next launch. An example use-case is an algorithm implemented as a graph that may need to allocate additional memory partway through, where the operations in the graph are in-place, and therefore cannot be rerun, and therefore for which simply retrying the whole graph from the start is not an option.</p>
 <p>To use checkpoints:</p>
 <ol class="arabic simple">
 <li><p>Decorate the kernel with <code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel(graph=True,</span> <span class="pre">checkpoints=True)</span></code>.</p></li>
@@ -694,6 +694,14 @@
                          <span class="n">from_checkpoint</span><span class="o">=</span><span class="n">status</span><span class="o">.</span><span class="n">checkpoint</span><span class="p">)</span>
 </pre></div>
 </div>
+</section>
+<section id="resume-where">
+<h3>Resume where?<a class="headerlink" href="#resume-where" title="Link to this heading">#</a></h3>
+<ul class="simple">
+<li><p>execution starts from and including the checkpoint block that yielded</p></li>
+<li><p>you must therefore ensure that re-running this checkpoint will not break the algorithm</p></li>
+<li><p>for example make sure that any check that lead to the yield do not modify any data before yielding</p></li>
+</ul>
 </section>
 <section id="id2">
 <h3>Restrictions<a class="headerlink" href="#id2" title="Link to this heading">#</a></h3>
@@ -1019,6 +1027,7 @@
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#checkpoints-with-qd-checkpoint-experimental">Checkpoints with <code class="docutils literal notranslate"><span class="pre">qd.checkpoint</span></code> <em>(experimental)</em></a><ul class="nav section-nav flex-column">
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#yield-mechanism">Yield mechanism</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#host-side-yield-resume-loop">Host-side yield / resume loop</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#resume-where">Resume where?</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id2">Restrictions</a></li>
 </ul>
 </li>
