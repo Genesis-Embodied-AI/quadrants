@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>Contributing to quadrants &#8212; Quadrants 1.0.3 documentation</title>
+    <title>Contributing to quadrants &#8212; Quadrants 1.1.0 documentation</title>
   
   
   
@@ -43,7 +43,7 @@
   <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5" />
 <link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5" />
 
-    <script src="../_static/documentation_options.js?v=baaebd52"></script>
+    <script src="../_static/documentation_options.js?v=fc837d61"></script>
     <script src="../_static/doctools.js?v=9bcbadda"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -63,7 +63,7 @@
     <link rel="prev" title="Optimization passes" href="optimization_passes.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="1.0.3" />
+  <meta name="docsearch:version" content="1.1.0" />
   
     
     <script src="../_static/searchtools.js"></script>
@@ -131,7 +131,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 1.0.3 documentation</p>
+    <p class="title logo__title">Quadrants 1.1.0 documentation</p>
   
 </a></div>
     
@@ -488,11 +488,12 @@
 <p>To write the environment variables to a file, use <code class="docutils literal notranslate"><span class="pre">./build.py</span> <span class="pre">-w</span> <span class="pre">[filename]</span></code>. For example:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">./</span><span class="n">build</span><span class="o">.</span><span class="n">py</span> <span class="o">-</span><span class="n">w</span> <span class="n">env</span><span class="o">.</span><span class="n">sh</span>
 <span class="n">source</span> <span class="n">env</span><span class="o">.</span><span class="n">sh</span>
-<span class="c1"># scikit-build-core reads CMake args from CMAKE_ARGS, not QUADRANTS_CMAKE_ARGS:</span>
-<span class="n">export</span> <span class="n">CMAKE_ARGS</span><span class="o">=</span><span class="s2">&quot;$QUADRANTS_CMAKE_ARGS&quot;</span>
 <span class="n">pip</span> <span class="n">install</span> <span class="o">--</span><span class="n">no</span><span class="o">-</span><span class="n">build</span><span class="o">-</span><span class="n">isolation</span> <span class="o">-</span><span class="n">e</span> <span class="o">.</span> <span class="o">-</span><span class="n">Ceditable</span><span class="o">.</span><span class="n">rebuild</span><span class="o">=</span><span class="n">true</span>
 </pre></div>
 </div>
+<p><code class="docutils literal notranslate"><span class="pre">build.py</span></code> exports both the legacy <code class="docutils literal notranslate"><span class="pre">QUADRANTS_CMAKE_ARGS</span></code> and the <code class="docutils literal notranslate"><span class="pre">CMAKE_ARGS</span></code> that scikit-build-core
+actually reads, so sourcing <code class="docutils literal notranslate"><span class="pre">env.sh</span></code> (or using <code class="docutils literal notranslate"><span class="pre">--shell</span></code>) is enough – no manual
+<code class="docutils literal notranslate"><span class="pre">export</span> <span class="pre">CMAKE_ARGS=&quot;$QUADRANTS_CMAKE_ARGS&quot;</span></code> step is needed.</p>
 </section>
 <section id="building-the-package-for-release-purposes">
 <h2>Building the package for release purposes<a class="headerlink" href="#building-the-package-for-release-purposes" title="Link to this heading">#</a></h2>
