@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>Graph &#8212; Quadrants 1.0.3 documentation</title>
+    <title>Graph &#8212; Quadrants 1.1.0 documentation</title>
   
   
   
@@ -43,7 +43,7 @@
   <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5" />
 <link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5" />
 
-    <script src="../_static/documentation_options.js?v=baaebd52"></script>
+    <script src="../_static/documentation_options.js?v=fc837d61"></script>
     <script src="../_static/doctools.js?v=9bcbadda"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -63,7 +63,7 @@
     <link rel="prev" title="Fastcache" href="fastcache.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="1.0.3" />
+  <meta name="docsearch:version" content="1.1.0" />
   
     
     <script src="../_static/searchtools.js"></script>
@@ -131,7 +131,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 1.0.3 documentation</p>
+    <p class="title logo__title">Quadrants 1.1.0 documentation</p>
   
 </a></div>
     
@@ -431,7 +431,7 @@
 <p>Graphs reduce kernel launch overhead by capturing a sequence of GPU operations into a graph, then replaying it in a single launch.</p>
 <section id="backend-support">
 <h2>Backend support<a class="headerlink" href="#backend-support" title="Link to this heading">#</a></h2>
-<p>Both features run on every backend. They are <em>hardware accelerated</em> on CUDA (via CUDA graphs) and AMDGPU (via HIP graphs); <code class="docutils literal notranslate"><span class="pre">graph_do_while</span></code> additionally requires CUDA SM 9.0+ / Hopper for its hardware-accelerated path. On other backends, <code class="docutils literal notranslate"><span class="pre">graph=True</span></code> is silently ignored and the kernel runs via the normal launch path, and <code class="docutils literal notranslate"><span class="pre">graph_do_while</span></code> falls back to a host-side do-while loop that copies the condition value GPU → host each iteration (causing a pipeline stall).</p>
+<p>Both features run on every backend. They are <em>hardware accelerated</em> on CUDA (via CUDA graphs) and AMDGPU (via HIP graphs); <code class="docutils literal notranslate"><span class="pre">graph_do_while</span></code> additionally requires CUDA SM 9.0+ / Hopper for its hardware-accelerated path. On other backends, <code class="docutils literal notranslate"><span class="pre">graph=True</span></code> is silently ignored and the kernel runs via the normal launch path, and <code class="docutils literal notranslate"><span class="pre">graph_do_while</span></code> falls back to a host-side do-while loop that copies the condition value GPU → host each iteration (causing a pipeline stall — see <a class="reference internal" href="#caveats">Caveats</a>).</p>
 <div class="pst-scrollable-table-container"><table class="table">
 <thead>
 <tr class="row-odd"><th class="head"><p>Feature</p></th>
@@ -464,7 +464,6 @@
 </table>
 </div>
 <p>AMDGPU <code class="docutils literal notranslate"><span class="pre">graph_do_while</span></code> falls back to the host-side loop because HIP does not currently expose conditional / while graph nodes (as of ROCm 7.2).</p>
-<p>Nested and sibling <code class="docutils literal notranslate"><span class="pre">graph_do_while</span></code> loops (and mixing <code class="docutils literal notranslate"><span class="pre">graph_do_while</span></code> with top-level <code class="docutils literal notranslate"><span class="pre">for</span></code>-loops) are <strong>experimental</strong> for now — see <a class="reference internal" href="#nested-loops-and-mixing-with-for-loops">Nested loops and mixing with for-loops</a>.</p>
 </section>
 <section id="basic-usage">
 <h2>Basic usage<a class="headerlink" href="#basic-usage" title="Link to this heading">#</a></h2>
@@ -512,6 +511,10 @@
 </pre></div>
 </div>
 </section>
+<section id="fields-as-arguments">
+<h3>Fields as arguments<a class="headerlink" href="#fields-as-arguments" title="Link to this heading">#</a></h3>
+<p>When different fields are passed as template arguments, each unique combination of fields produces a separately compiled kernel with its own graph cache entry. There is no interference between them.</p>
+</section>
 </section>
 <section id="gpu-side-iteration-with-graph-do-while">
 <h2>GPU-side iteration with <code class="docutils literal notranslate"><span class="pre">graph_do_while</span></code><a class="headerlink" href="#gpu-side-iteration-with-graph-do-while" title="Link to this heading">#</a></h2>
@@ -522,7 +525,8 @@
     <span class="k">while</span> <span class="n">qd</span><span class="o">.</span><span class="n">graph_do_while</span><span class="p">(</span><span class="n">counter</span><span class="p">):</span>
         <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>
             <span class="n">x</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">x</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">+</span> <span class="mf">1.0</span>
-        <span class="n">counter</span><span class="p">[()]</span> <span class="o">=</span> <span class="n">counter</span><span class="p">[()]</span> <span class="o">-</span> <span class="mi">1</span>   <span class="c1"># bare statement: runs every iteration</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">):</span>
+            <span class="n">counter</span><span class="p">[()]</span> <span class="o">=</span> <span class="n">counter</span><span class="p">[()]</span> <span class="o">-</span> <span class="mi">1</span>
 
 <span class="n">x</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="n">N</span><span class="p">,))</span>
 <span class="n">counter</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">())</span>
@@ -534,7 +538,7 @@
 <p>The argument to <code class="docutils literal notranslate"><span class="pre">qd.graph_do_while()</span></code> must be the name of a scalar <code class="docutils literal notranslate"><span class="pre">qd.i32</span></code> ndarray parameter. The loop body repeats while this value is non-zero.</p>
 <ul class="simple">
 <li><p>On CUDA SM 9.0+ (Hopper), this uses CUDA conditional while nodes — the entire iteration runs on the GPU with no host involvement.</p></li>
-<li><p>On older CUDA GPUs, AMDGPU, and non-GPU backends, it falls back to a host-side do-while loop (see the <a class="reference internal" href="#backend-support">backend support table</a>).</p></li>
+<li><p>On older CUDA GPUs, AMDGPU, and non-GPU backends, it falls back to a host-side do-while loop (see <a class="reference internal" href="#caveats">Caveats</a> and the <a class="reference internal" href="#backend-support">backend support table</a>).</p></li>
 </ul>
 <section id="patterns">
 <h3>Patterns<a class="headerlink" href="#patterns" title="Link to this heading">#</a></h3>
@@ -545,7 +549,8 @@
     <span class="k">while</span> <span class="n">qd</span><span class="o">.</span><span class="n">graph_do_while</span><span class="p">(</span><span class="n">counter</span><span class="p">):</span>
         <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>
             <span class="n">x</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">x</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">+</span> <span class="mf">1.0</span>
-        <span class="n">counter</span><span class="p">[()]</span> <span class="o">=</span> <span class="n">counter</span><span class="p">[()]</span> <span class="o">-</span> <span class="mi">1</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">):</span>
+            <span class="n">counter</span><span class="p">[()]</span> <span class="o">=</span> <span class="n">counter</span><span class="p">[()]</span> <span class="o">-</span> <span class="mi">1</span>
 </pre></div>
 </div>
 <p><strong>Boolean flag</strong>: set a <code class="docutils literal notranslate"><span class="pre">keep_going</span></code> flag to 1, have the kernel set it to 0 when a convergence criterion is met.</p>
@@ -556,8 +561,9 @@
         <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>
             <span class="c1"># ... do work ...</span>
             <span class="k">pass</span>
-        <span class="k">if</span> <span class="n">some_condition</span><span class="p">(</span><span class="n">x</span><span class="p">):</span>       <span class="c1"># bare `if` at the loop level is fine</span>
-            <span class="n">keep_going</span><span class="p">[()]</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">):</span>
+            <span class="k">if</span> <span class="n">some_condition</span><span class="p">(</span><span class="n">x</span><span class="p">):</span>
+                <span class="n">keep_going</span><span class="p">[()]</span> <span class="o">=</span> <span class="mi">0</span>
 </pre></div>
 </div>
 </section>
@@ -570,268 +576,28 @@
 <p>The parameter used by <code class="docutils literal notranslate"><span class="pre">graph_do_while</span></code> MUST be an ndarray.</p>
 <p>However, other parameters can be any supported Quadrants kernel parameter type.</p>
 </section>
-<section id="nested-loops-and-mixing-with-for-loops">
-<h3>Nested loops and mixing with for-loops<a class="headerlink" href="#nested-loops-and-mixing-with-for-loops" title="Link to this heading">#</a></h3>
-<blockquote>
-<div><p><strong>Experimental.</strong> Nested / sibling <code class="docutils literal notranslate"><span class="pre">graph_do_while</span></code> loops, and mixing <code class="docutils literal notranslate"><span class="pre">graph_do_while</span></code> with top-level <code class="docutils literal notranslate"><span class="pre">for</span></code>-loops, are experimental for now. Single-loop <code class="docutils literal notranslate"><span class="pre">graph_do_while</span></code> is the stable path.</p>
-</div></blockquote>
-<p><code class="docutils literal notranslate"><span class="pre">graph_do_while</span></code> loops can be <strong>nested</strong> inside one another, placed <strong>side by side</strong> (siblings), and freely <strong>mixed with plain top-level for-loops</strong>. Each loop has its own scalar <code class="docutils literal notranslate"><span class="pre">qd.i32</span></code> counter ndarray.</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span><span class="p">(</span><span class="n">graph</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-<span class="k">def</span><span class="w"> </span><span class="nf">nested</span><span class="p">(</span><span class="n">x</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">,</span> <span class="n">ndim</span><span class="o">=</span><span class="mi">1</span><span class="p">),</span>
-           <span class="n">outer</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">,</span> <span class="n">ndim</span><span class="o">=</span><span class="mi">0</span><span class="p">),</span>
-           <span class="n">inner</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">,</span> <span class="n">ndim</span><span class="o">=</span><span class="mi">0</span><span class="p">)):</span>
-    <span class="c1"># A plain for-loop at the top level runs exactly once (like an ordinary graph=True kernel).</span>
-    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>
-        <span class="n">x</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">x</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">+</span> <span class="mi">100</span>
-
-    <span class="k">while</span> <span class="n">qd</span><span class="o">.</span><span class="n">graph_do_while</span><span class="p">(</span><span class="n">outer</span><span class="p">):</span>
-        <span class="c1"># Reset the inner counter at the start of each outer iteration, else it only runs on the first outer pass.</span>
-        <span class="n">inner</span><span class="p">[()]</span> <span class="o">=</span> <span class="mi">5</span>                  <span class="c1"># bare statement: runs every outer iteration</span>
-        <span class="k">while</span> <span class="n">qd</span><span class="o">.</span><span class="n">graph_do_while</span><span class="p">(</span><span class="n">inner</span><span class="p">):</span>
-            <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>
-                <span class="n">x</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">x</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">+</span> <span class="mi">1</span>
-            <span class="n">inner</span><span class="p">[()]</span> <span class="o">=</span> <span class="n">inner</span><span class="p">[()]</span> <span class="o">-</span> <span class="mi">1</span>
-        <span class="n">outer</span><span class="p">[()]</span> <span class="o">=</span> <span class="n">outer</span><span class="p">[()]</span> <span class="o">-</span> <span class="mi">1</span>
-</pre></div>
-</div>
-<p>A <code class="docutils literal notranslate"><span class="pre">graph_do_while</span></code>-loop may only appear at the kernel top level or directly inside another <code class="docutils literal notranslate"><span class="pre">graph_do_while</span></code> body.</p>
-<p>Note that <code class="docutils literal notranslate"><span class="pre">qd.func</span></code>’s are inlined, so you can freely factorize these structures across <code class="docutils literal notranslate"><span class="pre">qd.func</span></code> boundaries.</p>
-</section>
-</section>
-<section id="performance">
-<h2>Performance<a class="headerlink" href="#performance" title="Link to this heading">#</a></h2>
-<p>The hardware support for each feature (graph and graph do while) was documented in the table above. But what does this mean in practice? Let’s look through some representative examples.</p>
-<section id="qd-kernel">
-<h3>qd.kernel<a class="headerlink" href="#qd-kernel" title="Link to this heading">#</a></h3>
-<p>Before migrating to graph, we have for example:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
-<span class="k">def</span><span class="w"> </span><span class="nf">k1</span><span class="p">(</span><span class="n">a</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">type</span><span class="o">.</span><span class="n">NDArray</span><span class="p">,</span> <span class="n">b</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">type</span><span class="o">.</span><span class="n">NDArray</span><span class="p">,</span> <span class="n">c</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">type</span><span class="o">.</span><span class="n">NDArray</span><span class="p">):</span>
-    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">a</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>
-        <span class="n">fn_a</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">i</span><span class="p">)</span>
-    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">b</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>
-        <span class="n">fn_b</span><span class="p">(</span><span class="n">b</span><span class="p">,</span> <span class="n">i</span><span class="p">)</span>
-    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">c</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>
-        <span class="n">fn_b</span><span class="p">(</span><span class="n">c</span><span class="p">,</span> <span class="n">i</span><span class="p">)</span>
-</pre></div>
-</div>
-<p>We have three top-level for loops, which we call ‘offloaded tasks’. Each offloaded task is compiled into a separate GPU kernel. When we call <code class="docutils literal notranslate"><span class="pre">k1</span></code> from python, the c++ host-side code launches three gpu kernels.</p>
-<p>We can migrate it to graph by adding <code class="docutils literal notranslate"><span class="pre">graph=True</span></code>:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span><span class="p">(</span><span class="n">graph</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-<span class="k">def</span><span class="w"> </span><span class="nf">k1</span><span class="p">(</span><span class="n">a</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">type</span><span class="o">.</span><span class="n">NDArray</span><span class="p">,</span> <span class="n">b</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">type</span><span class="o">.</span><span class="n">NDArray</span><span class="p">,</span> <span class="n">c</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">type</span><span class="o">.</span><span class="n">NDArray</span><span class="p">):</span>
-    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">a</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>
-        <span class="n">fn_a</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">i</span><span class="p">)</span>
-    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">b</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>
-        <span class="n">fn_b</span><span class="p">(</span><span class="n">b</span><span class="p">,</span> <span class="n">i</span><span class="p">)</span>
-    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">c</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>
-        <span class="n">fn_b</span><span class="p">(</span><span class="n">c</span><span class="p">,</span> <span class="n">i</span><span class="p">)</span>
-</pre></div>
-</div>
-<p>Results:</p>
+<section id="id1">
+<h3>Restrictions<a class="headerlink" href="#id1" title="Link to this heading">#</a></h3>
 <ul class="simple">
-<li><p>on hardware-accelerated platforms, we only launch a single graph from the host, rather than 3 kernels</p></li>
-<li><p>on other platforms, there is no change: we still launch 3 gpu kernels: no change: not better, not worse</p></li>
+<li><p>The same physical ndarray must be used for the counter parameter on every
+call. Passing a different ndarray raises an error, because the counter’s
+device pointer is baked into the graph at creation time.</p></li>
 </ul>
 </section>
-<section id="a-while-loop-conditional-on-a-device-side-scalar-tensor">
-<h3>A while loop, conditional on a device-side scalar tensor<a class="headerlink" href="#a-while-loop-conditional-on-a-device-side-scalar-tensor" title="Link to this heading">#</a></h3>
-<p>Before migrating to graph we have for example:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
-<span class="k">def</span><span class="w"> </span><span class="nf">k1</span><span class="p">(</span><span class="n">a</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">type</span><span class="o">.</span><span class="n">NDArray</span><span class="p">,</span> <span class="n">cond</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">type</span><span class="o">.</span><span class="n">NDArray</span><span class="p">):</span>
-    <span class="n">fn_1</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">cond</span><span class="p">)</span>
-    <span class="n">fn_2</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">cond</span><span class="p">)</span>
-    <span class="n">fn_3</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">cond</span><span class="p">)</span>
-
-<span class="k">while</span> <span class="kc">True</span><span class="p">:</span>
-    <span class="n">k1</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">cond</span><span class="p">)</span>
-    <span class="k">if</span> <span class="n">cond</span><span class="p">[()]</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
-        <span class="k">break</span>
-</pre></div>
-</div>
-<p>So, we have:</p>
+<section id="caveats">
+<h3>Caveats<a class="headerlink" href="#caveats" title="Link to this heading">#</a></h3>
+<p>On platforms without native device-side conditional graph nodes — currently CUDA pre-SM 9.0 and <strong>AMDGPU</strong> (HIP has no conditional / while node API as of ROCm 7.2) — the value of the <code class="docutils literal notranslate"><span class="pre">graph_do_while</span></code> parameter will be copied from the GPU to the host each iteration, in order to check whether we should continue iterating. This causes a GPU pipeline stall. At the end of each loop iteration:</p>
 <ul class="simple">
-<li><p>a python host-side loop</p></li>
-<li><p>the kernel contains device code, which will run on the gpu</p></li>
-<li><p>each iteration, we copy the value of cond, from the gpu to the host, and check the value</p></li>
-<li><p>this causes a gpu pipeline stall:</p>
-<ul>
-<li><p>first we wait for the entire default stream gpu work to complete/drain</p></li>
-<li><p>then we wait for the value of cond to copy from the gpu to the host</p></li>
-<li><p>then we run the python code to check the value of cond</p></li>
-<li><p>if we continue the loop, we now have to run through the python and c++ machinery to prepare the gpu kernel launch</p></li>
-<li><p>then launch the gpu kernels inside k1</p></li>
-<li><p>together, these steps can cause a noticeable delay, reducing throughput speed</p></li>
+<li><p>wait for GPU async queue to finish processing</p></li>
+<li><p>copy condition value to hostside</p></li>
+<li><p>evaluate condition value on hostside</p></li>
+<li><p>launch new kernels for next loop iteration, if not finished yet</p></li>
 </ul>
-</li>
-</ul>
-<p>After migrating to graph with graph do while we have:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span><span class="p">(</span><span class="n">graph</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-<span class="k">def</span><span class="w"> </span><span class="nf">k1</span><span class="p">(</span><span class="n">a</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">type</span><span class="o">.</span><span class="n">NDArray</span><span class="p">,</span> <span class="n">cond</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">type</span><span class="o">.</span><span class="n">NDArray</span><span class="p">):</span>
-    <span class="k">while</span> <span class="n">qd</span><span class="o">.</span><span class="n">graph_do_while</span><span class="p">(</span><span class="n">condition</span><span class="o">=</span><span class="n">cond</span><span class="p">):</span>
-        <span class="n">fn_1</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">cond</span><span class="p">)</span>
-        <span class="n">fn_2</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">cond</span><span class="p">)</span>
-        <span class="n">fn_3</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">cond</span><span class="p">)</span>
-
-<span class="n">k1</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">cond</span><span class="p">)</span>
-</pre></div>
-</div>
-<p>Now:</p>
+<p>Note: the basic <code class="docutils literal notranslate"><span class="pre">graph=True</span></code> path (without <code class="docutils literal notranslate"><span class="pre">graph_do_while</span></code>) does <strong>not</strong> stall the host like this on either CUDA or AMDGPU — the entire kernel sequence runs as a single GPU-side graph replay.</p>
+<p>Therefore on unsupported platforms, you might consider creating a second implementation, which works differently. e.g.:</p>
 <ul class="simple">
-<li><p>on supported hardware, the cond evaluation takes place on the gpu</p>
-<ul>
-<li><p>and we avoid the gpu pipeline stall</p></li>
-</ul>
-</li>
-<li><p>on unsupported hardware, we still incur the pipeline stall, as before</p>
-<ul>
-<li><p>note that there will be some small acceleration, because the condition evaluation and kernel launch will take place entirely from c++, bypassing python</p></li>
-<li><p>no worse, incrementally better</p></li>
-</ul>
-</li>
-</ul>
-</section>
-<section id="a-fixed-size-for-loop">
-<h3>A fixed-size for loop<a class="headerlink" href="#a-fixed-size-for-loop" title="Link to this heading">#</a></h3>
-<p>Before migrating to graph we have for example:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
-<span class="k">def</span><span class="w"> </span><span class="nf">k1</span><span class="p">(</span><span class="n">a</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">type</span><span class="o">.</span><span class="n">NDArray</span><span class="p">):</span>
-    <span class="n">fn_1</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>  <span class="c1"># assume these each launch a single offloaded task (gpu kernel)</span>
-    <span class="n">fn_2</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>
-    <span class="n">fn_3</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>
-
-<span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">num_its</span><span class="p">):</span>
-    <span class="n">k1</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>
-</pre></div>
-</div>
-<p>In this case, we have <code class="docutils literal notranslate"><span class="pre">num_its</span></code> launches of the three gpu kernels in k1</p>
-<ul class="simple">
-<li><p>there is nothing on the host side that waits for anything to finish on the gpu-side</p></li>
-<li><p>there is kernel launch latency associated with:</p>
-<ul>
-<li><p>running k1 from host-side python</p></li>
-<li><p>launching the gpu kernels for each of fn_1, fn_2, fn_3 from host-side c++</p></li>
-</ul>
-</li>
-</ul>
-<p>After migrating to graph we have something like:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span><span class="p">(</span><span class="n">graph</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-<span class="k">def</span><span class="w"> </span><span class="nf">k1</span><span class="p">(</span><span class="n">a</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">type</span><span class="o">.</span><span class="n">NDArray</span><span class="p">,</span> <span class="n">count</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">type</span><span class="o">.</span><span class="n">NDArray</span><span class="p">):</span>
-    <span class="k">while</span> <span class="n">qd</span><span class="o">.</span><span class="n">graph_do_while</span><span class="p">(</span><span class="n">count</span><span class="p">):</span>
-        <span class="n">fn_1</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>
-        <span class="n">fn_2</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>
-        <span class="n">fn_3</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>
-        <span class="n">count</span><span class="p">[()]</span> <span class="o">=</span> <span class="n">count</span><span class="p">[()]</span> <span class="o">-</span> <span class="mi">1</span>   <span class="c1"># bare statement: runs every iteration</span>
-
-<span class="n">k1</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">count</span><span class="p">)</span>
-</pre></div>
-</div>
-<ul class="simple">
-<li><p>on supported hardware, the entire loop runs on the gpu</p>
-<ul>
-<li><p>there is a single host-side launch, of the graph, when we run the <code class="docutils literal notranslate"><span class="pre">k1(a,</span> <span class="pre">count)</span></code> qd.kernel function</p></li>
-</ul>
-</li>
-<li><p>we have an additional kernel, in order to decrement count</p>
-<ul>
-<li><p>this is true on both supported and unsupported hardware</p></li>
-</ul>
-</li>
-<li><p>on unsupported hardware, we now have a gpu pipeline stall that we didn’t have before</p>
-<ul>
-<li><p>depending on the contents of the kernels, this might increase the per-iteration time by anything between 1% and 30% or so</p></li>
-</ul>
-</li>
-</ul>
-<p>The recommendation is to use the graph do while here anyway, if you need it for any platform, in order to ensure the code is compact and maintainable.</p>
-<p>If you do want fixed-size for loops to run optimally on unsupported hardware platforms, we could add a specializd <code class="docutils literal notranslate"><span class="pre">qd.graph_range_for</span></code> function. This would:</p>
-<ul class="simple">
-<li><p>on graph-do-while-supported hardware: handle adding the additional increment kernel</p></li>
-<li><p>on graph-do-while-unsupported hardware: handle running the loop entirely on the host-side, to avoid adding a gpu pipeline stall</p></li>
-</ul>
-<p>In practice, for our own kernels, i.e. in genesis-world, they largely fall under the do while formulation, see the previous section. However, also have some that used to be do while, but have been migrated to an optimized fixed-size, see next section.</p>
-</section>
-<section id="a-while-loop-conditional-on-a-device-side-scalar-tensor-that-has-been-optimized-into-a-fixed-size-for-loop">
-<h3>A while loop, conditional on a device-side scalar tensor, that has been optimized into a fixed-size for loop<a class="headerlink" href="#a-while-loop-conditional-on-a-device-side-scalar-tensor-that-has-been-optimized-into-a-fixed-size-for-loop" title="Link to this heading">#</a></h3>
-<p>In code that has been extensively optimized, but doesn’t yet use graph do while, we might have code like:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
-<span class="k">def</span><span class="w"> </span><span class="nf">k1</span><span class="p">(</span><span class="n">cond</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">,</span> <span class="n">a</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">NDArray</span><span class="p">):</span>
-    <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">a</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>  <span class="c1"># off-loaded task (gpu kernel)</span>
-        <span class="k">if</span> <span class="n">cond</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">:</span>  <span class="c1"># only runs main kernel body if cond != 0</span>
-            <span class="o">....</span>
-    <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">a</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>  <span class="c1"># off-loaded task (gpu kernel)</span>
-        <span class="k">if</span> <span class="n">cond</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">:</span>
-            <span class="o">....</span>
-    <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">a</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>
-        <span class="k">if</span> <span class="n">cond</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">:</span>
-            <span class="o">....</span>
-
-    <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">):</span>
-        <span class="n">check_cond</span><span class="p">(</span><span class="n">cond</span><span class="p">)</span>  <span class="c1"># check whether we should continue</span>
-
-
-<span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">MAX_ITER</span><span class="p">):</span>
-    <span class="n">k1</span><span class="p">(</span><span class="n">cond</span><span class="p">,</span> <span class="n">a</span><span class="p">)</span>
-</pre></div>
-</div>
-<p>In this case:</p>
-<ul class="simple">
-<li><p>we run a fixed number of iterations</p></li>
-<li><p>we update cond on the gpu</p></li>
-<li><p>we run all the gpu kernels MAX_ITER times</p>
-<ul>
-<li><p>but we short-circuit their contents if cond == 0</p></li>
-</ul>
-</li>
-<li><p>this still causes all the gpu kernels to launch MAX_ITER times</p>
-<ul>
-<li><p>but they quickly exit, and don’t take up too much time</p></li>
-</ul>
-</li>
-</ul>
-<p>This formulation avoids any gpu pipeline stalls caused by checking a gpu value on the hostside, before launching more kernels</p>
-<p>When we migrate this to graph do while, we get:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span><span class="p">(</span><span class="n">graph</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-<span class="k">def</span><span class="w"> </span><span class="nf">k1</span><span class="p">(</span><span class="n">a</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">type</span><span class="o">.</span><span class="n">NDArray</span><span class="p">,</span> <span class="n">cond</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">type</span><span class="o">.</span><span class="n">NDArray</span><span class="p">):</span>
-    <span class="k">while</span> <span class="n">qd</span><span class="o">.</span><span class="n">graph_do_while</span><span class="p">(</span><span class="n">condition</span><span class="o">=</span><span class="n">cond</span><span class="p">):</span>
-        <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">a</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>  <span class="c1"># off-loaded task (gpu kernel)</span>
-            <span class="o">....</span>  <span class="c1"># no need for cond check</span>
-        <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">a</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>  <span class="c1"># off-loaded task (gpu kernel)</span>
-            <span class="o">....</span>
-        <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">a</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>
-            <span class="o">....</span>
-
-        <span class="n">check_cond</span><span class="p">(</span><span class="n">cond</span><span class="p">)</span>  <span class="c1"># bare @qd.func call: runs every iteration (keeps its inner loops parallel)</span>
-
-<span class="n">k1</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">cond</span><span class="p">)</span>
-</pre></div>
-</div>
-<p>Similar to earlier.</p>
-<p>This is now optimal on gpu-do-while supported hardware, and the performance on unsupported hardware is similar to in the earlier section.</p>
-<p>HOWEVER, for unsupported hardware the baseline has changed, so the gpu pipeline stalls are now relative to a pipeline stall free baseline.</p>
-<p>The effect in reality is situation dependent:</p>
-<ul class="simple">
-<li><p>when MAX_ITER is relatively high, and many kernels are being launched un-necessarily, the graph do while approach might still be faster, even significantly faster</p>
-<ul>
-<li><p>this could happen when we are using the MAX_ITER approach for consistency across many scenarios</p>
-<ul>
-<li><p>and some scenarios are a poor fit for the MAX_ITER appraoch</p></li>
-</ul>
-</li>
-</ul>
-</li>
-<li><p>when MAX_ITER is actually a fairly close fit for the number of iterations really required, it is possible that the graph do while approach will be slower on unsupported platforms</p></li>
-</ul>
-<p>In this case, our recommendation is:</p>
-<ul class="simple">
-<li><p>use graph do while anyway, if you need it on any platform</p>
-<ul>
-<li><p>this will ensure your code is compact and maintainable</p></li>
-</ul>
-</li>
-<li><p>if you need optimum 100% performance on unsupported platforms, then consider PRing onto quadrants an optimized graph implementation for your target platform</p>
-<ul>
-<li><p>for example it could somehow run MAX_ITER iterations anyway, similar to the earlier hand-rolled version, but via the graph abstraction, hence allowing the code to be compact, cross-platform, and also optimally fast</p></li>
-</ul>
-</li>
+<li><p>fixed number of loop iterations, so no dependency on gpu data for kernel launch; combined perhaps with:</p></li>
+<li><p>make each kernel ‘short-circuit’, exit quickly, if the task has already been completed; to avoid running the GPU more than necessary</p></li>
 </ul>
 </section>
 </section>
@@ -888,20 +654,15 @@
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#basic-usage">Basic usage</a><ul class="nav section-nav flex-column">
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#restrictions">Restrictions</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#passing-different-arguments">Passing different arguments</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#fields-as-arguments">Fields as arguments</a></li>
 </ul>
 </li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#gpu-side-iteration-with-graph-do-while">GPU-side iteration with <code class="docutils literal notranslate"><span class="pre">graph_do_while</span></code></a><ul class="nav section-nav flex-column">
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#patterns">Patterns</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#do-while-semantics">Do-while semantics</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#ndarray-vs-field">ndarray vs field</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#nested-loops-and-mixing-with-for-loops">Nested loops and mixing with for-loops</a></li>
-</ul>
-</li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#performance">Performance</a><ul class="nav section-nav flex-column">
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#qd-kernel">qd.kernel</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#a-while-loop-conditional-on-a-device-side-scalar-tensor">A while loop, conditional on a device-side scalar tensor</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#a-fixed-size-for-loop">A fixed-size for loop</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#a-while-loop-conditional-on-a-device-side-scalar-tensor-that-has-been-optimized-into-a-fixed-size-for-loop">A while loop, conditional on a device-side scalar tensor, that has been optimized into a fixed-size for loop</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id1">Restrictions</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#caveats">Caveats</a></li>
 </ul>
 </li>
 </ul>

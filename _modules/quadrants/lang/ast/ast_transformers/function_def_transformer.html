@@ -7,7 +7,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>quadrants.lang.ast.ast_transformers.function_def_transformer &#8212; Quadrants 1.0.3 documentation</title>
+    <title>quadrants.lang.ast.ast_transformers.function_def_transformer &#8212; Quadrants 1.1.0 documentation</title>
   
   
   
@@ -42,7 +42,7 @@
   <link rel="preload" as="script" href="../../../../../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5" />
 <link rel="preload" as="script" href="../../../../../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5" />
 
-    <script src="../../../../../_static/documentation_options.js?v=baaebd52"></script>
+    <script src="../../../../../_static/documentation_options.js?v=fc837d61"></script>
     <script src="../../../../../_static/doctools.js?v=9bcbadda"></script>
     <script src="../../../../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../../../../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -60,7 +60,7 @@
     <link rel="search" title="Search" href="../../../../../search.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="1.0.3" />
+  <meta name="docsearch:version" content="1.1.0" />
   
     
     <script src="../../../../../_static/searchtools.js"></script>
@@ -128,7 +128,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 1.0.3 documentation</p>
+    <p class="title logo__title">Quadrants 1.1.0 documentation</p>
   
 </a></div>
     
@@ -841,7 +841,6 @@
 
         <span class="k">if</span> <span class="n">ctx</span><span class="o">.</span><span class="n">is_kernel</span><span class="p">:</span>
             <span class="n">FunctionDefTransformer</span><span class="o">.</span><span class="n">_validate_stream_parallel_exclusivity</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">body</span><span class="p">,</span> <span class="n">ctx</span><span class="o">.</span><span class="n">global_vars</span><span class="p">)</span>
-            <span class="n">FunctionDefTransformer</span><span class="o">.</span><span class="n">_validate_graph_do_while_structure</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">body</span><span class="p">)</span>
 
         <span class="k">with</span> <span class="n">ctx</span><span class="o">.</span><span class="n">variable_scope_guard</span><span class="p">():</span>
             <span class="n">build_stmts</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">body</span><span class="p">)</span>
@@ -871,94 +870,6 @@
         <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">func_node</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Name</span><span class="p">)</span> <span class="ow">and</span> <span class="n">func_node</span><span class="o">.</span><span class="n">id</span> <span class="o">==</span> <span class="s2">&quot;stream_parallel&quot;</span><span class="p">:</span>
             <span class="k">return</span> <span class="kc">True</span>
         <span class="k">return</span> <span class="kc">False</span>
-
-    <span class="nd">@staticmethod</span>
-    <span class="k">def</span><span class="w"> </span><span class="nf">_is_graph_do_while_while</span><span class="p">(</span><span class="n">stmt</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">stmt</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Syntactic check matching ASTTransformer._is_graph_do_while_call: a ``while qd.graph_do_while(var):`` loop.&quot;&quot;&quot;</span>
-        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">stmt</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">While</span><span class="p">):</span>
-            <span class="k">return</span> <span class="kc">False</span>
-        <span class="n">test</span> <span class="o">=</span> <span class="n">stmt</span><span class="o">.</span><span class="n">test</span>
-        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">test</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Call</span><span class="p">):</span>
-            <span class="k">return</span> <span class="kc">False</span>
-        <span class="n">func</span> <span class="o">=</span> <span class="n">test</span><span class="o">.</span><span class="n">func</span>
-        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">func</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Attribute</span><span class="p">)</span> <span class="ow">and</span> <span class="n">func</span><span class="o">.</span><span class="n">attr</span> <span class="o">==</span> <span class="s2">&quot;graph_do_while&quot;</span><span class="p">:</span>
-            <span class="k">return</span> <span class="kc">True</span>
-        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">func</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Name</span><span class="p">)</span> <span class="ow">and</span> <span class="n">func</span><span class="o">.</span><span class="n">id</span> <span class="o">==</span> <span class="s2">&quot;graph_do_while&quot;</span><span class="p">:</span>
-            <span class="k">return</span> <span class="kc">True</span>
-        <span class="k">return</span> <span class="kc">False</span>
-
-    <span class="nd">@staticmethod</span>
-    <span class="k">def</span><span class="w"> </span><span class="nf">_is_loop_config_call</span><span class="p">(</span><span class="n">stmt</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">stmt</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;A bare ``qd.loop_config(...)`` statement. It only configures the next for-loop (block_dim, serialize, ...) by</span>
-<span class="sd">        mutating ast_builder state and emits no offloaded task, so it does not break graph_do_while level tagging and is</span>
-<span class="sd">        allowed where bare statements otherwise are not.&quot;&quot;&quot;</span>
-        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">stmt</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Expr</span><span class="p">)</span> <span class="ow">or</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">stmt</span><span class="o">.</span><span class="n">value</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Call</span><span class="p">):</span>
-            <span class="k">return</span> <span class="kc">False</span>
-        <span class="n">func</span> <span class="o">=</span> <span class="n">stmt</span><span class="o">.</span><span class="n">value</span><span class="o">.</span><span class="n">func</span>
-        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">func</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Attribute</span><span class="p">)</span> <span class="ow">and</span> <span class="n">func</span><span class="o">.</span><span class="n">attr</span> <span class="o">==</span> <span class="s2">&quot;loop_config&quot;</span><span class="p">:</span>
-            <span class="k">return</span> <span class="kc">True</span>
-        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">func</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Name</span><span class="p">)</span> <span class="ow">and</span> <span class="n">func</span><span class="o">.</span><span class="n">id</span> <span class="o">==</span> <span class="s2">&quot;loop_config&quot;</span><span class="p">:</span>
-            <span class="k">return</span> <span class="kc">True</span>
-        <span class="k">return</span> <span class="kc">False</span>
-
-    <span class="nd">@staticmethod</span>
-    <span class="k">def</span><span class="w"> </span><span class="nf">_validate_graph_do_while_structure</span><span class="p">(</span><span class="n">body</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">ast</span><span class="o">.</span><span class="n">stmt</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;If a kernel uses qd.graph_do_while() anywhere, enforce the structural rules that remain after</span>
-<span class="sd">        per-statement graph-region tagging landed (see the offloader&#39;s region-boundary flushing and</span>
-<span class="sd">        ``GraphRegionTag`` in the C++ IR).</span>
-
-<span class="sd">        Bare statements -- assignments, ``@qd.func`` calls, ``qd.loop_config(...)`` directives, ``if``</span>
-<span class="sd">        branches -- are now legal at the kernel top level *and* inside graph_do_while bodies: each lowers to</span>
-<span class="sd">        a serial task tagged with the graph_do_while level it was written at, so it runs exactly once at the</span>
-<span class="sd">        kernel top level and every iteration inside a loop (issue #744). The old ``for _ in range(1):``</span>
-<span class="sd">        wrapping is no longer required (it still works, since a one-trip for-loop is just an offloaded task).</span>
-
-<span class="sd">        What this still checks is genuine well-formedness the offloader / runtime cannot express: a</span>
-<span class="sd">        graph_do_while ``while``-loop may not carry an ``else`` clause, and a bare runtime ``while`` (other</span>
-<span class="sd">        than ``qd.graph_do_while()``) is not a valid statement in a graph kernel. The placement rule that a</span>
-<span class="sd">        graph_do_while loop may only sit at the kernel top level or directly inside another graph_do_while</span>
-<span class="sd">        body (not inside a for-loop) is enforced elsewhere during lowering.&quot;&quot;&quot;</span>
-        <span class="n">uses_gdw</span> <span class="o">=</span> <span class="nb">any</span><span class="p">(</span><span class="n">FunctionDefTransformer</span><span class="o">.</span><span class="n">_is_graph_do_while_while</span><span class="p">(</span><span class="n">n</span><span class="p">)</span> <span class="k">for</span> <span class="n">stmt</span> <span class="ow">in</span> <span class="n">body</span> <span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="n">ast</span><span class="o">.</span><span class="n">walk</span><span class="p">(</span><span class="n">stmt</span><span class="p">))</span>
-        <span class="k">if</span> <span class="ow">not</span> <span class="n">uses_gdw</span><span class="p">:</span>
-            <span class="k">return</span>
-        <span class="n">FunctionDefTransformer</span><span class="o">.</span><span class="n">_validate_graph_do_while_stmt_list</span><span class="p">(</span><span class="n">body</span><span class="p">,</span> <span class="n">is_kernel_top</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-
-    <span class="nd">@staticmethod</span>
-    <span class="k">def</span><span class="w"> </span><span class="nf">_validate_graph_do_while_stmt_list</span><span class="p">(</span><span class="n">stmts</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">ast</span><span class="o">.</span><span class="n">stmt</span><span class="p">],</span> <span class="n">is_kernel_top</span><span class="p">:</span> <span class="nb">bool</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-        <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">stmt</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">stmts</span><span class="p">):</span>
-            <span class="k">if</span> <span class="n">FunctionDefTransformer</span><span class="o">.</span><span class="n">_is_docstring</span><span class="p">(</span><span class="n">stmt</span><span class="p">,</span> <span class="n">i</span><span class="p">):</span>
-                <span class="k">continue</span>
-            <span class="k">if</span> <span class="n">FunctionDefTransformer</span><span class="o">.</span><span class="n">_is_coverage_probe</span><span class="p">(</span><span class="n">stmt</span><span class="p">):</span>
-                <span class="k">continue</span>
-            <span class="k">if</span> <span class="n">FunctionDefTransformer</span><span class="o">.</span><span class="n">_is_loop_config_call</span><span class="p">(</span><span class="n">stmt</span><span class="p">):</span>
-                <span class="c1"># qd.loop_config(...) only tunes the next for-loop; it emits no serial task, so it is safe here.</span>
-                <span class="k">continue</span>
-            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">stmt</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">For</span><span class="p">):</span>
-                <span class="c1"># A for-loop is an offloaded task; its body is ordinary loop code (unrestricted).</span>
-                <span class="k">continue</span>
-            <span class="k">if</span> <span class="n">FunctionDefTransformer</span><span class="o">.</span><span class="n">_is_graph_do_while_while</span><span class="p">(</span><span class="n">stmt</span><span class="p">):</span>
-                <span class="k">if</span> <span class="n">stmt</span><span class="o">.</span><span class="n">orelse</span><span class="p">:</span>
-                    <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">&quot;&#39;else&#39; clause for &#39;while&#39; not supported in Quadrants kernels&quot;</span><span class="p">)</span>
-                <span class="n">FunctionDefTransformer</span><span class="o">.</span><span class="n">_validate_graph_do_while_stmt_list</span><span class="p">(</span><span class="n">stmt</span><span class="o">.</span><span class="n">body</span><span class="p">,</span> <span class="n">is_kernel_top</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
-                <span class="k">continue</span>
-            <span class="c1"># Bare statements are now correctly region-tagged by the offloader, so they are permitted at the</span>
-            <span class="c1"># kernel top level and inside graph_do_while bodies. `@qd.func` calls (bare `Expr`) inline at the</span>
-            <span class="c1"># current level, keeping their internal parallel for-loops parallel; bare assignments / directives</span>
-            <span class="c1"># lower to a serial task tagged at this level (run-once at the top level, every iteration inside a</span>
-            <span class="c1"># loop).</span>
-            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">stmt</span><span class="p">,</span> <span class="p">(</span><span class="n">ast</span><span class="o">.</span><span class="n">Expr</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Assign</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">AugAssign</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">AnnAssign</span><span class="p">)):</span>
-                <span class="k">continue</span>
-            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">stmt</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">If</span><span class="p">):</span>
-                <span class="c1"># Recurse so a malformed graph_do_while nested inside an `if` is still caught.</span>
-                <span class="n">FunctionDefTransformer</span><span class="o">.</span><span class="n">_validate_graph_do_while_stmt_list</span><span class="p">(</span><span class="n">stmt</span><span class="o">.</span><span class="n">body</span><span class="p">,</span> <span class="n">is_kernel_top</span><span class="o">=</span><span class="n">is_kernel_top</span><span class="p">)</span>
-                <span class="n">FunctionDefTransformer</span><span class="o">.</span><span class="n">_validate_graph_do_while_stmt_list</span><span class="p">(</span><span class="n">stmt</span><span class="o">.</span><span class="n">orelse</span><span class="p">,</span> <span class="n">is_kernel_top</span><span class="o">=</span><span class="n">is_kernel_top</span><span class="p">)</span>
-                <span class="k">continue</span>
-            <span class="n">where</span> <span class="o">=</span> <span class="s2">&quot;the kernel body&quot;</span> <span class="k">if</span> <span class="n">is_kernel_top</span> <span class="k">else</span> <span class="s2">&quot;a qd.graph_do_while() body&quot;</span>
-            <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span>
-                <span class="sa">f</span><span class="s2">&quot;When a kernel uses qd.graph_do_while(), </span><span class="si">{</span><span class="n">where</span><span class="si">}</span><span class="s2"> may not contain a </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">stmt</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2"> &quot;</span>
-                <span class="sa">f</span><span class="s2">&quot;statement. Allowed: for-loops, qd.graph_do_while() while-loops, bare assignments, and &quot;</span>
-                <span class="sa">f</span><span class="s2">&quot;@qd.func calls (freely mixed and nested). [offending stmt </span><span class="si">{</span><span class="n">i</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">stmt</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">]&quot;</span>
-            <span class="p">)</span>
 
     <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">_is_docstring</span><span class="p">(</span><span class="n">stmt</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">stmt</span><span class="p">,</span> <span class="n">index</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
