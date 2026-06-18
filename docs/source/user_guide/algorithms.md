@@ -431,7 +431,7 @@ Implementation detail for the curious - not needed to *use* the ops. In every ca
 ### `reduce_{add,min,max}`
 
 - Fixed-depth tree reduction. Each phase uses `BLOCK_DIM = 256` threads per block and reduces 256 elements per block via `block.reduce_{add,min,max}`. `LOG256_MAX_N = 1` covers `N <= 256`; `2` covers up to `256^2 = 65536`; and so on. Out-of-range lanes contribute the [identity value](#common-conventions).
-- Per-phase partials are written to the caller's `scratch`; the final phase writes `out[0]` directly.
+- The output is written to `out[0]`.
 
 ### `exclusive_scan_{add,min,max}`
 
