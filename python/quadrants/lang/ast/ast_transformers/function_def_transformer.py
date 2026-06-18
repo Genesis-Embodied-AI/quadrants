@@ -694,21 +694,22 @@ class FunctionDefTransformer:
                 continue
             if isinstance(stmt, ast.With) and FunctionDefTransformer._is_graph_parallel_with(stmt):
                 # `with qd.graph_parallel()` fork/join regions are also legal siblings. Descend into each branch (and
-                # through optional `if qd.static(...)` wrappers) so a malformed graph_do_while nested inside a branch
-                # body is still caught. The graph_parallel-specific structural rules are enforced in
+                # through optional `if qd.static(...)` wrappers) and validate each branch body with the stricter
+                # branch-in-gdw ruleset (no bare statements - see `_validate_branch_body_inside_gdw`). The
+                # graph_parallel-specific structural rules (branch/static-loop placement) are enforced in
                 # `ASTTransformer._build_graph_parallel_with`.
                 pending = list(stmt.body)
                 while pending:
                     member = pending.pop()
                     if isinstance(member, ast.With) and FunctionDefTransformer._is_branch_with(member):
-                        FunctionDefTransformer._validate_graph_do_while_stmt_list(member.body, is_kernel_top=False)
+                        FunctionDefTransformer._validate_branch_body_inside_gdw(member.body)
                     elif isinstance(member, ast.If):
                         pending.extend(member.body)
                         pending.extend(member.orelse)
                     elif isinstance(member, ast.For):
                         # `for ... in qd.static(...)` generates branches; descend so each unrolled branch
-                        # body is still validated with the in-loop rules. (A runtime for here is rejected
-                        # later by ASTTransformer._build_graph_parallel_with.)
+                        # body is still validated with the branch-in-gdw rules. (A runtime for here is
+                        # rejected later by ASTTransformer._build_graph_parallel_with.)
                         pending.extend(member.body)
                 continue
             where = "the kernel body" if is_kernel_top else "a qd.graph_do_while() body"
@@ -717,6 +718,58 @@ class FunctionDefTransformer:
                 f"statement. Allowed: for-loops, qd.graph_do_while() while-loops, qd.checkpoint() / "
                 f"qd.graph_parallel() with-blocks, bare assignments, and @qd.func calls (freely mixed and "
                 f"nested). [offending stmt {i}: {type(stmt).__name__}]"
+            )
+
+    @staticmethod
+    def _validate_branch_body_inside_gdw(stmts: list[ast.stmt]) -> None:
+        """Stricter ruleset for `with qd.branch():` bodies that sit inside a `qd.graph_do_while()` loop.
+
+        Per-statement region tagging (issue #744) makes bare statements work correctly directly inside a
+        graph_do_while body -- the offloader tags the resulting serial task with the loop's level, so it
+        re-runs every iteration. That tagging does not currently extend to bare statements inside a
+        `qd.branch()` body, where the task inherits a stale region tag and runs the wrong number of times
+        (observed: a bare assignment in a static-loop branch ran ~10x in a 3-iter loop). Until that is
+        fixed in the IR lowering, reject bare statements inside branch bodies here so the footgun surfaces
+        at compile time. Users must wrap bare statements in `for _ in range(1):` -- the wrapping for-loop
+        emits a regular offloaded task that *is* correctly tagged.
+
+        Still permitted inside a branch body: for-loops (their bodies are unrestricted task code),
+        nested `qd.graph_do_while()` while-loops (with recursion back into the main validator so
+        anything malformed deeper down is still caught), `qd.checkpoint()` / `qd.graph_parallel()`
+        with-blocks (also recursed), and `if` branches (recursed)."""
+        for i, stmt in enumerate(stmts):
+            if FunctionDefTransformer._is_docstring(stmt, i):
+                continue
+            if FunctionDefTransformer._is_coverage_probe(stmt):
+                continue
+            if FunctionDefTransformer._is_loop_config_call(stmt):
+                continue
+            if isinstance(stmt, ast.For):
+                continue
+            if FunctionDefTransformer._is_graph_do_while_while(stmt):
+                if stmt.orelse:
+                    raise QuadrantsSyntaxError("'else' clause for 'while' not supported in Quadrants kernels")
+                FunctionDefTransformer._validate_graph_do_while_stmt_list(stmt.body, is_kernel_top=False)
+                continue
+            if isinstance(stmt, ast.If):
+                FunctionDefTransformer._validate_branch_body_inside_gdw(stmt.body)
+                FunctionDefTransformer._validate_branch_body_inside_gdw(stmt.orelse)
+                continue
+            if isinstance(stmt, ast.With) and FunctionDefTransformer._is_checkpoint_with(stmt):
+                FunctionDefTransformer._validate_branch_body_inside_gdw(stmt.body)
+                continue
+            if isinstance(stmt, ast.With) and FunctionDefTransformer._is_graph_parallel_with(stmt):
+                # A nested graph_parallel inside a branch is unusual but not rejected here; the outer
+                # graph_do_while validator's graph_parallel branch (above) handles it via re-entry.
+                FunctionDefTransformer._validate_graph_do_while_stmt_list([stmt], is_kernel_top=False)
+                continue
+            raise QuadrantsSyntaxError(
+                f"A `with qd.branch():` body inside qd.graph_do_while() may contain only for-loops, "
+                f"nested qd.graph_do_while() while-loops, qd.checkpoint() / qd.graph_parallel() blocks, "
+                f"and `if` statements -- bare assignments and other bare statements re-execute the wrong "
+                f"number of times in this position (region-tag lowering bug). Wrap the offending statement "
+                f"in `for _ in range(1):` to lower it as a regular offloaded task. "
+                f"[offending stmt {i}: {type(stmt).__name__}]"
             )
 
     @staticmethod
