@@ -44,12 +44,11 @@ order by an in-place twiddle (first top-level ``for``) and restored by the inver
 participation); histogram ``atomic_add`` and the scatter store are gated on ``i < N`` so sentinels never pollute the
 histogram or write past the output.
 
-**Scratch.** The sort needs a **caller-owned** 1-D ``u32`` ``scratch`` buffer of
-:func:`sort_scratch_slots` ``(N, log256_max_n)`` slots (tile histograms + scan partials; ``u32`` regardless of
-key width, so 8-byte-key sorts have the same footprint as 4-byte ones). There is **no** module-level shared-scratch
-fallback - the caller always owns the buffer (graph- / multi-stream-safe, no global state). :func:`sort`
-does **no** on-device scratch check (a DtoH would defeat graph capture), so size ``scratch`` correctly up front when
-composing the func.
+**Scratch.** The sort needs a **caller-owned** 1-D ``u32`` ``scratch`` buffer of :func:`sort_scratch_slots`
+``(N, log256_max_n)`` slots (tile histograms + scan partials; ``u32`` regardless of key width, so 8-byte-key sorts
+have the same footprint as 4-byte ones). There is **no** module-level shared-scratch fallback - the caller always
+owns the buffer (graph- / multi-stream-safe, no global state). :func:`sort` does **no** on-device scratch check
+(a DtoH would defeat graph capture), so size ``scratch`` correctly up front when composing the func.
 """
 
 from quadrants.lang.impl import static

@@ -164,7 +164,10 @@ def reduce_by_key_add(
     is the values dtype (needed only to write the typed zero before the scatter ``atomic_add``; keys are handled
     generically). The five phases - head flags, in-place exclusive scan of those flags (the same staircase as
     ``exclusive_scan_add``, via :func:`_emit_scan_inplace`), zero ``values_out``, scatter, count - each emit as their
-    own offloaded launch. Size ``scratch`` via :func:`reduce_by_key_scratch_slots` ``(capacity_n)``."""
+    own offloaded launch. Size ``scratch`` via :func:`reduce_by_key_scratch_slots` ``(capacity_n)``.
+
+    **NaN handling for f32 keys:** ``NaN != NaN`` is true, so each NaN becomes its own run - consistent with treating
+    NaN as "different from everything", which matches the run-length-encoding spirit of reduce-by-key."""
     _validate_log256_max_n(log256_max_n)
     _rbk_head_flags_phase(keys_in, scratch, 0, n)
     _emit_scan_inplace(scratch, 0, n, log256_max_n - 1, i32, u32, _OP_ADD, _bin_add)
