@@ -3,6 +3,7 @@ import os
 import shutil
 import tempfile
 import warnings
+from contextlib import contextmanager
 from copy import deepcopy as _deepcopy
 
 from quadrants import _logging, _snode

@@ -33,7 +33,6 @@ struct ForLoopConfig {
   // plumbing here in slice 1b; the runtime does not yet consume this field, so behaviour is unchanged for non-
   // checkpoint code paths.
   int checkpoint_id{-1};
-  int graph_do_while_level_id{-1};
   std::string loop_name{""};
 };
 
@@ -212,7 +211,6 @@ class FrontendForStmt : public Stmt {
   int stream_parallel_group_id{0};
   int graph_do_while_level_id{-1};
   int checkpoint_id{-1};
-  int graph_do_while_level_id{-1};
   std::string loop_name;
 
   FrontendForStmt(const ExprGroup &loop_vars,
@@ -958,10 +956,6 @@ class ASTBuilder {
   // cleared by `end_checkpoint()`. Read at each `begin_frontend_*_for` call to tag the emitted
   // for-loop with the enclosing checkpoint's cp_id (or -1 when outside any checkpoint).
   int current_checkpoint_id_{-1};
-  // Innermost active graph_do_while level id (-1 if not inside any). The Python AST transformer manages
-  // the stack and calls set_graph_do_while_level_id() on enter/exit; for-loops created while it is >= 0
-  // are tagged with it (mirrors current_stream_parallel_group_id_).
-  int current_graph_do_while_level_id_{-1};
 
  public:
   ASTBuilder(Block *initial, Arch arch, bool is_kernel) : is_kernel_(is_kernel), arch_(arch) {
@@ -1127,12 +1121,6 @@ class ASTBuilder {
     current_checkpoint_id_ = -1;
   }
 
-  // Set the innermost active graph_do_while level id. Pass the new level id when entering a
-  // graph_do_while loop, and the parent level id (or -1) when leaving it. The Python AST transformer
-  // owns the level stack and the level table.
-  void set_graph_do_while_level_id(int level_id) {
-    current_graph_do_while_level_id_ = level_id;
-  }
 
   Identifier get_next_id(const std::string &name = "") {
     return Identifier(id_counter_++, name);
