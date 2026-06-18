@@ -275,7 +275,7 @@ def _emit_pass(
     _radix_scatter(src, dst, vsrc, vdst, scratch, n, num_blocks, bit_start, KEY_DTYPE, HAS_VALUES, KEY_WIDTH)
 
 
-@_func
+@_func(requires_top_level=True)
 def sort(
     keys: template(),
     tmp_keys: template(),

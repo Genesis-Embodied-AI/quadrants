@@ -418,7 +418,7 @@ def _emit_reduce(arr, out, scratch, n, LOG256_MAX_N, DTYPE, WIDE, OP):
     _emit_reduce_rec(arr, 0, False, scratch, 0, out, n, LOG256_MAX_N, DTYPE, WIDE, OP, OP_BIN)
 
 
-@_func
+@_func(requires_top_level=True)
 def reduce_add(
     arr: template(),
     out: template(),
@@ -442,7 +442,7 @@ def reduce_add(
     _emit_reduce(arr, out, scratch, n, LOG256_MAX_N, DTYPE, WIDE, _OP_ADD)
 
 
-@_func
+@_func(requires_top_level=True)
 def reduce_min(
     arr: template(),
     out: template(),
@@ -457,7 +457,7 @@ def reduce_min(
     _emit_reduce(arr, out, scratch, n, LOG256_MAX_N, DTYPE, WIDE, _OP_MIN)
 
 
-@_func
+@_func(requires_top_level=True)
 def reduce_max(
     arr: template(),
     out: template(),

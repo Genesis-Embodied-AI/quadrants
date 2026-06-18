@@ -141,7 +141,7 @@ def _rbk_count_phase(keys_in: template(), positions: template(), positions_off: 
         num_runs[0] = pos_last + head_last
 
 
-@_func
+@_func(requires_top_level=True)
 def reduce_by_key_add(
     keys_in: template(),
     values_in: template(),

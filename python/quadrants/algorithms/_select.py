@@ -119,7 +119,7 @@ def _emit_select_scan(flags, scratch, n, LOG256_MAX_N):
     )
 
 
-@_func
+@_func(requires_top_level=True)
 def select(
     arr: template(),
     flags: template(),
