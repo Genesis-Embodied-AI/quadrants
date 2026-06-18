@@ -26,6 +26,9 @@ from quadrants.lang._dataclass_util import create_flat_name
 from quadrants.lang.ast.ast_transformer_utils import (
     ASTTransformerFuncContext,
 )
+from quadrants.lang.ast.ast_transformers.checkpoint_transformer import (
+    CheckpointTransformer,
+)
 from quadrants.lang.ast.symbol_resolver import ASTResolver
 from quadrants.lang.buffer_view import BufferView
 from quadrants.lang.exception import (
@@ -505,6 +508,24 @@ class FunctionDefTransformer:
         if ctx.is_kernel:
             FunctionDefTransformer._validate_stream_parallel_exclusivity(node.body, ctx.global_vars)
             FunctionDefTransformer._validate_graph_do_while_structure(node.body)
+            kernel = ctx.global_context.current_kernel
+            if kernel is not None:
+                # Reset before walking the body so re-materialisations (e.g. when a templated kernel is compiled with a
+                # different argument shape) start from an empty list. Mirrors how `graph_do_while_arg` gets overwritten
+                # unconditionally during AST traversal.
+                kernel.checkpoint_yield_on_args = []
+                kernel.checkpoint_user_labels_by_cp_id = []
+                # Auto-wrap pass for `@qd.kernel(graph=True, checkpoints=True)` kernels. Mutates `node.body` in place so
+                # every top-level for-loop (and every for-loop inside a `qd.graph_do_while` body) that the user did not
+                # already wrap in a `with qd.checkpoint(...)` gets wrapped in a synthetic implicit no-yield checkpoint.
+                # Implicit checkpoints share the same dense source-order internal cp_id space as explicit ones, but
+                # carry `None` in `checkpoint_user_labels_by_cp_id` so they never appear in `GraphStatus.checkpoint` /
+                # `kernel.resume(from_checkpoint=...)`. Runs here (after coverage instrumentation has already injected
+                # its top-level `_qd_cov[i] = 1` probes, which are bare assigns that the wrap pass intentionally leaves
+                # alone) so that the regular `build_stmts` walk below sees a uniform stream of `with qd.checkpoint(...)`
+                # blocks and bare prologue stmts.
+                if kernel.use_checkpoints:
+                    node.body = CheckpointTransformer.auto_wrap_for_loops(node.body)
 
         with ctx.variable_scope_guard():
             build_stmts(ctx, node.body)
@@ -546,6 +567,22 @@ class FunctionDefTransformer:
         if isinstance(func, ast.Attribute) and func.attr == "graph_do_while":
             return True
         if isinstance(func, ast.Name) and func.id == "graph_do_while":
+            return True
+        return False
+
+    @staticmethod
+    def _is_checkpoint_with(stmt: ast.With) -> bool:
+        """Syntactic check matching CheckpointTransformer: a ``with qd.checkpoint(...):`` block. Accepted as a
+        well-formed statement inside a graph_do_while body (the checkpoint itself enforces its own restrictions)."""
+        if not isinstance(stmt, ast.With) or len(stmt.items) != 1:
+            return False
+        ctx = stmt.items[0].context_expr
+        if not isinstance(ctx, ast.Call):
+            return False
+        func = ctx.func
+        if isinstance(func, ast.Attribute) and func.attr == "checkpoint":
+            return True
+        if isinstance(func, ast.Name) and func.id == "checkpoint":
             return True
         return False
 
@@ -614,6 +651,13 @@ class FunctionDefTransformer:
                 # Recurse so a malformed graph_do_while nested inside an `if` is still caught.
                 FunctionDefTransformer._validate_graph_do_while_stmt_list(stmt.body, is_kernel_top=is_kernel_top)
                 FunctionDefTransformer._validate_graph_do_while_stmt_list(stmt.orelse, is_kernel_top=is_kernel_top)
+                continue
+            if isinstance(stmt, ast.With) and FunctionDefTransformer._is_checkpoint_with(stmt):
+                # `with qd.checkpoint(...)` is a legal placement for graph kernels (the checkpoint may sit at the
+                # kernel top level or inside any graph_do_while level). Recurse so a malformed graph_do_while
+                # nested inside a checkpoint body is still caught; the checkpoint's own body restrictions are
+                # enforced by `CheckpointTransformer.build_checkpoint_with`.
+                FunctionDefTransformer._validate_graph_do_while_stmt_list(stmt.body, is_kernel_top=is_kernel_top)
                 continue
             where = "the kernel body" if is_kernel_top else "a qd.graph_do_while() body"
             raise QuadrantsSyntaxError(

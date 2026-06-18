@@ -96,6 +96,48 @@ class QuadrantsCallable:
     def __call__(self, *args, **kwargs):
         return self.wrapper.__call__(*args, **kwargs)
 
+    def resume(self, *args, from_checkpoint, **kwargs):
+        """Continues a paused graph kernel from the checkpoint labelled ``from_checkpoint``.
+
+        .. warning::
+
+            **Experimental.** ``kernel.resume`` is part of the experimental ``qd.checkpoint`` surface; the signature
+            (in particular the ``from_checkpoint=`` kwarg) and behaviour may change in any future release without a
+            deprecation cycle.
+
+        Use only on ``@qd.kernel(graph=True, checkpoints=True)`` kernels with at least one
+        ``qd.checkpoint(cp_id, yield_on=flag)`` block. ``from_checkpoint`` is a ``cp_id`` label (typically an
+        ``IntEnum`` value, often ``status.checkpoint`` from the previous launch): everything before that label in
+        source order is skipped on this launch, and execution continues from there. The host loop pattern is::
+
+            from enum import IntEnum
+
+            class Stage(IntEnum):
+                SIM = 0
+
+            overflow_flag[()] = 0  # initialise before the first launch
+            status = step(arr, overflow_flag, newton_cond)
+            while status.yielded:
+                handle(status.checkpoint, ...)
+                overflow_flag[()] = 0  # the framework never clears your yield_on flag
+                status = step.resume(arr, overflow_flag, newton_cond,
+                                     from_checkpoint=status.checkpoint)
+
+        Returns the same ``GraphStatus`` shape as the plain call.
+
+        Raises ``RuntimeError`` if invoked on a kernel without any ``yield_on=`` checkpoint, or if ``from_checkpoint``
+        does not match any declared ``cp_id`` in the kernel.
+        """
+        if not isinstance(from_checkpoint, int):
+            raise RuntimeError(
+                f"from_checkpoint= must be an int or IntEnum value matching a `qd.checkpoint(cp_id=...)` label in "
+                f"the kernel (typically `status.checkpoint` from the previous launch's GraphStatus); "
+                f"got {from_checkpoint!r}."
+            )
+        # Smuggle the resume cookie past the AST-mapped kwargs path; `Kernel.__call__` pops it before anything else
+        # looks at kwargs.
+        return self.wrapper.__call__(*args, _qd_from_checkpoint=from_checkpoint, **kwargs)
+
     def __get__(self, instance, owner):
         if instance is None:
             return self
@@ -125,3 +167,7 @@ class BoundQuadrantsCallable:
     def grad(self, *args, **kwargs) -> "Kernel":
         assert self.quadrants_callable._adjoint is not None
         return self.quadrants_callable._adjoint(self.instance, *args, **kwargs)
+
+    def resume(self, *args, from_checkpoint, **kwargs):
+        """Bound-method form of `QuadrantsCallable.resume` (see that docstring)."""
+        return self.quadrants_callable.resume(self.instance, *args, from_checkpoint=from_checkpoint, **kwargs)

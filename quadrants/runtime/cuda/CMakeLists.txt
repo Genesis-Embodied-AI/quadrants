@@ -4,6 +4,7 @@ add_library(cuda_runtime)
 target_sources(cuda_runtime
   PRIVATE
     graph_manager.cpp
+    graph_manager_checkpoint.cpp
     cuda_utils.cpp
     jit_cuda.cpp
     kernel_launcher.cpp

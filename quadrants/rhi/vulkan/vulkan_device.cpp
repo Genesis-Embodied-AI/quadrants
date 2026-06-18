@@ -904,20 +904,27 @@ void VulkanCommandList::buffer_barrier(DevicePtr ptr, size_t size) noexcept {
   barrier.size = size;
   barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
   barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+  // `VK_ACCESS_INDIRECT_COMMAND_READ_BIT` + `VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT` cover the case
+  // where this buffer is the dim3 source for a subsequent `vkCmdDispatchIndirect` (the
+  // `qd.checkpoint` gating path; see `runtime/gfx/checkpoint_launch.cpp`). The barrier is already
+  // conservative (transfer + shader read/write on both sides); adding indirect-read coverage is
+  // strictly more permissive and adds no measurable cost over the all-shader barrier.
   barrier.srcAccessMask = (VK_ACCESS_TRANSFER_READ_BIT | VK_ACCESS_TRANSFER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT |
-                           VK_ACCESS_SHADER_WRITE_BIT);
+                           VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_INDIRECT_COMMAND_READ_BIT);
   barrier.dstAccessMask = (VK_ACCESS_TRANSFER_READ_BIT | VK_ACCESS_TRANSFER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT |
-                           VK_ACCESS_SHADER_WRITE_BIT);
+                           VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_INDIRECT_COMMAND_READ_BIT);
 
-  vkCmdPipelineBarrier(buffer_->buffer,
-                       /*srcStageMask=*/
-                       VK_PIPELINE_STAGE_TRANSFER_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-                       /*dstStageMask=*/VK_PIPELINE_STAGE_TRANSFER_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-                       /*srcStageMask=*/0, /*memoryBarrierCount=*/0, nullptr,
-                       /*bufferMemoryBarrierCount=*/1,
-                       /*pBufferMemoryBarriers=*/&barrier,
-                       /*imageMemoryBarrierCount=*/0,
-                       /*pImageMemoryBarriers=*/nullptr);
+  vkCmdPipelineBarrier(
+      buffer_->buffer,
+      /*srcStageMask=*/
+      VK_PIPELINE_STAGE_TRANSFER_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT,
+      /*dstStageMask=*/VK_PIPELINE_STAGE_TRANSFER_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT |
+          VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT,
+      /*srcStageMask=*/0, /*memoryBarrierCount=*/0, nullptr,
+      /*bufferMemoryBarrierCount=*/1,
+      /*pBufferMemoryBarriers=*/&barrier,
+      /*imageMemoryBarrierCount=*/0,
+      /*pImageMemoryBarriers=*/nullptr);
   buffer_->refs.push_back(buffer);
 }
 
@@ -929,20 +936,26 @@ void VulkanCommandList::memory_barrier() noexcept {
   VkMemoryBarrier barrier{};
   barrier.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
   barrier.pNext = nullptr;
+  // Indirect-read coverage matches the buffer_barrier path; see the comment there for rationale.
+  // Required for the `qd.checkpoint` gating path where a compute shader's writes to an indirect-
+  // dispatch buffer must happen-before the subsequent `vkCmdDispatchIndirect` reads the dim3
+  // triple from device memory.
   barrier.srcAccessMask = (VK_ACCESS_TRANSFER_READ_BIT | VK_ACCESS_TRANSFER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT |
-                           VK_ACCESS_SHADER_WRITE_BIT);
+                           VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_INDIRECT_COMMAND_READ_BIT);
   barrier.dstAccessMask = (VK_ACCESS_TRANSFER_READ_BIT | VK_ACCESS_TRANSFER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT |
-                           VK_ACCESS_SHADER_WRITE_BIT);
+                           VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_INDIRECT_COMMAND_READ_BIT);
 
-  vkCmdPipelineBarrier(buffer_->buffer,
-                       /*srcStageMask=*/
-                       VK_PIPELINE_STAGE_TRANSFER_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-                       /*dstStageMask=*/VK_PIPELINE_STAGE_TRANSFER_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-                       /*srcStageMask=*/0, /*memoryBarrierCount=*/1, &barrier,
-                       /*bufferMemoryBarrierCount=*/0,
-                       /*pBufferMemoryBarriers=*/nullptr,
-                       /*imageMemoryBarrierCount=*/0,
-                       /*pImageMemoryBarriers=*/nullptr);
+  vkCmdPipelineBarrier(
+      buffer_->buffer,
+      /*srcStageMask=*/
+      VK_PIPELINE_STAGE_TRANSFER_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT,
+      /*dstStageMask=*/VK_PIPELINE_STAGE_TRANSFER_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT |
+          VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT,
+      /*srcStageMask=*/0, /*memoryBarrierCount=*/1, &barrier,
+      /*bufferMemoryBarrierCount=*/0,
+      /*pBufferMemoryBarriers=*/nullptr,
+      /*imageMemoryBarrierCount=*/0,
+      /*pImageMemoryBarriers=*/nullptr);
 }
 
 void VulkanCommandList::buffer_copy(DevicePtr dst, DevicePtr src, size_t size) noexcept {
@@ -1001,6 +1014,26 @@ RhiResult VulkanCommandList::dispatch(uint32_t x, uint32_t y, uint32_t z) noexce
     return RhiResult::not_supported;
   }
   vkCmdDispatch(buffer_->buffer, x, y, z);
+  return RhiResult::success;
+}
+
+RhiResult VulkanCommandList::dispatch_indirect(DevicePtr dim3_ptr) noexcept {
+  // Backing VkBuffer for the (x, y, z) tuple. The buffer must have been allocated with `Indirect` usage
+  // (`AllocUsage::Indirect`); the allocator path in `VulkanDevice::allocate_memory` already maps that flag
+  // to `VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT`, so as long as the caller used `Indirect` in `AllocParams::usage`
+  // this points at a usable buffer. The byte offset is `dim3_ptr.offset`; Vulkan accepts any 4-byte-aligned
+  // offset for `vkCmdDispatchIndirect` and the three u32 workgroup counts are 4-byte aligned by construction.
+  auto buffer = ti_device_->get_vkbuffer(dim3_ptr);
+  if (!buffer) {
+    return RhiResult::invalid_usage;
+  }
+  vkCmdDispatchIndirect(buffer_->buffer, buffer->buffer, dim3_ptr.offset);
+  // The cmdbuf must keep the indirect-dispatch backing buffer alive until the cmdbuf has been retired. The
+  // direct-dispatch path tracks `current_pipeline_` automatically; for `dispatch_indirect` the spirv-bound
+  // SSBOs are already tracked via `ref_buffers_` from prior `bind_shader_resources`, but the *indirect
+  // buffer itself* is a separate resource that may not appear in any descriptor set. Tracking the buffer
+  // explicitly mirrors the pattern in `buffer_copy` and `buffer_fill`.
+  buffer_->refs.push_back(buffer);
   return RhiResult::success;
 }
 
@@ -1533,6 +1566,9 @@ RhiResult VulkanDevice::allocate_memory(const AllocParams &params, DeviceAllocat
   }
   if (params.usage && AllocUsage::Index) {
     buffer_info.usage |= VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
+  }
+  if (params.usage && AllocUsage::Indirect) {
+    buffer_info.usage |= VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT;
   }
 
   uint32_t queue_family_indices[] = {compute_queue_family_index_, graphics_queue_family_index_};

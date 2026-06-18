@@ -10,7 +10,9 @@ from quadrants._lib import core as _qd_core
 from quadrants._lib.core.quadrants_python import Extension
 from quadrants._lib.utils import get_os_name
 from quadrants.lang import impl, util
+from quadrants.lang.checkpoint import checkpoint
 from quadrants.lang.expr import Expr
+from quadrants.lang.graph_status import GraphStatus
 from quadrants.lang.impl import axes, get_runtime
 from quadrants.profiler.kernel_profiler import get_default_kernel_profiler
 from quadrants.types.primitive_types import f32, f64, i32, i64
@@ -885,6 +887,8 @@ __all__ = [
     "python",
     "vulkan",
     "extension",
+    "GraphStatus",
+    "checkpoint",
     "graph_do_while",
     "loop_config",
     "global_thread_idx",

@@ -628,6 +628,16 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
       emit_cuda_gc(stmt);
     } else {
       init_offloaded_task_function(stmt);
+      // GPU-side checkpoint gating prologue: emit a per-task early-return at the top of `func_body_bb` reading
+      // `RuntimeContext::checkpoint_resume_point_ptr` and `RuntimeContext::checkpoint_yield_signal_ptr`. The prologue
+      // is the gating mechanism on pre-Hopper CUDA (which has no conditional-graph-node support); on SM 9.0+ it is dead
+      // code in the common path (the conditional gate prevents launch entirely) but stays in for correctness on the
+      // rare overlapping-gate case where some yield-check kernel earlier in the same launched graph set yield_signal
+      // between the conditional gate's evaluation and the body's execution. See `runtime/cuda/graph_manager.cpp` for
+      // the host side that populates the device pointers in `persistent_ctx`.
+      if (stmt->checkpoint_id >= 0) {
+        emit_checkpoint_gate_prologue(stmt->checkpoint_id);
+      }
       if (stmt->task_type == Type::serial) {
         stmt->body->accept(this);
       } else if (stmt->task_type == Type::range_for) {
@@ -663,6 +673,7 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
       current_task->block_dim = stmt->block_dim;
       current_task->dynamic_shared_array_bytes = dynamic_shared_array_bytes;
       current_task->stream_parallel_group_id = stmt->stream_parallel_group_id;
+      current_task->checkpoint_id = stmt->checkpoint_id;
       QD_ASSERT(current_task->grid_dim != 0);
       QD_ASSERT(current_task->block_dim != 0);
       // Host-side adstack sizing. For non-range_for and for const-bound range_for the launcher uses

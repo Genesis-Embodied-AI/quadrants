@@ -370,6 +370,14 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
       emit_amdgpu_gc(stmt);
     } else {
       init_offloaded_task_function(stmt);
+      // GPU-side checkpoint gating prologue: HIP 7.2 has no conditional graph nodes and no indirect-dispatch
+      // primitive, so AMDGPU follows the same self-gating pattern as pre-Hopper CUDA -- every cp_id >= 0 body kernel
+      // reads `RuntimeContext::checkpoint_*_ptr` and early-returns when its checkpoint should be skipped. The flat
+      // HIP graph build path in `runtime/amdgpu/graph_manager.cpp` populates the device pointers in `persistent_ctx`
+      // once per launch.
+      if (stmt->checkpoint_id >= 0) {
+        emit_checkpoint_gate_prologue(stmt->checkpoint_id);
+      }
       if (stmt->task_type == Type::serial) {
         stmt->body->accept(this);
       } else if (stmt->task_type == Type::range_for) {
@@ -409,6 +417,7 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
       }
       current_task->block_dim = stmt->block_dim;
       current_task->stream_parallel_group_id = stmt->stream_parallel_group_id;
+      current_task->checkpoint_id = stmt->checkpoint_id;
       QD_ASSERT(current_task->grid_dim != 0);
       QD_ASSERT(current_task->block_dim != 0);
       // Host-side adstack sizing, same scheme as codegen_cuda: tight `grid_dim * block_dim` for

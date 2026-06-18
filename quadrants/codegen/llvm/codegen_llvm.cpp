@@ -2067,6 +2067,9 @@ std::string TaskCodeGenLLVM::init_offloaded_task_function(OffloadedStmt *stmt, s
   return task_kernel_name;
 }
 
+// Note: `TaskCodeGenLLVM::emit_checkpoint_gate_prologue(int cp_id)` lives in `codegen_llvm_checkpoint.cpp` (same
+// translation-unit-split pattern as `codegen_llvm_quant.cpp`).
+
 void TaskCodeGenLLVM::finalize_offloaded_task_function() {
   if (!returned) {
     builder->CreateBr(final_block);
@@ -2097,10 +2100,10 @@ void TaskCodeGenLLVM::finalize_offloaded_task_function() {
     if (!arch_is_cpu(compile_config.arch)) {
       current_task->ad_stack.max_reducer_specs = recognize_adstack_max_reducer_specs(ad_stack_size_exprs_);
     }
-    // Snodes the task body mutates. Persisted on `OffloadedTask::snode_writes` so the LLVM
-    // launcher can invalidate the per-task adstack metadata cache when a kernel that runs in
-    // between mutated a SNode an enclosing `size_expr::FieldLoad` reads. Mirrors the SPIR-V
-    // analogue in `spirv_codegen.cpp`. Sorted + deduplicated for stable serialisation.
+    // Snodes the task body mutates. Persisted on `OffloadedTask::snode_writes` so the LLVM launcher can invalidate
+    // the per-task adstack metadata cache when a kernel that runs in between mutated a SNode an enclosing
+    // `size_expr::FieldLoad` reads. Mirrors the SPIR-V analogue in `spirv_codegen.cpp`. Sorted + deduplicated for
+    // stable serialisation.
     if (current_offload != nullptr) {
       auto snode_rw = irpass::analysis::gather_snode_read_writes(current_offload);
       current_task->snode_writes.reserve(snode_rw.second.size());

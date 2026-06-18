@@ -422,6 +422,31 @@ class RHI_DLL_EXPORT CommandList {
     return RhiResult::not_supported;
   }
 
+  /**
+   * Enqueues an indirect compute dispatch.
+   *
+   * The (workgroup_count_x, workgroup_count_y, workgroup_count_z) triple is read by the GPU at execution time
+   * from `dim3_ptr`, which must point to three consecutive little-endian `uint32_t` slots (12 bytes). The bound
+   * pipeline's pre-determined workgroup size is used unchanged; only the workgroup *count* is sourced from
+   * device memory. A dispatch with all zeros is a hardware-level no-op on every backend that implements this
+   * call.
+   *
+   * Used by the `qd.checkpoint` GPU-side gating path on Vulkan / Metal: a gate compute shader runs before
+   * each checkpoint's body kernels and either writes the active workgroup count or `(0, 0, 0)` into the
+   * per-kernel `dim3_ptr` buffer, so the body kernel's indirect dispatch either runs normally or is a no-op
+   * without any host involvement. See `reentrant.md` and `runtime/gfx/runtime.cpp` for the full mechanism.
+   *
+   * Default implementation returns `not_supported`; backends without an indirect-dispatch primitive (CPU,
+   * CUDA / AMDGPU launchers that do not flow through this RHI surface) inherit it as-is.
+   *
+   * @params[in] dim3_ptr Device pointer to three consecutive `uint32_t` workgroup counts.
+   * @return `success` if dispatched; `not_supported` if the backend has no indirect-dispatch primitive;
+   *         `invalid_usage` if no pipeline is currently bound or `dim3_ptr` doesn't resolve to a real buffer.
+   */
+  virtual RhiResult dispatch_indirect(DevicePtr dim3_ptr) noexcept {
+    return RhiResult::not_supported;
+  }
+
   // Profiler support
   virtual void begin_profiler_scope(const std::string &kernel_name) {
   }
@@ -513,6 +538,11 @@ enum class AllocUsage : int {
   Vertex = 4,
   Index = 8,
   Upload = 16,
+  // Backing memory for `vkCmdDispatchIndirect` / `dispatchThreadgroupsIndirect`. Combine with `Storage`
+  // when the same buffer needs to be both writable as an SSBO (so a gate compute shader can populate the
+  // workgroup-count triple) and read by the GPU as an indirect-dispatch source. See
+  // `CommandList::dispatch_indirect` for the higher-level mechanism this flag exists to support.
+  Indirect = 32,
 };
 
 MAKE_ENUM_FLAGS(AllocUsage)

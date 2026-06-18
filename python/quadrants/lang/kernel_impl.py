@@ -158,6 +158,7 @@ def _kernel_impl(
     level_of_class_stackframe: int,
     verbose: bool = False,
     graph: bool = False,
+    checkpoints: bool = False,
 ) -> QuadrantsCallable:
     # Can decorators determine if a function is being defined inside a class?
     # https://stackoverflow.com/a/8793684/12003165
@@ -168,6 +169,8 @@ def _kernel_impl(
     primal = Kernel(_func, autodiff_mode=_NONE, _is_classkernel=is_classkernel)
     adjoint = Kernel(_func, autodiff_mode=_REVERSE, _is_classkernel=is_classkernel)
     primal.use_graph = graph
+    primal.use_checkpoints = checkpoints
+    adjoint.use_checkpoints = checkpoints
     # Having |primal| contains |grad| makes the tape work.
     primal.grad = adjoint
 
@@ -209,7 +212,9 @@ def _kernel_impl(
 @overload
 # TODO: This callable should be Callable[[F], F].
 # See comments below.
-def kernel(_fn: None = None, *, pure: bool = False, graph: bool = False) -> Callable[[Any], Any]: ...
+def kernel(
+    _fn: None = None, *, pure: bool = False, graph: bool = False, checkpoints: bool = False
+) -> Callable[[Any], Any]: ...
 
 
 # TODO: This next overload should return F, but currently that will cause issues
@@ -219,7 +224,7 @@ def kernel(_fn: None = None, *, pure: bool = False, graph: bool = False) -> Call
 # However, by making it return Any, we can make the pure parameter
 # change now, without breaking pyright.
 @overload
-def kernel(_fn: Any, *, pure: bool = False, graph: bool = False) -> Any: ...
+def kernel(_fn: Any, *, pure: bool = False, graph: bool = False, checkpoints: bool = False) -> Any: ...
 
 
 def kernel(
@@ -228,6 +233,7 @@ def kernel(
     pure: bool | None = None,
     fastcache: bool = False,
     graph: bool = False,
+    checkpoints: bool = False,
 ):
     """
     Marks a function as a Quadrants kernel.
@@ -244,6 +250,10 @@ def kernel(
             into a CUDA graph on first launch and replayed on subsequent
             launches, reducing per-kernel launch overhead. Non-CUDA backends
             are not supported currently.
+        checkpoints: If True, opt into the (experimental) ``qd.checkpoint`` pause / resume model.
+            ``with qd.checkpoint(cp_id, yield_on=flag):`` blocks in the kernel body become pause points the host can
+            resume from via ``kernel.resume(from_checkpoint=cp_id)``. Requires ``graph=True``.
+            ``qd.checkpoint(...)`` in the body is rejected unless this flag is set.
 
     Example::
 
@@ -263,7 +273,12 @@ def kernel(
         else:
             level = 4
 
-        wrapped = _kernel_impl(fn, level_of_class_stackframe=level, graph=graph)
+        if checkpoints and not graph:
+            raise QuadrantsSyntaxError(
+                f"@qd.kernel({fn.__name__!r}, checkpoints=True) requires graph=True; "
+                "the checkpoint resume model is only meaningful for graph kernels."
+            )
+        wrapped = _kernel_impl(fn, level_of_class_stackframe=level, graph=graph, checkpoints=checkpoints)
         wrapped.is_pure = pure is not None and pure or fastcache
         if pure is not None:
             warnings_helper.warn_once(
