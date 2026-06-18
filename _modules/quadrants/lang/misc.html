@@ -1159,16 +1159,28 @@
 <span class="k">def</span><span class="w"> </span><span class="nf">graph_do_while</span><span class="p">(</span><span class="n">condition</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Marks a while loop as a CUDA graph do-while conditional node.</span>
 
-<span class="sd">    Used as ``while qd.graph_do_while(flag):`` inside a</span>
-<span class="sd">    ``@qd.kernel(graph=True)`` kernel. The loop body repeats while</span>
+<span class="sd">    Used as ``while qd.graph_do_while(flag):`` inside a ``@qd.kernel(graph=True)`` kernel. The loop body repeats while</span>
 <span class="sd">    ``flag`` (a scalar ``qd.i32`` ndarray) is non-zero.</span>
 
-<span class="sd">    On SM 9.0+ (Hopper) GPUs this compiles to a native CUDA graph</span>
-<span class="sd">    conditional while node. On older CUDA GPUs and non-CUDA backends</span>
-<span class="sd">    it falls back to a host-side do-while loop.</span>
+<span class="sd">    On SM 9.0+ (Hopper) GPUs this compiles to a native CUDA graph conditional while node. On older CUDA GPUs and</span>
+<span class="sd">    non-CUDA backends it falls back to a host-side do-while loop.</span>
 
-<span class="sd">    This function should not be called directly at runtime; it is</span>
-<span class="sd">    recognised and transformed during AST compilation.</span>
+<span class="sd">    Only statements **inside** the ``while qd.graph_do_while(...):`` block repeat. Work placed before or after the block</span>
+<span class="sd">    at the kernel top level -- a ``for``-loop or a bare statement -- runs exactly once, so one-time init / writeback can</span>
+<span class="sd">    live in the same kernel (or in separate non-graph kernels). Loop-carried state held in global memory carries</span>
+<span class="sd">    normally between iterations because nothing outside the loop body resets it.</span>
+
+<span class="sd">    .. warning::</span>
+<span class="sd">        Reset the condition flag **outside** the loop body, never inside it. A reset such as ``counter[()] = N`` placed</span>
+<span class="sd">        within the ``while`` block is re-applied every iteration and the loop never terminates. Reset it before the loop</span>
+<span class="sd">        (a bare top-level statement runs once) or on the host between launches (``counter.fill(N)``).</span>
+
+<span class="sd">    Bare statements (assignments, ``if``, ``@qd.func`` calls) are allowed at the kernel top level and inside a</span>
+<span class="sd">    ``graph_do_while`` body; each runs at the loop level it is written at (top level = once, inside a loop = every</span>
+<span class="sd">    iteration). The one structural rule is that a ``qd.graph_do_while`` ``while``-loop may appear only at the kernel top</span>
+<span class="sd">    level or directly inside another ``graph_do_while`` body, not inside a ``for``-loop.</span>
+
+<span class="sd">    This function should not be called directly at runtime; it is recognised and transformed during AST compilation.</span>
 <span class="sd">    Requires ``@qd.kernel(graph=True)``.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">return</span> <span class="nb">bool</span><span class="p">(</span><span class="n">condition</span><span class="p">)</span></div>
