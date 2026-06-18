@@ -11,6 +11,7 @@ Classes
 
    quadrants.lang.kernel.LaunchContextBufferCache
    quadrants.lang.kernel.ASTGenerator
+   quadrants.lang.kernel.GraphDoWhileLevel
    quadrants.lang.kernel.Kernel
 
 
@@ -46,6 +47,26 @@ Module Contents
 
 
    .. py:attribute:: dump_ast
+
+
+.. py:class:: GraphDoWhileLevel
+
+   One nested ``qd.graph_do_while`` loop in a ``graph=True`` kernel, indexed by level id (assigned
+   outer-before-inner by the AST transformer). Mirrors the C++ ``GraphDoWhileLevel``.
+
+
+   .. py:attribute:: cond_arg_name
+      :type:  str
+
+
+   .. py:attribute:: parent_id
+      :type:  int
+
+
+   .. py:attribute:: cond_cpp_arg_id
+      :type:  int
+      :value: -1
+
 
 
 .. py:class:: Kernel(_func: Callable, autodiff_mode: quadrants.types.enums.AutodiffMode, _is_classkernel=False)
@@ -105,6 +126,12 @@ Module Contents
    .. py:attribute:: graph_do_while_arg
       :type:  str | None
       :value: None
+
+
+
+   .. py:attribute:: graph_do_while_levels
+      :type:  list[GraphDoWhileLevel]
+      :value: []
 
 
 

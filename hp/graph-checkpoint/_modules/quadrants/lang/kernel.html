@@ -604,6 +604,13 @@
             <span class="c1"># be available to use in build_Call, later.</span>
             <span class="n">tree</span> <span class="o">=</span> <span class="n">_kernel_impl_dataclass</span><span class="o">.</span><span class="n">unpack_ast_struct_expressions</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">tree</span><span class="p">,</span> <span class="n">struct_locals</span><span class="o">=</span><span class="n">struct_locals</span><span class="p">)</span>
             <span class="n">ctx</span><span class="o">.</span><span class="n">only_parse_function_def</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">only_parse_function_def</span>
+            <span class="c1"># Rebuild the graph_do_while level table from scratch each compilation pass (build_While appends to it as it</span>
+            <span class="c1"># walks the AST). Skip when only_parse_function_def: the body is not walked, so build_While never runs to</span>
+            <span class="c1"># repopulate it -- and on a fast-cache restore the table was already rebuilt from the cached (cond_arg_name,</span>
+            <span class="c1"># parent_id) pairs in _try_load_fastcache.</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">ctx</span><span class="o">.</span><span class="n">only_parse_function_def</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">current_kernel</span><span class="o">.</span><span class="n">graph_do_while_levels</span> <span class="o">=</span> <span class="p">[]</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">current_kernel</span><span class="o">.</span><span class="n">_graph_do_while_level_stack</span> <span class="o">=</span> <span class="p">[]</span>
             <span class="n">transform_tree</span><span class="p">(</span><span class="n">tree</span><span class="p">,</span> <span class="n">ctx</span><span class="p">)</span>
             <span class="k">if</span> <span class="ow">not</span> <span class="n">ctx</span><span class="o">.</span><span class="n">is_real_function</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">ctx</span><span class="o">.</span><span class="n">only_parse_function_def</span><span class="p">:</span>
                 <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">current_kernel</span><span class="o">.</span><span class="n">return_type</span> <span class="ow">and</span> <span class="n">ctx</span><span class="o">.</span><span class="n">returned</span> <span class="o">!=</span> <span class="n">ReturnStatus</span><span class="o">.</span><span class="n">ReturnedValue</span><span class="p">:</span>
@@ -644,6 +651,28 @@
         <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="nb">list</span><span class="p">):</span>
             <span class="k">return</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">_ast_to_dict</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">node</span><span class="p">]</span>
         <span class="k">return</span> <span class="n">node</span>  <span class="c1"># Basic types (str, int, None, etc.)</span></div>
+
+
+
+<span class="nd">@dataclasses</span><span class="o">.</span><span class="n">dataclass</span>
+<div class="viewcode-block" id="GraphDoWhileLevel">
+<a class="viewcode-back" href="../../../autoapi/quadrants/lang/kernel/index.html#quadrants.lang.kernel.GraphDoWhileLevel">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">GraphDoWhileLevel</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;One nested ``qd.graph_do_while`` loop in a ``graph=True`` kernel, indexed by level id (assigned</span>
+<span class="sd">    outer-before-inner by the AST transformer). Mirrors the C++ ``GraphDoWhileLevel``.&quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="GraphDoWhileLevel.cond_arg_name">
+<a class="viewcode-back" href="../../../autoapi/quadrants/lang/kernel/index.html#quadrants.lang.kernel.GraphDoWhileLevel.cond_arg_name">[docs]</a>
+    <span class="n">cond_arg_name</span><span class="p">:</span> <span class="nb">str</span></div>
+
+<div class="viewcode-block" id="GraphDoWhileLevel.parent_id">
+<a class="viewcode-back" href="../../../autoapi/quadrants/lang/kernel/index.html#quadrants.lang.kernel.GraphDoWhileLevel.parent_id">[docs]</a>
+    <span class="n">parent_id</span><span class="p">:</span> <span class="nb">int</span></div>
+
+<div class="viewcode-block" id="GraphDoWhileLevel.cond_cpp_arg_id">
+<a class="viewcode-back" href="../../../autoapi/quadrants/lang/kernel/index.html#quadrants.lang.kernel.GraphDoWhileLevel.cond_cpp_arg_id">[docs]</a>
+    <span class="n">cond_cpp_arg_id</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="o">-</span><span class="mi">1</span></div>
+</div>
 
 
 
@@ -712,10 +741,20 @@
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/kernel/index.html#quadrants.lang.kernel.Kernel.use_checkpoints">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">use_checkpoints</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span></div>
 
+        <span class="c1"># Legacy single-loop arg name, kept for reporting/back-compat; equals the outermost level&#39;s condition arg for</span>
+        <span class="c1"># nested kernels. The authoritative data is `graph_do_while_levels`.</span>
 <div class="viewcode-block" id="Kernel.graph_do_while_arg">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/kernel/index.html#quadrants.lang.kernel.Kernel.graph_do_while_arg">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">graph_do_while_arg</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span></div>
 
+        <span class="c1"># Nested graph_do_while level table, indexed by level id (outer before inner). Rebuilt each compilation pass by</span>
+        <span class="c1"># the AST transformer; serialized to the launch context at launch.</span>
+<div class="viewcode-block" id="Kernel.graph_do_while_levels">
+<a class="viewcode-back" href="../../../autoapi/quadrants/lang/kernel/index.html#quadrants.lang.kernel.Kernel.graph_do_while_levels">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">graph_do_while_levels</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">GraphDoWhileLevel</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span></div>
+
+        <span class="c1"># Transient stack of active level ids, used only while transforming the AST.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_graph_do_while_level_stack</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
         <span class="c1"># Per-checkpoint metadata, one entry per `with qd.checkpoint(...)` block (explicit AND auto-injected implicit)</span>
         <span class="c1"># in declaration order. List index is the checkpoint&#39;s internal `cp_id` (0, 1, 2, ... dense, flat across the</span>
         <span class="c1"># kernel). Each entry is the name of the `yield_on=` kernel parameter, or `None` for implicit checkpoints</span>
@@ -810,10 +849,10 @@
                 <span class="bp">self</span><span class="o">.</span><span class="n">raise_on_templated_floats</span><span class="p">,</span> <span class="n">kernel_source_info</span><span class="p">,</span> <span class="n">args</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">arg_metas</span>
             <span class="p">)</span>
             <span class="n">used_py_dataclass_parameters</span> <span class="o">=</span> <span class="kc">None</span>
-            <span class="n">cached_graph_do_while_arg</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+            <span class="n">cached_graph_do_while_levels</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">int</span><span class="p">]]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
             <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">fast_checksum</span><span class="p">:</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">src_ll_cache_observations</span><span class="o">.</span><span class="n">cache_key_generated</span> <span class="o">=</span> <span class="kc">True</span>
-                <span class="n">used_py_dataclass_parameters</span><span class="p">,</span> <span class="n">frontend_cache_key</span><span class="p">,</span> <span class="n">cached_graph_do_while_arg</span> <span class="o">=</span> <span class="n">src_hasher</span><span class="o">.</span><span class="n">load</span><span class="p">(</span>  <span class="c1"># type: ignore[reportAssignmentType]</span>
+                <span class="n">used_py_dataclass_parameters</span><span class="p">,</span> <span class="n">frontend_cache_key</span><span class="p">,</span> <span class="n">cached_graph_do_while_levels</span> <span class="o">=</span> <span class="n">src_hasher</span><span class="o">.</span><span class="n">load</span><span class="p">(</span>  <span class="c1"># type: ignore[reportAssignmentType]</span>
                     <span class="bp">self</span><span class="o">.</span><span class="n">fast_checksum</span>
                 <span class="p">)</span>
             <span class="k">if</span> <span class="n">used_py_dataclass_parameters</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">frontend_cache_key</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
@@ -829,8 +868,14 @@
                 <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">compiled_kernel_data_by_key</span><span class="p">[</span><span class="n">key</span><span class="p">]:</span>
                     <span class="bp">self</span><span class="o">.</span><span class="n">src_ll_cache_observations</span><span class="o">.</span><span class="n">cache_loaded</span> <span class="o">=</span> <span class="kc">True</span>
                     <span class="bp">self</span><span class="o">.</span><span class="n">used_py_dataclass_parameters_by_key_enforcing</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">used_py_dataclass_parameters</span>
-                    <span class="k">if</span> <span class="n">cached_graph_do_while_arg</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-                        <span class="bp">self</span><span class="o">.</span><span class="n">graph_do_while_arg</span> <span class="o">=</span> <span class="n">cached_graph_do_while_arg</span>
+                    <span class="c1"># Fast-cache restore skips AST transformation, so rebuild the gdw level table (and the legacy</span>
+                    <span class="c1"># outermost-arg alias) from the cached (cond_arg_name, parent_id) pairs.</span>
+                    <span class="k">if</span> <span class="n">cached_graph_do_while_levels</span><span class="p">:</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">graph_do_while_levels</span> <span class="o">=</span> <span class="p">[</span>
+                            <span class="n">GraphDoWhileLevel</span><span class="p">(</span><span class="n">cond_arg_name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span> <span class="n">parent_id</span><span class="o">=</span><span class="n">parent</span><span class="p">)</span>
+                            <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">parent</span> <span class="ow">in</span> <span class="n">cached_graph_do_while_levels</span>
+                        <span class="p">]</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">graph_do_while_arg</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">graph_do_while_levels</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">cond_arg_name</span>
                     <span class="k">return</span> <span class="n">used_py_dataclass_parameters</span>
 
         <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">quadrants_callable</span> <span class="ow">and</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">quadrants_callable</span><span class="o">.</span><span class="n">is_pure</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">runtime</span><span class="o">.</span><span class="n">print_non_pure</span><span class="p">:</span>
@@ -1013,8 +1058,10 @@
                 <span class="c1"># which weakens API/type safety and can route the wrong struct type through launch.</span>
                 <span class="k">if</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">val</span><span class="p">,</span> <span class="s2">&quot;_qd_all_field&quot;</span><span class="p">,</span> <span class="kc">False</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">needed_</span><span class="p">,</span> <span class="n">_FIELDS</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
                     <span class="k">continue</span>
-                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">graph_do_while_arg</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">arg_metas</span><span class="p">[</span><span class="n">i_in</span><span class="p">]</span><span class="o">.</span><span class="n">name</span> <span class="o">==</span> <span class="bp">self</span><span class="o">.</span><span class="n">graph_do_while_arg</span><span class="p">:</span>
-                    <span class="bp">self</span><span class="o">.</span><span class="n">_graph_do_while_cpp_arg_id</span> <span class="o">=</span> <span class="n">i_out</span> <span class="o">-</span> <span class="n">template_num</span>
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">graph_do_while_levels</span><span class="p">:</span>
+                    <span class="k">for</span> <span class="n">_gdw_level</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">graph_do_while_levels</span><span class="p">:</span>
+                        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">arg_metas</span><span class="p">[</span><span class="n">i_in</span><span class="p">]</span><span class="o">.</span><span class="n">name</span> <span class="o">==</span> <span class="n">_gdw_level</span><span class="o">.</span><span class="n">cond_arg_name</span><span class="p">:</span>
+                            <span class="n">_gdw_level</span><span class="o">.</span><span class="n">cond_cpp_arg_id</span> <span class="o">=</span> <span class="n">i_out</span> <span class="o">-</span> <span class="n">template_num</span>
                 <span class="n">_checkpoint_helpers</span><span class="o">.</span><span class="n">maybe_record_yield_on_arg</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">arg_metas</span><span class="p">[</span><span class="n">i_in</span><span class="p">]</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">i_out</span> <span class="o">-</span> <span class="n">template_num</span><span class="p">)</span>
                 <span class="n">num_args_</span><span class="p">,</span> <span class="n">is_launch_ctx_cacheable_</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_recursive_set_args</span><span class="p">(</span>
                     <span class="bp">self</span><span class="o">.</span><span class="n">used_py_dataclass_parameters_by_key_enforcing</span><span class="p">[</span><span class="n">key</span><span class="p">],</span>
@@ -1077,7 +1124,9 @@
                         <span class="bp">self</span><span class="o">.</span><span class="n">fast_checksum</span><span class="p">,</span>
                         <span class="bp">self</span><span class="o">.</span><span class="n">visited_functions</span><span class="p">,</span>
                         <span class="bp">self</span><span class="o">.</span><span class="n">used_py_dataclass_parameters_by_key_enforcing</span><span class="p">[</span><span class="n">key</span><span class="p">],</span>
-                        <span class="n">graph_do_while_arg</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">graph_do_while_arg</span><span class="p">,</span>  <span class="c1"># type: ignore[reportCallIssue]</span>
+                        <span class="n">graph_do_while_levels</span><span class="o">=</span><span class="p">[</span>  <span class="c1"># type: ignore[reportCallIssue]</span>
+                            <span class="p">(</span><span class="n">level</span><span class="o">.</span><span class="n">cond_arg_name</span><span class="p">,</span> <span class="n">level</span><span class="o">.</span><span class="n">parent_id</span><span class="p">)</span> <span class="k">for</span> <span class="n">level</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">graph_do_while_levels</span>
+                        <span class="p">],</span>
                     <span class="p">)</span>
                     <span class="bp">self</span><span class="o">.</span><span class="n">src_ll_cache_observations</span><span class="o">.</span><span class="n">cache_stored</span> <span class="o">=</span> <span class="kc">True</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">_last_compiled_kernel_data</span> <span class="o">=</span> <span class="n">compiled_kernel_data</span>
@@ -1087,8 +1136,8 @@
                     <span class="s2">&quot;qd_stream is not compatible with graph=True kernels. &quot;</span>
                     <span class="s2">&quot;See docs/source/user_guide/streams.md for details.&quot;</span>
                 <span class="p">)</span>
-            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">graph_do_while_arg</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="nb">hasattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s2">&quot;_graph_do_while_cpp_arg_id&quot;</span><span class="p">):</span>
-                <span class="n">launch_ctx</span><span class="o">.</span><span class="n">graph_do_while_arg_id</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_graph_do_while_cpp_arg_id</span>
+            <span class="k">for</span> <span class="n">_gdw_level</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">graph_do_while_levels</span><span class="p">:</span>
+                <span class="n">launch_ctx</span><span class="o">.</span><span class="n">add_graph_do_while_level</span><span class="p">(</span><span class="n">_gdw_level</span><span class="o">.</span><span class="n">cond_cpp_arg_id</span><span class="p">,</span> <span class="n">_gdw_level</span><span class="o">.</span><span class="n">parent_id</span><span class="p">)</span>
             <span class="n">_checkpoint_helpers</span><span class="o">.</span><span class="n">forward_yield_on_table_to_ctx</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">launch_ctx</span><span class="p">)</span>
             <span class="c1"># `_resume_from_checkpoint` is `None` for fresh launches (host-side default 0 in `LaunchContextBuilder`,</span>
             <span class="c1"># which means &quot;run every checkpoint&quot;). When `Kernel.resume` plumbs an int through, copy it onto the launch</span>
