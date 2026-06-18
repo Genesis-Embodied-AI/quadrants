@@ -246,6 +246,12 @@ while status.yielded:
                          from_checkpoint=status.checkpoint)
 ```
 
+### Resume where?
+
+- execution starts from and including the checkpoint block that yielded
+- you must therefore ensure that re-running this checkpoint will not break the algorithm
+- for example make sure that any check that lead to the yield do not modify any data before yielding
+
 ### Restrictions
 
 - Must be used inside `@qd.kernel(graph=True, checkpoints=True)`. Without the flag, `qd.checkpoint(...)` raises `QuadrantsSyntaxError` at compile time with a fix-it pointing at `checkpoints=True`.
