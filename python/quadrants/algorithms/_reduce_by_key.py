@@ -11,7 +11,7 @@ other keys are treated as separate runs. To compute a global per-key sum, sort b
 
 Algorithm (scan + scatter; no segmented-scan primitive needed), emitted as a fixed-depth staircase of ``@qd.func``
 phases (call ``reduce_by_key_add`` at the **top level** of your own ``@qd.kernel`` - e.g. a qipc ``graph=True``
-parent - with the live count ``n`` as a device ``Expr`` and the compile-time ``LOG256_MAX_N`` phase count):
+parent - with the live count ``n`` as a device ``Expr`` and the compile-time ``log256_max_n`` phase count):
 
 1. **Head-flag pass** (``_rbk_head_flags_phase``). Compute ``head_flags[i] = 1`` if ``i == 0 or keys[i] != keys[i-1]``,
    else ``0``, directly into the caller's ``u32`` scratch ``scratch[0:N]`` (storing the ``i32`` flag bit-cast to
@@ -78,17 +78,17 @@ def _rbk_head_flags_phase(keys_in: template(), head_flags: template(), head_flag
 
 
 @_func
-def _rbk_zero_values_out_phase(values_out: template(), N: i32, VALUE_DTYPE: template()):
+def _rbk_zero_values_out_phase(values_out: template(), N: i32, value_dtype: template()):
     """Set ``values_out[0 : N] = 0`` so the scatter ``atomic_add`` lands onto a clean additive identity. ``N`` is the
     upper bound on ``num_runs``; the caller-supplied ``values_out`` may be longer but we only need the prefix that the
     scatter can touch.
 
-    We write ``bit_cast(u32(0), VALUE_DTYPE)`` rather than relying on ``v - v == 0`` because the latter compiles to a
+    We write ``bit_cast(u32(0), value_dtype)`` rather than relying on ``v - v == 0`` because the latter compiles to a
     real subtract for ``f32`` (and yields NaN if the slot held NaN garbage from a prior allocation), whereas the
     bit-cast lowers to a plain store.
     """
     for i in range(N):
-        values_out[i] = bit_cast(u32(0), VALUE_DTYPE)
+        values_out[i] = bit_cast(u32(0), value_dtype)
 
 
 @_func
@@ -151,8 +151,8 @@ def reduce_by_key_add(
     num_runs: template(),
     scratch: template(),
     n: i32,
-    VALUE_DTYPE: template(),
-    LOG256_MAX_N: template(),
+    value_dtype: template(),
+    log256_max_n: template(),
 ):
     """Graph-composable reduce-by-key (add).
 
@@ -160,15 +160,15 @@ def reduce_by_key_add(
 
     Call at the **top level** of your own ``@qd.kernel`` (e.g. a qipc ``graph=True`` parent); never nest it in
     ordinary runtime ``for`` / ``if`` / ``while`` control flow. ``n`` is the live element count as a device ``Expr``;
-    ``LOG256_MAX_N`` is the compile-time phase count (any count ``<= BLOCK_DIM ** LOG256_MAX_N``). ``VALUE_DTYPE``
+    ``log256_max_n`` is the compile-time phase count (any count ``<= BLOCK_DIM ** log256_max_n``). ``value_dtype``
     is the values dtype (needed only to write the typed zero before the scatter ``atomic_add``; keys are handled
     generically). The five phases - head flags, in-place exclusive scan of those flags (the same staircase as
     ``exclusive_scan_add``, via :func:`_emit_scan_inplace`), zero ``values_out``, scatter, count - each emit as their
     own offloaded launch. Size ``scratch`` via :func:`reduce_by_key_scratch_slots` ``(capacity_n)``."""
-    _validate_log256_max_n(LOG256_MAX_N)
+    _validate_log256_max_n(log256_max_n)
     _rbk_head_flags_phase(keys_in, scratch, 0, n)
-    _emit_scan_inplace(scratch, 0, n, LOG256_MAX_N - 1, i32, u32, _OP_ADD, _bin_add)
-    _rbk_zero_values_out_phase(values_out, n, VALUE_DTYPE)
+    _emit_scan_inplace(scratch, 0, n, log256_max_n - 1, i32, u32, _OP_ADD, _bin_add)
+    _rbk_zero_values_out_phase(values_out, n, value_dtype)
     _rbk_scatter_phase(keys_in, values_in, scratch, 0, keys_out, values_out, n)
     _rbk_count_phase(keys_in, scratch, 0, n, num_runs)
 
@@ -190,8 +190,8 @@ def reduce_by_key_scratch_slots(n: int) -> int:
     pos = n > 0
     big = n > BLOCK_DIM
     small_pos = pos * (1 - big)
-    B0 = (n + BLOCK_DIM - 1) // BLOCK_DIM
-    return _at_least_one(n * small_pos + _scan_total_scratch_slots(B0, partials_cursor=n + B0) * big)
+    b0 = (n + BLOCK_DIM - 1) // BLOCK_DIM
+    return _at_least_one(n * small_pos + _scan_total_scratch_slots(b0, partials_cursor=n + b0) * big)
 
 
 __all__ = ["reduce_by_key_add", "reduce_by_key_scratch_slots"]

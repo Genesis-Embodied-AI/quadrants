@@ -89,7 +89,7 @@ class PrefixSumExecutor:
     def _init(self, length):
         self.sorting_length = length
 
-        BLOCK_SZ = 64
+        block_sz = 64
 
         # Buffer position and length
         # This is a single buffer implementation for ease of aot usage
@@ -99,9 +99,9 @@ class PrefixSumExecutor:
         self.ele_nums_pos = [start_pos]
 
         while ele_num > 1:
-            ele_num = int((ele_num + BLOCK_SZ - 1) / BLOCK_SZ)
+            ele_num = int((ele_num + block_sz - 1) / block_sz)
             self.ele_nums.append(ele_num)
-            start_pos += BLOCK_SZ * ele_num
+            start_pos += block_sz * ele_num
             self.ele_nums_pos.append(start_pos)
 
         self.large_arr = field(i32, shape=start_pos)

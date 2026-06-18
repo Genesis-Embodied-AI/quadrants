@@ -9,8 +9,8 @@ three-pass formulation).
 Each ``exclusive_scan_{add,min,max}`` is a fixed-depth three-pass staircase of ``@qd.func`` phases - pass 1 tile-reduce
 (:func:`_reduce_phase`), pass 2 in-place scan of the partials (:func:`_emit_scan_inplace`), pass 3 per-tile downsweep
 (:func:`_scan_downsweep_phase`). Call it at the **top level** of your own ``@qd.kernel`` with the live count ``n`` as a
-device ``Expr`` and the recursion depth as a compile-time ``LOG256_MAX_N``, so one captured graph replays for any count
-``<= BLOCK_DIM ** LOG256_MAX_N``. The scan is out-of-place (``arr`` -> ``out``); the per-tile partials stage through a
+device ``Expr`` and the recursion depth as a compile-time ``log256_max_n``, so one captured graph replays for any count
+``<= BLOCK_DIM ** log256_max_n``. The scan is out-of-place (``arr`` -> ``out``); the per-tile partials stage through a
 **caller-owned** scratch buffer (``u32`` for 4-byte element dtypes, ``u64`` for 8-byte ones; ``0`` slots for
 ``n <= BLOCK_DIM``) sized via :func:`exclusive_scan_scratch_slots`.
 
@@ -318,8 +318,8 @@ def _exclusive_scan_inplace_u64(scratch, off: int, n: int, identity_bits: int, o
 def exclusive_scan_scratch_slots(n, log256_max_n: int = None) -> int:
     """Number of scratch slots ``exclusive_scan_{add,min,max}`` need to scan a length-``n`` input.
 
-    The out-of-place staircase stages the per-tile partials in scratch: pass 1 writes ``B0 = ceil(n / BLOCK_DIM)``
-    partials, then the in-place scan of those partials stacks ``ceil(B0 / BLOCK_DIM)`` more, ... for ``depth - 2``
+    The out-of-place staircase stages the per-tile partials in scratch: pass 1 writes ``b0 = ceil(n / BLOCK_DIM)``
+    partials, then the in-place scan of those partials stacks ``ceil(b0 / BLOCK_DIM)`` more, ... for ``depth - 2``
     further levels (the final tile-scan writes straight back). The count is **dtype-width-independent** (slot count,
     not byte count): 4-byte scans stage through a ``u32`` scratch and 8-byte scans through a ``u64`` scratch, both of
     this many slots::
@@ -338,7 +338,7 @@ def exclusive_scan_scratch_slots(n, log256_max_n: int = None) -> int:
     _validate_log256_max_n(log256_max_n)
     if log256_max_n <= 1:
         return 1
-    cursor = (n + (BLOCK_DIM - 1)) // BLOCK_DIM  # B0 partials from pass 1
+    cursor = (n + (BLOCK_DIM - 1)) // BLOCK_DIM  # b0 partials from pass 1
     cur = cursor
     for _ in range(log256_max_n - 2):
         cur = (cur + (BLOCK_DIM - 1)) // BLOCK_DIM
@@ -352,20 +352,20 @@ def exclusive_scan_scratch_slots(n, log256_max_n: int = None) -> int:
 #
 # Mirrors the reduce design (see ``_reduce.py``): the three-pass Blelloch scan is emitted as a staircase of ``@qd.func``
 # phases. ``exclusive_scan_{add,min,max}`` are the graph-composable entries: call them at the **top level** of your
-# own ``@qd.kernel`` with a device-resident count ``n`` (i32 Expr) and a compile-time ``LOG256_MAX_N``, so one captured
-# graph replays for any count ``<= BLOCK_DIM ** LOG256_MAX_N``. The scan is out-of-place (``arr`` -> ``out``);
+# own ``@qd.kernel`` with a device-resident count ``n`` (i32 Expr) and a compile-time ``log256_max_n``, so one captured
+# graph replays for any count ``<= BLOCK_DIM ** log256_max_n``. The scan is out-of-place (``arr`` -> ``out``);
 # ``scratch`` stages the per-tile partials staircase (``bit_cast`` through ``u32`` / ``u64``). See
 # ``perso_hugh/doc/qipc/qipc_device_algos_design.md``.
 
 
-def _scan_identity(dtype, OP):
-    """Typed monoid-identity ``Expr`` for ``(OP, dtype)``: ``0`` for add, ``+extremum`` for min, ``-extremum`` for max.
+def _scan_identity(dtype, op):
+    """Typed monoid-identity ``Expr`` for ``(op, dtype)``: ``0`` for add, ``+extremum`` for min, ``-extremum`` for max.
     Trace-time helper (like :func:`_typed_min_identity`), used to seed out-of-range lanes and lane 0's predecessor in
     the block scans. Returns an ``Expr``, so its result is a valid unconditional first assignment inside a phase."""
     ident = _typed_zero_expr(dtype)
-    if OP == _OP_MIN:
+    if op == _OP_MIN:
         return _typed_min_identity(ident)
-    if OP == _OP_MAX:
+    if op == _OP_MAX:
         return _typed_max_identity(ident)
     return ident
 
@@ -377,31 +377,31 @@ def _scan_tile_phase(
     src_off: i32,
     dst_off: i32,
     n: i32,
-    DTYPE: template(),
-    WIDE: template(),
-    OP: template(),
-    OP_BIN: template(),
-    SRC_WIDE: template(),
-    DST_WIDE: template(),
+    dtype: template(),
+    wide: template(),
+    op: template(),
+    op_bin: template(),
+    src_wide: template(),
+    dst_wide: template(),
 ):
     """Single-block exclusive scan of ``src[src_off:src_off+n]`` -> ``dst[dst_off:dst_off+n]`` (``n <= BLOCK_DIM``).
 
-    The recursion base / single-tile case. ``SRC_WIDE`` / ``DST_WIDE`` switch between the ``bit_cast``-through-``WIDE``
+    The recursion base / single-tile case. ``src_wide`` / ``dst_wide`` switch between the ``bit_cast``-through-``wide``
     scratch path and the direct caller-tensor path. ``v`` is seeded with the monoid identity *before* the load branch
     (Quadrants requires a variable's first assignment at the outer scope)."""
     loop_config(block_dim=BLOCK_DIM)
     for i in range(BLOCK_DIM):
-        ident = _scan_identity(DTYPE, OP)
+        ident = _scan_identity(dtype, op)
         v = ident
         if i < n:
-            if static(SRC_WIDE):
-                v = bit_cast(src[src_off + i], DTYPE)
+            if static(src_wide):
+                v = bit_cast(src[src_off + i], dtype)
             else:
                 v = src[src_off + i]
-        prefix = _block.exclusive_scan(v, BLOCK_DIM, OP_BIN, ident, DTYPE)
+        prefix = _block.exclusive_scan(v, BLOCK_DIM, op_bin, ident, dtype)
         if i < n:
-            if static(DST_WIDE):
-                dst[dst_off + i] = bit_cast(prefix, WIDE)
+            if static(dst_wide):
+                dst[dst_off + i] = bit_cast(prefix, wide)
             else:
                 dst[dst_off + i] = prefix
 
@@ -416,18 +416,18 @@ def _scan_downsweep_phase(
     dst_off: i32,
     n: i32,
     total_threads: i32,
-    DTYPE: template(),
-    WIDE: template(),
-    OP: template(),
-    OP_BIN: template(),
-    SRC_WIDE: template(),
-    DST_WIDE: template(),
+    dtype: template(),
+    wide: template(),
+    op: template(),
+    op_bin: template(),
+    src_wide: template(),
+    dst_wide: template(),
 ):
     """Per-tile exclusive scan of ``src[src_off:src_off+n]`` plus the scanned per-tile prefix
     ``prefixes[prefixes_off + block_id]``, written to ``dst[dst_off:dst_off+n]``.
 
-    ``prefixes`` is always the ``WIDE`` scratch (the scanned partials from a lower level). ``src`` / ``dst`` switch
-    between the caller tensors (``SRC_WIDE`` / ``DST_WIDE`` False) and the ``WIDE`` scratch (in-place partials scan).
+    ``prefixes`` is always the ``wide`` scratch (the scanned partials from a lower level). ``src`` / ``dst`` switch
+    between the caller tensors (``src_wide`` / ``dst_wide`` False) and the ``wide`` scratch (in-place partials scan).
     ``dst`` may alias ``src``; the per-thread read-modify-write and ``block.exclusive_scan``'s internal barrier keep a
     block's tile consistent, and blocks write disjoint tiles."""
     loop_config(block_dim=BLOCK_DIM)
@@ -440,95 +440,95 @@ def _scan_downsweep_phase(
         _block.sync()
         tid = i % BLOCK_DIM
         block_id = i // BLOCK_DIM
-        ident = _scan_identity(DTYPE, OP)
+        ident = _scan_identity(dtype, op)
         v = ident
         if i < n:
-            if static(SRC_WIDE):
-                v = bit_cast(src[src_off + i], DTYPE)
+            if static(src_wide):
+                v = bit_cast(src[src_off + i], dtype)
             else:
                 v = src[src_off + i]
-        tile_prefix = _block.exclusive_scan(v, BLOCK_DIM, OP_BIN, ident, DTYPE)
-        block_prefix = bit_cast(prefixes[prefixes_off + block_id], DTYPE)
+        tile_prefix = _block.exclusive_scan(v, BLOCK_DIM, op_bin, ident, dtype)
+        block_prefix = bit_cast(prefixes[prefixes_off + block_id], dtype)
         if i < n:
-            scanned = OP_BIN(block_prefix, tile_prefix)
-            if static(DST_WIDE):
-                dst[dst_off + i] = bit_cast(scanned, WIDE)
+            scanned = op_bin(block_prefix, tile_prefix)
+            if static(dst_wide):
+                dst[dst_off + i] = bit_cast(scanned, wide)
             else:
                 dst[dst_off + i] = scanned
 
 
-def _emit_scan_inplace(buf, off, n, levels_remaining, DTYPE, WIDE, OP, OP_BIN):
-    """Emit a fixed-depth in-place exclusive scan of ``buf[off:off+n]`` (``WIDE`` scratch) at kernel-compile time.
+def _emit_scan_inplace(buf, off, n, levels_remaining, dtype, wide, op, op_bin):
+    """Emit a fixed-depth in-place exclusive scan of ``buf[off:off+n]`` (``wide`` scratch) at kernel-compile time.
 
     The partials-scan half of the staircase (Blelloch pass 2): reduce ``buf[off:off+n]`` into ``buf[off+n:...]``,
     recursively scan those partials, then downsweep back. ``n`` / ``off`` flow as ``Expr`` s; ``levels_remaining`` is a
     Python int so the depth is a compile-time constant (the base is reached by exhausting it, not by inspecting ``n``).
     Reuses :func:`_reduce_phase` for the tile-reduce rung."""
     if levels_remaining == 0:
-        _scan_tile_phase(buf, buf, off, off, n, DTYPE, WIDE, OP, OP_BIN, True, True)
+        _scan_tile_phase(buf, buf, off, off, n, dtype, wide, op, op_bin, True, True)
         return
     B = (n + (BLOCK_DIM - 1)) // BLOCK_DIM
     part_off = off + n
-    _reduce_phase(buf, buf, off, part_off, n, B * BLOCK_DIM, DTYPE, WIDE, OP, OP_BIN, True, True)
-    _emit_scan_inplace(buf, part_off, B, levels_remaining - 1, DTYPE, WIDE, OP, OP_BIN)
-    _scan_downsweep_phase(buf, buf, buf, off, part_off, off, n, B * BLOCK_DIM, DTYPE, WIDE, OP, OP_BIN, True, True)
+    _reduce_phase(buf, buf, off, part_off, n, B * BLOCK_DIM, dtype, wide, op, op_bin, True, True)
+    _emit_scan_inplace(buf, part_off, B, levels_remaining - 1, dtype, wide, op, op_bin)
+    _scan_downsweep_phase(buf, buf, buf, off, part_off, off, n, B * BLOCK_DIM, dtype, wide, op, op_bin, True, True)
 
 
-def _emit_scan(arr, out, scratch, n, LOG256_MAX_N, DTYPE, WIDE, OP):
-    """Emit a fixed-depth (``LOG256_MAX_N``) out-of-place exclusive scan of ``arr[0:n]`` into ``out[0:n]`` at compile
+def _emit_scan(arr, out, scratch, n, log256_max_n, dtype, wide, op):
+    """Emit a fixed-depth (``log256_max_n``) out-of-place exclusive scan of ``arr[0:n]`` into ``out[0:n]`` at compile
     time.
 
-    ``LOG256_MAX_N == 1`` (``n <= BLOCK_DIM``) is a single tile straight to ``out``; otherwise the three-pass scan:
-    pass 1 tile-reduce ``arr`` -> ``scratch[0:B0]`` (:func:`_reduce_phase`), pass 2 in-place scan of those ``B0``
-    partials (:func:`_emit_scan_inplace`, ``LOG256_MAX_N - 2`` further levels), pass 3 downsweep ``arr`` +
-    ``scratch[0:B0]`` -> ``out``. An over-specified ``LOG256_MAX_N`` bottoms out at length-1 partials that scan as
+    ``log256_max_n == 1`` (``n <= BLOCK_DIM``) is a single tile straight to ``out``; otherwise the three-pass scan:
+    pass 1 tile-reduce ``arr`` -> ``scratch[0:b0]`` (:func:`_reduce_phase`), pass 2 in-place scan of those ``b0``
+    partials (:func:`_emit_scan_inplace`, ``log256_max_n - 2`` further levels), pass 3 downsweep ``arr`` +
+    ``scratch[0:b0]`` -> ``out``. An over-specified ``log256_max_n`` bottoms out at length-1 partials that scan as
     identity rungs."""
-    _validate_log256_max_n(LOG256_MAX_N)
-    OP_BIN = _OP_BINS[OP]  # resolve the binary op at trace time so the @qd.func phases receive it as a template
-    if LOG256_MAX_N == 1:
-        _scan_tile_phase(arr, out, 0, 0, n, DTYPE, WIDE, OP, OP_BIN, False, False)
+    _validate_log256_max_n(log256_max_n)
+    op_bin = _OP_BINS[op]  # resolve the binary op at trace time so the @qd.func phases receive it as a template
+    if log256_max_n == 1:
+        _scan_tile_phase(arr, out, 0, 0, n, dtype, wide, op, op_bin, False, False)
         return
-    B0 = (n + (BLOCK_DIM - 1)) // BLOCK_DIM
-    _reduce_phase(arr, scratch, 0, 0, n, B0 * BLOCK_DIM, DTYPE, WIDE, OP, OP_BIN, False, True)
-    _emit_scan_inplace(scratch, 0, B0, LOG256_MAX_N - 2, DTYPE, WIDE, OP, OP_BIN)
-    _scan_downsweep_phase(arr, scratch, out, 0, 0, 0, n, B0 * BLOCK_DIM, DTYPE, WIDE, OP, OP_BIN, False, False)
+    b0 = (n + (BLOCK_DIM - 1)) // BLOCK_DIM
+    _reduce_phase(arr, scratch, 0, 0, n, b0 * BLOCK_DIM, dtype, wide, op, op_bin, False, True)
+    _emit_scan_inplace(scratch, 0, b0, log256_max_n - 2, dtype, wide, op, op_bin)
+    _scan_downsweep_phase(arr, scratch, out, 0, 0, 0, n, b0 * BLOCK_DIM, dtype, wide, op, op_bin, False, False)
 
 
 @_func(requires_top_level=True)
 def exclusive_scan_add(
-    arr: template(), out: template(), scratch: template(), n: i32, DTYPE: template(), LOG256_MAX_N: template()
+    arr: template(), out: template(), scratch: template(), n: i32, dtype: template(), log256_max_n: template()
 ):
     """Graph-composable ``out[i] = sum(arr[0:i])`` (exclusive prefix sum).
 
     **Experimental** - this API is new and may change in a future release.
 
     Call at the **top level** of your own ``@qd.kernel`` (e.g. a qipc ``graph=True`` parent); never nest it in ordinary
-    runtime ``for`` / ``if`` / ``while`` control flow. ``n`` is a device ``Expr`` (the live count); ``DTYPE`` is the
-    element dtype (pass it explicitly - an ndarray kernel arg has no in-kernel ``.dtype``); ``LOG256_MAX_N`` is the
-    compile-time phase count - the scan handles any count ``<= BLOCK_DIM ** LOG256_MAX_N``. ``out`` must be distinct
-    from ``arr``; size ``scratch`` via :func:`exclusive_scan_scratch_slots` ``(capacity_n, LOG256_MAX_N)``."""
-    WIDE = _scratch_dtype_for_width(_dtype_width_bytes(DTYPE))  # compile-time (from the DTYPE template)
-    _emit_scan(arr, out, scratch, n, LOG256_MAX_N, DTYPE, WIDE, _OP_ADD)
+    runtime ``for`` / ``if`` / ``while`` control flow. ``n`` is a device ``Expr`` (the live count); ``dtype`` is the
+    element dtype (pass it explicitly - an ndarray kernel arg has no in-kernel ``.dtype``); ``log256_max_n`` is the
+    compile-time phase count - the scan handles any count ``<= BLOCK_DIM ** log256_max_n``. ``out`` must be distinct
+    from ``arr``; size ``scratch`` via :func:`exclusive_scan_scratch_slots` ``(capacity_n, log256_max_n)``."""
+    wide = _scratch_dtype_for_width(_dtype_width_bytes(dtype))  # compile-time (from the dtype template)
+    _emit_scan(arr, out, scratch, n, log256_max_n, dtype, wide, _OP_ADD)
 
 
 @_func(requires_top_level=True)
 def exclusive_scan_min(
-    arr: template(), out: template(), scratch: template(), n: i32, DTYPE: template(), LOG256_MAX_N: template()
+    arr: template(), out: template(), scratch: template(), n: i32, dtype: template(), log256_max_n: template()
 ):
-    """Graph-composable ``out[i] = min(arr[0:i])`` (identity ``+extremum`` from ``DTYPE``). **Experimental** (new API,
+    """Graph-composable ``out[i] = min(arr[0:i])`` (identity ``+extremum`` from ``dtype``). **Experimental** (new API,
     may change). See :func:`exclusive_scan_add` for the top-level-call contract and arg semantics."""
-    WIDE = _scratch_dtype_for_width(_dtype_width_bytes(DTYPE))
-    _emit_scan(arr, out, scratch, n, LOG256_MAX_N, DTYPE, WIDE, _OP_MIN)
+    wide = _scratch_dtype_for_width(_dtype_width_bytes(dtype))
+    _emit_scan(arr, out, scratch, n, log256_max_n, dtype, wide, _OP_MIN)
 
 
 @_func(requires_top_level=True)
 def exclusive_scan_max(
-    arr: template(), out: template(), scratch: template(), n: i32, DTYPE: template(), LOG256_MAX_N: template()
+    arr: template(), out: template(), scratch: template(), n: i32, dtype: template(), log256_max_n: template()
 ):
-    """Graph-composable ``out[i] = max(arr[0:i])`` (identity ``-extremum`` from ``DTYPE``). **Experimental** (new API,
+    """Graph-composable ``out[i] = max(arr[0:i])`` (identity ``-extremum`` from ``dtype``). **Experimental** (new API,
     may change). See :func:`exclusive_scan_add` for the top-level-call contract and arg semantics."""
-    WIDE = _scratch_dtype_for_width(_dtype_width_bytes(DTYPE))
-    _emit_scan(arr, out, scratch, n, LOG256_MAX_N, DTYPE, WIDE, _OP_MAX)
+    wide = _scratch_dtype_for_width(_dtype_width_bytes(dtype))
+    _emit_scan(arr, out, scratch, n, log256_max_n, dtype, wide, _OP_MAX)
 
 
 # ---------------------------------------------------------------------------------------------------------------------

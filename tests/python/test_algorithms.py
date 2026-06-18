@@ -270,8 +270,8 @@ def _reduce_host(rng, op, dtype, N):
 @test_utils.test(arch=qd.gpu)
 def test_reduce_composition(op, dtype, N):
     """``reduce_{add,min,max}`` compose at the **top level** of a user ``@qd.kernel`` with a device-resident
-    count (``count[0]``) and a compile-time ``LOG256_MAX_N``, matching the host ``reduce_*`` entries. This pins the
-    graph-composable path qipc uses: the count flows as a device ``Expr`` while ``LOG256_MAX_N`` fixes the launch
+    count (``count[0]``) and a compile-time ``log256_max_n``, matching the host ``reduce_*`` entries. This pins the
+    graph-composable path qipc uses: the count flows as a device ``Expr`` while ``log256_max_n`` fixes the launch
     topology.
     """
     _skip_if_dtype_unsupported(dtype)
@@ -292,20 +292,20 @@ def test_reduce_composition(op, dtype, N):
     if op == "add":
 
         @qd.kernel
-        def run(DTYPE: qd.template(), LOG256_MAX_N: qd.template()):
-            qd.algorithms.reduce_add(arr, out, scratch, count[0], DTYPE, LOG256_MAX_N)
+        def run(dtype: qd.template(), log256_max_n: qd.template()):
+            qd.algorithms.reduce_add(arr, out, scratch, count[0], dtype, log256_max_n)
 
     elif op == "min":
 
         @qd.kernel
-        def run(DTYPE: qd.template(), LOG256_MAX_N: qd.template()):
-            qd.algorithms.reduce_min(arr, out, scratch, count[0], DTYPE, LOG256_MAX_N)
+        def run(dtype: qd.template(), log256_max_n: qd.template()):
+            qd.algorithms.reduce_min(arr, out, scratch, count[0], dtype, log256_max_n)
 
     else:
 
         @qd.kernel
-        def run(DTYPE: qd.template(), LOG256_MAX_N: qd.template()):
-            qd.algorithms.reduce_max(arr, out, scratch, count[0], DTYPE, LOG256_MAX_N)
+        def run(dtype: qd.template(), log256_max_n: qd.template()):
+            qd.algorithms.reduce_max(arr, out, scratch, count[0], dtype, log256_max_n)
 
     run(dtype, log256_max_n)
     got = out.to_numpy()[0]
@@ -408,9 +408,9 @@ def _verify_scan(got, op, dtype, N, host):
 @test_utils.test(arch=qd.gpu)
 def test_exclusive_scan_composition(op, dtype, N):
     """``exclusive_scan_{add,min,max}`` compose at the **top level** of a user ``@qd.kernel`` with a
-    device-resident count (``count[0]``) and a compile-time ``LOG256_MAX_N``, matching the host ``exclusive_scan_*``
+    device-resident count (``count[0]``) and a compile-time ``log256_max_n``, matching the host ``exclusive_scan_*``
     entries. This pins the graph-composable path qipc uses: the count flows as a device ``Expr`` while
-    ``LOG256_MAX_N`` fixes the launch topology (out-of-place ``arr`` -> ``out`` with a caller-sized partials staircase
+    ``log256_max_n`` fixes the launch topology (out-of-place ``arr`` -> ``out`` with a caller-sized partials staircase
     in ``scratch``)."""
     _skip_if_dtype_unsupported(dtype)
     from quadrants.algorithms._reduce import _reduce_depth_for_n
@@ -429,20 +429,20 @@ def test_exclusive_scan_composition(op, dtype, N):
     if op == "add":
 
         @qd.kernel
-        def run(DTYPE: qd.template(), LOG256_MAX_N: qd.template()):
-            qd.algorithms.exclusive_scan_add(arr, out, scratch, count[0], DTYPE, LOG256_MAX_N)
+        def run(dtype: qd.template(), log256_max_n: qd.template()):
+            qd.algorithms.exclusive_scan_add(arr, out, scratch, count[0], dtype, log256_max_n)
 
     elif op == "min":
 
         @qd.kernel
-        def run(DTYPE: qd.template(), LOG256_MAX_N: qd.template()):
-            qd.algorithms.exclusive_scan_min(arr, out, scratch, count[0], DTYPE, LOG256_MAX_N)
+        def run(dtype: qd.template(), log256_max_n: qd.template()):
+            qd.algorithms.exclusive_scan_min(arr, out, scratch, count[0], dtype, log256_max_n)
 
     else:
 
         @qd.kernel
-        def run(DTYPE: qd.template(), LOG256_MAX_N: qd.template()):
-            qd.algorithms.exclusive_scan_max(arr, out, scratch, count[0], DTYPE, LOG256_MAX_N)
+        def run(dtype: qd.template(), log256_max_n: qd.template()):
+            qd.algorithms.exclusive_scan_max(arr, out, scratch, count[0], dtype, log256_max_n)
 
     run(dtype, log256_max_n)
     _verify_scan(out.to_numpy(), op, dtype, N, host)
@@ -458,8 +458,8 @@ def test_exclusive_scan_composition(op, dtype, N):
 @test_utils.test(arch=qd.gpu)
 def test_select_composition(dtype, N):
     """``select`` composes at the **top level** of a user ``@qd.kernel`` with a device-resident count
-    (``count[0]``) and a compile-time ``LOG256_MAX_N``, matching the host ``select`` entry. This pins the
-    graph-composable compaction path qipc uses: the count flows as a device ``Expr`` while ``LOG256_MAX_N`` fixes the
+    (``count[0]``) and a compile-time ``log256_max_n``, matching the host ``select`` entry. This pins the
+    graph-composable compaction path qipc uses: the count flows as a device ``Expr`` while ``log256_max_n`` fixes the
     launch topology (the scan-of-flags staircase + scatter + count all emit inside one kernel)."""
     _skip_if_dtype_unsupported(dtype)
     from quadrants.algorithms._reduce import _reduce_depth_for_n
@@ -488,8 +488,8 @@ def test_select_composition(dtype, N):
     count.from_numpy(np.asarray([N], dtype=np.int32))
 
     @qd.kernel
-    def run(LOG256_MAX_N: qd.template()):
-        qd.algorithms.select(arr, flags, out, num_out, scratch, count[0], LOG256_MAX_N)
+    def run(log256_max_n: qd.template()):
+        qd.algorithms.select(arr, flags, out, num_out, scratch, count[0], log256_max_n)
 
     run(log256_max_n)
     got_n = int(num_out.to_numpy()[0])
@@ -542,7 +542,7 @@ def _gen_keys(rng, dtype, N):
 @test_utils.test(arch=qd.gpu)
 def test_sort_composition(dtype, N):
     """``sort`` composes at the **top level** of a user ``@qd.kernel`` with a device-resident 0-d count
-    (read as ``n[()]``) and compile-time ``KEY_DTYPE`` / ``HAS_VALUES`` / ``END_BIT`` / ``LOG256_MAX_N`` - the exact
+    (read as ``n[()]``) and compile-time ``key_dtype`` / ``has_values`` / ``end_bit`` / ``log256_max_n`` - the exact
     graph-composable contract qipc chains inside its LBVH / broadphase pipelines (see ``sort`` docstring).
     Pins the public func against the reference ``numpy`` argsort: keys come back ascending and the ``u32`` payload
     follows the stable argsort. The reduce / scan / select / reduce-by-key families have matching composition tests."""
@@ -637,9 +637,9 @@ def _gen_run_keys(rng, dtype, N):
 @test_utils.test(arch=qd.gpu)
 def test_reduce_by_key_add_composition(key_dtype, val_dtype, N):
     """``reduce_by_key_add`` composes at the **top level** of a user ``@qd.kernel`` with a device-resident count
-    (``count[0]``), a compile-time ``LOG256_MAX_N``, and the values dtype as a template (needed only for the zero-init
+    (``count[0]``), a compile-time ``log256_max_n``, and the values dtype as a template (needed only for the zero-init
     of ``values_out``). Pins the graph-composable reduce-by-key path: count flows as a device ``Expr`` while
-    ``LOG256_MAX_N`` fixes the launch topology (head flags + in-place scan + zero + scatter + count all emit inside one
+    ``log256_max_n`` fixes the launch topology (head flags + in-place scan + zero + scatter + count all emit inside one
     kernel)."""
     from quadrants.algorithms._reduce import _reduce_depth_for_n
 
@@ -664,9 +664,9 @@ def test_reduce_by_key_add_composition(key_dtype, val_dtype, N):
     count.from_numpy(np.asarray([N], dtype=np.int32))
 
     @qd.kernel
-    def run(VALUE_DTYPE: qd.template(), LOG256_MAX_N: qd.template()):
+    def run(value_dtype: qd.template(), log256_max_n: qd.template()):
         qd.algorithms.reduce_by_key_add(
-            keys_in, values_in, keys_out, values_out, num_runs, scratch, count[0], VALUE_DTYPE, LOG256_MAX_N
+            keys_in, values_in, keys_out, values_out, num_runs, scratch, count[0], value_dtype, log256_max_n
         )
 
     run(val_dtype, log256_max_n)
@@ -715,7 +715,7 @@ def test_scratch_slots_are_at_least_one(n):
 
 # ---------------------------------------------------------------------------
 # Depth cap: Quadrants tensors are i32-indexed (<= 2**31 elements) and BLOCK_DIM ** 4 == 256 ** 4 == 2**32 already
-# covers that range, so a LOG256_MAX_N above 4 can never address a valid input. The depth-aware helpers (host-callable)
+# covers that range, so a log256_max_n above 4 can never address a valid input. The depth-aware helpers (host-callable)
 # must reject it rather than silently over-allocate; the public ops route through the same check at compile time.
 # ---------------------------------------------------------------------------
 
@@ -725,11 +725,11 @@ def test_scratch_slots_are_at_least_one(n):
 def test_scratch_slots_reject_depth_above_max(n):
     a = qd.algorithms
     for depth in (5, 6, 8):
-        with pytest.raises(ValueError, match="LOG256_MAX_N"):
+        with pytest.raises(ValueError, match="log256_max_n"):
             a.reduce_scratch_slots(n, depth)
-        with pytest.raises(ValueError, match="LOG256_MAX_N"):
+        with pytest.raises(ValueError, match="log256_max_n"):
             a.exclusive_scan_scratch_slots(n, depth)
-        with pytest.raises(ValueError, match="LOG256_MAX_N"):
+        with pytest.raises(ValueError, match="log256_max_n"):
             a.sort_scratch_slots(n, depth)
     # The boundary value 4 is still accepted.
     assert a.reduce_scratch_slots(n, 4) >= 1

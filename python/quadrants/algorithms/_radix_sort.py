@@ -92,56 +92,56 @@ def _key_width_bits(dtype) -> int:
 
 
 @_func
-def _radix_twiddle(keys: template(), n: i32, KEY_DTYPE: template(), KEY_WIDTH: template(), DO_TWIDDLE: template()):
+def _radix_twiddle(keys: template(), n: i32, key_dtype: template(), key_width: template(), do_twiddle: template()):
     """In-place map between caller-dtype keys and monotone-unsigned "sortable" keys (signed / float only).
 
-    ``DO_TWIDDLE=True`` maps dtype -> sort order before the first pass; ``False`` is the inverse after the last pass.
+    ``do_twiddle=True`` maps dtype -> sort order before the first pass; ``False`` is the inverse after the last pass.
     Only instantiated for ``i32`` / ``f32`` / ``i64`` / ``f64`` (the kernel skips it for unsigned keys).
     """
     loop_config(block_dim=BLOCK_DIM)
     for i in range(n):
-        if static(KEY_WIDTH == 32):
+        if static(key_width == 32):
             v = bit_cast(keys[i], u32)
-            if static(KEY_DTYPE == i32):
-                keys[i] = bit_cast(v ^ u32(0x80000000), KEY_DTYPE)
+            if static(key_dtype == i32):
+                keys[i] = bit_cast(v ^ u32(0x80000000), key_dtype)
             else:  # f32
-                # Forward (DO_TWIDDLE) picks the mask from the *input* sign bit; the inverse picks it from the
+                # Forward (do_twiddle) picks the mask from the *input* sign bit; the inverse picks it from the
                 # *output* sign bit, which is the *opposite* bit (the forward twiddle flips it) - hence the two
                 # branches select the 0x80000000 / 0xFFFFFFFF masks in swapped order.
-                if static(DO_TWIDDLE):
+                if static(do_twiddle):
                     if (v & u32(0x80000000)) != u32(0):
-                        keys[i] = bit_cast(v ^ u32(0xFFFFFFFF), KEY_DTYPE)
+                        keys[i] = bit_cast(v ^ u32(0xFFFFFFFF), key_dtype)
                     else:
-                        keys[i] = bit_cast(v ^ u32(0x80000000), KEY_DTYPE)
+                        keys[i] = bit_cast(v ^ u32(0x80000000), key_dtype)
                 else:
                     if (v & u32(0x80000000)) != u32(0):
-                        keys[i] = bit_cast(v ^ u32(0x80000000), KEY_DTYPE)
+                        keys[i] = bit_cast(v ^ u32(0x80000000), key_dtype)
                     else:
-                        keys[i] = bit_cast(v ^ u32(0xFFFFFFFF), KEY_DTYPE)
+                        keys[i] = bit_cast(v ^ u32(0xFFFFFFFF), key_dtype)
         else:  # 64-bit
             w = bit_cast(keys[i], u64)
-            if static(KEY_DTYPE == i64):
-                keys[i] = bit_cast(w ^ u64(0x8000000000000000), KEY_DTYPE)
+            if static(key_dtype == i64):
+                keys[i] = bit_cast(w ^ u64(0x8000000000000000), key_dtype)
             else:  # f64
                 # Same input- vs output-sign-bit asymmetry as the 32-bit f32 case above (forward picks from the
                 # input sign bit, inverse from the output sign bit), so the masks are selected in swapped order.
-                if static(DO_TWIDDLE):
+                if static(do_twiddle):
                     if (w & u64(0x8000000000000000)) != u64(0):
-                        keys[i] = bit_cast(w ^ u64(0xFFFFFFFFFFFFFFFF), KEY_DTYPE)
+                        keys[i] = bit_cast(w ^ u64(0xFFFFFFFFFFFFFFFF), key_dtype)
                     else:
-                        keys[i] = bit_cast(w ^ u64(0x8000000000000000), KEY_DTYPE)
+                        keys[i] = bit_cast(w ^ u64(0x8000000000000000), key_dtype)
                 else:
                     if (w & u64(0x8000000000000000)) != u64(0):
-                        keys[i] = bit_cast(w ^ u64(0x8000000000000000), KEY_DTYPE)
+                        keys[i] = bit_cast(w ^ u64(0x8000000000000000), key_dtype)
                     else:
-                        keys[i] = bit_cast(w ^ u64(0xFFFFFFFFFFFFFFFF), KEY_DTYPE)
+                        keys[i] = bit_cast(w ^ u64(0xFFFFFFFFFFFFFFFF), key_dtype)
 
 
 @_func
-def _radix_hist(keys: template(), scratch: template(), n: i32, num_blocks: i32, bit_start: i32, KEY_WIDTH: template()):
+def _radix_hist(keys: template(), scratch: template(), n: i32, num_blocks: i32, bit_start: i32, key_width: template()):
     """Per-block histogram of digit ``(key >> bit_start) & 0xFF`` into ``scratch`` (digit-major: ``d*num_blocks+b``).
 
-    Tile histograms are ``u32`` regardless of key width (each count <= ``BLOCK_DIM`` = 256). ``KEY_WIDTH`` selects the
+    Tile histograms are ``u32`` regardless of key width (each count <= ``BLOCK_DIM`` = 256). ``key_width`` selects the
     32- vs 64-bit digit extraction.
     """
     loop_config(block_dim=BLOCK_DIM)
@@ -162,7 +162,7 @@ def _radix_hist(keys: template(), scratch: template(), n: i32, num_blocks: i32, 
         _block.sync()
         digit = i32(RADIX_DIGITS)  # default to the dump slot for out-of-range lanes (unconditional first assignment)
         if i < n:
-            if static(KEY_WIDTH == 32):
+            if static(key_width == 32):
                 key32 = bit_cast(keys[i], u32)
                 digit = i32((key32 >> u32(bit_start)) & u32(RADIX_DIGITS - 1))
             else:
@@ -183,9 +183,9 @@ def _radix_scatter(
     n: i32,
     num_blocks: i32,
     bit_start: i32,
-    KEY_DTYPE: template(),
-    HAS_VALUES: template(),
-    KEY_WIDTH: template(),
+    key_dtype: template(),
+    has_values: template(),
+    key_width: template(),
 ):
     """Per-block radix rank + scatter ``keys_in[i] -> keys_out[scanned_offset + intra_digit_rank]`` (and values in
     lock-step).
@@ -201,7 +201,7 @@ def _radix_scatter(
         bins = _block.SharedArray((RADIX_DIGITS,), i32)
         excl_prefix = _block.SharedArray((RADIX_DIGITS,), i32)
         block_offsets = _block.SharedArray((RADIX_DIGITS,), i32)
-        if static(KEY_WIDTH == 32):
+        if static(key_width == 32):
             key = u32(0xFFFFFFFF)
             if i < n:
                 key = bit_cast(keys_in[i], u32)
@@ -217,8 +217,8 @@ def _radix_scatter(
             _block.sync()
             if i < n:
                 dst = block_offsets[digit] + rank
-                keys_out[dst] = bit_cast(key, KEY_DTYPE)
-                if static(HAS_VALUES):
+                keys_out[dst] = bit_cast(key, key_dtype)
+                if static(has_values):
                     values_out[dst] = values_in[i]
         else:
             key = u64(0xFFFFFFFFFFFFFFFF)
@@ -235,8 +235,8 @@ def _radix_scatter(
             _block.sync()
             if i < n:
                 dst = block_offsets[digit] + rank
-                keys_out[dst] = bit_cast(key, KEY_DTYPE)
-                if static(HAS_VALUES):
+                keys_out[dst] = bit_cast(key, key_dtype)
+                if static(has_values):
                     values_out[dst] = values_in[i]
 
 
@@ -250,10 +250,10 @@ def _emit_pass(
     num_blocks,
     hist_len,
     p,
-    KEY_DTYPE,
-    HAS_VALUES,
-    KEY_WIDTH,
-    LOG256_MAX_N,
+    key_dtype,
+    has_values,
+    key_width,
+    log256_max_n,
 ):
     """Emit one digit pass (histogram -> scan staircase -> scatter) at compile time.
 
@@ -262,7 +262,7 @@ def _emit_pass(
     ``@qd.func`` calls - no field-handle assignment in the compiled body (which the compiler frontend rejects).
 
     The histogram scan reuses the shared graph-composable staircase :func:`._scan._emit_exclusive_scan_add` (``u32`` /
-    add, in place, fixed depth). ``LOG256_MAX_N - 1`` reduce levels makes the digit-major ``scratch[0:hist_len]`` scan a
+    add, in place, fixed depth). ``log256_max_n - 1`` reduce levels makes the digit-major ``scratch[0:hist_len]`` scan a
     compile-time-constant launch topology, independent of the device-resident ``n``.
     """
     bit_start = p * RADIX_BITS
@@ -270,9 +270,9 @@ def _emit_pass(
     dst = tmp_keys if (p % 2 == 0) else keys
     vsrc = values if (p % 2 == 0) else tmp_values
     vdst = tmp_values if (p % 2 == 0) else values
-    _radix_hist(src, scratch, n, num_blocks, bit_start, KEY_WIDTH)
-    _emit_exclusive_scan_add(scratch, 0, hist_len, LOG256_MAX_N - 1)
-    _radix_scatter(src, dst, vsrc, vdst, scratch, n, num_blocks, bit_start, KEY_DTYPE, HAS_VALUES, KEY_WIDTH)
+    _radix_hist(src, scratch, n, num_blocks, bit_start, key_width)
+    _emit_exclusive_scan_add(scratch, 0, hist_len, log256_max_n - 1)
+    _radix_scatter(src, dst, vsrc, vdst, scratch, n, num_blocks, bit_start, key_dtype, has_values, key_width)
 
 
 @_func(requires_top_level=True)
@@ -283,10 +283,10 @@ def sort(
     tmp_values: template(),
     scratch: template(),
     n: template(),
-    KEY_DTYPE: template(),
-    HAS_VALUES: template(),
-    END_BIT: template(),
-    LOG256_MAX_N: template(),
+    key_dtype: template(),
+    has_values: template(),
+    end_bit: template(),
+    log256_max_n: template(),
 ):
     """Whole LSB radix sort as one ``@qd.func`` - the composable form; see module docstring.
 
@@ -302,30 +302,30 @@ def sort(
     ``if``, or a plain ``while`` - which demotes the phase loops out of top-level position, collapses the per-phase
     grid-wide barriers and corrupts the sort. Compile-time ``static`` loops (like the pass loop here) are also fine.
 
-    Compile-time params: ``KEY_DTYPE`` (the key element dtype, one of ``{u32, i32, f32, u64, i64, f64}``),
-    ``HAS_VALUES`` (whether ``values`` / ``tmp_values`` are real buffers or placeholders), ``END_BIT`` (low key bits to
-    sort - positive even multiple of ``8``, ``<=`` key width), and ``LOG256_MAX_N`` (scan depth ``D``; the emitted sort
-    handles any count ``<= 256 ** D``). The width, pass count and twiddle need are derived from ``KEY_DTYPE`` +
-    ``END_BIT`` at compile time. ``KEY_DTYPE`` is an explicit param because an ``ndarray`` kernel argument (the qipc
+    Compile-time params: ``key_dtype`` (the key element dtype, one of ``{u32, i32, f32, u64, i64, f64}``),
+    ``has_values`` (whether ``values`` / ``tmp_values`` are real buffers or placeholders), ``end_bit`` (low key bits to
+    sort - positive even multiple of ``8``, ``<=`` key width), and ``log256_max_n`` (scan depth ``D``; the emitted sort
+    handles any count ``<= 256 ** D``). The width, pass count and twiddle need are derived from ``key_dtype`` +
+    ``end_bit`` at compile time. ``key_dtype`` is an explicit param because an ``ndarray`` kernel argument (the qipc
     path) exposes no ``.dtype`` inside the kernel - pass the dtype you already know.
 
     ``n`` is a 0-d ``i32`` ndarray handle read once as ``n[()]``; ``num_blocks`` / ``hist_len`` are derived on-device.
     The pass loop and scan staircase are statically unrolled, so the launch topology is fixed regardless of ``n``;
     after an even pass count the result lands in ``keys`` (and ``values``). The caller owns ``scratch`` (size it with
-    :func:`sort_scratch_slots` ``(capacity_n, LOG256_MAX_N)``) and the device-resident ``n``. There is **no**
+    :func:`sort_scratch_slots` ``(capacity_n, log256_max_n)``) and the device-resident ``n``. There is **no**
     host-side validation or scratch-sufficiency check (a DtoH would defeat graph capture) - pass distinct, same-shape
     buffers and size ``scratch`` correctly up front.
     """
-    _validate_log256_max_n(LOG256_MAX_N)
-    KEY_WIDTH = static(_key_width_bits(KEY_DTYPE))
-    NUM_PASSES = static(END_BIT // RADIX_BITS)
-    NEEDS_TWIDDLE = static(KEY_DTYPE in _TWIDDLE_KEY_DTYPES)
+    _validate_log256_max_n(log256_max_n)
+    key_width = static(_key_width_bits(key_dtype))
+    num_passes = static(end_bit // RADIX_BITS)
+    needs_twiddle = static(key_dtype in _TWIDDLE_KEY_DTYPES)
     count = n[()]
     num_blocks = (count + (BLOCK_DIM - 1)) // BLOCK_DIM
     hist_len = num_blocks * RADIX_DIGITS
-    if static(NEEDS_TWIDDLE):
-        _radix_twiddle(keys, count, KEY_DTYPE, KEY_WIDTH, True)
-    for p in static(range(NUM_PASSES)):
+    if static(needs_twiddle):
+        _radix_twiddle(keys, count, key_dtype, key_width, True)
+    for p in static(range(num_passes)):
         _emit_pass(
             keys,
             tmp_keys,
@@ -336,13 +336,13 @@ def sort(
             num_blocks,
             hist_len,
             p,
-            KEY_DTYPE,
-            HAS_VALUES,
-            KEY_WIDTH,
-            LOG256_MAX_N,
+            key_dtype,
+            has_values,
+            key_width,
+            log256_max_n,
         )
-    if static(NEEDS_TWIDDLE):
-        _radix_twiddle(keys, count, KEY_DTYPE, KEY_WIDTH, False)
+    if static(needs_twiddle):
+        _radix_twiddle(keys, count, key_dtype, key_width, False)
 
 
 def _min_log256_for_n(n: int) -> int:
