@@ -4,6 +4,7 @@ import argparse
 import glob
 import os
 import platform
+import shutil
 import sys
 
 import psutil
@@ -78,6 +79,28 @@ def setup_basic_build_env():
     return sccache, python
 
 
+@banner("Install Python dependency groups (dev, test)")
+def setup_python_deps() -> None:
+    # Convenience for the interactive `--shell` / `-w` flows: install the dev + test dependency
+    # groups into the active virtualenv so a subsequent editable install works without a manual
+    # `uv pip install --group dev --group test`. Only runs inside a virtualenv -- it never touches a
+    # system / externally-managed interpreter, and the CI `wheel` path provisions deps separately.
+    if not os.environ.get("VIRTUAL_ENV"):
+        misc.warn("No active virtualenv (VIRTUAL_ENV unset); skipping dev/test dependency install.")
+        return
+    groups = ("--group", "dev", "--group", "test")
+    try:
+        if shutil.which("uv"):
+            sh.uv("pip", "install", *groups)
+        else:
+            sh.bake(sys.executable)("-m", "pip", "install", *groups)
+    except CommandFailed as e:
+        misc.warn(
+            f"Installing dev/test dependency groups failed ({e}); continuing. "
+            "Install them manually with `uv pip install --group dev --group test`."
+        )
+
+
 def _is_sccache_running():
     for proc in psutil.process_iter(attrs=["name", "cmdline"]):
         try:
@@ -97,6 +120,10 @@ def action_wheel():
         print("sccache already appears to be running")
     else:
         sccache("--start-server")
+
+    # For the interactive convenience flows, make the active venv ready for an editable install.
+    if misc.options.shell or misc.options.write_env:
+        setup_python_deps()
 
     handle_alternate_actions()
     build_wheel(python)
