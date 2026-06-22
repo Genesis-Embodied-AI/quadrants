@@ -9,8 +9,7 @@ namespace metal {
 
 #include "quadrants/rhi/metal/metal_rhi_enum_mappings.h"
 
-MetalMemory::MetalMemory(MTLBuffer_id mtl_buffer, bool can_map)
-    : mtl_buffer_(mtl_buffer), can_map_(can_map) {}
+MetalMemory::MetalMemory(MTLBuffer_id mtl_buffer, bool can_map) : mtl_buffer_(mtl_buffer), can_map_(can_map) {}
 MetalMemory::~MetalMemory() {
   if (!dont_destroy_) {
     [mtl_buffer_ release];
@@ -45,13 +44,10 @@ void MetalImage::dont_destroy() { dont_destroy_ = true; }
 
 MTLTexture_id MetalImage::mtl_texture() const { return mtl_texture_; }
 
-MetalSampler::MetalSampler(MTLSamplerState_id mtl_sampler_state)
-    : mtl_sampler_state_(mtl_sampler_state) {}
+MetalSampler::MetalSampler(MTLSamplerState_id mtl_sampler_state) : mtl_sampler_state_(mtl_sampler_state) {}
 MetalSampler::~MetalSampler() { [mtl_sampler_state_ release]; }
 
-MTLSamplerState_id MetalSampler::mtl_sampler_state() const {
-  return mtl_sampler_state_;
-}
+MTLSamplerState_id MetalSampler::mtl_sampler_state() const { return mtl_sampler_state_; }
 
 MetalRasterLibraries::MetalRasterLibraries() : vertex(nil), fragment(nil) {}
 
@@ -67,22 +63,14 @@ void MetalRasterFunctions::destroy() {
   [fragment release];
 }
 
-MetalPipeline::MetalPipeline(
-    const MetalDevice &device, MTLLibrary_id mtl_library,
-    MTLFunction_id mtl_function,
-    MTLComputePipelineState_id mtl_compute_pipeline_state,
-    MetalWorkgroupSize workgroup_size)
-    : device_(&device), mtl_compute_library_(mtl_library),
-      mtl_compute_function_(mtl_function),
-      mtl_compute_pipeline_state_(mtl_compute_pipeline_state),
-      workgroup_size_(workgroup_size) {}
+MetalPipeline::MetalPipeline(const MetalDevice &device, MTLLibrary_id mtl_library, MTLFunction_id mtl_function,
+                             MTLComputePipelineState_id mtl_compute_pipeline_state, MetalWorkgroupSize workgroup_size)
+    : device_(&device), mtl_compute_library_(mtl_library), mtl_compute_function_(mtl_function),
+      mtl_compute_pipeline_state_(mtl_compute_pipeline_state), workgroup_size_(workgroup_size) {}
 
-MetalPipeline::MetalPipeline(const MetalDevice &device,
-                             MetalRasterLibraries &mtl_libraries,
-                             MetalRasterFunctions &mtl_functions,
-                             MTLVertexDescriptor *vertex_descriptor,
-                             const MetalShaderBindingMapping &mapping,
-                             const RasterParams &raster_params)
+MetalPipeline::MetalPipeline(const MetalDevice &device, MetalRasterLibraries &mtl_libraries,
+                             MetalRasterFunctions &mtl_functions, MTLVertexDescriptor *vertex_descriptor,
+                             const MetalShaderBindingMapping &mapping, const RasterParams &raster_params)
     : MetalPipeline(device, nil, nil, nil, MetalWorkgroupSize{0, 0, 0}) {
   mtl_raster_libraries_ = std::move(mtl_libraries);
   mtl_raster_functions_ = std::move(mtl_functions);
@@ -105,10 +93,8 @@ MetalPipeline::~MetalPipeline() {
   mtl_raster_functions_.destroy();
 }
 
-MetalPipeline *MetalPipeline::create_compute_pipeline(const MetalDevice &device,
-                                                      const uint32_t *spv_data,
-                                                      size_t spv_size,
-                                                      const std::string &name) {
+MetalPipeline *MetalPipeline::create_compute_pipeline(const MetalDevice &device, const uint32_t *spv_data,
+                                                      size_t spv_size, const std::string &name) {
   RHI_ASSERT((size_t)spv_data % sizeof(uint32_t) == 0);
   RHI_ASSERT(spv_size % sizeof(uint32_t) == 0);
   spirv_cross::CompilerMSL compiler(spv_data, spv_size / sizeof(uint32_t));
@@ -117,19 +103,15 @@ MetalPipeline *MetalPipeline::create_compute_pipeline(const MetalDevice &device,
 
   // Choose a proper msl version according to the device capability.
   DeviceCapabilityConfig caps = device.get_caps();
-  bool feature_simd_scoped_permute_operations =
-      caps.contains(DeviceCapability::spirv_has_subgroup_vote) ||
-      caps.contains(DeviceCapability::spirv_has_subgroup_ballot);
-  bool feature_simd_scoped_reduction_operations =
-      caps.contains(DeviceCapability::spirv_has_subgroup_arithmetic);
+  bool feature_simd_scoped_permute_operations = caps.contains(DeviceCapability::spirv_has_subgroup_vote) ||
+                                                caps.contains(DeviceCapability::spirv_has_subgroup_ballot);
+  bool feature_simd_scoped_reduction_operations = caps.contains(DeviceCapability::spirv_has_subgroup_arithmetic);
 
-  if (feature_simd_scoped_permute_operations ||
-      feature_simd_scoped_reduction_operations) {
+  if (feature_simd_scoped_permute_operations || feature_simd_scoped_reduction_operations) {
     // Subgroups are only supported in Metal 2.1 and up.
     options.set_msl_version(2, 1, 0);
   }
-  bool feature_64_bit_integer_math =
-      caps.contains(DeviceCapability::spirv_has_int64);
+  bool feature_64_bit_integer_math = caps.contains(DeviceCapability::spirv_has_int64);
   if (feature_64_bit_integer_math) {
     options.set_msl_version(2, 3, 0);
   }
@@ -141,30 +123,25 @@ MetalPipeline *MetalPipeline::create_compute_pipeline(const MetalDevice &device,
     msl = compiler.compile();
   } catch (const spirv_cross::CompilerError &e) {
     std::array<char, 4096> msgbuf;
-    snprintf(msgbuf.data(), msgbuf.size(), "(spirv-cross compiler) %s: %s",
-             name.c_str(), e.what());
+    snprintf(msgbuf.data(), msgbuf.size(), "(spirv-cross compiler) %s: %s", name.c_str(), e.what());
     RHI_LOG_ERROR(msgbuf.data());
     return nullptr;
   }
 
   if (const char *dump = std::getenv("QD_DUMP_MSL")) {
     if (std::string(dump) == "1") {
-      fprintf(stderr, "=== MSL for kernel '%s' ===\n%s\n=== END MSL ===\n",
-              name.c_str(), msl.c_str());
+      fprintf(stderr, "=== MSL for kernel '%s' ===\n%s\n=== END MSL ===\n", name.c_str(), msl.c_str());
     }
   }
 
   MTLLibrary_id mtl_library = device.get_mtl_library(msl);
 
-  MTLFunction_id mtl_function =
-      device.get_mtl_function(mtl_library, std::string("main0"));
+  MTLFunction_id mtl_function = device.get_mtl_function(mtl_library, std::string("main0"));
 
   MTLComputePipelineState_id mtl_compute_pipeline_state = nil;
   {
     NSError *err = nil;
-    mtl_compute_pipeline_state =
-        [device.mtl_device() newComputePipelineStateWithFunction:mtl_function
-                                                           error:&err];
+    mtl_compute_pipeline_state = [device.mtl_device() newComputePipelineStateWithFunction:mtl_function error:&err];
 
     if (mtl_compute_pipeline_state == nil) {
       std::array<char, 4096> msgbuf;
@@ -172,8 +149,7 @@ MetalPipeline *MetalPipeline::create_compute_pipeline(const MetalDevice &device,
         snprintf(msgbuf.data(), msgbuf.size(),
                  "cannot create compute pipeline state for kernel '%s' "
                  "(msl_bytes=%zu): %s (code=%d)",
-                 name.c_str(), msl.size(), err.localizedDescription.UTF8String,
-                 (int)err.code);
+                 name.c_str(), msl.size(), err.localizedDescription.UTF8String, (int)err.code);
       } else {
         // Apple's `com.apple.MTLCompilerService` returned nil pipeline + nil
         // NSError, meaning the XPC service dropped its connection mid-compile.
@@ -207,20 +183,18 @@ MetalPipeline *MetalPipeline::create_compute_pipeline(const MetalDevice &device,
     }
   }
 
-  const spirv_cross::SPIREntryPoint &entry_point = compiler.get_entry_point(
-      "main", spv::ExecutionModel::ExecutionModelGLCompute);
+  const spirv_cross::SPIREntryPoint &entry_point =
+      compiler.get_entry_point("main", spv::ExecutionModel::ExecutionModelGLCompute);
   MetalWorkgroupSize workgroup_size{};
   workgroup_size.x = entry_point.workgroup_size.x;
   workgroup_size.y = entry_point.workgroup_size.y;
   workgroup_size.z = entry_point.workgroup_size.z;
 
-  return new MetalPipeline(device, mtl_library, mtl_function,
-                           mtl_compute_pipeline_state,
-                           std::move(workgroup_size));
+  return new MetalPipeline(device, mtl_library, mtl_function, mtl_compute_pipeline_state, std::move(workgroup_size));
 }
 
-MTLRenderPipelineState_id MetalPipeline::build_mtl_render_pipeline(
-    const MetalRenderPassTargetDetails &renderpass_details) {
+MTLRenderPipelineState_id
+MetalPipeline::build_mtl_render_pipeline(const MetalRenderPassTargetDetails &renderpass_details) {
   // Create render pipeline
   MTLRenderPipelineDescriptor *rpd = [MTLRenderPipelineDescriptor new];
   rpd.vertexFunction = mtl_raster_functions_.vertex;
@@ -228,12 +202,10 @@ MTLRenderPipelineState_id MetalPipeline::build_mtl_render_pipeline(
   rpd.inputPrimitiveTopology = topotype2mtl(raster_params_.prim_topology);
   rpd.vertexDescriptor = vertex_descriptor_;
 
-  rpd.depthAttachmentPixelFormat =
-      format2mtl(renderpass_details.depth_attach_format);
+  rpd.depthAttachmentPixelFormat = format2mtl(renderpass_details.depth_attach_format);
 
   for (int i = 0; i < renderpass_details.color_attachments.size(); i++) {
-    MTLPixelFormat format =
-        format2mtl(renderpass_details.color_attachments[i].first);
+    MTLPixelFormat format = format2mtl(renderpass_details.color_attachments[i].first);
     rpd.colorAttachments[i].pixelFormat = format;
   }
 
@@ -241,29 +213,22 @@ MTLRenderPipelineState_id MetalPipeline::build_mtl_render_pipeline(
     BlendingParams blending = raster_params_.blending[i];
     rpd.colorAttachments[i].blendingEnabled = blending.enable;
     rpd.colorAttachments[i].rgbBlendOperation = blendop2mtl(blending.color.op);
-    rpd.colorAttachments[i].alphaBlendOperation =
-        blendop2mtl(blending.alpha.op);
-    rpd.colorAttachments[i].destinationRGBBlendFactor =
-        blendfactor2mtl(blending.color.dst_factor);
-    rpd.colorAttachments[i].sourceRGBBlendFactor =
-        blendfactor2mtl(blending.color.src_factor);
-    rpd.colorAttachments[i].destinationAlphaBlendFactor =
-        blendfactor2mtl(blending.alpha.dst_factor);
-    rpd.colorAttachments[i].sourceAlphaBlendFactor =
-        blendfactor2mtl(blending.alpha.src_factor);
+    rpd.colorAttachments[i].alphaBlendOperation = blendop2mtl(blending.alpha.op);
+    rpd.colorAttachments[i].destinationRGBBlendFactor = blendfactor2mtl(blending.color.dst_factor);
+    rpd.colorAttachments[i].sourceRGBBlendFactor = blendfactor2mtl(blending.color.src_factor);
+    rpd.colorAttachments[i].destinationAlphaBlendFactor = blendfactor2mtl(blending.alpha.dst_factor);
+    rpd.colorAttachments[i].sourceAlphaBlendFactor = blendfactor2mtl(blending.alpha.src_factor);
   }
 
   MTLRenderPipelineState_id rps = nil;
   {
     NSError *err = nil;
-    rps = [device_->mtl_device() newRenderPipelineStateWithDescriptor:rpd
-                                                                error:&err];
+    rps = [device_->mtl_device() newRenderPipelineStateWithDescriptor:rpd error:&err];
 
     if (rps == nil) {
       if (err != nil) {
         std::array<char, 4096> msgbuf;
-        snprintf(msgbuf.data(), msgbuf.size(),
-                 "cannot create render pipeline state: %s (code=%d)",
+        snprintf(msgbuf.data(), msgbuf.size(), "cannot create render pipeline state: %s (code=%d)",
                  err.localizedDescription.UTF8String, (int)err.code);
         RHI_LOG_ERROR(msgbuf.data());
       }
@@ -274,12 +239,10 @@ MTLRenderPipelineState_id MetalPipeline::build_mtl_render_pipeline(
   return rps;
 }
 
-MetalShaderResourceSet::MetalShaderResourceSet(const MetalDevice &device)
-    : device_(&device) {}
+MetalShaderResourceSet::MetalShaderResourceSet(const MetalDevice &device) : device_(&device) {}
 MetalShaderResourceSet::~MetalShaderResourceSet() {}
 
-ShaderResourceSet &MetalShaderResourceSet::buffer(uint32_t binding,
-                                                  DevicePtr ptr, size_t size) {
+ShaderResourceSet &MetalShaderResourceSet::buffer(uint32_t binding, DevicePtr ptr, size_t size) {
   RHI_ASSERT(ptr.device == (Device *)device_);
   const MetalMemory &memory = device_->get_memory(ptr.alloc_id);
 
@@ -293,8 +256,7 @@ ShaderResourceSet &MetalShaderResourceSet::buffer(uint32_t binding,
 
   return *this;
 }
-ShaderResourceSet &MetalShaderResourceSet::buffer(uint32_t binding,
-                                                  DeviceAllocation alloc) {
+ShaderResourceSet &MetalShaderResourceSet::buffer(uint32_t binding, DeviceAllocation alloc) {
   RHI_ASSERT(alloc.device == (Device *)device_);
   const MetalMemory &memory = device_->get_memory(alloc.alloc_id);
 
@@ -309,9 +271,7 @@ ShaderResourceSet &MetalShaderResourceSet::buffer(uint32_t binding,
   return *this;
 }
 
-ShaderResourceSet &MetalShaderResourceSet::rw_buffer(uint32_t binding,
-                                                     DevicePtr ptr,
-                                                     size_t size) {
+ShaderResourceSet &MetalShaderResourceSet::rw_buffer(uint32_t binding, DevicePtr ptr, size_t size) {
   RHI_ASSERT(ptr.device == (Device *)device_);
   const MetalMemory &memory = device_->get_memory(ptr.alloc_id);
 
@@ -325,8 +285,7 @@ ShaderResourceSet &MetalShaderResourceSet::rw_buffer(uint32_t binding,
 
   return *this;
 }
-ShaderResourceSet &MetalShaderResourceSet::rw_buffer(uint32_t binding,
-                                                     DeviceAllocation alloc) {
+ShaderResourceSet &MetalShaderResourceSet::rw_buffer(uint32_t binding, DeviceAllocation alloc) {
   RHI_ASSERT(alloc.device == (Device *)device_);
   const MetalMemory &memory = device_->get_memory(alloc.alloc_id);
 
@@ -341,9 +300,8 @@ ShaderResourceSet &MetalShaderResourceSet::rw_buffer(uint32_t binding,
   return *this;
 }
 
-ShaderResourceSet &
-MetalShaderResourceSet::image(uint32_t binding, DeviceAllocation alloc,
-                              ImageSamplerConfig sampler_config) {
+ShaderResourceSet &MetalShaderResourceSet::image(uint32_t binding, DeviceAllocation alloc,
+                                                 ImageSamplerConfig sampler_config) {
   RHI_ASSERT(alloc.device == (Device *)device_);
   const MetalImage &image = device_->get_image(alloc.alloc_id);
 
@@ -357,9 +315,7 @@ MetalShaderResourceSet::image(uint32_t binding, DeviceAllocation alloc,
   return *this;
 }
 
-ShaderResourceSet &MetalShaderResourceSet::rw_image(uint32_t binding,
-                                                    DeviceAllocation alloc,
-                                                    int lod) {
+ShaderResourceSet &MetalShaderResourceSet::rw_image(uint32_t binding, DeviceAllocation alloc, int lod) {
   RHI_ASSERT(alloc.device == (Device *)device_);
   const MetalImage &image = device_->get_image(alloc.alloc_id);
 
@@ -373,11 +329,8 @@ ShaderResourceSet &MetalShaderResourceSet::rw_image(uint32_t binding,
   return *this;
 }
 
-RasterResources &MetalRasterResources::vertex_buffer(DevicePtr ptr,
-                                                     uint32_t binding) {
-  MTLBuffer_id buffer = (ptr != kDeviceNullPtr)
-                            ? device_->get_memory(ptr.alloc_id).mtl_buffer()
-                            : nullptr;
+RasterResources &MetalRasterResources::vertex_buffer(DevicePtr ptr, uint32_t binding) {
+  MTLBuffer_id buffer = (ptr != kDeviceNullPtr) ? device_->get_memory(ptr.alloc_id).mtl_buffer() : nullptr;
   if (buffer == nullptr) {
     vertex_buffers.erase(binding);
   } else {
@@ -386,11 +339,8 @@ RasterResources &MetalRasterResources::vertex_buffer(DevicePtr ptr,
   return *this;
 }
 
-RasterResources &MetalRasterResources::index_buffer(DevicePtr ptr,
-                                                    size_t index_width) {
-  MTLBuffer_id buffer = (ptr != kDeviceNullPtr)
-                            ? device_->get_memory(ptr.alloc_id).mtl_buffer()
-                            : nullptr;
+RasterResources &MetalRasterResources::index_buffer(DevicePtr ptr, size_t index_width) {
+  MTLBuffer_id buffer = (ptr != kDeviceNullPtr) ? device_->get_memory(ptr.alloc_id).mtl_buffer() : nullptr;
   if (buffer == nullptr) {
     index_binding = BufferBinding();
   } else {
@@ -403,9 +353,7 @@ RasterResources &MetalRasterResources::index_buffer(DevicePtr ptr,
   }
   return *this;
 }
-MetalCommandList::MetalCommandList(const MetalDevice &device,
-                                   MTLCommandQueue_id cmd_queue)
-    : device_(&device) {
+MetalCommandList::MetalCommandList(const MetalDevice &device, MTLCommandQueue_id cmd_queue) : device_(&device) {
   @autoreleasepool {
     cmdbuf_ = [cmd_queue commandBuffer];
     [cmdbuf_ retain];
@@ -443,26 +391,21 @@ void MetalCommandList::bind_pipeline(Pipeline *p) noexcept {
     // Check if PSO is already built for current render pass parameters
     if (pipeline->built_pipelines_.count(current_renderpass_details_) == 0) {
       // Not built, need to build
-      MTLRenderPipelineState_id rps =
-          pipeline->build_mtl_render_pipeline(current_renderpass_details_);
+      MTLRenderPipelineState_id rps = pipeline->build_mtl_render_pipeline(current_renderpass_details_);
       pipeline->built_pipelines_[current_renderpass_details_] = rps;
     }
   }
 }
-RhiResult MetalCommandList::bind_shader_resources(ShaderResourceSet *res,
-                                                  int set_index) noexcept {
+RhiResult MetalCommandList::bind_shader_resources(ShaderResourceSet *res, int set_index) noexcept {
   RHI_ASSERT(set_index == 0);
   if (res == nullptr)
     return RhiResult::invalid_usage;
-  MetalShaderResourceSet *res_metal =
-      static_cast<MetalShaderResourceSet *>(res);
-  current_shader_resource_set_ =
-      std::make_unique<MetalShaderResourceSet>(*res_metal);
+  MetalShaderResourceSet *res_metal = static_cast<MetalShaderResourceSet *>(res);
+  current_shader_resource_set_ = std::make_unique<MetalShaderResourceSet>(*res_metal);
   return RhiResult::success;
 }
 
-RhiResult
-MetalCommandList::bind_raster_resources(RasterResources *_res) noexcept {
+RhiResult MetalCommandList::bind_raster_resources(RasterResources *_res) noexcept {
   MetalRasterResources *res = static_cast<MetalRasterResources *>(_res);
 
   if (!current_pipeline_->is_graphics() || res == nullptr) {
@@ -485,8 +428,7 @@ void MetalCommandList::track_physical_buffer(DeviceAllocation alloc) noexcept {
   tracked_physical_buffers_.push_back(alloc);
 }
 
-void MetalCommandList::buffer_copy(DevicePtr dst, DevicePtr src,
-                                   size_t size) noexcept {
+void MetalCommandList::buffer_copy(DevicePtr dst, DevicePtr src, size_t size) noexcept {
   flush_pending_encoder();
   const MetalMemory &src_memory = device_->get_memory(src.alloc_id);
   const MetalMemory &dst_memory = device_->get_memory(dst.alloc_id);
@@ -512,8 +454,7 @@ void MetalCommandList::buffer_copy(DevicePtr dst, DevicePtr src,
   }
 }
 
-void MetalCommandList::buffer_fill(DevicePtr ptr, size_t size,
-                                   uint32_t data) noexcept {
+void MetalCommandList::buffer_fill(DevicePtr ptr, size_t size, uint32_t data) noexcept {
   RHI_ASSERT(data == 0);
   flush_pending_encoder();
 
@@ -527,27 +468,22 @@ void MetalCommandList::buffer_fill(DevicePtr ptr, size_t size,
 
   @autoreleasepool {
     MTLBlitCommandEncoder_id encoder = [cmdbuf_ blitCommandEncoder];
-    [encoder fillBuffer:mtl_buffer
-                  range:NSMakeRange((NSUInteger)ptr.offset, (NSUInteger)size)
-                  value:0];
+    [encoder fillBuffer:mtl_buffer range:NSMakeRange((NSUInteger)ptr.offset, (NSUInteger)size) value:0];
     [encoder endEncoding];
   }
 }
 
-RhiResult MetalCommandList::dispatch(uint32_t x, uint32_t y,
-                                     uint32_t z) noexcept {
+RhiResult MetalCommandList::dispatch(uint32_t x, uint32_t y, uint32_t z) noexcept {
   RHI_ASSERT(current_pipeline_);
   RHI_ASSERT(current_shader_resource_set_);
 
-  MTLComputePipelineState_id mtl_compute_pipeline_state =
-      current_pipeline_->mtl_compute_pipeline_state();
+  MTLComputePipelineState_id mtl_compute_pipeline_state = current_pipeline_->mtl_compute_pipeline_state();
 
   NSUInteger local_x = current_pipeline_->workgroup_size().x;
   NSUInteger local_y = current_pipeline_->workgroup_size().y;
   NSUInteger local_z = current_pipeline_->workgroup_size().z;
 
-  std::vector<MetalShaderResource> shader_resources =
-      current_shader_resource_set_->resources();
+  std::vector<MetalShaderResource> shader_resources = current_shader_resource_set_->resources();
 
   @autoreleasepool {
     // Reuse the persistent compute encoder across consecutive dispatches in
@@ -571,17 +507,13 @@ RhiResult MetalCommandList::dispatch(uint32_t x, uint32_t y,
     for (const MetalShaderResource &resource : shader_resources) {
       switch (resource.ty) {
       case MetalShaderResourceType::buffer: {
-        [encoder setBuffer:resource.buffer.buffer
-                    offset:resource.buffer.offset
-                   atIndex:resource.binding];
+        [encoder setBuffer:resource.buffer.buffer offset:resource.buffer.offset atIndex:resource.binding];
         break;
       }
       case MetalShaderResourceType::texture: {
         [encoder setTexture:resource.texture.texture atIndex:resource.binding];
         if (resource.texture.is_sampled) {
-          [encoder
-              setSamplerState:device_->get_default_sampler().mtl_sampler_state()
-                      atIndex:resource.binding];
+          [encoder setSamplerState:device_->get_default_sampler().mtl_sampler_state() atIndex:resource.binding];
         }
         break;
       }
@@ -600,26 +532,21 @@ RhiResult MetalCommandList::dispatch(uint32_t x, uint32_t y,
       // into every dispatch.
       if (compute_encoder_resident_alloc_ids_.insert(alloc.alloc_id).second) {
         const MetalMemory &mem = device_->get_memory(alloc.alloc_id);
-        [encoder useResource:mem.mtl_buffer()
-                       usage:MTLResourceUsageRead | MTLResourceUsageWrite];
+        [encoder useResource:mem.mtl_buffer() usage:MTLResourceUsageRead | MTLResourceUsageWrite];
       }
     }
     tracked_physical_buffers_.clear();
 
     [encoder setComputePipelineState:mtl_compute_pipeline_state];
-    [encoder dispatchThreadgroups:MTLSizeMake(x, y, z)
-            threadsPerThreadgroup:MTLSizeMake(local_x, local_y, local_z)];
+    [encoder dispatchThreadgroups:MTLSizeMake(x, y, z) threadsPerThreadgroup:MTLSizeMake(local_x, local_y, local_z)];
   };
 
   return RhiResult::success;
 }
 
-void MetalCommandList::begin_renderpass(int x0, int y0, int x1, int y1,
-                                        uint32_t num_color_attachments,
-                                        DeviceAllocation *color_attachments,
-                                        bool *color_clear,
-                                        std::vector<float> *clear_colors,
-                                        DeviceAllocation *depth_attachment,
+void MetalCommandList::begin_renderpass(int x0, int y0, int x1, int y1, uint32_t num_color_attachments,
+                                        DeviceAllocation *color_attachments, bool *color_clear,
+                                        std::vector<float> *clear_colors, DeviceAllocation *depth_attachment,
                                         bool depth_clear) {
   flush_pending_encoder();
   current_renderpass_details_.clear_depth = depth_clear;
@@ -629,8 +556,7 @@ void MetalCommandList::begin_renderpass(int x0, int y0, int x1, int y1,
   RHI_ASSERT(render_targets_.empty() && "Renderpass already started");
 
   if (depth_attachment) {
-    const MetalImage &depth_attach =
-        device_->get_image(depth_attachment->alloc_id);
+    const MetalImage &depth_attach = device_->get_image(depth_attachment->alloc_id);
     depth_target_ = depth_attach.mtl_texture();
     RHI_ASSERT(depth_target_ != nil && "Invalid depth attachment");
     BufferFormat format = mtl2format(depth_target_.pixelFormat);
@@ -641,8 +567,7 @@ void MetalCommandList::begin_renderpass(int x0, int y0, int x1, int y1,
   }
 
   for (int i = 0; i < num_color_attachments; i++) {
-    const MetalImage &col_attach =
-        device_->get_image(color_attachments[i].alloc_id);
+    const MetalImage &col_attach = device_->get_image(color_attachments[i].alloc_id);
     MTLTexture_id col_attach_mtl = col_attach.mtl_texture();
     RHI_ASSERT(col_attach_mtl != nil && "Invalid color attachment");
     BufferFormat format = mtl2format(col_attach_mtl.pixelFormat);
@@ -650,8 +575,7 @@ void MetalCommandList::begin_renderpass(int x0, int y0, int x1, int y1,
     current_renderpass_details_.color_attachments.emplace_back(format, clear);
     std::array<float, 4> clear_color{0.0, 0.0, 0.0, 0.0};
     if (clear) {
-      clear_color = {clear_colors[i][0], clear_colors[i][1], clear_colors[i][2],
-                     clear_colors[i][3]};
+      clear_color = {clear_colors[i][0], clear_colors[i][1], clear_colors[i][2], clear_colors[i][3]};
     }
     clear_colors_.push_back(clear_color);
     render_targets_.push_back(col_attach_mtl);
@@ -673,9 +597,8 @@ void MetalCommandList::end_renderpass() {
   is_renderpass_active_ = false;
 }
 
-void MetalCommandList::bind_mtl_shader_resources(
-    MetalShaderResourceSet *resource_set, MTLRenderCommandEncoder_id rce,
-    const MetalShaderBindingMapping *mapping) {
+void MetalCommandList::bind_mtl_shader_resources(MetalShaderResourceSet *resource_set, MTLRenderCommandEncoder_id rce,
+                                                 const MetalShaderBindingMapping *mapping) {
   for (const MetalShaderResource &resource : resource_set->resources()) {
     bool is_used_in_vertex = mapping->vertex.count(resource.binding) > 0;
     bool is_used_in_fragment = mapping->fragment.count(resource.binding) > 0;
@@ -691,37 +614,29 @@ void MetalCommandList::bind_mtl_shader_resources(
     case MetalShaderResourceType::buffer: {
       // If resource isn't used in the MSL code, don't bind it.
       if (is_used_in_vertex) {
-        [rce setVertexBuffer:resource.buffer.buffer
-                      offset:resource.buffer.offset
-                     atIndex:msl_vert_index_pair.first];
+        [rce setVertexBuffer:resource.buffer.buffer offset:resource.buffer.offset atIndex:msl_vert_index_pair.first];
       }
       if (is_used_in_fragment) {
-        [rce setFragmentBuffer:resource.buffer.buffer
-                        offset:resource.buffer.offset
-                       atIndex:msl_frag_index_pair.first];
+        [rce setFragmentBuffer:resource.buffer.buffer offset:resource.buffer.offset atIndex:msl_frag_index_pair.first];
       }
       break;
     }
     case MetalShaderResourceType::texture: {
       if (is_used_in_vertex) {
-        [rce setVertexTexture:resource.texture.texture
-                      atIndex:msl_vert_index_pair.first];
+        [rce setVertexTexture:resource.texture.texture atIndex:msl_vert_index_pair.first];
       }
       if (is_used_in_fragment) {
-        [rce setFragmentTexture:resource.texture.texture
-                        atIndex:msl_frag_index_pair.first];
+        [rce setFragmentTexture:resource.texture.texture atIndex:msl_frag_index_pair.first];
       }
       if (resource.texture.is_sampled) {
         if (is_used_in_vertex) {
           RHI_ASSERT(msl_vert_index_pair.second != -1);
-          [rce setVertexSamplerState:device_->get_default_sampler()
-                                         .mtl_sampler_state()
+          [rce setVertexSamplerState:device_->get_default_sampler().mtl_sampler_state()
                              atIndex:msl_vert_index_pair.second];
         }
         if (is_used_in_fragment) {
           RHI_ASSERT(msl_frag_index_pair.second != -1);
-          [rce setFragmentSamplerState:device_->get_default_sampler()
-                                           .mtl_sampler_state()
+          [rce setFragmentSamplerState:device_->get_default_sampler().mtl_sampler_state()
                                atIndex:msl_frag_index_pair.second];
         }
       }
@@ -733,40 +648,31 @@ void MetalCommandList::bind_mtl_shader_resources(
   }
 }
 
-MTLRenderPassDescriptor *
-MetalCommandList::create_render_pass_desc(bool depth_write, bool noclear) {
+MTLRenderPassDescriptor *MetalCommandList::create_render_pass_desc(bool depth_write, bool noclear) {
 
   MTLRenderPassDescriptor *rpd = [MTLRenderPassDescriptor new];
   int i = 0;
   for (auto &pair : current_renderpass_details_.color_attachments) {
     rpd.colorAttachments[i].texture = render_targets_[i];
-    rpd.colorAttachments[i].loadAction =
-        (pair.second && !noclear) ? MTLLoadActionClear : MTLLoadActionLoad;
+    rpd.colorAttachments[i].loadAction = (pair.second && !noclear) ? MTLLoadActionClear : MTLLoadActionLoad;
     rpd.colorAttachments[i].storeAction = MTLStoreActionStore;
     rpd.colorAttachments[i].clearColor =
-        MTLClearColorMake(clear_colors_[i][0], clear_colors_[i][1],
-                          clear_colors_[i][2], clear_colors_[i][3]);
+        MTLClearColorMake(clear_colors_[i][0], clear_colors_[i][1], clear_colors_[i][2], clear_colors_[i][3]);
     i++;
   }
 
-  if (current_renderpass_details_.depth_attach_format !=
-      BufferFormat::unknown) {
+  if (current_renderpass_details_.depth_attach_format != BufferFormat::unknown) {
     rpd.depthAttachment.texture = depth_target_;
     rpd.depthAttachment.loadAction =
-        (current_renderpass_details_.clear_depth && !noclear)
-            ? MTLLoadActionClear
-            : MTLLoadActionLoad;
-    rpd.depthAttachment.storeAction =
-        depth_write ? MTLStoreActionStore : MTLStoreActionDontCare;
+        (current_renderpass_details_.clear_depth && !noclear) ? MTLLoadActionClear : MTLLoadActionLoad;
+    rpd.depthAttachment.storeAction = depth_write ? MTLStoreActionStore : MTLStoreActionDontCare;
     rpd.depthAttachment.clearDepth = 0.0;
   }
 
   return rpd;
 }
 
-bool MetalCommandList::is_renderpass_active() const {
-  return is_renderpass_active_;
-}
+bool MetalCommandList::is_renderpass_active() const { return is_renderpass_active_; }
 
 void MetalCommandList::set_renderpass_active() { is_renderpass_active_ = true; }
 
@@ -774,20 +680,15 @@ MTLRenderCommandEncoder_id MetalCommandList::pre_draw_setup() {
   flush_pending_encoder();
   const RasterParams *raster_params = current_pipeline_->raster_params();
 
-  MTLRenderPassDescriptor *rpd = create_render_pass_desc(
-      raster_params->depth_write, is_renderpass_active_);
+  MTLRenderPassDescriptor *rpd = create_render_pass_desc(raster_params->depth_write, is_renderpass_active_);
   RHI_ASSERT(current_pipeline_);
 
-  MTLRenderCommandEncoder_id rce =
-      [cmdbuf_ renderCommandEncoderWithDescriptor:rpd];
+  MTLRenderCommandEncoder_id rce = [cmdbuf_ renderCommandEncoderWithDescriptor:rpd];
   [rpd release];
-  [rce setRenderPipelineState:current_pipeline_->built_pipelines_.at(
-                                  current_renderpass_details_)];
+  [rce setRenderPipelineState:current_pipeline_->built_pipelines_.at(current_renderpass_details_)];
 
-  [rce setViewport:(MTLViewport){(double)current_viewport_.x,
-                                 (double)current_viewport_.y,
-                                 (double)current_viewport_.width,
-                                 (double)current_viewport_.height, 0.0, 1.0}];
+  [rce setViewport:(MTLViewport){(double)current_viewport_.x, (double)current_viewport_.y,
+                                 (double)current_viewport_.width, (double)current_viewport_.height, 0.0, 1.0}];
 
   [rce setTriangleFillMode:fillmode2mtl(raster_params->polygon_mode)];
   MTLCullMode cull_mode = MTLCullModeNone;
@@ -800,27 +701,21 @@ MTLRenderCommandEncoder_id MetalCommandList::pre_draw_setup() {
 
   // Set depth state
   MTLDepthStencilDescriptor *depthDescriptor = [MTLDepthStencilDescriptor new];
-  depthDescriptor.depthCompareFunction = raster_params->depth_test
-                                             ? MTLCompareFunctionGreaterEqual
-                                             : MTLCompareFunctionAlways;
+  depthDescriptor.depthCompareFunction =
+      raster_params->depth_test ? MTLCompareFunctionGreaterEqual : MTLCompareFunctionAlways;
   depthDescriptor.depthWriteEnabled = raster_params->depth_write;
-  MTLDepthStencilState_id depthState = [device_->mtl_device()
-      newDepthStencilStateWithDescriptor:depthDescriptor];
+  MTLDepthStencilState_id depthState = [device_->mtl_device() newDepthStencilStateWithDescriptor:depthDescriptor];
   [rce setDepthStencilState:depthState];
 
   // Bind vertex stage input buffers
   for (auto &[binding, buffer] : current_raster_resources_->vertex_buffers) {
-    int mapped_index =
-        binding + current_pipeline_->bind_map()->max_vert_buffer_index + 1;
-    [rce setVertexBuffer:buffer.buffer
-                  offset:buffer.offset
-                 atIndex:mapped_index];
+    int mapped_index = binding + current_pipeline_->bind_map()->max_vert_buffer_index + 1;
+    [rce setVertexBuffer:buffer.buffer offset:buffer.offset atIndex:mapped_index];
   }
 
   // Bind shader buffers & images
   if (current_shader_resource_set_) {
-    bind_mtl_shader_resources(current_shader_resource_set_.get(), rce,
-                              current_pipeline_->bind_map());
+    bind_mtl_shader_resources(current_shader_resource_set_.get(), rce, current_pipeline_->bind_map());
   }
 
   is_renderpass_active_ = true;
@@ -835,16 +730,12 @@ void MetalCommandList::draw(uint32_t num_verticies, uint32_t start_vertex) {
 
     const RasterParams *raster_params = current_pipeline_->raster_params();
 
-    [rce drawPrimitives:primtype2mtl(raster_params->prim_topology)
-            vertexStart:start_vertex
-            vertexCount:num_verticies];
+    [rce drawPrimitives:primtype2mtl(raster_params->prim_topology) vertexStart:start_vertex vertexCount:num_verticies];
     [rce endEncoding];
   }
 }
 
-void MetalCommandList::draw_instance(uint32_t num_verticies,
-                                     uint32_t num_instances,
-                                     uint32_t start_vertex,
+void MetalCommandList::draw_instance(uint32_t num_verticies, uint32_t num_instances, uint32_t start_vertex,
                                      uint32_t start_instance) {
   @autoreleasepool {
 
@@ -861,9 +752,7 @@ void MetalCommandList::draw_instance(uint32_t num_verticies,
   }
 }
 
-void MetalCommandList::draw_indexed(uint32_t num_indicies,
-                                    uint32_t start_vertex,
-                                    uint32_t start_index) {
+void MetalCommandList::draw_indexed(uint32_t num_indicies, uint32_t start_vertex, uint32_t start_index) {
   @autoreleasepool {
 
     MTLRenderCommandEncoder_id rce = pre_draw_setup();
@@ -873,17 +762,14 @@ void MetalCommandList::draw_indexed(uint32_t num_indicies,
     // indexBufferOffset must be multiple of 4. But if index type is 16 bit,
     // this math to get offset using the start_index might not work.
     // Except it does work fine for some reason.
-    size_t index_size = current_raster_resources_->index_type_enum ==
-                                (uint32_t)MTLIndexType::MTLIndexTypeUInt16
+    size_t index_size = current_raster_resources_->index_type_enum == (uint32_t)MTLIndexType::MTLIndexTypeUInt16
                             ? 2  // 16 bit
                             : 4; // 32 bit
-    size_t index_offset = current_raster_resources_->index_binding.offset +
-                          start_index * index_size;
+    size_t index_offset = current_raster_resources_->index_binding.offset + start_index * index_size;
 
     [rce drawIndexedPrimitives:primtype2mtl(raster_params->prim_topology)
                     indexCount:num_indicies
-                     indexType:(MTLIndexType)
-                                   current_raster_resources_->index_type_enum
+                     indexType:(MTLIndexType)current_raster_resources_->index_type_enum
                    indexBuffer:current_raster_resources_->index_binding.buffer
              indexBufferOffset:index_offset
                  instanceCount:1
@@ -893,28 +779,22 @@ void MetalCommandList::draw_indexed(uint32_t num_indicies,
   }
 }
 
-void MetalCommandList::draw_indexed_instance(uint32_t num_indicies,
-                                             uint32_t num_instances,
-                                             uint32_t start_vertex,
-                                             uint32_t start_index,
-                                             uint32_t start_instance) {
+void MetalCommandList::draw_indexed_instance(uint32_t num_indicies, uint32_t num_instances, uint32_t start_vertex,
+                                             uint32_t start_index, uint32_t start_instance) {
   @autoreleasepool {
 
     MTLRenderCommandEncoder_id rce = pre_draw_setup();
 
     const RasterParams *raster_params = current_pipeline_->raster_params();
 
-    size_t index_size = current_raster_resources_->index_type_enum ==
-                                (uint32_t)MTLIndexType::MTLIndexTypeUInt16
+    size_t index_size = current_raster_resources_->index_type_enum == (uint32_t)MTLIndexType::MTLIndexTypeUInt16
                             ? 2  // 16 bit
                             : 4; // 32 bit
-    size_t index_offset = current_raster_resources_->index_binding.offset +
-                          start_index * index_size;
+    size_t index_offset = current_raster_resources_->index_binding.offset + start_index * index_size;
 
     [rce drawIndexedPrimitives:primtype2mtl(raster_params->prim_topology)
                     indexCount:num_indicies
-                     indexType:(MTLIndexType)
-                                   current_raster_resources_->index_type_enum
+                     indexType:(MTLIndexType)current_raster_resources_->index_type_enum
                    indexBuffer:current_raster_resources_->index_binding.buffer
              indexBufferOffset:index_offset
                  instanceCount:num_instances
@@ -927,9 +807,7 @@ void MetalCommandList::set_line_width(float width) {
   // There is no way to set width in metal for rasterizing lines.
   return;
 }
-void MetalCommandList::image_transition(DeviceAllocation img,
-                                        ImageLayout old_layout,
-                                        ImageLayout new_layout) {}
+void MetalCommandList::image_transition(DeviceAllocation img, ImageLayout old_layout, ImageLayout new_layout) {}
 struct MetalBufferImageCopyDesc {
   // Other params
   MTLSize source_size;
@@ -944,10 +822,8 @@ struct MetalBufferImageCopyDesc {
   NSUInteger image_mip_level;
   MTLOrigin image_origin;
 };
-inline void
-buffer_image_copy_params_to_mtl(const BufferImageCopyParams &params,
-                                uint32_t buffer_offset, MTLTexture_id tex,
-                                MetalBufferImageCopyDesc *out_params) {
+inline void buffer_image_copy_params_to_mtl(const BufferImageCopyParams &params, uint32_t buffer_offset,
+                                            MTLTexture_id tex, MetalBufferImageCopyDesc *out_params) {
   out_params->buffer_offset = buffer_offset;
   uint32_t buff_width = params.buffer_row_length;
   if (buff_width == 0)
@@ -965,23 +841,18 @@ buffer_image_copy_params_to_mtl(const BufferImageCopyParams &params,
 
   out_params->image_slice = params.image_base_layer;
   out_params->image_mip_level = params.image_mip_level;
-  out_params->image_origin = MTLOriginMake(
-      params.image_offset.x, params.image_offset.y, params.image_offset.z);
-  out_params->source_size = MTLSizeMake(
-      params.image_extent.x, params.image_extent.y, params.image_extent.z);
+  out_params->image_origin = MTLOriginMake(params.image_offset.x, params.image_offset.y, params.image_offset.z);
+  out_params->source_size = MTLSizeMake(params.image_extent.x, params.image_extent.y, params.image_extent.z);
 }
 
-void MetalCommandList::buffer_to_image(DeviceAllocation dst_img,
-                                       DevicePtr src_buf,
-                                       ImageLayout img_layout,
+void MetalCommandList::buffer_to_image(DeviceAllocation dst_img, DevicePtr src_buf, ImageLayout img_layout,
                                        const BufferImageCopyParams &params) {
 
   const MetalMemory &src_buffer = device_->get_memory(src_buf.alloc_id);
   const MetalImage &dst_image = device_->get_image(dst_img.alloc_id);
 
   MetalBufferImageCopyDesc mtl_params;
-  buffer_image_copy_params_to_mtl(params, src_buf.offset,
-                                  dst_image.mtl_texture(), &mtl_params);
+  buffer_image_copy_params_to_mtl(params, src_buf.offset, dst_image.mtl_texture(), &mtl_params);
 
   flush_pending_encoder();
   @autoreleasepool {
@@ -999,17 +870,14 @@ void MetalCommandList::buffer_to_image(DeviceAllocation dst_img,
   }
 }
 
-void MetalCommandList::image_to_buffer(DevicePtr dst_buf,
-                                       DeviceAllocation src_img,
-                                       ImageLayout img_layout,
+void MetalCommandList::image_to_buffer(DevicePtr dst_buf, DeviceAllocation src_img, ImageLayout img_layout,
                                        const BufferImageCopyParams &params) {
 
   const MetalImage &src_image = device_->get_image(src_img.alloc_id);
   const MetalMemory &dst_buffer = device_->get_memory(dst_buf.alloc_id);
 
   MetalBufferImageCopyDesc mtl_params;
-  buffer_image_copy_params_to_mtl(params, dst_buf.offset,
-                                  src_image.mtl_texture(), &mtl_params);
+  buffer_image_copy_params_to_mtl(params, dst_buf.offset, src_image.mtl_texture(), &mtl_params);
 
   flush_pending_encoder();
   @autoreleasepool {
@@ -1027,11 +895,8 @@ void MetalCommandList::image_to_buffer(DevicePtr dst_buf,
   }
 }
 
-void MetalCommandList::copy_image(DeviceAllocation dst_img,
-                                  DeviceAllocation src_img,
-                                  ImageLayout dst_img_layout,
-                                  ImageLayout src_img_layout,
-                                  const ImageCopyParams &params) {
+void MetalCommandList::copy_image(DeviceAllocation dst_img, DeviceAllocation src_img, ImageLayout dst_img_layout,
+                                  ImageLayout src_img_layout, const ImageCopyParams &params) {
 
   const MetalImage &src_image = device_->get_image(src_img.alloc_id);
   const MetalImage &dst_image = device_->get_image(dst_img.alloc_id);
@@ -1039,25 +904,21 @@ void MetalCommandList::copy_image(DeviceAllocation dst_img,
   flush_pending_encoder();
   @autoreleasepool {
     MTLBlitCommandEncoder_id encoder = [cmdbuf_ blitCommandEncoder];
-    [encoder
-          copyFromTexture:src_image.mtl_texture()
-              sourceSlice:0
-              sourceLevel:0
-             sourceOrigin:MTLOriginMake(0, 0, 0)
-               sourceSize:MTLSizeMake(params.width, params.height, params.depth)
-                toTexture:dst_image.mtl_texture()
-         destinationSlice:0
-         destinationLevel:0
-        destinationOrigin:MTLOriginMake(0, 0, 0)];
+    [encoder copyFromTexture:src_image.mtl_texture()
+                 sourceSlice:0
+                 sourceLevel:0
+                sourceOrigin:MTLOriginMake(0, 0, 0)
+                  sourceSize:MTLSizeMake(params.width, params.height, params.depth)
+                   toTexture:dst_image.mtl_texture()
+            destinationSlice:0
+            destinationLevel:0
+           destinationOrigin:MTLOriginMake(0, 0, 0)];
     [encoder endEncoding];
   }
 }
 
-void MetalCommandList::blit_image(DeviceAllocation dst_img,
-                                  DeviceAllocation src_img,
-                                  ImageLayout dst_img_layout,
-                                  ImageLayout src_img_layout,
-                                  const ImageCopyParams &params) {
+void MetalCommandList::blit_image(DeviceAllocation dst_img, DeviceAllocation src_img, ImageLayout dst_img_layout,
+                                  ImageLayout src_img_layout, const ImageCopyParams &params) {
   copy_image(dst_img, src_img, dst_img_layout, src_img_layout, params);
 }
 
@@ -1066,19 +927,15 @@ MTLCommandBuffer_id MetalCommandList::finalize() {
   return cmdbuf_;
 }
 
-MetalStream::MetalStream(const MetalDevice &device,
-                         MTLCommandQueue_id mtl_command_queue, bool owns_queue)
-    : device_(&device), mtl_command_queue_(mtl_command_queue),
-      owns_queue_(owns_queue) {}
+MetalStream::MetalStream(const MetalDevice &device, MTLCommandQueue_id mtl_command_queue, bool owns_queue)
+    : device_(&device), mtl_command_queue_(mtl_command_queue), owns_queue_(owns_queue) {}
 MetalStream::~MetalStream() { destroy(); }
 
 MetalStream *MetalStream::create(const MetalDevice &device) {
   MTLCommandQueue_id compute_queue = [device.mtl_device() newCommandQueue];
   return new MetalStream(device, compute_queue, /*owns_queue=*/true);
 }
-MetalStream *
-MetalStream::create_with_external_queue(const MetalDevice &device,
-                                        MTLCommandQueue_id external_queue) {
+MetalStream *MetalStream::create_with_external_queue(const MetalDevice &device, MTLCommandQueue_id external_queue) {
   return new MetalStream(device, external_queue, /*owns_queue=*/false);
 }
 void MetalStream::destroy() {
@@ -1096,9 +953,7 @@ RhiResult MetalStream::new_command_list(CommandList **out_cmdlist) noexcept {
   return RhiResult::success;
 }
 
-StreamSemaphore
-MetalStream::submit(CommandList *cmdlist,
-                    const std::vector<StreamSemaphore> &wait_semaphores) {
+StreamSemaphore MetalStream::submit(CommandList *cmdlist, const std::vector<StreamSemaphore> &wait_semaphores) {
   MetalCommandList *cmdlist2 = (MetalCommandList *)cmdlist;
 
   MTLCommandBuffer_id cmdbuf = [cmdlist2->finalize() retain];
@@ -1107,8 +962,7 @@ MetalStream::submit(CommandList *cmdlist,
 
   return {};
 }
-StreamSemaphore MetalStream::submit_synced(
-    CommandList *cmdlist, const std::vector<StreamSemaphore> &wait_semaphores) {
+StreamSemaphore MetalStream::submit_synced(CommandList *cmdlist, const std::vector<StreamSemaphore> &wait_semaphores) {
   auto sema = submit(cmdlist, wait_semaphores);
   command_sync();
   return sema;
@@ -1133,14 +987,10 @@ DeviceCapabilityConfig collect_metal_device_caps(MTLDevice_id mtl_device) {
 
   bool family_mac2 = [mtl_device supportsFamily:MTLGPUFamilyMac2];
   bool family_apple7 = [mtl_device supportsFamily:kMTLGPUFamilyApple7];
-  bool family_apple6 =
-      [mtl_device supportsFamily:kMTLGPUFamilyApple6] | family_apple7;
-  bool family_apple5 =
-      [mtl_device supportsFamily:kMTLGPUFamilyApple5] | family_apple6;
-  bool family_apple4 =
-      [mtl_device supportsFamily:kMTLGPUFamilyApple4] | family_apple5;
-  bool family_apple3 =
-      [mtl_device supportsFamily:kMTLGPUFamilyApple3] | family_apple4;
+  bool family_apple6 = [mtl_device supportsFamily:kMTLGPUFamilyApple6] | family_apple7;
+  bool family_apple5 = [mtl_device supportsFamily:kMTLGPUFamilyApple5] | family_apple6;
+  bool family_apple4 = [mtl_device supportsFamily:kMTLGPUFamilyApple4] | family_apple5;
+  bool family_apple3 = [mtl_device supportsFamily:kMTLGPUFamilyApple3] | family_apple4;
 
   bool feature_64_bit_integer_math = family_apple3;
   bool feature_floating_point_atomics = family_apple7 | family_mac2;
@@ -1176,8 +1026,7 @@ DeviceCapabilityConfig collect_metal_device_caps(MTLDevice_id mtl_device) {
     // caps.set(DeviceCapability::spirv_has_atomic_float, 1);
     // caps.set(DeviceCapability::spirv_has_atomic_float_add, 1);
   }
-  if (feature_simd_scoped_permute_operations ||
-      feature_quad_scoped_permute_operations) {
+  if (feature_simd_scoped_permute_operations || feature_quad_scoped_permute_operations) {
     caps.set(DeviceCapability::spirv_has_subgroup_vote, 1);
     caps.set(DeviceCapability::spirv_has_subgroup_ballot, 1);
   }
@@ -1197,16 +1046,14 @@ std::unique_ptr<MetalSampler> create_sampler(id<MTLDevice> mtl_device) {
   desc.compareFunction = MTLCompareFunctionAlways;
   desc.mipFilter = MTLSamplerMipFilterLinear;
 
-  id<MTLSamplerState> mtl_sampler_state =
-      [mtl_device newSamplerStateWithDescriptor:desc];
+  id<MTLSamplerState> mtl_sampler_state = [mtl_device newSamplerStateWithDescriptor:desc];
 
   [desc release];
 
   return std::make_unique<MetalSampler>(mtl_sampler_state);
 }
 
-MetalSurface::MetalSurface(MetalDevice *device, const SurfaceConfig &config)
-    : config_(config), device_(device) {
+MetalSurface::MetalSurface(MetalDevice *device, const SurfaceConfig &config) : config_(config), device_(device) {
 
   width_ = config.width;
   height_ = config.height;
@@ -1241,30 +1088,23 @@ StreamSemaphore MetalSurface::acquire_next_image() {
   current_swap_chain_texture_ = current_drawable_.texture;
 
   if (swapchain_images_.count(current_swap_chain_texture_) == 0) {
-    swapchain_images_[current_swap_chain_texture_] =
-        device_->import_mtl_texture(current_drawable_.texture);
-    RHI_ASSERT(swapchain_images_.size() <=
-               50); // In case something goes wrong on Metal side, prevent this
-                    // map of images from growing each frame unbounded.
+    swapchain_images_[current_swap_chain_texture_] = device_->import_mtl_texture(current_drawable_.texture);
+    RHI_ASSERT(swapchain_images_.size() <= 50); // In case something goes wrong on Metal side, prevent this
+                                                // map of images from growing each frame unbounded.
   }
   return nullptr;
 }
 
-DeviceAllocation MetalSurface::get_target_image() {
-  return swapchain_images_.at(current_swap_chain_texture_);
-}
+DeviceAllocation MetalSurface::get_target_image() { return swapchain_images_.at(current_swap_chain_texture_); }
 
-void MetalSurface::present_image(
-    const std::vector<StreamSemaphore> &wait_semaphores) {
+void MetalSurface::present_image(const std::vector<StreamSemaphore> &wait_semaphores) {
 
   [current_drawable_ present];
 
   device_->wait_idle();
 }
 
-std::pair<uint32_t, uint32_t> MetalSurface::get_size() {
-  return std::make_pair(width_, height_);
-}
+std::pair<uint32_t, uint32_t> MetalSurface::get_size() { return std::make_pair(width_, height_); }
 
 int MetalSurface::get_image_count() { return (int)layer_.maximumDrawableCount; }
 
@@ -1277,12 +1117,10 @@ void MetalSurface::resize(uint32_t width, uint32_t height) {
   layer_.drawableSize = CGSizeMake(width_, height_);
 }
 
-MetalDevice::MetalDevice(MTLDevice_id mtl_device,
-                         MTLCommandQueue_id external_command_queue)
-    : mtl_device_(mtl_device) {
+MetalDevice::MetalDevice(MTLDevice_id mtl_device, MTLCommandQueue_id external_command_queue) : mtl_device_(mtl_device) {
   if (external_command_queue != nil) {
-    compute_stream_ = std::unique_ptr<MetalStream>(
-        MetalStream::create_with_external_queue(*this, external_command_queue));
+    compute_stream_ =
+        std::unique_ptr<MetalStream>(MetalStream::create_with_external_queue(*this, external_command_queue));
   } else {
     compute_stream_ = std::unique_ptr<MetalStream>(MetalStream::create(*this));
   }
@@ -1298,8 +1136,7 @@ MetalDevice *MetalDevice::create() {
   MTLDevice_id mtl_device = MTLCreateSystemDefaultDevice();
   return new MetalDevice(mtl_device);
 }
-MetalDevice *
-MetalDevice::create_with_external_queue(uint64_t external_queue_ptr) {
+MetalDevice *MetalDevice::create_with_external_queue(uint64_t external_queue_ptr) {
   MTLDevice_id mtl_device = MTLCreateSystemDefaultDevice();
   auto *queue = reinterpret_cast<MTLCommandQueue_id>(external_queue_ptr);
   return new MetalDevice(mtl_device, queue);
@@ -1313,13 +1150,11 @@ void MetalDevice::destroy() {
   }
 }
 
-std::unique_ptr<Surface>
-MetalDevice::create_surface(const SurfaceConfig &config) {
+std::unique_ptr<Surface> MetalDevice::create_surface(const SurfaceConfig &config) {
   return std::make_unique<MetalSurface>(this, config);
 }
 
-RhiResult MetalDevice::allocate_memory(const AllocParams &params,
-                                       DeviceAllocation *out_devalloc) {
+RhiResult MetalDevice::allocate_memory(const AllocParams &params, DeviceAllocation *out_devalloc) {
   if (params.export_sharing) {
     RHI_LOG_ERROR("export sharing is not available in metal");
   }
@@ -1334,11 +1169,9 @@ RhiResult MetalDevice::allocate_memory(const AllocParams &params,
   }
   MTLCPUCacheMode cpu_cache_mode = MTLCPUCacheModeDefaultCache;
   MTLResourceOptions resource_options =
-      (storage_mode << MTLResourceStorageModeShift) |
-      (cpu_cache_mode << MTLResourceCPUCacheModeShift);
+      (storage_mode << MTLResourceStorageModeShift) | (cpu_cache_mode << MTLResourceCPUCacheModeShift);
 
-  MTLBuffer_id buffer = [mtl_device_ newBufferWithLength:params.size
-                                                 options:resource_options];
+  MTLBuffer_id buffer = [mtl_device_ newBufferWithLength:params.size options:resource_options];
 
   // `newBufferWithLength:` returns nil on allocation failure (most commonly
   // when `params.size` exceeds `mtl_device_.maxBufferLength`, which on Apple
@@ -1349,10 +1182,8 @@ RhiResult MetalDevice::allocate_memory(const AllocParams &params,
   // through divide-by-zero in reverse-mode AD kernels (e.g. `.normalized()`'s
   // sqrt adjoint reloading a primal that was never actually written).
   if (buffer == nil) {
-    std::string msg =
-        "Metal newBufferWithLength:" + std::to_string(params.size) +
-        " returned nil (maxBufferLength=" +
-        std::to_string(uint64_t([mtl_device_ maxBufferLength])) + ")";
+    std::string msg = "Metal newBufferWithLength:" + std::to_string(params.size) +
+                      " returned nil (maxBufferLength=" + std::to_string(uint64_t([mtl_device_ maxBufferLength])) + ")";
     RHI_LOG_ERROR(msg);
     return RhiResult::out_of_memory;
   }
@@ -1432,20 +1263,15 @@ const MetalMemory &MetalDevice::get_memory(DeviceAllocationId alloc_id) const {
   return *reinterpret_cast<MetalMemory *>(alloc_id);
 }
 
-MetalMemory &MetalDevice::get_memory(DeviceAllocationId alloc_id) {
-  return *reinterpret_cast<MetalMemory *>(alloc_id);
-}
+MetalMemory &MetalDevice::get_memory(DeviceAllocationId alloc_id) { return *reinterpret_cast<MetalMemory *>(alloc_id); }
 
 const MetalImage &MetalDevice::get_image(DeviceAllocationId alloc_id) const {
   return *reinterpret_cast<MetalImage *>(alloc_id);
 }
 
-MetalImage &MetalDevice::get_image(DeviceAllocationId alloc_id) {
-  return *reinterpret_cast<MetalImage *>(alloc_id);
-}
+MetalImage &MetalDevice::get_image(DeviceAllocationId alloc_id) { return *reinterpret_cast<MetalImage *>(alloc_id); }
 
-RhiResult MetalDevice::map_range(DevicePtr ptr, uint64_t size,
-                                 void **mapped_ptr) {
+RhiResult MetalDevice::map_range(DevicePtr ptr, uint64_t size, void **mapped_ptr) {
   const MetalMemory &memory = get_memory(ptr.alloc_id);
 
   size_t offset = (size_t)ptr.offset;
@@ -1462,14 +1288,11 @@ RhiResult MetalDevice::map(DeviceAllocation alloc, void **mapped_ptr) {
 void MetalDevice::unmap(DevicePtr ptr) {}
 void MetalDevice::unmap(DeviceAllocation ptr) {}
 
-RhiResult MetalDevice::create_pipeline(Pipeline **out_pipeline,
-                                       const PipelineSourceDesc &src,
-                                       std::string name,
+RhiResult MetalDevice::create_pipeline(Pipeline **out_pipeline, const PipelineSourceDesc &src, std::string name,
                                        PipelineCache *cache) noexcept {
   RHI_ASSERT(src.type == PipelineSourceType::spirv_binary);
   try {
-    *out_pipeline = MetalPipeline::create_compute_pipeline(
-        *this, (const uint32_t *)src.data, src.size, name);
+    *out_pipeline = MetalPipeline::create_compute_pipeline(*this, (const uint32_t *)src.data, src.size, name);
   } catch (const std::exception &e) {
     return RhiResult::error;
   }
@@ -1486,37 +1309,33 @@ RhiResult MetalDevice::create_pipeline(Pipeline **out_pipeline,
   return RhiResult::success;
 }
 
-void get_binding_mappings(
-    spirv_cross::SmallVector<spirv_cross::Resource> *resource_list,
-    spirv_cross::CompilerMSL *compiler, MetalShaderBindingMapping *mapping,
-    bool isVertexStage, bool isCombinedSampler) {
+void get_binding_mappings(spirv_cross::SmallVector<spirv_cross::Resource> *resource_list,
+                          spirv_cross::CompilerMSL *compiler, MetalShaderBindingMapping *mapping, bool isVertexStage,
+                          bool isCombinedSampler) {
 
   for (auto &resource : *resource_list) {
     int msl_index = compiler->get_automatic_msl_resource_binding(resource.id);
     int binding = compiler->get_decoration(resource.id, spv::DecorationBinding);
     int sampler_index = -1;
     if (isCombinedSampler) {
-      sampler_index =
-          compiler->get_automatic_msl_resource_binding_secondary(resource.id);
+      sampler_index = compiler->get_automatic_msl_resource_binding_secondary(resource.id);
     }
 
-    std::pair<int, int> MSL_index_pair =
-        std::make_pair(msl_index, sampler_index);
+    std::pair<int, int> MSL_index_pair = std::make_pair(msl_index, sampler_index);
     if (isVertexStage) {
       mapping->vertex[binding] = MSL_index_pair;
-      mapping->max_vert_buffer_index =
-          std::max(mapping->max_vert_buffer_index, msl_index);
+      mapping->max_vert_buffer_index = std::max(mapping->max_vert_buffer_index, msl_index);
     } else {
       mapping->fragment[binding] = MSL_index_pair;
     }
   }
 }
 
-std::unique_ptr<Pipeline> MetalDevice::create_raster_pipeline(
-    const std::vector<PipelineSourceDesc> &src,
-    const RasterParams &raster_params,
-    const std::vector<VertexInputBinding> &vertex_inputs,
-    const std::vector<VertexInputAttribute> &vertex_attrs, std::string name) {
+std::unique_ptr<Pipeline> MetalDevice::create_raster_pipeline(const std::vector<PipelineSourceDesc> &src,
+                                                              const RasterParams &raster_params,
+                                                              const std::vector<VertexInputBinding> &vertex_inputs,
+                                                              const std::vector<VertexInputAttribute> &vertex_attrs,
+                                                              std::string name) {
 
   // (geometry shaders aren't supported in Vulkan backend either)
   RHI_ASSERT(src.size() == 2);
@@ -1547,36 +1366,27 @@ std::unique_ptr<Pipeline> MetalDevice::create_raster_pipeline(
 
     spirv_cross::CompilerMSL compiler(spv_data, src[i].size / sizeof(uint32_t));
     compiler.set_msl_options(options);
-    compiler.rename_entry_point("main",
-                                isVertexStage
-                                    ? std::string(kMetalVertFunctionName)
-                                    : std::string(kMetalFragFunctionName),
-                                isVertexStage ? spv::ExecutionModelVertex
-                                              : spv::ExecutionModelFragment);
+    compiler.rename_entry_point(
+        "main", isVertexStage ? std::string(kMetalVertFunctionName) : std::string(kMetalFragFunctionName),
+        isVertexStage ? spv::ExecutionModelVertex : spv::ExecutionModelFragment);
 
     auto *msl_string = isVertexStage ? &msl_vert_source : &msl_frag_source;
     try {
       *msl_string = compiler.compile();
     } catch (const spirv_cross::CompilerError &e) {
       std::array<char, 4096> msgbuf;
-      snprintf(msgbuf.data(), msgbuf.size(), "(spirv-cross compiler) %s: %s",
-               name.c_str(), e.what());
+      snprintf(msgbuf.data(), msgbuf.size(), "(spirv-cross compiler) %s: %s", name.c_str(), e.what());
       RHI_LOG_ERROR(msgbuf.data());
       return nullptr;
     }
 
     // Find mapping of GLSL binding to MSL index
-    spirv_cross::ShaderResources shader_res = compiler.get_shader_resources(
-        compiler.get_active_interface_variables());
+    spirv_cross::ShaderResources shader_res = compiler.get_shader_resources(compiler.get_active_interface_variables());
 
-    get_binding_mappings(&shader_res.uniform_buffers, &compiler, &mapping,
-                         isVertexStage, false);
-    get_binding_mappings(&shader_res.storage_buffers, &compiler, &mapping,
-                         isVertexStage, false);
-    get_binding_mappings(&shader_res.sampled_images, &compiler, &mapping,
-                         isVertexStage, true);
-    get_binding_mappings(&shader_res.storage_images, &compiler, &mapping,
-                         isVertexStage, false);
+    get_binding_mappings(&shader_res.uniform_buffers, &compiler, &mapping, isVertexStage, false);
+    get_binding_mappings(&shader_res.storage_buffers, &compiler, &mapping, isVertexStage, false);
+    get_binding_mappings(&shader_res.sampled_images, &compiler, &mapping, isVertexStage, true);
+    get_binding_mappings(&shader_res.storage_images, &compiler, &mapping, isVertexStage, false);
   }
 
   // Compile MSL source to MTLLibrary
@@ -1586,10 +1396,8 @@ std::unique_ptr<Pipeline> MetalDevice::create_raster_pipeline(
 
   // Get the MTLFunctions
   MetalRasterFunctions mtl_functions;
-  mtl_functions.vertex =
-      get_mtl_function(raster_libs.vertex, std::string(kMetalVertFunctionName)),
-  mtl_functions.fragment = get_mtl_function(
-      raster_libs.fragment, std::string(kMetalFragFunctionName));
+  mtl_functions.vertex = get_mtl_function(raster_libs.vertex, std::string(kMetalVertFunctionName)),
+  mtl_functions.fragment = get_mtl_function(raster_libs.fragment, std::string(kMetalFragFunctionName));
 
   // Set vertex descriptor
   MTLVertexDescriptor *vd = [MTLVertexDescriptor new];
@@ -1597,30 +1405,24 @@ std::unique_ptr<Pipeline> MetalDevice::create_raster_pipeline(
     int location = vert_attr.location;
     vd.attributes[location].format = vertexformat2mtl(vert_attr.format);
     vd.attributes[location].offset = vert_attr.offset;
-    vd.attributes[location].bufferIndex =
-        vert_attr.binding + mapping.max_vert_buffer_index + 1;
+    vd.attributes[location].bufferIndex = vert_attr.binding + mapping.max_vert_buffer_index + 1;
   }
   for (auto &vert_input : vertex_inputs) {
     int buffer_index = vert_input.binding + mapping.max_vert_buffer_index + 1;
     vd.layouts[buffer_index].stride = vert_input.stride;
     vd.layouts[buffer_index].stepFunction =
-        vert_input.instance ? MTLVertexStepFunctionPerInstance
-                            : MTLVertexStepFunctionPerVertex;
+        vert_input.instance ? MTLVertexStepFunctionPerInstance : MTLVertexStepFunctionPerVertex;
     vd.layouts[buffer_index].stepRate = 1;
   }
 
   // Create the pipeline object
-  return std::make_unique<MetalPipeline>(*this, raster_libs, mtl_functions, vd,
-                                         mapping, raster_params);
+  return std::make_unique<MetalPipeline>(*this, raster_libs, mtl_functions, vd, mapping, raster_params);
 }
 
-MTLFunction_id
-MetalDevice::get_mtl_function(MTLLibrary_id mtl_lib,
-                              const std::string &func_name) const {
+MTLFunction_id MetalDevice::get_mtl_function(MTLLibrary_id mtl_lib, const std::string &func_name) const {
 
   MTLFunction_id mtl_function = nil;
-  NSString *entry_name_ns =
-      [[NSString alloc] initWithUTF8String:func_name.c_str()];
+  NSString *entry_name_ns = [[NSString alloc] initWithUTF8String:func_name.c_str()];
   mtl_function = [mtl_lib newFunctionWithName:entry_name_ns];
   [entry_name_ns release];
   if (mtl_function == nil) {
@@ -1633,9 +1435,7 @@ MTLLibrary_id MetalDevice::get_mtl_library(const std::string &source) const {
   MTLLibrary_id mtl_library = nil;
   NSError *err = nil;
   NSString *msl_ns = [[NSString alloc] initWithUTF8String:source.c_str()];
-  mtl_library = [mtl_device_ newLibraryWithSource:msl_ns
-                                          options:nil
-                                            error:&err];
+  mtl_library = [mtl_device_ newLibraryWithSource:msl_ns options:nil error:&err];
   [msl_ns release];
 
   if (mtl_library == nil) {
@@ -1644,8 +1444,7 @@ MTLLibrary_id MetalDevice::get_mtl_library(const std::string &source) const {
       snprintf(msgbuf.data(), msgbuf.size(),
                "cannot compile metal library from source (msl_bytes=%zu): %s "
                "(code=%d)",
-               source.size(), err.localizedDescription.UTF8String,
-               (int)err.code);
+               source.size(), err.localizedDescription.UTF8String, (int)err.code);
     } else {
       // Apple's `com.apple.MTLCompilerService` returned nil library + nil
       // NSError - the XPC service dropped its connection during MSL -> AIR
@@ -1672,13 +1471,9 @@ MTLLibrary_id MetalDevice::get_mtl_library(const std::string &source) const {
   return mtl_library;
 }
 
-ShaderResourceSet *MetalDevice::create_resource_set() {
-  return new MetalShaderResourceSet(*this);
-}
+ShaderResourceSet *MetalDevice::create_resource_set() { return new MetalShaderResourceSet(*this); }
 
-RasterResources *MetalDevice::create_raster_resources() {
-  return new MetalRasterResources(this);
-}
+RasterResources *MetalDevice::create_raster_resources() { return new MetalRasterResources(this); }
 
 Stream *MetalDevice::get_compute_stream() { return compute_stream_.get(); }
 Stream *MetalDevice::get_graphics_stream() {
