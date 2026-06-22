@@ -176,7 +176,8 @@ CachedGraph &CachedGraph::operator=(CachedGraph &&other) noexcept {
 
 // Resolves ndarray parameter handles in the launch context to raw device pointers, writing them into the arg buffer
 // via `set_ndarray_ptrs`. Unlike the normal launch path, does not handle host-resident arrays (no temporary device
-// allocation or host-to-device transfer). Errors if any external array is on the host.
+// allocation or host-to-device transfer). Errors if any external array is on the host, since graph mode bakes device
+// pointers into the cached graph.
 void GraphManager::resolve_ctx_ndarray_ptrs(LaunchContextBuilder &ctx,
                                             const std::vector<std::pair<int, Callable::Parameter>> &parameters,
                                             LlvmRuntimeExecutor *executor) {
@@ -483,6 +484,8 @@ bool GraphManager::try_launch(int launch_id,
     AMDGPUDriver::get_instance().memcpy_host_to_device_async(
         cached.persistent_device_arg_buffer, ctx.get_context().arg_buffer, cached.arg_buffer_size, stream_for_setup);
   }
+  // Stage the RuntimeContext on device. Its arg_buffer / result_buffer pointers reference the persistent device
+  // buffers above; none of its fields change between graph launches so one copy is sufficient.
   AMDGPUDriver::get_instance().memcpy_host_to_device_async(cached.device_runtime_ctx, &cached.persistent_ctx,
                                                            sizeof(RuntimeContext), stream_for_setup);
   AMDGPUDriver::get_instance().stream_synchronize(stream_for_setup);
@@ -520,6 +523,9 @@ bool GraphManager::try_launch(int launch_id,
     ++total_nodes;
   };
 
+  // Each body-kernel node receives the device-side RuntimeContext pointer via the shared `cached.kernel_args`
+  // extra-config (see graph_manager.h for why all body nodes share one). Stream-parallel groups
+  // (`stream_parallel_group_id != 0`) are silently serialized inside the graph, matching the CUDA implementation.
   for (const auto &task : offloaded_tasks) {
     if (task.checkpoint_id != current_cp_id) {
       emit_yield_check_for_closed_cp();

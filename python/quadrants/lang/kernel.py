@@ -295,6 +295,7 @@ class GraphDoWhileLevel:
 
     cond_arg_name: str
     parent_id: int
+    # Resolved C++ arg index of the condition ndarray (filled during launch-arg iteration).
     cond_cpp_arg_id: int = -1
 
 
