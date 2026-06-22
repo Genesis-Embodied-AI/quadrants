@@ -167,6 +167,12 @@ Uses an AI agent to flag feature-specific code being piled into heavily-tracked 
 
 The agent reports up to 5 violations, each annotated with the host file's hotness numbers (commits / authors / size). This check is delayed by 30 minutes, to avoid running repeatedly if multiple commits pushed with a short delay between each.
 
+### Doc quality check (`check_doc_quality.yml`)
+
+Uses an AI agent to review documentation changes for an end-user audience (someone writing Quadrants kernels in Python, not a compiler engineer). For each `docs/**/*.md` file added or modified in the PR, it reads the entire current file (not just the diff) and checks two things: (1) **undefined terms** — a term a typical user is unlikely to know (specialized or internal jargon, project-specific abbreviations) must be defined at its first use in that file, either inline or via a link to a doc that defines it; (2) **end-user relevance** — internal / implementation / contributor-only material must be confined to a clearly-marked section whose heading contains "Advanced", "Under the hood", "Internals", or "Implementation".
+
+The following do not count as violations: references to public APIs that the author links to their docs and/or labels as public; brief reader-directed pointers suggesting the reader could contribute upstream or file an issue; the core public API vocabulary a user already knows (e.g. `@qd.kernel`, `@qd.func`, `qd.Template`, fields, ndarrays); and inline `FIXME`/`TODO` markers. The agent reports up to 10 violations. This check is delayed by 30 minutes, to avoid running repeatedly if multiple commits pushed with a short delay between each.
+
 ### PR change report (`pr_change_report.yml`)
 
 Posts a fresh PR comment on every push. The comment is a single line: the totals (file count, code lines added, code lines removed) formatted as a markdown link to a GitHub Check whose page contains the full per-file / per-function breakdown. "Code lines" exclude blank lines, comment-only lines, and (in Python) lines whose only token content is a string literal (i.e. docstrings and continuation lines of multi-line strings). C/C++ `/* … */` block comments are stripped before counting.
