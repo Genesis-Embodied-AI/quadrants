@@ -1,0 +1,137 @@
+name: Check doc quality
+on:
+  workflow_dispatch:
+  pull_request:
+    types:
+      - opened
+      - reopened
+      - synchronize
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+jobs:
+  check-doc-quality:
+    name: Check doc quality
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Wait using dead-reckoning for builds to finish, before running, to save AI cost, if someone pushes many commits in a row
+        run: sleep 1800
+
+      - name: Collect changed docs
+        id: changed
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          MERGE_BASE=$(git merge-base "origin/$BASE_REF" HEAD)
+
+          # List of *.md files under docs/ that were added/modified/renamed (not deleted) in this PR.
+          # Vendored third-party docs under external/ are out of scope (pathspec is anchored at docs/).
+          # We check the ENTIRE current contents of each file, not just the diff, so we only need the
+          # file list here.
+          git diff --name-only --diff-filter=d "$MERGE_BASE...HEAD" -- 'docs/' \
+            | grep -E '\.md$' > /tmp/changed_docs.txt || true
+
+          if [ ! -s /tmp/changed_docs.txt ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "No documentation (.md) files changed."
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+            echo "Changed docs:"
+            cat /tmp/changed_docs.txt
+          fi
+
+      - name: Install Cursor CLI
+        if: steps.changed.outputs.skip != 'true'
+        run: |
+          curl https://cursor.com/install -fsS | bash
+          echo "$HOME/.cursor/bin" >> $GITHUB_PATH
+
+      - name: Check doc quality with Cursor agent
+        if: steps.changed.outputs.skip != 'true'
+        env:
+          CURSOR_API_KEY: ${{ secrets.CURSOR_KEY_HUGH }}
+        run: |
+          RESULT=$(agent -p "$(cat <<'PROMPT'
+          You are reviewing the documentation in this PR for end-user quality.
+
+          /tmp/changed_docs.txt contains a newline-separated list of Markdown (.md) doc files (paths
+          relative to the repo root) that were added or modified in this PR. For EACH file in that
+          list, read the FULL current contents of the file (not just the diff) and review it against
+          the two rules below.
+
+          Target audience: an *end user* of Quadrants. That is, someone who writes GPU programs in
+          Python using the Quadrants library (`@qd.kernel`, `@qd.func`, ndarrays, fields, etc.).
+          Assume the reader:
+          - is comfortable with Python and has general familiarity with everyday GPU programming
+            ideas (a GPU, threads, host vs device, global memory, launching work);
+          - is NOT a compiler engineer and does NOT know Quadrants' internal implementation — its IR,
+            codegen, RHI / backend C++ code, pass pipeline, SNode internals, build system, etc. —
+            unless the doc itself explains it.
+
+          RULE 1 — Undefined terms.
+          Scan each doc for terms a typical Quadrants user is unlikely to already know: Quadrants-
+          specific concepts and APIs, project-specific abbreviations, internal subsystem names, and
+          specialized GPU/compiler jargon that goes beyond the everyday GPU knowledge described above.
+          A term is considered DEFINED if, at its first occurrence in that file, it is explained
+          inline (a sentence or parenthetical that tells the reader what it means) OR linked to
+          another doc/section that defines it (a Markdown link). Plain Python / everyday GPU terms
+          that the target reader already knows do NOT need a definition.
+          The reader is also assumed to know Quadrants' basic/core public API — the surface
+          introduced in the getting-started guide and used in everyday kernel writing (e.g.
+          `@qd.kernel`, `@qd.func`, `qd.Template`, fields, ndarrays, scalar dtypes like `qd.i32`,
+          `qd.init`, `qd.sync`). These core, commonly-used APIs do NOT need a definition or link at
+          first use. Rule 1 targets terms BEYOND this core vocabulary: less-common or specialized
+          APIs, internal subsystem names, project-specific abbreviations, and specialized
+          GPU/compiler jargon.
+          VIOLATION: a term the target reader probably does not know is used at its first occurrence
+          in the file without being defined there.
+
+          RULE 2 — End-user relevance.
+          A doc should only contain information that is useful to an end user. Internal /
+          implementation / contributor-only material (compiler internals, IR/codegen/backend
+          mechanics, "how it works inside", maintenance notes, etc.) is allowed ONLY if it is
+          confined to a clearly delimited section whose heading marks it as such — e.g. a heading
+          containing "Advanced", "Under the hood", "Internals", or "Implementation". Body text in a
+          dedicated such section, or a doc that is itself explicitly an advanced/internal reference,
+          is fine.
+          The following are NOT scope violations (they are useful to end users) even when they
+          appear outside an advanced/internals section:
+          - References to public, user-facing APIs. You do NOT need to independently work out
+            whether a symbol is public — rely on the author's signals: if the symbol is linked to
+            its documentation (a Markdown link) and/or explicitly presented as a public,
+            user-facing API, treat references to it, and descriptions of how user-facing features
+            build on or compose with it, as in scope rather than internal material. (An unlinked,
+            unexplained symbol that reads like an internal may still be an undefined term under
+            Rule 1.)
+          - Brief, optional, reader-directed suggestions that the reader could contribute upstream
+            or file an issue (e.g. "if you need X, consider opening a PR / contributing it / filing
+            an issue"). These are acceptable escape hatches for an open-source audience. This
+            carve-out covers the suggestion ITSELF ONLY; it does NOT extend to documenting how to
+            design, implement, or maintain quadrants internals (e.g. walking through how such a
+            contribution would work internally), which remains a violation.
+          - FIXME / TODO markers left inline in a doc (e.g. "(FIXME: add stream.md)"). These are
+            authoring notes; ignore them entirely — do not flag the marker or its contents.
+          VIOLATION: internal / non-end-user material (subject to the carve-outs above) appears
+          outside of such a clearly-marked advanced / under-the-hood section.
+
+          Read each listed file in full before judging it. You may open any other file in the repo
+          (e.g. linked docs) to verify whether a term is defined elsewhere. Do NOT modify any files.
+          Be precise and conservative: only flag clear violations, not borderline cases. Judge each
+          file independently. Stop after finding 10 violations in total.
+
+          If there are NO violations, your final output must start with the word PASS.
+          If there ARE violations, your final output must start with the word FAIL, followed by a list
+          of violations (up to 10), one per line, in the format:
+          <filepath>: [term|scope]: <brief description>
+          where [term] is a Rule 1 violation and [scope] is a Rule 2 violation.
+          PROMPT
+          )" --model claude-4.6-opus-high-thinking --mode ask --output-format text --trust)
+
+          echo "$RESULT"
+          if echo "$RESULT" | grep -qE "^FAIL([[:space:]]|$)"; then
+            exit 1
+          fi
