@@ -31,7 +31,8 @@
 #include "quadrants/rhi/cuda/cuda_driver.h"
 
 // Pre-built fatbins -- see `scripts/build_checkpoint_gate_fatbin.py` and
-// `scripts/build_checkpoint_yield_check_fatbin.py` for the regeneration commands.
+// `scripts/build_checkpoint_yield_check_fatbin.py` for the regeneration commands. Both are bundled to cover sm_90 /
+// sm_100 / sm_120 (the SM 9.0+ tiers that support conditional-graph nodes).
 #include "quadrants/runtime/cuda/checkpoint_gate_fatbin.h"
 #include "quadrants/runtime/cuda/checkpoint_yield_check_fatbin.h"
 

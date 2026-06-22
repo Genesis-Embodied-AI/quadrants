@@ -381,13 +381,12 @@ class QD_DLL_EXPORT GfxRuntime {
   // observes a non-zero `yield_on=` flag.
   int last_yield_cp_id_on_last_call_{-1};
 
-  // GPU-side checkpoint gating (Vulkan / Metal). Lazily-built generic gate + yield-check pipelines
-  // (one per `GfxRuntime`, shared across every yielding-capable kernel). The gate shader is
+  // GPU-side checkpoint gating (Vulkan / Metal). Lazily-built generic gate + yield-check pipelines (one per
+  // `GfxRuntime`, shared across every yielding-capable kernel). The gate shader is
   // `quadrants/codegen/spirv/checkpoint_gate_shader.{h,cpp}`; the yield-check shader is
-  // `quadrants/codegen/spirv/checkpoint_yield_check_shader.{h,cpp}`. Both are vanilla compute
-  // shaders (no capability requirements beyond `OpAtomicCompareExchange`, universal across the
-  // Quadrants-supported Vulkan / Metal feature set). See `runtime/gfx/checkpoint_launch.cpp` for
-  // the orchestration that uses them.
+  // `quadrants/codegen/spirv/checkpoint_yield_check_shader.{h,cpp}`. Both are vanilla compute shaders (no capability
+  // requirements beyond `OpAtomicCompareExchange`, universal across the Quadrants-supported Vulkan / Metal feature
+  // set). See `runtime/gfx/checkpoint_launch.cpp` for the orchestration that uses them.
   std::unique_ptr<Pipeline> checkpoint_gate_pipeline_{nullptr};
   std::unique_ptr<Pipeline> checkpoint_yield_check_pipeline_{nullptr};
 
