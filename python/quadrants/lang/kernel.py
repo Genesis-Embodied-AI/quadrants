@@ -588,10 +588,10 @@ class Kernel(FuncBase):
             template_num = 0
             i_out = 0
             # Hoist the `kernel has any yield_on= checkpoint` predicate out of the per-arg loop so non-checkpoint
-            # kernels (the overwhelming majority) skip the helper function call entirely on every arg. The helpers
-            # themselves early-return on empty `checkpoint_yield_on_args`, but the per-call Python frame cost still
-            # showed up as a ~3-5% per-launch regression on arg-heavy CPU benchmarks.
-            _kernel_has_yield_on_checkpoint = bool(self.checkpoint_yield_on_args)
+            # kernels (the overwhelming majority) skip the helper function call entirely on every arg. Gated on
+            # `use_checkpoints` first so non-checkpoint kernels pay only one attribute lookup, not the list-truthy
+            # check on every cache-miss build.
+            _kernel_has_yield_on_checkpoint = self.use_checkpoints and bool(self.checkpoint_yield_on_args)
             if _kernel_has_yield_on_checkpoint:
                 _checkpoint_helpers.init_yield_on_arg_id_table(self)
             for i_in, val in enumerate(args):
@@ -688,15 +688,20 @@ class Kernel(FuncBase):
                 )
             for _gdw_level in self.graph_do_while_levels:
                 launch_ctx.add_graph_do_while_level(_gdw_level.cond_cpp_arg_id, _gdw_level.parent_id)
-            if self.checkpoint_yield_on_args:
-                _checkpoint_helpers.forward_yield_on_table_to_ctx(self, launch_ctx)
-            # `_resume_from_checkpoint` is `None` for fresh launches (host-side default 0 in `LaunchContextBuilder`,
-            # which means "run every checkpoint"). When `Kernel.resume` plumbs an int through, copy it onto the launch
-            # context so the GraphManager's `launch_cached_graph` memcpys it into the device-side `resume_point` slot
-            # instead of clearing to 0. Slice 2 implementation; pre-CUDA-12.4 / non-CUDA backends ignore the value since
-            # they don't have a resume_point slot today (slices 4-6 will add an indirect-dispatch equivalent).
-            if _resume_from_checkpoint is not None:
-                launch_ctx.resume_from_checkpoint = int(_resume_from_checkpoint)
+            # Single `use_checkpoints` gate around the entire checkpoint-wiring block so non-checkpoint kernels skip
+            # both per-launch checks (yield-on table forward + resume_point copy) with one attribute lookup. Matches
+            # the equivalent fast-path gate in `__call__`.
+            if self.use_checkpoints:
+                if self.checkpoint_yield_on_args:
+                    _checkpoint_helpers.forward_yield_on_table_to_ctx(self, launch_ctx)
+                # `_resume_from_checkpoint` is `None` for fresh launches (host-side default 0 in
+                # `LaunchContextBuilder`, which means "run every checkpoint"). When `Kernel.resume` plumbs an int
+                # through, copy it onto the launch context so the GraphManager's `launch_cached_graph` memcpys it into
+                # the device-side `resume_point` slot instead of clearing to 0. Slice 2 implementation;
+                # pre-CUDA-12.4 / non-CUDA backends ignore the value since they don't have a resume_point slot today
+                # (slices 4-6 will add an indirect-dispatch equivalent).
+                if _resume_from_checkpoint is not None:
+                    launch_ctx.resume_from_checkpoint = int(_resume_from_checkpoint)
             stream_handle = qd_stream.handle if qd_stream is not None else 0
             if stream_handle:
                 prog.set_current_cuda_stream(stream_handle)
@@ -785,15 +790,23 @@ class Kernel(FuncBase):
     @_shell_pop_print
     def __call__(self, *py_args, **kwargs) -> Any:
         qd_stream = kwargs.pop("qd_stream", None)
-        # Pop the resume cookie before anything else touches kwargs -- the AST mapper sees user parameter names only, so
-        # a stray `from_checkpoint=` would raise "unexpected kwarg". `_resume_from_checkpoint` is the resolved cp_id to
-        # copy into the device-side `resume_point` slot before launch; `None` means "fresh start, reset to 0". Plumbed
-        # via `Kernel.resume()` only; users do not pass this directly.
-        _resume_from_checkpoint = kwargs.pop("_qd_from_checkpoint", None)
-        # `validate_resume_cookie` only does work when a resume cookie was actually passed; skip the function call
-        # entirely otherwise so the dominant non-resume call path stays clear of the checkpoint helpers.
-        if _resume_from_checkpoint is not None:
-            _checkpoint_helpers.validate_resume_cookie(self, _resume_from_checkpoint)
+        # `use_checkpoints` is the kernel-construction-time flag set by `@qd.kernel(graph=True, checkpoints=True)`. The
+        # `_qd_from_checkpoint` kwarg can only be injected by `QuadrantsCallable.resume()`, which is the user-facing
+        # entry that requires `use_checkpoints=True`. So for the dominant (non-checkpoint) launch path we can skip the
+        # entire resume-cookie / GraphStatus surface with a single attribute lookup, keeping per-launch overhead in line
+        # with `main`. The same single gate also guards the post-launch `maybe_build_graph_status` branch.
+        if self.use_checkpoints:
+            # Pop the resume cookie before anything else touches kwargs -- the AST mapper sees user parameter names
+            # only, so a stray `from_checkpoint=` would raise "unexpected kwarg". `_resume_from_checkpoint` is the
+            # resolved cp_id to copy into the device-side `resume_point` slot before launch; `None` means "fresh start,
+            # reset to 0". Plumbed via `Kernel.resume()` only; users do not pass this directly.
+            _resume_from_checkpoint = kwargs.pop("_qd_from_checkpoint", None)
+            # `validate_resume_cookie` only does work when a resume cookie was actually passed; skip the function call
+            # entirely otherwise so the dominant non-resume call path stays clear of the checkpoint helpers.
+            if _resume_from_checkpoint is not None:
+                _checkpoint_helpers.validate_resume_cookie(self, _resume_from_checkpoint)
+        else:
+            _resume_from_checkpoint = None
         if qd_stream is not None and self.autodiff_mode != _NONE:
             raise RuntimeError(
                 "qd_stream is not compatible with autodiff kernels. Streams cannot be used with "
@@ -866,9 +879,19 @@ class Kernel(FuncBase):
         kernel_cpp = self.materialized_kernels[key]
         compiled_kernel_data = self.compiled_kernel_data_by_key.get(key, None)
         self.launch_observations.found_kernel_in_materialize_cache = compiled_kernel_data is not None
-        # Translate the user-supplied `from_checkpoint=` label into the dense, source-order internal cp_id the runtime
-        # uses. Translation happens here (after `ensure_compiled`) because `checkpoint_user_labels_by_cp_id` is
-        # populated during AST processing inside `ensure_compiled`.
+        # Hot-path fast lane: for non-checkpoint kernels (`use_checkpoints=False`), skip every piece of checkpoint
+        # plumbing -- no label translation, no extra kwarg on `launch_kernel`, no post-launch GraphStatus build. This
+        # restores per-launch overhead to parity with `main` for the overwhelming majority of kernels (~120k launches/s
+        # on field-CPU benchmarks; every Python-frame nanosecond here shows up as 1-4% on small envs).
+        if not self.use_checkpoints:
+            ret = self.launch_kernel(key, kernel_cpp, compiled_kernel_data, *py_args, qd_stream=qd_stream)
+            if compiled_kernel_data is None:
+                assert self._last_compiled_kernel_data is not None
+                self.compiled_kernel_data_by_key[key] = self._last_compiled_kernel_data
+            return ret
+        # Checkpoint-enabled slow path: translate the user-supplied `from_checkpoint=` label into the dense,
+        # source-order internal cp_id the runtime uses. Translation happens here (after `ensure_compiled`) because
+        # `checkpoint_user_labels_by_cp_id` is populated during AST processing inside `ensure_compiled`.
         if _resume_from_checkpoint is not None:
             _resume_from_checkpoint = _checkpoint_helpers.translate_user_label_to_internal_cp_id(
                 self, _resume_from_checkpoint
