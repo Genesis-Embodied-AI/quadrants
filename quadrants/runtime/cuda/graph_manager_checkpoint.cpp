@@ -26,6 +26,9 @@
 
 #include "quadrants/runtime/cuda/graph_manager.h"
 
+#include <cstdlib>
+#include <unordered_map>
+
 #include "quadrants/common/logging.h"
 #include "quadrants/rhi/cuda/cuda_context.h"
 #include "quadrants/rhi/cuda/cuda_driver.h"
@@ -117,6 +120,123 @@ void GraphManager::ensure_checkpoint_yield_check_kernel_loaded() {
 
   driver.module_get_function(&yield_check_kernel_func_, yield_check_kernel_module_, "_qd_checkpoint_yield_check");
   QD_TRACE("Loaded qd.checkpoint yield-check kernel from pre-built fatbin");
+}
+
+CheckpointBuildPlan GraphManager::compute_checkpoint_plan_for_build(
+    const std::vector<OffloadedTask> &offloaded_tasks,
+    const LaunchContextBuilder &ctx,
+    bool use_graph_do_while) {
+  CheckpointBuildPlan plan;
+
+  // Scan for qd.checkpoint() metadata once: any task with `checkpoint_id >= 0` opts the kernel into the IF-conditional
+  // path. We need this before constructing CachedGraph so the latter can allocate the `resume_point` and `yield_signal`
+  // scalars exactly when (and only when) they will be referenced.
+  {
+    int prev_cp = -1;
+    for (const auto &task : offloaded_tasks) {
+      if (task.checkpoint_id >= 0) {
+        plan.has_checkpoints = true;
+        if (task.checkpoint_id != prev_cp) {
+          ++plan.num_distinct_checkpoints;
+          prev_cp = task.checkpoint_id;
+        }
+        if (task.checkpoint_id > plan.max_cp_id) {
+          plan.max_cp_id = task.checkpoint_id;
+        }
+      } else {
+        prev_cp = -1;
+      }
+    }
+  }
+
+  // Determine which checkpoints actually have a resolved `yield_on=` ndarray this launch. Only those need a per-cp
+  // persistent slot + a yield-check kernel inside the IF body. If every cp has a null dev_ptr, treat this graph as
+  // yield-free even if the kernel declared yield_on= for some cp (covers the case where the user passes the same
+  // kernel without a ready ndarray -- though `set_args` should reject that earlier; this is defence in depth).
+  for (void *p : ctx.checkpoint_yield_on_dev_ptrs) {
+    if (p) {
+      plan.has_yield = true;
+      break;
+    }
+  }
+
+  // Unsupported combined case: a `qd.checkpoint()` block whose body contains a nested `qd.graph_do_while` (one cp_id
+  // spanning more than one loop level). build_level's per-level IF grouping assumes a checkpoint's tasks are flat
+  // within a single level, so fall back to the non-graph launch path (correct results, just no on-device gating)
+  // rather than build a wrong graph.
+  if (plan.has_checkpoints && use_graph_do_while) {
+    std::unordered_map<int, int> cp_first_level;
+    for (const auto &task : offloaded_tasks) {
+      if (task.checkpoint_id >= 0) {
+        auto [iter, inserted] = cp_first_level.emplace(task.checkpoint_id, task.graph_do_while_level_id);
+        if (!inserted && iter->second != task.graph_do_while_level_id) {
+          QD_INFO(
+              "graph=True: a qd.checkpoint() block containing a nested qd.graph_do_while is not yet "
+              "supported on the CUDA graph path; falling back to the non-graph launch.");
+          plan.reject_graph_build = true;
+          return plan;
+        }
+      }
+    }
+  }
+
+  // On SM 9.0+ the checkpoint gating uses CUDA 12.4+ conditional-graph-node IF bodies driven by the gate kernel; on
+  // pre-Hopper (SM < 90) the gate kernel is not available (conditional graph nodes need SM 9.0+) and we instead build
+  // a flat graph where every body kernel still launches as a node but reads the codegen-emitted prologue and
+  // self-early-returns when its cp_id is skipped or another checkpoint has yielded. Both paths still need the
+  // yield-check kernel when `has_yield` is true -- the yield-check kernel uses only atomicCAS and direct pointer
+  // writes (no device-runtime calls), so its fatbin targets every SM we support.
+  if (plan.has_checkpoints) {
+    ensure_checkpoint_gate_kernel_loaded();
+    if (!gate_kernel_func_) {
+      // Pre-Hopper CUDA: gate kernel intentionally not loaded. Switch to the flat-graph path (codegen prologue gates
+      // each body kernel from inside). This path requires the yield-check kernel too when `has_yield` is set, and
+      // that fatbin does cover pre-Hopper.
+      plan.use_pre_hopper_flat_graph = true;
+    } else if (std::getenv("QD_CUDA_FORCE_FLAT_CHECKPOINT_GRAPH") != nullptr) {
+      // Debug / test knob: force the pre-Hopper flat-graph path even on SM 9.0+. Lets the checkpoint-prologue +
+      // flat-graph path be exercised on Hopper+ hardware (the only kind most CI runners and dev boxes have) without
+      // waiting for a pre-Hopper machine. The gate kernel is loaded but ignored; build_level's flat-graph branch
+      // chains every body kernel into the level's graph and relies on the codegen-emitted prologue for gating,
+      // identical to the pre-Hopper code path.
+      plan.use_pre_hopper_flat_graph = true;
+      QD_TRACE("QD_CUDA_FORCE_FLAT_CHECKPOINT_GRAPH=1 set; using pre-Hopper flat-graph path on SM 9.0+");
+    }
+    if (plan.has_yield) {
+      ensure_checkpoint_yield_check_kernel_loaded();
+      if (!yield_check_kernel_func_) {
+        plan.reject_graph_build = true;
+        return plan;
+      }
+    }
+  }
+
+  return plan;
+}
+
+void GraphManager::allocate_checkpoint_yield_on_slots(CachedGraph &cached,
+                                                      const LaunchContextBuilder &ctx,
+                                                      const CheckpointBuildPlan &plan) {
+  // Pre-size the per-checkpoint ptr-slot table to (max_cp_id + 1) so we can index by cp_id directly. Slots for
+  // checkpoints without `yield_on=` stay `nullptr` and are skipped at launch time. Only allocate when this graph
+  // actually has yield-bearing checkpoints -- otherwise the table stays empty and `launch_cached_graph`'s memcpy loop
+  // iterates zero times.
+  if (!(plan.has_yield && plan.max_cp_id >= 0)) {
+    return;
+  }
+  cached.checkpoint_yield_on_ptr_slots.assign((std::size_t)plan.max_cp_id + 1, nullptr);
+  for (std::size_t cp = 0;
+       cp < ctx.checkpoint_yield_on_dev_ptrs.size() && (int)cp <= plan.max_cp_id;
+       ++cp) {
+    if (ctx.checkpoint_yield_on_dev_ptrs[cp]) {
+      void *slot = nullptr;
+      CUDADriver::get_instance().malloc(&slot, sizeof(void *));
+      // Initial pointer write -- subsequent launches re-memcpy via launch_cached_graph.
+      void *user_ptr = ctx.checkpoint_yield_on_dev_ptrs[cp];
+      CUDADriver::get_instance().memcpy_host_to_device(slot, &user_ptr, sizeof(void *));
+      cached.checkpoint_yield_on_ptr_slots[cp] = slot;
+    }
+  }
 }
 
 }  // namespace cuda

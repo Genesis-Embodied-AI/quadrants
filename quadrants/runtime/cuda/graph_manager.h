@@ -12,6 +12,20 @@
 namespace quadrants::lang {
 namespace cuda {
 
+// Result of the up-front qd.checkpoint() scan over a kernel's `offloaded_tasks`. Computed once at graph-build time by
+// `compute_checkpoint_plan_for_build` (defined in `graph_manager_checkpoint.cpp`) and threaded through the rest of the
+// build so the construction of `CachedGraph`, the yield-on slot allocation, and `build_level`'s per-task dispatch all
+// see the same checkpoint shape. `reject_graph_build == true` means the caller (`try_launch`) should return false and
+// fall back to the non-graph launch path.
+struct CheckpointBuildPlan {
+  bool has_checkpoints{false};
+  bool has_yield{false};
+  std::size_t num_distinct_checkpoints{0};
+  int max_cp_id{-1};
+  bool use_pre_hopper_flat_graph{false};
+  bool reject_graph_build{false};
+};
+
 struct CudaKernelNodeParams {
   void *func;
   unsigned int gridDimX;
@@ -161,6 +175,19 @@ class GraphManager {
   void ensure_cond_with_yield_kernel_loaded();
   void ensure_checkpoint_gate_kernel_loaded();
   void ensure_checkpoint_yield_check_kernel_loaded();
+  // Scan offloaded_tasks + ctx once to derive the shape of the checkpoint build (how many distinct cp_ids, which need
+  // yield-check, whether to use the SM 9.0+ IF-node path or the pre-Hopper flat-graph fallback, etc.). Loads the gate /
+  // yield-check fatbins lazily as a side-effect (so the caller can see `gate_kernel_func_` populated by the time it
+  // returns). Defined in `graph_manager_checkpoint.cpp`.
+  CheckpointBuildPlan compute_checkpoint_plan_for_build(const std::vector<OffloadedTask> &offloaded_tasks,
+                                                        const LaunchContextBuilder &ctx,
+                                                        bool use_graph_do_while);
+  // Allocate the per-checkpoint yield-on indirection slots on the cached graph (one slot per cp_id <= max_cp_id that
+  // has a resolved `yield_on=` ndarray pointer this launch). No-op when `plan.has_yield` is false. Defined in
+  // `graph_manager_checkpoint.cpp`.
+  void allocate_checkpoint_yield_on_slots(CachedGraph &cached,
+                                          const LaunchContextBuilder &ctx,
+                                          const CheckpointBuildPlan &plan);
   // Create a conditional handle on `graph` with default launch value 1 (CU_GRAPH_COND_ASSIGN_DEFAULT). Must be called
   // before any re-arm init kernel that references the handle, so the handle value is baked into that kernel's params.
   unsigned long long create_cond_handle(void *graph);
