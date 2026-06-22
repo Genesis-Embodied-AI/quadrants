@@ -612,9 +612,7 @@ class Kernel(FuncBase):
                         if self.arg_metas[i_in].name == _gdw_level.cond_arg_name:
                             _gdw_level.cond_cpp_arg_id = i_out - template_num
                 if _kernel_has_yield_on_checkpoint:
-                    _checkpoint_helpers.maybe_record_yield_on_arg(
-                        self, self.arg_metas[i_in].name, i_out - template_num
-                    )
+                    _checkpoint_helpers.maybe_record_yield_on_arg(self, self.arg_metas[i_in].name, i_out - template_num)
                 num_args_, is_launch_ctx_cacheable_ = self._recursive_set_args(
                     self.used_py_dataclass_parameters_by_key_enforcing[key],
                     self.arg_metas[i_in].name,
