@@ -122,10 +122,9 @@ void GraphManager::ensure_checkpoint_yield_check_kernel_loaded() {
   QD_TRACE("Loaded qd.checkpoint yield-check kernel from pre-built fatbin");
 }
 
-CheckpointBuildPlan GraphManager::compute_checkpoint_plan_for_build(
-    const std::vector<OffloadedTask> &offloaded_tasks,
-    const LaunchContextBuilder &ctx,
-    bool use_graph_do_while) {
+CheckpointBuildPlan GraphManager::compute_checkpoint_plan_for_build(const std::vector<OffloadedTask> &offloaded_tasks,
+                                                                    const LaunchContextBuilder &ctx,
+                                                                    bool use_graph_do_while) {
   CheckpointBuildPlan plan;
 
   // Scan for qd.checkpoint() metadata once: any task with `checkpoint_id >= 0` opts the kernel into the IF-conditional
@@ -225,9 +224,7 @@ void GraphManager::allocate_checkpoint_yield_on_slots(CachedGraph &cached,
     return;
   }
   cached.checkpoint_yield_on_ptr_slots.assign((std::size_t)plan.max_cp_id + 1, nullptr);
-  for (std::size_t cp = 0;
-       cp < ctx.checkpoint_yield_on_dev_ptrs.size() && (int)cp <= plan.max_cp_id;
-       ++cp) {
+  for (std::size_t cp = 0; cp < ctx.checkpoint_yield_on_dev_ptrs.size() && (int)cp <= plan.max_cp_id; ++cp) {
     if (ctx.checkpoint_yield_on_dev_ptrs[cp]) {
       void *slot = nullptr;
       CUDADriver::get_instance().malloc(&slot, sizeof(void *));
