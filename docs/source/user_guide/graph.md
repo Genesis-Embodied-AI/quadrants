@@ -225,7 +225,7 @@ When the body of a checkpoint writes a non-zero value into `yield_on[()]`:
 The framework never writes into your `yield_on` buffer — you own it end-to-end. That means:
 
 - Before the **first** launch, initialise it to `0` (a freshly allocated `qd.ndarray` is not guaranteed to be zeroed).
-- Before each **resume** launch, reset it to `0` (otherwise the body of the same checkpoint sees the stale non-zero value and yields again on the same condition, looping forever).
+- :warning: Before each **resume** launch, reset it to `0` (otherwise the body of the same checkpoint sees the stale non-zero value and yields again on the same condition, looping forever).
 
 ### Host-side yield / resume loop
 
