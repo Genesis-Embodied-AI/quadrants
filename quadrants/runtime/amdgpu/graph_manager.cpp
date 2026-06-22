@@ -325,8 +325,8 @@ bool GraphManager::launch_cached_graph(CachedGraph &cached, LaunchContextBuilder
   auto *stream = AMDGPUContext::get_instance().get_stream();
 
   if (cached.arg_buffer_size > 0) {
-    // Async HtoD on the launch stream: the subsequent `graph_launch` is queued on the same stream, so the kernel nodes
-    // are ordered after the arg-buffer upload without a host-side barrier.
+    // Async HtoD on the launch stream: the subsequent `graph_launch` is queued on the same stream,
+    // so the kernel nodes are ordered after the arg-buffer upload without a host-side barrier.
     AMDGPUDriver::get_instance().memcpy_host_to_device_async(
         cached.persistent_device_arg_buffer, ctx.get_context().arg_buffer, cached.arg_buffer_size, stream);
   }
@@ -399,9 +399,9 @@ bool GraphManager::try_launch(int launch_id,
               "values; remove graph=True or avoid returning values");
 
   // Adstack-bearing kernels cannot go through the graph path. See the matching comment in
-  // `runtime/cuda/graph_manager.cpp::try_launch` for the full rationale: the per-task adstack setup runs host-side
-  // between the serial range_for-bounds kernel and the range_for kernel itself, and there is no host hook between graph
-  // nodes.
+  // `runtime/cuda/graph_manager.cpp::try_launch` for the full rationale: the per-task adstack
+  // setup runs host-side between the serial range_for-bounds kernel and the range_for kernel
+  // itself, and there is no host hook between graph nodes.
   for (const auto &task : offloaded_tasks) {
     QD_ERROR_IF(!task.ad_stack.allocas.empty(),
                 "graph=True is not supported for kernels that use the reverse-mode autodiff stack "
