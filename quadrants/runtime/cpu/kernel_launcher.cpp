@@ -152,6 +152,19 @@ void KernelLauncher::launch_offloaded_tasks(LaunchContextBuilder &ctx, const Con
   prepare_offloaded_tasks(ctx, launcher_ctx.task_funcs, launcher_ctx.ad_stacks);
   // Span every task's `publish_adstack_metadata` call with one shared read cache.
   SizeExprLaunchScope launch_scope;
+  // Fast path: this kernel has no `qd.checkpoint(...)` blocks, so the gating wrapper would do nothing useful on every
+  // task. Skip straight to the original tight loop that calls `run_one_offloaded_task` directly -- byte-equivalent to
+  // the pre-`qd.checkpoint` hot path, no per-task extra loads / branches / function-call overhead.
+  if (!launcher_ctx.has_any_checkpoint) {
+    for (std::size_t i = 0; i < launcher_ctx.task_funcs.size(); ++i) {
+      if (!run_one_offloaded_task(ctx, i, launcher_ctx.task_funcs, launcher_ctx.ad_stacks,
+                                  launcher_ctx.num_threads_per_task)) {
+        break;
+      }
+    }
+    return;
+  }
+  // Slow path: at least one task is inside a checkpoint, so route every task through the gating wrapper.
   // Host-side equivalents of the device-side resume_point / yield_signal scalars, reset per launch.
   int32_t resume_point = (ctx.resume_from_checkpoint < 0) ? 0 : ctx.resume_from_checkpoint;
   int32_t yield_signal = -1;
@@ -191,12 +204,26 @@ void KernelLauncher::launch_offloaded_tasks_with_do_while(LaunchContextBuilder &
   }
 
   // Nested graph_do_while: drive the loop tree from the per-task level tags. Adstack setup is done once up front
-  // (nested graph_do_while + reverse-mode adstack is not a supported combination). The checkpoint gating + yield
-  // observation run inside the launch_task callback against host-side resume_point / yield_signal scalars; a yield
-  // makes every enclosing level's continue_level return false, so the yield propagates out of all loops just like the
-  // device cond-with-yield kernel.
+  // (nested graph_do_while + reverse-mode adstack is not a supported combination). When the kernel has at least one
+  // checkpoint task, the checkpoint gating + yield observation run inside the launch_task callback against host-side
+  // resume_point / yield_signal scalars; a yield makes every enclosing level's continue_level return false, so the
+  // yield propagates out of all loops just like the device cond-with-yield kernel. Otherwise we wire the lambdas
+  // straight onto `run_one_offloaded_task` / the flag check, which is byte-equivalent to the pre-`qd.checkpoint` hot
+  // path.
   prepare_offloaded_tasks(ctx, task_funcs, launcher_ctx.ad_stacks);
   SizeExprLaunchScope launch_scope;
+  if (!launcher_ctx.has_any_checkpoint) {
+    auto launch_task_fast = [&](int i) -> bool {
+      return run_one_offloaded_task(ctx, (std::size_t)i, task_funcs, launcher_ctx.ad_stacks,
+                                    launcher_ctx.num_threads_per_task);
+    };
+    auto continue_level_fast = [&](int level) -> bool {
+      return ctx.get_context().cpu_assert_failed == 0 && *static_cast<int32_t *>(levels[level].flag_dev_ptr) != 0;
+    };
+    run_graph_do_while((int)task_funcs.size(), graph_do_while_level_per_task, levels, launch_task_fast,
+                       continue_level_fast);
+    return;
+  }
   int32_t resume_point = (ctx.resume_from_checkpoint < 0) ? 0 : ctx.resume_from_checkpoint;
   int32_t yield_signal = -1;
   auto launch_task = [&](int i) -> bool {
@@ -257,34 +284,38 @@ void KernelLauncher::launch_llvm_kernel(Handle handle, LaunchContextBuilder &ctx
   // Resolve per-checkpoint `yield_on=` ndarray host pointers into `ctx.checkpoint_yield_on_dev_ptrs` so the host-branch
   // gating can read the flag after each yield-bearing checkpoint body. Mirrors
   // `cuda::GraphManager::resolve_ctx_ndarray_ptrs` but uses the already-resolved host pointers from the array_arg_ids
-  // walk above instead of separately translating DeviceAllocation handles.
-  ctx.checkpoint_yield_on_dev_ptrs.assign(ctx.checkpoint_yield_on_arg_ids.size(), nullptr);
-  for (std::size_t cp = 0; cp < ctx.checkpoint_yield_on_arg_ids.size(); ++cp) {
-    int arg_id = ctx.checkpoint_yield_on_arg_ids[cp];
-    if (arg_id < 0) {
-      continue;
+  // walk above instead of separately translating DeviceAllocation handles. Skipped wholesale for kernels with no
+  // checkpoint tasks at all -- saves a per-launch `.assign()` + two empty walks for the dominant non-checkpoint case.
+  if (launcher_ctx.has_any_checkpoint) {
+    ctx.checkpoint_yield_on_dev_ptrs.assign(ctx.checkpoint_yield_on_arg_ids.size(), nullptr);
+    for (std::size_t cp = 0; cp < ctx.checkpoint_yield_on_arg_ids.size(); ++cp) {
+      int arg_id = ctx.checkpoint_yield_on_arg_ids[cp];
+      if (arg_id < 0) {
+        continue;
+      }
+      auto data_ptr_it = ctx.array_ptrs.find({arg_id, TypeFactory::DATA_PTR_POS_IN_NDARRAY});
+      if (data_ptr_it != ctx.array_ptrs.end()) {
+        ctx.checkpoint_yield_on_dev_ptrs[cp] = data_ptr_it->second;
+      }
     }
-    auto data_ptr_it = ctx.array_ptrs.find({arg_id, TypeFactory::DATA_PTR_POS_IN_NDARRAY});
-    if (data_ptr_it != ctx.array_ptrs.end()) {
-      ctx.checkpoint_yield_on_dev_ptrs[cp] = data_ptr_it->second;
+    // Reset the cross-launch yield bookkeeping ONLY when this launch belongs to a kernel that can yield. Mirrors the
+    // CUDA path, where `GraphManager::launch_cached_graph` is the only place that touches
+    // `last_yield_cp_id_on_last_call_`; non-graph aux launches (e.g. the implicit `to_numpy()` LLVM kernel triggered
+    // by user code between a yielding launch and the host-side `GraphStatus.yielded` check) must not clobber the
+    // value.
+    //
+    // The "kernel can yield" predicate is "at least one cp has a resolved `yield_on=` arg id". Kernels with no
+    // checkpoints, or with checkpoints that all opted out of `yield_on=`, leave the previous value alone.
+    bool kernel_can_yield = false;
+    for (int arg_id : ctx.checkpoint_yield_on_arg_ids) {
+      if (arg_id >= 0) {
+        kernel_can_yield = true;
+        break;
+      }
     }
-  }
-  // Reset the cross-launch yield bookkeeping ONLY when this launch belongs to a kernel that can yield. Mirrors the CUDA
-  // path, where `GraphManager::launch_cached_graph` is the only place that touches `last_yield_cp_id_on_last_call_`;
-  // non-graph aux launches (e.g. the implicit `to_numpy()` LLVM kernel triggered by user code between a yielding launch
-  // and the host-side `GraphStatus.yielded` check) must not clobber the value.
-  //
-  // The "kernel can yield" predicate is "at least one cp has a resolved `yield_on=` arg id". Kernels with no
-  // checkpoints, or with checkpoints that all opted out of `yield_on=`, leave the previous value alone.
-  bool kernel_can_yield = false;
-  for (int arg_id : ctx.checkpoint_yield_on_arg_ids) {
-    if (arg_id >= 0) {
-      kernel_can_yield = true;
-      break;
+    if (kernel_can_yield) {
+      last_yield_cp_id_on_last_call_ = -1;
     }
-  }
-  if (kernel_can_yield) {
-    last_yield_cp_id_on_last_call_ = -1;
   }
   if (ctx.has_graph_do_while()) {
     for (const auto &level : ctx.graph_do_while_levels) {
@@ -365,11 +396,13 @@ KernelLauncher::Handle KernelLauncher::register_llvm_kernel(const LLVM::Compiled
     // same-cp_id run" optimistically; the launcher then gates the read on `ctx.checkpoint_yield_on_dev_ptrs[cp_id] !=
     // nullptr`, making the per-launch yield_on= set authoritative.
     ctx.is_last_task_of_yielding_checkpoint.assign(ctx.task_funcs.size(), false);
+    ctx.has_any_checkpoint = false;
     for (std::size_t i = 0; i < ctx.task_funcs.size(); ++i) {
       int32_t cp_id = ctx.checkpoint_id_per_task[i];
       if (cp_id < 0) {
         continue;
       }
+      ctx.has_any_checkpoint = true;
       bool is_last_in_run = (i + 1 == ctx.task_funcs.size()) || ctx.checkpoint_id_per_task[i + 1] != cp_id;
       if (is_last_in_run) {
         ctx.is_last_task_of_yielding_checkpoint[i] = true;

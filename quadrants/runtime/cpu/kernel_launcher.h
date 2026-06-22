@@ -25,6 +25,11 @@ class KernelLauncher : public LLVM::KernelLauncher {
     // checkpoint that declared `yield_on=`. Used by the host-branch gating to know exactly which task boundary to read
     // the user's yield_on flag at, instead of paying the flag-read after every task in the body.
     std::vector<bool> is_last_task_of_yielding_checkpoint;
+    // Precomputed at register time off `checkpoint_id_per_task`: `true` iff at least one task in this kernel sits
+    // inside a `qd.checkpoint(...)` block. Used to bypass the per-task `run_gated_task` wrapper for kernels that have
+    // no checkpoints at all -- those skip straight to a tight `run_one_offloaded_task` loop with no per-task gating
+    // overhead, matching the pre-`qd.checkpoint` hot path byte-for-byte.
+    bool has_any_checkpoint{false};
     // Parallel vectors to `task_funcs`: `ad_stacks[i]` points into the owning `OffloadedTask::ad_stack` (stable
     // for the kernel's lifetime) and `num_threads_per_task[i]` is the thread count used to size the heap. CPU
     // sizing is always `static_num_threads` (set by codegen to `num_cpu_threads` for non-serial tasks, 1 for
