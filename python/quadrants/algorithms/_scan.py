@@ -192,12 +192,11 @@ def _scan_total_scratch_slots(n, partials_cursor):
     ``n`` elements with its partials starting at ``partials_cursor`` (i.e. the smallest required ``capacity`` such
     that ``capacity >= return_value`` is sufficient for the entire recursion).
 
-    Mirrors the level-by-level allocation that the recursion does internally: at each level we bump
-    ``partials_cursor`` by ``B = ceil(n / BLOCK_DIM)`` and recurse on ``B``, until ``B <= BLOCK_DIM`` (base case, no
-    further partials). Callers (e.g. ``sort``) should use this helper for their *up-front* scratch
-    check so they refuse the call before any in-place mutation runs (see PR 693 review: a single-level estimate
-    misses deeper recursion levels and lets ``_twiddle_pass`` corrupt the user's keys before the recursive
-    ``RuntimeError`` fires).
+    Mirrors the level-by-level allocation that the recursion does internally: at each level we bump ``partials_cursor``
+    by ``B = ceil(n / BLOCK_DIM)`` and recurse on ``B``, until ``B <= BLOCK_DIM`` (base case, no further partials).
+    Callers (e.g. ``sort``) should use this helper for their *up-front* scratch check so they refuse the call before any
+    in-place mutation runs (see PR 693 review: a single-level estimate misses deeper recursion levels and lets
+    ``_twiddle_pass`` corrupt the user's keys before the recursive ``RuntimeError`` fires).
 
     Delegates to :func:`_level_partials_slots`, so it is host- **and** kernel-callable (branch-free arithmetic over
     an unrolled fixed loop); ``n`` / ``partials_cursor`` may be Python ``int`` s or device-read ``Expr`` s. The check
@@ -264,9 +263,9 @@ def _exclusive_scan_inplace_u32(scratch, off: int, n: int, identity_bits: int, o
 def _exclusive_scan_inplace_u64(scratch, off: int, n: int, identity_bits: int, op, dtype, partials_cursor: int):
     """8-byte sibling of :func:`_exclusive_scan_inplace_u32`. Stages through the ``Field(u64)`` scratch.
 
-    Used internally by the 64-bit ``exclusive_scan_*`` path. Mirrors the 32-bit recursion shape: tile-reduce
-    into ``scratch[partials_off : partials_off + B]``, recurse on those partials, then downsweep back over the
-    original ``scratch[off : off + n]`` to apply per-tile prefixes.
+    Used internally by the 64-bit ``exclusive_scan_*`` path. Mirrors the 32-bit recursion shape: tile-reduce into
+    ``scratch[partials_off : partials_off + B]``, recurse on those partials, then downsweep back over the original
+    ``scratch[off : off + n]`` to apply per-tile prefixes.
     """
     if n <= BLOCK_DIM:
         _scan_block_inplace_u64(scratch, off, n, identity_bits, op, dtype)
@@ -535,11 +534,11 @@ def exclusive_scan_max(
 # Internal: u32 / add fixed-depth exclusive-scan staircase (shared with the radix-sort histogram scan)
 # ---------------------------------------------------------------------------------------------------------------------
 #
-# This is the ``u32`` / add specialization of the exclusive-scan staircase that ``sort`` reuses for its
-# digit-histogram scan: a fixed-depth staircase of ``@qd.func`` phases (in place) emitted at kernel-compile time, so
-# ``n`` flows as a device ``Expr`` while the recursion depth is a compile-time Python int (constant launch topology).
-# Kept separate from the generic typed staircase above (``_emit_scan``) because the histogram scan is always ``u32`` /
-# add and operates in place. See ``perso_hugh/doc/qipc/qipc_device_algos_design.md``.
+# This is the ``u32`` / add specialization of the exclusive-scan staircase that ``sort`` reuses for its digit-histogram
+# scan: a fixed-depth staircase of ``@qd.func`` phases (in place) emitted at kernel-compile time, so ``n`` flows as a
+# device ``Expr`` while the recursion depth is a compile-time Python int (constant launch topology). Kept separate from
+# the generic typed staircase above (``_emit_scan``) because the histogram scan is always ``u32`` / add and operates in
+# place. See ``perso_hugh/doc/qipc/qipc_device_algos_design.md``.
 
 
 @_func

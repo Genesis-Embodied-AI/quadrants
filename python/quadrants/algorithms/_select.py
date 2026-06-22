@@ -7,9 +7,9 @@ count of selected elements to ``num_out[0]``. Each ``flags[i]`` must be exactly 
 algorithm prefix-sums ``flags`` directly as counts, so non-0/1 values produce wrong indices and counts (caller's
 responsibility, no normalization pass).
 
-Algorithm (textbook scan-based compaction), emitted as a fixed-depth staircase of ``@qd.func`` phases (call
-``select`` at the **top level** of your own ``@qd.kernel`` - e.g. a qipc ``graph=True`` parent - with the live
-count ``n`` as a device ``Expr`` and the compile-time ``log256_max_n`` phase count):
+Algorithm (textbook scan-based compaction), emitted as a fixed-depth staircase of ``@qd.func`` phases (call ``select``
+at the **top level** of your own ``@qd.kernel`` - e.g. a qipc ``graph=True`` parent - with the live count ``n`` as a
+device ``Expr`` and the compile-time ``log256_max_n`` phase count):
 
 1. Exclusive prefix-sum the ``flags`` (treated as 0 / 1) into the caller's ``u32`` scratch, producing per-element
    write indices. This reuses the same staircase phases (:func:`_reduce_phase` / :func:`_scan_downsweep_phase`) as
@@ -19,9 +19,9 @@ count ``n`` as a device ``Expr`` and the compile-time ``log256_max_n`` phase cou
 
 Scratch layout for the scan: ``scratch[0 : N]`` holds the per-element indices (i32 bit-cast to u32).
 ``scratch[N : N + b0]`` holds the level-0 partials, ``scratch[N + b0 : ...]`` deeper recursion levels (mirrors the
-device scan). The scratch is *always* u32 regardless of the element dtype, because the scan operates on
-flags-as-counts (i32) which always fit in u32; the element dtype only shows up at scatter time as
-``dst[idx] = src[i]``, which lowers per-field for struct dtypes without any scratch reinterpretation.
+device scan). The scratch is *always* u32 regardless of the element dtype, because the scan operates on flags-as-counts
+(i32) which always fit in u32; the element dtype only shows up at scatter time as ``dst[idx] = src[i]``, which lowers
+per-field for struct dtypes without any scratch reinterpretation.
 
 This is why ``select`` works on any element dtype Quadrants supports for field assignment - scalars (``i32`` / ``u32`` /
 ``f32`` / ``i64`` / ``u64`` / ``f64``) and structs (libuipc ``Vector{2,3,4}i``, ``LinearBVHAABB``, etc.).
@@ -102,11 +102,11 @@ def _emit_select_scan(flags, scratch, n, log256_max_n):
     """Emit the exclusive prefix-sum of ``flags`` (0/1 counts) into the ``u32`` index slice ``scratch[0:n]`` at
     kernel-compile time, with the per-tile partials staircase stacked at ``scratch[n:]``.
 
-    The select-specific layout of the same out-of-place staircase that backs :func:`exclusive_scan_add`: the
-    indices and the partials live in one ``u32`` buffer (indices at offset 0, partials at offset ``n``), so it can't
-    reuse ``_emit_scan`` directly (that takes a separate ``out``). ``flags`` is read-only (the scatter / count phases
-    re-read it), so the scan is out-of-place into ``scratch``. ``dtype`` is ``i32`` (flags-as-counts) staged through a
-    ``u32`` (``wide``) scratch. ``n`` flows as an ``Expr``; ``log256_max_n`` is the compile-time phase count.
+    The select-specific layout of the same out-of-place staircase that backs :func:`exclusive_scan_add`: the indices and
+    the partials live in one ``u32`` buffer (indices at offset 0, partials at offset ``n``), so it can't reuse
+    ``_emit_scan`` directly (that takes a separate ``out``). ``flags`` is read-only (the scatter / count phases re-read
+    it), so the scan is out-of-place into ``scratch``. ``dtype`` is ``i32`` (flags-as-counts) staged through a ``u32``
+    (``wide``) scratch. ``n`` flows as an ``Expr``; ``log256_max_n`` is the compile-time phase count.
     """
     _validate_log256_max_n(log256_max_n)
     if log256_max_n == 1:

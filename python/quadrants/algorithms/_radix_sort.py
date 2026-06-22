@@ -1,10 +1,10 @@
 # type: ignore
 """Device-wide LSB radix sort (one capturable launch chain).
 
-The sort is exposed as the graph-composable ``@qd.func`` :func:`sort`: call it at the **top level** of your
-own ``@qd.kernel`` to compose the sort inline with other phases in one compiled kernel / captured graph (the qipc
-path); it takes the count as a device-resident 0-d ``n`` and the params as templates, and does no host-side validation.
-Size the caller-owned ``u32`` scratch with :func:`sort_scratch_slots`.
+The sort is exposed as the graph-composable ``@qd.func`` :func:`sort`: call it at the **top level** of your own
+``@qd.kernel`` to compose the sort inline with other phases in one compiled kernel / captured graph (the qipc path); it
+takes the count as a device-resident 0-d ``n`` and the params as templates, and does no host-side validation. Size the
+caller-owned ``u32`` scratch with :func:`sort_scratch_slots`.
 
 The body is a fixed sequence of top-level ``for`` loops - each of which Quadrants offloads as its own serialized GPU
 launch, giving the implicit grid-wide synchronization the algorithm needs between phases. (This replaces an earlier
@@ -291,11 +291,11 @@ def sort(
 
     **Experimental** - this API is new and may change in a future release.
 
-    Call it at the **top level** of your own ``@qd.kernel`` (e.g. a qipc ``graph=True``
-    parent that chains it with other phases). Each phase helper's single top-level ``for`` stays its own offloaded GPU
-    launch, so the inter-phase grid-wide synchronization survives and every phase is captured as a node in the parent's
-    graph. **A ``while qd.graph_do_while(...):`` body counts as top level** - the loops directly inside it still lower
-    as separate offloaded launches with grid-wide barriers between them, so calling this func directly in a
+    Call it at the **top level** of your own ``@qd.kernel`` (e.g. a qipc ``graph=True`` parent that chains it with other
+    phases). Each phase helper's single top-level ``for`` stays its own offloaded GPU launch, so the inter-phase
+    grid-wide synchronization survives and every phase is captured as a node in the parent's graph. A
+    ``while qd.graph_do_while(...):`` body **counts as top level** - the loops directly inside it still lower as
+    separate offloaded launches with grid-wide barriers between them, so calling this func directly in a
     ``graph_do_while`` body is supported and re-sorts correctly every iteration (verified for ``n`` spanning many
     blocks). What you **must not** do is nest the call inside *ordinary* runtime control flow - another ``for``, an
     ``if``, or a plain ``while`` - which demotes the phase loops out of top-level position, collapses the per-phase

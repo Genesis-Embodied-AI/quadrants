@@ -290,12 +290,12 @@ def _reduce_pass_u64(
 # Graph-composable reduce: a fixed-depth staircase of @qd.func phases (device-resident count, compile-time depth)
 # ---------------------------------------------------------------------------------------------------------------------
 #
-# The ``reduce_{add,min,max}`` @qd.func forms below are the graph-composable reduce (the exact pattern
-# ``sort`` uses): call them at the **top level** of your own ``@qd.kernel`` (e.g. a qipc ``graph=True``
-# parent), passing the live count ``n`` as a device ``Expr`` and the recursion depth as a compile-time ``log256_max_n``.
-# ``n`` flows dynamically while ``log256_max_n`` fixes the launch topology, so one captured graph serves every count
-# ``<= BLOCK_DIM ** log256_max_n``. The identity is derived in-kernel from the element dtype and the per-block partials
-# stage through ``bit_cast``-into-scratch - see ``perso_hugh/doc/qipc/qipc_device_algos_design.md``.
+# The ``reduce_{add,min,max}`` @qd.func forms below are the graph-composable reduce (the exact pattern ``sort`` uses):
+# call them at the **top level** of your own ``@qd.kernel`` (e.g. a qipc ``graph=True`` parent), passing the live count
+# ``n`` as a device ``Expr`` and the recursion depth as a compile-time ``log256_max_n``. ``n`` flows dynamically while
+# ``log256_max_n`` fixes the launch topology, so one captured graph serves every count ``<= BLOCK_DIM ** log256_max_n``.
+# The identity is derived in-kernel from the element dtype and the per-block partials stage through
+# ``bit_cast``-into-scratch - see ``perso_hugh/doc/qipc/qipc_device_algos_design.md``.
 
 _OP_ADD = 0
 _OP_MIN = 1

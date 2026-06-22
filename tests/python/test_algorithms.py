@@ -51,8 +51,8 @@ _DTYPE_TO_NP = {
 }
 
 
-# Identities for reduce_min / max (passed by tests that initialize an "all-identity" input). Floats use the
-# +/- inf extremum; ints use the dtype's positive / negative range extreme.
+# Identities for reduce_min / max (passed by tests that initialize an "all-identity" input). Floats use the +/- inf
+# extremum; ints use the dtype's positive / negative range extreme.
 _MIN_IDENTITY = {
     qd.i32: 2**31 - 1,
     qd.u32: 2**32 - 1,
@@ -269,8 +269,8 @@ def _reduce_host(rng, op, dtype, N):
 @pytest.mark.parametrize("dtype", [qd.i32, qd.f32, qd.u64])
 @test_utils.test(arch=qd.gpu)
 def test_reduce_composition(op, dtype, N):
-    """``reduce_{add,min,max}`` compose at the **top level** of a user ``@qd.kernel`` with a device-resident
-    count (``count[0]``) and a compile-time ``log256_max_n``, matching the host ``reduce_*`` entries. This pins the
+    """``reduce_{add,min,max}`` compose at the **top level** of a user ``@qd.kernel`` with a device-resident count
+    (``count[0]``) and a compile-time ``log256_max_n``, matching the host ``reduce_*`` entries. This pins the
     graph-composable path qipc uses: the count flows as a device ``Expr`` while ``log256_max_n`` fixes the launch
     topology.
     """
@@ -361,9 +361,8 @@ def _scan_host(rng, op, dtype, N):
 def _verify_scan(got, op, dtype, N, host):
     """Assert ``got`` matches ``numpy.<op>.accumulate``-shifted of ``host``.
 
-    Shared by the ``exclusive_scan_{op}`` composition test. Like the
-    reduce family, ``add`` accumulates (overflow / precision care) while ``min`` / ``max`` are bitwise-exact in both
-    float and int paths.
+    Shared by the ``exclusive_scan_{op}`` composition test. Like the reduce family, ``add`` accumulates (overflow /
+    precision care) while ``min`` / ``max`` are bitwise-exact in both float and int paths.
     """
     np_dt = _DTYPE_TO_NP[dtype]
     if op == "add":
@@ -407,11 +406,10 @@ def _verify_scan(got, op, dtype, N, host):
 @pytest.mark.parametrize("dtype", [qd.i32, qd.f32, qd.u64])
 @test_utils.test(arch=qd.gpu)
 def test_exclusive_scan_composition(op, dtype, N):
-    """``exclusive_scan_{add,min,max}`` compose at the **top level** of a user ``@qd.kernel`` with a
-    device-resident count (``count[0]``) and a compile-time ``log256_max_n``, matching the host ``exclusive_scan_*``
-    entries. This pins the graph-composable path qipc uses: the count flows as a device ``Expr`` while
-    ``log256_max_n`` fixes the launch topology (out-of-place ``arr`` -> ``out`` with a caller-sized partials staircase
-    in ``scratch``)."""
+    """``exclusive_scan_{add,min,max}`` compose at the **top level** of a user ``@qd.kernel`` with a device-resident
+    count (``count[0]``) and a compile-time ``log256_max_n``, matching the host ``exclusive_scan_*`` entries. This pins
+    the graph-composable path qipc uses: the count flows as a device ``Expr`` while ``log256_max_n`` fixes the launch
+    topology (out-of-place ``arr`` -> ``out`` with a caller-sized partials staircase in ``scratch``)."""
     _skip_if_dtype_unsupported(dtype)
     from quadrants.algorithms._reduce import _reduce_depth_for_n
 
@@ -457,10 +455,10 @@ def test_exclusive_scan_composition(op, dtype, N):
 @pytest.mark.parametrize("dtype", [qd.i32, qd.f32, qd.u64])
 @test_utils.test(arch=qd.gpu)
 def test_select_composition(dtype, N):
-    """``select`` composes at the **top level** of a user ``@qd.kernel`` with a device-resident count
-    (``count[0]``) and a compile-time ``log256_max_n``, matching the host ``select`` entry. This pins the
-    graph-composable compaction path qipc uses: the count flows as a device ``Expr`` while ``log256_max_n`` fixes the
-    launch topology (the scan-of-flags staircase + scatter + count all emit inside one kernel)."""
+    """``select`` composes at the **top level** of a user ``@qd.kernel`` with a device-resident count (``count[0]``) and
+    a compile-time ``log256_max_n``, matching the host ``select`` entry. This pins the graph-composable compaction path
+    qipc uses: the count flows as a device ``Expr`` while ``log256_max_n`` fixes the launch topology (the scan-of-flags
+    staircase + scatter + count all emit inside one kernel)."""
     _skip_if_dtype_unsupported(dtype)
     from quadrants.algorithms._reduce import _reduce_depth_for_n
 
@@ -541,11 +539,11 @@ def _gen_keys(rng, dtype, N):
 @pytest.mark.parametrize("dtype", _RADIX_KEY_DTYPES)
 @test_utils.test(arch=qd.gpu)
 def test_sort_composition(dtype, N):
-    """``sort`` composes at the **top level** of a user ``@qd.kernel`` with a device-resident 0-d count
-    (read as ``n[()]``) and compile-time ``key_dtype`` / ``has_values`` / ``end_bit`` / ``log256_max_n`` - the exact
-    graph-composable contract qipc chains inside its LBVH / broadphase pipelines (see ``sort`` docstring).
-    Pins the public func against the reference ``numpy`` argsort: keys come back ascending and the ``u32`` payload
-    follows the stable argsort. The reduce / scan / select / reduce-by-key families have matching composition tests."""
+    """``sort`` composes at the **top level** of a user ``@qd.kernel`` with a device-resident 0-d count (read as
+    ``n[()]``) and compile-time ``key_dtype`` / ``has_values`` / ``end_bit`` / ``log256_max_n`` - the exact
+    graph-composable contract qipc chains inside its LBVH / broadphase pipelines (see ``sort`` docstring). Pins the
+    public func against the reference ``numpy`` argsort: keys come back ascending and the ``u32`` payload follows the
+    stable argsort. The reduce / scan / select / reduce-by-key families have matching composition tests."""
     _skip_if_dtype_unsupported(dtype)
     from quadrants.algorithms._radix_sort import _min_log256_for_n
 

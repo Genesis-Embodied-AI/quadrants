@@ -16,12 +16,12 @@ parent - with the live count ``n`` as a device ``Expr`` and the compile-time ``l
 1. **Head-flag pass** (``_rbk_head_flags_phase``). Compute ``head_flags[i] = 1`` if ``i == 0 or keys[i] != keys[i-1]``,
    else ``0``, directly into the caller's ``u32`` scratch ``scratch[0:N]`` (storing the ``i32`` flag bit-cast to
    ``u32``).
-2. **Exclusive scan of head_flags** (in-place over ``scratch[0:N]``, via :func:`_emit_scan_inplace` - the same
-   staircase phases as ``exclusive_scan_add``). After this,
-   ``scratch[i] = exclusive_scan(head_flags)[i] = sum(head_flags[0:i])``. The 0-indexed run index of element ``i`` is
-   then ``positions[i] = scratch[i] + head_flag(i) - 1`` (i.e. ``inclusive_scan(head_flags)[i] - 1``); the scatter
-   pass recomputes ``head_flag(i)`` from the two keys at ``i`` and ``i - 1`` so the ``head_flags`` array itself does
-   not need to survive the scan. This lets the scan run in place, holding scratch to ~``1.004 * N`` slots.
+2. **Exclusive scan of head_flags** (in-place over ``scratch[0:N]``, via :func:`_emit_scan_inplace` - the same staircase
+   phases as ``exclusive_scan_add``). After this, ``scratch[i] = exclusive_scan(head_flags)[i] = sum(head_flags[0:i])``.
+   The 0-indexed run index of element ``i`` is then ``positions[i] = scratch[i] + head_flag(i) - 1`` (i.e.
+   ``inclusive_scan(head_flags)[i] - 1``); the scatter pass recomputes ``head_flag(i)`` from the two keys at ``i`` and
+   ``i - 1`` so the ``head_flags`` array itself does not need to survive the scan. This lets the scan run in place,
+   holding scratch to ~``1.004 * N`` slots.
 3. **Zero-init values_out**. The scatter step uses ``atomic_add`` on ``values_out[positions[i]]``; the slots must
    start at the additive identity ``0``.
 4. **Scatter pass** (``_rbk_scatter_phase``). For every ``i``:
