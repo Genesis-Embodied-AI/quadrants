@@ -587,7 +587,13 @@ class Kernel(FuncBase):
             is_launch_ctx_cacheable = True
             template_num = 0
             i_out = 0
-            _checkpoint_helpers.init_yield_on_arg_id_table(self)
+            # Hoist the `kernel has any yield_on= checkpoint` predicate out of the per-arg loop so non-checkpoint
+            # kernels (the overwhelming majority) skip the helper function call entirely on every arg. The helpers
+            # themselves early-return on empty `checkpoint_yield_on_args`, but the per-call Python frame cost still
+            # showed up as a ~3-5% per-launch regression on arg-heavy CPU benchmarks.
+            _kernel_has_yield_on_checkpoint = bool(self.checkpoint_yield_on_args)
+            if _kernel_has_yield_on_checkpoint:
+                _checkpoint_helpers.init_yield_on_arg_id_table(self)
             for i_in, val in enumerate(args):
                 needed_ = self.arg_metas[i_in].annotation
                 if needed_ is template or type(needed_) is template:
@@ -605,7 +611,10 @@ class Kernel(FuncBase):
                     for _gdw_level in self.graph_do_while_levels:
                         if self.arg_metas[i_in].name == _gdw_level.cond_arg_name:
                             _gdw_level.cond_cpp_arg_id = i_out - template_num
-                _checkpoint_helpers.maybe_record_yield_on_arg(self, self.arg_metas[i_in].name, i_out - template_num)
+                if _kernel_has_yield_on_checkpoint:
+                    _checkpoint_helpers.maybe_record_yield_on_arg(
+                        self, self.arg_metas[i_in].name, i_out - template_num
+                    )
                 num_args_, is_launch_ctx_cacheable_ = self._recursive_set_args(
                     self.used_py_dataclass_parameters_by_key_enforcing[key],
                     self.arg_metas[i_in].name,
@@ -681,7 +690,8 @@ class Kernel(FuncBase):
                 )
             for _gdw_level in self.graph_do_while_levels:
                 launch_ctx.add_graph_do_while_level(_gdw_level.cond_cpp_arg_id, _gdw_level.parent_id)
-            _checkpoint_helpers.forward_yield_on_table_to_ctx(self, launch_ctx)
+            if self.checkpoint_yield_on_args:
+                _checkpoint_helpers.forward_yield_on_table_to_ctx(self, launch_ctx)
             # `_resume_from_checkpoint` is `None` for fresh launches (host-side default 0 in `LaunchContextBuilder`,
             # which means "run every checkpoint"). When `Kernel.resume` plumbs an int through, copy it onto the launch
             # context so the GraphManager's `launch_cached_graph` memcpys it into the device-side `resume_point` slot
@@ -782,7 +792,10 @@ class Kernel(FuncBase):
         # copy into the device-side `resume_point` slot before launch; `None` means "fresh start, reset to 0". Plumbed
         # via `Kernel.resume()` only; users do not pass this directly.
         _resume_from_checkpoint = kwargs.pop("_qd_from_checkpoint", None)
-        _checkpoint_helpers.validate_resume_cookie(self, _resume_from_checkpoint)
+        # `validate_resume_cookie` only does work when a resume cookie was actually passed; skip the function call
+        # entirely otherwise so the dominant non-resume call path stays clear of the checkpoint helpers.
+        if _resume_from_checkpoint is not None:
+            _checkpoint_helpers.validate_resume_cookie(self, _resume_from_checkpoint)
         if qd_stream is not None and self.autodiff_mode != _NONE:
             raise RuntimeError(
                 "qd_stream is not compatible with autodiff kernels. Streams cannot be used with "
@@ -887,5 +900,8 @@ class Kernel(FuncBase):
             assert self._last_compiled_kernel_data is not None
             self.compiled_kernel_data_by_key[key] = self._last_compiled_kernel_data
         # Surface a GraphStatus for kernels with `qd.checkpoint(yield_on=...)` so the host can drive the qipc-style
-        # re-entrant loop. Kernels without yield-capable checkpoints get `ret` (typically `None`) passed through.
-        return _checkpoint_helpers.maybe_build_graph_status(self, ret)
+        # re-entrant loop. Kernels without yield-capable checkpoints get `ret` (typically `None`) passed through;
+        # short-circuit the helper call so the hot non-checkpoint path doesn't even enter the Python frame.
+        if self.checkpoint_yield_on_args:
+            return _checkpoint_helpers.maybe_build_graph_status(self, ret)
+        return ret
