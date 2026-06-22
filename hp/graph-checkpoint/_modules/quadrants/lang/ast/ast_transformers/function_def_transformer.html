@@ -991,10 +991,10 @@
                 <span class="n">FunctionDefTransformer</span><span class="o">.</span><span class="n">_validate_graph_do_while_stmt_list</span><span class="p">(</span><span class="n">stmt</span><span class="o">.</span><span class="n">orelse</span><span class="p">,</span> <span class="n">is_kernel_top</span><span class="o">=</span><span class="n">is_kernel_top</span><span class="p">)</span>
                 <span class="k">continue</span>
             <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">stmt</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">With</span><span class="p">)</span> <span class="ow">and</span> <span class="n">FunctionDefTransformer</span><span class="o">.</span><span class="n">_is_checkpoint_with</span><span class="p">(</span><span class="n">stmt</span><span class="p">):</span>
-                <span class="c1"># `with qd.checkpoint(...)` is a legal placement for graph kernels (the checkpoint may sit at the</span>
-                <span class="c1"># kernel top level or inside any graph_do_while level). Recurse so a malformed graph_do_while</span>
-                <span class="c1"># nested inside a checkpoint body is still caught; the checkpoint&#39;s own body restrictions are</span>
-                <span class="c1"># enforced by `CheckpointTransformer.build_checkpoint_with`.</span>
+                <span class="c1"># `with qd.checkpoint(...)` is a legal placement for graph kernels (the checkpoint may sit at the kernel</span>
+                <span class="c1"># top level or inside any graph_do_while level). Recurse so a malformed graph_do_while nested inside a</span>
+                <span class="c1"># checkpoint body is still caught; the checkpoint&#39;s own body restrictions are enforced by</span>
+                <span class="c1"># `CheckpointTransformer.build_checkpoint_with`.</span>
                 <span class="n">FunctionDefTransformer</span><span class="o">.</span><span class="n">_validate_graph_do_while_stmt_list</span><span class="p">(</span><span class="n">stmt</span><span class="o">.</span><span class="n">body</span><span class="p">,</span> <span class="n">is_kernel_top</span><span class="o">=</span><span class="n">is_kernel_top</span><span class="p">)</span>
                 <span class="k">continue</span>
             <span class="n">where</span> <span class="o">=</span> <span class="s2">&quot;the kernel body&quot;</span> <span class="k">if</span> <span class="n">is_kernel_top</span> <span class="k">else</span> <span class="s2">&quot;a qd.graph_do_while() body&quot;</span>

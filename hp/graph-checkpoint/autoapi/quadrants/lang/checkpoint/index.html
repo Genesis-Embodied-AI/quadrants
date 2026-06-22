@@ -386,9 +386,10 @@ implementation work; this file is just the public API entry point.</p>
 <dd><p>Marks a section of a graph kernel as a pause / resume point.</p>
 <div class="admonition warning">
 <p class="admonition-title">Warning</p>
-<p><strong>Experimental.</strong> <code class="docutils literal notranslate"><span class="pre">qd.checkpoint</span></code> (together with <code class="docutils literal notranslate"><span class="pre">qd.GraphStatus</span></code> and <code class="docutils literal notranslate"><span class="pre">kernel.resume(from_checkpoint=...)</span></code>)
-is an experimental API. The signature, the lowering across backends, the error messages, and the host-side
-yield/resume contract may change in any future release without a deprecation cycle.</p>
+<p><strong>Experimental.</strong> <code class="docutils literal notranslate"><span class="pre">qd.checkpoint</span></code> (together with <code class="docutils literal notranslate"><span class="pre">qd.GraphStatus</span></code> and
+<code class="docutils literal notranslate"><span class="pre">kernel.resume(from_checkpoint=...)</span></code>) is an experimental API. The signature, the lowering across backends, the
+error messages, and the host-side yield/resume contract may change in any future release without a deprecation
+cycle.</p>
 </div>
 <p>Used as <code class="docutils literal notranslate"><span class="pre">with</span> <span class="pre">qd.checkpoint(cp_id,</span> <span class="pre">yield_on=flag):</span></code> inside a <code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel(graph=True,</span> <span class="pre">checkpoints=True)</span></code> kernel
 body. When the body writes a non-zero value into <code class="docutils literal notranslate"><span class="pre">flag</span></code>, the kernel pauses at this checkpoint and returns a

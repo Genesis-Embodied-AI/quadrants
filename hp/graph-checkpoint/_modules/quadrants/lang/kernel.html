@@ -733,10 +733,9 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">use_graph</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span></div>
 
         <span class="c1"># Opt-in flag set by `@qd.kernel(graph=True, checkpoints=True)`. When True, the AST transformer enables</span>
-        <span class="c1"># `qd.checkpoint(...)` recognition AND auto-wraps every top-level for-loop that isn&#39;t already inside a</span>
-        <span class="c1"># `with qd.checkpoint(...)` block in an implicit no-yield checkpoint. When False, any use of</span>
-        <span class="c1"># `qd.checkpoint(...)` in the kernel body is rejected at compile time with a fix-it pointing at</span>
-        <span class="c1"># `checkpoints=True`.</span>
+        <span class="c1"># `qd.checkpoint(...)` recognition AND auto-wraps every top-level for-loop that isn&#39;t already inside a `with</span>
+        <span class="c1"># qd.checkpoint(...)` block in an implicit no-yield checkpoint. When False, any use of `qd.checkpoint(...)` in</span>
+        <span class="c1"># the kernel body is rejected at compile time with a fix-it pointing at `checkpoints=True`.</span>
 <div class="viewcode-block" id="Kernel.use_checkpoints">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/kernel/index.html#quadrants.lang.kernel.Kernel.use_checkpoints">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">use_checkpoints</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span></div>
@@ -757,8 +756,8 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">_graph_do_while_level_stack</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
         <span class="c1"># Per-checkpoint metadata, one entry per `with qd.checkpoint(...)` block (explicit AND auto-injected implicit)</span>
         <span class="c1"># in declaration order. List index is the checkpoint&#39;s internal `cp_id` (0, 1, 2, ... dense, flat across the</span>
-        <span class="c1"># kernel). Each entry is the name of the `yield_on=` kernel parameter, or `None` for implicit checkpoints</span>
-        <span class="c1"># (which never yield). Populated by the AST transformer; empty means the kernel uses no checkpoints.</span>
+        <span class="c1"># kernel). Each entry is the name of the `yield_on=` kernel parameter, or `None` for implicit checkpoints (which</span>
+        <span class="c1"># never yield). Populated by the AST transformer; empty means the kernel uses no checkpoints.</span>
 <div class="viewcode-block" id="Kernel.checkpoint_yield_on_args">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/kernel/index.html#quadrants.lang.kernel.Kernel.checkpoint_yield_on_args">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">checkpoint_yield_on_args</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span></div>

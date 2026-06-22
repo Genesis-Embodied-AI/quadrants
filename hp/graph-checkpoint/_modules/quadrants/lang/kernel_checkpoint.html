@@ -333,10 +333,10 @@
   <h1>Source code for quadrants.lang.kernel_checkpoint</h1><div class="highlight"><pre>
 <span></span><span class="sd">&quot;&quot;&quot;Helpers extracted from ``kernel.py`` for the ``qd.checkpoint(...)`` pause / resume model.</span>
 
-<span class="sd">``Kernel.__call__`` / ``Kernel.launch_kernel`` delegate the resume-cookie validation, the user-label-to-internal-</span>
-<span class="sd">cp_id translation, the per-launch ``yield_on=`` arg-id table construction, and the ``GraphStatus`` build to the free</span>
-<span class="sd">functions below so the central ``Kernel`` class doesn&#39;t accrete checkpoint-feature-specific blocks. See</span>
-<span class="sd">``qd.checkpoint`` / ``kernel.resume`` / ``docs/source/user_guide/graph.md`` for the user-facing surface.</span>
+<span class="sd">``Kernel.__call__`` / ``Kernel.launch_kernel`` delegate the resume-cookie validation, the user-label-to-internal- cp_id</span>
+<span class="sd">translation, the per-launch ``yield_on=`` arg-id table construction, and the ``GraphStatus`` build to the free functions</span>
+<span class="sd">below so the central ``Kernel`` class doesn&#39;t accrete checkpoint-feature-specific blocks. See ``qd.checkpoint`` /</span>
+<span class="sd">``kernel.resume`` / ``docs/source/user_guide/graph.md`` for the user-facing surface.</span>
 <span class="sd">&quot;&quot;&quot;</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
@@ -432,10 +432,9 @@
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Translate the runtime&#39;s internal yielding cp_id back to the user-supplied label and return a ``GraphStatus``.</span>
 
 <span class="sd">    Returns ``default_ret`` unchanged for kernels without any yielding checkpoint -- there&#39;s no ``yield_on=`` parameter</span>
-<span class="sd">    to surface a status from, so the value would always be ``yielded=False, checkpoint=None`` (no information).</span>
-<span class="sd">    Implicit (auto-wrapped) checkpoints have ``None`` in ``checkpoint_user_labels_by_cp_id`` but they never have</span>
-<span class="sd">    ``yield_on=``, so the runtime can&#39;t surface them as the yielding cp -- the lookup is always to an explicit</span>
-<span class="sd">    checkpoint.</span>
+<span class="sd">    to surface a status from, so the value would always be ``yielded=False, checkpoint=None`` (no information). Implicit</span>
+<span class="sd">    (auto-wrapped) checkpoints have ``None`` in ``checkpoint_user_labels_by_cp_id`` but they never have ``yield_on=``,</span>
+<span class="sd">    so the runtime can&#39;t surface them as the yielding cp -- the lookup is always to an explicit checkpoint.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">if</span> <span class="ow">not</span> <span class="p">(</span><span class="n">kernel</span><span class="o">.</span><span class="n">checkpoint_yield_on_args</span> <span class="ow">and</span> <span class="nb">any</span><span class="p">(</span><span class="n">n</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="n">kernel</span><span class="o">.</span><span class="n">checkpoint_yield_on_args</span><span class="p">)):</span>
         <span class="k">return</span> <span class="n">default_ret</span>

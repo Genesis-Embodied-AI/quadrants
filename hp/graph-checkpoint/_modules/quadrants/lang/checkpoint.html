@@ -353,9 +353,10 @@
 
 <span class="sd">    .. warning::</span>
 
-<span class="sd">        **Experimental.** ``qd.checkpoint`` (together with ``qd.GraphStatus`` and ``kernel.resume(from_checkpoint=...)``)</span>
-<span class="sd">        is an experimental API. The signature, the lowering across backends, the error messages, and the host-side</span>
-<span class="sd">        yield/resume contract may change in any future release without a deprecation cycle.</span>
+<span class="sd">        **Experimental.** ``qd.checkpoint`` (together with ``qd.GraphStatus`` and</span>
+<span class="sd">        ``kernel.resume(from_checkpoint=...)``) is an experimental API. The signature, the lowering across backends, the</span>
+<span class="sd">        error messages, and the host-side yield/resume contract may change in any future release without a deprecation</span>
+<span class="sd">        cycle.</span>
 
 <span class="sd">    Used as ``with qd.checkpoint(cp_id, yield_on=flag):`` inside a ``@qd.kernel(graph=True, checkpoints=True)`` kernel</span>
 <span class="sd">    body. When the body writes a non-zero value into ``flag``, the kernel pauses at this checkpoint and returns a</span>

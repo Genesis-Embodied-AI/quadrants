@@ -437,14 +437,14 @@
     <span class="k">def</span><span class="w"> </span><span class="nf">_resolve_cp_id</span><span class="p">(</span><span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">expr</span><span class="p">,</span> <span class="n">global_vars</span><span class="p">:</span> <span class="nb">dict</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Resolve the first positional arg of `qd.checkpoint(cp_id, ...)` to a Python int (or IntEnum instance).</span>
 
-<span class="sd">        Accepts (a) `ast.Constant` int literals (``qd.checkpoint(0, ...)``), (b) `ast.Attribute` references to</span>
-<span class="sd">        `IntEnum` values resolved against the kernel&#39;s `global_vars` (``qd.checkpoint(Stage.SIM, ...)`` where ``Stage``</span>
-<span class="sd">        is an `IntEnum` defined at module scope), and (c) `ast.Name` references to module-level int constants</span>
-<span class="sd">        (``qd.checkpoint(CP_LOAD, ...)`` where ``CP_LOAD`` is an int defined at module scope). For (b) and (c) we</span>
-<span class="sd">        return the resolved value AS-IS (without re-wrapping through `int(...)`) so an IntEnum member identity is</span>
-<span class="sd">        preserved end-to-end -- the user writes `qd.checkpoint(Stage.SIM, ...)`, then reads `status.checkpoint` and</span>
-<span class="sd">        gets back `Stage.SIM`, not the raw int. Rejects everything else with a clear error so the user gets a</span>
-<span class="sd">        compile-time diagnostic rather than a confusing template-mapper failure later.</span>
+<span class="sd">        Accepts (a) `ast.Constant` int literals (``qd.checkpoint(0, ...)``), (b) `ast.Attribute` references to `IntEnum`</span>
+<span class="sd">        values resolved against the kernel&#39;s `global_vars` (``qd.checkpoint(Stage.SIM, ...)`` where ``Stage`` is an</span>
+<span class="sd">        `IntEnum` defined at module scope), and (c) `ast.Name` references to module-level int constants</span>
+<span class="sd">        (``qd.checkpoint(CP_LOAD, ...)`` where ``CP_LOAD`` is an int defined at module scope). For (b) and (c) we return</span>
+<span class="sd">        the resolved value AS-IS (without re-wrapping through `int(...)`) so an IntEnum member identity is preserved</span>
+<span class="sd">        end-to-end -- the user writes `qd.checkpoint(Stage.SIM, ...)`, then reads `status.checkpoint` and gets back</span>
+<span class="sd">        `Stage.SIM`, not the raw int. Rejects everything else with a clear error so the user gets a compile-time</span>
+<span class="sd">        diagnostic rather than a confusing template-mapper failure later.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="c1"># Plain `qd.checkpoint(0, ...)` literal.</span>
         <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Constant</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">value</span><span class="p">,</span> <span class="nb">int</span><span class="p">)</span> <span class="ow">and</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">value</span><span class="p">,</span> <span class="nb">bool</span><span class="p">):</span>
@@ -592,18 +592,18 @@
         <span class="c1"># checkpoint body and ask the user to wrap them in their own for-loop. The offloader&#39;s pending-serial bucket</span>
         <span class="c1"># loses the surrounding `checkpoint_id` and emits such statements as `serial` tasks with `cp_id == -1`, so they</span>
         <span class="c1"># would run unconditionally even when the checkpoint is skipped -- a silent correctness bug. Rather than</span>
-        <span class="c1"># auto-wrapping them transparently (which hides the fact that each bare stmt becomes its own kernel / graph</span>
-        <span class="c1"># node and surprises users when they look at the lowered IR or `prog.get_num_offloaded_tasks_on_last_call()`),</span>
-        <span class="c1"># we surface a clear compile-time error and have the user write `for _ in range(1): &lt;stmt&gt;` themselves.</span>
-        <span class="c1"># Implicit (auto-wrapped) checkpoints can never trip this -- they wrap exactly one ast.For. Coverage probes</span>
-        <span class="c1"># (synthesized `_qd_cov[i] = 1` assignments under `QD_KERNEL_COVERAGE=1`) are explicitly exempt; the cp_id</span>
-        <span class="c1"># propagation in `quadrants/transforms/offload.cpp` (`assemble_serial_statements`) makes them inherit the</span>
-        <span class="c1"># surrounding checkpoint&#39;s cp_id so the launcher&#39;s &quot;last task in checkpoint&quot; detection stays correct.</span>
+        <span class="c1"># auto-wrapping them transparently (which hides the fact that each bare stmt becomes its own kernel / graph node</span>
+        <span class="c1"># and surprises users when they look at the lowered IR or `prog.get_num_offloaded_tasks_on_last_call()`), we</span>
+        <span class="c1"># surface a clear compile-time error and have the user write `for _ in range(1): &lt;stmt&gt;` themselves. Implicit</span>
+        <span class="c1"># (auto-wrapped) checkpoints can never trip this -- they wrap exactly one ast.For. Coverage probes (synthesized</span>
+        <span class="c1"># `_qd_cov[i] = 1` assignments under `QD_KERNEL_COVERAGE=1`) are explicitly exempt; the cp_id propagation in</span>
+        <span class="c1"># `quadrants/transforms/offload.cpp` (`assemble_serial_statements`) makes them inherit the surrounding</span>
+        <span class="c1"># checkpoint&#39;s cp_id so the launcher&#39;s &quot;last task in checkpoint&quot; detection stays correct.</span>
         <span class="k">for</span> <span class="n">stmt</span> <span class="ow">in</span> <span class="n">node</span><span class="o">.</span><span class="n">body</span><span class="p">:</span>
             <span class="n">is_bare</span> <span class="o">=</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">stmt</span><span class="p">,</span> <span class="p">(</span><span class="n">ast</span><span class="o">.</span><span class="n">Assign</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">AugAssign</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">AnnAssign</span><span class="p">))</span>
             <span class="k">if</span> <span class="ow">not</span> <span class="n">is_bare</span> <span class="ow">and</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">stmt</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Expr</span><span class="p">):</span>
-                <span class="c1"># Any `Expr(Constant)` is a no-op (Python&#39;s docstring pattern, e.g. a leading triple-quoted string).</span>
-                <span class="c1"># We accept it anywhere in the body rather than only at position 0 because the kernel-coverage AST</span>
+                <span class="c1"># Any `Expr(Constant)` is a no-op (Python&#39;s docstring pattern, e.g. a leading triple-quoted string). We</span>
+                <span class="c1"># accept it anywhere in the body rather than only at position 0 because the kernel-coverage AST</span>
                 <span class="c1"># transformer (see `_kernel_coverage.py`) prepends a `_qd_cov[...] = 1` probe under</span>
                 <span class="c1"># `QD_KERNEL_COVERAGE=1`, which would otherwise push the docstring to position 1 and have us flag it as</span>
                 <span class="c1"># a bare top-level statement.</span>
