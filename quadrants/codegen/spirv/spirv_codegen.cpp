@@ -1037,6 +1037,9 @@ void TaskCodegen::visit(UnaryOpStmt *stmt) {
     }
   } else if (stmt->op_type == UnaryOpType::inv) {
     if (is_real(dst_dt)) {
+      // Do not pass `stmt->precise` to the builder here: the post-hoc `maybe_no_contraction(val, stmt->precise)`
+      // block at the end of this visit() is the single source of truth for decoration, so passing `precise` at
+      // creation time would emit a duplicate OpDecorate on the same OpFDiv value ID.
       val = ir_->div(ir_->float_immediate_number(dst_type, 1), operand_val);
     } else {
       QD_NOT_IMPLEMENTED
@@ -1171,7 +1174,19 @@ void TaskCodegen::visit(UnaryOpStmt *stmt) {
   UNARY_OP_TO_SPIRV(log, Log, 28, 32)
   UNARY_OP_TO_SPIRV(sqrt, Sqrt, 31, 64)
 #undef UNARY_OP_TO_SPIRV
-  else {QD_NOT_IMPLEMENTED} ir_->register_value(stmt->raw_name(), val);
+  else {
+    QD_NOT_IMPLEMENTED
+  }
+  // For FP-producing unary ops, decorate the result with `NoContraction` when `precise` is set. This is meaningful on
+  // actual arithmetic instructions (`OpFNegate` from `neg`, `OpFDiv` synthesized by `inv`) where SPIRV-Cross maps it to
+  // MSL's `precise` qualifier. For transcendentals emitted via `OpExtInst GLSL.std.450 Sin/Cos/Log/Sqrt/...`, the
+  // SPIR-V spec scopes `NoContraction` to arithmetic instructions so most consumers will ignore it - there is no
+  // standard SPIR-V mechanism to force correctly-rounded transcendentals, so on those paths we rely on the driver's
+  // default (non-fast-math) stdlib being accurate enough. The decoration is kept as best-effort future-proofing.
+  if (stmt->precise && is_real(stmt->element_type())) {
+    ir_->maybe_no_contraction(val, /*precise=*/true);
+  }
+  ir_->register_value(stmt->raw_name(), val);
 }
 
 void TaskCodegen::generate_overflow_branch(const spirv::Value &cond_v, const std::string &op, const std::string &tb) {
@@ -1361,6 +1376,9 @@ void TaskCodegen::visit(BinaryOpStmt *bin) {
     }
     bin_value = ir_->cast(dst_type, bin_value);
   }
+  // `bin->precise` is deliberately not threaded into the builder calls below; the post-hoc block at the end of
+  // visit(BinaryOpStmt*) is the single source of truth for `NoContraction` decoration, so threading it here would
+  // emit a duplicate OpDecorate on the same arithmetic result ID when the subsequent cast is a no-op.
 #define BINARY_OP_TO_SPIRV_ARTHIMATIC(op, func)  \
   else if (op_type == BinaryOpType::op) {        \
     bin_value = ir_->func(lhs_value, rhs_value); \
@@ -1457,9 +1475,27 @@ void TaskCodegen::visit(BinaryOpStmt *bin) {
   else if (op_type == BinaryOpType::truediv) {
     lhs_value = ir_->cast(dst_type, lhs_value);
     rhs_value = ir_->cast(dst_type, rhs_value);
+    // As with the arithmetic macro above, leave decoration to the post-hoc block.
     bin_value = ir_->div(lhs_value, rhs_value);
   }
-  else {QD_NOT_IMPLEMENTED} ir_->register_value(bin_name, bin_value);
+  else {
+    QD_NOT_IMPLEMENTED;
+  }
+  // Single source of truth for `NoContraction` on FP-producing binary ops. Covers:
+  //   - arithmetic (add/sub/mul/div/mod/truediv): the intervening `ir_->cast(dst_type, bin_value)` is a no-op in the
+  //     common post-type_check case where operand type already matches `dst_type`, so this decorates the
+  //     OpF{Add,Sub,...} itself; in the rare non-no-op case it decorates the FConvert, which per spec drops the
+  //     decoration silently.
+  //   - FP binary transcendentals (atan2, pow): emitted by `FLOAT_BINARY_OP_TO_SPIRV_FLOAT_FUNC` through
+  //     `ir_->call_glsl450(...)` with no internal `maybe_no_contraction`; SPIR-V scopes `NoContraction` to arithmetic
+  //     instructions so most consumers ignore it on `OpExtInst`, but the decoration is best-effort future-proofing and
+  //     should be applied uniformly with the unary transcendental path.
+  // Do NOT thread `bin->precise` into the builder calls above; the builders would then emit a duplicate OpDecorate on
+  // the same result ID.
+  if (bin->precise && is_real(bin->element_type())) {
+    ir_->maybe_no_contraction(bin_value, /*precise=*/true);
+  }
+  ir_->register_value(bin_name, bin_value);
 }
 
 void TaskCodegen::visit(TernaryOpStmt *tri) {

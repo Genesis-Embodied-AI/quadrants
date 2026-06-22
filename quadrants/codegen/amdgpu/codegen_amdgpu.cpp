@@ -507,6 +507,11 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
     if (op != BinaryOpType::atan2 && op != BinaryOpType::pow) {
       return TaskCodeGenLLVM::visit(stmt);
     }
+    // The base-class `visit(BinaryOpStmt*)` terminates with `if (stmt->precise) disable_fast_math(...)` so LLVM cannot
+    // substitute approximate variants for precise-tagged FP ops. The AMDGPU override below returns without chaining to
+    // the base, so we mirror that same guard on the __ocml_* call results. AMDGPU's `__ocml_*` transcendentals are
+    // currently correctly-rounded (no `__ocml_fast_*` variants), so this is defensive against future libocml changes
+    // rather than a bug today.
     auto lhs = llvm_val[stmt->lhs];
     auto rhs = llvm_val[stmt->rhs];
 
@@ -521,6 +526,13 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
         auto sitofp_lhs_ = builder->CreateSIToFP(lhs, llvm::Type::getDoubleTy(*llvm_context));
         auto sitofp_rhs_ = builder->CreateSIToFP(rhs, llvm::Type::getDoubleTy(*llvm_context));
         auto ret_ = call("__ocml_pow_f64", {sitofp_lhs_, sitofp_rhs_});
+        // FPToSI is not an FPMathOperator, so the post-hoc `disable_fast_math(llvm_val[stmt])` below would be a no-op
+        // on it and leave the `__ocml_pow_f64` CallInst still carrying the IRBuilder's `afn` / `reassoc` / ... Clear
+        // FMF here on the actual call before its handle is overwritten by the FPToSI. Mirrors the f16 FPTrunc guards
+        // in `codegen_llvm.cpp` and `codegen_cuda.cpp::emit_extra_unary`.
+        if (stmt->precise) {
+          disable_fast_math(ret_);
+        }
         llvm_val[stmt] = builder->CreateFPToSI(ret_, llvm::Type::getInt32Ty(*llvm_context));
       } else {
         QD_NOT_IMPLEMENTED
@@ -535,6 +547,9 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
       } else {
         QD_NOT_IMPLEMENTED
       }
+    }
+    if (stmt->precise) {
+      disable_fast_math(llvm_val[stmt]);
     }
   }
 

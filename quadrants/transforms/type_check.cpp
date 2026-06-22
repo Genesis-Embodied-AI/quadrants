@@ -199,7 +199,7 @@ class TypeCheck : public IRVisitor {
               stmt->operand->ret_type->as<TensorType>()->get_shape(), target_dtype);
         }
 
-        cast(stmt->operand, target_dtype);
+        cast(stmt->operand, target_dtype, stmt->precise);
         stmt->ret_type = target_dtype;
       } else if (stmt->op_type == UnaryOpType::logic_not) {
         DataType target_dtype = PrimitiveType::u1;
@@ -232,18 +232,25 @@ class TypeCheck : public IRVisitor {
     }
   }
 
-  Stmt *insert_type_cast_before(Stmt *anchor, Stmt *input, DataType output_type) {
+  // `precise` propagates the user's `qd.precise(...)` tag onto the synthesized cast. Symmetric with
+  // alg_simp.cpp::cast_to_result_type. Benign on every backend shipping today (LLVM FPExt/FPTrunc/SIToFP are not
+  // FPMathOperators, so `disable_fast_math()` is a no-op on them; SPIR-V OpFConvert is a type conversion, so
+  // `NoContraction` is silently dropped per spec), but preserves the invariant for any future backend that decides
+  // to honor approximation flags on FP casts.
+  Stmt *insert_type_cast_before(Stmt *anchor, Stmt *input, DataType output_type, bool precise = false) {
     auto &&cast_stmt = Stmt::make_typed<UnaryOpStmt>(UnaryOpType::cast_value, input);
     cast_stmt->cast_type = output_type;
+    cast_stmt->precise = precise;
     cast_stmt->accept(this);
     auto stmt = cast_stmt.get();
     anchor->insert_before_me(std::move(cast_stmt));
     return stmt;
   }
 
-  Stmt *insert_type_cast_after(Stmt *anchor, Stmt *input, DataType output_type) {
+  Stmt *insert_type_cast_after(Stmt *anchor, Stmt *input, DataType output_type, bool precise = false) {
     auto &&cast_stmt = Stmt::make_typed<UnaryOpStmt>(UnaryOpType::cast_value, input);
     cast_stmt->cast_type = output_type;
+    cast_stmt->precise = precise;
     cast_stmt->accept(this);
     auto stmt = cast_stmt.get();
     anchor->insert_after_me(std::move(cast_stmt));
@@ -271,11 +278,11 @@ class TypeCheck : public IRVisitor {
     stmt->insert_before_me(std::move(assert_stmt));
   }
 
-  void cast(Stmt *&val, DataType dt) {
+  void cast(Stmt *&val, DataType dt, bool precise = false) {
     if (val->ret_type == dt)
       return;
 
-    auto cast_stmt = insert_type_cast_after(val, val, dt);
+    auto cast_stmt = insert_type_cast_after(val, val, dt, precise);
     val = cast_stmt;
   }
 
@@ -306,10 +313,10 @@ class TypeCheck : public IRVisitor {
     if (stmt->op_type == BinaryOpType::truediv) {
       auto default_fp = config_.default_fp;
       if (!is_real(stmt->lhs->ret_type.get_element_type())) {
-        cast(stmt->lhs, make_dt(default_fp));
+        cast(stmt->lhs, make_dt(default_fp), stmt->precise);
       }
       if (!is_real(stmt->rhs->ret_type.get_element_type())) {
-        cast(stmt->rhs, make_dt(default_fp));
+        cast(stmt->rhs, make_dt(default_fp), stmt->precise);
       }
       stmt->op_type = BinaryOpType::div;
     }
@@ -319,12 +326,12 @@ class TypeCheck : public IRVisitor {
     if (stmt->op_type == BinaryOpType::atan2) {
       if (stmt->rhs->ret_type == PrimitiveType::f64 || stmt->lhs->ret_type == PrimitiveType::f64) {
         stmt->ret_type = make_dt(PrimitiveType::f64);
-        cast(stmt->rhs, make_dt(PrimitiveType::f64));
-        cast(stmt->lhs, make_dt(PrimitiveType::f64));
+        cast(stmt->rhs, make_dt(PrimitiveType::f64), stmt->precise);
+        cast(stmt->lhs, make_dt(PrimitiveType::f64), stmt->precise);
       } else {
         stmt->ret_type = make_dt(PrimitiveType::f32);
-        cast(stmt->rhs, make_dt(PrimitiveType::f32));
-        cast(stmt->lhs, make_dt(PrimitiveType::f32));
+        cast(stmt->rhs, make_dt(PrimitiveType::f32), stmt->precise);
+        cast(stmt->lhs, make_dt(PrimitiveType::f32), stmt->precise);
       }
     }
 
@@ -351,12 +358,12 @@ class TypeCheck : public IRVisitor {
 
       if (ret_type != stmt->lhs->ret_type) {
         // promote lhs
-        auto cast_stmt = insert_type_cast_before(stmt, stmt->lhs, ret_type);
+        auto cast_stmt = insert_type_cast_before(stmt, stmt->lhs, ret_type, stmt->precise);
         stmt->lhs = cast_stmt;
       }
       if (ret_type != stmt->rhs->ret_type) {
         // promote rhs
-        auto cast_stmt = insert_type_cast_before(stmt, stmt->rhs, ret_type);
+        auto cast_stmt = insert_type_cast_before(stmt, stmt->rhs, ret_type, stmt->precise);
         stmt->rhs = cast_stmt;
       }
     }

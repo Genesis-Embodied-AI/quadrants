@@ -52,6 +52,107 @@ Expr bit_cast(const Expr &input, DataType dt) {
   return Expr::make<UnaryOpExpression>(UnaryOpType::cast_bits, input, dt);
 }
 
+namespace {
+
+// Bottom-up clone of every BinaryOp / UnaryOp / TernaryOp expression reachable from `input`, tagging the fresh Binary /
+// Unary nodes `precise`. Non-walked kinds (loads, constants, qd.func calls, ndarray accesses, ...) carry no `precise`
+// field and are passed through by reference - aliasing them is safe. TernaryOp nodes are cloned structurally so the
+// walk can recurse into their branches, but the TernaryOp itself does not carry a `precise` flag (the only ternary
+// today is `select`, a control-flow-shaped conditional move, not FP arithmetic; see also the matching comment in expr.h
+// and the `precise` fields in frontend_ir.h / statements.h).
+//
+// Implemented as an explicit worklist (not C++ recursion) so stack depth stays bounded for deep AST chains common in
+// scientific code (e.g. programmatically generated compensated-arithmetic unrolls). Each frame has a `children_pushed`
+// flag: on first visit the frame pushes its children onto the stack and sets the flag; on the second visit every child
+// result is in `results` and the frame constructs the cloned node. `results` also deduplicates so any shared
+// sub-Expression (rare at the BinaryOp/UnaryOp/TernaryOp level, but possible via shared_ptr aliasing) is cloned once.
+Expr clone_and_tag_precise(const Expr &input) {
+  struct Frame {
+    Expr cur;
+    bool children_pushed;
+  };
+  std::unordered_map<const Expression *, Expr> results;
+  std::vector<Frame> stack;
+  stack.push_back({input, false});
+  while (!stack.empty()) {
+    const size_t idx = stack.size() - 1;
+    Expr cur = stack[idx].cur;
+    const bool pushed = stack[idx].children_pushed;
+    const Expression *key = cur.expr.get();
+    if (results.count(key)) {
+      stack.pop_back();
+      continue;
+    }
+    if (auto bin = cur.cast<BinaryOpExpression>()) {
+      if (!pushed) {
+        stack[idx].children_pushed = true;
+        stack.push_back({bin->rhs, false});
+        stack.push_back({bin->lhs, false});
+        continue;
+      }
+      Expr new_lhs = results.at(bin->lhs.expr.get());
+      Expr new_rhs = results.at(bin->rhs.expr.get());
+      Expr out = Expr::make<BinaryOpExpression>(bin->type, new_lhs, new_rhs);
+      auto new_bin = out.cast<BinaryOpExpression>();
+      new_bin->precise = true;
+      new_bin->dbg_info = bin->dbg_info;
+      new_bin->attributes = bin->attributes;
+      new_bin->ret_type = bin->ret_type;
+      results.emplace(key, out);
+      stack.pop_back();
+    } else if (auto un = cur.cast<UnaryOpExpression>()) {
+      if (!pushed) {
+        stack[idx].children_pushed = true;
+        stack.push_back({un->operand, false});
+        continue;
+      }
+      Expr new_operand = results.at(un->operand.expr.get());
+      Expr out = un->is_cast() ? Expr::make<UnaryOpExpression>(un->type, new_operand, un->cast_type, un->dbg_info)
+                               : Expr::make<UnaryOpExpression>(un->type, new_operand, un->dbg_info);
+      auto new_un = out.cast<UnaryOpExpression>();
+      new_un->precise = true;
+      new_un->attributes = un->attributes;
+      new_un->ret_type = un->ret_type;
+      results.emplace(key, out);
+      stack.pop_back();
+    } else if (auto tri = cur.cast<TernaryOpExpression>()) {
+      if (!pushed) {
+        stack[idx].children_pushed = true;
+        stack.push_back({tri->op3, false});
+        stack.push_back({tri->op2, false});
+        stack.push_back({tri->op1, false});
+        continue;
+      }
+      Expr new_op1 = results.at(tri->op1.expr.get());
+      Expr new_op2 = results.at(tri->op2.expr.get());
+      Expr new_op3 = results.at(tri->op3.expr.get());
+      Expr out = Expr::make<TernaryOpExpression>(tri->type, new_op1, new_op2, new_op3);
+      auto new_tri = out.cast<TernaryOpExpression>();
+      new_tri->dbg_info = tri->dbg_info;
+      new_tri->attributes = tri->attributes;
+      new_tri->ret_type = tri->ret_type;
+      results.emplace(key, out);
+      stack.pop_back();
+    } else {
+      // Base case: load, constant, qd.func call, ndarray access, etc. Pass through by reference.
+      results.emplace(key, cur);
+      stack.pop_back();
+    }
+  }
+  return results.at(input.expr.get());
+}
+
+}  // namespace
+
+Expr precise(const Expr &input) {
+  // Return a fresh Expression subtree with every reachable BinaryOp and UnaryOp tagged `precise`. The user's original
+  // subtree is untouched: no in-place mutation, so aliasing a subexpression
+  // (`ab = a + b; x = qd.precise(ab); y = ab * 2`) does not retroactively tag the other alias. Non-walked kinds (loads,
+  // constants, qd.func calls, ndarray accesses, ...) are passed through by reference; they carry no `precise` field, so
+  // sharing them is safe. See expr.h for the full canonical contract.
+  return clone_and_tag_precise(input);
+}
+
 Expr &Expr::operator=(const Expr &o) {
   set(o);
   return *this;

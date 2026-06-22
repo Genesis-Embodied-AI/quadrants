@@ -483,6 +483,13 @@ class TaskCodeGenLLVM : public IRVisitor, public LLVMModuleBuilder {
   llvm::Value *bitcast_from_u64(llvm::Value *val, DataType type);
   llvm::Value *bitcast_to_u64(llvm::Value *val, DataType type);
 
+  // Clear every fast-math flag on the FP instruction backing `v`, so LLVM cannot reassociate, contract, or substitute
+  // approximations (e.g. sqrt -> rsqrt+refine, sin -> libm fast variant). No-op if `v` is not an
+  // `llvm::FPMathOperator`. Exposed so non-LLVM-base backends (AMDGPU, CUDA) that override `visit` for specific ops
+  // can honor `stmt->precise` consistently. Note: `setFastMathFlags(FastMathFlags{})` only OR's in flags on this LLVM
+  // version, so each flag has to be cleared individually.
+  static void disable_fast_math(llvm::Value *v);
+
   ~TaskCodeGenLLVM() override = default;
 
  private:

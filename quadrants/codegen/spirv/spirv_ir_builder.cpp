@@ -768,28 +768,33 @@ Value IRBuilder::popcnt(Value x) {
   return make_value(spv::OpBitCount, x.stype, x);
 }
 
-#define DEFINE_BUILDER_BINARY_USIGN_OP(_OpName, _Op)   \
-  Value IRBuilder::_OpName(Value a, Value b) {         \
-    QD_ASSERT(a.stype.id == b.stype.id);               \
-    if (is_integral(a.stype.dt)) {                     \
-      return make_value(spv::OpI##_Op, a.stype, a, b); \
-    } else {                                           \
-      QD_ASSERT(is_real(a.stype.dt));                  \
-      return make_value(spv::OpF##_Op, a.stype, a, b); \
-    }                                                  \
+// NOTE: `maybe_no_contraction` is defined inline in spirv_ir_builder.h so the `precise=false` branch folds away at the
+// many FP arithmetic call sites that invoke it unconditionally. See the header for the body and rationale.
+
+#define DEFINE_BUILDER_BINARY_USIGN_OP(_OpName, _Op)         \
+  Value IRBuilder::_OpName(Value a, Value b, bool precise) { \
+    QD_ASSERT(a.stype.id == b.stype.id);                     \
+    if (is_integral(a.stype.dt)) {                           \
+      return make_value(spv::OpI##_Op, a.stype, a, b);       \
+    }                                                        \
+    QD_ASSERT(is_real(a.stype.dt));                          \
+    Value v = make_value(spv::OpF##_Op, a.stype, a, b);      \
+    maybe_no_contraction(v, precise);                        \
+    return v;                                                \
   }
 
-#define DEFINE_BUILDER_BINARY_SIGN_OP(_OpName, _Op)         \
-  Value IRBuilder::_OpName(Value a, Value b) {              \
-    QD_ASSERT(a.stype.id == b.stype.id);                    \
-    if (is_integral(a.stype.dt) && is_signed(a.stype.dt)) { \
-      return make_value(spv::OpS##_Op, a.stype, a, b);      \
-    } else if (is_integral(a.stype.dt)) {                   \
-      return make_value(spv::OpU##_Op, a.stype, a, b);      \
-    } else {                                                \
-      QD_ASSERT(is_real(a.stype.dt));                       \
-      return make_value(spv::OpF##_Op, a.stype, a, b);      \
-    }                                                       \
+#define DEFINE_BUILDER_BINARY_SIGN_OP(_OpName, _Op)          \
+  Value IRBuilder::_OpName(Value a, Value b, bool precise) { \
+    QD_ASSERT(a.stype.id == b.stype.id);                     \
+    if (is_integral(a.stype.dt) && is_signed(a.stype.dt)) {  \
+      return make_value(spv::OpS##_Op, a.stype, a, b);       \
+    } else if (is_integral(a.stype.dt)) {                    \
+      return make_value(spv::OpU##_Op, a.stype, a, b);       \
+    }                                                        \
+    QD_ASSERT(is_real(a.stype.dt));                          \
+    Value v = make_value(spv::OpF##_Op, a.stype, a, b);      \
+    maybe_no_contraction(v, precise);                        \
+    return v;                                                \
   }
 
 DEFINE_BUILDER_BINARY_USIGN_OP(add, Add);
@@ -797,17 +802,18 @@ DEFINE_BUILDER_BINARY_USIGN_OP(sub, Sub);
 DEFINE_BUILDER_BINARY_USIGN_OP(mul, Mul);
 DEFINE_BUILDER_BINARY_SIGN_OP(div, Div);
 
-Value IRBuilder::mod(Value a, Value b) {
+Value IRBuilder::mod(Value a, Value b, bool precise) {
   QD_ASSERT(a.stype.id == b.stype.id);
   if (is_integral(a.stype.dt) && is_signed(a.stype.dt)) {
     // FIXME: figure out why OpSRem does not work
-    return sub(a, mul(b, div(a, b)));
+    return sub(a, mul(b, div(a, b, precise), precise), precise);
   } else if (is_integral(a.stype.dt)) {
     return make_value(spv::OpUMod, a.stype, a, b);
-  } else {
-    QD_ASSERT(is_real(a.stype.dt));
-    return make_value(spv::OpFRem, a.stype, a, b);
   }
+  QD_ASSERT(is_real(a.stype.dt));
+  Value v = make_value(spv::OpFRem, a.stype, a, b);
+  maybe_no_contraction(v, precise);
+  return v;
 }
 
 #define DEFINE_BUILDER_CMP_OP(_OpName, _Op)                                \

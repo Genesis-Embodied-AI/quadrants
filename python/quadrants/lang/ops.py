@@ -95,6 +95,59 @@ def cast(obj, dtype):
     return expr.Expr(_qd_core.value_cast(expr.Expr(obj).ptr, dtype))
 
 
+def precise(obj):
+    """Mark a floating-point expression as IEEE-strict.
+
+    Every binary and unary FP op inside ``obj`` is evaluated in source
+    order with no reassociation, no FMA contraction, no approximate
+    transcendental substitution, and no non-IEEE-exact algebraic
+    simplification, regardless of the module-level :attr:`fast_math`
+    setting. Folds that are IEEE-exact for every input (e.g.
+    ``a - 0 -> a``, ``a > a -> false``) are still applied. This is
+    equivalent to MSL's / HLSL's ``precise`` keyword and lets you keep
+    ``fast_math=True`` globally while protecting compensated-arithmetic
+    blocks (Dekker / Kahan 2Sum, Veltkamp split, etc.) from being folded
+    away.
+
+    Recursion descends through ``BinaryOp``, ``UnaryOp`` (cast, bit_cast,
+    neg, sqrt, ...), and ``TernaryOp`` (select) wrappers so that inner
+    binary ops are reached even when wrapped, e.g.
+    ``qd.precise(qd.bit_cast(a + b, qd.f32))``. It stops at loads,
+    constants, ``qd.func`` calls, ndarray accesses, etc.; semantics inside
+    a ``qd.func`` body are governed by that body's own ops - wrap calls
+    separately if needed.
+
+    Notes:
+        * ``qd.precise`` does NOT mutate the input expression. It returns
+          a fresh subtree that mirrors the input's structure, with every
+          reachable Binary / Unary / Ternary node cloned and the new
+          Binary / Unary nodes tagged as ``precise``. Non-walked nodes
+          (loads, constants, ``qd.func`` calls, ndarray accesses, ...)
+          are shared with the input by reference. The practical upshot:
+          reusing the original (pre-``precise``) expression value
+          elsewhere is safe - it will NOT pick up the tag.
+
+    Args:
+        obj: A scalar Quadrants expression (typically a chain of FP ops).
+
+    Returns:
+        A fresh expression subtree with every reachable binary and unary
+        FP op tagged as ``precise``. The original ``obj`` is unchanged.
+
+    Example::
+
+        >>> @qd.func
+        >>> def fast_two_sum(a, b):
+        >>>     # Local IEEE region, survives even with fast_math=True.
+        >>>     s = qd.precise(a + b)
+        >>>     e = qd.precise(b - (s - a))
+        >>>     return s, e
+    """
+    if is_quadrants_class(obj):
+        raise ValueError("Cannot apply precise on Quadrants classes")
+    return expr.Expr(_qd_core.precise(expr.Expr(obj).ptr))
+
+
 def bit_cast(obj, dtype):
     """Copy and cast a scalar to a specified data type with its underlying
     bits preserved. Must be called in quadrants scope.
@@ -1725,4 +1778,5 @@ __all__ = [
     "select",
     "abs",
     "pow",
+    "precise",
 ]

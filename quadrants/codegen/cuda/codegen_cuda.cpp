@@ -220,6 +220,9 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
     }
 
     auto op = stmt->op_type;
+    // The fast-math libdevice variants (__nv_fast_*) bypass LLVM FMF entirely (they're plain function calls, not FP
+    // intrinsics), so qd.precise(...) has to opt out of them at each call site below.
+    const bool use_fast = compile_config.fast_math && !stmt->precise;
 
 #define UNARY_STD(x)                                                       \
   else if (op == UnaryOpType::x) {                                         \
@@ -308,8 +311,7 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
       }
     } else if (op == UnaryOpType::log) {
       if (input_quadrants_type->is_primitive(PrimitiveTypeID::f32)) {
-        // logf has fast-math option
-        llvm_val[stmt] = call(compile_config.fast_math ? "__nv_fast_logf" : "__nv_logf", input);
+        llvm_val[stmt] = call(use_fast ? "__nv_fast_logf" : "__nv_logf", input);
       } else if (input_quadrants_type->is_primitive(PrimitiveTypeID::f64)) {
         llvm_val[stmt] = call("__nv_log", input);
       } else if (input_quadrants_type->is_primitive(PrimitiveTypeID::i32)) {
@@ -319,8 +321,7 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
       }
     } else if (op == UnaryOpType::sin) {
       if (input_quadrants_type->is_primitive(PrimitiveTypeID::f32)) {
-        // sinf has fast-math option
-        llvm_val[stmt] = call(compile_config.fast_math ? "__nv_fast_sinf" : "__nv_sinf", input);
+        llvm_val[stmt] = call(use_fast ? "__nv_fast_sinf" : "__nv_sinf", input);
       } else if (input_quadrants_type->is_primitive(PrimitiveTypeID::f64)) {
         llvm_val[stmt] = call("__nv_sin", input);
       } else if (input_quadrants_type->is_primitive(PrimitiveTypeID::i32)) {
@@ -330,8 +331,7 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
       }
     } else if (op == UnaryOpType::cos) {
       if (input_quadrants_type->is_primitive(PrimitiveTypeID::f32)) {
-        // cosf has fast-math option
-        llvm_val[stmt] = call(compile_config.fast_math ? "__nv_fast_cosf" : "__nv_cosf", input);
+        llvm_val[stmt] = call(use_fast ? "__nv_fast_cosf" : "__nv_cosf", input);
       } else if (input_quadrants_type->is_primitive(PrimitiveTypeID::f64)) {
         llvm_val[stmt] = call("__nv_cos", input);
       } else if (input_quadrants_type->is_primitive(PrimitiveTypeID::i32)) {
@@ -352,7 +352,14 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
     }
 #undef UNARY_STD
     if (stmt->ret_type->is_primitive(PrimitiveTypeID::f16)) {
-      // Convert back to f16.
+      // Convert back to f16. FPTrunc is not an FPMathOperator, so the post-hoc
+      // `disable_fast_math(llvm_val[stmt])` in visit(UnaryOpStmt*) would be a no-op on it and leave
+      // the libdevice CallInst (an FPMathOperator when returning FP) still carrying the IRBuilder's
+      // `afn` / `reassoc` / ... Clear FMF here on the actual call before its handle is overwritten
+      // by the FPTrunc. Mirrors the guard in the base class emit_extra_unary().
+      if (stmt->precise) {
+        disable_fast_math(llvm_val[stmt]);
+      }
       llvm_val[stmt] = builder->CreateFPTrunc(llvm_val[stmt], llvm::Type::getHalfTy(*llvm_context));
     }
   }
@@ -746,9 +753,17 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
       }
     }
 
-    // Convert back to f16 if applicable.
+    // Convert back to f16 if applicable. Mirror the base class's pattern: clear FMF on the actual FP call before the
+    // FPTrunc overwrites its handle (FPTrunc is not an FPMathOperator). The AMDGPU override does the same; this branch
+    // of CUDA override previously skipped the clear entirely because the base class never runs for pow/atan2.
     if (stmt->ret_type->is_primitive(PrimitiveTypeID::f16)) {
+      if (stmt->precise) {
+        disable_fast_math(llvm_val[stmt]);
+      }
       llvm_val[stmt] = builder->CreateFPTrunc(llvm_val[stmt], llvm::Type::getHalfTy(*llvm_context));
+    }
+    if (stmt->precise) {
+      disable_fast_math(llvm_val[stmt]);
     }
   }
 

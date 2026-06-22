@@ -156,6 +156,8 @@ class UnaryOpStmt : public Stmt {
   UnaryOpType op_type;
   Stmt *operand;
   DataType cast_type;
+  // Set by `qd.precise(...)`; see quadrants::lang::precise() in ir/expr.h for the canonical contract.
+  bool precise{false};
 
   UnaryOpStmt(UnaryOpType op_type, Stmt *operand, const DebugInfo &dbg_info = DebugInfo());
 
@@ -166,7 +168,7 @@ class UnaryOpStmt : public Stmt {
     return false;
   }
 
-  QD_STMT_DEF_FIELDS(ret_type, op_type, operand, cast_type);
+  QD_STMT_DEF_FIELDS(ret_type, op_type, operand, cast_type, precise);
   QD_DEFINE_ACCEPT_AND_CLONE
 };
 
@@ -249,6 +251,8 @@ class BinaryOpStmt : public Stmt {
   BinaryOpType op_type;
   Stmt *lhs, *rhs;
   bool is_bit_vectorized;  // TODO: remove this field
+  // Set by `qd.precise(...)`; see quadrants::lang::precise() in ir/expr.h for the canonical contract.
+  bool precise{false};
 
   BinaryOpStmt(BinaryOpType op_type,
                Stmt *lhs,
@@ -265,7 +269,7 @@ class BinaryOpStmt : public Stmt {
     return false;
   }
 
-  QD_STMT_DEF_FIELDS(ret_type, op_type, lhs, rhs, is_bit_vectorized);
+  QD_STMT_DEF_FIELDS(ret_type, op_type, lhs, rhs, is_bit_vectorized, precise);
   QD_DEFINE_ACCEPT_AND_CLONE
 };
 

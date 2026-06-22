@@ -199,6 +199,10 @@ class Scalarize : public BasicStmtVisitor {
           unary_stmt->cast_type = stmt->cast_type.get_element_type();
         }
         unary_stmt->ret_type = primitive_type;
+        // Propagate the user's `qd.precise(...)` tag onto each scalar element. Without this, scalarizing a
+        // tensor-typed precise op (e.g. from a field access returning a TensorType) would silently drop the tag
+        // on every element, reintroducing fast-math behavior on what should be an IEEE-strict computation.
+        unary_stmt->precise = stmt->precise;
         matrix_init_values.push_back(unary_stmt.get());
 
         delayed_modifier_.insert_before(stmt, std::move(unary_stmt));
@@ -268,6 +272,9 @@ class Scalarize : public BasicStmtVisitor {
         auto binary_stmt = std::make_unique<BinaryOpStmt>(stmt->op_type, lhs_vals[i], rhs_vals[i]);
         matrix_init_values.push_back(binary_stmt.get());
         binary_stmt->ret_type = primitive_type;
+        // Propagate `qd.precise(...)` onto each scalar element; see the matching comment in the UnaryOpStmt
+        // decomposition above.
+        binary_stmt->precise = stmt->precise;
 
         delayed_modifier_.insert_before(stmt, std::move(binary_stmt));
       }

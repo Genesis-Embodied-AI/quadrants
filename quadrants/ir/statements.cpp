@@ -23,14 +23,17 @@ bool UnaryOpStmt::is_cast() const {
 }
 
 bool UnaryOpStmt::same_operation(UnaryOpStmt *o) const {
-  if (op_type == o->op_type) {
-    if (is_cast()) {
-      return cast_type == o->cast_type;
-    } else {
-      return true;
-    }
+  if (op_type != o->op_type) {
+    return false;
   }
-  return false;
+  // Two unary ops that differ only in their `precise` flag are not the same operation.
+  if (precise != o->precise) {
+    return false;
+  }
+  if (is_cast()) {
+    return cast_type == o->cast_type;
+  }
+  return true;
 }
 
 ExternalPtrStmt::ExternalPtrStmt(Stmt *base_ptr,

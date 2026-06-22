@@ -13,11 +13,14 @@ class AlgSimp : public BasicStmtVisitor {
   static constexpr int max_weaken_exponent = 32;
 
  private:
-  void cast_to_result_type(Stmt *&a, Stmt *stmt) {
+  void cast_to_result_type(Stmt *&a, Stmt *stmt, bool precise = false) {
     if (stmt->ret_type != a->ret_type) {
       auto cast = Stmt::make_typed<UnaryOpStmt>(UnaryOpType::cast_value, a);
       cast->cast_type = stmt->ret_type;
       cast->ret_type = stmt->ret_type;
+      // Propagate the user's `qd.precise(...)` tag: a cast chain inside a precise op (e.g. the `f64 -> f32` cast on `a`
+      // for `qd.precise(f32_var ** 2.0)`) must stay IEEE-strict so codegen's FMF clear / NoContraction reaches it.
+      cast->precise = precise;
       a = cast.get();
       modifier.insert_before(stmt, std::move(cast));
     }
@@ -182,9 +185,12 @@ class AlgSimp : public BasicStmtVisitor {
       }
     }
     auto a = stmt->lhs;
-    cast_to_result_type(a, stmt);
-    auto result = Stmt::make<UnaryOpStmt>(UnaryOpType::sqrt, a);
+    cast_to_result_type(a, stmt, stmt->precise);
+    auto result = Stmt::make_typed<UnaryOpStmt>(UnaryOpType::sqrt, a);
     result->ret_type = a->ret_type;
+    // `a ** 0.5 -> sqrt(a)` is IEEE-equivalent, but the synthesized sqrt must carry `precise` so codegen clears FMF on
+    // it; otherwise `qd.precise(x ** 0.5)` silently gets `afn`-approximated.
+    result->precise = stmt->precise;
     stmt->replace_usages_with(result.get());
     modifier.insert_before(stmt, std::move(result));
     modifier.erase(stmt);
@@ -211,7 +217,7 @@ class AlgSimp : public BasicStmtVisitor {
 
     // a ** n -> Exponentiation by squaring
     auto a = stmt->lhs;
-    cast_to_result_type(a, stmt);
+    cast_to_result_type(a, stmt, stmt->precise);
     const int exp = exponent;
     Stmt *result = nullptr;
     auto a_power_of_2 = a;
@@ -221,8 +227,11 @@ class AlgSimp : public BasicStmtVisitor {
         if (!result)
           result = a_power_of_2;
         else {
-          auto new_result = Stmt::make<BinaryOpStmt>(BinaryOpType::mul, result, a_power_of_2);
+          auto new_result = Stmt::make_typed<BinaryOpStmt>(BinaryOpType::mul, result, a_power_of_2);
           new_result->ret_type = a->ret_type;
+          // Propagate `qd.precise(...)`: the mul chain is IEEE-equivalent to `pow(a, n)`, but every mul must carry the
+          // tag so codegen clears FMF on them.
+          new_result->precise = stmt->precise;
           result = new_result.get();
           modifier.insert_before(stmt, std::move(new_result));
         }
@@ -230,8 +239,9 @@ class AlgSimp : public BasicStmtVisitor {
       current_exponent <<= 1;
       if (current_exponent > exp)
         break;
-      auto new_a_power = Stmt::make<BinaryOpStmt>(BinaryOpType::mul, a_power_of_2, a_power_of_2);
+      auto new_a_power = Stmt::make_typed<BinaryOpStmt>(BinaryOpType::mul, a_power_of_2, a_power_of_2);
       new_a_power->ret_type = a->ret_type;
+      new_a_power->precise = stmt->precise;
       a_power_of_2 = new_a_power.get();
       modifier.insert_before(stmt, std::move(new_a_power));
     }
@@ -264,13 +274,20 @@ class AlgSimp : public BasicStmtVisitor {
       modifier.insert_before(stmt, std::move(s));
     }
 
-    cast_to_result_type(one, stmt);
-    auto new_exponent = Stmt::make<UnaryOpStmt>(UnaryOpType::neg, stmt->rhs);
+    cast_to_result_type(one, stmt, stmt->precise);
+    auto new_exponent = Stmt::make_typed<UnaryOpStmt>(UnaryOpType::neg, stmt->rhs);
     new_exponent->ret_type = stmt->rhs->ret_type;
-    auto a_to_n = Stmt::make<BinaryOpStmt>(BinaryOpType::pow, stmt->lhs, new_exponent.get());
+    // `a ** -n -> 1 / (a ** n)` is IEEE-equivalent, but the synthesized neg / pow / div must carry `precise` so the
+    // subsequent `a ** n -> mul chain` rewrite (exponent_n_optimize) and codegen see the IEEE-strict tag. `neg` on the
+    // integer exponent is tagged for completeness - the flag has no effect on integer ops but keeps the chain
+    // self-consistent for future FP ternary-style exponents.
+    new_exponent->precise = stmt->precise;
+    auto a_to_n = Stmt::make_typed<BinaryOpStmt>(BinaryOpType::pow, stmt->lhs, new_exponent.get());
     a_to_n->ret_type = stmt->ret_type;
-    auto result = Stmt::make<BinaryOpStmt>(BinaryOpType::div, one, a_to_n.get());
+    a_to_n->precise = stmt->precise;
+    auto result = Stmt::make_typed<BinaryOpStmt>(BinaryOpType::div, one, a_to_n.get());
     result->ret_type = stmt->ret_type;
+    result->precise = stmt->precise;
     stmt->replace_usages_with(result.get());
     modifier.insert_before(stmt, std::move(new_exponent));
     modifier.insert_before(stmt, std::move(a_to_n));
@@ -345,8 +362,9 @@ class AlgSimp : public BasicStmtVisitor {
       modifier.erase(stmt);
       return true;
     }
-    if ((fast_math || is_integral(stmt->ret_type.get_element_type())) && (alg_is_zero(lhs) || alg_is_zero(rhs))) {
-      // fast_math or integral operands: 0 * a -> 0, a * 0 -> 0
+    if (((fast_math && !stmt->precise) || is_integral(stmt->ret_type.get_element_type())) &&
+        (alg_is_zero(lhs) || alg_is_zero(rhs))) {
+      // fast_math or integral operands: 0 * a -> 0, a * 0 -> 0. Skipped when `stmt->precise` is set.
       replace_with_zero(stmt);
       return true;
     }
@@ -372,10 +390,13 @@ class AlgSimp : public BasicStmtVisitor {
       auto a = stmt->lhs;
       if (alg_is_two(lhs))
         a = stmt->rhs;
-      cast_to_result_type(a, stmt);
-      auto sum = Stmt::make<BinaryOpStmt>(BinaryOpType::add, a, a);
+      cast_to_result_type(a, stmt, stmt->precise);
+      auto sum = Stmt::make_typed<BinaryOpStmt>(BinaryOpType::add, a, a);
       sum->ret_type = a->ret_type;
       sum->dbg_info = stmt->dbg_info;
+      // `2 * a` and `a + a` are IEEE-equivalent, but the synthesized add must carry `precise` so the downstream FMF
+      // clear / NoContraction plumbing still sees the user's opt-in tag.
+      sum->precise = stmt->precise;
       stmt->replace_usages_with(sum.get());
       modifier.insert_before(stmt, std::move(sum));
       modifier.erase(stmt);
@@ -395,13 +416,13 @@ class AlgSimp : public BasicStmtVisitor {
       modifier.erase(stmt);
       return true;
     }
-    if ((fast_math || is_integral(stmt->ret_type.get_element_type())) &&
+    if (((fast_math && !stmt->precise) || is_integral(stmt->ret_type.get_element_type())) &&
         irpass::analysis::same_value(stmt->lhs, stmt->rhs)) {
-      // fast_math or integral operands: a / a -> 1
+      // fast_math or integral operands: a / a -> 1. Skipped when `stmt->precise` is set.
       replace_with_one(stmt);
       return true;
     }
-    if (fast_math && alg_is_optimizable(rhs) && is_real(rhs->ret_type.get_element_type()) &&
+    if (fast_math && !stmt->precise && alg_is_optimizable(rhs) && is_real(rhs->ret_type.get_element_type()) &&
         stmt->op_type != BinaryOpType::floordiv) {
       if (alg_is_zero(rhs)) {
         QD_WARN("Potential division by 0\n{}", stmt->get_tb());
@@ -441,12 +462,15 @@ class AlgSimp : public BasicStmtVisitor {
       optimize_division(stmt);
     } else if (stmt->op_type == BinaryOpType::add || stmt->op_type == BinaryOpType::sub ||
                stmt->op_type == BinaryOpType::bit_or || stmt->op_type == BinaryOpType::bit_xor) {
-      if (alg_is_zero(rhs)) {
-        // a +-|^ 0 -> a
+      const bool precise_fp_add =
+          stmt->precise && stmt->op_type == BinaryOpType::add && is_real(stmt->ret_type.get_element_type());
+      if (alg_is_zero(rhs) && !precise_fp_add) {
+        // a +-|^ 0 -> a. Skipped only for `precise` FP adds: `(-0.0) + 0.0` yields `+0.0` under IEEE. `a - 0 -> a` is
+        // IEEE-exact for every `a` and `bit_or`/`bit_xor` are integer ops, so they stay unconditional.
         stmt->replace_usages_with(stmt->lhs);
         modifier.erase(stmt);
-      } else if (stmt->op_type != BinaryOpType::sub && alg_is_zero(lhs)) {
-        // 0 +|^ a -> a
+      } else if (stmt->op_type != BinaryOpType::sub && alg_is_zero(lhs) && !precise_fp_add) {
+        // 0 +|^ a -> a. Same reasoning.
         stmt->replace_usages_with(stmt->rhs);
         modifier.erase(stmt);
       } else if (stmt->op_type == BinaryOpType::bit_or && irpass::analysis::same_value(stmt->lhs, stmt->rhs)) {
@@ -454,12 +478,15 @@ class AlgSimp : public BasicStmtVisitor {
         stmt->replace_usages_with(stmt->lhs);
         modifier.erase(stmt);
       } else if ((stmt->op_type == BinaryOpType::sub || stmt->op_type == BinaryOpType::bit_xor) &&
-                 (fast_math || is_integral(stmt->ret_type.get_element_type())) &&
+                 ((fast_math && !stmt->precise) || is_integral(stmt->ret_type.get_element_type())) &&
                  irpass::analysis::same_value(stmt->lhs, stmt->rhs)) {
-        // fast_math or integral operands: a -^ a -> 0
+        // fast_math or integral operands: a -^ a -> 0. Skipped when `stmt->precise` is set.
         replace_with_zero(stmt);
       }
     } else if (stmt->op_type == BinaryOpType::pow) {
+      // Each exponent_* helper propagates `stmt->precise` onto its synthesized stmts (sqrt for ** 0.5, the mul chain
+      // for ** n, and neg/pow/div for ** -n), so `qd.precise(x ** n)` keeps the fast rewritten form AND the
+      // IEEE-strict tag that reaches codegen's FMF clear / NoContraction.
       if (exponent_one_optimize(stmt)) {
         // a ** 1 -> a
       } else if (exponent_zero_optimize(stmt)) {
@@ -500,9 +527,14 @@ class AlgSimp : public BasicStmtVisitor {
         modifier.erase(stmt);
       }
     } else if (is_comparison(stmt->op_type)) {
-      if ((fast_math || is_integral(stmt->lhs->ret_type.get_element_type())) &&
+      // Strict inequalities `a > a` / `a < a` are `false` for every input under IEEE 754 (including NaN, since
+      // the ordered relations are false on unordered operands), so their self-fold does not need the `!precise`
+      // gate that the other comparisons need to preserve NaN semantics.
+      const bool is_strict_ineq = stmt->op_type == BinaryOpType::cmp_gt || stmt->op_type == BinaryOpType::cmp_lt;
+      if (((fast_math && (is_strict_ineq || !stmt->precise)) || is_integral(stmt->lhs->ret_type.get_element_type())) &&
           irpass::analysis::same_value(stmt->lhs, stmt->rhs)) {
-        // fast_math or integral operands: a == a -> 1, a != a -> 0
+        // fast_math or integral operands: a == a -> 1, a != a -> 0. Skipped for `stmt->precise` except on
+        // strict inequalities where the fold is IEEE-exact regardless of the precise tag.
         if (stmt->op_type == BinaryOpType::cmp_eq || stmt->op_type == BinaryOpType::cmp_ge ||
             stmt->op_type == BinaryOpType::cmp_le) {
           replace_with_one(stmt);
