@@ -628,11 +628,14 @@ RhiResult MetalCommandList::dispatch_indirect(DevicePtr dim3_ptr) noexcept {
   std::vector<MetalShaderResource> shader_resources =
       current_shader_resource_set_->resources();
 
-  // Resolve the indirect buffer through the same device allocation path the SSBO binds use.
-  // `dispatchThreadgroupsWithIndirectBuffer:indirectBufferOffset:threadsPerThreadgroup:` is the standard Metal
-  // indirect-compute primitive (Metal 2+, all relevant hardware). The buffer holds three consecutive uint32 workgroup
-  // counts at `dim3_ptr.offset` (little-endian; matches Vulkan / SPIR-V layout). A dispatch with `(0, 0, 0)` is a no-op
-  // at the encoder level - Metal records the indirect dispatch but the GPU schedules zero threadgroups.
+  // Resolve the indirect buffer through the same device allocation path the
+  // SSBO binds use.
+  // `dispatchThreadgroupsWithIndirectBuffer:indirectBufferOffset:threadsPerThreadgroup:`
+  // is the standard Metal indirect-compute primitive (Metal 2+, all relevant
+  // hardware). The buffer holds three consecutive uint32 workgroup counts at
+  // `dim3_ptr.offset` (little-endian; matches Vulkan / SPIR-V layout). A
+  // dispatch with `(0, 0, 0)` is a no-op at the encoder level - Metal records
+  // the indirect dispatch but the GPU schedules zero threadgroups.
   const MetalMemory &mem = device_->get_memory(dim3_ptr.alloc_id);
   MTLBuffer_id mtl_indirect_buffer = mem.mtl_buffer();
 
