@@ -72,9 +72,7 @@ source env.sh
 pip install --no-build-isolation -e . -Ceditable.rebuild=true
 ```
 
-`build.py` exports both the legacy `QUADRANTS_CMAKE_ARGS` and the `CMAKE_ARGS` that scikit-build-core
-actually reads, so sourcing `env.sh` (or using `--shell`) is enough -- no manual
-`export CMAKE_ARGS="$QUADRANTS_CMAKE_ARGS"` step is needed.
+`build.py` exports both the legacy `QUADRANTS_CMAKE_ARGS` and the `CMAKE_ARGS` that scikit-build-core actually reads, so sourcing `env.sh` (or using `--shell`) is enough -- no manual `export CMAKE_ARGS="$QUADRANTS_CMAKE_ARGS"` step is needed.
 
 ## Building the package for release purposes
 
