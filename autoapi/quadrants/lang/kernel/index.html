@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>quadrants.lang.kernel &#8212; Quadrants 1.1.0 documentation</title>
+    <title>quadrants.lang.kernel &#8212; Quadrants 1.0.3 documentation</title>
   
   
   
@@ -43,7 +43,7 @@
   <link rel="preload" as="script" href="../../../../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5" />
 <link rel="preload" as="script" href="../../../../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5" />
 
-    <script src="../../../../_static/documentation_options.js?v=fc837d61"></script>
+    <script src="../../../../_static/documentation_options.js?v=baaebd52"></script>
     <script src="../../../../_static/doctools.js?v=9bcbadda"></script>
     <script src="../../../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../../../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -63,7 +63,7 @@
     <link rel="prev" title="quadrants.lang.intrinsics" href="../intrinsics/index.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="1.1.0" />
+  <meta name="docsearch:version" content="1.0.3" />
   
     
     <script src="../../../../_static/searchtools.js"></script>
@@ -131,7 +131,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 1.1.0 documentation</p>
+    <p class="title logo__title">Quadrants 1.0.3 documentation</p>
   
 </a></div>
     
@@ -372,7 +372,10 @@
 <tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.kernel.ASTGenerator" title="quadrants.lang.kernel.ASTGenerator"><code class="xref py py-obj docutils literal notranslate"><span class="pre">ASTGenerator</span></code></a></p></td>
 <td><p></p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.kernel.Kernel" title="quadrants.lang.kernel.Kernel"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Kernel</span></code></a></p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.kernel.GraphDoWhileLevel" title="quadrants.lang.kernel.GraphDoWhileLevel"><code class="xref py py-obj docutils literal notranslate"><span class="pre">GraphDoWhileLevel</span></code></a></p></td>
+<td><p>One nested <code class="docutils literal notranslate"><span class="pre">qd.graph_do_while</span></code> loop in a <code class="docutils literal notranslate"><span class="pre">graph=True</span></code> kernel, indexed by level id (assigned</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.kernel.Kernel" title="quadrants.lang.kernel.Kernel"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Kernel</span></code></a></p></td>
 <td><p>Base class for Kernels and Funcs</p></td>
 </tr>
 </tbody>
@@ -437,6 +440,28 @@
 </dd></dl>
 
 <dl class="py class">
+<dt class="sig sig-object py" id="quadrants.lang.kernel.GraphDoWhileLevel">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">quadrants.lang.kernel.</span></span><span class="sig-name descname"><span class="pre">GraphDoWhileLevel</span></span><a class="reference internal" href="../../../../_modules/quadrants/lang/kernel.html#GraphDoWhileLevel"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.kernel.GraphDoWhileLevel" title="Link to this definition">#</a></dt>
+<dd><p>One nested <code class="docutils literal notranslate"><span class="pre">qd.graph_do_while</span></code> loop in a <code class="docutils literal notranslate"><span class="pre">graph=True</span></code> kernel, indexed by level id (assigned
+outer-before-inner by the AST transformer). Mirrors the C++ <code class="docutils literal notranslate"><span class="pre">GraphDoWhileLevel</span></code>.</p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="quadrants.lang.kernel.GraphDoWhileLevel.cond_arg_name">
+<span class="sig-name descname"><span class="pre">cond_arg_name</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">str</span></em><a class="reference internal" href="../../../../_modules/quadrants/lang/kernel.html#GraphDoWhileLevel.cond_arg_name"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.kernel.GraphDoWhileLevel.cond_arg_name" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="quadrants.lang.kernel.GraphDoWhileLevel.parent_id">
+<span class="sig-name descname"><span class="pre">parent_id</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">int</span></em><a class="reference internal" href="../../../../_modules/quadrants/lang/kernel.html#GraphDoWhileLevel.parent_id"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.kernel.GraphDoWhileLevel.parent_id" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="quadrants.lang.kernel.GraphDoWhileLevel.cond_cpp_arg_id">
+<span class="sig-name descname"><span class="pre">cond_cpp_arg_id</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">int</span></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">-1</span></em><a class="reference internal" href="../../../../_modules/quadrants/lang/kernel.html#GraphDoWhileLevel.cond_cpp_arg_id"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.kernel.GraphDoWhileLevel.cond_cpp_arg_id" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
 <dt class="sig sig-object py" id="quadrants.lang.kernel.Kernel">
 <em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">quadrants.lang.kernel.</span></span><span class="sig-name descname"><span class="pre">Kernel</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">_func</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Callable</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">autodiff_mode</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">quadrants.types.enums.AutodiffMode</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">_is_classkernel</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/kernel.html#Kernel"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.kernel.Kernel" title="Link to this definition">#</a></dt>
 <dd><p>Bases: <code class="xref py py-obj docutils literal notranslate"><span class="pre">quadrants.lang._func_base.FuncBase</span></code></p>
@@ -484,6 +509,11 @@
 <dl class="py attribute">
 <dt class="sig sig-object py" id="quadrants.lang.kernel.Kernel.graph_do_while_arg">
 <span class="sig-name descname"><span class="pre">graph_do_while_arg</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">None</span></em><a class="reference internal" href="../../../../_modules/quadrants/lang/kernel.html#Kernel.graph_do_while_arg"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.kernel.Kernel.graph_do_while_arg" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="quadrants.lang.kernel.Kernel.graph_do_while_levels">
+<span class="sig-name descname"><span class="pre">graph_do_while_levels</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">list</span><span class="p"><span class="pre">[</span></span><a class="reference internal" href="#quadrants.lang.kernel.GraphDoWhileLevel" title="quadrants.lang.kernel.GraphDoWhileLevel"><span class="pre">GraphDoWhileLevel</span></a><span class="p"><span class="pre">]</span></span></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">[]</span></em><a class="reference internal" href="../../../../_modules/quadrants/lang/kernel.html#Kernel.graph_do_while_levels"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.kernel.Kernel.graph_do_while_levels" title="Link to this definition">#</a></dt>
 <dd></dd></dl>
 
 <dl class="py attribute">
@@ -630,6 +660,12 @@
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.kernel.ASTGenerator.dump_ast"><code class="docutils literal notranslate"><span class="pre">ASTGenerator.dump_ast</span></code></a></li>
 </ul>
 </li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.kernel.GraphDoWhileLevel"><code class="docutils literal notranslate"><span class="pre">GraphDoWhileLevel</span></code></a><ul class="nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.kernel.GraphDoWhileLevel.cond_arg_name"><code class="docutils literal notranslate"><span class="pre">GraphDoWhileLevel.cond_arg_name</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.kernel.GraphDoWhileLevel.parent_id"><code class="docutils literal notranslate"><span class="pre">GraphDoWhileLevel.parent_id</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.kernel.GraphDoWhileLevel.cond_cpp_arg_id"><code class="docutils literal notranslate"><span class="pre">GraphDoWhileLevel.cond_cpp_arg_id</span></code></a></li>
+</ul>
+</li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.kernel.Kernel"><code class="docutils literal notranslate"><span class="pre">Kernel</span></code></a><ul class="nav section-nav flex-column">
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.kernel.Kernel.counter"><code class="docutils literal notranslate"><span class="pre">Kernel.counter</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.kernel.Kernel.kernel_counter"><code class="docutils literal notranslate"><span class="pre">Kernel.kernel_counter</span></code></a></li>
@@ -640,6 +676,7 @@
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.kernel.Kernel.has_print"><code class="docutils literal notranslate"><span class="pre">Kernel.has_print</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.kernel.Kernel.use_graph"><code class="docutils literal notranslate"><span class="pre">Kernel.use_graph</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.kernel.Kernel.graph_do_while_arg"><code class="docutils literal notranslate"><span class="pre">Kernel.graph_do_while_arg</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.kernel.Kernel.graph_do_while_levels"><code class="docutils literal notranslate"><span class="pre">Kernel.graph_do_while_levels</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.kernel.Kernel.quadrants_callable"><code class="docutils literal notranslate"><span class="pre">Kernel.quadrants_callable</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.kernel.Kernel.visited_functions"><code class="docutils literal notranslate"><span class="pre">Kernel.visited_functions</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.kernel.Kernel.kernel_function_info"><code class="docutils literal notranslate"><span class="pre">Kernel.kernel_function_info</span></code></a></li>

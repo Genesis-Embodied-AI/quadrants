@@ -54,14 +54,14 @@ uv pip install --group dev --group test
 
 `build.py` can be used at least two ways:
 
-* `build.py wheel` to build the wheel (via scikit-build-core, i.e. `pip wheel`)
+* `build.py wheel` to build the wheel currently using `setup.py bdist_wheel`
 * `build.py --shell` to enter a shell with environment variables set up as with `build.py wheel` in order to let you invoke yourself the commands.
 
-For incremental development, do an editable install (scikit-build-core "redirect" mode: the compiled core is installed and rebuilt on demand, Python edits are live):
+`python setup.py develop` provides incremental builds:
 
 ```
 ./build.py --shell # run a new shell with environment variables
-pip install --no-build-isolation -e . -Ceditable.rebuild=true
+python setup.py develop
 ```
 
 To write the environment variables to a file, use `./build.py -w [filename]`. For example:
@@ -69,9 +69,7 @@ To write the environment variables to a file, use `./build.py -w [filename]`. Fo
 ```
 ./build.py -w env.sh
 source env.sh
-# scikit-build-core reads CMake args from CMAKE_ARGS, not QUADRANTS_CMAKE_ARGS:
-export CMAKE_ARGS="$QUADRANTS_CMAKE_ARGS"
-pip install --no-build-isolation -e . -Ceditable.rebuild=true
+python setup.py develop
 ```
 
 ## Building the package for release purposes
@@ -82,18 +80,18 @@ To build the release package:
 ./build.py wheel
 ```
 
-We use `cmake` to build the C++ core. scikit-build-core puts the CMake build tree under `build/{wheel_tag}`, where the wheel tag encodes the Python version and host platform. For example: `build/cp310-cp310-linux_x86_64`.
+We use `cmake` to build the C++ core. The build directory depends on the host architecture and the python version. For example: `_skbuild/linux-x86_64-3.10/cmake-build`.
 
 You can modify the cmake options to your liking in order to enable or disable some features you need or don't need. To discover them, you can use `ccmake`:
 
 ```
-ccmake build/cp310-cp310-linux_x86_64
+ccmake _skbuild/linux-x86_64-3.10/cmake-build
 ```
 
-You could then set the environment variable `CMAKE_ARGS` (scikit-build-core's CMake-args passthrough) to configure the build. `build.py` also accepts the legacy `QUADRANTS_CMAKE_ARGS` and forwards it to `CMAKE_ARGS`. For instance, to disable the CUDA and AMDGPU backends:
+You could then set the environment variable `QUADRANTS_CMAKE_ARGS` that will be appended to the `cmake` command used to configure the `cmake` build. For instance, to disable the CUDA and AMDGPU backends:
 
 ```
-export CMAKE_ARGS="-DQD_WITH_CUDA=OFF -DQD_WITH_AMDGPU=OFF"
+export QUADRANTS_CMAKE_ARGS="-DQD_WITH_CUDA=OFF -DQD_WITH_AMDGPU=OFF"
 ```
 
 To direct `cmake` where to look at for some dependencies, for example `LLVM`, you could either use an environment variable `LLVM_DIR` or specify the cmake option `LLVM_ROOT`:
