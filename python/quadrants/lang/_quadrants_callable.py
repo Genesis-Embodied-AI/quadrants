@@ -105,10 +105,10 @@ class QuadrantsCallable:
             (in particular the ``from_checkpoint=`` kwarg) and behaviour may change in any future release without a
             deprecation cycle.
 
-        Use only on ``@qd.kernel(graph=True, checkpoints=True)`` kernels with at least one
-        ``qd.checkpoint(cp_id, yield_on=flag)`` block. ``from_checkpoint`` is a ``cp_id`` label (typically an
-        ``IntEnum`` value, often ``status.checkpoint`` from the previous launch): everything before that label in
-        source order is skipped on this launch, and execution continues from there. The host loop pattern is::
+        Use only on ``@qd.kernel(graph=True, checkpoints=True)`` kernels with at least one ``qd.checkpoint(cp_id,
+        yield_on=flag)`` block. ``from_checkpoint`` is a ``cp_id`` label (typically an ``IntEnum`` value, often
+        ``status.checkpoint`` from the previous launch): everything before that label in source order is skipped on this
+        launch, and execution continues from there. The host loop pattern is::
 
             from enum import IntEnum
 

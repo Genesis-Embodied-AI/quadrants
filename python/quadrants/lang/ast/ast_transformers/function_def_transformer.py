@@ -653,10 +653,10 @@ class FunctionDefTransformer:
                 FunctionDefTransformer._validate_graph_do_while_stmt_list(stmt.orelse, is_kernel_top=is_kernel_top)
                 continue
             if isinstance(stmt, ast.With) and FunctionDefTransformer._is_checkpoint_with(stmt):
-                # `with qd.checkpoint(...)` is a legal placement for graph kernels (the checkpoint may sit at the
-                # kernel top level or inside any graph_do_while level). Recurse so a malformed graph_do_while
-                # nested inside a checkpoint body is still caught; the checkpoint's own body restrictions are
-                # enforced by `CheckpointTransformer.build_checkpoint_with`.
+                # `with qd.checkpoint(...)` is a legal placement for graph kernels (the checkpoint may sit at the kernel
+                # top level or inside any graph_do_while level). Recurse so a malformed graph_do_while nested inside a
+                # checkpoint body is still caught; the checkpoint's own body restrictions are enforced by
+                # `CheckpointTransformer.build_checkpoint_with`.
                 FunctionDefTransformer._validate_graph_do_while_stmt_list(stmt.body, is_kernel_top=is_kernel_top)
                 continue
             where = "the kernel body" if is_kernel_top else "a qd.graph_do_while() body"

@@ -538,10 +538,10 @@ enum class AllocUsage : int {
   Vertex = 4,
   Index = 8,
   Upload = 16,
-  // Backing memory for `vkCmdDispatchIndirect` / `dispatchThreadgroupsIndirect`. Combine with `Storage`
-  // when the same buffer needs to be both writable as an SSBO (so a gate compute shader can populate the
-  // workgroup-count triple) and read by the GPU as an indirect-dispatch source. See
-  // `CommandList::dispatch_indirect` for the higher-level mechanism this flag exists to support.
+  // Backing memory for `vkCmdDispatchIndirect` / `dispatchThreadgroupsIndirect`. Combine with `Storage` when the same
+  // buffer needs to be both writable as an SSBO (so a gate compute shader can populate the workgroup-count triple) and
+  // read by the GPU as an indirect-dispatch source. See `CommandList::dispatch_indirect` for the higher-level mechanism
+  // this flag exists to support.
   Indirect = 32,
 };
 

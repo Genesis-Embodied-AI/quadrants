@@ -60,13 +60,13 @@ struct CachedKernelArgs {
 // `qd.checkpoint(...)` blocks, the graph is just the task chain (the body kernels' codegen prologue is dead code
 // because RuntimeContext::checkpoint_*_ptr is nullptr). When the kernel carries checkpoints, every cp_id >= 0 body
 // kernel reads its own prologue and self-gates against `*resume_point_dev_ptr` / `*yield_signal_dev_ptr`, and the
-// yield-check kernel (loaded once via `GraphManager::ensure_checkpoint_yield_check_kernel_loaded`) is inserted
-// inline after each yielding checkpoint's last body kernel to maintain the yield-signal / resume-point state.
+// yield-check kernel (loaded once via `GraphManager::ensure_checkpoint_yield_check_kernel_loaded`) is inserted inline
+// after each yielding checkpoint's last body kernel to maintain the yield-signal / resume-point state.
 //
-// All gating is on the GPU. The host writes resume_point once per launch (4-byte HtoD), reads yield_signal once
-// after the graph completes (4-byte DtoH), and otherwise stays out of the way. Same shape as pre-Hopper CUDA's
-// `CachedGraph` in `runtime/cuda/graph_manager.h`; HIP 7.2 lacks both conditional graph nodes and indirect
-// dispatch, so the codegen-prologue + flat-graph pattern is the only mechanism that keeps gating on the GPU.
+// All gating is on the GPU. The host writes resume_point once per launch (4-byte HtoD), reads yield_signal once after
+// the graph completes (4-byte DtoH), and otherwise stays out of the way. Same shape as pre-Hopper CUDA's `CachedGraph`
+// in `runtime/cuda/graph_manager.h`; HIP 7.2 lacks both conditional graph nodes and indirect dispatch, so the
+// codegen-prologue + flat-graph pattern is the only mechanism that keeps gating on the GPU.
 struct CachedGraph {
   // hipGraphExec_t. The instantiated, launchable form of the captured HIP graph. Typed as void * since the driver is
   // loaded dynamically.
@@ -77,9 +77,9 @@ struct CachedGraph {
   // Persistent device buffer for struct return values. Unused at the moment (graph mode rejects kernels with struct
   // returns up-front) but kept for parity with the CUDA implementation and future expansion.
   char *persistent_device_result_buffer{nullptr};
-  // Host-side shadow of the `RuntimeContext` fields. The pointers it carries (`runtime`, `arg_buffer`,
-  // `result_buffer`, `checkpoint_resume_point_ptr`, `checkpoint_yield_signal_ptr`) reference the persistent device
-  // buffers above. Filled once in the constructor; copied into `device_runtime_ctx` exactly once at graph build time.
+  // Host-side shadow of the `RuntimeContext` fields. The pointers it carries (`runtime`, `arg_buffer`, `result_buffer`,
+  // `checkpoint_resume_point_ptr`, `checkpoint_yield_signal_ptr`) reference the persistent device buffers above. Filled
+  // once in the constructor; copied into `device_runtime_ctx` exactly once at graph build time.
   RuntimeContext persistent_ctx{};
   // Device-resident copy of `persistent_ctx`. The graph's kernel-node args bake the *value* of this pointer; the
   // kernels dereference it on the GPU to reach the persistent arg / result buffers. Unlike the CUDA path which can pass
@@ -91,20 +91,20 @@ struct CachedGraph {
   // RuntimeContext pointer).
   CachedKernelArgs kernel_args;
   // Per-yield-check-kernel-node arg packing. The yield-check kernel takes 4 args (yield_on_ptr_slot, cp_id,
-  // yield_signal_ptr, resume_point_ptr); each yield-check node needs its own packed-args block because the cp_id
-  // is per-node. One entry per yielding checkpoint inserted into the graph.
+  // yield_signal_ptr, resume_point_ptr); each yield-check node needs its own packed-args block because the cp_id is
+  // per-node. One entry per yielding checkpoint inserted into the graph.
   std::vector<CachedKernelArgs> yield_check_kernel_args;
-  // One cp_id literal per yielding checkpoint, held by value so its address stays stable for the graph's lifetime
-  // (the yield-check kernel reads cp_id by pointer through HIP_LAUNCH_PARAM_BUFFER_POINTER, see CachedKernelArgs).
+  // One cp_id literal per yielding checkpoint, held by value so its address stays stable for the graph's lifetime (the
+  // yield-check kernel reads cp_id by pointer through HIP_LAUNCH_PARAM_BUFFER_POINTER, see CachedKernelArgs).
   std::vector<int32_t> yield_check_cp_id_storage;
   // One per-cp persistent slot holding the device address of the user's `yield_on=` ndarray. The slot's address is
   // baked into the graph; the pointer it contains is host-updated each launch via memcpy (mirrors CUDA's
   // `checkpoint_yield_on_ptr_slots`). Sized by max_cp_id + 1; non-yielding checkpoints have a nullptr slot.
   std::vector<void *> checkpoint_yield_on_ptr_slots;
 
-  // Device-side int32 scalars read by the codegen prologue and the yield-check kernel. Allocated only when the
-  // kernel has at least one `qd.checkpoint(...)`; nullptr otherwise. `persistent_ctx.checkpoint_*_ptr` carry their
-  // device addresses so the body kernels can dereference them.
+  // Device-side int32 scalars read by the codegen prologue and the yield-check kernel. Allocated only when the kernel
+  // has at least one `qd.checkpoint(...)`; nullptr otherwise. `persistent_ctx.checkpoint_*_ptr` carry their device
+  // addresses so the body kernels can dereference them.
   void *resume_point_dev_ptr{nullptr};
   void *yield_signal_dev_ptr{nullptr};
 
@@ -156,24 +156,24 @@ class GraphManager {
   std::size_t total_builds() const {
     return total_builds_;
   }
-  // Slice 4: cp_id of the first checkpoint whose `yield_on=` flag was non-zero on the most recent launch, or `-1`
-  // if no yield was observed (or the launch was not a checkpoint kernel). Mirrors the CUDA GraphManager surface
-  // (`cuda::GraphManager::last_yield_cp_id_on_last_call`) so `Program::get_graph_last_yield_cp_id_on_last_call`
-  // can call straight through.
+  // Slice 4: cp_id of the first checkpoint whose `yield_on=` flag was non-zero on the most recent launch, or `-1` if no
+  // yield was observed (or the launch was not a checkpoint kernel). Mirrors the CUDA GraphManager surface
+  // (`cuda::GraphManager::last_yield_cp_id_on_last_call`) so `Program::get_graph_last_yield_cp_id_on_last_call` can
+  // call straight through.
   int last_yield_cp_id_on_last_call() const {
     return last_yield_cp_id_on_last_call_;
   }
-  // Slice 4: writable setter so the streaming `KernelLauncher` (which handles `graph_do_while + checkpoint`
-  // kernels that fall through the graph-path eligibility check above) can record yields into the same field
-  // the graph path uses. The override in `kernel_launcher.h` reads it through `last_yield_cp_id_on_last_call()`
-  // either way, so the Python `GraphStatus` surface stays uniform across both code paths.
+  // Slice 4: writable setter so the streaming `KernelLauncher` (which handles `graph_do_while + checkpoint` kernels
+  // that fall through the graph-path eligibility check above) can record yields into the same field the graph path
+  // uses. The override in `kernel_launcher.h` reads it through `last_yield_cp_id_on_last_call()` either way, so the
+  // Python `GraphStatus` surface stays uniform across both code paths.
   void set_last_yield_cp_id_on_last_call(int cp_id) {
     last_yield_cp_id_on_last_call_ = cp_id;
   }
 
   // Lazy-load + return the pre-built AMDGPU yield-check kernel function. Public so the streaming launcher
-  // (`runtime/amdgpu/kernel_launcher.cpp`) can launch the same kernel inline for graph_do_while + checkpoint
-  // kernels that fall through the graph-fast-path. Returns nullptr if the bundle doesn't cover the current arch.
+  // (`runtime/amdgpu/kernel_launcher.cpp`) can launch the same kernel inline for graph_do_while + checkpoint kernels
+  // that fall through the graph-fast-path. Returns nullptr if the bundle doesn't cover the current arch.
   void *ensure_and_get_checkpoint_yield_check_kernel() {
     ensure_checkpoint_yield_check_kernel_loaded();
     return yield_check_kernel_func_;
@@ -192,14 +192,14 @@ class GraphManager {
                         unsigned int shared_mem,
                         CachedKernelArgs &kernel_args);
   // Lazily loads the AMDGPU yield-check kernel from the pre-built bundled HSACO. Mirrors the CUDA equivalent
-  // `cuda::GraphManager::ensure_checkpoint_yield_check_kernel_loaded`; called from `try_launch` when the kernel
-  // carries at least one `qd.checkpoint(yield_on=...)`. Sets `yield_check_kernel_func_` to nullptr if the bundle
-  // can't be loaded (unsupported arch); callers must treat nullptr as "yield-check unavailable".
+  // `cuda::GraphManager::ensure_checkpoint_yield_check_kernel_loaded`; called from `try_launch` when the kernel carries
+  // at least one `qd.checkpoint(yield_on=...)`. Sets `yield_check_kernel_func_` to nullptr if the bundle can't be
+  // loaded (unsupported arch); callers must treat nullptr as "yield-check unavailable".
   void ensure_checkpoint_yield_check_kernel_loaded();
-  // Populates a CachedKernelArgs to pack 4 args (yield_on_ptr_slot **, cp_id literal *, yield_signal *,
-  // resume_point *) in the layout the AMDGPU yield-check kernel expects via HIP_LAUNCH_PARAM_BUFFER_POINTER. The
-  // packed buffer is stored inside the CachedKernelArgs (its `packed_runtime_ctx_ptr` slot is repurposed as a
-  // void * to an owned heap allocation); extra_config[1] points at that heap slot.
+  // Populates a CachedKernelArgs to pack 4 args (yield_on_ptr_slot **, cp_id literal *, yield_signal *, resume_point *)
+  // in the layout the AMDGPU yield-check kernel expects via HIP_LAUNCH_PARAM_BUFFER_POINTER. The packed buffer is
+  // stored inside the CachedKernelArgs (its `packed_runtime_ctx_ptr` slot is repurposed as a void * to an owned heap
+  // allocation); extra_config[1] points at that heap slot.
   void initialize_yield_check_kernel_args(CachedKernelArgs &kernel_args,
                                           void *yield_on_ptr_slot_addr,
                                           int32_t *cp_id_storage,
@@ -217,8 +217,8 @@ class GraphManager {
   // GraphManager field of the same name.
   int last_yield_cp_id_on_last_call_{-1};
 
-  // Pre-built yield-check kernel state. Loaded once (lazily) per process; the loaded HIP module / function pointers
-  // are shared across every cached graph. Same lifecycle as the CUDA `gate_kernel_*` / `yield_check_*` pair in
+  // Pre-built yield-check kernel state. Loaded once (lazily) per process; the loaded HIP module / function pointers are
+  // shared across every cached graph. Same lifecycle as the CUDA `gate_kernel_*` / `yield_check_*` pair in
   // `cuda::GraphManager`.
   void *yield_check_kernel_module_{nullptr};
   void *yield_check_kernel_func_{nullptr};

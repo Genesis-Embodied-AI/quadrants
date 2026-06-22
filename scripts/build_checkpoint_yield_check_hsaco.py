@@ -99,8 +99,8 @@ def generate_header(bundle_path: Path, out_path: Path) -> None:
         "",
         "static const unsigned char kCheckpointYieldCheckKernelHsaco[] = {",
     ]
-    # Wide layout (19 bytes / line ~= 120c) lines up with what pre-commit's clang-format would produce, so the CI
-    # linter is happy without an extra `clang-format -i` pass on the regenerated header.
+    # Wide layout (19 bytes / line ~= 120c) lines up with what pre-commit's clang-format would produce, so the CI linter
+    # is happy without an extra `clang-format -i` pass on the regenerated header.
     for i in range(0, len(bundle_data), 19):
         chunk = bundle_data[i : i + 19]
         header_lines.append("    " + ", ".join(f"0x{b:02x}" for b in chunk) + ",")

@@ -13,8 +13,8 @@ namespace amdgpu {
 
 namespace {
 
-// Layout of the body-kernel `extra_config` block. Reused for the yield-check kernel block too; only the
-// `packed_args` contents and `pack_size` differ between the two.
+// Layout of the body-kernel `extra_config` block. Reused for the yield-check kernel block too; only the `packed_args`
+// contents and `pack_size` differ between the two.
 constexpr unsigned long long kHipLaunchParamBufferPointer = 0x01;
 constexpr unsigned long long kHipLaunchParamBufferSize = 0x02;
 constexpr unsigned long long kHipLaunchParamEnd = 0x03;
@@ -55,11 +55,11 @@ CachedGraph::CachedGraph(std::size_t arg_buf_size,
   AMDGPUDriver::get_instance().malloc(&device_runtime_ctx, sizeof(RuntimeContext));
 
   if (needs_checkpoint_scalars) {
-    // resume_point and yield_signal int32 device scalars read by the codegen prologue (in every cp_id >= 0 body
-    // kernel) and the yield-check kernel. Zero-init / -1-init matches "no resume in progress" / "no yield observed".
-    // The per-launch HtoD in `launch_cached_graph` overwrites them before every launch, so the initial values are
-    // only consumed by the very first launch's first body kernel before the per-launch HtoD finishes; we still set
-    // them defensively here.
+    // resume_point and yield_signal int32 device scalars read by the codegen prologue (in every cp_id >= 0 body kernel)
+    // and the yield-check kernel. Zero-init / -1-init matches "no resume in progress" / "no yield observed". The
+    // per-launch HtoD in `launch_cached_graph` overwrites them before every launch, so the initial values are only
+    // consumed by the very first launch's first body kernel before the per-launch HtoD finishes; we still set them
+    // defensively here.
     AMDGPUDriver::get_instance().malloc(&resume_point_dev_ptr, sizeof(int32_t));
     int32_t zero = 0;
     AMDGPUDriver::get_instance().memcpy_host_to_device(resume_point_dev_ptr, &zero, sizeof(int32_t));
@@ -74,9 +74,9 @@ CachedGraph::CachedGraph(std::size_t arg_buf_size,
   persistent_ctx.result_buffer = reinterpret_cast<uint64 *>(persistent_device_result_buffer);
   persistent_ctx.cpu_thread_id = 0;
   // GPU-side checkpoint gating: publish the device-side resume_point / yield_signal pointers to the RuntimeContext
-  // slots that the codegen-emitted body-kernel prologue reads. Null-pointers stay null for kernels without
-  // checkpoints (the prologue is never emitted, so the read never happens; we still write nullptr to keep the
-  // runtime struct fully initialised).
+  // slots that the codegen-emitted body-kernel prologue reads. Null-pointers stay null for kernels without checkpoints
+  // (the prologue is never emitted, so the read never happens; we still write nullptr to keep the runtime struct fully
+  // initialised).
   persistent_ctx.checkpoint_resume_point_ptr = reinterpret_cast<int32_t *>(resume_point_dev_ptr);
   persistent_ctx.checkpoint_yield_signal_ptr = reinterpret_cast<int32_t *>(yield_signal_dev_ptr);
 
@@ -139,8 +139,8 @@ CachedGraph::CachedGraph(CachedGraph &&other) noexcept
   other.device_runtime_ctx = nullptr;
   other.resume_point_dev_ptr = nullptr;
   other.yield_signal_dev_ptr = nullptr;
-  // The std::move'd vectors are left empty by the moves above, so `other.~CachedGraph()` will not try to release
-  // any per-cp yield-on ptr slots that now belong to us.
+  // The std::move'd vectors are left empty by the moves above, so `other.~CachedGraph()` will not try to release any
+  // per-cp yield-on ptr slots that now belong to us.
 }
 
 CachedGraph &CachedGraph::operator=(CachedGraph &&other) noexcept {
@@ -161,8 +161,8 @@ CachedGraph &CachedGraph::operator=(CachedGraph &&other) noexcept {
   std::swap(result_buffer_size, raii_guard.result_buffer_size);
   std::swap(num_nodes, raii_guard.num_nodes);
   std::swap(num_checkpoints, raii_guard.num_checkpoints);
-  // After the swap, every CachedKernelArgs's `extra_config` still references the *raii_guard*'s storage (which is
-  // about to die). Rebind both sides to point at their post-swap owner's `packed_args` / `pack_size`.
+  // After the swap, every CachedKernelArgs's `extra_config` still references the *raii_guard*'s storage (which is about
+  // to die). Rebind both sides to point at their post-swap owner's `packed_args` / `pack_size`.
   rebind_kernel_args_self(kernel_args);
   for (auto &yk : yield_check_kernel_args) {
     rebind_kernel_args_self(yk);
@@ -316,16 +316,16 @@ void GraphManager::initialize_yield_check_kernel_args(CachedKernelArgs &kernel_a
 }
 
 bool GraphManager::launch_cached_graph(CachedGraph &cached, LaunchContextBuilder &ctx) {
-  // Reset the yield bookkeeping. Mirrors the CUDA equivalent: `-1` means "no yield observed (yet)" for both
-  // plain-graph kernels (where the question has no meaning) and checkpoint kernels (where the post-launch DtoH
-  // below will overwrite it if a yield fired).
+  // Reset the yield bookkeeping. Mirrors the CUDA equivalent: `-1` means "no yield observed (yet)" for both plain-graph
+  // kernels (where the question has no meaning) and checkpoint kernels (where the post-launch DtoH below will overwrite
+  // it if a yield fired).
   last_yield_cp_id_on_last_call_ = -1;
 
   auto *stream = AMDGPUContext::get_instance().get_stream();
 
   if (cached.arg_buffer_size > 0) {
-    // Async HtoD on the launch stream: the subsequent `graph_launch` is queued on the same stream, so the kernel
-    // nodes are ordered after the arg-buffer upload without a host-side barrier.
+    // Async HtoD on the launch stream: the subsequent `graph_launch` is queued on the same stream, so the kernel nodes
+    // are ordered after the arg-buffer upload without a host-side barrier.
     AMDGPUDriver::get_instance().memcpy_host_to_device_async(
         cached.persistent_device_arg_buffer, ctx.get_context().arg_buffer, cached.arg_buffer_size, stream);
   }
@@ -334,9 +334,9 @@ bool GraphManager::launch_cached_graph(CachedGraph &cached, LaunchContextBuilder
   const bool has_yield_state = (cached.yield_signal_dev_ptr != nullptr);
 
   if (has_checkpoints) {
-    // GPU-side checkpoint gating: write the per-launch resume_point so the codegen prologue / yield-check kernels
-    // see the right value. `ctx.resume_from_checkpoint < 0` means "no resume requested"; map to 0 so every
-    // checkpoint (cp_id >= 0 >= 0) runs.
+    // GPU-side checkpoint gating: write the per-launch resume_point so the codegen prologue / yield-check kernels see
+    // the right value. `ctx.resume_from_checkpoint < 0` means "no resume requested"; map to 0 so every checkpoint
+    // (cp_id >= 0 >= 0) runs.
     int32_t resume_point = (ctx.resume_from_checkpoint < 0) ? 0 : ctx.resume_from_checkpoint;
     AMDGPUDriver::get_instance().memcpy_host_to_device_async(cached.resume_point_dev_ptr, &resume_point,
                                                              sizeof(int32_t), stream);
@@ -345,16 +345,16 @@ bool GraphManager::launch_cached_graph(CachedGraph &cached, LaunchContextBuilder
       AMDGPUDriver::get_instance().memcpy_host_to_device_async(cached.yield_signal_dev_ptr, &neg_one, sizeof(int32_t),
                                                                stream);
     }
-    // Rewrite the per-cp yield-on slot pointers so each yield-check kernel sees the user's current `yield_on=`
-    // ndarray address. The slot addresses are baked into the graph; the contents are host-updated each launch.
+    // Rewrite the per-cp yield-on slot pointers so each yield-check kernel sees the user's current `yield_on=` ndarray
+    // address. The slot addresses are baked into the graph; the contents are host-updated each launch.
     for (std::size_t cp = 0; cp < cached.checkpoint_yield_on_ptr_slots.size(); ++cp) {
       if (cached.checkpoint_yield_on_ptr_slots[cp] == nullptr) {
         continue;
       }
       // Look up the user's current device pointer for this cp (resolve_ctx_ndarray_ptrs populated
-      // ctx.checkpoint_yield_on_dev_ptrs). Defensive default to nullptr if the user passed no ndarray; the yield-
-      // check kernel reads through the slot and would null-deref, but the graph build rejected that earlier (a
-      // yielding checkpoint without a resolved ndarray fails resolve_ctx_ndarray_ptrs).
+      // ctx.checkpoint_yield_on_dev_ptrs). Defensive default to nullptr if the user passed no ndarray; the yield- check
+      // kernel reads through the slot and would null-deref, but the graph build rejected that earlier (a yielding
+      // checkpoint without a resolved ndarray fails resolve_ctx_ndarray_ptrs).
       void *user_ptr = nullptr;
       if (cp < ctx.checkpoint_yield_on_dev_ptrs.size()) {
         user_ptr = ctx.checkpoint_yield_on_dev_ptrs[cp];
@@ -369,9 +369,9 @@ bool GraphManager::launch_cached_graph(CachedGraph &cached, LaunchContextBuilder
   num_nodes_on_last_call_ = cached.num_nodes;
 
   if (has_yield_state) {
-    // Post-launch DtoH of yield_signal. Mirrors CUDA's single-D2H-per-launch model: one sync per launch regardless
-    // of how many yielding checkpoints the graph contains. The synchronize is implicit in the synchronous DtoH
-    // memcpy; HIP guarantees the host-visible value reflects all prior graph writes on this stream.
+    // Post-launch DtoH of yield_signal. Mirrors CUDA's single-D2H-per-launch model: one sync per launch regardless of
+    // how many yielding checkpoints the graph contains. The synchronize is implicit in the synchronous DtoH memcpy; HIP
+    // guarantees the host-visible value reflects all prior graph writes on this stream.
     int32_t signal = -1;
     AMDGPUDriver::get_instance().stream_synchronize(stream);
     AMDGPUDriver::get_instance().memcpy_device_to_host(&signal, cached.yield_signal_dev_ptr, sizeof(int32_t));
@@ -399,8 +399,8 @@ bool GraphManager::try_launch(int launch_id,
 
   // Adstack-bearing kernels cannot go through the graph path. See the matching comment in
   // `runtime/cuda/graph_manager.cpp::try_launch` for the full rationale: the per-task adstack setup runs host-side
-  // between the serial range_for-bounds kernel and the range_for kernel itself, and there is no host hook between
-  // graph nodes.
+  // between the serial range_for-bounds kernel and the range_for kernel itself, and there is no host hook between graph
+  // nodes.
   for (const auto &task : offloaded_tasks) {
     QD_ERROR_IF(!task.ad_stack.allocas.empty(),
                 "graph=True is not supported for kernels that use the reverse-mode autodiff stack "
@@ -447,8 +447,8 @@ bool GraphManager::try_launch(int launch_id,
   if (has_yield) {
     ensure_checkpoint_yield_check_kernel_loaded();
     if (!yield_check_kernel_func_) {
-      // Yield-check fatbin didn't cover the current AMD arch. Fall back to the streaming launcher (which still
-      // does host-branch gating today; tracked separately for the same prologue treatment as the flat-graph path).
+      // Yield-check fatbin didn't cover the current AMD arch. Fall back to the streaming launcher (which still does
+      // host-branch gating today; tracked separately for the same prologue treatment as the flat-graph path).
       return false;
     }
   }
@@ -457,8 +457,8 @@ bool GraphManager::try_launch(int launch_id,
   CachedGraph cached(ctx.arg_buffer_size, ctx.result_buffer_size, has_checkpoints, executor);
   cached.num_checkpoints = num_distinct_checkpoints;
 
-  // Per-cp yield-on slot table. Sized by max_cp_id + 1 so the host-side update loop in launch_cached_graph can
-  // index by cp_id directly. Slots for non-yielding checkpoints stay nullptr. Mirrors CUDA's slot table.
+  // Per-cp yield-on slot table. Sized by max_cp_id + 1 so the host-side update loop in launch_cached_graph can index by
+  // cp_id directly. Slots for non-yielding checkpoints stay nullptr. Mirrors CUDA's slot table.
   if (has_yield && max_cp_id >= 0) {
     cached.checkpoint_yield_on_ptr_slots.assign((std::size_t)max_cp_id + 1, nullptr);
     for (std::size_t cp = 0; cp < ctx.checkpoint_yield_on_dev_ptrs.size() && (int)cp <= max_cp_id; ++cp) {
@@ -472,9 +472,9 @@ bool GraphManager::try_launch(int launch_id,
     }
   }
 
-  // Reserve the per-yielding-checkpoint storage up-front so the cp_id literals and CachedKernelArgs entries get
-  // stable addresses for the lifetime of the graph (the kernel-node `extra` config baked into the HIP graph holds
-  // raw pointers into these vectors).
+  // Reserve the per-yielding-checkpoint storage up-front so the cp_id literals and CachedKernelArgs entries get stable
+  // addresses for the lifetime of the graph (the kernel-node `extra` config baked into the HIP graph holds raw pointers
+  // into these vectors).
   cached.yield_check_cp_id_storage.reserve(num_distinct_checkpoints);
   cached.yield_check_kernel_args.reserve(num_distinct_checkpoints);
 
@@ -492,8 +492,8 @@ bool GraphManager::try_launch(int launch_id,
   AMDGPUDriver::get_instance().graph_create(&graph, 0);
 
   // Helper: emit the yield-check kernel node for a just-closed checkpoint. Stable addresses are required: cp_id is
-  // stored in `cached.yield_check_cp_id_storage` (reserved above), the packed-args block lives in the
-  // CachedKernelArgs stashed into `cached.yield_check_kernel_args`, and the yield-on slot's address comes from
+  // stored in `cached.yield_check_cp_id_storage` (reserved above), the packed-args block lives in the CachedKernelArgs
+  // stashed into `cached.yield_check_kernel_args`, and the yield-on slot's address comes from
   // `cached.checkpoint_yield_on_ptr_slots[cp_id]`.
   std::size_t total_nodes = 0;
   void *prev_node = nullptr;

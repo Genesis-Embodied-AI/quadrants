@@ -1272,12 +1272,11 @@ Stmt *ASTBuilder::get_last_stmt() {
 
 void ASTBuilder::insert(std::unique_ptr<Stmt> &&stmt, int location) {
   QD_ASSERT(!stack_.empty());
-  // Stamp the graph-region active at this source position so the offloader can flush serial work at
-  // the level it was written at. For-loops separately carry these same values via ForLoopConfig; the
-  // stamp here is what gives bare statements (assignments, inlined @qd.func bodies, directives) a
-  // correct region too. Statements inside a real for-loop body are also stamped, but harmlessly: they
-  // live inside the for-loop's task body and never reach the offloader's root-level pending-serial
-  // bucket.
+  // Stamp the graph-region active at this source position so the offloader can flush serial work at the level it was
+  // written at. For-loops separately carry these same values via ForLoopConfig; the stamp here is what gives bare
+  // statements (assignments, inlined @qd.func bodies, directives) a correct region too. Statements inside a real
+  // for-loop body are also stamped, but harmlessly: they live inside the for-loop's task body and never reach the
+  // offloader's root-level pending-serial bucket.
   stmt->region_tag = {current_graph_do_while_level_id_, current_stream_parallel_group_id_, current_checkpoint_id_};
   stack_.back()->insert(std::move(stmt), location);
 }

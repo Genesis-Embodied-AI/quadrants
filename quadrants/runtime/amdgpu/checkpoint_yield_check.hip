@@ -44,9 +44,8 @@ extern "C" __global__ void _qd_checkpoint_yield_check(int32_t **yield_on_ptr_slo
                                                       int32_t cp_id,
                                                       int32_t *yield_signal,
                                                       int32_t *resume_point) {
-  // Self-gate: identical predicate to the codegen-emitted body-kernel prologue. On AMDGPU's
-  // flat-graph path it skips the yield-read when this checkpoint should not have run. Pre-
-  // Hopper CUDA uses the exact same pattern.
+  // Self-gate: identical predicate to the codegen-emitted body-kernel prologue. On AMDGPU's flat-graph path it skips
+  // the yield-read when this checkpoint should not have run. Pre- Hopper CUDA uses the exact same pattern.
   if (*resume_point > cp_id) {
     return;
   }

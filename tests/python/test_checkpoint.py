@@ -395,8 +395,8 @@ def test_autowrap_leaves_kernel_prologue_alone():
 @test_utils.test()
 def test_checkpoint_bare_assign_raises():
     """A bare ``Assign`` at the top level of an explicit ``with qd.checkpoint(...)`` body must raise
-    ``QuadrantsSyntaxError`` at compile time, not be silently wrapped. The user should be steered to
-    ``for _ in range(1): <stmt>`` explicitly so they see each top-level statement becomes its own offloaded task."""
+    ``QuadrantsSyntaxError`` at compile time, not be silently wrapped. The user should be steered to ``for _ in
+    range(1): <stmt>`` explicitly so they see each top-level statement becomes its own offloaded task."""
 
     @qd.kernel(graph=True, checkpoints=True)
     def k(c: qd.types.ndarray(qd.i32, ndim=0), flag: qd.types.ndarray(qd.i32, ndim=0)):
@@ -581,9 +581,9 @@ def test_checkpoint_yield_first_wins_subsequent_skipped():
 
 @test_utils.test()
 def test_checkpoint_yield_does_not_clear_user_flag():
-    """The framework never writes into the user's ``yield_on`` buffer -- after a yield the flag retains whatever
-    value the body wrote. The host loop is responsible for clearing the flag before ``resume(...)`` (the canonical
-    pattern in ``docs/source/user_guide/graph.md``)."""
+    """The framework never writes into the user's ``yield_on`` buffer -- after a yield the flag retains whatever value
+    the body wrote. The host loop is responsible for clearing the flag before ``resume(...)`` (the canonical pattern in
+    ``docs/source/user_guide/graph.md``)."""
     if not _supports_checkpoint_yield_resume():
         pytest.skip("requires yield/resume support")
     N = 4
@@ -756,8 +756,8 @@ def test_canonical_yield_resume_loop():
 
     # Simulate the canonical pattern: yield from LOAD, host "fixes" it and resumes past LOAD; on the resume launch SIM
     # yields once, host "fixes" it and resumes past SIM; on the second resume nothing yields and the loop exits. The
-    # "fix" each round is to re-arm overflow so the *next* yielder fires (and resume past LOAD/SIM into the next
-    # stage). With the new label API the host advances by passing the next stage explicitly rather than computing
+    # "fix" each round is to re-arm overflow so the *next* yielder fires (and resume past LOAD/SIM into the next stage).
+    # With the new label API the host advances by passing the next stage explicitly rather than computing
     # `status.checkpoint + 1`.
     resume_targets = {_Stage.LOAD: _Stage.SIM, _Stage.SIM: _Stage.REDUCE}
     overflow.from_numpy(np.array(1, dtype=np.int32))

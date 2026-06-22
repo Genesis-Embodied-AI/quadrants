@@ -118,16 +118,15 @@ class OffloadedTask {
   int grid_dim{0};
   int dynamic_shared_array_bytes{0};
   int stream_parallel_group_id{0};
-  // `cp_id` of the enclosing `qd.checkpoint(...)` block for this task (`-1` outside any
-  // checkpoint). Populated by the CUDA / AMDGPU LLVM codegen from `OffloadedStmt::checkpoint_id`
-  // (set by the offload pass from `RangeForStmt::checkpoint_id` / `StructForStmt::checkpoint_id`).
-  // The GraphManager will consume this in slice 1c to group consecutive same-cp_id tasks under a
-  // CUDA IF conditional node. Default `-1` keeps non-checkpoint kernels (every existing user) on
-  // the unchanged code path. Serialised into the offline-cache via the `QD_IO_DEF` list below.
+  // `cp_id` of the enclosing `qd.checkpoint(...)` block for this task (`-1` outside any checkpoint). Populated by the
+  // CUDA / AMDGPU LLVM codegen from `OffloadedStmt::checkpoint_id` (set by the offload pass from
+  // `RangeForStmt::checkpoint_id` / `StructForStmt::checkpoint_id`). The GraphManager will consume this in slice 1c to
+  // group consecutive same-cp_id tasks under a CUDA IF conditional node. Default `-1` keeps non-checkpoint kernels
+  // (every existing user) on the unchanged code path. Serialised into the offline-cache via the `QD_IO_DEF` list below.
   int checkpoint_id{-1};
-  // Innermost enclosing `graph_do_while` level id (-1 if none). Set from the OffloadedStmt at codegen
-  // time and consumed at launch to reconstruct nested graph_do_while loops (CUDA native conditional
-  // nodes / host fallback). See docs/source/user_guide/graph.md.
+  // Innermost enclosing `graph_do_while` level id (-1 if none). Set from the OffloadedStmt at codegen time and consumed
+  // at launch to reconstruct nested graph_do_while loops (CUDA native conditional nodes / host fallback). See
+  // docs/source/user_guide/graph.md.
   int graph_do_while_level_id{-1};
   AdStackSizingInfo ad_stack{};
 

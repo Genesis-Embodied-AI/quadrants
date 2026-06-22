@@ -2100,8 +2100,8 @@ void TaskCodeGenLLVM::finalize_offloaded_task_function() {
     if (!arch_is_cpu(compile_config.arch)) {
       current_task->ad_stack.max_reducer_specs = recognize_adstack_max_reducer_specs(ad_stack_size_exprs_);
     }
-    // Snodes the task body mutates. Persisted on `OffloadedTask::snode_writes` so the LLVM launcher can invalidate
-    // the per-task adstack metadata cache when a kernel that runs in between mutated a SNode an enclosing
+    // Snodes the task body mutates. Persisted on `OffloadedTask::snode_writes` so the LLVM launcher can invalidate the
+    // per-task adstack metadata cache when a kernel that runs in between mutated a SNode an enclosing
     // `size_expr::FieldLoad` reads. Mirrors the SPIR-V analogue in `spirv_codegen.cpp`. Sorted + deduplicated for
     // stable serialisation.
     if (current_offload != nullptr) {

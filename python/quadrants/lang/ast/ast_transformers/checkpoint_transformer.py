@@ -87,14 +87,14 @@ class CheckpointTransformer:
     def _resolve_cp_id(node: ast.expr, global_vars: dict) -> int:
         """Resolve the first positional arg of `qd.checkpoint(cp_id, ...)` to a Python int (or IntEnum instance).
 
-        Accepts (a) `ast.Constant` int literals (``qd.checkpoint(0, ...)``), (b) `ast.Attribute` references to
-        `IntEnum` values resolved against the kernel's `global_vars` (``qd.checkpoint(Stage.SIM, ...)`` where ``Stage``
-        is an `IntEnum` defined at module scope), and (c) `ast.Name` references to module-level int constants
-        (``qd.checkpoint(CP_LOAD, ...)`` where ``CP_LOAD`` is an int defined at module scope). For (b) and (c) we
-        return the resolved value AS-IS (without re-wrapping through `int(...)`) so an IntEnum member identity is
-        preserved end-to-end -- the user writes `qd.checkpoint(Stage.SIM, ...)`, then reads `status.checkpoint` and
-        gets back `Stage.SIM`, not the raw int. Rejects everything else with a clear error so the user gets a
-        compile-time diagnostic rather than a confusing template-mapper failure later.
+        Accepts (a) `ast.Constant` int literals (``qd.checkpoint(0, ...)``), (b) `ast.Attribute` references to `IntEnum`
+        values resolved against the kernel's `global_vars` (``qd.checkpoint(Stage.SIM, ...)`` where ``Stage`` is an
+        `IntEnum` defined at module scope), and (c) `ast.Name` references to module-level int constants
+        (``qd.checkpoint(CP_LOAD, ...)`` where ``CP_LOAD`` is an int defined at module scope). For (b) and (c) we return
+        the resolved value AS-IS (without re-wrapping through `int(...)`) so an IntEnum member identity is preserved
+        end-to-end -- the user writes `qd.checkpoint(Stage.SIM, ...)`, then reads `status.checkpoint` and gets back
+        `Stage.SIM`, not the raw int. Rejects everything else with a clear error so the user gets a compile-time
+        diagnostic rather than a confusing template-mapper failure later.
         """
         # Plain `qd.checkpoint(0, ...)` literal.
         if isinstance(node, ast.Constant) and isinstance(node.value, int) and not isinstance(node.value, bool):
@@ -237,18 +237,18 @@ class CheckpointTransformer:
         # checkpoint body and ask the user to wrap them in their own for-loop. The offloader's pending-serial bucket
         # loses the surrounding `checkpoint_id` and emits such statements as `serial` tasks with `cp_id == -1`, so they
         # would run unconditionally even when the checkpoint is skipped -- a silent correctness bug. Rather than
-        # auto-wrapping them transparently (which hides the fact that each bare stmt becomes its own kernel / graph
-        # node and surprises users when they look at the lowered IR or `prog.get_num_offloaded_tasks_on_last_call()`),
-        # we surface a clear compile-time error and have the user write `for _ in range(1): <stmt>` themselves.
-        # Implicit (auto-wrapped) checkpoints can never trip this -- they wrap exactly one ast.For. Coverage probes
-        # (synthesized `_qd_cov[i] = 1` assignments under `QD_KERNEL_COVERAGE=1`) are explicitly exempt; the cp_id
-        # propagation in `quadrants/transforms/offload.cpp` (`assemble_serial_statements`) makes them inherit the
-        # surrounding checkpoint's cp_id so the launcher's "last task in checkpoint" detection stays correct.
+        # auto-wrapping them transparently (which hides the fact that each bare stmt becomes its own kernel / graph node
+        # and surprises users when they look at the lowered IR or `prog.get_num_offloaded_tasks_on_last_call()`), we
+        # surface a clear compile-time error and have the user write `for _ in range(1): <stmt>` themselves. Implicit
+        # (auto-wrapped) checkpoints can never trip this -- they wrap exactly one ast.For. Coverage probes (synthesized
+        # `_qd_cov[i] = 1` assignments under `QD_KERNEL_COVERAGE=1`) are explicitly exempt; the cp_id propagation in
+        # `quadrants/transforms/offload.cpp` (`assemble_serial_statements`) makes them inherit the surrounding
+        # checkpoint's cp_id so the launcher's "last task in checkpoint" detection stays correct.
         for stmt in node.body:
             is_bare = isinstance(stmt, (ast.Assign, ast.AugAssign, ast.AnnAssign))
             if not is_bare and isinstance(stmt, ast.Expr):
-                # Any `Expr(Constant)` is a no-op (Python's docstring pattern, e.g. a leading triple-quoted string).
-                # We accept it anywhere in the body rather than only at position 0 because the kernel-coverage AST
+                # Any `Expr(Constant)` is a no-op (Python's docstring pattern, e.g. a leading triple-quoted string). We
+                # accept it anywhere in the body rather than only at position 0 because the kernel-coverage AST
                 # transformer (see `_kernel_coverage.py`) prepends a `_qd_cov[...] = 1` probe under
                 # `QD_KERNEL_COVERAGE=1`, which would otherwise push the docstring to position 1 and have us flag it as
                 # a bare top-level statement.

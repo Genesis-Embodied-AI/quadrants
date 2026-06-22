@@ -18,9 +18,10 @@ def checkpoint(cp_id, yield_on):
 
     .. warning::
 
-        **Experimental.** ``qd.checkpoint`` (together with ``qd.GraphStatus`` and ``kernel.resume(from_checkpoint=...)``)
-        is an experimental API. The signature, the lowering across backends, the error messages, and the host-side
-        yield/resume contract may change in any future release without a deprecation cycle.
+        **Experimental.** ``qd.checkpoint`` (together with ``qd.GraphStatus`` and
+        ``kernel.resume(from_checkpoint=...)``) is an experimental API. The signature, the lowering across backends, the
+        error messages, and the host-side yield/resume contract may change in any future release without a deprecation
+        cycle.
 
     Used as ``with qd.checkpoint(cp_id, yield_on=flag):`` inside a ``@qd.kernel(graph=True, checkpoints=True)`` kernel
     body. When the body writes a non-zero value into ``flag``, the kernel pauses at this checkpoint and returns a

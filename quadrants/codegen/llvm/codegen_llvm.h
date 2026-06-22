@@ -405,8 +405,8 @@ class TaskCodeGenLLVM : public IRVisitor, public LLVMModuleBuilder {
   // dispatch in HIP 7.2). On CUDA SM 9.0+ the conditional-graph-node gate prevents the body kernel from launching when
   // the checkpoint should be skipped, so the prologue is dead code in the common path but kept for correctness on
   // overlapping-gate races. Not emitted by CPU codegen (the host launcher does branch gating before launch) or by the
-  // GFX (Vulkan / Metal) codegen path (those use indirect-dispatch gating via SPIR-V gate shaders that don't go
-  // through RuntimeContext).
+  // GFX (Vulkan / Metal) codegen path (those use indirect-dispatch gating via SPIR-V gate shaders that don't go through
+  // RuntimeContext).
   //
   // `cp_id` is the literal checkpoint id this task belongs to (-1 for non-checkpoint tasks, in which case callers
   // should not invoke this method).

@@ -401,8 +401,8 @@ struct GraphRegionTag {
   // checkpoint. Stamped on every frontend statement by `ASTBuilder::insert` (from `current_checkpoint_id_`) so a
   // SIDE-EFFECTING serial task tagged with a real checkpoint can be gated/skipped on `resume(from_checkpoint=...)`
   // exactly like a range-for in that checkpoint. The PURE-bucket fallback in `offload.cpp` deliberately leaves
-  // `checkpoint_id = -1` (always-run) so a hoisted loop bound / shared constant a later task reads is never gated
-  // away on a resume launch.
+  // `checkpoint_id = -1` (always-run) so a hoisted loop bound / shared constant a later task reads is never gated away
+  // on a resume launch.
   int checkpoint_id{-1};
   // `is_set` distinguishes a tag that was explicitly stamped at a known program point (frontend
   // build via ASTBuilder::insert, lowering via FlattenContext, or the region-propagating
@@ -415,12 +415,12 @@ struct GraphRegionTag {
   bool is_set{false};
 
   GraphRegionTag() = default;
-  // 2-arg ctor: (level, group). Defaults checkpoint_id to -1 ("not inside any checkpoint"). Use at call sites
-  // that don't know / don't care about checkpoint_id (e.g., pure-only fallback tag in offload.cpp).
+  // 2-arg ctor: (level, group). Defaults checkpoint_id to -1 ("not inside any checkpoint"). Use at call sites that
+  // don't know / don't care about checkpoint_id (e.g., pure-only fallback tag in offload.cpp).
   GraphRegionTag(int level, int group) : graph_do_while_level_id(level), stream_parallel_group_id(group), is_set(true) {
   }
-  // 3-arg ctor: (level, group, checkpoint). Used by `ASTBuilder::insert` to stamp the active region on every
-  // frontend statement.
+  // 3-arg ctor: (level, group, checkpoint). Used by `ASTBuilder::insert` to stamp the active region on every frontend
+  // statement.
   GraphRegionTag(int level, int group, int checkpoint)
       : graph_do_while_level_id(level), stream_parallel_group_id(group), checkpoint_id(checkpoint), is_set(true) {
   }

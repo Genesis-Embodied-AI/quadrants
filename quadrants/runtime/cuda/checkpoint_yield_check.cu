@@ -39,9 +39,9 @@ extern "C" __global__ void _qd_checkpoint_yield_check(int32_t **yield_on_ptr_slo
                                                       int32_t cp_id,
                                                       int32_t *yield_signal,
                                                       int32_t *resume_point) {
-  // Self-gate: identical predicate to the codegen-emitted body-kernel prologue. On SM 9.0+
-  // the surrounding IF conditional makes this dead code in the common path; on pre-Hopper
-  // (flat-graph path) it skips the yield-read when this checkpoint should not have run.
+  // Self-gate: identical predicate to the codegen-emitted body-kernel prologue. On SM 9.0+ the surrounding IF
+  // conditional makes this dead code in the common path; on pre-Hopper (flat-graph path) it skips the yield-read when
+  // this checkpoint should not have run.
   if (*resume_point > cp_id) {
     return;
   }

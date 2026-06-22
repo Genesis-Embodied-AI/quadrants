@@ -30,10 +30,9 @@ class KernelLauncher {
     return 0;
   }
 
-  // cp_id of the checkpoint that yielded on the most recent graph launch, or `-1` if no
-  // checkpoint yielded (this also covers non-graph launches, non-CUDA backends, and kernels
-  // without any `qd.checkpoint(yield_on=...)`). Slice 1d test introspection only; slice 2's
-  // `GraphStatus` host API supersedes this for end users.
+  // cp_id of the checkpoint that yielded on the most recent graph launch, or `-1` if no checkpoint yielded (this also
+  // covers non-graph launches, non-CUDA backends, and kernels without any `qd.checkpoint(yield_on=...)`). Slice 1d test
+  // introspection only; slice 2's `GraphStatus` host API supersedes this for end users.
   virtual int get_graph_last_yield_cp_id_on_last_call() const {
     return -1;
   }

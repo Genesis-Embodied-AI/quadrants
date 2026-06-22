@@ -16,9 +16,9 @@ class KernelLauncher : public lang::KernelLauncher {
 
   void launch_kernel(const lang::CompiledKernelData &compiled_kernel_data, LaunchContextBuilder &ctx) override;
 
-  // Slice 4 (Vulkan / Metal): route through to `GfxRuntime::last_yield_cp_id_on_last_call()`. Without
-  // this override the default in `program/kernel_launcher.h` returns -1 unconditionally and Python's
-  // `GraphStatus.yielded` always reports False on GFX backends. Matches the AMDGPU / CUDA overrides.
+  // Slice 4 (Vulkan / Metal): route through to `GfxRuntime::last_yield_cp_id_on_last_call()`. Without this override the
+  // default in `program/kernel_launcher.h` returns -1 unconditionally and Python's `GraphStatus.yielded` always reports
+  // False on GFX backends. Matches the AMDGPU / CUDA overrides.
   int get_graph_last_yield_cp_id_on_last_call() const override {
     return config_.gfx_runtime_->last_yield_cp_id_on_last_call();
   }

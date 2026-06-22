@@ -39,16 +39,16 @@ void KernelLauncher::launch_offloaded_tasks_with_do_while(Handle handle, LaunchC
     }
   }
 
-  // Checkpoint gating mirrors CPU / AMDGPU: a yield (surfaced via the runtime's
-  // last_yield_cp_id_on_last_call after a flush+sync) must exit the loop, otherwise the body re-enters,
-  // skips every checkpoint, never decrements the user's counter, and spins forever. `from_checkpoint=cp`
-  // applies only to the first pass, so we clear `ctx.resume_from_checkpoint` once a body has run.
+  // Checkpoint gating mirrors CPU / AMDGPU: a yield (surfaced via the runtime's last_yield_cp_id_on_last_call after a
+  // flush+sync) must exit the loop, otherwise the body re-enters, skips every checkpoint, never decrements the user's
+  // counter, and spins forever. `from_checkpoint=cp` applies only to the first pass, so we clear
+  // `ctx.resume_from_checkpoint` once a body has run.
   auto did_yield = [&]() -> bool { return config_.gfx_runtime_->last_yield_cp_id_on_last_call() != -1; };
 
   if (levels.size() == 1 && !has_top_level_task) {
-    // Single loop whose body is the entire kernel: keep the historical fast path of recording every task in one
-    // command list each iteration, which is materially cheaper than the per-task replay the general driver below
-    // uses (one cmdlist + one args-buffer blit per iteration instead of per task).
+    // Single loop whose body is the entire kernel: keep the historical fast path of recording every task in one command
+    // list each iteration, which is materially cheaper than the per-task replay the general driver below uses (one
+    // cmdlist + one args-buffer blit per iteration instead of per task).
     int32_t flag_val;
     do {
       config_.gfx_runtime_->launch_kernel(handle, ctx);
@@ -62,11 +62,11 @@ void KernelLauncher::launch_offloaded_tasks_with_do_while(Handle handle, LaunchC
     return;
   }
 
-  // Nested / sibling loops, or a loop mixed with plain top-level for-loops: drive the loop tree on the host from
-  // the per-task level tags. Each `launch_task` records exactly one offloaded task into the current command list;
-  // `continue_level` flushes + waits so the just-recorded body's device writes are visible, checks for a yield
-  // (exiting this and, by propagation, every enclosing loop), then reads the level's condition flag. GFX has no
-  // device-side assert-abort hook here, so `launch_task` always reports success.
+  // Nested / sibling loops, or a loop mixed with plain top-level for-loops: drive the loop tree on the host from the
+  // per-task level tags. Each `launch_task` records exactly one offloaded task into the current command list;
+  // `continue_level` flushes + waits so the just-recorded body's device writes are visible, checks for a yield (exiting
+  // this and, by propagation, every enclosing loop), then reads the level's condition flag. GFX has no device-side
+  // assert-abort hook here, so `launch_task` always reports success.
   auto launch_task = [&](int i) -> bool {
     config_.gfx_runtime_->launch_kernel(handle, ctx, i, i + 1);
     return true;

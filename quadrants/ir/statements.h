@@ -977,13 +977,13 @@ class RangeForStmt : public Stmt {
   bool strictly_serialized;
   std::string range_hint;
   int stream_parallel_group_id{0};
-  // `cp_id` of the enclosing `qd.checkpoint(...)` block (`-1` outside any checkpoint).
-  // Propagated from `FrontendForStmt::checkpoint_id` by `lower_ast.cpp`, then carried into
-  // the post-offload `OffloadedStmt::checkpoint_id` by `offload.cpp`. See ForLoopConfig
-  // comment in `frontend_ir.h` for the full pipeline.
+  // `cp_id` of the enclosing `qd.checkpoint(...)` block (`-1` outside any checkpoint). Propagated from
+  // `FrontendForStmt::checkpoint_id` by `lower_ast.cpp`, then carried into the post-offload
+  // `OffloadedStmt::checkpoint_id` by `offload.cpp`. See ForLoopConfig comment in `frontend_ir.h` for the full
+  // pipeline.
   int checkpoint_id{-1};
-  // Innermost enclosing `graph_do_while` level id (-1 if none). Propagated to the OffloadedStmt at
-  // offload time so the runtime can reconstruct nested graph_do_while loops. See graph_do_while docs.
+  // Innermost enclosing `graph_do_while` level id (-1 if none). Propagated to the OffloadedStmt at offload time so the
+  // runtime can reconstruct nested graph_do_while loops. See graph_do_while docs.
   int graph_do_while_level_id{-1};
   std::string loop_name;
 
@@ -1406,14 +1406,13 @@ class OffloadedStmt : public Stmt {
   std::size_t bls_size{0};
   MemoryAccessOptions mem_access_opt;
   int stream_parallel_group_id{0};
-  // `cp_id` of the enclosing `qd.checkpoint(...)` block for this offloaded task (`-1` outside
-  // any checkpoint). Set by `offload.cpp` from the source `RangeForStmt::checkpoint_id` /
-  // `StructForStmt::checkpoint_id`. Read by the CUDA / AMDGPU LLVM codegen to populate
-  // `OffloadedTask::checkpoint_id`, which the GraphManager will consume in slice 1c.
+  // `cp_id` of the enclosing `qd.checkpoint(...)` block for this offloaded task (`-1` outside any checkpoint). Set by
+  // `offload.cpp` from the source `RangeForStmt::checkpoint_id` / `StructForStmt::checkpoint_id`. Read by the CUDA /
+  // AMDGPU LLVM codegen to populate `OffloadedTask::checkpoint_id`, which the GraphManager will consume in slice 1c.
   int checkpoint_id{-1};
-  // Innermost enclosing `graph_do_while` level id (-1 if none), propagated from the source for-stmt
-  // (or, for serial bound/listgen tasks, from the for-stmt that flushed them). The runtime uses these
-  // per-task tags plus the launch-context level table to rebuild nested graph_do_while loops.
+  // Innermost enclosing `graph_do_while` level id (-1 if none), propagated from the source for-stmt (or, for serial
+  // bound/listgen tasks, from the for-stmt that flushed them). The runtime uses these per-task tags plus the
+  // launch-context level table to rebuild nested graph_do_while loops.
   int graph_do_while_level_id{-1};
 
   // Pre-chunking loop trip-count `SizeExpr` captured by `determine_ad_stack_size`. Set on adstack-bearing

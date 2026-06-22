@@ -329,10 +329,9 @@ class Kernel(FuncBase):
         self.has_print = False
         self.use_graph: bool = False
         # Opt-in flag set by `@qd.kernel(graph=True, checkpoints=True)`. When True, the AST transformer enables
-        # `qd.checkpoint(...)` recognition AND auto-wraps every top-level for-loop that isn't already inside a
-        # `with qd.checkpoint(...)` block in an implicit no-yield checkpoint. When False, any use of
-        # `qd.checkpoint(...)` in the kernel body is rejected at compile time with a fix-it pointing at
-        # `checkpoints=True`.
+        # `qd.checkpoint(...)` recognition AND auto-wraps every top-level for-loop that isn't already inside a `with
+        # qd.checkpoint(...)` block in an implicit no-yield checkpoint. When False, any use of `qd.checkpoint(...)` in
+        # the kernel body is rejected at compile time with a fix-it pointing at `checkpoints=True`.
         self.use_checkpoints: bool = False
         # Legacy single-loop arg name, kept for reporting/back-compat; equals the outermost level's condition arg for
         # nested kernels. The authoritative data is `graph_do_while_levels`.
@@ -344,8 +343,8 @@ class Kernel(FuncBase):
         self._graph_do_while_level_stack: list[int] = []
         # Per-checkpoint metadata, one entry per `with qd.checkpoint(...)` block (explicit AND auto-injected implicit)
         # in declaration order. List index is the checkpoint's internal `cp_id` (0, 1, 2, ... dense, flat across the
-        # kernel). Each entry is the name of the `yield_on=` kernel parameter, or `None` for implicit checkpoints
-        # (which never yield). Populated by the AST transformer; empty means the kernel uses no checkpoints.
+        # kernel). Each entry is the name of the `yield_on=` kernel parameter, or `None` for implicit checkpoints (which
+        # never yield). Populated by the AST transformer; empty means the kernel uses no checkpoints.
         self.checkpoint_yield_on_args: list[str | None] = []
         # User-facing labels for explicit checkpoints. Same indexing as `checkpoint_yield_on_args`: entry `i` is the int
         # (or IntEnum value) the user passed as the first positional arg of `qd.checkpoint(cp_id, yield_on)` for the

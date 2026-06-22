@@ -1,9 +1,9 @@
 """Helpers extracted from ``kernel.py`` for the ``qd.checkpoint(...)`` pause / resume model.
 
-``Kernel.__call__`` / ``Kernel.launch_kernel`` delegate the resume-cookie validation, the user-label-to-internal-
-cp_id translation, the per-launch ``yield_on=`` arg-id table construction, and the ``GraphStatus`` build to the free
-functions below so the central ``Kernel`` class doesn't accrete checkpoint-feature-specific blocks. See
-``qd.checkpoint`` / ``kernel.resume`` / ``docs/source/user_guide/graph.md`` for the user-facing surface.
+``Kernel.__call__`` / ``Kernel.launch_kernel`` delegate the resume-cookie validation, the user-label-to-internal- cp_id
+translation, the per-launch ``yield_on=`` arg-id table construction, and the ``GraphStatus`` build to the free functions
+below so the central ``Kernel`` class doesn't accrete checkpoint-feature-specific blocks. See ``qd.checkpoint`` /
+``kernel.resume`` / ``docs/source/user_guide/graph.md`` for the user-facing surface.
 """
 
 from __future__ import annotations
@@ -82,10 +82,9 @@ def maybe_build_graph_status(kernel: Any, default_ret: Any) -> Any:
     """Translate the runtime's internal yielding cp_id back to the user-supplied label and return a ``GraphStatus``.
 
     Returns ``default_ret`` unchanged for kernels without any yielding checkpoint -- there's no ``yield_on=`` parameter
-    to surface a status from, so the value would always be ``yielded=False, checkpoint=None`` (no information).
-    Implicit (auto-wrapped) checkpoints have ``None`` in ``checkpoint_user_labels_by_cp_id`` but they never have
-    ``yield_on=``, so the runtime can't surface them as the yielding cp -- the lookup is always to an explicit
-    checkpoint.
+    to surface a status from, so the value would always be ``yielded=False, checkpoint=None`` (no information). Implicit
+    (auto-wrapped) checkpoints have ``None`` in ``checkpoint_user_labels_by_cp_id`` but they never have ``yield_on=``,
+    so the runtime can't surface them as the yielding cp -- the lookup is always to an explicit checkpoint.
     """
     if not (kernel.checkpoint_yield_on_args and any(n is not None for n in kernel.checkpoint_yield_on_args)):
         return default_ret

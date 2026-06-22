@@ -35,10 +35,10 @@ TEST(CheckpointGateShader, DumpBinary) {
                binary.size() * sizeof(uint32_t), out_path);
 }
 
-// The gate shader has no extra capability requirements beyond a vanilla compute pipeline: pins that even a
-// minimum-cap caller (just `spirv_version`) gets a non-empty binary back. Reflects the header doc-comment
-// guarantee "Returns the finalized SPIR-V binary; never empty (no capability requirement beyond a vanilla
-// compute pipeline)" -- if a future refactor adds a cap gate without updating that doc, this test catches it.
+// The gate shader has no extra capability requirements beyond a vanilla compute pipeline: pins that even a minimum-cap
+// caller (just `spirv_version`) gets a non-empty binary back. Reflects the header doc-comment guarantee "Returns the
+// finalized SPIR-V binary; never empty (no capability requirement beyond a vanilla compute pipeline)" -- if a future
+// refactor adds a cap gate without updating that doc, this test catches it.
 TEST(CheckpointGateShader, NoExtraCapabilityRequired) {
   DeviceCapabilityConfig caps;
   caps.set(DeviceCapability::spirv_version, 0x10400);

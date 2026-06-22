@@ -587,24 +587,22 @@ void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_c
     per_task_bound_count = dispatch_adstack_bound_reducers(host_ctx, args_buffer.get(), task_attribs);
   }
 
-  // GPU-side per-checkpoint gating setup (Vulkan / Metal). Replaces an earlier per-task host-branch
-  // gating loop with the design `reentrant.md` §6.2 specifies for non-CUDA-12.4 GPU backends: a small
-  // "gate" compute shader runs in the same cmdlist before each checkpoint's body kernels and writes
-  // either `(active_gx, 1, 1)` or `(0, 0, 0)` into a per-kernel dim3 slot; body kernels then dispatch
-  // via `CommandList::dispatch_indirect` so a skipped checkpoint dispatches zero workgroups (no GPU
-  // work). After the body, an indirect-gated yield-check shader atomic-CASes the cp_id into a shared
-  // `yield_signal` slot if the user's `yield_on=` ndarray flag is non-zero.
+  // GPU-side per-checkpoint gating setup (Vulkan / Metal). Replaces an earlier per-task host-branch gating loop with
+  // the design `reentrant.md` §6.2 specifies for non-CUDA-12.4 GPU backends: a small "gate" compute shader runs in the
+  // same cmdlist before each checkpoint's body kernels and writes either `(active_gx, 1, 1)` or `(0, 0, 0)` into a
+  // per-kernel dim3 slot; body kernels then dispatch via `CommandList::dispatch_indirect` so a skipped checkpoint
+  // dispatches zero workgroups (no GPU work). After the body, an indirect-gated yield-check shader atomic-CASes the
+  // cp_id into a shared `yield_signal` slot if the user's `yield_on=` ndarray flag is non-zero.
   //
-  // The host reads `yield_signal` once at the end of the launch (single 8-byte D2H) and surfaces the
-  // first-yielder cp_id through `last_yield_cp_id_on_last_call()`. No per-task host calls, no per-
-  // task D2H stalls. See `runtime/gfx/checkpoint_launch.cpp` for the orchestration logic.
+  // The host reads `yield_signal` once at the end of the launch (single 8-byte D2H) and surfaces the first-yielder
+  // cp_id through `last_yield_cp_id_on_last_call()`. No per-task host calls, no per- task D2H stalls. See
+  // `runtime/gfx/checkpoint_launch.cpp` for the orchestration logic.
   //
-  // group_x for each task is hoisted out of the per-task dispatch loop because the gate's params
-  // buffer needs to bake the active dim for every body kernel up-front (first launch only). The value
-  // is a function of the kernel's compile-time `advisory_total_num_threads` and the per-launch ndarray
-  // shape lookups; identical to the calculation inlined in the dispatch loop. Stored as a dense
-  // `int[n_tasks]` (the full task list, not the dispatch sub-range) so the gate params stay complete
-  // even when the nested graph_do_while driver dispatches one task at a time.
+  // group_x for each task is hoisted out of the per-task dispatch loop because the gate's params buffer needs to bake
+  // the active dim for every body kernel up-front (first launch only). The value is a function of the kernel's
+  // compile-time `advisory_total_num_threads` and the per-launch ndarray shape lookups; identical to the calculation
+  // inlined in the dispatch loop. Stored as a dense `int[n_tasks]` (the full task list, not the dispatch sub-range) so
+  // the gate params stay complete even when the nested graph_do_while driver dispatches one task at a time.
   std::vector<int> per_task_group_x(task_attribs.size(), 0);
   for (int i = 0; i < (int)task_attribs.size(); ++i) {
     const auto &attribs = task_attribs[i];
@@ -642,15 +640,15 @@ void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_c
 
   ensure_current_cmdlist();
 
-  // Dispatch only the requested task sub-range. A plain launch passes [0, num_tasks); the nested
-  // graph_do_while host driver replays one task at a time via launch_kernel(handle, ctx, i, i + 1).
+  // Dispatch only the requested task sub-range. A plain launch passes [0, num_tasks); the nested graph_do_while host
+  // driver replays one task at a time via launch_kernel(handle, ctx, i, i + 1).
   for (int i = dispatch_task_begin; i < dispatch_task_end; ++i) {
     const auto &attribs = task_attribs[i];
-    // GPU-side gating: cp_id >= 0 tasks dispatch via `dispatch_indirect` against a per-cp out_dims
-    // SSBO; the gate shader (run inline below before this checkpoint's first body task) decides on
-    // GPU whether the grid is `(active, 1, 1)` or `(0, 0, 0)`. No host skip - the loop dispatches
-    // every task into the cmdlist; skipped checkpoints dispatch with zero workgroups and the
-    // hardware no-ops the entry. See `runtime/gfx/checkpoint_launch.cpp` for the mechanism.
+    // GPU-side gating: cp_id >= 0 tasks dispatch via `dispatch_indirect` against a per-cp out_dims SSBO; the gate
+    // shader (run inline below before this checkpoint's first body task) decides on GPU whether the grid is `(active,
+    // 1, 1)` or `(0, 0, 0)`. No host skip - the loop dispatches every task into the cmdlist; skipped checkpoints
+    // dispatch with zero workgroups and the hardware no-ops the entry. See `runtime/gfx/checkpoint_launch.cpp` for the
+    // mechanism.
     if (kernel_has_checkpoints && is_first_in_cp[i]) {
       const auto &state = checkpoint_handle_states_[handle.get_launch_id()];
       dispatch_checkpoint_gate(current_cmdlist_.get(), state, attribs.checkpoint_id);
@@ -658,9 +656,9 @@ void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_c
     }
     auto vp = ti_kernel->get_pipeline(i);
 
-    // group_x for this task is the value baked into the gate's params buffer at first launch (for
-    // cp_id >= 0 tasks) or used directly as the host-side dispatch dim (for cp_id < 0 tasks).
-    // Hoisted into `per_task_group_x` above; see that block for the full derivation comment.
+    // group_x for this task is the value baked into the gate's params buffer at first launch (for cp_id >= 0 tasks) or
+    // used directly as the host-side dispatch dim (for cp_id < 0 tasks). Hoisted into `per_task_group_x` above; see
+    // that block for the full derivation comment.
     const int group_x = per_task_group_x[i];
     // Adstack metadata (runtime-evaluated stride and per-alloca `(offset, max_size)` u32 table) precomputed
     // before the cmdlist opened - see the `per_task_ad_stack` loop above. Zero-length `metadata` means the
@@ -1006,18 +1004,17 @@ void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_c
       current_cmdlist_->begin_profiler_scope(attribs.name);
     }
 
-    // GPU-side gating: cp_id >= 0 tasks dispatch indirect off the per-cp out_dims SSBO slot the
-    // gate shader populated above; cp_id < 0 tasks (work outside any `qd.checkpoint`) dispatch
-    // direct with the host-computed grid. The indirect read of the per-kernel triple is fenced by
-    // the `memory_barrier()` the gate dispatch's caller emits before this point.
+    // GPU-side gating: cp_id >= 0 tasks dispatch indirect off the per-cp out_dims SSBO slot the gate shader populated
+    // above; cp_id < 0 tasks (work outside any `qd.checkpoint`) dispatch direct with the host-computed grid. The
+    // indirect read of the per-kernel triple is fenced by the `memory_barrier()` the gate dispatch's caller emits
+    // before this point.
     if (kernel_has_checkpoints && attribs.checkpoint_id >= 0) {
       const auto &state = checkpoint_handle_states_[handle.get_launch_id()];
       const auto &per_cp = state.per_cp[attribs.checkpoint_id];
       size_t slot_off = static_cast<size_t>(slot_in_cp[i]) * 3u * sizeof(uint32_t);
-      // The out_dims buffer doubles as an indirect-dispatch source, so its prior writer (the gate
-      // shader) must be barriered before the indirect read. The barrier was emitted in
-      // `is_first_in_cp` above; for subsequent body tasks in the same checkpoint the previous
-      // task's `memory_barrier()` covers it. No extra barrier needed here.
+      // The out_dims buffer doubles as an indirect-dispatch source, so its prior writer (the gate shader) must be
+      // barriered before the indirect read. The barrier was emitted in `is_first_in_cp` above; for subsequent body
+      // tasks in the same checkpoint the previous task's `memory_barrier()` covers it. No extra barrier needed here.
       status = current_cmdlist_->dispatch_indirect(per_cp.out_dims->get_ptr(slot_off));
     } else {
       status = current_cmdlist_->dispatch(group_x);
@@ -1030,10 +1027,10 @@ void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_c
     QD_ERROR_IF(status != RhiResult::success, "Dispatch error : RhiResult({})", status);
     current_cmdlist_->memory_barrier();
 
-    // GPU-side yield-check: after the last body task of each yielding checkpoint, issue the
-    // yield-check shader indirect off the trailing out_dims slot. A skipped checkpoint's
-    // yield-check is also gated to `(0, 0, 0)` by the same gate dispatch above, so this runs in
-    // the cmdlist unconditionally and the hardware no-ops the skipped case at dispatch issue.
+    // GPU-side yield-check: after the last body task of each yielding checkpoint, issue the yield-check shader indirect
+    // off the trailing out_dims slot. A skipped checkpoint's yield-check is also gated to `(0, 0, 0)` by the same gate
+    // dispatch above, so this runs in the cmdlist unconditionally and the hardware no-ops the skipped case at dispatch
+    // issue.
     if (kernel_has_checkpoints && attribs.checkpoint_id >= 0 && is_last_in_cp[i]) {
       int cp = attribs.checkpoint_id;
       if ((std::size_t)cp < yield_on_devallocs.size() &&

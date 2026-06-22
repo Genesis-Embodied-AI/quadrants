@@ -10,13 +10,13 @@
 #include "quadrants/codegen/spirv/checkpoint_yield_check_shader.h"
 #include "quadrants/rhi/public_device.h"
 
-// Builds the checkpoint yield-check SPIR-V binary with a vanilla compute-capability set and writes the word stream to
-// a temporary file. The CI doesn't run `spirv-val` automatically -- but dumping the binary makes it trivial to
-// validate / disassemble the output during local debugging:
-//   spirv-val /tmp/checkpoint_yield_check.spv spirv-dis /tmp/checkpoint_yield_check.spv | head -200
-// Parity with `adstack_bound_reducer_shader_test.cpp` / `adstack_sizer_shader_test.cpp` -- every SPIR-V shader builder
-// in `quadrants/codegen/spirv/` has a matching `DumpBinary` test that guards the IR-builder from regressions which
-// would otherwise only surface at runtime on a Vulkan / Metal device.
+// Builds the checkpoint yield-check SPIR-V binary with a vanilla compute-capability set and writes the word stream to a
+// temporary file. The CI doesn't run `spirv-val` automatically -- but dumping the binary makes it trivial to validate /
+// disassemble the output during local debugging:   spirv-val /tmp/checkpoint_yield_check.spv spirv-dis
+// /tmp/checkpoint_yield_check.spv | head -200 Parity with `adstack_bound_reducer_shader_test.cpp` /
+// `adstack_sizer_shader_test.cpp` -- every SPIR-V shader builder in `quadrants/codegen/spirv/` has a matching
+// `DumpBinary` test that guards the IR-builder from regressions which would otherwise only surface at runtime on a
+// Vulkan / Metal device.
 namespace quadrants::lang::spirv {
 
 TEST(CheckpointYieldCheckShader, DumpBinary) {

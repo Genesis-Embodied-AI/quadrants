@@ -77,8 +77,8 @@ def test_resume_offset_sequential_this():
 
     Layout: one explicit yielder on the first counter; the second and third counters auto-wrap into implicit
     checkpoints. cp LOAD yields once on the first launch, the host clears the flag and calls
-    ``resume(from_checkpoint=LOAD)``, which re-runs LOAD (this time without yielding because the host cleared the
-    flag) and the trailing implicit checkpoints.
+    ``resume(from_checkpoint=LOAD)``, which re-runs LOAD (this time without yielding because the host cleared the flag)
+    and the trailing implicit checkpoints.
 
     Expected: A hit 2x (yield + resume), B and C hit 1x each (resume launch only). One host yield callback.
     """
@@ -224,8 +224,8 @@ def test_resume_offset_loop_next():
     past SIM. The labels make the resume target stable across renumbering of any neighbouring implicit checkpoints.
 
     Iter 1 (yield launch): implicit (A+=1), SIM (B+=1, yields), exit WHILE.
-    Resume(from=AFTER_SIM): iter 1 of resume skips implicit + SIM, runs AFTER_SIM (C+=1) + counter --;
-        resume_point reset to 0; iters 2-3 run full body.
+    Resume(from=AFTER_SIM): iter 1 of resume skips implicit + SIM, runs AFTER_SIM (C+=1) + counter --;     resume_point
+    reset to 0; iters 2-3 run full body.
     Expected: A: 1 + 2 = 3, B: 1 + 2 = 3, C: 1 + 2 = 3, counter -> 0, one host yield.
     """
     if not _supports_checkpoint_yield_resume_in_while_loop():
