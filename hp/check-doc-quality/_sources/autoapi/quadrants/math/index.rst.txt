@@ -1,0 +1,22 @@
+quadrants.math
+==============
+
+.. py:module:: quadrants.math
+
+.. autoapi-nested-parse::
+
+   Quadrants math module.
+
+   The math module supports glsl-style vectors, matrices and functions.
+
+
+
+Submodules
+----------
+
+.. toctree::
+   :maxdepth: 1
+
+   /autoapi/quadrants/math/mathimpl/index
+
+
