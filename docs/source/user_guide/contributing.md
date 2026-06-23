@@ -110,17 +110,9 @@ export QUADRANTS_CMAKE_ARGS="$QUADRANTS_CMAKE_ARGS -DLLVM_ROOT=/path/to/llvm"
 The AMD GPU backend is Linux-only (it is force-disabled on macOS and Windows) and is off by default, so enable it explicitly through `CMAKE_ARGS`:
 
 ```
-export CMAKE_ARGS="-DQD_WITH_AMDGPU=ON -DQD_WITH_CUDA=OFF"
-./build.py wheel
+./build.py --shell
+CMAKE_ARGS="-DQD_WITH_AMDGPU=ON -DQD_WITH_CUDA=OFF" pip install --no-build-isolation -e . -v
 ```
-
-For an editable/incremental build instead of a wheel, run the `pip install --no-build-isolation -e . -Ceditable.rebuild=true` command above inside a `./build.py --shell` session (or after sourcing the env written by `./build.py -w env.sh`).
-
-A few things worth knowing:
-
-- `-DQD_WITH_CUDA=OFF` is optional. CUDA is on by default and the two backends can be built together, but CMake warns when both are enabled, so disable CUDA if you only want AMD.
-- No ROCm installation is needed to *build*: the required ROCm 7.0 device-library bitcode is vendored under `external/amdgpu_libdevice_rocm70` and bundled into the wheel, and the LLVM toolchain that `build.py` provisions already includes the AMDGPU target.
-- To *run* AMD GPU kernels you need an AMD GPU and a working ROCm runtime/driver on the host. Quadrants JIT-compiles kernels to HSACO for the detected GPU architecture at runtime, so there is no target arch to set at build time.
 
 ## Advanced usage
 
