@@ -11,9 +11,9 @@ Graphs reduce kernel launch overhead by capturing a sequence of GPU operations i
 | `graph=True` | hardware accelerated | hardware accelerated | hardware accelerated | runs (no acceleration) | runs (no acceleration) | runs (no acceleration) |
 | `qd.graph_do_while` | hardware accelerated | host fallback | host fallback | host fallback | host fallback | host fallback |
 | `qd.checkpoint` | GPU-side | GPU-side | GPU-side | GPU-side | GPU-side | host-side |
-| `qd.graph_parallel_context` / `qd.graph_parallel` (concurrent branches) | concurrent (parallel streams) | concurrent (parallel streams) | runs serially (correct) | runs serially (correct) | runs serially (correct) | runs serially (correct) |
+| `qd.graph_parallel_context` / `qd.graph_parallel` (concurrent sections) | concurrent | concurrent | runs serially | runs serially | runs serially | runs serially |
 
-AMDGPU `graph_do_while` falls back to the host-side loop because HIP does not currently expose conditional / while graph nodes (as of ROCm 7.2).
+AMDGPU `graph_do_while` falls back to a host-side loop because HIP does not currently expose conditional / while graph nodes (as of ROCm 7.2).
 
 Nested and sibling `graph_do_while` loops (and mixing `graph_do_while` with top-level `for`-loops) are **experimental** for now — see [Nested loops and mixing with for-loops](#nested-loops-and-mixing-with-for-loops).
 
@@ -123,7 +123,7 @@ def converge(x: qd.types.ndarray(qd.f32, ndim=1),
 
 ### Do-while semantics
 
-`graph_do_while` has **do-while** semantics: the kernel body always executes at least once before the condition is checked. This matches the behavior of CUDA conditional while nodes. The flag value must be >= 1 at launch time. Passing 0 with a kernel that decrements the counter will cause an infinite loop.
+`graph_do_while` has **do-while** semantics: the kernel body always executes at least once before the condition is checked. This matches the behaviour of CUDA conditional while nodes. The flag value must be >= 1 at launch time. Passing 0 with a kernel that decrements the counter will cause an infinite loop.
 
 ### ndarray vs field
 
@@ -468,9 +468,9 @@ In this case, our recommendation is:
 - if you need optimum 100% performance on unsupported platforms, then consider PRing onto quadrants an optimized graph implementation for your target platform
     - for example it could somehow run MAX_ITER iterations anyway, similar to the earlier hand-rolled version, but via the graph abstraction, hence allowing the code to be compact, cross-platform, and also optimally fast
 
-## Concurrent branches with `qd.graph_parallel_context` *(experimental)*
+## Concurrent sections with `qd.graph_parallel_context` *(experimental)*
 
-`qd.checkpoint` and `graph_do_while` change *which* kernels run and *how many times*; `qd.graph_parallel_context` changes *how* a graph's kernels are scheduled relative to each other. By default the kernels captured in a `graph=True` kernel run as a single dependency chain (each waits for the previous one), even when they are completely independent. A `with qd.graph_parallel_context():` region lets you declare independent stages so the graph runs them on **parallel streams**.
+`qd.checkpoint` and `graph_do_while` change *which* kernels run and *how many times*; `qd.graph_parallel_context` changes *how* a graph's kernels are scheduled relative to each other. By default the kernels captured in a `graph=True` kernel run as a single dependency chain (each waits for the previous one), even when they are completely independent. A `with qd.graph_parallel_context():` region lets you declare independent stages so the graph runs them concurrently.
 
 `qd.graph_parallel_context` is honoured by the graph builder so it composes with `graph=True` and `graph_do_while`.
 
@@ -478,37 +478,36 @@ In this case, our recommendation is:
 @qd.kernel(graph=True)
 def step(...):
     while qd.graph_do_while(ncond):
-        assemble_shared(...)                 # serial: feeds both branches
+        assemble_shared(...)                 # serial: feeds both sections
 
-        with qd.graph_parallel_context():    # fork: branches run concurrently
+        with qd.graph_parallel_context():    # fork: sections run concurrently
             with qd.graph_parallel():            # point-triangle contacts
                 pt_assemble(...)
                 pt_hessian(...)
             with qd.graph_parallel():            # edge-edge contacts (independent of pt)
                 ee_assemble(...)
                 ee_hessian(...)
-        # join: everything below waits for BOTH branches to finish
+        # join: everything below waits for BOTH sections to finish
         merge_hessians(...)
         precondition(...)
 ```
 
 ### Semantics
 
-- **Fork / join.** Every `qd.graph_parallel()` branch in the region forks from the work that precedes the region. All branches must finish before any work *after* the region begins (the join). On CUDA the join is a single empty graph node depending on every branch's last kernel.
-- **Branches are independent — you guarantee it.** Calls *within* a branch keep their program order, but calls in *different* branches have no ordering. The branches must be data-race free with respect to one another: no branch may read what another writes, and no two branches may write the same memory. Quadrants does not check this; getting it wrong gives nondeterministic results, exactly like `qd.stream_parallel()`.
+- **Fork / join.** Every `qd.graph_parallel()` section in the region forks from the work that precedes the region. All sections must finish before any work *after* the region begins (the join). On CUDA the join is a single empty graph node depending on every section's last kernel.
+- **Sections are independent — you guarantee it.** Calls *within* a section keep their program order, but calls in *different* sections have no ordering. The sections must be data-race free with respect to one another: no section may read what another writes, and no two sections may write the same memory. Quadrants does not check this; getting it wrong gives nondeterministic results.
 
 ### Restrictions (enforced at kernel compile time)
 
-- Must be used inside `@qd.kernel(graph=True)`.
-- A region body may contain only `with qd.graph_parallel():` blocks, optionally wrapped in `if qd.static(...)` (so an optional branch can be compiled in or out — e.g. enabling edge-edge contacts only when a feature flag is set).
-- `qd.graph_parallel()` may appear only directly inside a `qd.graph_parallel_context()` region.
-- Regions cannot be nested, and a branch body must be straight-line task work — no `qd.graph_do_while`, `qd.checkpoint`, or nested `qd.graph_parallel_context` inside a branch (a region may, however, sit inside a `qd.graph_do_while` body, as shown above).
+- `qd.graph_parallel_context` may contain only `with qd.graph_parallel():` blocks, optionally wrapped in `if qd.static(...)` (so an optional section can be compiled in or out — e.g. enabling edge-edge contacts only when a feature flag is set).
+- `qd.graph_parallel()` may appear only directly inside a `qd.graph_parallel_context()`.
+- `qd.graph_parallel_context` cannot be nested, and a section body must be straight-line task work — no `qd.graph_do_while`, `qd.checkpoint`, or nested `qd.graph_parallel_context` inside a section (a `qd.graph_parallel_context` may, however, sit inside a `qd.graph_do_while` body, as shown above).
 
 ### Backend behaviour
 
-| backend | result | scheduling |
-| --- | --- | --- |
-| CUDA (graph path) | correct | branches run **concurrently** on parallel streams |
-| AMDGPU / CPU / Vulkan / Metal | correct | branches run **serially** (the concurrency tags are honoured only by the graph builder today) |
+| backend | scheduling |
+| --- | --- |
+| CUDA | sections run **concurrently** |
+| AMDGPU / CPU / Vulkan / Metal | sections run **serially** |
 
-Because branches are independent by construction, running them serially on the other backends produces identical results — only the scheduling differs.
+Because sections are independent by construction, running them serially produces identical results — only the scheduling differs.
