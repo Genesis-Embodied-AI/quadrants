@@ -72,7 +72,7 @@ source env.sh
 pip install --no-build-isolation -e . -Ceditable.rebuild=true
 ```
 
-`build.py` exports both the legacy `QUADRANTS_CMAKE_ARGS` and the `CMAKE_ARGS` that scikit-build-core actually reads, so sourcing `env.sh` (or using `--shell`) is enough -- no manual `export CMAKE_ARGS="$QUADRANTS_CMAKE_ARGS"` step is needed.
+`build.py` reads and exports `CMAKE_ARGS` (scikit-build-core's CMake-args passthrough), so sourcing `env.sh` (or using `--shell`) is enough to make the configured options available to the build.
 
 ## Building the package for release purposes
 
@@ -90,7 +90,7 @@ You can modify the cmake options to your liking in order to enable or disable so
 ccmake build/cp310-cp310-linux_x86_64
 ```
 
-You could then set the environment variable `CMAKE_ARGS` (scikit-build-core's CMake-args passthrough) to configure the build. `build.py` also accepts the legacy `QUADRANTS_CMAKE_ARGS` and forwards it to `CMAKE_ARGS`. For instance, to disable the CUDA and AMDGPU backends:
+You could then set the environment variable `CMAKE_ARGS` (scikit-build-core's CMake-args passthrough) to configure the build. `build.py` reads it, layers on the toolchain options it manages, and exports it back. For instance, to disable the CUDA and AMDGPU backends:
 
 ```
 export CMAKE_ARGS="-DQD_WITH_CUDA=OFF -DQD_WITH_AMDGPU=OFF"
@@ -102,7 +102,7 @@ To direct `cmake` where to look at for some dependencies, for example `LLVM`, yo
 # using an env var
 export LLVM_DIR="/path/to/llvm/"
 # or with a cmake option
-export QUADRANTS_CMAKE_ARGS="$QUADRANTS_CMAKE_ARGS -DLLVM_ROOT=/path/to/llvm"
+export CMAKE_ARGS="$CMAKE_ARGS -DLLVM_ROOT=/path/to/llvm"
 ```
 
 ## Advanced usage
