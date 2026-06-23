@@ -470,7 +470,7 @@ In this case, our recommendation is:
 
 ## Parallel sections with `qd.graph_parallel_context` *(experimental)*
 
-`qd.checkpoint` and `graph_do_while` change *which* kernels run and *how many times*; `qd.graph_parallel_context` changes *how* a graph's kernels are scheduled relative to each other. By default the kernels captured in a `graph=True` kernel run as a single dependency chain (each waits for the previous one), even when they are completely independent. A `with qd.graph_parallel_context():` region lets you declare independent stages so the graph runs them concurrently.
+A `with qd.graph_parallel_context():` region lets you declare independent stages so the graph runs them concurrently.
 
 `qd.graph_parallel_context` is honoured by the graph builder so it composes with `graph=True` and `graph_do_while`.
 
