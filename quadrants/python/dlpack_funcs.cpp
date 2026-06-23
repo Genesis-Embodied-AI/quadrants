@@ -3,6 +3,11 @@
 #include <algorithm>
 #include <vector>
 
+// nb::cast<std::string>() (torch version check below) is compiled in this translation unit, so the std::string
+// type caster must be visible here. Without it nanobind treats std::string as an unregistered bound type and
+// nb::cast throws std::bad_cast at runtime.
+#include <nanobind/stl/string.h>
+
 #include "dlpack/dlpack.h"
 
 #include "quadrants/program/ndarray.h"

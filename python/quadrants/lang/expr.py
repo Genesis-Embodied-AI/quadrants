@@ -111,7 +111,9 @@ def _clamp_unsigned_to_range(npty, val: np.integer | int) -> np.integer | int:
 def make_constant_expr(val, dtype):
     if isinstance(val, (bool, np.bool_)):
         constant_dtype = primitive_types.u1
-        return Expr(_qd_core.make_const_expr_bool(constant_dtype, val))
+        # nanobind's bool caster is strict and rejects numpy's np.bool_ (pybind11 accepted it), so coerce to a
+        # native Python bool before crossing into C++.
+        return Expr(_qd_core.make_const_expr_bool(constant_dtype, bool(val)))
 
     if isinstance(val, (float, np.floating)):
         constant_dtype = impl.get_runtime().default_fp if dtype is None else dtype
