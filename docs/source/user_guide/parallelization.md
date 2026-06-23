@@ -76,7 +76,7 @@ for I in qd.grouped(qd.ndrange(M, N, axes=(1, 0))):
 
 ## Does GPU kernel launch latency matter?
 
-Kernel launch can be done in parallel whilst the previously launched kernel is still running. This means that if the previously launched kernel takes longer to run than the launch time for the new kernel, then the kernel launch latency will be perfectly hidden.
+Kernel launch can be done in parallel while the previously launched kernel is still running. This means that if the previously launched kernel takes longer to run than the launch time for the new kernel, then the kernel launch latency will be perfectly hidden.
 
 It's important to try to make sure that the work done by each kernel is sufficient to hide the kernel launch latency, otherwise the launch latency will be a bottleneck to maximum performance.
 
