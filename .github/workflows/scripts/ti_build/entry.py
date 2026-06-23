@@ -43,10 +43,6 @@ def build_wheel(python: Command) -> None:
     # Build via scikit-build-core. Use `pip wheel` (not `python -m build`) because the repo ships a top-level build.py
     # that would shadow the `build` module under `-m`. --no-build-isolation: the LLVM/clang toolchain is not
     # pip-installable (it is provisioned by setup_basic_build_env above), so build deps come from this env.
-    # Perf test: --no-build-isolation means the env's pybind11 is what gets compiled into the bindings, so pin the
-    # exact version here. pybind11 3.0.x has a faster Python<->C++ call dispatch than 2.x; the prior implicit 2.x in
-    # this build path cost ~8% on call-overhead-bound CPU benchmarks (batch_size=0).
-    python("-m", "pip", "install", "pybind11==3.0.4")
     with nice():
         python("-m", "pip", "wheel", "--no-deps", "--no-build-isolation", "-w", "dist", ".")
 
