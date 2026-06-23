@@ -781,8 +781,8 @@ def graph_parallel_context():
       - Regions cannot be nested, and a ``qd.graph_parallel`` section body must be straight-line task work
         (no nested ``qd.graph_do_while``, ``qd.checkpoint``, or ``qd.graph_parallel_context``).
 
-    This function should not be called directly at runtime; it is recognized and transformed during AST
-    compilation. At Python runtime (outside kernels) it is a no-op context manager.
+    This function should not be called directly at runtime; it is recognized and transformed during AST compilation.
+    At Python runtime (outside kernels) it is a no-op context manager.
 
     See also ``docs/source/user_guide/graph.md``.
     """
