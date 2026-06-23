@@ -602,7 +602,7 @@ class FunctionDefTransformer:
 
     @staticmethod
     def _is_graph_parallel_context_with(stmt: ast.stmt) -> bool:
-        """Syntactic check matching ASTTransformer._is_graph_parallel_context_call: a
+        """Syntactic check matching GraphParallelTransformer.is_graph_parallel_context_call: a
         ``with qd.graph_parallel_context():`` fork/join region."""
         if not isinstance(stmt, ast.With) or len(stmt.items) != 1:
             return False
@@ -618,7 +618,7 @@ class FunctionDefTransformer:
 
     @staticmethod
     def _is_parallel_section_with(stmt: ast.stmt) -> bool:
-        """Syntactic check matching ASTTransformer._is_parallel_section_call: a ``with qd.graph_parallel(...):``
+        """Syntactic check matching GraphParallelTransformer.is_parallel_section_call: a ``with qd.graph_parallel(...):``
         section of a ``qd.graph_parallel_context()`` region."""
         if not isinstance(stmt, ast.With) or len(stmt.items) != 1:
             return False
@@ -695,7 +695,7 @@ class FunctionDefTransformer:
                 # A `with qd.graph_parallel_context()` region groups concurrent `with qd.graph_parallel()`
                 # sections; it is a legal sibling of for-loops / checkpoints. Its body must be
                 # `qd.graph_parallel` section blocks (optionally under `if qd.static(...)`); the full check
-                # is in ASTTransformer._build_graph_parallel_context_with. Each `qd.graph_parallel` section's
+                # is in GraphParallelTransformer.build_graph_parallel_context_with. Each `qd.graph_parallel` section's
                 # body is task territory, validated here with the in-loop rules. Descend through `if` members
                 # so `qd.graph_parallel` sections inside an optional `if qd.static(...)` are reached too.
                 pending = list(stmt.body)
@@ -709,7 +709,7 @@ class FunctionDefTransformer:
                     elif isinstance(member, ast.For):
                         # `for ... in qd.static(...)` generates sections; descend so each unrolled section
                         # body is still validated with the in-loop rules (a runtime for here is rejected
-                        # earlier by ASTTransformer._build_graph_parallel_context_with).
+                        # earlier by GraphParallelTransformer.build_graph_parallel_context_with).
                         pending.extend(member.body)
                 continue
             where = "the kernel body" if is_kernel_top else "a qd.graph_do_while() body"
