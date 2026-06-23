@@ -202,8 +202,8 @@ class GraphManager {
                         unsigned int shared_mem,
                         void **kernel_params);
   // Add an empty (no-op) node to `graph` depending on every node in `deps`. Used as the join point of a
-  // qd.graph_parallel_context() region: it has no work but collects all branch tails into a single successor so
-  // downstream nodes wait for every branch. `deps` must be non-empty.
+  // qd.graph_parallel_context() region: it has no work but collects all parallel-section tails into a single
+  // successor so downstream nodes wait for every parallel section. `deps` must be non-empty.
   void *add_empty_node(void *graph, const std::vector<void *> &deps);
   // Recursively build the nodes for graph_do_while level `parent_id` (-1 = kernel top level) over the task range
   // [begin, end) into `target_graph` (the body graph of `parent_id`, or the root graph for -1). Direct tasks become

@@ -406,18 +406,19 @@ void GraphManager::build_level(int parent_id,
 
     // --- A qd.graph_parallel_context() fork/join region: a contiguous run of this level's direct,
     // non-checkpoint tasks tagged with a nonzero stream_parallel_group_id (set by qd.graph_parallel()). Each
-    // distinct group id is one branch; branches fork from the region's entry (`prev_node`), run their
-    // tasks in order, and join into a single empty node so downstream work waits for all of them. CUDA's
-    // graph executor schedules the independent branch chains on separate streams -> real overlap. ---
+    // distinct group id is one parallel section; the parallel sections fork from the region's entry
+    // (`prev_node`), run their tasks in order, and join into a single empty node so downstream work waits for
+    // all of them. CUDA's graph executor schedules the independent parallel-section chains on separate
+    // streams -> real overlap. ---
     if (tasks[cursor].stream_parallel_group_id != 0 && tasks[cursor].checkpoint_id < 0) {
       int run_end = cursor;
       while (run_end < end && tasks[run_end].graph_do_while_level_id == parent_id &&
              tasks[run_end].checkpoint_id < 0 && tasks[run_end].stream_parallel_group_id != 0) {
         run_end++;
       }
-      // Bucket the run's tasks by branch id, preserving first-seen (declaration) order.
+      // Bucket the run's tasks by parallel-section id, preserving first-seen (declaration) order.
       std::vector<int> group_ids;
-      std::vector<std::vector<int>> branches;
+      std::vector<std::vector<int>> parallel_sections;
       for (int t = cursor; t < run_end; t++) {
         const int g = tasks[t].stream_parallel_group_id;
         int idx = -1;
@@ -430,16 +431,16 @@ void GraphManager::build_level(int parent_id,
         if (idx < 0) {
           idx = (int)group_ids.size();
           group_ids.push_back(g);
-          branches.emplace_back();
+          parallel_sections.emplace_back();
         }
-        branches[idx].push_back(t);
+        parallel_sections[idx].push_back(t);
       }
       void *ctx_ptr = &cached.persistent_ctx;
       std::vector<void *> tails;
-      tails.reserve(branches.size());
-      for (auto &br : branches) {
-        void *bp = prev_node;  // every branch forks from the region entry dependency
-        for (int t : br) {
+      tails.reserve(parallel_sections.size());
+      for (auto &ps : parallel_sections) {
+        void *bp = prev_node;  // every parallel section forks from the region entry dependency
+        for (int t : ps) {
           bp = add_kernel_node(target_graph, bp, cuda_module->lookup_function(tasks[t].name),
                                (unsigned int)tasks[t].grid_dim, (unsigned int)tasks[t].block_dim,
                                (unsigned int)tasks[t].dynamic_shared_array_bytes, &ctx_ptr);
@@ -447,8 +448,9 @@ void GraphManager::build_level(int parent_id,
         }
         tails.push_back(bp);
       }
-      // Join. A single-branch region (e.g. an optional branch compiled out) has nothing to join, so just
-      // continue the chain from its tail; otherwise collect all tails into one empty successor node.
+      // Join. A single-parallel-section region (e.g. an optional parallel section compiled out) has nothing
+      // to join, so just continue the chain from its tail; otherwise collect all tails into one empty
+      // successor node.
       if (tails.size() == 1) {
         prev_node = tails[0];
       } else {

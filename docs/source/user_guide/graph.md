@@ -11,7 +11,7 @@ Graphs reduce kernel launch overhead by capturing a sequence of GPU operations i
 | `graph=True` | hardware accelerated | hardware accelerated | hardware accelerated | runs (no acceleration) | runs (no acceleration) | runs (no acceleration) |
 | `qd.graph_do_while` | hardware accelerated | host fallback | host fallback | host fallback | host fallback | host fallback |
 | `qd.checkpoint` | GPU-side | GPU-side | GPU-side | GPU-side | GPU-side | host-side |
-| `qd.graph_parallel_context` / `qd.graph_parallel` (concurrent sections) | concurrent | concurrent | runs serially | runs serially | runs serially | runs serially |
+| `qd.graph_parallel_context` / `qd.graph_parallel` (parallel sections) | concurrent | concurrent | runs serially | runs serially | runs serially | runs serially |
 
 AMDGPU `graph_do_while` falls back to a host-side loop because HIP does not currently expose conditional / while graph nodes (as of ROCm 7.2).
 
@@ -468,7 +468,7 @@ In this case, our recommendation is:
 - if you need optimum 100% performance on unsupported platforms, then consider PRing onto quadrants an optimized graph implementation for your target platform
     - for example it could somehow run MAX_ITER iterations anyway, similar to the earlier hand-rolled version, but via the graph abstraction, hence allowing the code to be compact, cross-platform, and also optimally fast
 
-## Concurrent sections with `qd.graph_parallel_context` *(experimental)*
+## Parallel sections with `qd.graph_parallel_context` *(experimental)*
 
 `qd.checkpoint` and `graph_do_while` change *which* kernels run and *how many times*; `qd.graph_parallel_context` changes *how* a graph's kernels are scheduled relative to each other. By default the kernels captured in a `graph=True` kernel run as a single dependency chain (each waits for the previous one), even when they are completely independent. A `with qd.graph_parallel_context():` region lets you declare independent stages so the graph runs them concurrently.
 
@@ -478,36 +478,36 @@ In this case, our recommendation is:
 @qd.kernel(graph=True)
 def step(...):
     while qd.graph_do_while(ncond):
-        assemble_shared(...)                 # serial: feeds both sections
+        assemble_shared(...)                 # serial: feeds both parallel sections
 
-        with qd.graph_parallel_context():    # fork: sections run concurrently
+        with qd.graph_parallel_context():    # fork: parallel sections run concurrently
             with qd.graph_parallel():            # point-triangle contacts
                 pt_assemble(...)
                 pt_hessian(...)
             with qd.graph_parallel():            # edge-edge contacts (independent of pt)
                 ee_assemble(...)
                 ee_hessian(...)
-        # join: everything below waits for BOTH sections to finish
+        # join: everything below waits for BOTH parallel sections to finish
         merge_hessians(...)
         precondition(...)
 ```
 
 ### Semantics
 
-- **Fork / join.** Every `qd.graph_parallel()` section in the region forks from the work that precedes the region. All sections must finish before any work *after* the region begins (the join). On CUDA the join is a single empty graph node depending on every section's last kernel.
-- **Sections are independent — you guarantee it.** Calls *within* a section keep their program order, but calls in *different* sections have no ordering. The sections must be data-race free with respect to one another: no section may read what another writes, and no two sections may write the same memory. Quadrants does not check this; getting it wrong gives nondeterministic results.
+- **Fork / join.** Every parallel section in the region forks from the work that precedes the region. All parallel sections must finish before any work *after* the region begins (the join). On CUDA the join is a single empty graph node depending on every parallel section's last kernel.
+- **Parallel sections are independent — you guarantee it.** Calls *within* a parallel section keep their program order, but calls in *different* parallel sections have no ordering. The parallel sections must be data-race free with respect to one another: no parallel section may read what another writes, and no two parallel sections may write the same memory. Quadrants does not check this; getting it wrong gives nondeterministic results.
 
 ### Restrictions (enforced at kernel compile time)
 
-- `qd.graph_parallel_context` may contain only `with qd.graph_parallel():` blocks, optionally wrapped in `if qd.static(...)` (so an optional section can be compiled in or out — e.g. enabling edge-edge contacts only when a feature flag is set).
+- `qd.graph_parallel_context` may contain only `with qd.graph_parallel():` blocks, optionally wrapped in `if qd.static(...)` (so an optional parallel section can be compiled in or out — e.g. enabling edge-edge contacts only when a feature flag is set).
 - `qd.graph_parallel()` may appear only directly inside a `qd.graph_parallel_context()`.
-- `qd.graph_parallel_context` cannot be nested, and a section body must be straight-line task work — no `qd.graph_do_while`, `qd.checkpoint`, or nested `qd.graph_parallel_context` inside a section (a `qd.graph_parallel_context` may, however, sit inside a `qd.graph_do_while` body, as shown above).
+- `qd.graph_parallel_context` cannot be nested, and a parallel section body must be straight-line task work — no `qd.graph_do_while`, `qd.checkpoint`, or nested `qd.graph_parallel_context` inside a parallel section (a `qd.graph_parallel_context` may, however, sit inside a `qd.graph_do_while` body, as shown above).
 
 ### Backend behaviour
 
 | backend | scheduling |
 | --- | --- |
-| CUDA | sections run **concurrently** |
-| AMDGPU / CPU / Vulkan / Metal | sections run **serially** |
+| CUDA | parallel sections run **concurrently** |
+| AMDGPU / CPU / Vulkan / Metal | parallel sections run **serially** |
 
-Because sections are independent by construction, running them serially produces identical results — only the scheduling differs.
+Because parallel sections are independent by construction, running them serially produces identical results — only the scheduling differs.

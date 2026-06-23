@@ -617,9 +617,9 @@ class FunctionDefTransformer:
         return False
 
     @staticmethod
-    def _is_branch_with(stmt: ast.stmt) -> bool:
-        """Syntactic check matching ASTTransformer._is_branch_call: a ``with qd.graph_parallel(...):``
-        branch member of a ``qd.graph_parallel_context()`` region."""
+    def _is_parallel_section_with(stmt: ast.stmt) -> bool:
+        """Syntactic check matching ASTTransformer._is_parallel_section_call: a ``with qd.graph_parallel(...):``
+        parallel section of a ``qd.graph_parallel_context()`` region."""
         if not isinstance(stmt, ast.With) or len(stmt.items) != 1:
             return False
         ctx_expr = stmt.items[0].context_expr
@@ -693,15 +693,15 @@ class FunctionDefTransformer:
                 continue
             if FunctionDefTransformer._is_graph_parallel_context_with(stmt):
                 # A `with qd.graph_parallel_context()` region groups concurrent `with qd.graph_parallel()`
-                # branches; it is a legal sibling of for-loops / checkpoints. Its body must be branch blocks
-                # (optionally under `if qd.static(...)`); the full check is in
-                # ASTTransformer._build_graph_parallel_context_with. Each branch body is task territory,
-                # validated here with the in-loop rules. Descend through `if` members so branches inside an
-                # optional-branch `if qd.static(...)` are reached too.
+                # parallel sections; it is a legal sibling of for-loops / checkpoints. Its body must be
+                # parallel-section blocks (optionally under `if qd.static(...)`); the full check is in
+                # ASTTransformer._build_graph_parallel_context_with. Each parallel section's body is task
+                # territory, validated here with the in-loop rules. Descend through `if` members so parallel
+                # sections inside an optional `if qd.static(...)` are reached too.
                 pending = list(stmt.body)
                 while pending:
                     member = pending.pop()
-                    if FunctionDefTransformer._is_branch_with(member):
+                    if FunctionDefTransformer._is_parallel_section_with(member):
                         FunctionDefTransformer._validate_graph_do_while_stmt_list(member.body, is_kernel_top=False)
                     elif isinstance(member, ast.If):
                         pending.extend(member.body)

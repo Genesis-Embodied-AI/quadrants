@@ -754,29 +754,30 @@ def graph_do_while(condition) -> bool:
 
 @contextmanager
 def graph_parallel_context():
-    """Opens a fork/join region whose ``qd.graph_parallel()`` branches run concurrently.
+    """Opens a fork/join region whose ``qd.graph_parallel()`` parallel sections run concurrently.
 
-    Used as ``with qd.graph_parallel_context():`` inside a ``@qd.kernel(graph=True)`` kernel. The
-    region's body must contain only ``with qd.graph_parallel():`` blocks. Each branch is an independent
-    sequence of work; the branches have no ordering relative to each other and may execute concurrently,
-    while everything after the region waits for *all* branches to finish (the join). This is the graph
-    analogue of ``qd.stream_parallel()`` (which is for non-graph kernels): it lets independent stages --
-    e.g. qipc's point-triangle and edge-edge assembly -- overlap inside a captured graph.
+    Used as ``with qd.graph_parallel_context():`` inside a ``@qd.kernel(graph=True)`` kernel. The region's
+    body must contain only ``with qd.graph_parallel():`` blocks. Each parallel section is an independent
+    sequence of work; the parallel sections have no ordering relative to each other and may execute
+    concurrently, while everything after the region waits for *all* parallel sections to finish (the join).
+    This is the graph analogue of ``qd.stream_parallel()`` (which is for non-graph kernels): it lets
+    independent stages -- e.g. qipc's point-triangle and edge-edge assembly -- overlap inside a captured
+    graph.
 
-    Concurrency contract (the author's responsibility): branches must be data-race free with respect to
-    one another (no branch reads what another writes, no two branches write the same location). Calls
-    *within* a branch keep their program order.
+    Concurrency contract (the author's responsibility): parallel sections must be data-race free with
+    respect to one another (no parallel section reads what another writes, no two parallel sections write
+    the same location). Calls *within* a parallel section keep their program order.
 
     Backend behaviour:
-      - CUDA SM graph path: branches become independent graph chains joined by an empty node, so the
-        runtime schedules them on parallel streams (real overlap).
-      - CPU / Vulkan / Metal / AMDGPU graph: correct results, branches run serially (the concurrency
-        tags are honoured only by the graph builder today).
+      - CUDA SM graph path: parallel sections become independent graph chains joined by an empty node, so
+        the runtime schedules them on parallel streams (real overlap).
+      - CPU / Vulkan / Metal / AMDGPU graph: correct results, parallel sections run serially (the
+        concurrency tags are honoured only by the graph builder today).
 
     Restrictions (enforced at kernel compile time):
       - Must be used inside ``@qd.kernel(graph=True)``.
       - The region body may contain only ``with qd.graph_parallel():`` blocks.
-      - Regions cannot be nested, and a branch body must be straight-line task work (no nested
+      - Regions cannot be nested, and a parallel section body must be straight-line task work (no nested
         ``qd.graph_do_while``, ``qd.checkpoint``, or ``qd.graph_parallel_context``).
 
     This function should not be called directly at runtime; it is recognised and transformed during AST
@@ -789,11 +790,11 @@ def graph_parallel_context():
 
 @contextmanager
 def graph_parallel():
-    """Declares one concurrent branch of an enclosing ``qd.graph_parallel_context()`` region.
+    """Declares one parallel section of an enclosing ``qd.graph_parallel_context()`` region.
 
     Used as ``with qd.graph_parallel():`` directly inside a ``with qd.graph_parallel_context():`` block.
-    The branch's body is an independent sequence of work that may run concurrently with the region's
-    other branches.
+    The parallel section's body is an independent sequence of work that may run concurrently with the
+    region's other parallel sections.
 
     See ``qd.graph_parallel_context()`` for the full contract and backend behaviour.
     """

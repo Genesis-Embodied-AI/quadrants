@@ -1388,16 +1388,16 @@ class ASTTransformer(Builder):
         return True
 
     @staticmethod
-    def _is_branch_call(node: ast.expr) -> bool:
-        """If *node* is a ``qd.graph_parallel()`` (branch) call return True, else False. The call shape is
-        validated here so misuse raises at the ``with`` site rather than later."""
+    def _is_parallel_section_call(node: ast.expr) -> bool:
+        """If *node* is a ``qd.graph_parallel()`` (a parallel section) call return True, else False. The
+        call shape is validated here so misuse raises at the ``with`` site rather than later."""
         if not isinstance(node, ast.Call):
             return False
         func = node.func
-        is_branch = (isinstance(func, ast.Attribute) and func.attr == "graph_parallel") or (
+        is_parallel_section = (isinstance(func, ast.Attribute) and func.attr == "graph_parallel") or (
             isinstance(func, ast.Name) and func.id == "graph_parallel"
         )
-        if not is_branch:
+        if not is_parallel_section:
             return False
         if node.args or node.keywords:
             raise QuadrantsSyntaxError("qd.graph_parallel() takes no arguments")
@@ -1649,8 +1649,8 @@ class ASTTransformer(Builder):
         if ASTTransformer._is_graph_parallel_context_call(item.context_expr):
             return ASTTransformer._build_graph_parallel_context_with(ctx, node)
 
-        if ASTTransformer._is_branch_call(item.context_expr):
-            return ASTTransformer._build_branch_with(ctx, node)
+        if ASTTransformer._is_parallel_section_call(item.context_expr):
+            return ASTTransformer._build_parallel_section_with(ctx, node)
 
         if not FunctionDefTransformer._is_stream_parallel_with(node, ctx.global_vars):
             raise QuadrantsSyntaxError(
@@ -1680,8 +1680,8 @@ class ASTTransformer(Builder):
 
         Validates the use-site (kernel must be graph=True, no nesting) and that the region body contains
         only ``with qd.graph_parallel():`` blocks, then walks the body. The region emits no IR tag of its
-        own -- each branch inside lowers to a stream-parallel group (via begin/end_stream_parallel), and
-        the graph builder forks the distinct groups in a contiguous run and joins them. Regions are kept
+        own -- each parallel section inside lowers to a stream-parallel group (via begin/end_stream_parallel),
+        and the graph builder forks the distinct groups in a contiguous run and joins them. Regions are kept
         apart by the serial work between them (see d3_0_graph_parallel_impl.md)."""
         if not ctx.is_kernel:
             raise QuadrantsSyntaxError(
@@ -1692,7 +1692,7 @@ class ASTTransformer(Builder):
             raise QuadrantsSyntaxError("qd.graph_parallel_context() requires @qd.kernel(graph=True)")
         if getattr(ctx, "_in_graph_parallel_context", False):
             raise QuadrantsSyntaxError("qd.graph_parallel_context() regions cannot be nested")
-        if getattr(ctx, "_in_branch", False):
+        if getattr(ctx, "_in_parallel_section", False):
             raise QuadrantsSyntaxError(
                 "qd.graph_parallel_context() cannot appear inside a qd.graph_parallel() body"
             )
@@ -1707,17 +1707,17 @@ class ASTTransformer(Builder):
     @staticmethod
     def _validate_graph_parallel_context_body(stmts: list[ast.stmt]) -> None:
         """A qd.graph_parallel_context() region body may contain only `with qd.graph_parallel():` blocks,
-        optionally wrapped in compile-time `if qd.static(...)` branches (the optional-branch pattern, e.g.
+        optionally wrapped in compile-time `if qd.static(...)` (the optional parallel-section pattern, e.g.
         qipc's ENABLE_EE). Docstrings / coverage probes / `pass` are allowed. Anything else (a bare
-        for-loop, assignment, etc.) is a serial task that would silently fall outside any branch, so
-        reject it."""
+        for-loop, assignment, etc.) is a serial task that would silently fall outside any parallel section,
+        so reject it."""
         for i, stmt in enumerate(stmts):
             if FunctionDefTransformer._is_docstring(stmt, i) or FunctionDefTransformer._is_coverage_probe(stmt):
                 continue
             if isinstance(stmt, ast.Pass):
                 continue
             if isinstance(stmt, ast.With) and stmt.items:
-                if ASTTransformer._is_branch_call(stmt.items[0].context_expr):
+                if ASTTransformer._is_parallel_section_call(stmt.items[0].context_expr):
                     continue
             if isinstance(stmt, ast.If):
                 ASTTransformer._validate_graph_parallel_context_body(stmt.body)
@@ -1730,23 +1730,23 @@ class ASTTransformer(Builder):
             )
 
     @staticmethod
-    def _build_branch_with(ctx: ASTTransformerFuncContext, node: ast.With) -> None:
-        """Handles ``with qd.graph_parallel():`` branch members of a ``qd.graph_parallel_context()`` region.
+    def _build_parallel_section_with(ctx: ASTTransformerFuncContext, node: ast.With) -> None:
+        """Handles a ``with qd.graph_parallel():`` parallel section of a ``qd.graph_parallel_context()`` region.
 
-        Reuses the stream-parallel tagging: begin_stream_parallel() assigns this branch a fresh
+        Reuses the stream-parallel tagging: begin_stream_parallel() assigns this parallel section a fresh
         ``stream_parallel_group_id`` that every for-loop in the body inherits, so the offloaded tasks
-        carry the branch id all the way to the graph builder."""
+        carry the parallel-section id all the way to the graph builder."""
         if not getattr(ctx, "_in_graph_parallel_context", False):
             raise QuadrantsSyntaxError(
                 "qd.graph_parallel() can only be used directly inside a qd.graph_parallel_context() region"
             )
-        ctx._in_branch = True
+        ctx._in_parallel_section = True
         ctx.ast_builder.begin_stream_parallel()
         try:
             build_stmts(ctx, node.body)
         finally:
             ctx.ast_builder.end_stream_parallel()
-            ctx._in_branch = False
+            ctx._in_parallel_section = False
         return None
 
     @staticmethod
