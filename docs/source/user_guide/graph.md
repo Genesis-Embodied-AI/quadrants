@@ -512,4 +512,4 @@ def step(...):
 | CUDA (graph path) | correct | branches run **concurrently** on parallel streams |
 | AMDGPU / CPU / Vulkan / Metal | correct | branches run **serially** (the concurrency tags are honoured only by the CUDA graph builder today) |
 
-Because branches are independent by construction, running them serially on the other backends produces identical results — only the scheduling differs. `qd.graph_parallel` lowers onto the same internal concurrency-group mechanism as `qd.stream_parallel`, so non-graph fallbacks also fork the branches across streams.
+Because branches are independent by construction, running them serially on the other backends produces identical results — only the scheduling differs.
