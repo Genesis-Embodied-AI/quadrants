@@ -514,6 +514,7 @@ class FunctionDefTransformer:
                 # different argument shape) start from an empty list. Mirrors how `graph_do_while_arg` gets overwritten
                 # unconditionally during AST traversal.
                 kernel.checkpoint_yield_on_args = []
+                kernel.checkpoint_yield_on_cpp_arg_ids = []
                 kernel.checkpoint_user_labels_by_cp_id = []
                 # Auto-wrap pass for `@qd.kernel(graph=True, checkpoints=True)` kernels. Mutates `node.body` in place so
                 # every top-level for-loop (and every for-loop inside a `qd.graph_do_while` body) that the user did not

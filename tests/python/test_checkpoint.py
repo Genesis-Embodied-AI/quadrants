@@ -208,7 +208,7 @@ def test_checkpoint_duplicate_cp_id_raises():
 
 @test_utils.test()
 def test_checkpoint_yield_on_nonexistent_arg_raises():
-    """``yield_on`` must name a kernel parameter; typos / scope mismatches must error early."""
+    """``yield_on`` must reference an ndarray kernel argument; typos / scope mismatches must error early."""
 
     @qd.kernel(graph=True, checkpoints=True)
     def k(x: qd.types.ndarray(qd.i32, ndim=1), flag: qd.types.ndarray(qd.i32, ndim=0)):
@@ -218,13 +218,14 @@ def test_checkpoint_yield_on_nonexistent_arg_raises():
 
     x = qd.ndarray(qd.i32, shape=(4,))
     flag = qd.ndarray(qd.i32, shape=())
-    with pytest.raises(qd.QuadrantsSyntaxError, match="does not match any parameter"):
+    with pytest.raises(qd.QuadrantsSyntaxError, match="does not resolve to an ndarray kernel parameter"):
         k(x, flag)
 
 
 @test_utils.test()
-def test_checkpoint_yield_on_must_be_bare_name():
-    """``yield_on=`` must be a bare ``ast.Name`` (a kernel parameter); expressions are not supported. Pinning the
+def test_checkpoint_yield_on_must_be_name_or_attribute():
+    """``yield_on=`` must reference an ndarray kernel argument -- either a bare ``ast.Name`` or an ``ast.Attribute``
+    chain (for ``@qd.data_oriented`` member ndarrays). Arbitrary expressions are not supported; pinning the
     diagnostic so the user knows to refactor."""
 
     @qd.kernel(graph=True, checkpoints=True)
@@ -235,7 +236,7 @@ def test_checkpoint_yield_on_must_be_bare_name():
 
     x = qd.ndarray(qd.i32, shape=(4,))
     flag = qd.ndarray(qd.i32, shape=())
-    with pytest.raises(qd.QuadrantsSyntaxError, match=r"must be the bare name of a kernel parameter"):
+    with pytest.raises(qd.QuadrantsSyntaxError, match=r"must reference a kernel ndarray argument"):
         k(x, flag)
 
 
@@ -841,6 +842,129 @@ def test_checkpoint_yield_exits_graph_do_while_early():
     np.testing.assert_array_equal(x.to_numpy(), np.ones(N, dtype=np.int32))
     assert status.yielded
     assert status.checkpoint == 0
+
+
+# ----------------------------------------------------------------------------------------------------------------------
+# Member-ndarray support for `yield_on=` (both `@qd.data_oriented` self-members and `@dataclasses.dataclass` parameter
+# members).
+#
+# ``qd.checkpoint(yield_on=self.flag)`` and ``qd.checkpoint(yield_on=params.flag)`` (where ``params`` is a kernel
+# parameter typed as a ``@dataclasses.dataclass``) both resolve the member ndarray to a flat C++ arg-id at AST-build
+# time via ``ASTTransformer._resolve_ndarray_kernel_arg_id``: it builds the expression and reads the resolved
+# ``ExternalTensorExpression.arg_id``, so any attribute chain that ends up as a kernel ndarray arg works the same
+# way as a bare parameter name. This frees users from having to forward flag members as bare kernel parameters when
+# the rest of the kernel already operates on the dataclass / data-oriented owner.
+# ----------------------------------------------------------------------------------------------------------------------
+
+
+@test_utils.test()
+def test_checkpoint_yield_on_data_oriented_member_metadata():
+    """`yield_on=self.flag` is accepted and the resolved label is stored verbatim (``"self.flag"``) in
+    ``checkpoint_yield_on_args``, while ``checkpoint_yield_on_cpp_arg_ids`` carries the flat C++ arg-id the
+    runtime forwards to the launch context. Verifies the AST-build-time resolution path without booting the
+    backend."""
+    N = 4
+
+    @qd.data_oriented
+    class Sim:
+        def __init__(self):
+            self.x = qd.ndarray(qd.i32, shape=(N,))
+            self.flag = qd.ndarray(qd.i32, shape=())
+
+        @qd.kernel(graph=True, checkpoints=True)
+        def step(self):
+            with qd.checkpoint(0, yield_on=self.flag):
+                for i in range(self.x.shape[0]):
+                    self.x[i] = self.x[i] + 1
+
+    sim = Sim()
+    sim.x.from_numpy(np.zeros(N, dtype=np.int32))
+    sim.flag.from_numpy(np.array(0, dtype=np.int32))
+    sim.step()
+    np.testing.assert_array_equal(sim.x.to_numpy(), np.ones(N, dtype=np.int32))
+    assert sim.step._primal.checkpoint_user_labels_by_cp_id == [0]
+    assert sim.step._primal.checkpoint_yield_on_args == ["self.flag"]
+    cpp_ids = sim.step._primal.checkpoint_yield_on_cpp_arg_ids
+    assert len(cpp_ids) == 1 and cpp_ids[0] >= 0
+
+
+@test_utils.test()
+def test_checkpoint_yield_on_dataclass_member_metadata():
+    """`yield_on=params.flag` for a ``@dataclasses.dataclass`` kernel parameter takes the same AST-build-time
+    resolution path as ``self.flag`` for a ``@qd.data_oriented`` owner -- the resolved label round-trips into
+    ``checkpoint_yield_on_args`` and the flat arg-id lands in ``checkpoint_yield_on_cpp_arg_ids``."""
+    import dataclasses  # pylint: disable=import-outside-toplevel
+
+    N = 4
+
+    @dataclasses.dataclass
+    class Params:
+        x: qd.types.NDArray[qd.i32, 1]
+        flag: qd.types.NDArray[qd.i32, 0]
+
+    @qd.kernel(graph=True, checkpoints=True)
+    def step(params: Params):
+        with qd.checkpoint(0, yield_on=params.flag):
+            for i in range(params.x.shape[0]):
+                params.x[i] = params.x[i] + 1
+
+    params = Params(
+        x=qd.ndarray(qd.i32, shape=(N,)),
+        flag=qd.ndarray(qd.i32, shape=()),
+    )
+    params.x.from_numpy(np.zeros(N, dtype=np.int32))
+    params.flag.from_numpy(np.array(0, dtype=np.int32))
+    step(params)
+    np.testing.assert_array_equal(params.x.to_numpy(), np.ones(N, dtype=np.int32))
+    assert step._primal.checkpoint_user_labels_by_cp_id == [0]
+    # Dataclass-parameter member access gets pre-rewritten by the AST pipeline to a flattened parameter name
+    # (`__qd_params__qd_flag`) before the checkpoint transformer sees it, so the label round-trips in the
+    # flattened form. The functional contract -- a valid flat C++ arg-id is resolved and the kernel mutates the
+    # right ndarray -- is the same as for the bare-param / `self.flag` forms.
+    labels = step._primal.checkpoint_yield_on_args
+    assert len(labels) == 1 and labels[0] is not None and "flag" in labels[0]
+    cpp_ids = step._primal.checkpoint_yield_on_cpp_arg_ids
+    assert len(cpp_ids) == 1 and cpp_ids[0] >= 0
+
+
+@test_utils.test()
+def test_checkpoint_yield_on_data_oriented_member_yields_and_resumes():
+    """Behavioural round-trip for `yield_on=self.flag`: setting the member flag from inside the kernel yields, and
+    ``kernel.resume(from_checkpoint=...)`` skips ahead to the named checkpoint. Same surface contract as the bare-
+    parameter form (`test_checkpoint_yield_on_yields_and_resumes`); the only difference is where the flag lives."""
+    if not _supports_checkpoint_yield_resume():
+        pytest.skip("backend does not implement checkpoint yield/resume")
+    N = 4
+
+    @qd.data_oriented
+    class Sim:
+        def __init__(self):
+            self.x = qd.ndarray(qd.i32, shape=(N,))
+            self.flag = qd.ndarray(qd.i32, shape=())
+
+        @qd.kernel(graph=True, checkpoints=True)
+        def step(self):
+            with qd.checkpoint(7, yield_on=self.flag):
+                for i in range(self.x.shape[0]):
+                    self.x[i] = self.x[i] + 1
+                    self.flag[()] = 1
+            with qd.checkpoint(8, yield_on=self.flag):
+                for i in range(self.x.shape[0]):
+                    self.x[i] = self.x[i] + 10
+
+    sim = Sim()
+    sim.x.from_numpy(np.zeros(N, dtype=np.int32))
+    sim.flag.from_numpy(np.array(0, dtype=np.int32))
+    status = sim.step()
+    # Checkpoint 7 set the flag in the first iter so the kernel yields before running checkpoint 8.
+    assert status.yielded
+    assert status.checkpoint == 7
+    np.testing.assert_array_equal(sim.x.to_numpy(), np.ones(N, dtype=np.int32))
+    # User clears the flag and resumes from the post-yield checkpoint (skipping the +1 loop entirely).
+    sim.flag.from_numpy(np.array(0, dtype=np.int32))
+    status = sim.step.resume(from_checkpoint=8)
+    assert not status.yielded
+    np.testing.assert_array_equal(sim.x.to_numpy(), np.full(N, 11, dtype=np.int32))
 
 
 # ----------------------------------------------------------------------------------------------------------------------
