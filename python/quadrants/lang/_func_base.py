@@ -277,7 +277,9 @@ class FuncBase:
                     # v: BufferView (no dtype) — infer dtype from the passed argument
                     annotation = buffer_view_type.BufferViewType()
                 else:
-                    raise QuadrantsSyntaxError(f"Invalid type annotation (argument {i}) of Quadrants kernel: {annotation}")
+                    raise QuadrantsSyntaxError(
+                        f"Invalid type annotation (argument {i}) of Quadrants kernel: {annotation}"
+                    )
             self.arg_metas.append(ArgMetadata(annotation, param.name, param.default))
             self.orig_arguments.append(ArgMetadata(annotation, param.name, param.default))
 
