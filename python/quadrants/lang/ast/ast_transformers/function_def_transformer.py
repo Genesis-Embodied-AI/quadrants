@@ -706,6 +706,11 @@ class FunctionDefTransformer:
                     elif isinstance(member, ast.If):
                         pending.extend(member.body)
                         pending.extend(member.orelse)
+                    elif isinstance(member, ast.For):
+                        # `for ... in qd.static(...)` generates sections; descend so each unrolled section
+                        # body is still validated with the in-loop rules (a runtime for here is rejected
+                        # earlier by ASTTransformer._build_graph_parallel_context_with).
+                        pending.extend(member.body)
                 continue
             where = "the kernel body" if is_kernel_top else "a qd.graph_do_while() body"
             raise QuadrantsSyntaxError(

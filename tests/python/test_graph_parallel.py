@@ -340,3 +340,287 @@ def test_graph_parallel_nested_region_raises():
     x = qd.ndarray(qd.f32, shape=(16,))
     with pytest.raises(qd.QuadrantsSyntaxError):
         k(x)
+
+
+@test_utils.test()
+def test_graph_parallel_static_loop_two_sections():
+    """`for b in qd.static(range(NB))` unrolls into NB literal qd.graph_parallel sections, each writing a
+    disjoint row."""
+    nb = 2
+    n = 256
+
+    @qd.kernel(graph=True)
+    def k(x: qd.types.ndarray(qd.f32, ndim=2)):
+        with qd.graph_parallel_context():
+            for b in qd.static(range(nb)):
+                with qd.graph_parallel():
+                    for i in range(x.shape[1]):
+                        x[b, i] = x[b, i] + (b + 1)
+
+    x = qd.ndarray(qd.f32, shape=(nb, n))
+    x.from_numpy(np.zeros((nb, n), dtype=np.float32))
+
+    k(x)
+    num_tasks = _num_offloaded_tasks()
+    if _on_cuda():
+        assert _graph_num_nodes() == num_tasks + 1  # nb qd.graph_parallel sections + one join
+
+    out = x.to_numpy()
+    np.testing.assert_allclose(out[0], 1.0)
+    np.testing.assert_allclose(out[1], 2.0)
+
+
+@test_utils.test()
+def test_graph_parallel_static_loop_over_funcs():
+    """The motivating pattern: a @qd.data_oriented class iterates a static list of @qd.func members, one
+    qd.graph_parallel section each (mirrors qipc's per-contact-type assembly funcs)."""
+    n = 4
+
+    @qd.data_oriented
+    class Demo:
+        def __init__(self):
+            self.a = qd.field(qd.i32, shape=(n,))
+            self.b = qd.field(qd.i32, shape=(n,))
+            self.funcs = [self._fill_a, self._fill_b]
+
+        @qd.func
+        def _fill_a(self):
+            for i in range(n):
+                self.a[i] += 1
+
+        @qd.func
+        def _fill_b(self):
+            for i in range(n):
+                self.b[i] += 10
+
+        @qd.kernel(graph=True)
+        def step(self):
+            with qd.graph_parallel_context():
+                for i in qd.static(range(len(self.funcs))):
+                    with qd.graph_parallel():
+                        self.funcs[i]()
+
+    d = Demo()
+    d.a.from_numpy(np.zeros(n, dtype=np.int32))
+    d.b.from_numpy(np.zeros(n, dtype=np.int32))
+    d.step()
+    np.testing.assert_array_equal(d.a.to_numpy(), np.ones(n, dtype=np.int32))
+    np.testing.assert_array_equal(d.b.to_numpy(), np.full(n, 10, dtype=np.int32))
+
+
+@test_utils.test()
+def test_graph_parallel_static_loop_single_section():
+    """A static loop of one iteration is a single-section region: a plain chain, no join node."""
+    n = 256
+
+    @qd.kernel(graph=True)
+    def k(x: qd.types.ndarray(qd.f32, ndim=1)):
+        with qd.graph_parallel_context():
+            for _b in qd.static(range(1)):
+                with qd.graph_parallel():
+                    for i in range(x.shape[0]):
+                        x[i] = x[i] + 5.0
+
+    x = qd.ndarray(qd.f32, shape=(n,))
+    x.from_numpy(np.zeros(n, dtype=np.float32))
+
+    k(x)
+    num_tasks = _num_offloaded_tasks()
+    if _on_cuda():
+        assert _graph_num_nodes() == num_tasks  # single section -> no join node
+
+    np.testing.assert_allclose(x.to_numpy(), 5.0)
+
+
+@test_utils.test()
+def test_graph_parallel_static_loop_empty_range():
+    """An empty static range produces zero qd.graph_parallel sections: the region is a no-op (consistent
+    with wrapping the only section in `if qd.static(False)`). Serial work after it still runs."""
+    n = 128
+
+    @qd.kernel(graph=True)
+    def k(x: qd.types.ndarray(qd.f32, ndim=1)):
+        with qd.graph_parallel_context():
+            for _b in qd.static(range(0)):
+                with qd.graph_parallel():
+                    for i in range(x.shape[0]):
+                        x[i] = x[i] + 1.0
+        for i in range(x.shape[0]):
+            x[i] = x[i] + 5.0
+
+    x = qd.ndarray(qd.f32, shape=(n,))
+    x.from_numpy(np.zeros(n, dtype=np.float32))
+
+    k(x)
+    np.testing.assert_allclose(x.to_numpy(), 5.0)  # region did nothing; only the serial +5 applied
+
+
+@test_utils.test()
+def test_graph_parallel_static_loop_nested():
+    """Nested static loops fan out to N*M qd.graph_parallel sections, each writing a disjoint row."""
+    ni, nj = 2, 2
+    nrows = ni * nj
+    n = 64
+
+    @qd.kernel(graph=True)
+    def k(x: qd.types.ndarray(qd.f32, ndim=2)):
+        with qd.graph_parallel_context():
+            for i in qd.static(range(ni)):
+                for j in qd.static(range(nj)):
+                    with qd.graph_parallel():
+                        for c in range(x.shape[1]):
+                            x[i * nj + j, c] = x[i * nj + j, c] + (i * nj + j + 1)
+
+    x = qd.ndarray(qd.f32, shape=(nrows, n))
+    x.from_numpy(np.zeros((nrows, n), dtype=np.float32))
+
+    k(x)
+    num_tasks = _num_offloaded_tasks()
+    if _on_cuda():
+        assert _graph_num_nodes() == num_tasks + 1  # nrows qd.graph_parallel sections + one join
+
+    out = x.to_numpy()
+    for r in range(nrows):
+        np.testing.assert_allclose(out[r], float(r + 1))
+
+
+@test_utils.test()
+def test_graph_parallel_static_loop_mixed_with_static_if():
+    """A static section loop and an `if qd.static(...)` optional qd.graph_parallel section coexist in one
+    region."""
+    nb = 2
+    n = 64
+
+    @qd.kernel(graph=True)
+    def k(x: qd.types.ndarray(qd.f32, ndim=2), y: qd.types.ndarray(qd.f32, ndim=1)):
+        with qd.graph_parallel_context():
+            for b in qd.static(range(nb)):
+                with qd.graph_parallel():
+                    for i in range(x.shape[1]):
+                        x[b, i] = x[b, i] + (b + 1)
+            if qd.static(True):
+                with qd.graph_parallel():
+                    for i in range(y.shape[0]):
+                        y[i] = y[i] + 7.0
+
+    x = qd.ndarray(qd.f32, shape=(nb, n))
+    y = qd.ndarray(qd.f32, shape=(n,))
+    x.from_numpy(np.zeros((nb, n), dtype=np.float32))
+    y.from_numpy(np.zeros(n, dtype=np.float32))
+
+    k(x, y)
+    num_tasks = _num_offloaded_tasks()
+    if _on_cuda():
+        assert _graph_num_nodes() == num_tasks + 1  # nb + 1 qd.graph_parallel sections + one join
+
+    out = x.to_numpy()
+    np.testing.assert_allclose(out[0], 1.0)
+    np.testing.assert_allclose(out[1], 2.0)
+    np.testing.assert_allclose(y.to_numpy(), 7.0)
+
+
+@test_utils.test()
+def test_graph_parallel_runtime_loop_raises():
+    """A *runtime* for-loop in a region body stays rejected: only `qd.static(...)` loops unroll to literal
+    qd.graph_parallel sections; a runtime range would nest the section tagging inside a parallel range_for
+    (malformed)."""
+
+    @qd.kernel(graph=True)
+    def k(x: qd.types.ndarray(qd.f32, ndim=2), nb: qd.i32):
+        with qd.graph_parallel_context():
+            for b in range(nb):
+                with qd.graph_parallel():
+                    for i in range(x.shape[1]):
+                        x[b, i] = x[b, i] + 1.0
+
+    x = qd.ndarray(qd.f32, shape=(2, 16))
+    with pytest.raises(qd.QuadrantsSyntaxError, match="may contain only .with qd.graph_parallel"):
+        k(x, 2)
+
+
+@test_utils.test()
+def test_graph_parallel_takes_no_arguments():
+    """qd.graph_parallel() (the section) takes no arguments. Any argument raises."""
+
+    @qd.kernel(graph=True)
+    def k(x: qd.types.ndarray(qd.f32, ndim=1)):
+        with qd.graph_parallel_context():
+            with qd.graph_parallel(name="bx"):
+                for i in range(x.shape[0]):
+                    x[i] = x[i] + 1.0
+
+    x = qd.ndarray(qd.f32, shape=(16,))
+    with pytest.raises(qd.QuadrantsSyntaxError, match="qd.graph_parallel.. takes no arguments"):
+        k(x)
+
+
+@test_utils.test()
+def test_graph_parallel_static_loop_body_non_section_raises():
+    """A static loop body must still be section-only: serial work inside the loop (outside any
+    qd.graph_parallel section) would silently fall outside a section, so it is rejected (the validator
+    recurses into the loop body)."""
+
+    @qd.kernel(graph=True)
+    def k(x: qd.types.ndarray(qd.f32, ndim=2)):
+        with qd.graph_parallel_context():
+            for b in qd.static(range(2)):
+                x[b, 0] = 1.0  # serial work outside any qd.graph_parallel section
+                with qd.graph_parallel():
+                    for i in range(x.shape[1]):
+                        x[b, i] = x[b, i] + 1.0
+
+    x = qd.ndarray(qd.f32, shape=(2, 16))
+    with pytest.raises(qd.QuadrantsSyntaxError, match="may contain only .with qd.graph_parallel"):
+        k(x)
+
+
+@test_utils.test()
+def test_graph_parallel_static_loop_runtime_inner_loop_raises():
+    """Staticness is re-checked at every nesting level: a *runtime* loop nested inside a static loop and
+    wrapping a qd.graph_parallel section is still rejected (only the static unroll yields independent
+    sections)."""
+
+    @qd.kernel(graph=True)
+    def k(x: qd.types.ndarray(qd.f32, ndim=2), m: qd.i32):
+        with qd.graph_parallel_context():
+            for b in qd.static(range(2)):
+                for _j in range(m):  # runtime loop around a section -> rejected
+                    with qd.graph_parallel():
+                        for i in range(x.shape[1]):
+                            x[b, i] = x[b, i] + 1.0
+
+    x = qd.ndarray(qd.f32, shape=(2, 16))
+    with pytest.raises(qd.QuadrantsSyntaxError, match="may contain only .with qd.graph_parallel"):
+        k(x, 2)
+
+
+@test_utils.test()
+def test_graph_parallel_static_loop_inside_graph_do_while():
+    """A static section loop composes with qd.graph_do_while: each iteration runs all unrolled
+    qd.graph_parallel sections, then decrements the counter."""
+    nb = 2
+    n = 64
+    iters = 4
+
+    @qd.kernel(graph=True)
+    def k(x: qd.types.ndarray(qd.i32, ndim=2), counter: qd.types.ndarray(qd.i32, ndim=0)):
+        while qd.graph_do_while(counter):
+            with qd.graph_parallel_context():
+                for b in qd.static(range(nb)):
+                    with qd.graph_parallel():
+                        for i in range(x.shape[1]):
+                            x[b, i] = x[b, i] + (b + 1)
+            for _ in range(1):
+                counter[()] = counter[()] - 1
+
+    x = qd.ndarray(qd.i32, shape=(nb, n))
+    counter = qd.ndarray(qd.i32, shape=())
+    x.from_numpy(np.zeros((nb, n), dtype=np.int32))
+    counter.from_numpy(np.array(iters, dtype=np.int32))
+
+    k(x, counter)
+
+    assert counter.to_numpy() == 0
+    out = x.to_numpy()
+    np.testing.assert_array_equal(out[0], np.full(n, iters, dtype=np.int32))
+    np.testing.assert_array_equal(out[1], np.full(n, 2 * iters, dtype=np.int32))
