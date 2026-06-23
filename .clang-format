@@ -94,4 +94,5 @@ TabWidth:        8
 UseTab:          Never
 ---
 Language: ObjC
+ColumnLimit: 120
 ...

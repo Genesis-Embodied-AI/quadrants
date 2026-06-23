@@ -22,6 +22,10 @@ jobs:
     runs-on: macos-${{ matrix.MAC_OS_VERSION }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Need full history + tags so setuptools_scm derives the correct wheel version
+          # (otherwise it falls back to "0.1"). Matches linux.yml / manylinux_wheel.yml.
+          fetch-depth: 0
       - name: Python check
         uses: actions/setup-python@v4
         with:

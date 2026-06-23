@@ -16,6 +16,28 @@ from .misc import get_cache_home
 from .tinysh import Command
 
 
+def _editable_install_hint():
+    # Printed (via the shell rc) right above the first prompt of the build shell, so the user sees
+    # the exact editable-install command to run without consulting the docs. setup_python_deps()
+    # seeds pip into the venv (uv venv ships none), so a bare `pip install` resolves to the venv.
+    return (
+        r"printf '\n\033[1;36m:: Quadrants build environment ready. To do an editable install, run:\033[0m\n"
+        r"    \033[1;32mpip install --no-build-isolation -e . -Ceditable.rebuild=true\033[0m\n\n'"
+        "\n"
+    )
+
+
+def _venv_reactivation():
+    # Sourcing the user's shell rc (below) can reset PATH and drop an active virtualenv, leaving
+    # `python`/`pip` pointed at the system (often externally-managed) interpreter. Re-activate the
+    # caller's venv, if any, *after* the rc + env files so it ends up first on PATH. Disable
+    # activate's own prompt mangling so the `[Quadrants Build]` prompt set afterwards stays clean.
+    venv = os.environ.get("VIRTUAL_ENV")
+    if not venv:
+        return ""
+    return "export VIRTUAL_ENV_DISABLE_PROMPT=1\n" f'[ -f "{venv}/bin/activate" ] && source "{venv}/bin/activate"\n'
+
+
 def _write_qd_bashrc():
     path = get_cache_home() / "qd.bashrc"
     envs = get_cache_home() / "ti-env.sh"
@@ -24,9 +46,11 @@ def _write_qd_bashrc():
         f.write(
             "[ -f /etc/bashrc ] && source /etc/bashrc\n"
             "[ -f ~/.bashrc ] && source ~/.bashrc\n"
+            f"source {envs}\n"
+            f"{_venv_reactivation()}"
             r'export PS1="\[\e]0;[Quadrants Build Environment]\a\]\[\033[01;31m\][Quadrants Build] \[\033[00m\]$PS1"'
             "\n"
-            f"source {envs}\n"
+            f"{_editable_install_hint()}"
         )
 
     return path
@@ -42,9 +66,11 @@ def _write_qd_zshrc():
         f.write(
             "[ -f /etc/zsh/zshrc ] && source /etc/zsh/zshrc\n"
             "[ -f $HOME/.zshrc ] && source $HOME/.zshrc\n"
+            f"source {envs}\n"
+            f"{_venv_reactivation()}"
             r"export PROMPT='%{$fg_bold[red]%}[Quadrants Build] %{$reset_color%}'$PROMPT"
             "\n"
-            f"source {envs}\n"
+            f"{_editable_install_hint()}"
         )
     return dotdir
 

@@ -36,8 +36,10 @@ jobs:
           mkdir -p stubs/quadrants/_lib/core
           cp dist/quadrants/_lib/core/quadrants_python.pyi stubs/quadrants/_lib/core/
           touch stubs/quadrants/_lib/core/py.typed
-          pip install setuptools_scm
-          pip install -e .
+          # Install the prebuilt wheel artifact (binary, no C++ build) so `quadrants`
+          # resolves for pyright. Under scikit-build-core `pip install -e .` would
+          # trigger a full CMake build, which this toolchain-less runner cannot do.
+          pip install dist/*.whl
       - name: install torch and pyright
         run: |
           pip install torch pyright

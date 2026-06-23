@@ -10,7 +10,9 @@ from quadrants._lib import core as _qd_core
 from quadrants._lib.core.quadrants_python import Extension
 from quadrants._lib.utils import get_os_name
 from quadrants.lang import impl, util
+from quadrants.lang.checkpoint import checkpoint
 from quadrants.lang.expr import Expr
+from quadrants.lang.graph_status import GraphStatus
 from quadrants.lang.impl import axes, get_runtime
 from quadrants.profiler.kernel_profiler import get_default_kernel_profiler
 from quadrants.types.primitive_types import f32, f64, i32, i64
@@ -722,16 +724,28 @@ def loop_config(
 def graph_do_while(condition) -> bool:
     """Marks a while loop as a CUDA graph do-while conditional node.
 
-    Used as ``while qd.graph_do_while(flag):`` inside a
-    ``@qd.kernel(graph=True)`` kernel. The loop body repeats while
+    Used as ``while qd.graph_do_while(flag):`` inside a ``@qd.kernel(graph=True)`` kernel. The loop body repeats while
     ``flag`` (a scalar ``qd.i32`` ndarray) is non-zero.
 
-    On SM 9.0+ (Hopper) GPUs this compiles to a native CUDA graph
-    conditional while node. On older CUDA GPUs and non-CUDA backends
-    it falls back to a host-side do-while loop.
+    On SM 9.0+ (Hopper) GPUs this compiles to a native CUDA graph conditional while node. On older CUDA GPUs and
+    non-CUDA backends it falls back to a host-side do-while loop.
 
-    This function should not be called directly at runtime; it is
-    recognised and transformed during AST compilation.
+    Only statements **inside** the ``while qd.graph_do_while(...):`` block repeat. Work placed before or after the block
+    at the kernel top level -- a ``for``-loop or a bare statement -- runs exactly once, so one-time init / writeback can
+    live in the same kernel (or in separate non-graph kernels). Loop-carried state held in global memory carries
+    normally between iterations because nothing outside the loop body resets it.
+
+    .. warning::
+        Reset the condition flag **outside** the loop body, never inside it. A reset such as ``counter[()] = N`` placed
+        within the ``while`` block is re-applied every iteration and the loop never terminates. Reset it before the loop
+        (a bare top-level statement runs once) or on the host between launches (``counter.fill(N)``).
+
+    Bare statements (assignments, ``if``, ``@qd.func`` calls) are allowed at the kernel top level and inside a
+    ``graph_do_while`` body; each runs at the loop level it is written at (top level = once, inside a loop = every
+    iteration). The one structural rule is that a ``qd.graph_do_while`` ``while``-loop may appear only at the kernel top
+    level or directly inside another ``graph_do_while`` body, not inside a ``for``-loop.
+
+    This function should not be called directly at runtime; it is recognised and transformed during AST compilation.
     Requires ``@qd.kernel(graph=True)``.
     """
     return bool(condition)
@@ -873,6 +887,8 @@ __all__ = [
     "python",
     "vulkan",
     "extension",
+    "GraphStatus",
+    "checkpoint",
     "graph_do_while",
     "loop_config",
     "global_thread_idx",

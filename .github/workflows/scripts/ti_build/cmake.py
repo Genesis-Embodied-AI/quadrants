@@ -129,7 +129,13 @@ class CMakeArgsManager:
     def writeback(self) -> None:
         rendered = self.render()
         self.print_summary(rendered)
-        os.environ[self.environ_name] = " ".join([v for _, v, _ in rendered])
+        value = " ".join([v for _, v, _ in rendered])
+        os.environ[self.environ_name] = value
+        # scikit-build-core reads CMake args from CMAKE_ARGS, not the legacy QUADRANTS_CMAKE_ARGS.
+        # Mirror the rendered args there so the environment exported by `build.py wheel`, `-w`, and
+        # `--shell` is directly usable -- no manual `export CMAKE_ARGS="$QUADRANTS_CMAKE_ARGS"` step.
+        if self.environ_name == "QUADRANTS_CMAKE_ARGS":
+            os.environ["CMAKE_ARGS"] = value
         self.finalized = True
 
     def __setitem__(self, name: str, value: Union[str, bool]) -> None:

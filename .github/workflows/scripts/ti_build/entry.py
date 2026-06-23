@@ -1,7 +1,10 @@
 # -*- coding: utf-8 -*-
 
 import argparse
+import glob
+import os
 import platform
+import shutil
 import sys
 
 import psutil
@@ -11,7 +14,7 @@ from .alter import handle_alternate_actions
 from .cmake import cmake_args
 from .compiler import setup_clang, setup_msvc
 from .llvm import setup_llvm
-from .misc import banner
+from .misc import banner, path_prepend
 from .ospkg import setup_os_pkgs
 from .sccache import setup_sccache
 from .tinysh import Command, CommandFailed, nice, sh
@@ -20,22 +23,35 @@ from .tinysh import Command, CommandFailed, nice, sh
 # -- code --
 @banner("Build Quadrants Wheel")
 def build_wheel(python: Command) -> None:
-    extra = []
-
+    # cmake_args.writeback() populates both QUADRANTS_CMAKE_ARGS and (for scikit-build-core) CMAKE_ARGS.
     cmake_args.writeback()
+
+    plat = None
     u = platform.uname()
     match (u.system, u.machine):
         case ("Linux", "x86_64"):
-            extra.extend(["-p", "manylinux_2_27_x86_64"])
+            plat = "manylinux_2_27_x86_64"
         case ("Linux", "arm64") | ("Linux", "aarch64"):
-            extra.extend(["-p", "manylinux_2_27_aarch64"])
+            plat = "manylinux_2_27_aarch64"
         case ("Darwin", _):
-            extra.extend(["-p", "macosx-11.0-arm64"])
+            plat = "macosx_11_0_arm64"
 
-    python("setup.py", "clean")
+    # Clear stale wheels so the tag-stamping step below is unambiguous.
+    for whl in glob.glob("dist/quadrants-*.whl"):
+        os.remove(whl)
 
+    # Build via scikit-build-core. Use `pip wheel` (not `python -m build`) because the repo ships a top-level build.py
+    # that would shadow the `build` module under `-m`. --no-build-isolation: the LLVM/clang toolchain is not
+    # pip-installable (it is provisioned by setup_basic_build_env above), so build deps come from this env.
     with nice():
-        python("setup.py", "bdist_wheel", *extra)
+        python("-m", "pip", "wheel", "--no-deps", "--no-build-isolation", "-w", "dist", ".")
+
+    if plat:
+        wheels = glob.glob("dist/quadrants-*.whl")
+        assert len(wheels) == 1, f"expected exactly one freshly built wheel, got {wheels}"
+        # scikit-build-core emits a bare linux_x86_64 / macosx_* tag; stamp the distribution platform tag the project
+        # ships under (manylinux / macOS).
+        python("-m", "wheel", "tags", "--platform-tag", plat, "--remove", wheels[0])
 
 
 def setup_basic_build_env():
@@ -63,6 +79,59 @@ def setup_basic_build_env():
     return sccache, python
 
 
+def _venv_bindir(venv: str) -> str:
+    return os.path.join(venv, "Scripts" if platform.system() == "Windows" else "bin")
+
+
+@banner("Resolve virtualenv")
+def ensure_venv() -> None:
+    # The interactive `--shell` / `-w` flows target a virtualenv so the editable install works. If
+    # the user already activated one, use it; otherwise fall back to the repo's ./.venv. Exporting
+    # VIRTUAL_ENV and putting its bin first on PATH (both captured into env.sh / the --shell rc) makes
+    # python/pip/uv resolve to it even when the user did not activate it before invoking build.py --
+    # which is the common footgun, since `./build.py` runs under whatever `python` is on PATH.
+    if os.environ.get("VIRTUAL_ENV"):
+        return
+    candidate = os.path.join(os.getcwd(), ".venv")
+    if os.path.exists(os.path.join(_venv_bindir(candidate), "activate")):
+        os.environ["VIRTUAL_ENV"] = candidate
+        path_prepend("PATH", _venv_bindir(candidate))
+        misc.info(f"No active virtualenv; using the repo virtualenv at {candidate}")
+    else:
+        misc.warn(
+            f"No active virtualenv and none found at {candidate}. The editable install would run "
+            "against the system interpreter. Create one first, e.g. `uv venv --python 3.10`."
+        )
+
+
+@banner("Install Python deps (pip, dev, test)")
+def setup_python_deps() -> None:
+    # Convenience for the interactive `--shell` / `-w` flows: install pip plus the dev + test
+    # dependency groups into the target virtualenv so a subsequent editable install just works.
+    # pip is installed explicitly because the project's venv is created by `uv venv`, which does not
+    # seed pip -- without this a bare `pip install -e .` in the build shell falls through PATH to the
+    # system (externally-managed) interpreter. Skipped when no virtualenv could be resolved -- it
+    # never touches a system / externally-managed interpreter, and the CI `wheel` path provisions
+    # deps separately.
+    venv = os.environ.get("VIRTUAL_ENV")
+    if not venv:
+        return
+    groups = ("--group", "dev", "--group", "test")
+    try:
+        if shutil.which("uv"):
+            # uv installs into VIRTUAL_ENV; "pip" seeds pip into the uv-created venv.
+            sh.uv("pip", "install", "pip", *groups)
+        else:
+            # Target the venv's interpreter explicitly: sys.executable may be the system python that
+            # launched build.py, not the resolved venv. A python -m venv venv already has pip.
+            sh.bake(os.path.join(_venv_bindir(venv), "python"))("-m", "pip", "install", *groups)
+    except CommandFailed as e:
+        misc.warn(
+            f"Installing dev/test dependency groups failed ({e}); continuing. "
+            "Install them manually with `uv pip install pip --group dev --group test`."
+        )
+
+
 def _is_sccache_running():
     for proc in psutil.process_iter(attrs=["name", "cmdline"]):
         try:
@@ -82,6 +151,11 @@ def action_wheel():
         print("sccache already appears to be running")
     else:
         sccache("--start-server")
+
+    # For the interactive convenience flows, resolve + prepare a venv for the editable install.
+    if misc.options.shell or misc.options.write_env:
+        ensure_venv()
+        setup_python_deps()
 
     handle_alternate_actions()
     build_wheel(python)

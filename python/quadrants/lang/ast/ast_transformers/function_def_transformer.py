@@ -26,6 +26,9 @@ from quadrants.lang._dataclass_util import create_flat_name
 from quadrants.lang.ast.ast_transformer_utils import (
     ASTTransformerFuncContext,
 )
+from quadrants.lang.ast.ast_transformers.checkpoint_transformer import (
+    CheckpointTransformer,
+)
 from quadrants.lang.ast.symbol_resolver import ASTResolver
 from quadrants.lang.buffer_view import BufferView
 from quadrants.lang.exception import (
@@ -504,6 +507,25 @@ class FunctionDefTransformer:
 
         if ctx.is_kernel:
             FunctionDefTransformer._validate_stream_parallel_exclusivity(node.body, ctx.global_vars)
+            FunctionDefTransformer._validate_graph_do_while_structure(node.body)
+            kernel = ctx.global_context.current_kernel
+            if kernel is not None:
+                # Reset before walking the body so re-materialisations (e.g. when a templated kernel is compiled with a
+                # different argument shape) start from an empty list. Mirrors how `graph_do_while_arg` gets overwritten
+                # unconditionally during AST traversal.
+                kernel.checkpoint_yield_on_args = []
+                kernel.checkpoint_user_labels_by_cp_id = []
+                # Auto-wrap pass for `@qd.kernel(graph=True, checkpoints=True)` kernels. Mutates `node.body` in place so
+                # every top-level for-loop (and every for-loop inside a `qd.graph_do_while` body) that the user did not
+                # already wrap in a `with qd.checkpoint(...)` gets wrapped in a synthetic implicit no-yield checkpoint.
+                # Implicit checkpoints share the same dense source-order internal cp_id space as explicit ones, but
+                # carry `None` in `checkpoint_user_labels_by_cp_id` so they never appear in `GraphStatus.checkpoint` /
+                # `kernel.resume(from_checkpoint=...)`. Runs here (after coverage instrumentation has already injected
+                # its top-level `_qd_cov[i] = 1` probes, which are bare assigns that the wrap pass intentionally leaves
+                # alone) so that the regular `build_stmts` walk below sees a uniform stream of `with qd.checkpoint(...)`
+                # blocks and bare prologue stmts.
+                if kernel.use_checkpoints:
+                    node.body = CheckpointTransformer.auto_wrap_for_loops(node.body)
 
         with ctx.variable_scope_guard():
             build_stmts(ctx, node.body)
@@ -532,6 +554,117 @@ class FunctionDefTransformer:
         if isinstance(func_node, ast.Name) and func_node.id == "stream_parallel":
             return True
         return False
+
+    @staticmethod
+    def _is_graph_do_while_while(stmt: ast.stmt) -> bool:
+        """Syntactic check matching ASTTransformer._is_graph_do_while_call: a ``while qd.graph_do_while(var):`` loop."""
+        if not isinstance(stmt, ast.While):
+            return False
+        test = stmt.test
+        if not isinstance(test, ast.Call):
+            return False
+        func = test.func
+        if isinstance(func, ast.Attribute) and func.attr == "graph_do_while":
+            return True
+        if isinstance(func, ast.Name) and func.id == "graph_do_while":
+            return True
+        return False
+
+    @staticmethod
+    def _is_checkpoint_with(stmt: ast.With) -> bool:
+        """Syntactic check matching CheckpointTransformer: a ``with qd.checkpoint(...):`` block. Accepted as a
+        well-formed statement inside a graph_do_while body (the checkpoint itself enforces its own restrictions)."""
+        if not isinstance(stmt, ast.With) or len(stmt.items) != 1:
+            return False
+        ctx = stmt.items[0].context_expr
+        if not isinstance(ctx, ast.Call):
+            return False
+        func = ctx.func
+        if isinstance(func, ast.Attribute) and func.attr == "checkpoint":
+            return True
+        if isinstance(func, ast.Name) and func.id == "checkpoint":
+            return True
+        return False
+
+    @staticmethod
+    def _is_loop_config_call(stmt: ast.stmt) -> bool:
+        """A bare ``qd.loop_config(...)`` statement. It only configures the next for-loop (block_dim, serialize, ...) by
+        mutating ast_builder state and emits no offloaded task, so it does not break graph_do_while level tagging and is
+        allowed where bare statements otherwise are not."""
+        if not isinstance(stmt, ast.Expr) or not isinstance(stmt.value, ast.Call):
+            return False
+        func = stmt.value.func
+        if isinstance(func, ast.Attribute) and func.attr == "loop_config":
+            return True
+        if isinstance(func, ast.Name) and func.id == "loop_config":
+            return True
+        return False
+
+    @staticmethod
+    def _validate_graph_do_while_structure(body: list[ast.stmt]) -> None:
+        """If a kernel uses qd.graph_do_while() anywhere, enforce the structural rules that remain after
+        per-statement graph-region tagging landed (see the offloader's region-boundary flushing and
+        ``GraphRegionTag`` in the C++ IR).
+
+        Bare statements -- assignments, ``@qd.func`` calls, ``qd.loop_config(...)`` directives, ``if``
+        branches -- are now legal at the kernel top level *and* inside graph_do_while bodies: each lowers to
+        a serial task tagged with the graph_do_while level it was written at, so it runs exactly once at the
+        kernel top level and every iteration inside a loop (issue #744). The old ``for _ in range(1):``
+        wrapping is no longer required (it still works, since a one-trip for-loop is just an offloaded task).
+
+        What this still checks is genuine well-formedness the offloader / runtime cannot express: a
+        graph_do_while ``while``-loop may not carry an ``else`` clause, and a bare runtime ``while`` (other
+        than ``qd.graph_do_while()``) is not a valid statement in a graph kernel. The placement rule that a
+        graph_do_while loop may only sit at the kernel top level or directly inside another graph_do_while
+        body (not inside a for-loop) is enforced elsewhere during lowering."""
+        uses_gdw = any(FunctionDefTransformer._is_graph_do_while_while(n) for stmt in body for n in ast.walk(stmt))
+        if not uses_gdw:
+            return
+        FunctionDefTransformer._validate_graph_do_while_stmt_list(body, is_kernel_top=True)
+
+    @staticmethod
+    def _validate_graph_do_while_stmt_list(stmts: list[ast.stmt], is_kernel_top: bool) -> None:
+        for i, stmt in enumerate(stmts):
+            if FunctionDefTransformer._is_docstring(stmt, i):
+                continue
+            if FunctionDefTransformer._is_coverage_probe(stmt):
+                continue
+            if FunctionDefTransformer._is_loop_config_call(stmt):
+                # qd.loop_config(...) only tunes the next for-loop; it emits no serial task, so it is safe here.
+                continue
+            if isinstance(stmt, ast.For):
+                # A for-loop is an offloaded task; its body is ordinary loop code (unrestricted).
+                continue
+            if FunctionDefTransformer._is_graph_do_while_while(stmt):
+                if stmt.orelse:
+                    raise QuadrantsSyntaxError("'else' clause for 'while' not supported in Quadrants kernels")
+                FunctionDefTransformer._validate_graph_do_while_stmt_list(stmt.body, is_kernel_top=False)
+                continue
+            # Bare statements are now correctly region-tagged by the offloader, so they are permitted at the
+            # kernel top level and inside graph_do_while bodies. `@qd.func` calls (bare `Expr`) inline at the
+            # current level, keeping their internal parallel for-loops parallel; bare assignments / directives
+            # lower to a serial task tagged at this level (run-once at the top level, every iteration inside a
+            # loop).
+            if isinstance(stmt, (ast.Expr, ast.Assign, ast.AugAssign, ast.AnnAssign)):
+                continue
+            if isinstance(stmt, ast.If):
+                # Recurse so a malformed graph_do_while nested inside an `if` is still caught.
+                FunctionDefTransformer._validate_graph_do_while_stmt_list(stmt.body, is_kernel_top=is_kernel_top)
+                FunctionDefTransformer._validate_graph_do_while_stmt_list(stmt.orelse, is_kernel_top=is_kernel_top)
+                continue
+            if isinstance(stmt, ast.With) and FunctionDefTransformer._is_checkpoint_with(stmt):
+                # `with qd.checkpoint(...)` is a legal placement for graph kernels (the checkpoint may sit at the kernel
+                # top level or inside any graph_do_while level). Recurse so a malformed graph_do_while nested inside a
+                # checkpoint body is still caught; the checkpoint's own body restrictions are enforced by
+                # `CheckpointTransformer.build_checkpoint_with`.
+                FunctionDefTransformer._validate_graph_do_while_stmt_list(stmt.body, is_kernel_top=is_kernel_top)
+                continue
+            where = "the kernel body" if is_kernel_top else "a qd.graph_do_while() body"
+            raise QuadrantsSyntaxError(
+                f"When a kernel uses qd.graph_do_while(), {where} may not contain a {type(stmt).__name__} "
+                f"statement. Allowed: for-loops, qd.graph_do_while() while-loops, bare assignments, and "
+                f"@qd.func calls (freely mixed and nested). [offending stmt {i}: {type(stmt).__name__}]"
+            )
 
     @staticmethod
     def _is_docstring(stmt: ast.stmt, index: int) -> bool:

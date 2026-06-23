@@ -338,6 +338,7 @@ class MetalCommandList final : public CommandList {
   void buffer_copy(DevicePtr dst, DevicePtr src, size_t size) noexcept final;
   void buffer_fill(DevicePtr ptr, size_t size, uint32_t data) noexcept final;
   RhiResult dispatch(uint32_t x, uint32_t y = 1, uint32_t z = 1) noexcept final;
+  RhiResult dispatch_indirect(DevicePtr dim3_ptr) noexcept final;
   void begin_renderpass(int x0,
                         int y0,
                         int x1,
