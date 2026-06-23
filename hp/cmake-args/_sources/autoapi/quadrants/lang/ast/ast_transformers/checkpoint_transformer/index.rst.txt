@@ -1,0 +1,110 @@
+quadrants.lang.ast.ast_transformers.checkpoint_transformer
+==========================================================
+
+.. py:module:: quadrants.lang.ast.ast_transformers.checkpoint_transformer
+
+.. autoapi-nested-parse::
+
+   AST recognition, validation, and auto-wrap lowering for ``qd.checkpoint(...)`` ``with`` blocks.
+
+   Lives alongside ``call_transformer.py`` / ``function_def_transformer.py`` so that ``ast_transformer.py`` doesn't have to
+   grow per-feature. ``ASTTransformer.build_With`` and ``ASTTransformer._is_checkpoint_call`` forward calls into the static
+   methods here. ``FunctionDefTransformer.build_FunctionDef`` calls ``auto_wrap_for_loops`` on the kernel body when the
+   kernel was decorated with ``@qd.kernel(graph=True, checkpoints=True)``, so that every top-level for-loop not already
+   inside a ``with qd.checkpoint(...)`` becomes its own implicit no-yield checkpoint.
+
+   See ``docs/source/user_guide/graph.md`` for the user-facing surface and ``perso_hugh/doc/qipc/reentrant.md`` for the
+   design.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   quadrants.lang.ast.ast_transformers.checkpoint_transformer.CheckpointCallInfo
+   quadrants.lang.ast.ast_transformers.checkpoint_transformer.CheckpointTransformer
+
+
+Module Contents
+---------------
+
+.. py:class:: CheckpointCallInfo
+
+   Resolved metadata for a `qd.checkpoint(...)` call recognised in the AST.
+
+   - ``cp_id``: the user-supplied label (an ``int`` or ``IntEnum`` value), or ``None`` for an auto-wrap implicit
+     checkpoint.
+   - ``yield_on``: name of the kernel parameter passed as ``yield_on=`` (an ``ast.Name`` is required), or ``None`` for
+     an implicit checkpoint.
+   - ``is_implicit``: ``True`` iff this Call was synthesised by ``auto_wrap_for_loops``.
+
+
+   .. py:attribute:: cp_id
+      :type:  int | None
+
+
+   .. py:attribute:: yield_on
+      :type:  str | None
+
+
+   .. py:attribute:: is_implicit
+      :type:  bool
+
+
+.. py:class:: CheckpointTransformer
+
+   .. py:method:: is_explicit_checkpoint_with(stmt: ast.stmt) -> bool
+      :staticmethod:
+
+
+      Return True iff *stmt* is a single-item `with qd.checkpoint(...):` block (explicit or implicit). Used by
+      ``auto_wrap_for_loops`` to leave already-wrapped for-loops alone.
+
+
+
+   .. py:method:: is_checkpoint_call(node: ast.expr, global_vars: dict) -> CheckpointCallInfo | None
+      :staticmethod:
+
+
+      If *node* is a `qd.checkpoint(...)` call return a `CheckpointCallInfo`; otherwise return `None`.
+
+      Validates the call shape and raises `QuadrantsSyntaxError` for misuse so the user gets a clear message at the
+      `with` site rather than a vague "not stream_parallel" error later. Implicit calls (the synthetic
+      `qd.checkpoint()` no-arg calls produced by `auto_wrap_for_loops`) are recognised via the `_qd_implicit`
+      attribute and bypass user-call argument validation entirely.
+
+
+
+   .. py:method:: build_checkpoint_with(ctx: quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node: ast.With, info: CheckpointCallInfo, build_stmts) -> None
+      :staticmethod:
+
+
+      Handles a `with qd.checkpoint(...):` block (explicit or auto-wrapped implicit).
+
+      Validates the use-site (kernel must be `graph=True, checkpoints=True`, no nesting; for explicit calls, the
+      `yield_on` arg must be a kernel parameter and the `cp_id` must be unique across the kernel) and appends an entry
+      to `kernel.checkpoint_yield_on_args` + `kernel.checkpoint_user_labels_by_cp_id`. Walks the body transparently --
+      for-loops inside the `with` become normal top-level for-loops in the kernel's frontend IR. The internal `cp_id`
+      is assigned by declaration order (the C++ `ASTBuilder.begin_checkpoint()` counter, mirrored as the list index in
+      `checkpoint_yield_on_args`).
+
+
+
+   .. py:method:: auto_wrap_for_loops(stmts: list[ast.stmt]) -> list[ast.stmt]
+      :staticmethod:
+
+
+      Auto-wrap pass for `@qd.kernel(graph=True, checkpoints=True)` kernels.
+
+      Walks *stmts* and returns a new list where every `ast.For` not already inside a `with qd.checkpoint(...)` block
+      is wrapped in a synthetic implicit checkpoint. Recurses into `while qd.graph_do_while(...)` bodies so for-loops
+      nested in the WHILE body get the same treatment. Other compound statements (`ast.If`, `ast.With`,
+      non-graph_do_while `ast.While`, `ast.Try`) are passed through unchanged -- they're not the common pattern in
+      Quadrants kernel bodies and recursing into them risks wrapping nested for-loops that the user intended to be
+      sub-tasks of a larger control-flow block. Bare top-level statements (assignments, expressions, coverage probes)
+      are also passed through unchanged so they remain in the kernel prologue with `cp_id=-1` and run on every launch.
+
+
+
