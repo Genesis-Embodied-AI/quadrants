@@ -7,9 +7,7 @@
 namespace quadrants {
 
 class MemoryMonitor {
-  // avoid including py::dict
-  // py::dict locals;
-  void *locals_;
+  int pid_ = -1;
   std::ofstream log_;
 
  public:

@@ -11,9 +11,17 @@
 #pragma warning(disable : 4267)
 #endif
 
-#include "pybind11/pybind11.h"
-#include "pybind11/operators.h"
-#include "pybind11/stl.h"
+#include <nanobind/nanobind.h>
+#include <nanobind/operators.h>
+#include <nanobind/stl/string.h>
+#include <nanobind/stl/vector.h>
+#include <nanobind/stl/pair.h>
+#include <nanobind/stl/tuple.h>
+#include <nanobind/stl/optional.h>
+#include <nanobind/stl/map.h>
+#include <nanobind/stl/shared_ptr.h>
+#include <nanobind/stl/unique_ptr.h>
+#include <nanobind/stl/function.h>
 
 #if defined(_MSC_VER)
 #pragma warning(pop)
@@ -27,16 +35,20 @@ class Program;
 
 namespace quadrants {
 
-namespace py = pybind11;
+namespace nb = nanobind;
 
-using py::literals::operator""_a;
+using namespace nb::literals;
 
-void export_lang(py::module &m);
+void export_lang(nb::module_ &m);
 
-void export_math(py::module &m);
+void export_math(nb::module_ &m);
 
-void export_misc(py::module &m);
+void export_misc(nb::module_ &m);
 
-void export_stream(py::module &m, py::class_<lang::Program> &program_class);
+void export_stream(nb::module_ &m, nb::class_<lang::Program> &program_class);
+
+// Registers the C++ (std::string) -> Python exception translator. Must be called from NB_MODULE rather than a
+// static initializer: nanobind's API cannot be used before module init has set up its internals.
+void register_py_exception_translator();
 
 }  // namespace quadrants

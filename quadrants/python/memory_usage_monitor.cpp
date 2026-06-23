@@ -1,21 +1,47 @@
 #include "quadrants/python/memory_usage_monitor.h"
 
-#include "pybind11/embed.h"
-#include "pybind11/pybind11.h"
+#include <fstream>
+#include <string>
+
 #include "quadrants/common/core.h"
 #include "quadrants/common/task.h"
 #include "quadrants/math/scalar.h"
 #include "quadrants/system/threading.h"
 #include "quadrants/system/timer.h"
 
-namespace quadrants {
+#if defined(__linux__)
+#include <unistd.h>
+#endif
 
-namespace py = pybind11;
-using namespace py::literals;
+namespace quadrants {
 
 float64 bytes_to_GB(float64 bytes) {
   return float64(bytes) * pow<3>(1.0_f64 / 1024.0_f64);
 }
+
+namespace {
+// Resident set size in bytes for the given pid. Read directly from /proc on Linux. nanobind does not
+// support embedding a Python interpreter (which the previous pybind11 implementation used via psutil),
+// so the RSS is now sourced from the kernel. Returns 0 where unavailable (e.g. non-Linux platforms).
+uint64 read_rss_bytes(int pid) {
+#if defined(__linux__)
+  std::ifstream f("/proc/" + std::to_string(pid) + "/statm");
+  if (!f.good()) {
+    return 0;
+  }
+  uint64 size_pages = 0, resident_pages = 0;
+  f >> size_pages >> resident_pages;
+  if (!f) {
+    return 0;
+  }
+  const long page_size = sysconf(_SC_PAGESIZE);
+  return resident_pages * static_cast<uint64>(page_size);
+#else
+  (void)pid;
+  return 0;
+#endif
+}
+}  // namespace
 
 float64 get_memory_usage_gb(int pid) {
   return bytes_to_GB(get_memory_usage(pid));
@@ -25,40 +51,19 @@ uint64 get_memory_usage(int pid) {
   if (pid == -1) {
     pid = PID::get_pid();
   }
-
-  auto locals = py::dict("pid"_a = pid);
-  py::exec(R"(
-        import os, psutil
-        process = psutil.Process(pid)
-        mem = process.memory_info().rss)",
-           py::globals(), locals);
-
-  return locals["mem"].cast<int64>();
+  return read_rss_bytes(pid);
 }
 
 MemoryMonitor::MemoryMonitor(int pid, std::string output_fn) {
   log_.open(output_fn, std::ios_base::out);
-  locals_ = new py::dict;
-  (*reinterpret_cast<py::dict *>(locals_))["pid"] = pid;
-  py::exec(R"(
-        import os, psutil
-        process = psutil.Process(pid))",
-           py::globals(), *reinterpret_cast<py::dict *>(locals_));
+  pid_ = pid;
 }
 
 MemoryMonitor::~MemoryMonitor() {
-  delete reinterpret_cast<py::dict *>(locals_);
 }
 
 uint64 MemoryMonitor::get_usage() const {
-  py::gil_scoped_acquire acquire;
-  py::exec(R"(
-        try:
-          mem = process.memory_info().rss
-        except:
-          mem = -1)",
-           py::globals(), *reinterpret_cast<py::dict *>(locals_));
-  return (*reinterpret_cast<py::dict *>(locals_))["mem"].cast<uint64>();
+  return read_rss_bytes(pid_);
 }
 
 void MemoryMonitor::append_sample() {

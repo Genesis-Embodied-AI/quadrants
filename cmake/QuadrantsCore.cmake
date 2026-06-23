@@ -329,12 +329,14 @@ endforeach ()
 if(QD_WITH_PYTHON)
     message("PYTHON_LIBRARIES: " ${PYTHON_LIBRARIES})
     set(CORE_WITH_PYBIND_LIBRARY_NAME quadrants_python)
-    # NO_EXTRAS is required here to avoid llvm symbol error during build
     file(GLOB QUADRANTS_PYBIND_SOURCE
         "quadrants/python/*.cpp"
         "quadrants/python/*.h"
     )
-    pybind11_add_module(${CORE_WITH_PYBIND_LIBRARY_NAME} NO_EXTRAS ${QUADRANTS_PYBIND_SOURCE})
+    # NOMINSIZE: keep the project optimization level (-O3) for the binding layer instead of nanobind's
+    # default -Os, matching the previous pybind11 NO_EXTRAS build and avoiding per-call overhead in the
+    # hot launch path. NB_STATIC links the nanobind core statically (single extension module).
+    nanobind_add_module(${CORE_WITH_PYBIND_LIBRARY_NAME} NB_STATIC NOMINSIZE ${QUADRANTS_PYBIND_SOURCE})
 
     # Remove symbols from static libs: https://stackoverflow.com/a/14863432/12003165
     if (LINUX)
