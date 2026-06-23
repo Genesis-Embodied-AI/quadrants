@@ -1,13 +1,14 @@
-"""Tests for qd.graph_parallel_context / qd.graph_parallel -- concurrent fork/join branches in graph kernels.
+"""Tests for qd.graph_parallel_context / qd.graph_parallel -- concurrent fork/join parallel sections in
+graph kernels.
 
-`with qd.graph_parallel_context():` opens a fork/join region whose `with qd.graph_parallel():` members are independent
-sequences of work. On the graph path the branches become independent graph chains joined by a single
-empty node, so the runtime schedules them on parallel streams; on other backends (CPU / AMDGPU / Vulkan /
-Metal) they run serially but produce identical results.
+`with qd.graph_parallel_context():` opens a fork/join region whose `with qd.graph_parallel():` members are
+independent sequences of work. On the graph path the parallel sections become independent graph chains
+joined by a single empty node, so the runtime schedules them on parallel streams; on other backends
+(CPU / AMDGPU / Vulkan / Metal) they run serially but produce identical results.
 
 The behavioural assertions (disjoint-array correctness) hold on every backend. The graph-structure
-assertions (node counts: one kernel node per branch task + one empty join node) only apply where the
-builder forks/joins (CUDA today), so they are guarded by `_on_cuda()`.
+assertions (node counts: one kernel node per parallel-section task + one empty join node) only apply where
+the builder forks/joins (CUDA today), so they are guarded by `_on_cuda()`.
 """
 
 import numpy as np
@@ -51,10 +52,10 @@ def test_graph_parallel_is_no_op_outside_kernels():
 
 
 @test_utils.test()
-def test_graph_parallel_two_branches():
-    """Two branches write disjoint arrays; a serial loop after the region reads both (so it depends on
-    the join). Results must match the serial reference on every backend; on CUDA the graph has one node
-    per task plus one empty join node."""
+def test_graph_parallel_two_sections():
+    """Two parallel sections write disjoint arrays; a serial loop after the region reads both (so it
+    depends on the join). Results must match the serial reference on every backend; on CUDA the graph has
+    one node per task plus one empty join node."""
     n = 1024
 
     @qd.kernel(graph=True)
@@ -85,7 +86,7 @@ def test_graph_parallel_two_branches():
     num_tasks = _num_offloaded_tasks()
     if _on_cuda():
         # One graph node per offloaded task (each dynamic-bound loop is a bound-compute serial + a
-        # range_for, both in the branch) plus exactly one empty join node for the single region.
+        # range_for, both in the parallel section) plus exactly one empty join node for the single region.
         assert _graph_num_nodes() == num_tasks + 1
 
     np.testing.assert_allclose(x.to_numpy(), 1.0)
@@ -100,8 +101,8 @@ def test_graph_parallel_two_branches():
 
 
 @test_utils.test()
-def test_graph_parallel_three_branches():
-    """Fan-out of three independent branches; one empty join node."""
+def test_graph_parallel_three_sections():
+    """Fan-out of three independent parallel sections; one empty join node."""
     n = 256
 
     @qd.kernel(graph=True)
@@ -130,7 +131,7 @@ def test_graph_parallel_three_branches():
     k(a, b, c)
     num_tasks = _num_offloaded_tasks()
     if _on_cuda():
-        assert _graph_num_nodes() == num_tasks + 1  # three branches + one join
+        assert _graph_num_nodes() == num_tasks + 1  # three parallel sections + one join
 
     np.testing.assert_allclose(a.to_numpy(), 1.0)
     np.testing.assert_allclose(b.to_numpy(), 2.0)
@@ -138,9 +139,10 @@ def test_graph_parallel_three_branches():
 
 
 @test_utils.test()
-def test_graph_parallel_multi_loop_branches():
-    """Each branch contains several loops; they must chain in order inside the branch while the two
-    branches run independently. Branch tasks = 4, plus one join node on CUDA."""
+def test_graph_parallel_multi_loop_sections():
+    """Each parallel section contains several loops; they must chain in order inside the parallel section
+    while the two parallel sections run independently. Parallel-section tasks = 4, plus one join node on
+    CUDA."""
     n = 128
 
     @qd.kernel(graph=True)
@@ -165,16 +167,17 @@ def test_graph_parallel_multi_loop_branches():
     k(x, y)
     num_tasks = _num_offloaded_tasks()
     if _on_cuda():
-        assert _graph_num_nodes() == num_tasks + 1  # all branch tasks + one join
+        assert _graph_num_nodes() == num_tasks + 1  # all parallel-section tasks + one join
 
     np.testing.assert_allclose(x.to_numpy(), 2.0)  # (0+1)*2
     np.testing.assert_allclose(y.to_numpy(), 12.0)  # (0+3)*4
 
 
 @test_utils.test()
-def test_graph_parallel_single_branch_no_join():
-    """A region with a single branch (e.g. an optional branch compiled out) needs no join: it degenerates
-    to a plain chain, so the node count equals the number of branch tasks (no extra empty node)."""
+def test_graph_parallel_single_section_no_join():
+    """A region with a single parallel section (e.g. an optional parallel section compiled out) needs no
+    join: it degenerates to a plain chain, so the node count equals the number of parallel-section tasks
+    (no extra empty node)."""
     n = 256
 
     @qd.kernel(graph=True)
@@ -190,15 +193,16 @@ def test_graph_parallel_single_branch_no_join():
     k(x)
     num_tasks = _num_offloaded_tasks()
     if _on_cuda():
-        assert _graph_num_nodes() == num_tasks  # single branch -> plain chain, no join node
+        assert _graph_num_nodes() == num_tasks  # single parallel section -> plain chain, no join node
 
     np.testing.assert_allclose(x.to_numpy(), 5.0)
 
 
 @test_utils.test()
-def test_graph_parallel_optional_branch_static_if():
-    """The qipc ENABLE_EE pattern: a branch wrapped in `if qd.static(...)`. When the flag is False the
-    branch is compiled out (region has one branch -> no join); when True both branches run."""
+def test_graph_parallel_optional_section_static_if():
+    """The qipc ENABLE_EE pattern: a parallel section wrapped in `if qd.static(...)`. When the flag is
+    False the parallel section is compiled out (region has one parallel section -> no join); when True both
+    parallel sections run."""
     n = 128
 
     @qd.kernel(graph=True)
@@ -229,15 +233,15 @@ def test_graph_parallel_optional_branch_static_if():
     y.from_numpy(np.zeros(n, dtype=np.float32))
     k_off(x, y)
     if _on_cuda():
-        assert _graph_num_nodes() == _num_offloaded_tasks()  # single branch -> no join
+        assert _graph_num_nodes() == _num_offloaded_tasks()  # single parallel section -> no join
     np.testing.assert_allclose(x.to_numpy(), 1.0)
-    np.testing.assert_allclose(y.to_numpy(), 0.0)  # EE branch compiled out
+    np.testing.assert_allclose(y.to_numpy(), 0.0)  # EE parallel section compiled out
 
     x.from_numpy(np.zeros(n, dtype=np.float32))
     y.from_numpy(np.zeros(n, dtype=np.float32))
     k_on(x, y)
     if _on_cuda():
-        assert _graph_num_nodes() == _num_offloaded_tasks() + 1  # two branches + join
+        assert _graph_num_nodes() == _num_offloaded_tasks() + 1  # two parallel sections + join
     np.testing.assert_allclose(x.to_numpy(), 1.0)
     np.testing.assert_allclose(y.to_numpy(), 1.0)
 
@@ -245,7 +249,7 @@ def test_graph_parallel_optional_branch_static_if():
 @test_utils.test()
 def test_graph_parallel_inside_graph_do_while():
     """A fork/join region inside a qd.graph_do_while loop body must be correct across iterations: each
-    iteration runs both branches, then decrements the counter."""
+    iteration runs both parallel sections, then decrements the counter."""
     n = 64
     iters = 5
 
@@ -281,7 +285,7 @@ def test_graph_parallel_inside_graph_do_while():
 
 
 @test_utils.test()
-def test_graph_parallel_branch_outside_region_raises():
+def test_graph_parallel_section_outside_region_raises():
     @qd.kernel(graph=True)
     def k(x: qd.types.ndarray(qd.f32, ndim=1)):
         with qd.graph_parallel():
@@ -310,7 +314,7 @@ def test_graph_parallel_requires_graph_kernel():
 
 
 @test_utils.test()
-def test_graph_parallel_non_branch_body_raises():
+def test_graph_parallel_non_section_body_raises():
     @qd.kernel(graph=True)
     def k(x: qd.types.ndarray(qd.f32, ndim=1)):
         with qd.graph_parallel_context():
