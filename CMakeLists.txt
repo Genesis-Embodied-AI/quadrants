@@ -145,7 +145,6 @@ endif()
 
 # No support of Python for any case quadrants is integrated
 # in another project as submodule.
-set(PYBIND11_VERSION "2.13.6" CACHE STRING "Pybind11 version to use")
 option(QD_WITH_PYTHON "Build with Python language binding" ON)
 if (QD_WITH_PYTHON)
     include(cmake/PythonNumpyPybind11.cmake)
