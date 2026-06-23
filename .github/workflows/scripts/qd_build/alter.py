@@ -82,7 +82,7 @@ def _write_qd_pwshrc():
             "\n".join(
                 [
                     r"function Prompt {",
-                    r'    return "TiBuild $($executionContext.SessionState.Path.CurrentLocation)$(">" * ($nestedPromptLevel + 1)) "'
+                    r'    return "[Quadrants Build] $($executionContext.SessionState.Path.CurrentLocation)$(">" * ($nestedPromptLevel + 1)) "'
                     r"}",
                 ]
             )

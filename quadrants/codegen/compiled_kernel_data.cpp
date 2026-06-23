@@ -9,8 +9,8 @@ static CompiledKernelData::Err translate_err(CompiledKernelDataFile::Err err) {
   switch (err) {
     case CompiledKernelDataFile::Err::kNoError:
       return CompiledKernelData::Err::kNoError;
-    case CompiledKernelDataFile::Err::kNotTicFile:
-      return CompiledKernelData::Err::kNotTicFile;
+    case CompiledKernelDataFile::Err::kNotQdcFile:
+      return CompiledKernelData::Err::kNotQdcFile;
     case CompiledKernelDataFile::Err::kCorruptedFile:
       return CompiledKernelData::Err::kCorruptedFile;
     case CompiledKernelDataFile::Err::kOutOfMemory:
@@ -47,7 +47,7 @@ CompiledKernelDataFile::Err CompiledKernelDataFile::load(std::istream &is) {
     if (!is.read(head_, std::size(head_))) {
       return Err::kIOStreamError;
     } else if (std::strncmp(head_, kHeadStr, kHeadSize) != 0) {
-      return Err::kNotTicFile;
+      return Err::kNotQdcFile;
     }
     std::uint32_t arch;
     std::uint64_t metadata_size;
@@ -153,8 +153,8 @@ std::string CompiledKernelData::get_err_msg(Err err) {
   switch (err) {
     case Err::kNoError:
       return "Success";
-    case Err::kNotTicFile:
-      return "The file is not TIC file";
+    case Err::kNotQdcFile:
+      return "The file is not QDC file";
     case Err::kCorruptedFile:
       return "The file was corrupted";
     case Err::kParseMetadataFailed:
@@ -171,9 +171,9 @@ std::string CompiledKernelData::get_err_msg(Err err) {
       return "IO error";
     case Err::kOutOfMemory:
       return "Out of memory";
-    case Err::kTiWithoutLLVM:
+    case Err::kQdWithoutLLVM:
       return "The quadrants is not built with llvm";
-    case Err::kTiWithoutSpirv:
+    case Err::kQdWithoutSpirv:
       return "The quadrants is not built with spirv";
     case Err::kCompiledKernelDataBroken:
       return "The CompiledKernelData is broken";
@@ -189,14 +189,14 @@ std::unique_ptr<CompiledKernelData> CompiledKernelData::create(Arch arch, Err &e
       err = Err::kNoError;
       return llvm_creator();
     } else {
-      err = Err::kTiWithoutLLVM;
+      err = Err::kQdWithoutLLVM;
     }
   } else if (arch_uses_spirv(arch)) {
     if (spriv_creator) {
       err = Err::kNoError;
       return spriv_creator();
     } else {
-      err = Err::kTiWithoutSpirv;
+      err = Err::kQdWithoutSpirv;
     }
   }
   return nullptr;
