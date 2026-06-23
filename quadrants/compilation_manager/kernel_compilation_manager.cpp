@@ -56,7 +56,7 @@ KernelCompilationManager::KernelCompilationManager(Config config)
       auto _ = make_unlocker(lock_path);
       offline_cache::load_metadata_with_checking(cached_data_, filepath);
     } else {
-      QD_WARN("Lock {} failed. Please run 'ti cache clean -p {}' and try again.", lock_path, this->cache_dir_);
+      QD_WARN("Lock {} failed. Please run 'qd cache clean -p {}' and try again.", lock_path, this->cache_dir_);
     }
   }
 }
@@ -85,7 +85,7 @@ void KernelCompilationManager::dump() {
   auto lock_path = join_path(cache_dir_, kMetadataLockName);
 
   if (!lock_with_file(lock_path)) {
-    QD_WARN("Lock {} failed. Please run 'ti cache clean -p {}' and try again.", lock_path, cache_dir_);
+    QD_WARN("Lock {} failed. Please run 'qd cache clean -p {}' and try again.", lock_path, cache_dir_);
     caching_kernels_.clear();  // Ignore the caching kernels
     return;
   }

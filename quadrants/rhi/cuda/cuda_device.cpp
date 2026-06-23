@@ -92,8 +92,8 @@ uint64_t *CudaDevice::allocate_llvm_runtime_memory_jit(const LlvmRuntimeAllocPar
   uint64 *ret{nullptr};
   CUDADriver::get_instance().memcpy_device_to_host(&ret, params.result_buffer, sizeof(uint64));
   QD_ERROR_IF(ret == nullptr,
-              "Out of CUDA pre-allocated memory. Consider using ti.init(device_memory_fraction=0.9) or "
-              "ti.init(device_memory_GB=N) to allocate more GPU memory.");
+              "Out of CUDA pre-allocated memory. Consider using qd.init(device_memory_fraction=0.9) or "
+              "qd.init(device_memory_GB=N) to allocate more GPU memory.");
   return ret;
 }
 

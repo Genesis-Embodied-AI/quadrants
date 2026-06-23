@@ -94,9 +94,9 @@ TaskCodegen::TaskCodegen(const Params &params)
       compiled_structs_(params.compiled_structs),
       ctx_attribs_(params.ctx_attribs),
       task_name_(params.task_ir->loop_name.empty()
-                     ? fmt::format("{}_t{:02d}", params.ti_kernel_name, params.task_id_in_kernel)
+                     ? fmt::format("{}_t{:02d}", params.qd_kernel_name, params.task_id_in_kernel)
                      : fmt::format("{}_t{:02d}_{}",
-                                   params.ti_kernel_name,
+                                   params.qd_kernel_name,
                                    params.task_id_in_kernel,
                                    params.task_ir->loop_name)) {
   allow_undefined_visitor = true;
@@ -2454,33 +2454,33 @@ static DataType pick_buffer_access_type(DataType dt, const spirv::Value &ptr_val
 spirv::Value TaskCodegen::load_buffer(const Stmt *ptr, DataType dt, bool is_volatile) {
   spirv::Value ptr_val = ir_->query_value(ptr->raw_name());
 
-  DataType ti_buffer_type = pick_buffer_access_type(dt, ptr_val, *ir_);
+  DataType qd_buffer_type = pick_buffer_access_type(dt, ptr_val, *ir_);
 
-  auto buf_ptr = at_buffer(ptr, ti_buffer_type);
+  auto buf_ptr = at_buffer(ptr, qd_buffer_type);
   // The Metal-global `use_volatile_buffer_access_` flag (set on every buffer in the constructor) marks the storage
   // *buffer* as volatile, which protects against MoltenVK's coarse-grained LICM bug.  `is_volatile` here is a
   // per-load opt-in for `qd.volatile_load`: the OpLoad itself carries the `Volatile` `MemoryAccess` mask so the
   // SPIR-V optimiser cannot forward / merge this specific read with prior reads of the same address, even when
   // the surrounding buffer is not blanket-decorated.
-  auto val_bits = is_volatile ? ir_->load_variable_volatile(buf_ptr, ir_->get_primitive_type(ti_buffer_type))
-                              : ir_->load_variable(buf_ptr, ir_->get_primitive_type(ti_buffer_type));
+  auto val_bits = is_volatile ? ir_->load_variable_volatile(buf_ptr, ir_->get_primitive_type(qd_buffer_type))
+                              : ir_->load_variable(buf_ptr, ir_->get_primitive_type(qd_buffer_type));
   if (dt->is_primitive(PrimitiveTypeID::u1))
     return ir_->cast(ir_->bool_type(), val_bits);
-  return ti_buffer_type == dt ? val_bits : ir_->make_value(spv::OpBitcast, ir_->get_primitive_type(dt), val_bits);
+  return qd_buffer_type == dt ? val_bits : ir_->make_value(spv::OpBitcast, ir_->get_primitive_type(dt), val_bits);
 }
 
 void TaskCodegen::store_buffer(const Stmt *ptr, spirv::Value val) {
   spirv::Value ptr_val = ir_->query_value(ptr->raw_name());
 
-  DataType ti_buffer_type = pick_buffer_access_type(val.stype.dt, ptr_val, *ir_);
+  DataType qd_buffer_type = pick_buffer_access_type(val.stype.dt, ptr_val, *ir_);
   if (val.stype.dt->is_primitive(PrimitiveTypeID::u1)) {
     // Stores go through i8 (matching the original path) so a signed i1 narrowing is preserved.
-    ti_buffer_type = PrimitiveType::i8;
+    qd_buffer_type = PrimitiveType::i8;
   }
 
-  auto buf_ptr = at_buffer(ptr, ti_buffer_type);
+  auto buf_ptr = at_buffer(ptr, qd_buffer_type);
   spirv::Value val_bits;
-  if (val.stype.dt == ti_buffer_type) {
+  if (val.stype.dt == qd_buffer_type) {
     val_bits = val;
   } else if (val.stype.dt->is_primitive(PrimitiveTypeID::u1)) {
     // SPIR-V `OpBitcast` rejects bool operands (spec: operand must be numerical scalar / vector or pointer). A direct
@@ -2491,9 +2491,9 @@ void TaskCodegen::store_buffer(const Stmt *ptr, spirv::Value val) {
     // picking `1` or `0` of the target type - the canonical spec-compliant way to widen a bool, matching what
     // `load_buffer` already does on the reverse path and keeping the "bool serialises as 0 / 1" behaviour every user of
     // `to_numpy()` / `from_numpy()` depends on.
-    val_bits = ir_->cast(ir_->get_primitive_type(ti_buffer_type), val);
+    val_bits = ir_->cast(ir_->get_primitive_type(qd_buffer_type), val);
   } else {
-    val_bits = ir_->make_value(spv::OpBitcast, ir_->get_primitive_type(ti_buffer_type), val);
+    val_bits = ir_->make_value(spv::OpBitcast, ir_->get_primitive_type(qd_buffer_type), val);
   }
   ir_->store_variable(buf_ptr, val_bits);
 }
@@ -3326,7 +3326,7 @@ void KernelCodegen::run(QuadrantsKernelAttributes &kernel_attribs,
     std::filesystem::create_directories(ir_dump_dir);
   }
   if (dump_ir) {
-    std::filesystem::path filename = ir_dump_dir / (params_.ti_kernel_name + "_before_final_spirv.ll");
+    std::filesystem::path filename = ir_dump_dir / (params_.qd_kernel_name + "_before_final_spirv.ll");
     if (std::ofstream out_file(filename); out_file) {
       std::string outString;
       irpass::print(const_cast<IRNode *>(params_.ir_root), &outString);
@@ -3341,7 +3341,7 @@ void KernelCodegen::run(QuadrantsKernelAttributes &kernel_attribs,
     tp.task_id_in_kernel = i;
     tp.compiled_structs = params_.compiled_structs;
     tp.ctx_attribs = &ctx_attribs_;
-    tp.ti_kernel_name = fmt::format("{}_{}", params_.ti_kernel_name, i);
+    tp.qd_kernel_name = fmt::format("{}_{}", params_.qd_kernel_name, i);
     tp.arch = params_.arch;
     tp.caps = &params_.caps;
     tp.compile_config = params_.compile_config;
@@ -3386,7 +3386,7 @@ void KernelCodegen::run(QuadrantsKernelAttributes &kernel_attribs,
           "SPIRV optimization failed");
       spirv_msg_flush_dedup();
       if (spirv_opt_id_overflow_seen) {
-        QD_WARN("SPIR-V ID overflow detected during optimization of '{}'", tp.ti_kernel_name);
+        QD_WARN("SPIR-V ID overflow detected during optimization of '{}'", tp.qd_kernel_name);
       }
       if (result || spirv_opt_id_overflow_seen) {
         success = false;
@@ -3410,7 +3410,7 @@ void KernelCodegen::run(QuadrantsKernelAttributes &kernel_attribs,
 
       std::string spirv_asm;
       spirv_tools_->Disassemble(spirv, &spirv_asm);
-      auto kernel_name = tp.ti_kernel_name;
+      auto kernel_name = tp.qd_kernel_name;
       QD_WARN("SPIR-V Assembly dump for {} :\n{}\n\n", kernel_name, spirv_asm);
 
       std::ofstream fout(kernel_name + ".spv", std::ios::binary | std::ios::out);
@@ -3422,15 +3422,15 @@ void KernelCodegen::run(QuadrantsKernelAttributes &kernel_attribs,
       QD_ERROR_IF(!success,
                   "SPIR-V optimization failed for '{}' due to ID-space overflow. "
                   "The kernel is too large for the SPIRV-Tools optimizer pipeline.",
-                  tp.ti_kernel_name);
+                  tp.qd_kernel_name);
     } else {
-      QD_ERROR_IF(!success, "SPIR-V optimization failed for '{}'.", tp.ti_kernel_name);
+      QD_ERROR_IF(!success, "SPIR-V optimization failed for '{}'.", tp.qd_kernel_name);
     }
     kernel_attribs.tasks_attribs.push_back(std::move(task_res.task_attribs));
     generated_spirv.push_back(std::move(optimized_spv));
   }
   kernel_attribs.ctx_attribs = std::move(ctx_attribs_);
-  kernel_attribs.name = params_.ti_kernel_name;
+  kernel_attribs.name = params_.qd_kernel_name;
 }
 
 }  // namespace spirv
