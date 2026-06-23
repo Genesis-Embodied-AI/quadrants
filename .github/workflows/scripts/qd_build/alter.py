@@ -40,7 +40,7 @@ def _venv_reactivation():
 
 def _write_qd_bashrc():
     path = get_cache_home() / "qd.bashrc"
-    envs = get_cache_home() / "ti-env.sh"
+    envs = get_cache_home() / "qd-env.sh"
     _write_env(envs)
     with open(path, "w") as f:
         f.write(
@@ -60,7 +60,7 @@ def _write_qd_zshrc():
     dotdir = get_cache_home() / "zdotdir"
     dotdir.mkdir(parents=True, exist_ok=True)
     path = dotdir / ".zshrc"
-    envs = get_cache_home() / "ti-env.sh"
+    envs = get_cache_home() / "qd-env.sh"
     _write_env(envs)
     with open(path, "w") as f:
         f.write(
