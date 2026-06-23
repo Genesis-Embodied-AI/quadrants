@@ -1183,7 +1183,7 @@
 <span class="sd">    iteration). The one structural rule is that a ``qd.graph_do_while`` ``while``-loop may appear only at the kernel top</span>
 <span class="sd">    level or directly inside another ``graph_do_while`` body, not inside a ``for``-loop.</span>
 
-<span class="sd">    This function should not be called directly at runtime; it is recognised and transformed during AST compilation.</span>
+<span class="sd">    This function should not be called directly at runtime; it is recognized and transformed during AST compilation.</span>
 <span class="sd">    Requires ``@qd.kernel(graph=True)``.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">return</span> <span class="nb">bool</span><span class="p">(</span><span class="n">condition</span><span class="p">)</span></div>
@@ -1194,32 +1194,34 @@
 <div class="viewcode-block" id="graph_parallel_context">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/misc/index.html#quadrants.lang.misc.graph_parallel_context">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">graph_parallel_context</span><span class="p">():</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Opens a fork/join region whose ``qd.graph_parallel()`` branches run concurrently.</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Opens a fork/join region whose ``qd.graph_parallel()`` sections run concurrently.</span>
 
-<span class="sd">    Used as ``with qd.graph_parallel_context():`` inside a ``@qd.kernel(graph=True)`` kernel. The</span>
-<span class="sd">    region&#39;s body must contain only ``with qd.graph_parallel():`` blocks. Each branch is an independent</span>
-<span class="sd">    sequence of work; the branches have no ordering relative to each other and may execute concurrently,</span>
-<span class="sd">    while everything after the region waits for *all* branches to finish (the join). This is the graph</span>
-<span class="sd">    analogue of ``qd.stream_parallel()`` (which is for non-graph kernels): it lets independent stages --</span>
-<span class="sd">    e.g. qipc&#39;s point-triangle and edge-edge assembly -- overlap inside a captured graph.</span>
+<span class="sd">    Used as ``with qd.graph_parallel_context():`` inside a ``@qd.kernel(graph=True)`` kernel. The region&#39;s</span>
+<span class="sd">    body must contain only ``with qd.graph_parallel():`` blocks. Each ``qd.graph_parallel`` section is an</span>
+<span class="sd">    independent sequence of work; the ``qd.graph_parallel`` sections have no ordering relative to each</span>
+<span class="sd">    other and may execute concurrently, while everything after the region waits for *all* ``qd.graph_parallel``</span>
+<span class="sd">    sections to finish (the join). This is the graph analogue of ``qd.stream_parallel()`` (which is for</span>
+<span class="sd">    non-graph kernels): it lets independent stages -- e.g. qipc&#39;s point-triangle and edge-edge assembly</span>
+<span class="sd">    -- overlap inside a captured graph.</span>
 
-<span class="sd">    Concurrency contract (the author&#39;s responsibility): branches must be data-race free with respect to</span>
-<span class="sd">    one another (no branch reads what another writes, no two branches write the same location). Calls</span>
-<span class="sd">    *within* a branch keep their program order.</span>
+<span class="sd">    Concurrency contract (the author&#39;s responsibility): ``qd.graph_parallel`` sections must be data-race</span>
+<span class="sd">    free with respect to one another (no ``qd.graph_parallel`` section reads what another writes, no two</span>
+<span class="sd">    ``qd.graph_parallel`` sections write the same location). Calls *within* a ``qd.graph_parallel`` section</span>
+<span class="sd">    keep their program order.</span>
 
-<span class="sd">    Backend behaviour:</span>
-<span class="sd">      - CUDA SM graph path: branches become independent graph chains joined by an empty node, so the</span>
-<span class="sd">        runtime schedules them on parallel streams (real overlap).</span>
-<span class="sd">      - CPU / Vulkan / Metal / AMDGPU graph: correct results, branches run serially (the concurrency</span>
-<span class="sd">        tags are honoured only by the graph builder today).</span>
+<span class="sd">    Backend behavior:</span>
+<span class="sd">      - CUDA SM graph path: ``qd.graph_parallel`` sections become independent graph chains joined by an</span>
+<span class="sd">        empty node, so the runtime schedules them on parallel streams (real overlap).</span>
+<span class="sd">      - CPU / Vulkan / Metal / AMDGPU graph: correct results, ``qd.graph_parallel`` sections run serially</span>
+<span class="sd">        (the concurrency tags are honored only by the graph builder today).</span>
 
 <span class="sd">    Restrictions (enforced at kernel compile time):</span>
 <span class="sd">      - Must be used inside ``@qd.kernel(graph=True)``.</span>
 <span class="sd">      - The region body may contain only ``with qd.graph_parallel():`` blocks.</span>
-<span class="sd">      - Regions cannot be nested, and a branch body must be straight-line task work (no nested</span>
-<span class="sd">        ``qd.graph_do_while``, ``qd.checkpoint``, or ``qd.graph_parallel_context``).</span>
+<span class="sd">      - Regions cannot be nested, and a ``qd.graph_parallel`` section body must be straight-line task work</span>
+<span class="sd">        (no nested ``qd.graph_do_while``, ``qd.checkpoint``, or ``qd.graph_parallel_context``).</span>
 
-<span class="sd">    This function should not be called directly at runtime; it is recognised and transformed during AST</span>
+<span class="sd">    This function should not be called directly at runtime; it is recognized and transformed during AST</span>
 <span class="sd">    compilation. At Python runtime (outside kernels) it is a no-op context manager.</span>
 
 <span class="sd">    See also ``docs/source/user_guide/graph.md``.</span>
@@ -1232,13 +1234,13 @@
 <div class="viewcode-block" id="graph_parallel">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/misc/index.html#quadrants.lang.misc.graph_parallel">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">graph_parallel</span><span class="p">():</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Declares one concurrent branch of an enclosing ``qd.graph_parallel_context()`` region.</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Declares one ``qd.graph_parallel`` section of an enclosing ``qd.graph_parallel_context()`` region.</span>
 
 <span class="sd">    Used as ``with qd.graph_parallel():`` directly inside a ``with qd.graph_parallel_context():`` block.</span>
-<span class="sd">    The branch&#39;s body is an independent sequence of work that may run concurrently with the region&#39;s</span>
-<span class="sd">    other branches.</span>
+<span class="sd">    The ``qd.graph_parallel`` section&#39;s body is an independent sequence of work that may run concurrently</span>
+<span class="sd">    with the region&#39;s other ``qd.graph_parallel`` sections.</span>
 
-<span class="sd">    See ``qd.graph_parallel_context()`` for the full contract and backend behaviour.</span>
+<span class="sd">    See ``qd.graph_parallel_context()`` for the full contract and backend behavior.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">yield</span></div>
 

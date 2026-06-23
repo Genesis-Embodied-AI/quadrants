@@ -380,38 +380,40 @@ Module Contents
    iteration). The one structural rule is that a ``qd.graph_do_while`` ``while``-loop may appear only at the kernel top
    level or directly inside another ``graph_do_while`` body, not inside a ``for``-loop.
 
-   This function should not be called directly at runtime; it is recognised and transformed during AST compilation.
+   This function should not be called directly at runtime; it is recognized and transformed during AST compilation.
    Requires ``@qd.kernel(graph=True)``.
 
 
 .. py:function:: graph_parallel_context()
 
-   Opens a fork/join region whose ``qd.graph_parallel()`` branches run concurrently.
+   Opens a fork/join region whose ``qd.graph_parallel()`` sections run concurrently.
 
-   Used as ``with qd.graph_parallel_context():`` inside a ``@qd.kernel(graph=True)`` kernel. The
-   region's body must contain only ``with qd.graph_parallel():`` blocks. Each branch is an independent
-   sequence of work; the branches have no ordering relative to each other and may execute concurrently,
-   while everything after the region waits for *all* branches to finish (the join). This is the graph
-   analogue of ``qd.stream_parallel()`` (which is for non-graph kernels): it lets independent stages --
-   e.g. qipc's point-triangle and edge-edge assembly -- overlap inside a captured graph.
+   Used as ``with qd.graph_parallel_context():`` inside a ``@qd.kernel(graph=True)`` kernel. The region's
+   body must contain only ``with qd.graph_parallel():`` blocks. Each ``qd.graph_parallel`` section is an
+   independent sequence of work; the ``qd.graph_parallel`` sections have no ordering relative to each
+   other and may execute concurrently, while everything after the region waits for *all* ``qd.graph_parallel``
+   sections to finish (the join). This is the graph analogue of ``qd.stream_parallel()`` (which is for
+   non-graph kernels): it lets independent stages -- e.g. qipc's point-triangle and edge-edge assembly
+   -- overlap inside a captured graph.
 
-   Concurrency contract (the author's responsibility): branches must be data-race free with respect to
-   one another (no branch reads what another writes, no two branches write the same location). Calls
-   *within* a branch keep their program order.
+   Concurrency contract (the author's responsibility): ``qd.graph_parallel`` sections must be data-race
+   free with respect to one another (no ``qd.graph_parallel`` section reads what another writes, no two
+   ``qd.graph_parallel`` sections write the same location). Calls *within* a ``qd.graph_parallel`` section
+   keep their program order.
 
-   Backend behaviour:
-     - CUDA SM graph path: branches become independent graph chains joined by an empty node, so the
-       runtime schedules them on parallel streams (real overlap).
-     - CPU / Vulkan / Metal / AMDGPU graph: correct results, branches run serially (the concurrency
-       tags are honoured only by the graph builder today).
+   Backend behavior:
+     - CUDA SM graph path: ``qd.graph_parallel`` sections become independent graph chains joined by an
+       empty node, so the runtime schedules them on parallel streams (real overlap).
+     - CPU / Vulkan / Metal / AMDGPU graph: correct results, ``qd.graph_parallel`` sections run serially
+       (the concurrency tags are honored only by the graph builder today).
 
    Restrictions (enforced at kernel compile time):
      - Must be used inside ``@qd.kernel(graph=True)``.
      - The region body may contain only ``with qd.graph_parallel():`` blocks.
-     - Regions cannot be nested, and a branch body must be straight-line task work (no nested
-       ``qd.graph_do_while``, ``qd.checkpoint``, or ``qd.graph_parallel_context``).
+     - Regions cannot be nested, and a ``qd.graph_parallel`` section body must be straight-line task work
+       (no nested ``qd.graph_do_while``, ``qd.checkpoint``, or ``qd.graph_parallel_context``).
 
-   This function should not be called directly at runtime; it is recognised and transformed during AST
+   This function should not be called directly at runtime; it is recognized and transformed during AST
    compilation. At Python runtime (outside kernels) it is a no-op context manager.
 
    See also ``docs/source/user_guide/graph.md``.
@@ -419,13 +421,13 @@ Module Contents
 
 .. py:function:: graph_parallel()
 
-   Declares one concurrent branch of an enclosing ``qd.graph_parallel_context()`` region.
+   Declares one ``qd.graph_parallel`` section of an enclosing ``qd.graph_parallel_context()`` region.
 
    Used as ``with qd.graph_parallel():`` directly inside a ``with qd.graph_parallel_context():`` block.
-   The branch's body is an independent sequence of work that may run concurrently with the region's
-   other branches.
+   The ``qd.graph_parallel`` section's body is an independent sequence of work that may run concurrently
+   with the region's other ``qd.graph_parallel`` sections.
 
-   See ``qd.graph_parallel_context()`` for the full contract and backend behaviour.
+   See ``qd.graph_parallel_context()`` for the full contract and backend behavior.
 
 
 .. py:function:: global_thread_idx()
