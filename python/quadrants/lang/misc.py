@@ -753,15 +753,15 @@ def graph_do_while(condition) -> bool:
 
 
 @contextmanager
-def graph_parallel():
-    """Opens a fork/join region whose ``qd.branch()`` members run concurrently.
+def graph_parallel_context():
+    """Opens a fork/join region whose ``qd.graph_parallel()`` branches run concurrently.
 
-    Used as ``with qd.graph_parallel():`` inside a ``@qd.kernel(graph=True)`` kernel. The region's body
-    must contain only ``with qd.branch():`` blocks. Each branch is an independent sequence of work; the
-    branches have no ordering relative to each other and may execute concurrently, while everything after
-    the region waits for *all* branches to finish (the join). This is the CUDA-graph analogue of
-    ``qd.stream_parallel()`` (which is for non-graph kernels): it lets independent stages -- e.g. qipc's
-    point-triangle and edge-edge assembly -- overlap inside a captured graph.
+    Used as ``with qd.graph_parallel_context():`` inside a ``@qd.kernel(graph=True)`` kernel. The
+    region's body must contain only ``with qd.graph_parallel():`` blocks. Each branch is an independent
+    sequence of work; the branches have no ordering relative to each other and may execute concurrently,
+    while everything after the region waits for *all* branches to finish (the join). This is the
+    CUDA-graph analogue of ``qd.stream_parallel()`` (which is for non-graph kernels): it lets independent
+    stages -- e.g. qipc's point-triangle and edge-edge assembly -- overlap inside a captured graph.
 
     Concurrency contract (the author's responsibility): branches must be data-race free with respect to
     one another (no branch reads what another writes, no two branches write the same location). Calls
@@ -775,9 +775,9 @@ def graph_parallel():
 
     Restrictions (enforced at kernel compile time):
       - Must be used inside ``@qd.kernel(graph=True)``.
-      - The region body may contain only ``with qd.branch():`` blocks.
+      - The region body may contain only ``with qd.graph_parallel():`` blocks.
       - Regions cannot be nested, and a branch body must be straight-line task work (no nested
-        ``qd.graph_do_while``, ``qd.checkpoint``, or ``qd.graph_parallel``).
+        ``qd.graph_do_while``, ``qd.checkpoint``, or ``qd.graph_parallel_context``).
 
     This function should not be called directly at runtime; it is recognised and transformed during AST
     compilation. At Python runtime (outside kernels) it is a no-op context manager.
@@ -788,15 +788,15 @@ def graph_parallel():
 
 
 @contextmanager
-def branch(name=None):
-    """Declares one concurrent member of an enclosing ``qd.graph_parallel()`` region.
+def graph_parallel(name=None):
+    """Declares one concurrent branch of an enclosing ``qd.graph_parallel_context()`` region.
 
-    Used as ``with qd.branch():`` or ``with qd.branch(name="pt"):`` directly inside a
-    ``with qd.graph_parallel():`` block. The branch's body is an independent sequence of work that may
-    run concurrently with the region's other branches. ``name`` is optional and used only as a label for
-    profiling / graph introspection.
+    Used as ``with qd.graph_parallel():`` or ``with qd.graph_parallel(name="pt"):`` directly inside a
+    ``with qd.graph_parallel_context():`` block. The branch's body is an independent sequence of work
+    that may run concurrently with the region's other branches. ``name`` is optional and used only as a
+    label for profiling / graph introspection.
 
-    See ``qd.graph_parallel()`` for the full contract and backend behaviour.
+    See ``qd.graph_parallel_context()`` for the full contract and backend behaviour.
     """
     yield
 
@@ -940,8 +940,8 @@ __all__ = [
     "GraphStatus",
     "checkpoint",
     "graph_do_while",
+    "graph_parallel_context",
     "graph_parallel",
-    "branch",
     "loop_config",
     "global_thread_idx",
     "assume_in_range",

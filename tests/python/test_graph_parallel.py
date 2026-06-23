@@ -1,6 +1,6 @@
-"""Tests for qd.graph_parallel / qd.branch -- concurrent fork/join branches in graph kernels.
+"""Tests for qd.graph_parallel_context / qd.graph_parallel -- concurrent fork/join branches in graph kernels.
 
-`with qd.graph_parallel():` opens a fork/join region whose `with qd.branch():` members are independent
+`with qd.graph_parallel_context():` opens a fork/join region whose `with qd.graph_parallel():` members are independent
 sequences of work. On the CUDA graph path the branches become independent graph chains joined by a single
 empty node, so the runtime schedules them on parallel streams; on other backends (CPU / AMDGPU / Vulkan /
 Metal) they run serially but produce identical results.
@@ -38,14 +38,14 @@ def _num_offloaded_tasks():
 
 @test_utils.test()
 def test_graph_parallel_is_no_op_outside_kernels():
-    """At Python runtime (outside kernels) qd.graph_parallel / qd.branch must be usable no-op context
+    """At Python runtime (outside kernels) qd.graph_parallel_context / qd.graph_parallel must be usable no-op context
     managers, so helpers that are sometimes called from Python and sometimes from kernels still import
     and run. Mirrors qd.stream_parallel / qd.checkpoint."""
     sentinel = []
-    with qd.graph_parallel():
-        with qd.branch():
+    with qd.graph_parallel_context():
+        with qd.graph_parallel():
             sentinel.append("a")
-        with qd.branch(name="b"):
+        with qd.graph_parallel(name="b"):
             sentinel.append("b")
     assert sentinel == ["a", "b"]
 
@@ -63,11 +63,11 @@ def test_graph_parallel_two_branches():
         y: qd.types.ndarray(qd.f32, ndim=1),
         z: qd.types.ndarray(qd.f32, ndim=1),
     ):
-        with qd.graph_parallel():
-            with qd.branch(name="bx"):
+        with qd.graph_parallel_context():
+            with qd.graph_parallel(name="bx"):
                 for i in range(x.shape[0]):
                     x[i] = x[i] + 1.0
-            with qd.branch(name="by"):
+            with qd.graph_parallel(name="by"):
                 for i in range(y.shape[0]):
                     y[i] = y[i] + 2.0
         for i in range(z.shape[0]):
@@ -110,14 +110,14 @@ def test_graph_parallel_three_branches():
         b: qd.types.ndarray(qd.f32, ndim=1),
         c: qd.types.ndarray(qd.f32, ndim=1),
     ):
-        with qd.graph_parallel():
-            with qd.branch():
+        with qd.graph_parallel_context():
+            with qd.graph_parallel():
                 for i in range(a.shape[0]):
                     a[i] = a[i] + 1.0
-            with qd.branch():
+            with qd.graph_parallel():
                 for i in range(b.shape[0]):
                     b[i] = b[i] + 2.0
-            with qd.branch():
+            with qd.graph_parallel():
                 for i in range(c.shape[0]):
                     c[i] = c[i] + 3.0
 
@@ -145,13 +145,13 @@ def test_graph_parallel_multi_loop_branches():
 
     @qd.kernel(graph=True)
     def k(x: qd.types.ndarray(qd.f32, ndim=1), y: qd.types.ndarray(qd.f32, ndim=1)):
-        with qd.graph_parallel():
-            with qd.branch():
+        with qd.graph_parallel_context():
+            with qd.graph_parallel():
                 for i in range(x.shape[0]):
                     x[i] = x[i] + 1.0
                 for i in range(x.shape[0]):
                     x[i] = x[i] * 2.0
-            with qd.branch():
+            with qd.graph_parallel():
                 for i in range(y.shape[0]):
                     y[i] = y[i] + 3.0
                 for i in range(y.shape[0]):
@@ -179,8 +179,8 @@ def test_graph_parallel_single_branch_no_join():
 
     @qd.kernel(graph=True)
     def k(x: qd.types.ndarray(qd.f32, ndim=1)):
-        with qd.graph_parallel():
-            with qd.branch():
+        with qd.graph_parallel_context():
+            with qd.graph_parallel():
                 for i in range(x.shape[0]):
                     x[i] = x[i] + 5.0
 
@@ -203,23 +203,23 @@ def test_graph_parallel_optional_branch_static_if():
 
     @qd.kernel(graph=True)
     def k_off(x: qd.types.ndarray(qd.f32, ndim=1), y: qd.types.ndarray(qd.f32, ndim=1)):
-        with qd.graph_parallel():
-            with qd.branch():
+        with qd.graph_parallel_context():
+            with qd.graph_parallel():
                 for i in range(x.shape[0]):
                     x[i] = x[i] + 1.0
             if qd.static(False):
-                with qd.branch():
+                with qd.graph_parallel():
                     for i in range(y.shape[0]):
                         y[i] = y[i] + 1.0
 
     @qd.kernel(graph=True)
     def k_on(x: qd.types.ndarray(qd.f32, ndim=1), y: qd.types.ndarray(qd.f32, ndim=1)):
-        with qd.graph_parallel():
-            with qd.branch():
+        with qd.graph_parallel_context():
+            with qd.graph_parallel():
                 for i in range(x.shape[0]):
                     x[i] = x[i] + 1.0
             if qd.static(True):
-                with qd.branch():
+                with qd.graph_parallel():
                     for i in range(y.shape[0]):
                         y[i] = y[i] + 1.0
 
@@ -256,11 +256,11 @@ def test_graph_parallel_inside_graph_do_while():
         counter: qd.types.ndarray(qd.i32, ndim=0),
     ):
         while qd.graph_do_while(counter):
-            with qd.graph_parallel():
-                with qd.branch():
+            with qd.graph_parallel_context():
+                with qd.graph_parallel():
                     for i in range(x.shape[0]):
                         x[i] = x[i] + 1
-                with qd.branch():
+                with qd.graph_parallel():
                     for i in range(y.shape[0]):
                         y[i] = y[i] + 2
             for _ in range(1):
@@ -284,12 +284,14 @@ def test_graph_parallel_inside_graph_do_while():
 def test_graph_parallel_branch_outside_region_raises():
     @qd.kernel(graph=True)
     def k(x: qd.types.ndarray(qd.f32, ndim=1)):
-        with qd.branch():
+        with qd.graph_parallel():
             for i in range(x.shape[0]):
                 x[i] = x[i] + 1.0
 
     x = qd.ndarray(qd.f32, shape=(16,))
-    with pytest.raises(qd.QuadrantsSyntaxError, match="qd.branch.. can only be used .* inside a qd.graph_parallel"):
+    with pytest.raises(
+        qd.QuadrantsSyntaxError, match="qd.graph_parallel.. can only be used .* inside a qd.graph_parallel_context"
+    ):
         k(x)
 
 
@@ -297,8 +299,8 @@ def test_graph_parallel_branch_outside_region_raises():
 def test_graph_parallel_requires_graph_kernel():
     @qd.kernel
     def k(x: qd.types.ndarray(qd.f32, ndim=1)):
-        with qd.graph_parallel():
-            with qd.branch():
+        with qd.graph_parallel_context():
+            with qd.graph_parallel():
                 for i in range(x.shape[0]):
                     x[i] = x[i] + 1.0
 
@@ -311,12 +313,12 @@ def test_graph_parallel_requires_graph_kernel():
 def test_graph_parallel_non_branch_body_raises():
     @qd.kernel(graph=True)
     def k(x: qd.types.ndarray(qd.f32, ndim=1)):
-        with qd.graph_parallel():
+        with qd.graph_parallel_context():
             for i in range(x.shape[0]):
                 x[i] = x[i] + 1.0
 
     x = qd.ndarray(qd.f32, shape=(16,))
-    with pytest.raises(qd.QuadrantsSyntaxError, match="may contain only .with qd.branch"):
+    with pytest.raises(qd.QuadrantsSyntaxError, match="may contain only .with qd.graph_parallel"):
         k(x)
 
 
@@ -324,10 +326,10 @@ def test_graph_parallel_non_branch_body_raises():
 def test_graph_parallel_nested_region_raises():
     @qd.kernel(graph=True)
     def k(x: qd.types.ndarray(qd.f32, ndim=1)):
-        with qd.graph_parallel():
-            with qd.branch():
-                with qd.graph_parallel():
-                    with qd.branch():
+        with qd.graph_parallel_context():
+            with qd.graph_parallel():
+                with qd.graph_parallel_context():
+                    with qd.graph_parallel():
                         for i in range(x.shape[0]):
                             x[i] = x[i] + 1.0
 

@@ -601,9 +601,25 @@ class FunctionDefTransformer:
         return False
 
     @staticmethod
-    def _is_graph_parallel_with(stmt: ast.stmt) -> bool:
-        """Syntactic check matching ASTTransformer._is_graph_parallel_call: a
-        ``with qd.graph_parallel():`` fork/join region."""
+    def _is_graph_parallel_context_with(stmt: ast.stmt) -> bool:
+        """Syntactic check matching ASTTransformer._is_graph_parallel_context_call: a
+        ``with qd.graph_parallel_context():`` fork/join region."""
+        if not isinstance(stmt, ast.With) or len(stmt.items) != 1:
+            return False
+        ctx_expr = stmt.items[0].context_expr
+        if not isinstance(ctx_expr, ast.Call):
+            return False
+        func = ctx_expr.func
+        if isinstance(func, ast.Attribute) and func.attr == "graph_parallel_context":
+            return True
+        if isinstance(func, ast.Name) and func.id == "graph_parallel_context":
+            return True
+        return False
+
+    @staticmethod
+    def _is_branch_with(stmt: ast.stmt) -> bool:
+        """Syntactic check matching ASTTransformer._is_branch_call: a ``with qd.graph_parallel(...):``
+        branch member of a ``qd.graph_parallel_context()`` region."""
         if not isinstance(stmt, ast.With) or len(stmt.items) != 1:
             return False
         ctx_expr = stmt.items[0].context_expr
@@ -613,22 +629,6 @@ class FunctionDefTransformer:
         if isinstance(func, ast.Attribute) and func.attr == "graph_parallel":
             return True
         if isinstance(func, ast.Name) and func.id == "graph_parallel":
-            return True
-        return False
-
-    @staticmethod
-    def _is_branch_with(stmt: ast.stmt) -> bool:
-        """Syntactic check matching ASTTransformer._is_branch_call: a ``with qd.branch(...):`` member
-        of a ``qd.graph_parallel()`` region."""
-        if not isinstance(stmt, ast.With) or len(stmt.items) != 1:
-            return False
-        ctx_expr = stmt.items[0].context_expr
-        if not isinstance(ctx_expr, ast.Call):
-            return False
-        func = ctx_expr.func
-        if isinstance(func, ast.Attribute) and func.attr == "branch":
-            return True
-        if isinstance(func, ast.Name) and func.id == "branch":
             return True
         return False
 
@@ -691,12 +691,13 @@ class FunctionDefTransformer:
                 # `CheckpointTransformer.build_checkpoint_with`.
                 FunctionDefTransformer._validate_graph_do_while_stmt_list(stmt.body, is_kernel_top=is_kernel_top)
                 continue
-            if FunctionDefTransformer._is_graph_parallel_with(stmt):
-                # A `with qd.graph_parallel()` region groups concurrent `with qd.branch()` members; it is
-                # a legal sibling of for-loops / checkpoints. Its body must be branch blocks (optionally
-                # under `if qd.static(...)`); the full check is in ASTTransformer._build_graph_parallel_with.
-                # Each branch body is task territory, validated here with the in-loop rules. Descend through
-                # `if` members so branches inside an optional-branch `if qd.static(...)` are reached too.
+            if FunctionDefTransformer._is_graph_parallel_context_with(stmt):
+                # A `with qd.graph_parallel_context()` region groups concurrent `with qd.graph_parallel()`
+                # branches; it is a legal sibling of for-loops / checkpoints. Its body must be branch blocks
+                # (optionally under `if qd.static(...)`); the full check is in
+                # ASTTransformer._build_graph_parallel_context_with. Each branch body is task territory,
+                # validated here with the in-loop rules. Descend through `if` members so branches inside an
+                # optional-branch `if qd.static(...)` are reached too.
                 pending = list(stmt.body)
                 while pending:
                     member = pending.pop()

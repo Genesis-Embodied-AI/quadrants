@@ -404,8 +404,8 @@ void GraphManager::build_level(int parent_id,
       continue;
     }
 
-    // --- A qd.graph_parallel() fork/join region: a contiguous run of this level's direct,
-    // non-checkpoint tasks tagged with a nonzero stream_parallel_group_id (set by qd.branch()). Each
+    // --- A qd.graph_parallel_context() fork/join region: a contiguous run of this level's direct,
+    // non-checkpoint tasks tagged with a nonzero stream_parallel_group_id (set by qd.graph_parallel()). Each
     // distinct group id is one branch; branches fork from the region's entry (`prev_node`), run their
     // tasks in order, and join into a single empty node so downstream work waits for all of them. CUDA's
     // graph executor schedules the independent branch chains on separate streams -> real overlap. ---
