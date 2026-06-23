@@ -277,7 +277,7 @@ class FuncBase:
                     # v: BufferView (no dtype) — infer dtype from the passed argument
                     annotation = buffer_view_type.BufferViewType()
                 else:
-                    raise QuadrantsSyntaxError(f"Invalid type annotation (argument {i}) of Taichi kernel: {annotation}")
+                    raise QuadrantsSyntaxError(f"Invalid type annotation (argument {i}) of Quadrants kernel: {annotation}")
             self.arg_metas.append(ArgMetadata(annotation, param.name, param.default))
             self.orig_arguments.append(ArgMetadata(annotation, param.name, param.default))
 
@@ -579,7 +579,7 @@ class FuncBase:
         Returns the number of underlying kernel args being set for a given Python arg, and whether the launch context
         buffer can be cached (see 'launch_kernel' for details).
 
-        Note that templates don't set kernel args, and a single scalar, an external array (numpy or torch) or a taichi
+        Note that templates don't set kernel args, and a single scalar, an external array (numpy or torch) or a quadrants
         ndarray all set 1 kernel arg. Similarlty, a struct of N ndarrays would set N kernel args.
         """
         if actual_argument_slot >= MAX_ARG_NUM:
@@ -776,7 +776,7 @@ class FuncBase:
 
                     grad = v.grad
                     if (v.device.type != "cpu") and not (v.device.type == "cuda" and quadrants_arch == _arch_cuda):
-                        # For a torch tensor to be passed as as input argument (in and/or out) of a taichi kernel, its
+                        # For a torch tensor to be passed as as input argument (in and/or out) of a quadrants kernel, its
                         # memory must be hosted either on CPU, or on CUDA if and only if Quadrants is using CUDA backend.
                         # We just replace it with a CPU tensor and by the end of kernel execution we'll use the callback
                         # to copy the values back to the original tensor.

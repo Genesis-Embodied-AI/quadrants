@@ -132,11 +132,11 @@ class EntryBase:
             self.vendor = vendor
             self.is_extension = True
         elif "is_extension" in j:
-            prefix += ["ti"]
+            prefix += ["qd"]
             suffix += ["ext"]
             self.is_extension = True
         else:
-            prefix += ["ti"]
+            prefix += ["qd"]
 
         if "version" in j:
             version = int(j["version"])
