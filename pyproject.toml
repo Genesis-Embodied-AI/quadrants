@@ -109,7 +109,7 @@ Homepage = "https://github.com/Genesis-Embodied-AI/quadrants"
 [build-system]
 requires = [
     "scikit-build-core>=0.10",
-    "pybind11<3.0.0",      # pybind11 bindings (headers + CMake config)
+    "pybind11==3.0.4",     # pybind11 bindings (headers + CMake config); 3.0.x = faster call dispatch (perf test)
     "pybind11-stubgen",    # consumed by the CMake stub-generation install hook
     "numpy>=2.0.0",        # NumPy headers for the extension
     "setuptools_scm>=6.0", # version from git tags (metadata provider below)
