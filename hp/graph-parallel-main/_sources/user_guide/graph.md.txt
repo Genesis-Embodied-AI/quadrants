@@ -180,7 +180,7 @@ Therefore on unsupported platforms, you might consider creating a second impleme
 
 ## Checkpoints with `qd.checkpoint` *(experimental)*
 
-> **Experimental.** `qd.checkpoint`, `qd.GraphStatus`, and `kernel.resume(from_checkpoint=...)` are experimental APIs. The shape of the public surface (the context-manager signature, the `@qd.kernel(checkpoints=True)` flag, the `GraphStatus` fields, the host-side resume loop, the error messages, and the cross-backend lowering details) may change in any future release without a deprecation cycle.
+> **Experimental.** `qd.checkpoint`, `qd.GraphStatus`, and `kernel.resume(from_checkpoint=...)` are experimental APIs. The shape of the public surface (the context-manager signature, the `@qd.kernel(checkpoints=True)` flag, the `GraphStatus` fields, the host-side resume loop, the error messages, and the cross-backend compilation details) may change in any future release without a deprecation cycle.
 
 `qd.checkpoint` lets a graph kernel break partway through, surface a reason to the host, let the host fix things up, and resume from the same location on the next launch. An example use-case is an algorithm implemented as a graph that may need to allocate additional memory partway through, where the operations in the graph are in-place, and therefore cannot be rerun without changing/corrupting the output, and therefore for which simply retrying the whole graph from the start is not an option.
 
@@ -269,7 +269,7 @@ while status.yielded:
           arr[i] = arr[i] + 1
   ```
 
-The restriction is by design: each top-level statement inside a checkpoint becomes its own GPU task / graph node, so silently wrapping bare statements would hide a sequence of N field writes ballooning into N kernel launches. Forcing the user to write the `for`-wrap themselves keeps the lowering visible and gives a single obvious place to fuse multiple writes into one task by sharing a single wrapper.
+The restriction is by design: each top-level statement inside a checkpoint becomes its own GPU task / graph node, so silently wrapping bare statements would hide a sequence of N field writes ballooning into N kernel launches. Forcing the user to write the `for`-wrap themselves keeps the mapping to GPU tasks visible and gives a single obvious place to fuse multiple writes into one task by sharing a single wrapper.
 
 ## Performance
 
@@ -394,11 +394,9 @@ k1(a, count)
 
 The recommendation is to use the graph do while here anyway, if you need it for any platform, in order to ensure the code is compact and maintainable.
 
-If you do want fixed-size for loops to run optimally on unsupported hardware platforms, we could add a specializd `qd.graph_range_for` function. This would:
-- on graph-do-while-supported hardware: handle adding the additional increment kernel
-- on graph-do-while-unsupported hardware: handle running the loop entirely on the host-side, to avoid adding a gpu pipeline stall
+If you need fixed-size for loops to run optimally on hardware without graph-do-while support, consider opening a PR for a dedicated helper that picks the host-side fallback automatically on those backends.
 
-In practice, for our own kernels, i.e. in genesis-world, they largely fall under the do while formulation, see the previous section. However, also have some that used to be do while, but have been migrated to an optimized fixed-size, see next section.
+In practice, most such loops fall under the do while formulation (see the previous section). Some that were originally do while have since been migrated to an optimized fixed-size form (see the next section).
 
 ### A while loop, conditional on a device-side scalar tensor, that has been optimized into a fixed-size for loop
 
@@ -466,7 +464,6 @@ In this case, our recommendation is:
 - use graph do while anyway, if you need it on any platform
     - this will ensure your code is compact and maintainable
 - if you need optimum 100% performance on unsupported platforms, then consider PRing onto quadrants an optimized graph implementation for your target platform
-    - for example it could somehow run MAX_ITER iterations anyway, similar to the earlier hand-rolled version, but via the graph abstraction, hence allowing the code to be compact, cross-platform, and also optimally fast
 
 ## `qd.graph_parallel` sections with `qd.graph_parallel_context` *(experimental)*
 

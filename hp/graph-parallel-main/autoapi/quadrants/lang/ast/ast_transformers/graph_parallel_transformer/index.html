@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>quadrants.lang.ast.ast_transformers.function_def_transformer &#8212; Quadrants 1.0.3 documentation</title>
+    <title>quadrants.lang.ast.ast_transformers.graph_parallel_transformer &#8212; Quadrants 1.0.3 documentation</title>
   
   
   
@@ -55,12 +55,12 @@
     <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
     <script src="../../../../../../_static/design-tabs.js?v=f930bc37"></script>
     <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
-    <script>DOCUMENTATION_OPTIONS.pagename = 'autoapi/quadrants/lang/ast/ast_transformers/function_def_transformer/index';</script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'autoapi/quadrants/lang/ast/ast_transformers/graph_parallel_transformer/index';</script>
     <script>DOCUMENTATION_OPTIONS.search_as_you_type = false;</script>
     <link rel="index" title="Index" href="../../../../../../genindex.html" />
     <link rel="search" title="Search" href="../../../../../../search.html" />
-    <link rel="next" title="quadrants.lang.ast.ast_transformers.graph_parallel_transformer" href="../graph_parallel_transformer/index.html" />
-    <link rel="prev" title="quadrants.lang.ast.ast_transformers.checkpoint_transformer" href="../checkpoint_transformer/index.html" />
+    <link rel="next" title="quadrants.lang.ast.checkers" href="../../checkers/index.html" />
+    <link rel="prev" title="quadrants.lang.ast.ast_transformers.function_def_transformer" href="../function_def_transformer/index.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
   <meta name="docsearch:version" content="1.0.3" />
@@ -349,7 +349,7 @@
     
     <li class="breadcrumb-item"><a href="../index.html" class="nav-link">quadrants.lang.ast.ast_transformers</a></li>
     
-    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">quadrants.lang.ast.ast_transformers.function_def_transformer</span></li>
+    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">quadrants.lang.ast.ast_transformers.graph_parallel_transformer</span></li>
   </ul>
 </nav>
 </div>
@@ -366,13 +366,21 @@
 <div id="searchbox"></div>
                 <article class="bd-article">
                   
-  <section id="module-quadrants.lang.ast.ast_transformers.function_def_transformer">
-<span id="quadrants-lang-ast-ast-transformers-function-def-transformer"></span><h1>quadrants.lang.ast.ast_transformers.function_def_transformer<a class="headerlink" href="#module-quadrants.lang.ast.ast_transformers.function_def_transformer" title="Link to this heading">#</a></h1>
+  <section id="module-quadrants.lang.ast.ast_transformers.graph_parallel_transformer">
+<span id="quadrants-lang-ast-ast-transformers-graph-parallel-transformer"></span><h1>quadrants.lang.ast.ast_transformers.graph_parallel_transformer<a class="headerlink" href="#module-quadrants.lang.ast.ast_transformers.graph_parallel_transformer" title="Link to this heading">#</a></h1>
+<p>AST recognition, validation, and lowering for <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel_context()</span></code> / <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel()</span></code> blocks.</p>
+<p>Lives alongside <code class="docutils literal notranslate"><span class="pre">checkpoint_transformer.py</span></code> / <code class="docutils literal notranslate"><span class="pre">function_def_transformer.py</span></code> so that <code class="docutils literal notranslate"><span class="pre">ast_transformer.py</span></code> doesn’t
+have to grow per-feature. <code class="docutils literal notranslate"><span class="pre">ASTTransformer.build_With</span></code> forwards <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel_context()</span></code> regions and their
+<code class="docutils literal notranslate"><span class="pre">qd.graph_parallel()</span></code> sections into the static methods here.</p>
+<p>A <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel_context()</span></code> region emits no IR tag of its own: each <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel()</span></code> section inside lowers
+to a stream-parallel group (via <code class="docutils literal notranslate"><span class="pre">begin/end_stream_parallel</span></code>), and the graph builder forks the distinct groups in a
+contiguous run and joins them. Regions are kept apart by the serial work between them. See
+<code class="docutils literal notranslate"><span class="pre">docs/source/user_guide/graph.md</span></code> for the user-facing surface.</p>
 <section id="classes">
 <h2>Classes<a class="headerlink" href="#classes" title="Link to this heading">#</a></h2>
 <div class="pst-scrollable-table-container"><table class="autosummary longtable table autosummary">
 <tbody>
-<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.ast.ast_transformers.function_def_transformer.FunctionDefTransformer" title="quadrants.lang.ast.ast_transformers.function_def_transformer.FunctionDefTransformer"><code class="xref py py-obj docutils literal notranslate"><span class="pre">FunctionDefTransformer</span></code></a></p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.ast.ast_transformers.graph_parallel_transformer.GraphParallelTransformer" title="quadrants.lang.ast.ast_transformers.graph_parallel_transformer.GraphParallelTransformer"><code class="xref py py-obj docutils literal notranslate"><span class="pre">GraphParallelTransformer</span></code></a></p></td>
 <td><p></p></td>
 </tr>
 </tbody>
@@ -382,12 +390,40 @@
 <section id="module-contents">
 <h2>Module Contents<a class="headerlink" href="#module-contents" title="Link to this heading">#</a></h2>
 <dl class="py class">
-<dt class="sig sig-object py" id="quadrants.lang.ast.ast_transformers.function_def_transformer.FunctionDefTransformer">
-<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">quadrants.lang.ast.ast_transformers.function_def_transformer.</span></span><span class="sig-name descname"><span class="pre">FunctionDefTransformer</span></span><a class="reference internal" href="../../../../../../_modules/quadrants/lang/ast/ast_transformers/function_def_transformer.html#FunctionDefTransformer"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.ast.ast_transformers.function_def_transformer.FunctionDefTransformer" title="Link to this definition">#</a></dt>
+<dt class="sig sig-object py" id="quadrants.lang.ast.ast_transformers.graph_parallel_transformer.GraphParallelTransformer">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">quadrants.lang.ast.ast_transformers.graph_parallel_transformer.</span></span><span class="sig-name descname"><span class="pre">GraphParallelTransformer</span></span><a class="reference internal" href="../../../../../../_modules/quadrants/lang/ast/ast_transformers/graph_parallel_transformer.html#GraphParallelTransformer"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.ast.ast_transformers.graph_parallel_transformer.GraphParallelTransformer" title="Link to this definition">#</a></dt>
 <dd><dl class="py method">
-<dt class="sig sig-object py" id="quadrants.lang.ast.ast_transformers.function_def_transformer.FunctionDefTransformer.build_FunctionDef">
-<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">build_FunctionDef</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ctx</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../../ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext" title="quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext"><span class="pre">quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">node</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ast.FunctionDef</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">build_stmts</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Callable</span><span class="p"><span class="pre">[</span></span><span class="p"><span class="pre">[</span></span><a class="reference internal" href="../../ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext" title="quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext"><span class="pre">quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">list</span><span class="p"><span class="pre">[</span></span><span class="pre">ast.stmt</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">None</span><span class="p"><span class="pre">]</span></span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="../../../../../../_modules/quadrants/lang/ast/ast_transformers/function_def_transformer.html#FunctionDefTransformer.build_FunctionDef"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.ast.ast_transformers.function_def_transformer.FunctionDefTransformer.build_FunctionDef" title="Link to this definition">#</a></dt>
-<dd></dd></dl>
+<dt class="sig sig-object py" id="quadrants.lang.ast.ast_transformers.graph_parallel_transformer.GraphParallelTransformer.is_graph_parallel_context_call">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">is_graph_parallel_context_call</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">node</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ast.expr</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">bool</span></span></span><a class="reference internal" href="../../../../../../_modules/quadrants/lang/ast/ast_transformers/graph_parallel_transformer.html#GraphParallelTransformer.is_graph_parallel_context_call"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.ast.ast_transformers.graph_parallel_transformer.GraphParallelTransformer.is_graph_parallel_context_call" title="Link to this definition">#</a></dt>
+<dd><p>If <em>node</em> is a <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel_context()</span></code> call return True, else False.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="quadrants.lang.ast.ast_transformers.graph_parallel_transformer.GraphParallelTransformer.is_parallel_section_call">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">is_parallel_section_call</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">node</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ast.expr</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">bool</span></span></span><a class="reference internal" href="../../../../../../_modules/quadrants/lang/ast/ast_transformers/graph_parallel_transformer.html#GraphParallelTransformer.is_parallel_section_call"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.ast.ast_transformers.graph_parallel_transformer.GraphParallelTransformer.is_parallel_section_call" title="Link to this definition">#</a></dt>
+<dd><p>If <em>node</em> is a <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel()</span></code> (a section) call return True, else False. The call shape is validated
+here so misuse raises at the <code class="docutils literal notranslate"><span class="pre">with</span></code> site rather than later.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="quadrants.lang.ast.ast_transformers.graph_parallel_transformer.GraphParallelTransformer.build_graph_parallel_context_with">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">build_graph_parallel_context_with</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ctx</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../../ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext" title="quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext"><span class="pre">quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">node</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ast.With</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">build_stmts</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="../../../../../../_modules/quadrants/lang/ast/ast_transformers/graph_parallel_transformer.html#GraphParallelTransformer.build_graph_parallel_context_with"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.ast.ast_transformers.graph_parallel_transformer.GraphParallelTransformer.build_graph_parallel_context_with" title="Link to this definition">#</a></dt>
+<dd><p>Handles <code class="docutils literal notranslate"><span class="pre">with</span> <span class="pre">qd.graph_parallel_context():</span></code> fork/join regions.</p>
+<p>Validates the use-site (kernel must be graph=True, no nesting) and that the region body contains only
+<code class="docutils literal notranslate"><span class="pre">with</span> <span class="pre">qd.graph_parallel():</span></code> blocks, then walks the body. The region emits no IR tag of its own – each
+<code class="docutils literal notranslate"><span class="pre">qd.graph_parallel</span></code> section inside lowers to a stream-parallel group (via begin/end_stream_parallel), and the
+graph builder forks the distinct groups in a contiguous run and joins them. Regions are kept apart by the serial
+work between them.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="quadrants.lang.ast.ast_transformers.graph_parallel_transformer.GraphParallelTransformer.build_parallel_section_with">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">build_parallel_section_with</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ctx</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../../ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext" title="quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext"><span class="pre">quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">node</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ast.With</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">build_stmts</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="../../../../../../_modules/quadrants/lang/ast/ast_transformers/graph_parallel_transformer.html#GraphParallelTransformer.build_parallel_section_with"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.ast.ast_transformers.graph_parallel_transformer.GraphParallelTransformer.build_parallel_section_with" title="Link to this definition">#</a></dt>
+<dd><p>Handles a <code class="docutils literal notranslate"><span class="pre">with</span> <span class="pre">qd.graph_parallel():</span></code> section of a <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel_context()</span></code> region.</p>
+<p>Reuses the stream-parallel tagging: begin_stream_parallel() assigns this <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel</span></code> section a fresh
+<code class="docutils literal notranslate"><span class="pre">stream_parallel_group_id</span></code> that every for-loop in the body inherits, so the offloaded tasks carry the
+<code class="docutils literal notranslate"><span class="pre">qd.graph_parallel</span></code> section id all the way to the graph builder.</p>
+</dd></dl>
 
 </dd></dl>
 
@@ -405,20 +441,20 @@
                   
 <div class="prev-next-area">
     <a class="left-prev"
-       href="../checkpoint_transformer/index.html"
+       href="../function_def_transformer/index.html"
        title="previous page">
       <i class="fa-solid fa-angle-left"></i>
       <div class="prev-next-info">
         <p class="prev-next-subtitle">previous</p>
-        <p class="prev-next-title">quadrants.lang.ast.ast_transformers.checkpoint_transformer</p>
+        <p class="prev-next-title">quadrants.lang.ast.ast_transformers.function_def_transformer</p>
       </div>
     </a>
     <a class="right-next"
-       href="../graph_parallel_transformer/index.html"
+       href="../../checkers/index.html"
        title="next page">
       <div class="prev-next-info">
         <p class="prev-next-subtitle">next</p>
-        <p class="prev-next-title">quadrants.lang.ast.ast_transformers.graph_parallel_transformer</p>
+        <p class="prev-next-title">quadrants.lang.ast.checkers</p>
       </div>
       <i class="fa-solid fa-angle-right"></i>
     </a>
@@ -443,8 +479,11 @@
     <ul class="pst-show_toc_level nav section-nav flex-column">
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#classes">Classes</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#module-contents">Module Contents</a><ul class="nav section-nav flex-column">
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.ast.ast_transformers.function_def_transformer.FunctionDefTransformer"><code class="docutils literal notranslate"><span class="pre">FunctionDefTransformer</span></code></a><ul class="nav section-nav flex-column">
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.ast.ast_transformers.function_def_transformer.FunctionDefTransformer.build_FunctionDef"><code class="docutils literal notranslate"><span class="pre">FunctionDefTransformer.build_FunctionDef()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.ast.ast_transformers.graph_parallel_transformer.GraphParallelTransformer"><code class="docutils literal notranslate"><span class="pre">GraphParallelTransformer</span></code></a><ul class="nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.ast.ast_transformers.graph_parallel_transformer.GraphParallelTransformer.is_graph_parallel_context_call"><code class="docutils literal notranslate"><span class="pre">GraphParallelTransformer.is_graph_parallel_context_call()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.ast.ast_transformers.graph_parallel_transformer.GraphParallelTransformer.is_parallel_section_call"><code class="docutils literal notranslate"><span class="pre">GraphParallelTransformer.is_parallel_section_call()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.ast.ast_transformers.graph_parallel_transformer.GraphParallelTransformer.build_graph_parallel_context_with"><code class="docutils literal notranslate"><span class="pre">GraphParallelTransformer.build_graph_parallel_context_with()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.ast.ast_transformers.graph_parallel_transformer.GraphParallelTransformer.build_parallel_section_with"><code class="docutils literal notranslate"><span class="pre">GraphParallelTransformer.build_parallel_section_with()</span></code></a></li>
 </ul>
 </li>
 </ul>
@@ -455,7 +494,7 @@
   <div class="sidebar-secondary-item">
 
   <div class="tocsection sourcelink">
-    <a href="../../../../../../_sources/autoapi/quadrants/lang/ast/ast_transformers/function_def_transformer/index.rst.txt">
+    <a href="../../../../../../_sources/autoapi/quadrants/lang/ast/ast_transformers/graph_parallel_transformer/index.rst.txt">
       <i class="fa-solid fa-file-lines"></i> Show Source
     </a>
   </div>

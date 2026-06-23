@@ -1,0 +1,76 @@
+quadrants.lang.ast.ast_transformers.graph_parallel_transformer
+==============================================================
+
+.. py:module:: quadrants.lang.ast.ast_transformers.graph_parallel_transformer
+
+.. autoapi-nested-parse::
+
+   AST recognition, validation, and lowering for ``qd.graph_parallel_context()`` / ``qd.graph_parallel()`` blocks.
+
+   Lives alongside ``checkpoint_transformer.py`` / ``function_def_transformer.py`` so that ``ast_transformer.py`` doesn't
+   have to grow per-feature. ``ASTTransformer.build_With`` forwards ``qd.graph_parallel_context()`` regions and their
+   ``qd.graph_parallel()`` sections into the static methods here.
+
+   A ``qd.graph_parallel_context()`` region emits no IR tag of its own: each ``qd.graph_parallel()`` section inside lowers
+   to a stream-parallel group (via ``begin/end_stream_parallel``), and the graph builder forks the distinct groups in a
+   contiguous run and joins them. Regions are kept apart by the serial work between them. See
+   ``docs/source/user_guide/graph.md`` for the user-facing surface.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   quadrants.lang.ast.ast_transformers.graph_parallel_transformer.GraphParallelTransformer
+
+
+Module Contents
+---------------
+
+.. py:class:: GraphParallelTransformer
+
+   .. py:method:: is_graph_parallel_context_call(node: ast.expr) -> bool
+      :staticmethod:
+
+
+      If *node* is a ``qd.graph_parallel_context()`` call return True, else False.
+
+
+
+   .. py:method:: is_parallel_section_call(node: ast.expr) -> bool
+      :staticmethod:
+
+
+      If *node* is a ``qd.graph_parallel()`` (a section) call return True, else False. The call shape is validated
+      here so misuse raises at the ``with`` site rather than later.
+
+
+
+   .. py:method:: build_graph_parallel_context_with(ctx: quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node: ast.With, build_stmts) -> None
+      :staticmethod:
+
+
+      Handles ``with qd.graph_parallel_context():`` fork/join regions.
+
+      Validates the use-site (kernel must be graph=True, no nesting) and that the region body contains only
+      ``with qd.graph_parallel():`` blocks, then walks the body. The region emits no IR tag of its own -- each
+      ``qd.graph_parallel`` section inside lowers to a stream-parallel group (via begin/end_stream_parallel), and the
+      graph builder forks the distinct groups in a contiguous run and joins them. Regions are kept apart by the serial
+      work between them.
+
+
+
+   .. py:method:: build_parallel_section_with(ctx: quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node: ast.With, build_stmts) -> None
+      :staticmethod:
+
+
+      Handles a ``with qd.graph_parallel():`` section of a ``qd.graph_parallel_context()`` region.
+
+      Reuses the stream-parallel tagging: begin_stream_parallel() assigns this ``qd.graph_parallel`` section a fresh
+      ``stream_parallel_group_id`` that every for-loop in the body inherits, so the offloaded tasks carry the
+      ``qd.graph_parallel`` section id all the way to the graph builder.
+
+
+
