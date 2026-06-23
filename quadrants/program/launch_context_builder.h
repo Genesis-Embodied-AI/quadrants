@@ -173,7 +173,8 @@ class LaunchContextBuilder {
   bool use_graph{false};
   // Level table for nested `graph_do_while`, indexed by level id (empty if the kernel has no graph_do_while loop).
   // Populated from Python at launch; flag_dev_ptr filled in by the backend's ndarray-resolution loop. Replaces the old
-  // single-loop scalars (arg id + flag ptr).
+  // single-loop scalars (arg id + flag ptr); the single (non-nested) loop is simply the depth-1 case with one level
+  // whose parent_id is -1.
   std::vector<GraphDoWhileLevel> graph_do_while_levels;
 
   // True if this kernel has at least one graph_do_while loop.
@@ -197,6 +198,19 @@ class LaunchContextBuilder {
       }
     }
   }
+  // Per-checkpoint `yield_on` arg-id table. Index = cp_id (0, 1, 2, ... in declaration order matching the Python
+  // `kernel.checkpoint_yield_on_args` list). Value is the resolved C++ arg-id of the ndarray parameter named in
+  // `qd.checkpoint(yield_on=name)`, or `-1` for checkpoints without a `yield_on=`. Set by `Kernel.__call__` just before
+  // `prog.launch_kernel`.
+  std::vector<int> checkpoint_yield_on_arg_ids;
+  // Parallel table of device pointers resolved by `resolve_ctx_ndarray_ptrs`. Same indexing convention as
+  // `checkpoint_yield_on_arg_ids`; `nullptr` for checkpoints without yield. Read by the GraphManager when wiring up the
+  // yield-check kernel for each checkpoint.
+  std::vector<void *> checkpoint_yield_on_dev_ptrs;
+  // Value to memcpy into the device-side `resume_point` slot before launch. `-1` means "fresh launch -- reset to 0 so
+  // every checkpoint runs"; any other non-negative integer means "resume from this cp_id, skipping cp_ids < value". Set
+  // by `Kernel.resume()`'s Python plumbing; defaults to -1 so non-resume launches behave as they always have.
+  int resume_from_checkpoint{-1};
 
   // Note that I've tried to group `array_runtime_size` and
   // `is_device_allocations` into a small struct. However, it caused some test

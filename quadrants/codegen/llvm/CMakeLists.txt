@@ -4,6 +4,7 @@ add_library(llvm_codegen)
 target_sources(llvm_codegen
   PRIVATE
     codegen_llvm.cpp
+    codegen_llvm_checkpoint.cpp
     codegen_llvm_quant.cpp
     llvm_codegen_utils.cpp
     struct_llvm.cpp

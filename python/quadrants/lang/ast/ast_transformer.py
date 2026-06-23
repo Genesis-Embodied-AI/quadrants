@@ -26,6 +26,9 @@ from quadrants.lang.ast.ast_transformer_utils import (
     get_decorator,
 )
 from quadrants.lang.ast.ast_transformers.call_transformer import CallTransformer
+from quadrants.lang.ast.ast_transformers.checkpoint_transformer import (
+    CheckpointTransformer,
+)
 from quadrants.lang.ast.ast_transformers.function_def_transformer import (
     FunctionDefTransformer,
 )
@@ -1363,6 +1366,13 @@ class ASTTransformer(Builder):
         return None
 
     @staticmethod
+    def _is_checkpoint_call(node: ast.expr, global_vars: dict):
+        """Thin forwarding wrapper around ``CheckpointTransformer.is_checkpoint_call``; the actual logic lives in module
+        ``ast_transformers/checkpoint_transformer.py`` to keep this file from growing per-feature. Returns a
+        ``CheckpointCallInfo`` or ``None``."""
+        return CheckpointTransformer.is_checkpoint_call(node, global_vars)
+
+    @staticmethod
     def build_While(ctx: ASTTransformerFuncContext, node: ast.While) -> None:
         if node.orelse:
             raise QuadrantsSyntaxError("'else' clause for 'while' not supported in Quadrants kernels")
@@ -1600,14 +1610,31 @@ class ASTTransformer(Builder):
             raise QuadrantsSyntaxError("'with ... as ...' is not supported in Quadrants kernels")
         if not isinstance(item.context_expr, ast.Call):
             raise QuadrantsSyntaxError("'with' in Quadrants kernels requires a call expression")
+
+        checkpoint_info = ASTTransformer._is_checkpoint_call(item.context_expr, ctx.global_vars)
+        if checkpoint_info is not None:
+            return ASTTransformer._build_checkpoint_with(ctx, node, checkpoint_info)
+
         if not FunctionDefTransformer._is_stream_parallel_with(node, ctx.global_vars):
-            raise QuadrantsSyntaxError("'with' in Quadrants kernels only supports qd.stream_parallel()")
+            raise QuadrantsSyntaxError(
+                "'with' in Quadrants kernels only supports qd.stream_parallel() or qd.checkpoint()"
+            )
         if not ctx.is_kernel:
             raise QuadrantsSyntaxError("qd.stream_parallel() can only be used inside @qd.kernel, not @qd.func")
         ctx.ast_builder.begin_stream_parallel()
         build_stmts(ctx, node.body)
         ctx.ast_builder.end_stream_parallel()
         return None
+
+    @staticmethod
+    def _build_checkpoint_with(
+        ctx: ASTTransformerFuncContext,
+        node: ast.With,
+        info,
+    ) -> None:
+        """Thin forwarding wrapper around ``CheckpointTransformer.build_checkpoint_with``; the actual logic lives in
+        ``ast_transformers/checkpoint_transformer.py``."""
+        return CheckpointTransformer.build_checkpoint_with(ctx, node, info, build_stmts)
 
     @staticmethod
     def build_Pass(ctx: ASTTransformerFuncContext, node: ast.Pass) -> None:

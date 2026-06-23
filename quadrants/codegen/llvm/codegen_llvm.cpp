@@ -2067,6 +2067,9 @@ std::string TaskCodeGenLLVM::init_offloaded_task_function(OffloadedStmt *stmt, s
   return task_kernel_name;
 }
 
+// Note: `TaskCodeGenLLVM::emit_checkpoint_gate_prologue(int cp_id)` lives in `codegen_llvm_checkpoint.cpp` (same
+// translation-unit-split pattern as `codegen_llvm_quant.cpp`).
+
 void TaskCodeGenLLVM::finalize_offloaded_task_function() {
   if (!returned) {
     builder->CreateBr(final_block);

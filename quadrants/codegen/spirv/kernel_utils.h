@@ -249,6 +249,13 @@ struct TaskAttributes {
   // `Program::get_snode_by_id` only if it ever needs to call into snode-specific APIs.
   std::vector<int> snode_writes;
 
+  // Slice 4 (Vulkan / Metal): cp_id of the `qd.checkpoint(...)` block this task belongs to, or -1 if it lives outside
+  // every checkpoint. Propagated from `OffloadedStmt::checkpoint_id` at SPIR-V codegen time (mirroring the LLVM
+  // `OffloadedTask::checkpoint_id` field set by `codegen_cpu.cpp` / `codegen_cuda.cpp` / `codegen_amdgpu.cpp`).
+  // Consumed by `GfxRuntime::launch_kernel`'s host-branch gating loop to skip task dispatches when `cp_id <
+  // resume_point` or after a yield observed earlier in this launch. -1 is the offline-cache-load default so
+  // deserialised tasks that predate slice 4 keep "always run" semantics.
+  int32_t checkpoint_id{-1};
   // Innermost `qd.graph_do_while()` loop level this task belongs to (-1 = outside all graph_do_while loops, i.e.
   // top-level tasks that run exactly once). Mirrors `OffloadedTask::graph_do_while_level_id` on the LLVM path and is
   // copied straight from the `OffloadedStmt` at SPIR-V codegen time. The host-side do-while driver in the GFX kernel
@@ -268,6 +275,7 @@ struct TaskAttributes {
             range_for_attribs,
             ad_stack,
             snode_writes,
+            checkpoint_id,
             graph_do_while_level_id);
 };
 

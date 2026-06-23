@@ -4,12 +4,13 @@ Graphs reduce kernel launch overhead by capturing a sequence of GPU operations i
 
 ## Backend support
 
-Both features run on every backend. They are *hardware accelerated* on CUDA (via CUDA graphs) and AMDGPU (via HIP graphs); `graph_do_while` additionally requires CUDA SM 9.0+ / Hopper for its hardware-accelerated path. On other backends, `graph=True` is silently ignored and the kernel runs via the normal launch path, and `graph_do_while` falls back to a host-side do-while loop that copies the condition value GPU → host each iteration (causing a pipeline stall).
+`graph=True` and `graph_do_while` run on every backend. They are *hardware accelerated* on CUDA (via CUDA graphs) and AMDGPU (via HIP graphs); `graph_do_while` additionally requires CUDA SM 9.0+ / Hopper for its hardware-accelerated path. On other backends, `graph=True` is silently ignored and the kernel runs via the normal launch path, and `graph_do_while` falls back to a host-side do-while loop that copies the condition value GPU → host each iteration (causing a pipeline stall). `qd.checkpoint` gating runs entirely on the device on every GPU backend; only the CPU backend uses host-side gating.
 
 | Feature | `qd.cuda` SM 9.0+ | `qd.cuda` < SM 9.0 | `qd.amdgpu` | `qd.metal` | `qd.vulkan` | `qd.cpu` |
 | --- | --- | --- | --- | --- | --- | --- |
 | `graph=True` | hardware accelerated | hardware accelerated | hardware accelerated | runs (no acceleration) | runs (no acceleration) | runs (no acceleration) |
-| `graph_do_while` | hardware accelerated | host fallback | host fallback | host fallback | host fallback | host fallback |
+| `qd.graph_do_while` | hardware accelerated | host fallback | host fallback | host fallback | host fallback | host fallback |
+| `qd.checkpoint` | GPU-side | GPU-side | GPU-side | GPU-side | GPU-side | host-side |
 
 AMDGPU `graph_do_while` falls back to the host-side loop because HIP does not currently expose conditional / while graph nodes (as of ROCm 7.2).
 
@@ -157,6 +158,117 @@ def nested(x: qd.types.ndarray(qd.i32, ndim=1),
 A `graph_do_while`-loop may only appear at the kernel top level or directly inside another `graph_do_while` body.
 
 Note that `qd.func`'s are inlined, so you can freely factorize these structures across `qd.func` boundaries.
+
+### Restrictions
+
+- The counter ndarray may be swapped between calls: the cached graph reads each counter through an indirection slot that is refreshed on every launch, so passing a different ndarray (or alternating between several) replays the cached graph without rebuilding it.
+
+### Caveats
+
+On platforms without native device-side conditional graph nodes — currently CUDA pre-SM 9.0 and **AMDGPU** (HIP has no conditional / while node API as of ROCm 7.2) — the value of the `graph_do_while` parameter will be copied from the GPU to the host each iteration, in order to check whether we should continue iterating. This causes a GPU pipeline stall. For nested loops this host round-trip happens once per iteration of each loop level, and each loop-body task is replayed individually, so deeply nested loops on these backends pay correspondingly more host overhead (they remain correct, just slower than the CUDA SM 9.0+ native path). At the end of each loop iteration:
+- wait for GPU async queue to finish processing
+- copy condition value to hostside
+- evaluate condition value on hostside
+- launch new kernels for next loop iteration, if not finished yet
+
+Note: the basic `graph=True` path (without `graph_do_while`) does **not** stall the host like this on either CUDA or AMDGPU — the entire kernel sequence runs as a single GPU-side graph replay.
+
+Therefore on unsupported platforms, you might consider creating a second implementation, which works differently. e.g.:
+- fixed number of loop iterations, so no dependency on gpu data for kernel launch; combined perhaps with:
+- make each kernel 'short-circuit', exit quickly, if the task has already been completed; to avoid running the GPU more than necessary
+
+## Checkpoints with `qd.checkpoint` *(experimental)*
+
+> **Experimental.** `qd.checkpoint`, `qd.GraphStatus`, and `kernel.resume(from_checkpoint=...)` are experimental APIs. The shape of the public surface (the context-manager signature, the `@qd.kernel(checkpoints=True)` flag, the `GraphStatus` fields, the host-side resume loop, the error messages, and the cross-backend lowering details) may change in any future release without a deprecation cycle.
+
+`qd.checkpoint` lets a graph kernel break partway through, surface a reason to the host, let the host fix things up, and resume from the same location on the next launch. An example use-case is an algorithm implemented as a graph that may need to allocate additional memory partway through, where the operations in the graph are in-place, and therefore cannot be rerun without changing/corrupting the output, and therefore for which simply retrying the whole graph from the start is not an option.
+
+To use checkpoints:
+
+1. Decorate the kernel with `@qd.kernel(graph=True, checkpoints=True)`.
+2. Place `with qd.checkpoint(cp_id, yield_on=flag):` around any section of the body where you want to be able to pause and resume.
+
+```python
+from enum import IntEnum
+
+class Stage(IntEnum):
+    SIM = 0
+
+@qd.kernel(graph=True, checkpoints=True)
+def step(
+    arr: qd.types.ndarray(qd.f32, ndim=1),
+    overflow_flag: qd.types.ndarray(qd.i32, ndim=0),
+    newton_cond: qd.types.ndarray(qd.i32, ndim=0),
+):
+    while qd.graph_do_while(newton_cond):
+        for i in range(arr.shape[0]):
+            # ...
+            pass
+        with qd.checkpoint(Stage.SIM, yield_on=overflow_flag):
+            for i in range(arr.shape[0]):
+                # ...
+                pass
+        for i in range(arr.shape[0]):
+            # ...
+            pass
+```
+
+The `cp_id` argument is the label you'll use to identify the checkpoint from the host (in `GraphStatus.checkpoint` and `kernel.resume(from_checkpoint=...)`). It must be an int literal or an `IntEnum` value; the framework preserves the value as-is, so `qd.checkpoint(Stage.SIM, ...)` round-trips as `Stage.SIM` rather than the raw int. Labels must be unique within a kernel.
+
+### Yield mechanism
+
+When the body of a checkpoint writes a non-zero value into `yield_on[()]`:
+
+1. Everything after the yielding checkpoint in the same launch is skipped.
+2. `qd.checkpoint` will exit any surrounding `qd.graph_do_while`.
+
+The framework never writes into your `yield_on` buffer — you own it end-to-end. That means:
+
+- Before the **first** launch, initialise it to `0` (a freshly allocated `qd.ndarray` is not guaranteed to be zeroed).
+- :warning: Before each **resume** launch, reset it to `0` (otherwise the body of the same checkpoint sees the stale non-zero value and yields again on the same condition, looping forever).
+
+### Host-side yield / resume loop
+
+Kernels annotated with `checkpoints=True` return a `qd.GraphStatus` from every launch (including from `kernel.resume(...)`). The status carries two fields:
+
+- `status.yielded` — `True` iff a checkpoint's `yield_on=` flag was non-zero during this launch.
+- `status.checkpoint` — the `cp_id` label of the yielding checkpoint (or `None` when `yielded` is `False`).
+
+Resume by calling `kernel.resume(..., from_checkpoint=label)`. Everything before `label` in source order is skipped on the resume launch; everything from `label` onward runs normally. The canonical host loop:
+
+```python
+overflow_flag[()] = 0  # initialise before the first launch
+status = step(arr, overflow_flag, newton_cond)
+while status.yielded:
+    handle_overflow_for(status.checkpoint, ...)
+    overflow_flag[()] = 0  # clear before resume, otherwise the same checkpoint yields again
+    status = step.resume(arr, overflow_flag, newton_cond,
+                         from_checkpoint=status.checkpoint)
+```
+
+### Resume where?
+
+- execution starts from and including the checkpoint block that yielded
+- you must therefore ensure that re-running this checkpoint will not break the algorithm
+- for example make sure that any check that lead to the yield do not modify any data before yielding
+
+### Restrictions
+
+- Must be used inside `@qd.kernel(graph=True, checkpoints=True)`. Without the flag, `qd.checkpoint(...)` raises `QuadrantsSyntaxError` at compile time with a fix-it pointing at `checkpoints=True`.
+- `cp_id` must be an int literal or an `IntEnum` value, and must be unique across the kernel.
+- `yield_on=` must be a kernel parameter that is a 0-d `qd.types.ndarray(qd.i32, ndim=0)`; expressions are not supported.
+- Checkpoints cannot be nested inside other checkpoints. Checkpoints inside a `qd.graph_do_while` body are fine.
+- The body of a `with qd.checkpoint(...)` block cannot contain bare top-level statements (assignments, augmented assignments, or bare call/expression statements). Every top-level statement must be inside a `for`-loop (or other control-flow construct). A docstring as the first statement is allowed. Bare statements raise `QuadrantsSyntaxError` at compile time with a fix-it pointing at the explicit one-iteration `for`-wrap:
+
+  ```python
+  with qd.checkpoint(0, yield_on=flag):
+      for _ in range(1):
+          c[()] = c[()] + 1
+      for i in range(arr.shape[0]):
+          arr[i] = arr[i] + 1
+  ```
+
+The restriction is by design: each top-level statement inside a checkpoint becomes its own GPU task / graph node, so silently wrapping bare statements would hide a sequence of N field writes ballooning into N kernel launches. Forcing the user to write the `for`-wrap themselves keeps the lowering visible and gives a single obvious place to fuse multiple writes into one task by sharing a single wrapper.
 
 ## Performance
 

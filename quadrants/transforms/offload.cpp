@@ -78,34 +78,30 @@ class Offloader {
     pending_serial_statements->grid_dim = 1;
     pending_serial_statements->block_dim = 1;
 
-    // `bucket_tag` is the graph-region (graph_do_while level + stream_parallel group) of the
-    // *side-effecting* statement(s) currently buffered in `pending_serial_statements`;
-    // `bucket_has_side_effect` records whether any such statement is present. A flushed serial task that
-    // carries real side effects is tagged with the region the work was *written* at -- read from the
-    // statement's own `region_tag` (stamped at frontend build, propagated through lowering) -- rather than
-    // borrowing the level of whatever for-loop happens to trigger the flush. This is what lets a bare
-    // statement / an inlined `@qd.func` body run at the graph_do_while level it was written at (run-once at
-    // the kernel top level, every iteration inside a loop) instead of being silently swept into the wrong
-    // loop level (issue #744).
+    // `bucket_tag` is the graph-region (graph_do_while level + stream_parallel group) of the *side-effecting*
+    // statement(s) currently buffered in `pending_serial_statements`; `bucket_has_side_effect` records whether any such
+    // statement is present. A flushed serial task that carries real side effects is tagged with the region the work was
+    // *written* at -- read from the statement's own `region_tag` (stamped at frontend build, propagated through
+    // lowering) -- rather than borrowing the level of whatever for-loop happens to trigger the flush. This is what lets
+    // a bare statement / an inlined `@qd.func` body run at the graph_do_while level it was written at (run-once at the
+    // kernel top level, every iteration inside a loop) instead of being silently swept into the wrong loop level (issue
+    // #744).
     //
-    // Pure (side-effect-free) buffered statements -- shared constants and for-loop bound/listgen
-    // computations that CSE / LICM hoist to the kernel root -- are deliberately NOT tagged from their own
-    // `region_tag`: hoisting leaves that tag stale (it still names the loop body the value was first
-    // written in, even though the value now lives outside all loops, and one hoisted value may be shared by
-    // loops at several different levels). A pure-only bucket instead borrows the region of the for-loop that
-    // triggers its flush (the original offloader behaviour, passed in as `fallback_tag`). That keeps a
-    // loop-invariant helper computation contiguous with -- and at the same level as -- the loop that
-    // consumes it, which the host-side graph_do_while driver requires (it rebuilds the loop nesting from a
-    // flat, contiguity-assuming task list, so a stray top-level task wedged inside a loop body's run would
-    // split the body and the loop counter would never decrement). Running such a value once per loop
-    // iteration is harmless because it is loop-invariant by construction.
+    // Pure (side-effect-free) buffered statements -- shared constants and for-loop bound/listgen computations that CSE
+    // / LICM hoist to the kernel root -- are deliberately NOT tagged from their own `region_tag`: hoisting leaves that
+    // tag stale (it still names the loop body the value was first written in, even though the value now lives outside
+    // all loops, and one hoisted value may be shared by loops at several different levels). A pure-only bucket instead
+    // borrows the region of the for-loop that triggers its flush (the original offloader behaviour, passed in as
+    // `fallback_tag`). That keeps a loop-invariant helper computation contiguous with -- and at the same level as --
+    // the loop that consumes it, which the host-side graph_do_while driver requires (it rebuilds the loop nesting from
+    // a flat, contiguity-assuming task list, so a stray top-level task wedged inside a loop body's run would split the
+    // body and the loop counter would never decrement). Running such a value once per loop iteration is harmless
+    // because it is loop-invariant by construction.
     //
-    // NOTE(checkpoint-reintroduction): this branch has no qd.checkpoint, so GraphRegionTag carries only
-    // (level + stream_parallel group) -- see the NOTE on GraphRegionTag in ir.h. When qd.checkpoint lands,
-    // a SIDE-EFFECTING serial bucket must also carry its real checkpoint_id (so a bare store inside a
-    // checkpoint gates / skips on resume), while the PURE-only `fallback_tag` must stay checkpoint_id = -1
-    // (always-run) so a hoisted bound/const a later task reads is never gated away on resume. Reconcile
-    // against hp/qipc-integration commit da2cdc910 (its assemble_serial_statements / fallback_tag).
+    // SIDE-EFFECTING serial buckets carry their own real `checkpoint_id` (so a bare store inside a qd.checkpoint gates
+    // / skips on resume exactly like a range-for in that checkpoint). The PURE-only `fallback_tag` deliberately
+    // defaults to checkpoint_id = -1 ("always-run") so a hoisted loop bound / shared constant a later task reads is
+    // never gated away on a `resume(from_checkpoint=...)` launch.
     GraphRegionTag bucket_tag;
     bool bucket_has_side_effect = false;
     auto assemble_serial_statements = [&](GraphRegionTag fallback_tag = GraphRegionTag{}) {
@@ -113,6 +109,7 @@ class Offloader {
         const GraphRegionTag tag = bucket_has_side_effect ? bucket_tag : fallback_tag;
         pending_serial_statements->graph_do_while_level_id = tag.graph_do_while_level_id;
         pending_serial_statements->stream_parallel_group_id = tag.stream_parallel_group_id;
+        pending_serial_statements->checkpoint_id = tag.checkpoint_id;
         root_block->insert(std::move(pending_serial_statements));
         pending_serial_statements = Stmt::make_typed<OffloadedStmt>(OffloadedStmt::TaskType::serial, arch, kernel);
         pending_serial_statements->grid_dim = 1;
@@ -196,6 +193,7 @@ class Offloader {
         offloaded->range_hint = s->range_hint;
         offloaded->stream_parallel_group_id = s->stream_parallel_group_id;
         offloaded->graph_do_while_level_id = s->graph_do_while_level_id;
+        offloaded->checkpoint_id = s->checkpoint_id;
         offloaded->loop_name = s->loop_name;
         root_block->insert(std::move(offloaded));
       } else if (auto st = stmt->cast<StructForStmt>()) {
@@ -312,6 +310,7 @@ class Offloader {
     offloaded_struct_for->mem_access_opt = mem_access_opt;
     offloaded_struct_for->stream_parallel_group_id = for_stmt->stream_parallel_group_id;
     offloaded_struct_for->graph_do_while_level_id = for_stmt->graph_do_while_level_id;
+    offloaded_struct_for->checkpoint_id = for_stmt->checkpoint_id;
     offloaded_struct_for->loop_name = for_stmt->loop_name;
 
     root_block->insert(std::move(offloaded_struct_for));

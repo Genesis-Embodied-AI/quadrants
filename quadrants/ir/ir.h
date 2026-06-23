@@ -394,21 +394,16 @@ class StmtFieldManager {
 // region. For-loop statements additionally carry the same two values in their own dedicated fields (set
 // from the `ForLoopConfig`); those are left in place for now.
 //
-// NOTE(checkpoint-reintroduction): this branch (hp/nested-graph-do-while) has no `qd.checkpoint()`
-// feature, so GraphRegionTag intentionally omits the `checkpoint_id` dimension that the qipc-integration
-// version of this fix carries. When the qd.checkpoint PR is merged onto this branch, reconcile against
-// `hp/qipc-integration` (commits bd499c745 + da2cdc910) as follows:
-//   * add `int checkpoint_id{-1};` here and to operator==;
-//   * stamp `current_checkpoint_id_` in `ASTBuilder::insert` (alongside the level / group);
-//   * in `offload.cpp`, tag a SIDE-EFFECTING serial task with its real `checkpoint_id` (a bare store
-//     inside a checkpoint must gate / skip on resume exactly like a range-for in that checkpoint);
-//   * BUT keep the PURE-bucket fallback at `checkpoint_id = -1` (always-run) -- a hoisted loop bound /
-//     constant that a later task reads must NOT be gated away on a `resume(from_checkpoint=...)` launch.
-//     Do NOT uniformly propagate the for-loop's checkpoint_id onto pure buckets.
-//   * emit `checkpoint_id` in `gen_offline_cache_key.cpp` alongside the other two fields.
 struct GraphRegionTag {
   int graph_do_while_level_id{-1};
   int stream_parallel_group_id{0};
+  // `cp_id` (see `quadrants/lang/checkpoint.py`) of the enclosing `qd.checkpoint(...)` block, or `-1` outside any
+  // checkpoint. Stamped on every frontend statement by `ASTBuilder::insert` (from `current_checkpoint_id_`) so a
+  // SIDE-EFFECTING serial task tagged with a real checkpoint can be gated/skipped on `resume(from_checkpoint=...)`
+  // exactly like a range-for in that checkpoint. The PURE-bucket fallback in `offload.cpp` deliberately leaves
+  // `checkpoint_id = -1` (always-run) so a hoisted loop bound / shared constant a later task reads is never gated away
+  // on a resume launch.
+  int checkpoint_id{-1};
   // `is_set` distinguishes a tag that was explicitly stamped at a known program point (frontend
   // build via ASTBuilder::insert, lowering via FlattenContext, or the region-propagating
   // insert_before_me / replace_with helpers) from a tag that's still at its struct default because
@@ -420,14 +415,19 @@ struct GraphRegionTag {
   bool is_set{false};
 
   GraphRegionTag() = default;
-  // Use this 2-arg ctor at every place that knows the region (it stamps is_set=true). Brace-init
-  // call sites `GraphRegionTag{level, group}` resolve to this ctor.
+  // 2-arg ctor: (level, group). Defaults checkpoint_id to -1 ("not inside any checkpoint"). Use at call sites that
+  // don't know / don't care about checkpoint_id (e.g., pure-only fallback tag in offload.cpp).
   GraphRegionTag(int level, int group) : graph_do_while_level_id(level), stream_parallel_group_id(group), is_set(true) {
+  }
+  // 3-arg ctor: (level, group, checkpoint). Used by `ASTBuilder::insert` to stamp the active region on every frontend
+  // statement.
+  GraphRegionTag(int level, int group, int checkpoint)
+      : graph_do_while_level_id(level), stream_parallel_group_id(group), checkpoint_id(checkpoint), is_set(true) {
   }
 
   bool operator==(const GraphRegionTag &o) const {
     return graph_do_while_level_id == o.graph_do_while_level_id &&
-           stream_parallel_group_id == o.stream_parallel_group_id;
+           stream_parallel_group_id == o.stream_parallel_group_id && checkpoint_id == o.checkpoint_id;
   }
   bool operator!=(const GraphRegionTag &o) const {
     return !(*this == o);

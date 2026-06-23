@@ -544,6 +544,72 @@ RhiResult MetalCommandList::dispatch(uint32_t x, uint32_t y, uint32_t z) noexcep
   return RhiResult::success;
 }
 
+RhiResult MetalCommandList::dispatch_indirect(DevicePtr dim3_ptr) noexcept {
+  RHI_ASSERT(current_pipeline_);
+  RHI_ASSERT(current_shader_resource_set_);
+
+  MTLComputePipelineState_id mtl_compute_pipeline_state = current_pipeline_->mtl_compute_pipeline_state();
+
+  NSUInteger local_x = current_pipeline_->workgroup_size().x;
+  NSUInteger local_y = current_pipeline_->workgroup_size().y;
+  NSUInteger local_z = current_pipeline_->workgroup_size().z;
+
+  std::vector<MetalShaderResource> shader_resources = current_shader_resource_set_->resources();
+
+  // Resolve the indirect buffer through the same device allocation path the SSBO binds use.
+  // `dispatchThreadgroupsWithIndirectBuffer:indirectBufferOffset:threadsPerThreadgroup:` is the standard Metal
+  // indirect-compute primitive (Metal 2+, all relevant hardware). The buffer holds three consecutive uint32 workgroup
+  // counts at `dim3_ptr.offset` (little-endian; matches Vulkan / SPIR-V layout). A dispatch with `(0, 0, 0)` is a no-op
+  // at the encoder level - Metal records the indirect dispatch but the GPU schedules zero threadgroups.
+  const MetalMemory &mem = device_->get_memory(dim3_ptr.alloc_id);
+  MTLBuffer_id mtl_indirect_buffer = mem.mtl_buffer();
+
+  @autoreleasepool {
+    // Reuse the persistent compute encoder across consecutive dispatches in this cmdlist. Same rationale and lifetime
+    // rules as the direct `dispatch()` path above; flush_pending_encoder() tears it down on an encoder-incompatible op.
+    if (current_compute_encoder_ == nullptr) {
+      current_compute_encoder_ = [[cmdbuf_ computeCommandEncoder] retain];
+    }
+    MTLComputeCommandEncoder_id encoder = current_compute_encoder_;
+
+    for (const MetalShaderResource &resource : shader_resources) {
+      switch (resource.ty) {
+      case MetalShaderResourceType::buffer: {
+        [encoder setBuffer:resource.buffer.buffer offset:resource.buffer.offset atIndex:resource.binding];
+        break;
+      }
+      case MetalShaderResourceType::texture: {
+        [encoder setTexture:resource.texture.texture atIndex:resource.binding];
+        if (resource.texture.is_sampled) {
+          [encoder setSamplerState:device_->get_default_sampler().mtl_sampler_state() atIndex:resource.binding];
+        }
+        break;
+      }
+      default:
+        RHI_ASSERT(false);
+      }
+    }
+
+    for (const DeviceAllocation &alloc : tracked_physical_buffers_) {
+      if (compute_encoder_resident_alloc_ids_.insert(alloc.alloc_id).second) {
+        const MetalMemory &mem_tracked = device_->get_memory(alloc.alloc_id);
+        [encoder useResource:mem_tracked.mtl_buffer() usage:MTLResourceUsageRead | MTLResourceUsageWrite];
+      }
+    }
+    tracked_physical_buffers_.clear();
+
+    // The indirect buffer is read by the GPU at dispatch issue time - declare it resident on the encoder.
+    [encoder useResource:mtl_indirect_buffer usage:MTLResourceUsageRead];
+
+    [encoder setComputePipelineState:mtl_compute_pipeline_state];
+    [encoder dispatchThreadgroupsWithIndirectBuffer:mtl_indirect_buffer
+                               indirectBufferOffset:dim3_ptr.offset
+                              threadsPerThreadgroup:MTLSizeMake(local_x, local_y, local_z)];
+  };
+
+  return RhiResult::success;
+}
+
 void MetalCommandList::begin_renderpass(int x0, int y0, int x1, int y1, uint32_t num_color_attachments,
                                         DeviceAllocation *color_attachments, bool *color_clear,
                                         std::vector<float> *clear_colors, DeviceAllocation *depth_attachment,

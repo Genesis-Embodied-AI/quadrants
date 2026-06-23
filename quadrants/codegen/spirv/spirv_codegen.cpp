@@ -2068,6 +2068,11 @@ void TaskCodegen::generate_serial_kernel(OffloadedStmt *stmt) {
   task_attribs_.task_type = OffloadedTaskType::serial;
   task_attribs_.advisory_total_num_threads = 1;
   task_attribs_.advisory_num_threads_per_group = 1;
+  // Slice 4 (Vulkan / Metal): propagate the `qd.checkpoint(...)` id off the offloaded statement onto the SPIR-V task
+  // attribs so `GfxRuntime::launch_kernel`'s host-branch gating loop can skip / yield-check this task. Mirrors
+  // `current_task->checkpoint_id = stmt->checkpoint_id;` in the LLVM codegen paths; without this every Vulkan/Metal
+  // task would carry the field's `-1` default and every checkpoint body would run unconditionally on those backends.
+  task_attribs_.checkpoint_id = stmt->checkpoint_id;
 
   // The computation for a single work is wrapped inside a function, so that
   // we can do grid-strided loop.
@@ -2117,6 +2122,8 @@ void TaskCodegen::gen_array_range(Stmt *stmt) {
 void TaskCodegen::generate_range_for_kernel(OffloadedStmt *stmt) {
   task_attribs_.name = task_name_;
   task_attribs_.task_type = OffloadedTaskType::range_for;
+  // See `generate_serial_kernel`'s `checkpoint_id` comment.
+  task_attribs_.checkpoint_id = stmt->checkpoint_id;
 
   task_attribs_.range_for_attribs = TaskAttributes::RangeForAttributes();
   auto &range_for_attribs = task_attribs_.range_for_attribs.value();
@@ -2303,6 +2310,8 @@ void TaskCodegen::generate_range_for_kernel(OffloadedStmt *stmt) {
 void TaskCodegen::generate_struct_for_kernel(OffloadedStmt *stmt) {
   task_attribs_.name = task_name_;
   task_attribs_.task_type = OffloadedTaskType::struct_for;
+  // See `generate_serial_kernel`'s `checkpoint_id` comment.
+  task_attribs_.checkpoint_id = stmt->checkpoint_id;
   task_attribs_.advisory_total_num_threads = 65536;
   task_attribs_.advisory_num_threads_per_group = 128;
 
