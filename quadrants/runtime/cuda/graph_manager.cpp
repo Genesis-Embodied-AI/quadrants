@@ -412,8 +412,8 @@ void GraphManager::build_level(int parent_id,
     // qd.graph_parallel section chains on separate streams -> real overlap. ---
     if (tasks[cursor].stream_parallel_group_id != 0 && tasks[cursor].checkpoint_id < 0) {
       int run_end = cursor;
-      while (run_end < end && tasks[run_end].graph_do_while_level_id == parent_id &&
-             tasks[run_end].checkpoint_id < 0 && tasks[run_end].stream_parallel_group_id != 0) {
+      while (run_end < end && tasks[run_end].graph_do_while_level_id == parent_id && tasks[run_end].checkpoint_id < 0 &&
+             tasks[run_end].stream_parallel_group_id != 0) {
         run_end++;
       }
       // Bucket the run's tasks by qd.graph_parallel section id, preserving first-seen (declaration) order.

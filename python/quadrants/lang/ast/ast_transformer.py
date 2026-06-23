@@ -1685,18 +1685,14 @@ class ASTTransformer(Builder):
         joins them. Regions are kept apart by the serial work between them (see
         d3_0_graph_parallel_impl.md)."""
         if not ctx.is_kernel:
-            raise QuadrantsSyntaxError(
-                "qd.graph_parallel_context() can only be used inside @qd.kernel, not @qd.func"
-            )
+            raise QuadrantsSyntaxError("qd.graph_parallel_context() can only be used inside @qd.kernel, not @qd.func")
         kernel = ctx.global_context.current_kernel
         if kernel is None or not kernel.use_graph:
             raise QuadrantsSyntaxError("qd.graph_parallel_context() requires @qd.kernel(graph=True)")
         if getattr(ctx, "_in_graph_parallel_context", False):
             raise QuadrantsSyntaxError("qd.graph_parallel_context() regions cannot be nested")
         if getattr(ctx, "_in_parallel_section", False):
-            raise QuadrantsSyntaxError(
-                "qd.graph_parallel_context() cannot appear inside a qd.graph_parallel() body"
-            )
+            raise QuadrantsSyntaxError("qd.graph_parallel_context() cannot appear inside a qd.graph_parallel() body")
         ASTTransformer._validate_graph_parallel_context_body(node.body)
         ctx._in_graph_parallel_context = True
         try:
