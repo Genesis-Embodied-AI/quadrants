@@ -517,7 +517,9 @@ void export_lang(nb::module_ &m) {
       .def_ro("device", &DeviceAllocation::device)
       .def_ro("alloc_id", &DeviceAllocation::alloc_id);
 
-  nb::class_<Ndarray>(m, "NdarrayCxx")
+  // The frontend holds weakrefs to the underlying Ndarray (kernel launch-context cache eviction in
+  // kernel.py); nanobind types are not weak-referenceable by default, so opt in (pybind11 default).
+  nb::class_<Ndarray>(m, "NdarrayCxx", nb::is_weak_referenceable())
       .def("device_allocation_ptr", &Ndarray::get_device_allocation_ptr_as_int)
       .def("device_allocation", &Ndarray::get_device_allocation)
       .def("element_size", &Ndarray::get_element_size)
