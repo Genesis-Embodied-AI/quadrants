@@ -759,9 +759,9 @@ def graph_parallel_context():
     Used as ``with qd.graph_parallel_context():`` inside a ``@qd.kernel(graph=True)`` kernel. The
     region's body must contain only ``with qd.graph_parallel():`` blocks. Each branch is an independent
     sequence of work; the branches have no ordering relative to each other and may execute concurrently,
-    while everything after the region waits for *all* branches to finish (the join). This is the
-    CUDA-graph analogue of ``qd.stream_parallel()`` (which is for non-graph kernels): it lets independent
-    stages -- e.g. qipc's point-triangle and edge-edge assembly -- overlap inside a captured graph.
+    while everything after the region waits for *all* branches to finish (the join). This is the graph
+    analogue of ``qd.stream_parallel()`` (which is for non-graph kernels): it lets independent stages --
+    e.g. qipc's point-triangle and edge-edge assembly -- overlap inside a captured graph.
 
     Concurrency contract (the author's responsibility): branches must be data-race free with respect to
     one another (no branch reads what another writes, no two branches write the same location). Calls
@@ -771,7 +771,7 @@ def graph_parallel_context():
       - CUDA SM graph path: branches become independent graph chains joined by an empty node, so the
         runtime schedules them on parallel streams (real overlap).
       - CPU / Vulkan / Metal / AMDGPU graph: correct results, branches run serially (the concurrency
-        tags are honoured only by the CUDA graph builder today).
+        tags are honoured only by the graph builder today).
 
     Restrictions (enforced at kernel compile time):
       - Must be used inside ``@qd.kernel(graph=True)``.
@@ -788,13 +788,12 @@ def graph_parallel_context():
 
 
 @contextmanager
-def graph_parallel(name=None):
+def graph_parallel():
     """Declares one concurrent branch of an enclosing ``qd.graph_parallel_context()`` region.
 
-    Used as ``with qd.graph_parallel():`` or ``with qd.graph_parallel(name="pt"):`` directly inside a
-    ``with qd.graph_parallel_context():`` block. The branch's body is an independent sequence of work
-    that may run concurrently with the region's other branches. ``name`` is optional and used only as a
-    label for profiling / graph introspection.
+    Used as ``with qd.graph_parallel():`` directly inside a ``with qd.graph_parallel_context():`` block.
+    The branch's body is an independent sequence of work that may run concurrently with the region's
+    other branches.
 
     See ``qd.graph_parallel_context()`` for the full contract and backend behaviour.
     """

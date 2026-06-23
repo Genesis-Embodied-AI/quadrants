@@ -1,13 +1,13 @@
 """Tests for qd.graph_parallel_context / qd.graph_parallel -- concurrent fork/join branches in graph kernels.
 
 `with qd.graph_parallel_context():` opens a fork/join region whose `with qd.graph_parallel():` members are independent
-sequences of work. On the CUDA graph path the branches become independent graph chains joined by a single
+sequences of work. On the graph path the branches become independent graph chains joined by a single
 empty node, so the runtime schedules them on parallel streams; on other backends (CPU / AMDGPU / Vulkan /
 Metal) they run serially but produce identical results.
 
 The behavioural assertions (disjoint-array correctness) hold on every backend. The graph-structure
-assertions (node counts: one kernel node per branch task + one empty join node) only apply on the CUDA
-graph path, where the builder forks/joins; they are guarded by `_on_cuda()`.
+assertions (node counts: one kernel node per branch task + one empty join node) only apply where the
+builder forks/joins (CUDA today), so they are guarded by `_on_cuda()`.
 """
 
 import numpy as np
@@ -45,7 +45,7 @@ def test_graph_parallel_is_no_op_outside_kernels():
     with qd.graph_parallel_context():
         with qd.graph_parallel():
             sentinel.append("a")
-        with qd.graph_parallel(name="b"):
+        with qd.graph_parallel():
             sentinel.append("b")
     assert sentinel == ["a", "b"]
 
@@ -64,10 +64,10 @@ def test_graph_parallel_two_branches():
         z: qd.types.ndarray(qd.f32, ndim=1),
     ):
         with qd.graph_parallel_context():
-            with qd.graph_parallel(name="bx"):
+            with qd.graph_parallel():
                 for i in range(x.shape[0]):
                     x[i] = x[i] + 1.0
-            with qd.graph_parallel(name="by"):
+            with qd.graph_parallel():
                 for i in range(y.shape[0]):
                     y[i] = y[i] + 2.0
         for i in range(z.shape[0]):

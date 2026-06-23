@@ -470,9 +470,9 @@ In this case, our recommendation is:
 
 ## Concurrent branches with `qd.graph_parallel_context` *(experimental)*
 
-`qd.checkpoint` and `graph_do_while` change *which* kernels run and *how many times*; `qd.graph_parallel_context` changes *how* a graph's kernels are scheduled relative to each other. By default the kernels captured in a `graph=True` kernel run as a single dependency chain (each waits for the previous one), even when they are completely independent. A `with qd.graph_parallel_context():` region lets you declare independent stages so the CUDA graph runs them on **parallel streams**.
+`qd.checkpoint` and `graph_do_while` change *which* kernels run and *how many times*; `qd.graph_parallel_context` changes *how* a graph's kernels are scheduled relative to each other. By default the kernels captured in a `graph=True` kernel run as a single dependency chain (each waits for the previous one), even when they are completely independent. A `with qd.graph_parallel_context():` region lets you declare independent stages so the graph runs them on **parallel streams**.
 
-This is the graph-compatible analogue of [`qd.stream_parallel()`](streams.md) (which only works for non-graph kernels): both express "these sequences are independent, run them concurrently", but `qd.graph_parallel_context` is honoured by the CUDA graph builder so it composes with `graph=True` and `graph_do_while`.
+`qd.graph_parallel_context` is honoured by the graph builder so it composes with `graph=True` and `graph_do_while`.
 
 ```python
 @qd.kernel(graph=True)
@@ -481,10 +481,10 @@ def step(...):
         assemble_shared(...)                 # serial: feeds both branches
 
         with qd.graph_parallel_context():    # fork: branches run concurrently
-            with qd.graph_parallel(name="pt"):   # point-triangle contacts
+            with qd.graph_parallel():            # point-triangle contacts
                 pt_assemble(...)
                 pt_hessian(...)
-            with qd.graph_parallel(name="ee"):   # edge-edge contacts (independent of pt)
+            with qd.graph_parallel():            # edge-edge contacts (independent of pt)
                 ee_assemble(...)
                 ee_hessian(...)
         # join: everything below waits for BOTH branches to finish
@@ -496,12 +496,11 @@ def step(...):
 
 - **Fork / join.** Every `qd.graph_parallel()` branch in the region forks from the work that precedes the region. All branches must finish before any work *after* the region begins (the join). On CUDA the join is a single empty graph node depending on every branch's last kernel.
 - **Branches are independent — you guarantee it.** Calls *within* a branch keep their program order, but calls in *different* branches have no ordering. The branches must be data-race free with respect to one another: no branch may read what another writes, and no two branches may write the same memory. Quadrants does not check this; getting it wrong gives nondeterministic results, exactly like `qd.stream_parallel()`.
-- **`name=` is optional** and used only as a label for profiling / graph introspection.
 
 ### Restrictions (enforced at kernel compile time)
 
 - Must be used inside `@qd.kernel(graph=True)`.
-- A region body may contain only `with qd.graph_parallel():` blocks, optionally wrapped in `if qd.static(...)` (so an optional branch can be compiled in or out — e.g. enabling edge-edge contacts only when a feature flag is set). A single-branch region is allowed and lowers to a plain chain (no fork/join overhead).
+- A region body may contain only `with qd.graph_parallel():` blocks, optionally wrapped in `if qd.static(...)` (so an optional branch can be compiled in or out — e.g. enabling edge-edge contacts only when a feature flag is set).
 - `qd.graph_parallel()` may appear only directly inside a `qd.graph_parallel_context()` region.
 - Regions cannot be nested, and a branch body must be straight-line task work — no `qd.graph_do_while`, `qd.checkpoint`, or nested `qd.graph_parallel_context` inside a branch (a region may, however, sit inside a `qd.graph_do_while` body, as shown above).
 
@@ -510,6 +509,6 @@ def step(...):
 | backend | result | scheduling |
 | --- | --- | --- |
 | CUDA (graph path) | correct | branches run **concurrently** on parallel streams |
-| AMDGPU / CPU / Vulkan / Metal | correct | branches run **serially** (the concurrency tags are honoured only by the CUDA graph builder today) |
+| AMDGPU / CPU / Vulkan / Metal | correct | branches run **serially** (the concurrency tags are honoured only by the graph builder today) |
 
 Because branches are independent by construction, running them serially on the other backends produces identical results — only the scheduling differs.
