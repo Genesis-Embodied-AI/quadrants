@@ -477,20 +477,21 @@
 </ul>
 <p><code class="docutils literal notranslate"><span class="pre">build.py</span></code> can be used at least two ways:</p>
 <ul class="simple">
-<li><p><code class="docutils literal notranslate"><span class="pre">build.py</span> <span class="pre">wheel</span></code> to build the wheel currently using <code class="docutils literal notranslate"><span class="pre">setup.py</span> <span class="pre">bdist_wheel</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">build.py</span> <span class="pre">wheel</span></code> to build the wheel (via scikit-build-core, i.e. <code class="docutils literal notranslate"><span class="pre">pip</span> <span class="pre">wheel</span></code>)</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">build.py</span> <span class="pre">--shell</span></code> to enter a shell with environment variables set up as with <code class="docutils literal notranslate"><span class="pre">build.py</span> <span class="pre">wheel</span></code> in order to let you invoke yourself the commands.</p></li>
 </ul>
-<p><code class="docutils literal notranslate"><span class="pre">python</span> <span class="pre">setup.py</span> <span class="pre">develop</span></code> provides incremental builds:</p>
+<p>For incremental development, do an editable install (scikit-build-core “redirect” mode: the compiled core is installed and rebuilt on demand, Python edits are live):</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">./</span><span class="n">build</span><span class="o">.</span><span class="n">py</span> <span class="o">--</span><span class="n">shell</span> <span class="c1"># run a new shell with environment variables</span>
-<span class="n">python</span> <span class="n">setup</span><span class="o">.</span><span class="n">py</span> <span class="n">develop</span>
+<span class="n">pip</span> <span class="n">install</span> <span class="o">--</span><span class="n">no</span><span class="o">-</span><span class="n">build</span><span class="o">-</span><span class="n">isolation</span> <span class="o">-</span><span class="n">e</span> <span class="o">.</span> <span class="o">-</span><span class="n">Ceditable</span><span class="o">.</span><span class="n">rebuild</span><span class="o">=</span><span class="n">true</span>
 </pre></div>
 </div>
 <p>To write the environment variables to a file, use <code class="docutils literal notranslate"><span class="pre">./build.py</span> <span class="pre">-w</span> <span class="pre">[filename]</span></code>. For example:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">./</span><span class="n">build</span><span class="o">.</span><span class="n">py</span> <span class="o">-</span><span class="n">w</span> <span class="n">env</span><span class="o">.</span><span class="n">sh</span>
 <span class="n">source</span> <span class="n">env</span><span class="o">.</span><span class="n">sh</span>
-<span class="n">python</span> <span class="n">setup</span><span class="o">.</span><span class="n">py</span> <span class="n">develop</span>
+<span class="n">pip</span> <span class="n">install</span> <span class="o">--</span><span class="n">no</span><span class="o">-</span><span class="n">build</span><span class="o">-</span><span class="n">isolation</span> <span class="o">-</span><span class="n">e</span> <span class="o">.</span> <span class="o">-</span><span class="n">Ceditable</span><span class="o">.</span><span class="n">rebuild</span><span class="o">=</span><span class="n">true</span>
 </pre></div>
 </div>
+<p><code class="docutils literal notranslate"><span class="pre">build.py</span></code> exports both the legacy <code class="docutils literal notranslate"><span class="pre">QUADRANTS_CMAKE_ARGS</span></code> and the <code class="docutils literal notranslate"><span class="pre">CMAKE_ARGS</span></code> that scikit-build-core actually reads, so sourcing <code class="docutils literal notranslate"><span class="pre">env.sh</span></code> (or using <code class="docutils literal notranslate"><span class="pre">--shell</span></code>) is enough – no manual <code class="docutils literal notranslate"><span class="pre">export</span> <span class="pre">CMAKE_ARGS=&quot;$QUADRANTS_CMAKE_ARGS&quot;</span></code> step is needed.</p>
 </section>
 <section id="building-the-package-for-release-purposes">
 <h2>Building the package for release purposes<a class="headerlink" href="#building-the-package-for-release-purposes" title="Link to this heading">#</a></h2>
@@ -498,13 +499,13 @@
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">./</span><span class="n">build</span><span class="o">.</span><span class="n">py</span> <span class="n">wheel</span>
 </pre></div>
 </div>
-<p>We use <code class="docutils literal notranslate"><span class="pre">cmake</span></code> to build the C++ core. The build directory depends on the host architecture and the python version. For example: <code class="docutils literal notranslate"><span class="pre">_skbuild/linux-x86_64-3.10/cmake-build</span></code>.</p>
+<p>We use <code class="docutils literal notranslate"><span class="pre">cmake</span></code> to build the C++ core. scikit-build-core puts the CMake build tree under <code class="docutils literal notranslate"><span class="pre">build/{wheel_tag}</span></code>, where the wheel tag encodes the Python version and host platform. For example: <code class="docutils literal notranslate"><span class="pre">build/cp310-cp310-linux_x86_64</span></code>.</p>
 <p>You can modify the cmake options to your liking in order to enable or disable some features you need or don’t need. To discover them, you can use <code class="docutils literal notranslate"><span class="pre">ccmake</span></code>:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">ccmake</span> <span class="n">_skbuild</span><span class="o">/</span><span class="n">linux</span><span class="o">-</span><span class="n">x86_64</span><span class="o">-</span><span class="mf">3.10</span><span class="o">/</span><span class="n">cmake</span><span class="o">-</span><span class="n">build</span>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">ccmake</span> <span class="n">build</span><span class="o">/</span><span class="n">cp310</span><span class="o">-</span><span class="n">cp310</span><span class="o">-</span><span class="n">linux_x86_64</span>
 </pre></div>
 </div>
-<p>You could then set the environment variable <code class="docutils literal notranslate"><span class="pre">QUADRANTS_CMAKE_ARGS</span></code> that will be appended to the <code class="docutils literal notranslate"><span class="pre">cmake</span></code> command used to configure the <code class="docutils literal notranslate"><span class="pre">cmake</span></code> build. For instance, to disable the CUDA and AMDGPU backends:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">export</span> <span class="n">QUADRANTS_CMAKE_ARGS</span><span class="o">=</span><span class="s2">&quot;-DQD_WITH_CUDA=OFF -DQD_WITH_AMDGPU=OFF&quot;</span>
+<p>You could then set the environment variable <code class="docutils literal notranslate"><span class="pre">CMAKE_ARGS</span></code> (scikit-build-core’s CMake-args passthrough) to configure the build. <code class="docutils literal notranslate"><span class="pre">build.py</span></code> also accepts the legacy <code class="docutils literal notranslate"><span class="pre">QUADRANTS_CMAKE_ARGS</span></code> and forwards it to <code class="docutils literal notranslate"><span class="pre">CMAKE_ARGS</span></code>. For instance, to disable the CUDA and AMDGPU backends:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">export</span> <span class="n">CMAKE_ARGS</span><span class="o">=</span><span class="s2">&quot;-DQD_WITH_CUDA=OFF -DQD_WITH_AMDGPU=OFF&quot;</span>
 </pre></div>
 </div>
 <p>To direct <code class="docutils literal notranslate"><span class="pre">cmake</span></code> where to look at for some dependencies, for example <code class="docutils literal notranslate"><span class="pre">LLVM</span></code>, you could either use an environment variable <code class="docutils literal notranslate"><span class="pre">LLVM_DIR</span></code> or specify the cmake option <code class="docutils literal notranslate"><span class="pre">LLVM_ROOT</span></code>:</p>

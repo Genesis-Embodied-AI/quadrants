@@ -359,6 +359,9 @@
     <span class="n">get_decorator</span><span class="p">,</span>
 <span class="p">)</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.ast.ast_transformers.call_transformer</span><span class="w"> </span><span class="kn">import</span> <span class="n">CallTransformer</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.ast.ast_transformers.checkpoint_transformer</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">CheckpointTransformer</span><span class="p">,</span>
+<span class="p">)</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.ast.ast_transformers.function_def_transformer</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
     <span class="n">FunctionDefTransformer</span><span class="p">,</span>
 <span class="p">)</span>
@@ -1854,6 +1857,13 @@
         <span class="k">return</span> <span class="kc">None</span>
 
     <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_is_checkpoint_call</span><span class="p">(</span><span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">expr</span><span class="p">,</span> <span class="n">global_vars</span><span class="p">:</span> <span class="nb">dict</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Thin forwarding wrapper around ``CheckpointTransformer.is_checkpoint_call``; the actual logic lives in module</span>
+<span class="sd">        ``ast_transformers/checkpoint_transformer.py`` to keep this file from growing per-feature. Returns a</span>
+<span class="sd">        ``CheckpointCallInfo`` or ``None``.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">CheckpointTransformer</span><span class="o">.</span><span class="n">is_checkpoint_call</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">global_vars</span><span class="p">)</span>
+
+    <span class="nd">@staticmethod</span>
 <div class="viewcode-block" id="ASTTransformer.build_While">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer/index.html#quadrants.lang.ast.ast_transformer.ASTTransformer.build_While">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">build_While</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">ASTTransformerFuncContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">While</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
@@ -2117,8 +2127,15 @@
             <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">&quot;&#39;with ... as ...&#39; is not supported in Quadrants kernels&quot;</span><span class="p">)</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">item</span><span class="o">.</span><span class="n">context_expr</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Call</span><span class="p">):</span>
             <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">&quot;&#39;with&#39; in Quadrants kernels requires a call expression&quot;</span><span class="p">)</span>
+
+        <span class="n">checkpoint_info</span> <span class="o">=</span> <span class="n">ASTTransformer</span><span class="o">.</span><span class="n">_is_checkpoint_call</span><span class="p">(</span><span class="n">item</span><span class="o">.</span><span class="n">context_expr</span><span class="p">,</span> <span class="n">ctx</span><span class="o">.</span><span class="n">global_vars</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">checkpoint_info</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">ASTTransformer</span><span class="o">.</span><span class="n">_build_checkpoint_with</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="p">,</span> <span class="n">checkpoint_info</span><span class="p">)</span>
+
         <span class="k">if</span> <span class="ow">not</span> <span class="n">FunctionDefTransformer</span><span class="o">.</span><span class="n">_is_stream_parallel_with</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">ctx</span><span class="o">.</span><span class="n">global_vars</span><span class="p">):</span>
-            <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">&quot;&#39;with&#39; in Quadrants kernels only supports qd.stream_parallel()&quot;</span><span class="p">)</span>
+            <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span>
+                <span class="s2">&quot;&#39;with&#39; in Quadrants kernels only supports qd.stream_parallel() or qd.checkpoint()&quot;</span>
+            <span class="p">)</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">ctx</span><span class="o">.</span><span class="n">is_kernel</span><span class="p">:</span>
             <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">&quot;qd.stream_parallel() can only be used inside @qd.kernel, not @qd.func&quot;</span><span class="p">)</span>
         <span class="n">ctx</span><span class="o">.</span><span class="n">ast_builder</span><span class="o">.</span><span class="n">begin_stream_parallel</span><span class="p">()</span>
@@ -2126,6 +2143,16 @@
         <span class="n">ctx</span><span class="o">.</span><span class="n">ast_builder</span><span class="o">.</span><span class="n">end_stream_parallel</span><span class="p">()</span>
         <span class="k">return</span> <span class="kc">None</span></div>
 
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_build_checkpoint_with</span><span class="p">(</span>
+        <span class="n">ctx</span><span class="p">:</span> <span class="n">ASTTransformerFuncContext</span><span class="p">,</span>
+        <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">With</span><span class="p">,</span>
+        <span class="n">info</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Thin forwarding wrapper around ``CheckpointTransformer.build_checkpoint_with``; the actual logic lives in</span>
+<span class="sd">        ``ast_transformers/checkpoint_transformer.py``.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">CheckpointTransformer</span><span class="o">.</span><span class="n">build_checkpoint_with</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="p">,</span> <span class="n">info</span><span class="p">,</span> <span class="n">build_stmts</span><span class="p">)</span>
 
     <span class="nd">@staticmethod</span>
 <div class="viewcode-block" id="ASTTransformer.build_Pass">

@@ -76,8 +76,8 @@ Module Contents
    :rtype: Callable
 
 
-.. py:function:: kernel(_fn: None = None, *, pure: bool = False, graph: bool = False) -> Callable[[Any], Any]
-                 kernel(_fn: Any, *, pure: bool = False, graph: bool = False) -> Any
+.. py:function:: kernel(_fn: None = None, *, pure: bool = False, graph: bool = False, checkpoints: bool = False) -> Callable[[Any], Any]
+                 kernel(_fn: Any, *, pure: bool = False, graph: bool = False, checkpoints: bool = False) -> Any
 
    Marks a function as a Quadrants kernel.
 
@@ -92,6 +92,10 @@ Module Contents
                  into a CUDA graph on first launch and replayed on subsequent
                  launches, reducing per-kernel launch overhead. Non-CUDA backends
                  are not supported currently.
+   :param checkpoints: If True, opt into the (experimental) ``qd.checkpoint`` pause / resume model.
+                       ``with qd.checkpoint(cp_id, yield_on=flag):`` blocks in the kernel body become pause points the host can
+                       resume from via ``kernel.resume(from_checkpoint=cp_id)``. Requires ``graph=True``.
+                       ``qd.checkpoint(...)`` in the body is rejected unless this flag is set.
 
    Example::
 

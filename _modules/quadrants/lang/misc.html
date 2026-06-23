@@ -343,7 +343,9 @@
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._lib.core.quadrants_python</span><span class="w"> </span><span class="kn">import</span> <span class="n">Extension</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._lib.utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_os_name</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">impl</span><span class="p">,</span> <span class="n">util</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.checkpoint</span><span class="w"> </span><span class="kn">import</span> <span class="n">checkpoint</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.expr</span><span class="w"> </span><span class="kn">import</span> <span class="n">Expr</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.graph_status</span><span class="w"> </span><span class="kn">import</span> <span class="n">GraphStatus</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.impl</span><span class="w"> </span><span class="kn">import</span> <span class="n">axes</span><span class="p">,</span> <span class="n">get_runtime</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.profiler.kernel_profiler</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_default_kernel_profiler</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.types.primitive_types</span><span class="w"> </span><span class="kn">import</span> <span class="n">f32</span><span class="p">,</span> <span class="n">f64</span><span class="p">,</span> <span class="n">i32</span><span class="p">,</span> <span class="n">i64</span>
@@ -1335,6 +1337,8 @@
     <span class="s2">&quot;python&quot;</span><span class="p">,</span>
     <span class="s2">&quot;vulkan&quot;</span><span class="p">,</span>
     <span class="s2">&quot;extension&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;GraphStatus&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;checkpoint&quot;</span><span class="p">,</span>
     <span class="s2">&quot;graph_do_while&quot;</span><span class="p">,</span>
     <span class="s2">&quot;loop_config&quot;</span><span class="p">,</span>
     <span class="s2">&quot;global_thread_idx&quot;</span><span class="p">,</span>

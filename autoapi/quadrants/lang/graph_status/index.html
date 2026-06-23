@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>quadrants.lang.common_ops &#8212; Quadrants 1.0.3 documentation</title>
+    <title>quadrants.lang.graph_status &#8212; Quadrants 1.0.3 documentation</title>
   
   
   
@@ -55,12 +55,12 @@
     <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
     <script src="../../../../_static/design-tabs.js?v=f930bc37"></script>
     <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
-    <script>DOCUMENTATION_OPTIONS.pagename = 'autoapi/quadrants/lang/common_ops/index';</script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'autoapi/quadrants/lang/graph_status/index';</script>
     <script>DOCUMENTATION_OPTIONS.search_as_you_type = false;</script>
     <link rel="index" title="Index" href="../../../../genindex.html" />
     <link rel="search" title="Search" href="../../../../search.html" />
-    <link rel="next" title="quadrants.lang.exception" href="../exception/index.html" />
-    <link rel="prev" title="quadrants.lang.checkpoint" href="../checkpoint/index.html" />
+    <link rel="next" title="quadrants.lang.impl" href="../impl/index.html" />
+    <link rel="prev" title="quadrants.lang.func" href="../func/index.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
   <meta name="docsearch:version" content="1.0.3" />
@@ -343,7 +343,7 @@
     
     <li class="breadcrumb-item"><a href="../index.html" class="nav-link">quadrants.lang</a></li>
     
-    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">quadrants.lang.common_ops</span></li>
+    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">quadrants.lang.graph_status</span></li>
   </ul>
 </nav>
 </div>
@@ -360,14 +360,18 @@
 <div id="searchbox"></div>
                 <article class="bd-article">
                   
-  <section id="module-quadrants.lang.common_ops">
-<span id="quadrants-lang-common-ops"></span><h1>quadrants.lang.common_ops<a class="headerlink" href="#module-quadrants.lang.common_ops" title="Link to this heading">#</a></h1>
+  <section id="module-quadrants.lang.graph_status">
+<span id="quadrants-lang-graph-status"></span><h1>quadrants.lang.graph_status<a class="headerlink" href="#module-quadrants.lang.graph_status" title="Link to this heading">#</a></h1>
+<p>Plain-Python container returned from graph kernels that contain <code class="docutils literal notranslate"><span class="pre">qd.checkpoint(yield_on=...)</span></code>.</p>
+<p>Lives in its own module (with no Quadrants-internal imports) so it can be imported safely from both <code class="docutils literal notranslate"><span class="pre">kernel.py</span></code> and
+<code class="docutils literal notranslate"><span class="pre">misc.py</span></code> without re-introducing the circular import chain that <code class="docutils literal notranslate"><span class="pre">misc.py</span> <span class="pre">-&gt;</span> <span class="pre">impl.py</span> <span class="pre">-&gt;</span> <span class="pre">kernel.py</span></code> would create.</p>
+<p>Re-exported via <code class="docutils literal notranslate"><span class="pre">qd.lang.misc</span></code> (and therefore as <code class="docutils literal notranslate"><span class="pre">qd.GraphStatus</span></code>) for the user-facing canonical import path.</p>
 <section id="classes">
 <h2>Classes<a class="headerlink" href="#classes" title="Link to this heading">#</a></h2>
 <div class="pst-scrollable-table-container"><table class="autosummary longtable table autosummary">
 <tbody>
-<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.common_ops.QuadrantsOperations" title="quadrants.lang.common_ops.QuadrantsOperations"><code class="xref py py-obj docutils literal notranslate"><span class="pre">QuadrantsOperations</span></code></a></p></td>
-<td><p>The base class of quadrants operations of expressions. Subclasses: <code class="xref py py-class docutils literal notranslate"><span class="pre">Expr</span></code>, <a class="reference internal" href="../matrix/index.html#quadrants.lang.matrix.Matrix" title="quadrants.lang.matrix.Matrix"><code class="xref py py-class docutils literal notranslate"><span class="pre">Matrix</span></code></a></p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.graph_status.GraphStatus" title="quadrants.lang.graph_status.GraphStatus"><code class="xref py py-obj docutils literal notranslate"><span class="pre">GraphStatus</span></code></a></p></td>
+<td><p>Result returned by a graph kernel that contains <code class="docutils literal notranslate"><span class="pre">qd.checkpoint(cp_id,</span> <span class="pre">yield_on=...)</span></code> blocks.</p></td>
 </tr>
 </tbody>
 </table>
@@ -376,9 +380,57 @@
 <section id="module-contents">
 <h2>Module Contents<a class="headerlink" href="#module-contents" title="Link to this heading">#</a></h2>
 <dl class="py class">
-<dt class="sig sig-object py" id="quadrants.lang.common_ops.QuadrantsOperations">
-<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">quadrants.lang.common_ops.</span></span><span class="sig-name descname"><span class="pre">QuadrantsOperations</span></span><a class="reference internal" href="../../../../_modules/quadrants/lang/common_ops.html#QuadrantsOperations"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.common_ops.QuadrantsOperations" title="Link to this definition">#</a></dt>
-<dd><p>The base class of quadrants operations of expressions. Subclasses: <code class="xref py py-class docutils literal notranslate"><span class="pre">Expr</span></code>, <a class="reference internal" href="../matrix/index.html#quadrants.lang.matrix.Matrix" title="quadrants.lang.matrix.Matrix"><code class="xref py py-class docutils literal notranslate"><span class="pre">Matrix</span></code></a></p>
+<dt class="sig sig-object py" id="quadrants.lang.graph_status.GraphStatus">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">quadrants.lang.graph_status.</span></span><span class="sig-name descname"><span class="pre">GraphStatus</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">yielded</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">checkpoint</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/graph_status.html#GraphStatus"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.graph_status.GraphStatus" title="Link to this definition">#</a></dt>
+<dd><p>Result returned by a graph kernel that contains <code class="docutils literal notranslate"><span class="pre">qd.checkpoint(cp_id,</span> <span class="pre">yield_on=...)</span></code> blocks.</p>
+<div class="admonition warning">
+<p class="admonition-title">Warning</p>
+<p><strong>Experimental.</strong> <code class="docutils literal notranslate"><span class="pre">GraphStatus</span></code> is part of the experimental <code class="docutils literal notranslate"><span class="pre">qd.checkpoint</span></code> surface; its attributes and
+the conditions under which it is returned may change in any future release without a deprecation cycle.</p>
+</div>
+<p>Returned from <code class="docutils literal notranslate"><span class="pre">kernel(...)</span></code> and <code class="docutils literal notranslate"><span class="pre">kernel.resume(...,</span> <span class="pre">from_checkpoint=label)</span></code> whenever the kernel was decorated
+with <code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel(graph=True,</span> <span class="pre">checkpoints=True)</span></code>. Read <code class="docutils literal notranslate"><span class="pre">status.yielded</span></code> to decide whether to keep running the
+host loop, and <code class="docutils literal notranslate"><span class="pre">status.checkpoint</span></code> to find out which checkpoint asked the host to handle something.</p>
+<p>Canonical usage (see <code class="docutils literal notranslate"><span class="pre">graph.md</span></code>):</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">enum</span><span class="w"> </span><span class="kn">import</span> <span class="n">IntEnum</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">Stage</span><span class="p">(</span><span class="n">IntEnum</span><span class="p">):</span>
+    <span class="n">SIM</span> <span class="o">=</span> <span class="mi">0</span>
+
+<span class="n">overflow_flag</span><span class="p">[()]</span> <span class="o">=</span> <span class="mi">0</span>  <span class="c1"># initialise before the first launch</span>
+<span class="n">status</span> <span class="o">=</span> <span class="n">step</span><span class="p">(</span><span class="n">arr</span><span class="p">,</span> <span class="n">overflow_flag</span><span class="p">,</span> <span class="n">newton_cond</span><span class="p">)</span>
+<span class="k">while</span> <span class="n">status</span><span class="o">.</span><span class="n">yielded</span><span class="p">:</span>
+    <span class="n">handle_overflow_for</span><span class="p">(</span><span class="n">status</span><span class="o">.</span><span class="n">checkpoint</span><span class="p">,</span> <span class="o">...</span><span class="p">)</span>
+    <span class="n">overflow_flag</span><span class="p">[()]</span> <span class="o">=</span> <span class="mi">0</span>  <span class="c1"># the framework never clears your yield_on flag</span>
+    <span class="n">status</span> <span class="o">=</span> <span class="n">step</span><span class="o">.</span><span class="n">resume</span><span class="p">(</span><span class="n">arr</span><span class="p">,</span> <span class="n">overflow_flag</span><span class="p">,</span> <span class="n">newton_cond</span><span class="p">,</span>
+                         <span class="n">from_checkpoint</span><span class="o">=</span><span class="n">status</span><span class="o">.</span><span class="n">checkpoint</span><span class="p">)</span>
+</pre></div>
+</div>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="quadrants.lang.graph_status.GraphStatus.yielded">
+<span class="sig-name descname"><span class="pre">yielded</span></span><a class="reference internal" href="../../../../_modules/quadrants/lang/graph_status.html#GraphStatus.yielded"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.graph_status.GraphStatus.yielded" title="Link to this definition">#</a></dt>
+<dd><p><code class="docutils literal notranslate"><span class="pre">True</span></code> iff one of the kernel’s checkpoints paused on the most recent launch (i.e. its <code class="docutils literal notranslate"><span class="pre">yield_on=</span></code>
+flag was non-zero). <code class="docutils literal notranslate"><span class="pre">False</span></code> means the kernel completed normally and the host loop should exit.</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="quadrants.lang.graph_status.GraphStatus.checkpoint">
+<span class="sig-name descname"><span class="pre">checkpoint</span></span><a class="reference internal" href="../../../../_modules/quadrants/lang/graph_status.html#GraphStatus.checkpoint"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.graph_status.GraphStatus.checkpoint" title="Link to this definition">#</a></dt>
+<dd><p>The <code class="docutils literal notranslate"><span class="pre">cp_id</span></code> label of the checkpoint that paused (an <code class="docutils literal notranslate"><span class="pre">int</span></code> or the original <code class="docutils literal notranslate"><span class="pre">IntEnum</span></code> instance
+you passed to <code class="docutils literal notranslate"><span class="pre">qd.checkpoint(cp_id,</span> <span class="pre">...)</span></code>), or <code class="docutils literal notranslate"><span class="pre">None</span></code> when <code class="docutils literal notranslate"><span class="pre">yielded</span></code> is <code class="docutils literal notranslate"><span class="pre">False</span></code>. Pass it to
+<code class="docutils literal notranslate"><span class="pre">kernel.resume(...,</span> <span class="pre">from_checkpoint=...)</span></code> to continue from that point on the next launch.</p>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="id0">
+<span class="sig-name descname"><span class="pre">yielded</span></span><a class="reference internal" href="../../../../_modules/quadrants/lang/graph_status.html#GraphStatus.yielded"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#id0" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="id1">
+<span class="sig-name descname"><span class="pre">checkpoint</span></span><a class="reference internal" href="../../../../_modules/quadrants/lang/graph_status.html#GraphStatus.checkpoint"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#id1" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
 </dd></dl>
 
 </section>
@@ -395,20 +447,20 @@
                   
 <div class="prev-next-area">
     <a class="left-prev"
-       href="../checkpoint/index.html"
+       href="../func/index.html"
        title="previous page">
       <i class="fa-solid fa-angle-left"></i>
       <div class="prev-next-info">
         <p class="prev-next-subtitle">previous</p>
-        <p class="prev-next-title">quadrants.lang.checkpoint</p>
+        <p class="prev-next-title">quadrants.lang.func</p>
       </div>
     </a>
     <a class="right-next"
-       href="../exception/index.html"
+       href="../impl/index.html"
        title="next page">
       <div class="prev-next-info">
         <p class="prev-next-subtitle">next</p>
-        <p class="prev-next-title">quadrants.lang.exception</p>
+        <p class="prev-next-title">quadrants.lang.impl</p>
       </div>
       <i class="fa-solid fa-angle-right"></i>
     </a>
@@ -433,7 +485,13 @@
     <ul class="pst-show_toc_level nav section-nav flex-column">
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#classes">Classes</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#module-contents">Module Contents</a><ul class="nav section-nav flex-column">
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.common_ops.QuadrantsOperations"><code class="docutils literal notranslate"><span class="pre">QuadrantsOperations</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.graph_status.GraphStatus"><code class="docutils literal notranslate"><span class="pre">GraphStatus</span></code></a><ul class="nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.graph_status.GraphStatus.yielded"><code class="docutils literal notranslate"><span class="pre">GraphStatus.yielded</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.graph_status.GraphStatus.checkpoint"><code class="docutils literal notranslate"><span class="pre">GraphStatus.checkpoint</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#id0"><code class="docutils literal notranslate"><span class="pre">GraphStatus.yielded</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#id1"><code class="docutils literal notranslate"><span class="pre">GraphStatus.checkpoint</span></code></a></li>
+</ul>
+</li>
 </ul>
 </li>
 </ul>
@@ -442,7 +500,7 @@
   <div class="sidebar-secondary-item">
 
   <div class="tocsection sourcelink">
-    <a href="../../../../_sources/autoapi/quadrants/lang/common_ops/index.rst.txt">
+    <a href="../../../../_sources/autoapi/quadrants/lang/graph_status/index.rst.txt">
       <i class="fa-solid fa-file-lines"></i> Show Source
     </a>
   </div>

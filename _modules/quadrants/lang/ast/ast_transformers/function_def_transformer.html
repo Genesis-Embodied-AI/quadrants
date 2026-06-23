@@ -359,6 +359,9 @@
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.ast.ast_transformer_utils</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
     <span class="n">ASTTransformerFuncContext</span><span class="p">,</span>
 <span class="p">)</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.ast.ast_transformers.checkpoint_transformer</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">CheckpointTransformer</span><span class="p">,</span>
+<span class="p">)</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.ast.symbol_resolver</span><span class="w"> </span><span class="kn">import</span> <span class="n">ASTResolver</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.buffer_view</span><span class="w"> </span><span class="kn">import</span> <span class="n">BufferView</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.exception</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
@@ -842,6 +845,24 @@
         <span class="k">if</span> <span class="n">ctx</span><span class="o">.</span><span class="n">is_kernel</span><span class="p">:</span>
             <span class="n">FunctionDefTransformer</span><span class="o">.</span><span class="n">_validate_stream_parallel_exclusivity</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">body</span><span class="p">,</span> <span class="n">ctx</span><span class="o">.</span><span class="n">global_vars</span><span class="p">)</span>
             <span class="n">FunctionDefTransformer</span><span class="o">.</span><span class="n">_validate_graph_do_while_structure</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">body</span><span class="p">)</span>
+            <span class="n">kernel</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">global_context</span><span class="o">.</span><span class="n">current_kernel</span>
+            <span class="k">if</span> <span class="n">kernel</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="c1"># Reset before walking the body so re-materialisations (e.g. when a templated kernel is compiled with a</span>
+                <span class="c1"># different argument shape) start from an empty list. Mirrors how `graph_do_while_arg` gets overwritten</span>
+                <span class="c1"># unconditionally during AST traversal.</span>
+                <span class="n">kernel</span><span class="o">.</span><span class="n">checkpoint_yield_on_args</span> <span class="o">=</span> <span class="p">[]</span>
+                <span class="n">kernel</span><span class="o">.</span><span class="n">checkpoint_user_labels_by_cp_id</span> <span class="o">=</span> <span class="p">[]</span>
+                <span class="c1"># Auto-wrap pass for `@qd.kernel(graph=True, checkpoints=True)` kernels. Mutates `node.body` in place so</span>
+                <span class="c1"># every top-level for-loop (and every for-loop inside a `qd.graph_do_while` body) that the user did not</span>
+                <span class="c1"># already wrap in a `with qd.checkpoint(...)` gets wrapped in a synthetic implicit no-yield checkpoint.</span>
+                <span class="c1"># Implicit checkpoints share the same dense source-order internal cp_id space as explicit ones, but</span>
+                <span class="c1"># carry `None` in `checkpoint_user_labels_by_cp_id` so they never appear in `GraphStatus.checkpoint` /</span>
+                <span class="c1"># `kernel.resume(from_checkpoint=...)`. Runs here (after coverage instrumentation has already injected</span>
+                <span class="c1"># its top-level `_qd_cov[i] = 1` probes, which are bare assigns that the wrap pass intentionally leaves</span>
+                <span class="c1"># alone) so that the regular `build_stmts` walk below sees a uniform stream of `with qd.checkpoint(...)`</span>
+                <span class="c1"># blocks and bare prologue stmts.</span>
+                <span class="k">if</span> <span class="n">kernel</span><span class="o">.</span><span class="n">use_checkpoints</span><span class="p">:</span>
+                    <span class="n">node</span><span class="o">.</span><span class="n">body</span> <span class="o">=</span> <span class="n">CheckpointTransformer</span><span class="o">.</span><span class="n">auto_wrap_for_loops</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">body</span><span class="p">)</span>
 
         <span class="k">with</span> <span class="n">ctx</span><span class="o">.</span><span class="n">variable_scope_guard</span><span class="p">():</span>
             <span class="n">build_stmts</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">body</span><span class="p">)</span>
@@ -884,6 +905,22 @@
         <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">func</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Attribute</span><span class="p">)</span> <span class="ow">and</span> <span class="n">func</span><span class="o">.</span><span class="n">attr</span> <span class="o">==</span> <span class="s2">&quot;graph_do_while&quot;</span><span class="p">:</span>
             <span class="k">return</span> <span class="kc">True</span>
         <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">func</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Name</span><span class="p">)</span> <span class="ow">and</span> <span class="n">func</span><span class="o">.</span><span class="n">id</span> <span class="o">==</span> <span class="s2">&quot;graph_do_while&quot;</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">True</span>
+        <span class="k">return</span> <span class="kc">False</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_is_checkpoint_with</span><span class="p">(</span><span class="n">stmt</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">With</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Syntactic check matching CheckpointTransformer: a ``with qd.checkpoint(...):`` block. Accepted as a</span>
+<span class="sd">        well-formed statement inside a graph_do_while body (the checkpoint itself enforces its own restrictions).&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">stmt</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">With</span><span class="p">)</span> <span class="ow">or</span> <span class="nb">len</span><span class="p">(</span><span class="n">stmt</span><span class="o">.</span><span class="n">items</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">False</span>
+        <span class="n">ctx</span> <span class="o">=</span> <span class="n">stmt</span><span class="o">.</span><span class="n">items</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">context_expr</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Call</span><span class="p">):</span>
+            <span class="k">return</span> <span class="kc">False</span>
+        <span class="n">func</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">func</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">func</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Attribute</span><span class="p">)</span> <span class="ow">and</span> <span class="n">func</span><span class="o">.</span><span class="n">attr</span> <span class="o">==</span> <span class="s2">&quot;checkpoint&quot;</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">True</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">func</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Name</span><span class="p">)</span> <span class="ow">and</span> <span class="n">func</span><span class="o">.</span><span class="n">id</span> <span class="o">==</span> <span class="s2">&quot;checkpoint&quot;</span><span class="p">:</span>
             <span class="k">return</span> <span class="kc">True</span>
         <span class="k">return</span> <span class="kc">False</span>
 
@@ -952,6 +989,13 @@
                 <span class="c1"># Recurse so a malformed graph_do_while nested inside an `if` is still caught.</span>
                 <span class="n">FunctionDefTransformer</span><span class="o">.</span><span class="n">_validate_graph_do_while_stmt_list</span><span class="p">(</span><span class="n">stmt</span><span class="o">.</span><span class="n">body</span><span class="p">,</span> <span class="n">is_kernel_top</span><span class="o">=</span><span class="n">is_kernel_top</span><span class="p">)</span>
                 <span class="n">FunctionDefTransformer</span><span class="o">.</span><span class="n">_validate_graph_do_while_stmt_list</span><span class="p">(</span><span class="n">stmt</span><span class="o">.</span><span class="n">orelse</span><span class="p">,</span> <span class="n">is_kernel_top</span><span class="o">=</span><span class="n">is_kernel_top</span><span class="p">)</span>
+                <span class="k">continue</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">stmt</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">With</span><span class="p">)</span> <span class="ow">and</span> <span class="n">FunctionDefTransformer</span><span class="o">.</span><span class="n">_is_checkpoint_with</span><span class="p">(</span><span class="n">stmt</span><span class="p">):</span>
+                <span class="c1"># `with qd.checkpoint(...)` is a legal placement for graph kernels (the checkpoint may sit at the kernel</span>
+                <span class="c1"># top level or inside any graph_do_while level). Recurse so a malformed graph_do_while nested inside a</span>
+                <span class="c1"># checkpoint body is still caught; the checkpoint&#39;s own body restrictions are enforced by</span>
+                <span class="c1"># `CheckpointTransformer.build_checkpoint_with`.</span>
+                <span class="n">FunctionDefTransformer</span><span class="o">.</span><span class="n">_validate_graph_do_while_stmt_list</span><span class="p">(</span><span class="n">stmt</span><span class="o">.</span><span class="n">body</span><span class="p">,</span> <span class="n">is_kernel_top</span><span class="o">=</span><span class="n">is_kernel_top</span><span class="p">)</span>
                 <span class="k">continue</span>
             <span class="n">where</span> <span class="o">=</span> <span class="s2">&quot;the kernel body&quot;</span> <span class="k">if</span> <span class="n">is_kernel_top</span> <span class="k">else</span> <span class="s2">&quot;a qd.graph_do_while() body&quot;</span>
             <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span>
