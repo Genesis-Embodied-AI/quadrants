@@ -285,7 +285,7 @@ def test_graph_parallel_inside_graph_do_while():
 
 
 @test_utils.test()
-def test_graph_parallel_section_outside_region_raises():
+def test_graph_parallel_outside_context_raises():
     @qd.kernel(graph=True)
     def k(x: qd.types.ndarray(qd.f32, ndim=1)):
         with qd.graph_parallel():
