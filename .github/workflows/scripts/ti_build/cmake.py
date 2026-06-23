@@ -130,9 +130,9 @@ class CMakeArgsManager:
         rendered = self.render()
         self.print_summary(rendered)
         value = " ".join([v for _, v, _ in rendered])
-        # CMAKE_ARGS is scikit-build-core's standard CMake-args passthrough, and it is also what we
-        # parse on input, so writing it back makes the environment exported by `build.py wheel`, `-w`,
-        # and `--shell` directly usable by the build with no further bridging.
+        # CMAKE_ARGS is scikit-build-core's standard CMake-args passthrough, and it is also what we parse on input, so
+        # writing it back makes the environment exported by `build.py wheel`, `-w`, and `--shell` directly usable by the
+        # build with no further bridging.
         os.environ[self.environ_name] = value
         self.finalized = True
 
