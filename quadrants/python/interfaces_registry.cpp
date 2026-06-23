@@ -9,7 +9,7 @@
 
 namespace quadrants {
 
-#define QD_INTERFACE_DEF_WITH_PYBIND11(class_name, base_alias)                                                 \
+#define QD_INTERFACE_DEF_WITH_NANOBIND(class_name, base_alias)                                                 \
                                                                                                                \
   class InterfaceInjector_##class_name {                                                                       \
    public:                                                                                                     \
@@ -28,7 +28,7 @@ namespace quadrants {
     }                                                                                                          \
   } ImplementationInjector_##base_class_name##class_name##instance(base_alias);
 
-QD_INTERFACE_DEF_WITH_PYBIND11(Benchmark, "benchmark")
-QD_INTERFACE_DEF_WITH_PYBIND11(Task, "task")
+QD_INTERFACE_DEF_WITH_NANOBIND(Benchmark, "benchmark")
+QD_INTERFACE_DEF_WITH_NANOBIND(Task, "task")
 
 }  // namespace quadrants
