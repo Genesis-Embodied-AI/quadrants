@@ -472,7 +472,7 @@ In this case, our recommendation is:
 
 A `with qd.graph_parallel_context():` region lets you declare independent stages so the graph runs them concurrently.
 
-`qd.graph_parallel_context` is honoured by the graph builder so it composes with `graph=True` and `graph_do_while`.
+`qd.graph_parallel_context` is honored by the graph builder so it composes with `graph=True` and `graph_do_while`.
 
 ```python
 @qd.kernel(graph=True)
@@ -503,7 +503,7 @@ def step(...):
 - `qd.graph_parallel()` may appear only directly inside a `qd.graph_parallel_context()`.
 - `qd.graph_parallel_context` cannot be nested, and a parallel section body must be straight-line task work — no `qd.graph_do_while`, `qd.checkpoint`, or nested `qd.graph_parallel_context` inside a parallel section (a `qd.graph_parallel_context` may, however, sit inside a `qd.graph_do_while` body, as shown above).
 
-### Backend behaviour
+### Backend behavior
 
 | backend | scheduling |
 | --- | --- |

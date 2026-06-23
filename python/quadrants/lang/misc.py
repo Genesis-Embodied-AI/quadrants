@@ -746,7 +746,7 @@ def graph_do_while(condition) -> bool:
     iteration). The one structural rule is that a ``qd.graph_do_while`` ``while``-loop may appear only at the kernel top
     level or directly inside another ``graph_do_while`` body, not inside a ``for``-loop.
 
-    This function should not be called directly at runtime; it is recognised and transformed during AST compilation.
+    This function should not be called directly at runtime; it is recognized and transformed during AST compilation.
     Requires ``@qd.kernel(graph=True)``.
     """
     return bool(condition)
@@ -768,11 +768,11 @@ def graph_parallel_context():
     respect to one another (no parallel section reads what another writes, no two parallel sections write
     the same location). Calls *within* a parallel section keep their program order.
 
-    Backend behaviour:
+    Backend behavior:
       - CUDA SM graph path: parallel sections become independent graph chains joined by an empty node, so
         the runtime schedules them on parallel streams (real overlap).
       - CPU / Vulkan / Metal / AMDGPU graph: correct results, parallel sections run serially (the
-        concurrency tags are honoured only by the graph builder today).
+        concurrency tags are honored only by the graph builder today).
 
     Restrictions (enforced at kernel compile time):
       - Must be used inside ``@qd.kernel(graph=True)``.
@@ -780,7 +780,7 @@ def graph_parallel_context():
       - Regions cannot be nested, and a parallel section body must be straight-line task work (no nested
         ``qd.graph_do_while``, ``qd.checkpoint``, or ``qd.graph_parallel_context``).
 
-    This function should not be called directly at runtime; it is recognised and transformed during AST
+    This function should not be called directly at runtime; it is recognized and transformed during AST
     compilation. At Python runtime (outside kernels) it is a no-op context manager.
 
     See also ``docs/source/user_guide/graph.md``.
@@ -796,7 +796,7 @@ def graph_parallel():
     The parallel section's body is an independent sequence of work that may run concurrently with the
     region's other parallel sections.
 
-    See ``qd.graph_parallel_context()`` for the full contract and backend behaviour.
+    See ``qd.graph_parallel_context()`` for the full contract and backend behavior.
     """
     yield
 

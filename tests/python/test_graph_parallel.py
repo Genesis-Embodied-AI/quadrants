@@ -6,7 +6,7 @@ independent sequences of work. On the graph path the parallel sections become in
 joined by a single empty node, so the runtime schedules them on parallel streams; on other backends
 (CPU / AMDGPU / Vulkan / Metal) they run serially but produce identical results.
 
-The behavioural assertions (disjoint-array correctness) hold on every backend. The graph-structure
+The behavioral assertions (disjoint-array correctness) hold on every backend. The graph-structure
 assertions (node counts: one kernel node per parallel-section task + one empty join node) only apply where
 the builder forks/joins (CUDA today), so they are guarded by `_on_cuda()`.
 """
