@@ -767,8 +767,10 @@ void export_lang(nb::module_ &m) {
 
 #undef DEFINE_EXPRESSION_OP
 
-  m.def("make_global_load_stmt", Stmt::make<GlobalLoadStmt, Stmt *>);
-  m.def("make_global_store_stmt", Stmt::make<GlobalStoreStmt, Stmt *, Stmt *>);
+  // nanobind rejects None for pointer arguments by default; pybind11 mapped None -> nullptr. Opt back in with
+  // .none() so callers (incl. the binding-surface test) can pass None for these Stmt* operands.
+  m.def("make_global_load_stmt", Stmt::make<GlobalLoadStmt, Stmt *>, nb::arg().none());
+  m.def("make_global_store_stmt", Stmt::make<GlobalStoreStmt, Stmt *, Stmt *>, nb::arg().none(), nb::arg().none());
   m.def("make_frontend_assign_stmt", Stmt::make<FrontendAssignStmt, const Expr &, const Expr &, const DebugInfo &>);
 
   m.def("make_arg_load_expr",
