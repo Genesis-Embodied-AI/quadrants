@@ -619,7 +619,7 @@ class FunctionDefTransformer:
     @staticmethod
     def _is_parallel_section_with(stmt: ast.stmt) -> bool:
         """Syntactic check matching ASTTransformer._is_parallel_section_call: a ``with qd.graph_parallel(...):``
-        parallel section of a ``qd.graph_parallel_context()`` region."""
+        section of a ``qd.graph_parallel_context()`` region."""
         if not isinstance(stmt, ast.With) or len(stmt.items) != 1:
             return False
         ctx_expr = stmt.items[0].context_expr
@@ -693,11 +693,11 @@ class FunctionDefTransformer:
                 continue
             if FunctionDefTransformer._is_graph_parallel_context_with(stmt):
                 # A `with qd.graph_parallel_context()` region groups concurrent `with qd.graph_parallel()`
-                # parallel sections; it is a legal sibling of for-loops / checkpoints. Its body must be
-                # parallel-section blocks (optionally under `if qd.static(...)`); the full check is in
-                # ASTTransformer._build_graph_parallel_context_with. Each parallel section's body is task
-                # territory, validated here with the in-loop rules. Descend through `if` members so parallel
-                # sections inside an optional `if qd.static(...)` are reached too.
+                # sections; it is a legal sibling of for-loops / checkpoints. Its body must be
+                # `qd.graph_parallel` section blocks (optionally under `if qd.static(...)`); the full check
+                # is in ASTTransformer._build_graph_parallel_context_with. Each `qd.graph_parallel` section's
+                # body is task territory, validated here with the in-loop rules. Descend through `if` members
+                # so `qd.graph_parallel` sections inside an optional `if qd.static(...)` are reached too.
                 pending = list(stmt.body)
                 while pending:
                     member = pending.pop()

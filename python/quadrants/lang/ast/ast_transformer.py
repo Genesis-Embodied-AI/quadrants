@@ -1389,8 +1389,8 @@ class ASTTransformer(Builder):
 
     @staticmethod
     def _is_parallel_section_call(node: ast.expr) -> bool:
-        """If *node* is a ``qd.graph_parallel()`` (a parallel section) call return True, else False. The
-        call shape is validated here so misuse raises at the ``with`` site rather than later."""
+        """If *node* is a ``qd.graph_parallel()`` (a section) call return True, else False. The call shape
+        is validated here so misuse raises at the ``with`` site rather than later."""
         if not isinstance(node, ast.Call):
             return False
         func = node.func
@@ -1680,9 +1680,10 @@ class ASTTransformer(Builder):
 
         Validates the use-site (kernel must be graph=True, no nesting) and that the region body contains
         only ``with qd.graph_parallel():`` blocks, then walks the body. The region emits no IR tag of its
-        own -- each parallel section inside lowers to a stream-parallel group (via begin/end_stream_parallel),
-        and the graph builder forks the distinct groups in a contiguous run and joins them. Regions are kept
-        apart by the serial work between them (see d3_0_graph_parallel_impl.md)."""
+        own -- each ``qd.graph_parallel`` section inside lowers to a stream-parallel group (via
+        begin/end_stream_parallel), and the graph builder forks the distinct groups in a contiguous run and
+        joins them. Regions are kept apart by the serial work between them (see
+        d3_0_graph_parallel_impl.md)."""
         if not ctx.is_kernel:
             raise QuadrantsSyntaxError(
                 "qd.graph_parallel_context() can only be used inside @qd.kernel, not @qd.func"
@@ -1707,10 +1708,10 @@ class ASTTransformer(Builder):
     @staticmethod
     def _validate_graph_parallel_context_body(stmts: list[ast.stmt]) -> None:
         """A qd.graph_parallel_context() region body may contain only `with qd.graph_parallel():` blocks,
-        optionally wrapped in compile-time `if qd.static(...)` (the optional parallel-section pattern, e.g.
-        qipc's ENABLE_EE). Docstrings / coverage probes / `pass` are allowed. Anything else (a bare
-        for-loop, assignment, etc.) is a serial task that would silently fall outside any parallel section,
-        so reject it."""
+        optionally wrapped in compile-time `if qd.static(...)` (the optional ``qd.graph_parallel`` section
+        pattern, e.g. qipc's ENABLE_EE). Docstrings / coverage probes / `pass` are allowed. Anything else
+        (a bare for-loop, assignment, etc.) is a serial task that would silently fall outside any
+        ``qd.graph_parallel`` section, so reject it."""
         for i, stmt in enumerate(stmts):
             if FunctionDefTransformer._is_docstring(stmt, i) or FunctionDefTransformer._is_coverage_probe(stmt):
                 continue
@@ -1731,11 +1732,11 @@ class ASTTransformer(Builder):
 
     @staticmethod
     def _build_parallel_section_with(ctx: ASTTransformerFuncContext, node: ast.With) -> None:
-        """Handles a ``with qd.graph_parallel():`` parallel section of a ``qd.graph_parallel_context()`` region.
+        """Handles a ``with qd.graph_parallel():`` section of a ``qd.graph_parallel_context()`` region.
 
-        Reuses the stream-parallel tagging: begin_stream_parallel() assigns this parallel section a fresh
-        ``stream_parallel_group_id`` that every for-loop in the body inherits, so the offloaded tasks
-        carry the parallel-section id all the way to the graph builder."""
+        Reuses the stream-parallel tagging: begin_stream_parallel() assigns this ``qd.graph_parallel``
+        section a fresh ``stream_parallel_group_id`` that every for-loop in the body inherits, so the
+        offloaded tasks carry the ``qd.graph_parallel`` section id all the way to the graph builder."""
         if not getattr(ctx, "_in_graph_parallel_context", False):
             raise QuadrantsSyntaxError(
                 "qd.graph_parallel() can only be used directly inside a qd.graph_parallel_context() region"

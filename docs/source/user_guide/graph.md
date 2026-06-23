@@ -11,7 +11,7 @@ Graphs reduce kernel launch overhead by capturing a sequence of GPU operations i
 | `graph=True` | hardware accelerated | hardware accelerated | hardware accelerated | runs (no acceleration) | runs (no acceleration) | runs (no acceleration) |
 | `qd.graph_do_while` | hardware accelerated | host fallback | host fallback | host fallback | host fallback | host fallback |
 | `qd.checkpoint` | GPU-side | GPU-side | GPU-side | GPU-side | GPU-side | host-side |
-| `qd.graph_parallel_context` / `qd.graph_parallel` (parallel sections) | concurrent | concurrent | runs serially | runs serially | runs serially | runs serially |
+| `qd.graph_parallel_context` / `qd.graph_parallel` (sections) | concurrent | concurrent | runs serially | runs serially | runs serially | runs serially |
 
 AMDGPU `graph_do_while` falls back to a host-side loop because HIP does not currently expose conditional / while graph nodes (as of ROCm 7.2).
 
@@ -468,7 +468,7 @@ In this case, our recommendation is:
 - if you need optimum 100% performance on unsupported platforms, then consider PRing onto quadrants an optimized graph implementation for your target platform
     - for example it could somehow run MAX_ITER iterations anyway, similar to the earlier hand-rolled version, but via the graph abstraction, hence allowing the code to be compact, cross-platform, and also optimally fast
 
-## Parallel sections with `qd.graph_parallel_context` *(experimental)*
+## `qd.graph_parallel` sections with `qd.graph_parallel_context` *(experimental)*
 
 A `with qd.graph_parallel_context():` region lets you declare independent stages so the graph runs them concurrently.
 
@@ -478,36 +478,36 @@ A `with qd.graph_parallel_context():` region lets you declare independent stages
 @qd.kernel(graph=True)
 def step(...):
     while qd.graph_do_while(ncond):
-        assemble_shared(...)                 # serial: feeds both parallel sections
+        assemble_shared(...)                 # serial: feeds both `qd.graph_parallel` sections
 
-        with qd.graph_parallel_context():    # fork: parallel sections run concurrently
+        with qd.graph_parallel_context():    # fork: `qd.graph_parallel` sections run concurrently
             with qd.graph_parallel():            # point-triangle contacts
                 pt_assemble(...)
                 pt_hessian(...)
             with qd.graph_parallel():            # edge-edge contacts (independent of pt)
                 ee_assemble(...)
                 ee_hessian(...)
-        # join: everything below waits for BOTH parallel sections to finish
+        # join: everything below waits for BOTH `qd.graph_parallel` sections to finish
         merge_hessians(...)
         precondition(...)
 ```
 
 ### Semantics
 
-- **Fork / join.** Every parallel section in the region forks from the work that precedes the region. All parallel sections must finish before any work *after* the region begins (the join). On CUDA the join is a single empty graph node depending on every parallel section's last kernel.
-- **Parallel sections are independent — you guarantee it.** Calls *within* a parallel section keep their program order, but calls in *different* parallel sections have no ordering. The parallel sections must be data-race free with respect to one another: no parallel section may read what another writes, and no two parallel sections may write the same memory. Quadrants does not check this; getting it wrong gives nondeterministic results.
+- **Fork / join.** Every `qd.graph_parallel` section in the region forks from the work that precedes the region. All `qd.graph_parallel` sections must finish before any work *after* the region begins (the join). On CUDA the join is a single empty graph node depending on every `qd.graph_parallel` section's last kernel.
+- **`qd.graph_parallel` sections are independent — you guarantee it.** Calls *within* a `qd.graph_parallel` section keep their program order, but calls in *different* `qd.graph_parallel` sections have no ordering. The `qd.graph_parallel` sections must be data-race free with respect to one another: no `qd.graph_parallel` section may read what another writes, and no two `qd.graph_parallel` sections may write the same memory. Quadrants does not check this; getting it wrong gives nondeterministic results.
 
 ### Restrictions (enforced at kernel compile time)
 
-- `qd.graph_parallel_context` may contain only `with qd.graph_parallel():` blocks, optionally wrapped in `if qd.static(...)` (so an optional parallel section can be compiled in or out — e.g. enabling edge-edge contacts only when a feature flag is set).
+- `qd.graph_parallel_context` may contain only `with qd.graph_parallel():` blocks, optionally wrapped in `if qd.static(...)` (so an optional `qd.graph_parallel` section can be compiled in or out — e.g. enabling edge-edge contacts only when a feature flag is set).
 - `qd.graph_parallel()` may appear only directly inside a `qd.graph_parallel_context()`.
-- `qd.graph_parallel_context` cannot be nested, and a parallel section body must be straight-line task work — no `qd.graph_do_while`, `qd.checkpoint`, or nested `qd.graph_parallel_context` inside a parallel section (a `qd.graph_parallel_context` may, however, sit inside a `qd.graph_do_while` body, as shown above).
+- `qd.graph_parallel_context` cannot be nested, and a `qd.graph_parallel` section body must be straight-line task work — no `qd.graph_do_while`, `qd.checkpoint`, or nested `qd.graph_parallel_context` inside a `qd.graph_parallel` section (a `qd.graph_parallel_context` may, however, sit inside a `qd.graph_do_while` body, as shown above).
 
 ### Backend behavior
 
 | backend | scheduling |
 | --- | --- |
-| CUDA | parallel sections run **concurrently** |
-| AMDGPU / CPU / Vulkan / Metal | parallel sections run **serially** |
+| CUDA | `qd.graph_parallel` sections run **concurrently** |
+| AMDGPU / CPU / Vulkan / Metal | `qd.graph_parallel` sections run **serially** |
 
-Because parallel sections are independent by construction, running them serially produces identical results — only the scheduling differs.
+Because `qd.graph_parallel` sections are independent by construction, running them serially produces identical results — only the scheduling differs.
