@@ -314,7 +314,7 @@ def test_graph_parallel_requires_graph_kernel():
 
 
 @test_utils.test()
-def test_graph_parallel_non_section_body_raises():
+def test_graph_parallel_context_non_graph_parallel_raises():
     @qd.kernel(graph=True)
     def k(x: qd.types.ndarray(qd.f32, ndim=1)):
         with qd.graph_parallel_context():
