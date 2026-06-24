@@ -1,0 +1,112 @@
+name: Check doc ordering
+on:
+  workflow_dispatch:
+  pull_request:
+    types:
+      - opened
+      - reopened
+      - synchronize
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+jobs:
+  check-doc-ordering:
+    name: Check doc ordering
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Wait using dead-reckoning for builds to finish, before running, to save AI cost, if someone pushes many commits in a row
+        run: sleep 1800
+
+      - name: Collect changed docs
+        id: changed
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          MERGE_BASE=$(git merge-base "origin/$BASE_REF" HEAD)
+
+          # List of *.md files under docs/ that were added/modified/renamed (not deleted) in this PR.
+          # Vendored third-party docs under external/ are out of scope (pathspec is anchored at docs/).
+          # We check the ENTIRE current contents of each file, not just the diff, so we only need the
+          # file list here.
+          git diff --name-only --diff-filter=d "$MERGE_BASE...HEAD" -- 'docs/' \
+            | grep -E '\.md$' > /tmp/changed_docs.txt || true
+
+          if [ ! -s /tmp/changed_docs.txt ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "No documentation (.md) files changed."
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+            echo "Changed docs:"
+            cat /tmp/changed_docs.txt
+          fi
+
+      - name: Install Cursor CLI
+        if: steps.changed.outputs.skip != 'true'
+        run: |
+          curl https://cursor.com/install -fsS | bash
+          echo "$HOME/.cursor/bin" >> $GITHUB_PATH
+
+      - name: Check doc ordering with Cursor agent
+        if: steps.changed.outputs.skip != 'true'
+        env:
+          CURSOR_API_KEY: ${{ secrets.CURSOR_KEY_HUGH }}
+        run: |
+          RESULT=$(agent -p "$(cat <<'PROMPT'
+          You are reviewing the documentation in this PR for end-user reading order.
+
+          /tmp/changed_docs.txt contains a newline-separated list of Markdown (.md) doc files (paths
+          relative to the repo root) that were added or modified in this PR. For EACH file in that
+          list, read the FULL current contents of the file (not just the diff) and review it against
+          the rule below.
+
+          Target audience: an *end user* of Quadrants — someone who writes GPU programs in Python
+          using the Quadrants library. Assume the reader is comfortable with Python and everyday GPU
+          programming ideas, reads the doc top-to-bottom for the first time, and is NOT a compiler
+          engineer familiar with Quadrants' internals unless the doc explains them.
+
+          RULE — Reading order (no forward references).
+          Within a single doc, information should be ordered so a first-time reader can follow it
+          top-to-bottom in one pass, without jumping ahead. A FORWARD REFERENCE is when a passage
+          depends on a term, concept, parameter, behavior, code element, or result that is only
+          introduced LATER in the SAME file, such that the reader cannot understand the current
+          passage without first reading the later one.
+          VIOLATION: a passage cannot be understood by a first-time reader at the point they reach
+          it, because what it relies on is only introduced later in the same file.
+
+          The following are NOT violations:
+          - A brief overview / roadmap near the top that previews upcoming sections ("this guide
+            covers A, then B") — this is signposting the structure, not a dependency: the reader does
+            not need to understand A or B yet to keep reading.
+          - Optional "for more detail, see <section> below" pointers, where the current passage is
+            fully understandable WITHOUT following them. The test is: MUST read ahead to understand
+            (violation) vs more depth merely available later (fine).
+          - Backward references (to something earlier in the same file) are always fine.
+          - References to OTHER docs/files; this rule is about ordering WITHIN a single file only.
+          - Conventional preamble ordering (e.g. Prerequisites -> Installation -> Usage).
+
+          Pure "term is never defined" or "term not defined at first use" issues are OUT OF SCOPE for
+          this check (a separate doc-quality check owns those). Only flag genuine ORDERING problems:
+          the needed explanation exists in the file but appears too late to help the reader when they
+          first need it.
+
+          Read each listed file in full before judging it. Do NOT modify any files. Be precise and
+          conservative: only flag clear cases where a first-time reader genuinely cannot follow
+          without jumping ahead — not borderline stylistic preferences. Judge each file
+          independently. Stop after finding 10 violations in total.
+
+          If there are NO violations, your final output must start with the word PASS.
+          If there ARE violations, your final output must start with the word FAIL, followed by a list
+          of violations (up to 10), one per line, in the format:
+          <filepath>: [order]: <description, citing both line numbers — what is used at line N is only
+          introduced at line M>
+          PROMPT
+          )" --model claude-4.6-opus-high-thinking --mode ask --output-format text --trust)
+
+          echo "$RESULT"
+          if echo "$RESULT" | grep -qE "^FAIL([[:space:]]|$)"; then
+            exit 1
+          fi
