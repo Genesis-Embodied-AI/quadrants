@@ -182,7 +182,9 @@ The agent reports up to 5 violations, each annotated with the host file's hotnes
 
 Uses an AI agent to review documentation changes for an end-user audience (someone writing Quadrants kernels in Python, not a compiler engineer).
 
-Let's first define An *advanced / internal section* as a clearly-marked section whose heading contains "Advanced", "Under the hood", "Internals", or "Implementation"; it targets a more advanced reader rather than the typical end user.
+
+Let's first define an *advanced / internal section* as a clearly-marked section whose heading contains "Advanced", "Under the hood", "Internals", or "Implementation"; it targets a more advanced reader rather than the typical end user.
+
 
 For each `docs/**/*.md` file added or modified in the PR, the CI agent reads the entire current file (not just the diff) and checks two things:
 - (1) **undefined terms** — a term a typical user is unlikely to know (specialized or internal jargon, project-specific abbreviations) must be defined at its first use in that file, either inline or via a link to a doc that defines it, unless that first use is inside an advanced / internal section;
