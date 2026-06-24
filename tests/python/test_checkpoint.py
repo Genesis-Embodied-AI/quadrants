@@ -1167,6 +1167,92 @@ def test_checkpoint_fastcache_restores_self_member_yield_on(tmp_path: pathlib.Pa
         assert proc.returncode == RET_SUCCESS
 
 
+# Module-level IntEnum so `_resolve_intenum_member` can find it via importlib from the persisted qualname
+# (`tests.python.test_checkpoint._FastcacheStage.LOAD`). The kernel below uses it as the cp_id so the fast-cache
+# round-trip exercises the schema-v4 enum-identity preservation path.
+class _FastcacheStage(IntEnum):
+    LOAD = 10
+    REDUCE = 20
+
+
+@qd.kernel(graph=True, checkpoints=True, fastcache=True)
+def _fastcache_intenum_kernel(
+    x: qd.types.ndarray(qd.i32, ndim=1),
+    flag: qd.types.ndarray(qd.i32, ndim=0),
+):
+    with qd.checkpoint(_FastcacheStage.LOAD, yield_on=flag):
+        for i in range(x.shape[0]):
+            x[i] = x[i] + 1
+    with qd.checkpoint(_FastcacheStage.REDUCE, yield_on=flag):
+        for i in range(x.shape[0]):
+            x[i] = x[i] + 10
+
+
+def _fastcache_intenum_child(args: list[str]) -> None:
+    args_obj = _FastcacheCheckpointArgs.model_validate_json(args[0])
+    qd.init(
+        arch=getattr(qd, args_obj.arch),
+        offline_cache=True,
+        offline_cache_file_path=args_obj.offline_cache_file_path,
+        src_ll_cache=True,
+    )
+
+    N = 4
+    x = qd.ndarray(qd.i32, shape=(N,))
+    flag = qd.ndarray(qd.i32, shape=())
+    x.from_numpy(np.zeros(N, dtype=np.int32))
+    flag.from_numpy(np.array(0, dtype=np.int32))
+    _fastcache_intenum_kernel(x, flag)
+    np.testing.assert_array_equal(x.to_numpy(), np.full(N, 11, dtype=np.int32))
+
+    primal = _fastcache_intenum_kernel._primal
+    labels = primal.checkpoint_user_labels_by_cp_id
+    # The schema-v4 round-trip must rebuild the IntEnum identity, not just the int equality. A regression here
+    # would show up as `labels == [10, 20]` (plain ints) breaking the documented contract that
+    # `qd.checkpoint(Stage.X, ...)` surfaces as `Stage.X` (not the raw int) on `status.checkpoint`.
+    assert labels == [
+        _FastcacheStage.LOAD,
+        _FastcacheStage.REDUCE,
+    ], f"checkpoint_user_labels_by_cp_id should round-trip with IntEnum identity, got {labels!r}"
+    assert all(
+        isinstance(lbl, _FastcacheStage) for lbl in labels
+    ), f"every label slot must be a _FastcacheStage instance, got {[type(lbl).__name__ for lbl in labels]!r}"
+    assert primal.src_ll_cache_observations.cache_loaded == args_obj.expect_loaded_from_fastcache
+
+    print(TEST_RAN)
+    sys.exit(RET_SUCCESS)
+
+
+@test_utils.test()
+def test_checkpoint_fastcache_preserves_intenum_label_identity(tmp_path: pathlib.Path):
+    """Fast-cache restore must rebuild ``checkpoint_user_labels_by_cp_id`` with the original ``IntEnum`` members,
+    not just int-equal plain ints. Schema v4 adds a parallel ``checkpoint_user_label_enum_qualnames`` column so
+    ``_resolve_intenum_member`` can re-import the enum class on cache hit -- pydantic coerces ``IntEnum`` to
+    ``int`` at ``CacheValue`` construction, which would otherwise silently drop enum identity and break the
+    documented contract that ``qd.checkpoint(Stage.X, ...)`` surfaces as ``Stage.X`` (not the raw int) on
+    ``status.checkpoint`` after a fast-cache hit."""
+    assert qd.lang is not None
+    arch = qd.lang.impl.current_cfg().arch.name
+    env = dict(os.environ)
+    env["PYTHONPATH"] = "."
+
+    for expect_loaded in [False, True]:
+        args_obj = _FastcacheCheckpointArgs(
+            arch=arch,
+            offline_cache_file_path=str(tmp_path / "cache"),
+            expect_loaded_from_fastcache=expect_loaded,
+        )
+        cmd_line = [sys.executable, __file__, _fastcache_intenum_child.__name__, args_obj.model_dump_json()]
+        proc = subprocess.run(cmd_line, capture_output=True, text=True, env=env)
+        if proc.returncode != RET_SUCCESS:
+            print(" ".join(cmd_line))
+            print(proc.stdout)
+            print("-" * 100)
+            print(proc.stderr)
+        assert TEST_RAN in proc.stdout
+        assert proc.returncode == RET_SUCCESS
+
+
 # ----------------------------------------------------------------------------------------------------------------------
 # CUDA-native introspection (slice 1c).
 # ----------------------------------------------------------------------------------------------------------------------

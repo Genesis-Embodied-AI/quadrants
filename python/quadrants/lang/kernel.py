@@ -438,7 +438,20 @@ class Kernel(FuncBase):
                     if cache_value.checkpoint_yield_on_args:
                         self.checkpoint_yield_on_args = list(cache_value.checkpoint_yield_on_args)
                         self.checkpoint_yield_on_cpp_arg_ids = list(cache_value.checkpoint_yield_on_cpp_arg_ids)
-                        self.checkpoint_user_labels_by_cp_id = list(cache_value.checkpoint_user_labels_by_cp_id)
+                        # Pydantic coerces IntEnum -> int at CacheValue construction time, so the raw labels are
+                        # plain ints after JSON round-trip. ``checkpoint_user_label_enum_qualnames`` carries the
+                        # parallel ``module.ClassQualName.MEMBER`` strings that ``_resolve_intenum_member`` uses
+                        # to rebuild the original ``IntEnum`` member -- preserving the documented contract that
+                        # ``qd.checkpoint(Stage.X, ...)`` surfaces as ``Stage.X`` (not the raw int) on
+                        # ``status.checkpoint``. Older v3 caches predate the qualname column, so we default any
+                        # missing slots to ``None`` -> raw-int fallback (the same behaviour they had on v3).
+                        raw_labels = list(cache_value.checkpoint_user_labels_by_cp_id)
+                        qualnames = list(cache_value.checkpoint_user_label_enum_qualnames) or [None] * len(raw_labels)
+                        if len(qualnames) != len(raw_labels):
+                            qualnames = [None] * len(raw_labels)
+                        self.checkpoint_user_labels_by_cp_id = [
+                            src_hasher._resolve_intenum_member(qn, lbl) for qn, lbl in zip(qualnames, raw_labels)
+                        ]
                     return cache_value.used_py_dataclass_parameters
 
         elif self.quadrants_callable and not self.quadrants_callable.is_pure and self.runtime.print_non_pure:
