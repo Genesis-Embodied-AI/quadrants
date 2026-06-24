@@ -118,6 +118,10 @@ class OffloadedTask {
   int grid_dim{0};
   int dynamic_shared_array_bytes{0};
   int stream_parallel_group_id{0};
+  // Per-kernel `qd.graph_parallel_context()` region id (0 outside any region). Populated by the CUDA LLVM codegen from
+  // `OffloadedStmt::graph_parallel_region_id`. The GraphManager pairs it with `stream_parallel_group_id` so two
+  // back-to-back regions are built as separate fork/join groups (each with its own join) instead of one merged group.
+  int graph_parallel_region_id{0};
   // `cp_id` of the enclosing `qd.checkpoint(...)` block for this task (`-1` outside any checkpoint). Populated by the
   // CUDA / AMDGPU LLVM codegen from `OffloadedStmt::checkpoint_id` (set by the offload pass from
   // `RangeForStmt::checkpoint_id` / `StructForStmt::checkpoint_id`). The GraphManager will consume this in slice 1c to
@@ -167,6 +171,7 @@ class OffloadedTask {
             grid_dim,
             dynamic_shared_array_bytes,
             stream_parallel_group_id,
+            graph_parallel_region_id,
             checkpoint_id,
             graph_do_while_level_id,
             ad_stack,

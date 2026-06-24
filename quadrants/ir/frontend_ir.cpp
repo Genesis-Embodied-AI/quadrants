@@ -111,6 +111,7 @@ FrontendForStmt::FrontendForStmt(const FrontendForStmt &o)
       mem_access_opt(o.mem_access_opt),
       block_dim(o.block_dim),
       stream_parallel_group_id(o.stream_parallel_group_id),
+      graph_parallel_region_id(o.graph_parallel_region_id),
       graph_do_while_level_id(o.graph_do_while_level_id),
       checkpoint_id(o.checkpoint_id),
       loop_name(o.loop_name) {
@@ -122,6 +123,7 @@ void FrontendForStmt::init_config(Arch arch, const ForLoopConfig &config) {
   mem_access_opt = config.mem_access_opt;
   block_dim = config.block_dim;
   stream_parallel_group_id = config.stream_parallel_group_id;
+  graph_parallel_region_id = config.graph_parallel_region_id;
   graph_do_while_level_id = config.graph_do_while_level_id;
   checkpoint_id = config.checkpoint_id;
   loop_name = config.loop_name;
@@ -1510,6 +1512,7 @@ void ASTBuilder::warn_if_named_nested_loop() {
 void ASTBuilder::begin_frontend_range_for(const Expr &i, const Expr &s, const Expr &e, const DebugInfo &dbg_info) {
   warn_if_named_nested_loop();
   for_loop_dec_.config.stream_parallel_group_id = current_stream_parallel_group_id_;
+  for_loop_dec_.config.graph_parallel_region_id = current_graph_parallel_region_id_;
   for_loop_dec_.config.graph_do_while_level_id = current_graph_do_while_level_id_;
   for_loop_dec_.config.checkpoint_id = current_checkpoint_id_;
   auto stmt_unique = std::make_unique<FrontendForStmt>(i, s, e, arch_, for_loop_dec_.config, dbg_info);
@@ -1527,6 +1530,7 @@ void ASTBuilder::begin_frontend_struct_for_on_snode(const ExprGroup &loop_vars,
              "qd.loop_config(serialize=True) does not have effect on the struct for. "
              "The execution order is not guaranteed.");
   for_loop_dec_.config.stream_parallel_group_id = current_stream_parallel_group_id_;
+  for_loop_dec_.config.graph_parallel_region_id = current_graph_parallel_region_id_;
   for_loop_dec_.config.graph_do_while_level_id = current_graph_do_while_level_id_;
   for_loop_dec_.config.checkpoint_id = current_checkpoint_id_;
   auto stmt_unique = std::make_unique<FrontendForStmt>(loop_vars, snode, arch_, for_loop_dec_.config, dbg_info);
@@ -1544,6 +1548,7 @@ void ASTBuilder::begin_frontend_struct_for_on_external_tensor(const ExprGroup &l
              "qd.loop_config(serialize=True) does not have effect on the struct for. "
              "The execution order is not guaranteed.");
   for_loop_dec_.config.stream_parallel_group_id = current_stream_parallel_group_id_;
+  for_loop_dec_.config.graph_parallel_region_id = current_graph_parallel_region_id_;
   for_loop_dec_.config.graph_do_while_level_id = current_graph_do_while_level_id_;
   for_loop_dec_.config.checkpoint_id = current_checkpoint_id_;
   auto stmt_unique =
@@ -1563,6 +1568,7 @@ void ASTBuilder::begin_frontend_mesh_for(const Expr &i,
              "qd.loop_config(serialize=True) does not have effect on the mesh for. "
              "The execution order is not guaranteed.");
   for_loop_dec_.config.stream_parallel_group_id = current_stream_parallel_group_id_;
+  for_loop_dec_.config.graph_parallel_region_id = current_graph_parallel_region_id_;
   for_loop_dec_.config.graph_do_while_level_id = current_graph_do_while_level_id_;
   for_loop_dec_.config.checkpoint_id = current_checkpoint_id_;
   auto stmt_unique =

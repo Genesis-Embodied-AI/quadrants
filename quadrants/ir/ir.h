@@ -397,6 +397,12 @@ class StmtFieldManager {
 struct GraphRegionTag {
   int graph_do_while_level_id{-1};
   int stream_parallel_group_id{0};
+  // Per-kernel `qd.graph_parallel_context()` region id (0 outside any region). Only ever set on the PURE-bucket
+  // `fallback_tag` in `offload.cpp` (so a section's pure bound-compute serial is grouped into the same region as the
+  // for-loop that consumes it). Source-level serial statements live outside any region, so their stamped `region_tag`
+  // leaves this at 0. Excluded from operator==/!= for the same reason `is_set` is: the serial bucket only ever
+  // compares region-0 side-effecting tags, so region id never participates.
+  int graph_parallel_region_id{0};
   // `cp_id` (see `quadrants/lang/checkpoint.py`) of the enclosing `qd.checkpoint(...)` block, or `-1` outside any
   // checkpoint. Stamped on every frontend statement by `ASTBuilder::insert` (from `current_checkpoint_id_`) so a
   // SIDE-EFFECTING serial task tagged with a real checkpoint can be gated/skipped on `resume(from_checkpoint=...)`

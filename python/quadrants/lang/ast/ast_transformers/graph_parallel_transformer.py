@@ -5,9 +5,10 @@ Lives alongside ``checkpoint_transformer.py`` / ``function_def_transformer.py`` 
 have to grow per-feature. ``ASTTransformer.build_With`` forwards ``qd.graph_parallel_context()`` regions and their
 ``qd.graph_parallel()`` sections into the static methods here.
 
-A ``qd.graph_parallel_context()`` region emits no IR tag of its own: each ``qd.graph_parallel()`` section inside lowers
-to a stream-parallel group (via ``begin/end_stream_parallel``), and the graph builder forks the distinct groups in a
-contiguous run and joins them. Regions are kept apart by the serial work between them. See
+A ``qd.graph_parallel_context()`` region tags its body with a per-kernel region id (via
+``begin/end_graph_parallel_context``) and each ``qd.graph_parallel()`` section inside lowers to a stream-parallel group
+(via ``begin/end_stream_parallel``). The graph builder forks the distinct groups of one region in a contiguous run and
+joins them; the region id keeps two back-to-back regions apart (each gets its own join). See
 ``docs/source/user_guide/graph.md`` for the user-facing surface.
 """
 
@@ -62,10 +63,11 @@ class GraphParallelTransformer:
         """Handles ``with qd.graph_parallel_context():`` fork/join regions.
 
         Validates the use-site (kernel must be graph=True, no nesting) and that the region body contains only
-        ``with qd.graph_parallel():`` blocks, then walks the body. The region emits no IR tag of its own -- each
-        ``qd.graph_parallel`` section inside lowers to a stream-parallel group (via begin/end_stream_parallel), and the
-        graph builder forks the distinct groups in a contiguous run and joins them. Regions are kept apart by the serial
-        work between them."""
+        ``with qd.graph_parallel():`` blocks, then walks the body. The region is bracketed with
+        begin/end_graph_parallel_context() so its body carries a per-kernel region id, and each ``qd.graph_parallel``
+        section inside lowers to a stream-parallel group (via begin/end_stream_parallel). The graph builder forks the
+        distinct groups of one region in a contiguous run and joins them; the region id keeps two back-to-back regions
+        apart (each gets its own join)."""
         if not ctx.is_kernel:
             raise QuadrantsSyntaxError("qd.graph_parallel_context() can only be used inside @qd.kernel, not @qd.func")
         kernel = ctx.global_context.current_kernel
@@ -77,9 +79,11 @@ class GraphParallelTransformer:
             raise QuadrantsSyntaxError("qd.graph_parallel_context() cannot appear inside a qd.graph_parallel() body")
         GraphParallelTransformer._validate_graph_parallel_context_body(ctx, node.body)
         ctx._in_graph_parallel_context = True
+        ctx.ast_builder.begin_graph_parallel_context()
         try:
             build_stmts(ctx, node.body)
         finally:
+            ctx.ast_builder.end_graph_parallel_context()
             ctx._in_graph_parallel_context = False
         return None
 

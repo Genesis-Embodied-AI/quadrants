@@ -409,11 +409,17 @@ void GraphManager::build_level(int parent_id,
     // distinct group id is one qd.graph_parallel section; the qd.graph_parallel sections fork from the
     // region's entry (`prev_node`), run their tasks in order, and join into a single empty node so
     // downstream work waits for all of them. CUDA's graph executor schedules the independent
-    // qd.graph_parallel section chains on separate streams -> real overlap. ---
+    // qd.graph_parallel section chains on separate streams -> real overlap.
+    //
+    // The run is bounded to a single region by graph_parallel_region_id: two qd.graph_parallel_context() regions
+    // written back-to-back (no serial task between them to break the run) carry distinct region ids, so each builds
+    // its own fork/join with its own join node. Without this guard the second region's sections would fork from the
+    // same entry as the first's and could run concurrently with -- and race -- the first region's work. ---
     if (tasks[cursor].stream_parallel_group_id != 0 && tasks[cursor].checkpoint_id < 0) {
+      const int region_id = tasks[cursor].graph_parallel_region_id;
       int run_end = cursor;
       while (run_end < end && tasks[run_end].graph_do_while_level_id == parent_id && tasks[run_end].checkpoint_id < 0 &&
-             tasks[run_end].stream_parallel_group_id != 0) {
+             tasks[run_end].stream_parallel_group_id != 0 && tasks[run_end].graph_parallel_region_id == region_id) {
         run_end++;
       }
       // Bucket the run's tasks by qd.graph_parallel section id, preserving first-seen (declaration) order.

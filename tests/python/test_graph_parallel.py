@@ -101,6 +101,64 @@ def test_graph_parallel_two_sections():
 
 
 @test_utils.test()
+def test_graph_parallel_back_to_back_regions_keep_join():
+    """Two qd.graph_parallel_context() regions written back-to-back (no serial work between them) must each get
+    their own fork/join. Region B reads what region A wrote, so if the two regions were merged into one fork/join
+    (dropping A's join) B's sections would fork alongside -- and race -- A's. On CUDA we assert the graph has one
+    empty join node per region (two total); on every backend the post-join values must be correct. Regression test
+    for the back-to-back-region merge bug.
+
+    Each region's two sections stay mutually disjoint (one touches only x, the other only y); the only data
+    dependency is across the region boundary (B's x-section reads A's x-section output, B's y-section reads A's
+    y-section output), which is exactly the edge the join protects."""
+    n = 1024
+
+    @qd.kernel(graph=True)
+    def k(x: qd.types.ndarray(qd.f32, ndim=1), y: qd.types.ndarray(qd.f32, ndim=1)):
+        # Region A: write x and y in two independent sections.
+        with qd.graph_parallel_context():
+            with qd.graph_parallel():
+                for i in range(x.shape[0]):
+                    x[i] = 1.0
+            with qd.graph_parallel():
+                for i in range(y.shape[0]):
+                    y[i] = 2.0
+        # Region B, immediately after A (no serial statement between the regions). Each section reads the region-A
+        # section that wrote the same array, so B must wait for A's join. B's sections remain disjoint from each
+        # other (x-only vs y-only).
+        with qd.graph_parallel_context():
+            with qd.graph_parallel():
+                for i in range(x.shape[0]):
+                    x[i] = x[i] * 10.0
+            with qd.graph_parallel():
+                for i in range(y.shape[0]):
+                    y[i] = y[i] * 10.0
+
+    x = qd.ndarray(qd.f32, shape=(n,))
+    y = qd.ndarray(qd.f32, shape=(n,))
+    x.from_numpy(np.zeros(n, dtype=np.float32))
+    y.from_numpy(np.zeros(n, dtype=np.float32))
+
+    k(x, y)
+
+    if _on_cuda():
+        # One empty join node per region (two regions -> two joins). The merge bug this guards would build a single
+        # fork/join across both regions, emitting only one join, i.e. num_tasks + 1.
+        assert _graph_num_nodes() == _num_offloaded_tasks() + 2
+
+    # Correct only if region A fully joined before region B ran: x = 1 * 10, y = 2 * 10.
+    np.testing.assert_allclose(x.to_numpy(), 10.0)
+    np.testing.assert_allclose(y.to_numpy(), 20.0)
+
+    # Relaunch: same cached graph, same result.
+    x.from_numpy(np.zeros(n, dtype=np.float32))
+    y.from_numpy(np.zeros(n, dtype=np.float32))
+    k(x, y)
+    np.testing.assert_allclose(x.to_numpy(), 10.0)
+    np.testing.assert_allclose(y.to_numpy(), 20.0)
+
+
+@test_utils.test()
 def test_graph_parallel_three_sections():
     """Fan-out of three independent qd.graph_parallel sections; one empty join node."""
     n = 256
