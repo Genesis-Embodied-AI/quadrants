@@ -366,6 +366,83 @@ def test_graph_do_while_with_dataclass_member_counter():
 
 
 @test_utils.test()
+def test_graph_do_while_with_member_nonexistent_attribute_raises():
+    """`qd.graph_do_while(self.nonexistent_attr)` must raise the same user-facing
+    `does not resolve to an ndarray kernel parameter` diagnostic as the bare-name nonexistent case. The AST-time
+    resolver wraps the underlying attribute lookup failure so the user sees one consistent error pattern across
+    bare-name and attribute forms."""
+    N = 4
+
+    @qd.data_oriented
+    class Sim:
+        def __init__(self):
+            self.x = qd.ndarray(qd.i32, shape=(N,))
+            self.counter = qd.ndarray(qd.i32, shape=())
+
+        @qd.kernel(graph=True)
+        def step(self):
+            while qd.graph_do_while(self.nonexistent_counter):  # type: ignore[attr-defined]
+                for i in range(self.x.shape[0]):
+                    self.x[i] = self.x[i] + 1
+
+    sim = Sim()
+    with pytest.raises(qd.QuadrantsSyntaxError, match="does not resolve to an ndarray kernel parameter"):
+        sim.step()
+
+
+@test_utils.test()
+def test_graph_do_while_with_data_oriented_member_nested():
+    """Nested `qd.graph_do_while(self.outer)` containing `qd.graph_do_while(self.inner)` exercises the level-table
+    machinery with member ndarrays: each level resolves its own flat C++ arg-id at AST-build time, the parent_id
+    chain links inner -> outer, and the loop body iterates `outer_iters * inner_iters` times the same as the
+    bare-parameter version (see `test_graph_do_while_nested_two_levels`)."""
+    if not _is_graph_do_while_natively_supported() and not (
+        impl.current_cfg().arch in (qd.x64, qd.arm64, qd.amdgpu, qd.vulkan, qd.metal)
+    ):
+        pytest.skip("backend does not implement graph_do_while")
+    N = 4
+
+    @qd.data_oriented
+    class Sim:
+        def __init__(self):
+            self.x = qd.ndarray(qd.i32, shape=(N,))
+            self.outer = qd.ndarray(qd.i32, shape=())
+            self.inner = qd.ndarray(qd.i32, shape=())
+            self.inner_start = qd.ndarray(qd.i32, shape=())
+
+        @qd.kernel(graph=True)
+        def step(self):
+            while qd.graph_do_while(self.outer):
+                for _ in range(1):
+                    self.inner[()] = self.inner_start[()]
+                while qd.graph_do_while(self.inner):
+                    for i in range(self.x.shape[0]):
+                        self.x[i] = self.x[i] + 1
+                    for _ in range(1):
+                        self.inner[()] = self.inner[()] - 1
+                for _ in range(1):
+                    self.outer[()] = self.outer[()] - 1
+
+    sim = Sim()
+    sim.x.from_numpy(np.zeros(N, dtype=np.int32))
+    sim.outer.from_numpy(np.array(3, dtype=np.int32))
+    sim.inner.from_numpy(np.array(2, dtype=np.int32))
+    sim.inner_start.from_numpy(np.array(2, dtype=np.int32))
+    sim.step()
+    np.testing.assert_array_equal(sim.x.to_numpy(), np.full(N, 6, dtype=np.int32))
+    assert sim.outer.to_numpy() == 0
+    levels = sim.step._primal.graph_do_while_levels
+    assert len(levels) == 2
+    assert levels[0].cond_arg_name == "self.outer"
+    assert levels[1].cond_arg_name == "self.inner"
+    assert levels[0].parent_id == -1
+    assert levels[1].parent_id == 0
+    assert levels[0].cond_cpp_arg_id >= 0
+    assert levels[1].cond_cpp_arg_id >= 0
+    assert levels[0].cond_cpp_arg_id != levels[1].cond_cpp_arg_id
+
+
+@test_utils.test()
 def test_graph_do_while_with_data_oriented_member_counter():
     """`qd.graph_do_while(self.counter)` resolves the member ndarray to the loop condition's flat C++ arg-id at
     AST-build time via ``ASTTransformer._resolve_ndarray_kernel_arg_id``, lifting the previous bare-parameter
