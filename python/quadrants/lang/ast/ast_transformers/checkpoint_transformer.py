@@ -228,16 +228,18 @@ class CheckpointTransformer:
         yield_on_label: str | None = None
         yield_on_cpp_arg_id: int = -1
         if not info.is_implicit:
-            # Resolve `yield_on=` (a bare parameter or `@qd.data_oriented` member ndarray) to its flat C++ arg-id at
-            # AST-build time. ``_resolve_ndarray_kernel_arg_id`` raises a user-facing ``QuadrantsSyntaxError`` if the
-            # expression does not name a real ndarray kernel argument, which keeps the diagnostic at the `with` site
-            # instead of leaking into the launcher. Both the label (for ``checkpoint_yield_on_args`` / introspection)
-            # and the resolved arg-id (for the runtime) are stashed and forwarded to the launch path below.
-            # Local import to avoid an ast_transformers -> ast_transformer cycle.
+            # Resolve `yield_on=` (a bare parameter or `@qd.data_oriented` / `@dataclasses.dataclass` member
+            # ndarray) to its flat C++ arg-id at AST-build time. ``resolve_ndarray_kernel_arg_id`` raises a
+            # user-facing ``QuadrantsSyntaxError`` if the expression does not name a real ndarray kernel argument,
+            # which keeps the diagnostic at the `with` site instead of leaking into the launcher. Both the label
+            # (for ``checkpoint_yield_on_args`` / introspection) and the resolved arg-id (for the runtime) are
+            # stashed and forwarded to the launch path below.
             # pylint: disable-next=C0415,import-outside-toplevel
-            from quadrants.lang.ast.ast_transformer import ASTTransformer
+            from quadrants.lang.ast.ast_transformers.ndarray_arg_resolver import (
+                resolve_ndarray_kernel_arg_id,
+            )
 
-            yield_on_label, yield_on_cpp_arg_id = ASTTransformer._resolve_ndarray_kernel_arg_id(
+            yield_on_label, yield_on_cpp_arg_id = resolve_ndarray_kernel_arg_id(
                 ctx, kernel, info.yield_on_node, "qd.checkpoint(yield_on=...)"
             )
             # Reject duplicate user-supplied cp_id labels.
