@@ -36,7 +36,7 @@ class TaskCodegen : public IRVisitor {
     DeviceCapabilityConfig *caps;
     std::vector<CompiledSNodeStructs> compiled_structs;
     const KernelContextAttributes *ctx_attribs;
-    std::string ti_kernel_name;
+    std::string qd_kernel_name;
     int task_id_in_kernel;
     const CompileConfig *compile_config{nullptr};
   };

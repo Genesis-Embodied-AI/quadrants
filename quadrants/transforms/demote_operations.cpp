@@ -180,9 +180,9 @@ class DemoteOperations : public BasicStmtVisitor {
     auto rhs_prim_type = rhs_type.get_element_type();
     if (stmt->op_type == BinaryOpType::floordiv) {
       if (is_integral(rhs_prim_type) && is_integral(lhs_prim_type)) {
-        // @ti.func
+        // @qd.func
         // def ifloordiv(a, b):
-        //     r = ti.raw_div(a, b)
+        //     r = qd.raw_div(a, b)
         //     if (a < 0) != (b < 0) and a and b * r != a:
         //         r = r - 1
         //     return r
@@ -210,10 +210,10 @@ class DemoteOperations : public BasicStmtVisitor {
         modifier.erase(stmt);
 
       } else if (is_real(rhs_prim_type) || is_real(lhs_prim_type)) {
-        // @ti.func
+        // @qd.func
         // def ffloordiv(a, b):
-        //     r = ti.raw_div(a, b)
-        //     return ti.floor(r)
+        //     r = qd.raw_div(a, b)
+        //     return qd.floor(r)
         auto floor = demote_ffloor(stmt, lhs, rhs);
         floor->ret_type = stmt->ret_type;
         stmt->replace_usages_with(floor.get());
@@ -221,11 +221,11 @@ class DemoteOperations : public BasicStmtVisitor {
         modifier.erase(stmt);
       }
     } else if (stmt->op_type == BinaryOpType::bit_shr) {
-      // @ti.func
+      // @qd.func
       // def bit_shr(a, b):
-      //     unsigned_a = ti.cast(a, ti.uXX)
-      //     shifted = ti.bit_sar(unsigned_a, b)
-      //     ret = ti.cast(shifted, ti.iXX)
+      //     unsigned_a = qd.cast(a, qd.uXX)
+      //     shifted = qd.bit_sar(unsigned_a, b)
+      //     ret = qd.cast(shifted, qd.iXX)
       //     return ret
       QD_ASSERT(is_integral(lhs_prim_type) && is_integral(rhs_prim_type));
       auto unsigned_cast = Stmt::make<UnaryOpStmt>(UnaryOpType::cast_bits, lhs);
@@ -245,7 +245,7 @@ class DemoteOperations : public BasicStmtVisitor {
       // We need to manually transform it to make it work.
 
       // [Transform]
-      // @ti.func
+      // @qd.func
       // def pow(lhs, rhs):
       //     a = lhs
       //     b = abs(rhs)

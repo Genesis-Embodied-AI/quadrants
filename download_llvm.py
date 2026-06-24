@@ -6,6 +6,6 @@ from pathlib import Path
 path = Path(__file__).resolve().parent / ".github" / "workflows" / "scripts"
 sys.path.insert(0, str(path))
 
-import ti_build.llvm
+import qd_build.llvm
 
-sys.exit(ti_build.llvm.main())
+sys.exit(qd_build.llvm.main())

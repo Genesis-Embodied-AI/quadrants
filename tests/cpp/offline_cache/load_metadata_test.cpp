@@ -44,10 +44,10 @@ MetadataType gen_correct_metadata() {
 
 template <typename MetadataType>
 void load_metadata_test() {
-  std::string fake_file = fmt::format("{}.tcb", std::tmpnam(nullptr));
-  std::string old_file = fmt::format("{}.tcb", std::tmpnam(nullptr));
-  std::string corrupted_file = fmt::format("{}.tcb", std::tmpnam(nullptr));
-  std::string true_file = fmt::format("{}.tcb", std::tmpnam(nullptr));
+  std::string fake_file = fmt::format("{}.qdb", std::tmpnam(nullptr));
+  std::string old_file = fmt::format("{}.qdb", std::tmpnam(nullptr));
+  std::string corrupted_file = fmt::format("{}.qdb", std::tmpnam(nullptr));
+  std::string true_file = fmt::format("{}.qdb", std::tmpnam(nullptr));
 
   // Generate metadata & Save as file
   write_to_binary_file(gen_correct_metadata<MetadataType>(), true_file);

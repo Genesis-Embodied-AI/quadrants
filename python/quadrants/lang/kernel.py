@@ -104,17 +104,17 @@ class LaunchContextBufferCache:
     # pointers, the address of these pointers cannot change, and the set of parameters is fixed.
     # The lifetime of a cache entry is bound to the lifetime of any of its input arguments: the first being garbage
     # collected will invalidate the entire entry. Moreover, the entire cache registry is bound to the lifetime of the
-    # taichi prog itself, which means that calling `qd.reset()` will automatically clear the cache. Note that the cache
+    # quadrants prog itself, which means that calling `qd.reset()` will automatically clear the cache. Note that the cache
     # stores wear references to pointers, so it does not hold alife any allocated memory.
     def __init__(self) -> None:
-        # Keep track of taichi runtime to automatically clear cache if destroyed
+        # Keep track of quadrants runtime to automatically clear cache if destroyed
         self._prog_weakref: ReferenceType[Program] | None = None
 
         # The cache key corresponds to the hash of the (packed) python-side input arguments of the kernel.
         # * '_launch_ctx_cache' is storing a backup of the launch context BEFORE ever calling the kernel.
         # * '_launch_ctx_cache_tracker' is used for bounding the lifetime of a cache entry to its corresponding set of
-        #   input arguments. Internally, this is done by wrapping all Taichi ndarrays as weak reference.
-        # * '_prog_weakref'is used for bounding the lifetime of the entire cache to the Taichi programm managing all
+        #   input arguments. Internally, this is done by wrapping all Quadrants ndarrays as weak reference.
+        # * '_prog_weakref'is used for bounding the lifetime of the entire cache to the Quadrants programm managing all
         #   the launch context being stored in cache.
         # See 'launch_kernel' for details regarding the intended use of caching.
         self._launch_ctx_cache: dict["ArgsHash", KernelLaunchContext] = {}
@@ -170,7 +170,7 @@ class LaunchContextBufferCache:
                 prog, partial(LaunchContextBufferCache._destroy_callback, ReferenceType(self))
             )
         else:
-            # Since we already store a weak reference to taichi program, it is much faster to use it rather than
+            # Since we already store a weak reference to quadrants program, it is much faster to use it rather than
             # paying the overhead of calling pybind11 functions (~200ns vs 5ns).
             prog = self._prog_weakref()
         assert prog is not None
@@ -670,7 +670,7 @@ class Kernel(FuncBase):
         try:
             prog = impl.get_runtime().prog
             if not compiled_kernel_data:
-                # Store Taichi program config and device cap for efficiency because they are used at multiple places
+                # Store Quadrants program config and device cap for efficiency because they are used at multiple places
                 prog_config = prog.config()
                 prog_device_cap = prog.get_device_caps()
 

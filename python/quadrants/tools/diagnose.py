@@ -46,7 +46,7 @@ def main():
             print(f"{tag}: ERROR {e}")
 
     print("")
-    try_print("import", "ti")
+    try_print("import", "qd")
     print("")
     for arch in ["cpu", "metal", "cuda", "vulkan"]:
         try_print(arch, f"qd.lang.misc.is_arch_supported(qd.{arch})")
@@ -81,32 +81,32 @@ def main():
         print(f"{nvidia_smi.decode()}")
 
     try:
-        ti_header = subprocess.check_output([executable, "-c", "import quadrants"])
+        qd_header = subprocess.check_output([executable, "-c", "import quadrants"])
     except Exception as e:
         print(f"`import quadrants` failed: {e}")
     else:
-        print(f"{ti_header.decode()}")
+        print(f"{qd_header.decode()}")
 
     try:
-        ti_init_test = subprocess.check_output([executable, "-c", "import quadrants as qd; qd.init()"])
+        qd_init_test = subprocess.check_output([executable, "-c", "import quadrants as qd; qd.init()"])
     except Exception as e:
         print(f"`qd.init()` failed: {e}")
     else:
-        print(f"{ti_init_test.decode()}")
+        print(f"{qd_init_test.decode()}")
 
     try:
-        ti_cuda_test = subprocess.check_output([executable, "-c", "import quadrants as qd; qd.init(arch=qd.cuda)"])
+        qd_cuda_test = subprocess.check_output([executable, "-c", "import quadrants as qd; qd.init(arch=qd.cuda)"])
     except Exception as e:
         print(f"Quadrants CUDA test failed: {e}")
     else:
-        print(f"{ti_cuda_test.decode()}")
+        print(f"{qd_cuda_test.decode()}")
 
     try:
-        ti_laplace = subprocess.check_output([executable, "-m", "quadrants", "example", "minimal"])
+        qd_laplace = subprocess.check_output([executable, "-m", "quadrants", "example", "minimal"])
     except Exception as e:
         print(f"`python/quadrants/examples/algorithm/laplace.py` failed: {e}")
     else:
-        print(f"{ti_laplace.decode()}")
+        print(f"{qd_laplace.decode()}")
 
     print("Consider attaching this log when maintainers ask about system information.")
 

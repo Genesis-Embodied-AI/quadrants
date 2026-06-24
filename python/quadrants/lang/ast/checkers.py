@@ -92,7 +92,7 @@ class KernelSimplicityASTChecker(ast.NodeVisitor):
         # is_static = (isinstance(node.iter, ast.Call)
         #              and isinstance(node.iter.func, ast.Attribute)
         #              and isinstance(node.iter.func.value, ast.Name)
-        #              and node.iter.func.value.id == 'ti'
+        #              and node.iter.func.value.id == 'qd'
         #              and node.iter.func.attr == 'static')
         # if not (self.top_level or self.current_scope.allows_for_loop
         #         or is_static):

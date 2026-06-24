@@ -14,7 +14,5 @@ message("    numpy include: ${NUMPY_INCLUDE_DIR}")
 
 include_directories(${NUMPY_INCLUDE_DIR})
 
-include(FetchContent)
-
 message("Using pybind11 version: ${pybind11_version}")
 find_package(pybind11 CONFIG REQUIRED)

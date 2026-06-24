@@ -160,7 +160,7 @@ LoopUniqueStmt::LoopUniqueStmt(Stmt *input, const std::vector<SNode *> &covers, 
     if (sn->is_place()) {
       QD_INFO(
           "A place SNode {} appears in the 'covers' parameter "
-          "of 'ti.loop_unique'. It is recommended to use its parent "
+          "of 'qd.loop_unique'. It is recommended to use its parent "
           "(x.parent()) instead.",
           sn->get_node_type_name_hinted());
       this->covers.insert(sn->parent->id);

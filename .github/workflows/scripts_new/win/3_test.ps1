@@ -2,8 +2,8 @@ $ErrorActionPreference = "Stop"
 Set-PSDebug -Trace 1
 trap { Write-Error $_; exit 1 }
 
-python -c 'import gstaichi as ti; ti.init();'
-$env:QD_LIB_DIR="python/gstaichi/_lib/runtime"
+python -c 'import quadrants as qd; qd.init();'
+$env:QD_LIB_DIR="python/quadrants/_lib/runtime"
 Get-ChildItem -Path build -Recurse
 pip install --group test
 

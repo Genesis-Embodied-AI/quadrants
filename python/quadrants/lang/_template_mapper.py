@@ -81,13 +81,13 @@ class TemplateMapper:
         if len(args) != self.num_args:
             raise TypeError(f"{self.num_args} argument(s) needed but {len(args)} provided.")
 
-        # Keep track of taichi runtime to automatically clear cache if destroyed
+        # Keep track of quadrants runtime to automatically clear cache if destroyed
         if self._prog_weakref is None:
             prog = impl.get_runtime().prog
             assert prog is not None
             self._prog_weakref = ReferenceType(prog, partial(_destroy_callback, ReferenceType(self)))
         else:
-            # Since we already store a weak reference to taichi program, it is much faster to use it rather than
+            # Since we already store a weak reference to quadrants program, it is much faster to use it rather than
             # paying the overhead of calling pybind11 functions (~200ns vs 5ns).
             prog = self._prog_weakref()
         assert prog is not None

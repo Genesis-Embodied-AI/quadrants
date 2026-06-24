@@ -194,7 +194,7 @@ class DemoteAtomics : public BasicStmtVisitor {
           new_stmts.push_back<GlobalStoreStmt>(ptr, bin);
         }
       }
-      // For a quadrants program like `c = ti.atomic_add(a, b)`, the IR looks
+      // For a quadrants program like `c = qd.atomic_add(a, b)`, the IR looks
       // like the following
       //
       // $c  = # lhs memory
