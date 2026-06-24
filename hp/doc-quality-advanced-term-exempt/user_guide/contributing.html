@@ -592,7 +592,7 @@
 <section id="doc-quality-check-check-doc-quality-yml">
 <h3>Doc quality check (<code class="docutils literal notranslate"><span class="pre">check_doc_quality.yml</span></code>)<a class="headerlink" href="#doc-quality-check-check-doc-quality-yml" title="Link to this heading">#</a></h3>
 <p>Uses an AI agent to review documentation changes for an end-user audience (someone writing Quadrants kernels in Python, not a compiler engineer).</p>
-<p>Let’s first define An <em>advanced / internal section</em> as a clearly-marked section whose heading contains “Advanced”, “Under the hood”, “Internals”, or “Implementation”; it targets a more advanced reader rather than the typical end user.</p>
+<p>Let’s first define an <em>advanced / internal section</em> as a clearly-marked section whose heading contains “Advanced”, “Under the hood”, “Internals”, or “Implementation”; it targets a more advanced reader rather than the typical end user.</p>
 <p>For each <code class="docutils literal notranslate"><span class="pre">docs/**/*.md</span></code> file added or modified in the PR, the CI agent reads the entire current file (not just the diff) and checks two things:</p>
 <ul class="simple">
 <li><p>(1) <strong>undefined terms</strong> — a term a typical user is unlikely to know (specialized or internal jargon, project-specific abbreviations) must be defined at its first use in that file, either inline or via a link to a doc that defines it, unless that first use is inside an advanced / internal section;</p></li>
