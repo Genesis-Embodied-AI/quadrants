@@ -60,10 +60,17 @@ void export_lang(nb::module_ &m) {
   using namespace quadrants::lang;
   using namespace std::placeholders;
 
+  // nb::exception registers the Python exception type (and its C++->Python translation) as a side
+  // effect of construction; the returned handle is intentionally discarded.
+  // NOLINTNEXTLINE(bugprone-unused-raii)
   nb::exception<QuadrantsTypeError>(m, "QuadrantsTypeError", PyExc_TypeError);
+  // NOLINTNEXTLINE(bugprone-unused-raii)
   nb::exception<QuadrantsSyntaxError>(m, "QuadrantsSyntaxError", PyExc_SyntaxError);
+  // NOLINTNEXTLINE(bugprone-unused-raii)
   nb::exception<QuadrantsIndexError>(m, "QuadrantsIndexError", PyExc_IndexError);
+  // NOLINTNEXTLINE(bugprone-unused-raii)
   nb::exception<QuadrantsRuntimeError>(m, "QuadrantsRuntimeError", PyExc_RuntimeError);
+  // NOLINTNEXTLINE(bugprone-unused-raii)
   nb::exception<QuadrantsAssertionError>(m, "QuadrantsAssertionError", PyExc_AssertionError);
   nb::enum_<Arch>(m, "Arch", nb::is_arithmetic())
 #define PER_ARCH(x) .value(#x, Arch::x)
