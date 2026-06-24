@@ -472,12 +472,12 @@
 <h2><code class="docutils literal notranslate"><span class="pre">build.py</span></code><a class="headerlink" href="#build-py" title="Link to this heading">#</a></h2>
 <p><code class="docutils literal notranslate"><span class="pre">build.py</span></code> is a python script to automatically set up the build environment for you before invoking the build commands:</p>
 <ul class="simple">
-<li><p><code class="docutils literal notranslate"><span class="pre">LLVM</span> <span class="pre">libraries</span></code>: downloads an archive for <code class="docutils literal notranslate"><span class="pre">LLVM</span></code> libraries, decompresses it and sets <code class="docutils literal notranslate"><span class="pre">LLVM_DIR</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">LLVM</span> <span class="pre">libraries</span></code>: downloads an archive for <a class="reference external" href="https://llvm.org/">LLVM</a> libraries (a library for building compilers), decompresses it and sets <code class="docutils literal notranslate"><span class="pre">LLVM_DIR</span></code>.</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">clang</span></code>: depending on the platform, download <code class="docutils literal notranslate"><span class="pre">clang</span></code> or just check if available with the right version.</p></li>
 </ul>
 <p><code class="docutils literal notranslate"><span class="pre">build.py</span></code> can be used at least two ways:</p>
 <ul class="simple">
-<li><p><code class="docutils literal notranslate"><span class="pre">build.py</span> <span class="pre">wheel</span></code> to build the wheel (via scikit-build-core, i.e. <code class="docutils literal notranslate"><span class="pre">pip</span> <span class="pre">wheel</span></code>)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">build.py</span> <span class="pre">wheel</span></code> to build the wheel</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">build.py</span> <span class="pre">--shell</span></code> to enter a shell with environment variables set up as with <code class="docutils literal notranslate"><span class="pre">build.py</span> <span class="pre">wheel</span></code> in order to let you invoke yourself the commands.</p></li>
 </ul>
 <p>For incremental development, do an editable install (scikit-build-core “redirect” mode: the compiled core is installed and rebuilt on demand, Python edits are live):</p>
