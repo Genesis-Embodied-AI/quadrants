@@ -49,12 +49,12 @@ uv pip install --group dev --group test
 
 `build.py` is a python script to automatically set up the build environment for you before invoking the build commands:
 
-* `LLVM libraries`: downloads an archive for `LLVM` libraries, decompresses it and sets `LLVM_DIR`.
+* `LLVM libraries`: downloads an archive for [LLVM](https://llvm.org/) libraries (a library for building compilers), decompresses it and sets `LLVM_DIR`.
 * `clang`: depending on the platform, download `clang` or just check if available with the right version.
 
 `build.py` can be used at least two ways:
 
-* `build.py wheel` to build the wheel (via scikit-build-core, i.e. `pip wheel`)
+* `build.py wheel` to build the wheel
 * `build.py --shell` to enter a shell with environment variables set up as with `build.py wheel` in order to let you invoke yourself the commands.
 
 For incremental development, do an editable install (scikit-build-core "redirect" mode: the compiled core is installed and rebuilt on demand, Python edits are live):
