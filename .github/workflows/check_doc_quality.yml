@@ -72,6 +72,12 @@ jobs:
             codegen, RHI / backend C++ code, pass pipeline, SNode internals, build system, etc. —
             unless the doc itself explains it.
 
+          Advanced / internal section (referenced by both rules below): a clearly delimited section
+          whose heading marks it as such — e.g. a heading containing "Advanced", "Under the hood",
+          "Internals", or "Implementation" — or a doc that is itself explicitly an advanced / internal
+          reference. Such a section is understood to be aimed at a more advanced / internal reader
+          rather than the typical end user.
+
           RULE 1 — Undefined terms.
           Scan each doc for terms a typical Quadrants user is unlikely to already know: Quadrants-
           specific concepts and APIs, project-specific abbreviations, internal subsystem names, and
@@ -87,25 +93,22 @@ jobs:
           first use. Rule 1 targets terms BEYOND this core vocabulary: less-common or specialized
           APIs, internal subsystem names, project-specific abbreviations, and specialized
           GPU/compiler jargon.
-          Terms whose first occurrence is inside a clearly-marked advanced / under-the-hood /
-          internals / implementation section (the same kind of section described in Rule 2) do NOT
-          need to be defined: those sections are explicitly aimed at a more advanced / internal
-          reader, so internal jargon there is acceptable. Rule 1 applies to terms first used in the
-          normal, end-user-facing body of the doc. (A term first used in the main body still needs a
+          Terms whose first occurrence is inside an advanced / internal section (defined above) do
+          NOT need to be defined: such sections are aimed at a more advanced / internal reader, so
+          internal jargon there is acceptable. Rule 1 applies to terms first used in the normal,
+          end-user-facing body of the doc. (A term first used in the main body still needs a
           definition there even if it is also discussed later in such a section.)
           VIOLATION: a term the target reader probably does not know is used at its first occurrence
-          in the file (outside any advanced / under-the-hood section) without being defined there.
+          in the file (outside any advanced / internal section) without being defined there.
 
           RULE 2 — End-user relevance.
           A doc should only contain information that is useful to an end user. Internal /
           implementation / contributor-only material (compiler internals, IR/codegen/backend
           mechanics, "how it works inside", maintenance notes, etc.) is allowed ONLY if it is
-          confined to a clearly delimited section whose heading marks it as such — e.g. a heading
-          containing "Advanced", "Under the hood", "Internals", or "Implementation". Body text in a
-          dedicated such section, or a doc that is itself explicitly an advanced/internal reference,
-          is fine.
+          confined to an advanced / internal section (defined above). Body text in such a section is
+          fine.
           The following are NOT scope violations (they are useful to end users) even when they
-          appear outside an advanced/internals section:
+          appear outside an advanced / internal section:
           - References to public, user-facing APIs. You do NOT need to independently work out
             whether a symbol is public — rely on the author's signals: if the symbol is linked to
             its documentation (a Markdown link) and/or explicitly presented as a public,
@@ -122,7 +125,7 @@ jobs:
           - FIXME / TODO markers left inline in a doc (e.g. "(FIXME: add stream.md)"). These are
             authoring notes; ignore them entirely — do not flag the marker or its contents.
           VIOLATION: internal / non-end-user material (subject to the carve-outs above) appears
-          outside of such a clearly-marked advanced / under-the-hood section.
+          outside of an advanced / internal section.
 
           Read each listed file in full before judging it. You may open any other file in the repo
           (e.g. linked docs) to verify whether a term is defined elsewhere. Do NOT modify any files.
