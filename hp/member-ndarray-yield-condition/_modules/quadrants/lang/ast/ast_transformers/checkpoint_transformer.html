@@ -583,16 +583,18 @@
         <span class="n">yield_on_label</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
         <span class="n">yield_on_cpp_arg_id</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="o">-</span><span class="mi">1</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">info</span><span class="o">.</span><span class="n">is_implicit</span><span class="p">:</span>
-            <span class="c1"># Resolve `yield_on=` (a bare parameter or `@qd.data_oriented` member ndarray) to its flat C++ arg-id at</span>
-            <span class="c1"># AST-build time. ``_resolve_ndarray_kernel_arg_id`` raises a user-facing ``QuadrantsSyntaxError`` if the</span>
-            <span class="c1"># expression does not name a real ndarray kernel argument, which keeps the diagnostic at the `with` site</span>
-            <span class="c1"># instead of leaking into the launcher. Both the label (for ``checkpoint_yield_on_args`` / introspection)</span>
-            <span class="c1"># and the resolved arg-id (for the runtime) are stashed and forwarded to the launch path below.</span>
-            <span class="c1"># Local import to avoid an ast_transformers -&gt; ast_transformer cycle.</span>
+            <span class="c1"># Resolve `yield_on=` (a bare parameter or `@qd.data_oriented` / `@dataclasses.dataclass` member</span>
+            <span class="c1"># ndarray) to its flat C++ arg-id at AST-build time. ``resolve_ndarray_kernel_arg_id`` raises a</span>
+            <span class="c1"># user-facing ``QuadrantsSyntaxError`` if the expression does not name a real ndarray kernel argument,</span>
+            <span class="c1"># which keeps the diagnostic at the `with` site instead of leaking into the launcher. Both the label</span>
+            <span class="c1"># (for ``checkpoint_yield_on_args`` / introspection) and the resolved arg-id (for the runtime) are</span>
+            <span class="c1"># stashed and forwarded to the launch path below.</span>
             <span class="c1"># pylint: disable-next=C0415,import-outside-toplevel</span>
-            <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.ast.ast_transformer</span><span class="w"> </span><span class="kn">import</span> <span class="n">ASTTransformer</span>
+            <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.ast.ast_transformers.ndarray_arg_resolver</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+                <span class="n">resolve_ndarray_kernel_arg_id</span><span class="p">,</span>
+            <span class="p">)</span>
 
-            <span class="n">yield_on_label</span><span class="p">,</span> <span class="n">yield_on_cpp_arg_id</span> <span class="o">=</span> <span class="n">ASTTransformer</span><span class="o">.</span><span class="n">_resolve_ndarray_kernel_arg_id</span><span class="p">(</span>
+            <span class="n">yield_on_label</span><span class="p">,</span> <span class="n">yield_on_cpp_arg_id</span> <span class="o">=</span> <span class="n">resolve_ndarray_kernel_arg_id</span><span class="p">(</span>
                 <span class="n">ctx</span><span class="p">,</span> <span class="n">kernel</span><span class="p">,</span> <span class="n">info</span><span class="o">.</span><span class="n">yield_on_node</span><span class="p">,</span> <span class="s2">&quot;qd.checkpoint(yield_on=...)&quot;</span>
             <span class="p">)</span>
             <span class="c1"># Reject duplicate user-supplied cp_id labels.</span>

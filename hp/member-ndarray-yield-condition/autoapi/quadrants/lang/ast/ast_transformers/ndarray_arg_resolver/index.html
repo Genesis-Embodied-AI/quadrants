@@ -2,13 +2,13 @@
 <!DOCTYPE html>
 
 
-<html lang="en" data-content_root="../../../../../" >
+<html lang="en" data-content_root="../../../../../../" >
 
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>quadrants.lang.ast.ast_transformers &#8212; Quadrants 1.0.3 documentation</title>
+    <title>quadrants.lang.ast.ast_transformers.ndarray_arg_resolver &#8212; Quadrants 1.0.3 documentation</title>
   
   
   
@@ -27,48 +27,48 @@
   </noscript>
   
   <!-- Loaded before other Sphinx assets -->
-  <link href="../../../../../_static/styles/theme.css?digest=a95f357e85573c9b56d5" rel="stylesheet" />
-<link href="../../../../../_static/styles/pydata-sphinx-theme.css?digest=a95f357e85573c9b56d5" rel="stylesheet" />
+  <link href="../../../../../../_static/styles/theme.css?digest=a95f357e85573c9b56d5" rel="stylesheet" />
+<link href="../../../../../../_static/styles/pydata-sphinx-theme.css?digest=a95f357e85573c9b56d5" rel="stylesheet" />
 
-    <link rel="stylesheet" type="text/css" href="../../../../../_static/pygments.css?v=8f2a1f02" />
-    <link rel="stylesheet" type="text/css" href="../../../../../_static/copybutton.css?v=76b2166b" />
-    <link rel="stylesheet" type="text/css" href="../../../../../_static/togglebutton.css?v=9c3e77be" />
-    <link rel="stylesheet" type="text/css" href="../../../../../_static/graphviz.css?v=4ae1632d" />
-    <link rel="stylesheet" type="text/css" href="../../../../../_static/sphinx-design.min.css?v=95c83b7e" />
-    <link rel="stylesheet" type="text/css" href="../../../../../_static/css/custom.css" />
+    <link rel="stylesheet" type="text/css" href="../../../../../../_static/pygments.css?v=8f2a1f02" />
+    <link rel="stylesheet" type="text/css" href="../../../../../../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../../../../../../_static/togglebutton.css?v=9c3e77be" />
+    <link rel="stylesheet" type="text/css" href="../../../../../../_static/graphviz.css?v=4ae1632d" />
+    <link rel="stylesheet" type="text/css" href="../../../../../../_static/sphinx-design.min.css?v=95c83b7e" />
+    <link rel="stylesheet" type="text/css" href="../../../../../../_static/css/custom.css" />
   
   <!-- So that users can add custom icons -->
-  <script defer src="../../../../../_static/scripts/fontawesome.js?digest=a95f357e85573c9b56d5"></script>
+  <script defer src="../../../../../../_static/scripts/fontawesome.js?digest=a95f357e85573c9b56d5"></script>
   <!-- Pre-loaded scripts that we'll load fully later -->
-  <link rel="preload" as="script" href="../../../../../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5" />
-<link rel="preload" as="script" href="../../../../../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5" />
+  <link rel="preload" as="script" href="../../../../../../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5" />
+<link rel="preload" as="script" href="../../../../../../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5" />
 
-    <script src="../../../../../_static/documentation_options.js?v=baaebd52"></script>
-    <script src="../../../../../_static/doctools.js?v=9bcbadda"></script>
-    <script src="../../../../../_static/sphinx_highlight.js?v=dc90522c"></script>
-    <script src="../../../../../_static/clipboard.min.js?v=a7894cd8"></script>
-    <script src="../../../../../_static/copybutton.js?v=f281be69"></script>
+    <script src="../../../../../../_static/documentation_options.js?v=baaebd52"></script>
+    <script src="../../../../../../_static/doctools.js?v=9bcbadda"></script>
+    <script src="../../../../../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../../../../../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../../../../../../_static/copybutton.js?v=f281be69"></script>
     <script>let toggleHintShow = 'Click to show';</script>
     <script>let toggleHintHide = 'Click to hide';</script>
     <script>let toggleOpenOnPrint = 'true';</script>
-    <script src="../../../../../_static/togglebutton.js?v=b8b12719"></script>
+    <script src="../../../../../../_static/togglebutton.js?v=b8b12719"></script>
     <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
-    <script src="../../../../../_static/design-tabs.js?v=f930bc37"></script>
+    <script src="../../../../../../_static/design-tabs.js?v=f930bc37"></script>
     <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
-    <script>DOCUMENTATION_OPTIONS.pagename = 'autoapi/quadrants/lang/ast/ast_transformers/index';</script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'autoapi/quadrants/lang/ast/ast_transformers/ndarray_arg_resolver/index';</script>
     <script>DOCUMENTATION_OPTIONS.search_as_you_type = false;</script>
-    <link rel="index" title="Index" href="../../../../../genindex.html" />
-    <link rel="search" title="Search" href="../../../../../search.html" />
-    <link rel="next" title="quadrants.lang.ast.ast_transformers.call_transformer" href="call_transformer/index.html" />
-    <link rel="prev" title="quadrants.lang.ast.ast_transformer_utils" href="../ast_transformer_utils/index.html" />
+    <link rel="index" title="Index" href="../../../../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../../../../search.html" />
+    <link rel="next" title="quadrants.lang.ast.checkers" href="../../checkers/index.html" />
+    <link rel="prev" title="quadrants.lang.ast.ast_transformers.function_def_transformer" href="../function_def_transformer/index.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
   <meta name="docsearch:version" content="1.0.3" />
   
     
-    <script src="../../../../../_static/searchtools.js"></script>
-    <script src="../../../../../_static/language_data.js"></script>
-    <script src="../../../../../searchindex.js"></script>
+    <script src="../../../../../../_static/searchtools.js"></script>
+    <script src="../../../../../../_static/language_data.js"></script>
+    <script src="../../../../../../searchindex.js"></script>
   
   </head>
   <body data-default-mode="">
@@ -88,7 +88,7 @@
   <dialog id="pst-search-dialog">
     
 <form class="bd-search d-flex align-items-center"
-      action="../../../../../search.html"
+      action="../../../../../../search.html"
       method="get">
   <i class="fa-solid fa-magnifying-glass"></i>
   <input type="search"
@@ -124,7 +124,7 @@
     
   
 
-<a class="navbar-brand logo" href="../../../../../index.html">
+<a class="navbar-brand logo" href="../../../../../../index.html">
   
   
   
@@ -146,14 +146,14 @@
   <ul class="bd-navbar-elements navbar-nav">
     
 <li class="nav-item ">
-  <a class="nav-link nav-internal" href="../../../../../user_guide/index.html">
+  <a class="nav-link nav-internal" href="../../../../../../user_guide/index.html">
     User guide
   </a>
 </li>
 
 
 <li class="nav-item current active">
-  <a class="nav-link nav-internal" href="../../../../index.html">
+  <a class="nav-link nav-internal" href="../../../../../index.html">
     API Reference
   </a>
 </li>
@@ -239,14 +239,14 @@
   <ul class="bd-navbar-elements navbar-nav">
     
 <li class="nav-item ">
-  <a class="nav-link nav-internal" href="../../../../../user_guide/index.html">
+  <a class="nav-link nav-internal" href="../../../../../../user_guide/index.html">
     User guide
   </a>
 </li>
 
 
 <li class="nav-item current active">
-  <a class="nav-link nav-internal" href="../../../../index.html">
+  <a class="nav-link nav-internal" href="../../../../../index.html">
     API Reference
   </a>
 </li>
@@ -293,7 +293,7 @@
      aria-label="Section Navigation">
   <p class="bd-links__title" role="heading" aria-level="1">Section Navigation</p>
   <div class="bd-toc-item navbar-nav"><ul class="current nav bd-sidenav">
-<li class="toctree-l1 current active"><a class="reference internal" href="../../../index.html">quadrants</a></li>
+<li class="toctree-l1 current active"><a class="reference internal" href="../../../../index.html">quadrants</a></li>
 </ul>
 </div>
 </nav></div>
@@ -330,23 +330,26 @@
   <ul class="bd-breadcrumbs">
     
     <li class="breadcrumb-item breadcrumb-home">
-      <a href="../../../../../index.html" class="nav-link" aria-label="Home">
+      <a href="../../../../../../index.html" class="nav-link" aria-label="Home">
         <i class="fa-solid fa-home"></i>
       </a>
     </li>
     
-    <li class="breadcrumb-item"><a href="../../../../index.html" class="nav-link">API Reference</a></li>
+    <li class="breadcrumb-item"><a href="../../../../../index.html" class="nav-link">API Reference</a></li>
     
     
-    <li class="breadcrumb-item"><a href="../../../index.html" class="nav-link">quadrants</a></li>
+    <li class="breadcrumb-item"><a href="../../../../index.html" class="nav-link">quadrants</a></li>
     
     
-    <li class="breadcrumb-item"><a href="../../index.html" class="nav-link">quadrants.lang</a></li>
+    <li class="breadcrumb-item"><a href="../../../index.html" class="nav-link">quadrants.lang</a></li>
     
     
-    <li class="breadcrumb-item"><a href="../index.html" class="nav-link">quadrants.lang.ast</a></li>
+    <li class="breadcrumb-item"><a href="../../index.html" class="nav-link">quadrants.lang.ast</a></li>
     
-    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">quadrants.lang.ast.ast_transformers</span></li>
+    
+    <li class="breadcrumb-item"><a href="../index.html" class="nav-link">quadrants.lang.ast.ast_transformers</a></li>
+    
+    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">quadrants.lang.ast.ast_transformers.ndarray_arg_resolver</span></li>
   </ul>
 </nav>
 </div>
@@ -363,18 +366,48 @@
 <div id="searchbox"></div>
                 <article class="bd-article">
                   
-  <section id="module-quadrants.lang.ast.ast_transformers">
-<span id="quadrants-lang-ast-ast-transformers"></span><h1>quadrants.lang.ast.ast_transformers<a class="headerlink" href="#module-quadrants.lang.ast.ast_transformers" title="Link to this heading">#</a></h1>
-<section id="submodules">
-<h2>Submodules<a class="headerlink" href="#submodules" title="Link to this heading">#</a></h2>
-<div class="toctree-wrapper compound">
-<ul>
-<li class="toctree-l1"><a class="reference internal" href="call_transformer/index.html">quadrants.lang.ast.ast_transformers.call_transformer</a></li>
-<li class="toctree-l1"><a class="reference internal" href="checkpoint_transformer/index.html">quadrants.lang.ast.ast_transformers.checkpoint_transformer</a></li>
-<li class="toctree-l1"><a class="reference internal" href="function_def_transformer/index.html">quadrants.lang.ast.ast_transformers.function_def_transformer</a></li>
-<li class="toctree-l1"><a class="reference internal" href="ndarray_arg_resolver/index.html">quadrants.lang.ast.ast_transformers.ndarray_arg_resolver</a></li>
-</ul>
+  <section id="module-quadrants.lang.ast.ast_transformers.ndarray_arg_resolver">
+<span id="quadrants-lang-ast-ast-transformers-ndarray-arg-resolver"></span><h1>quadrants.lang.ast.ast_transformers.ndarray_arg_resolver<a class="headerlink" href="#module-quadrants.lang.ast.ast_transformers.ndarray_arg_resolver" title="Link to this heading">#</a></h1>
+<p>Resolve an ndarray-referencing AST expression to its flat C++ kernel arg-id at AST-build time.</p>
+<p>Lives alongside <code class="docutils literal notranslate"><span class="pre">checkpoint_transformer.py</span></code> / <code class="docutils literal notranslate"><span class="pre">call_transformer.py</span></code> so the central <code class="docutils literal notranslate"><span class="pre">ast_transformer.py</span></code> file
+doesn’t have to grow per-feature. Both <code class="docutils literal notranslate"><span class="pre">qd.checkpoint(yield_on=...)</span></code> (via
+<code class="docutils literal notranslate"><span class="pre">CheckpointTransformer.build_checkpoint_with</span></code>) and <code class="docutils literal notranslate"><span class="pre">qd.graph_do_while(...)</span></code> (via <code class="docutils literal notranslate"><span class="pre">ASTTransformer.build_While</span></code>)
+share this helper: each form takes a control-flag / counter ndarray argument that may be a bare kernel parameter
+(e.g. <code class="docutils literal notranslate"><span class="pre">flag</span></code>), a <code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code> member ndarray (e.g. <code class="docutils literal notranslate"><span class="pre">self.flag</span></code>), or a <code class="docutils literal notranslate"><span class="pre">&#64;dataclasses.dataclass</span></code>
+parameter member (e.g. <code class="docutils literal notranslate"><span class="pre">params.flag</span></code>). All three flatten to the same <code class="docutils literal notranslate"><span class="pre">ExternalTensorExpression</span></code> after AST build,
+so resolving the arg-id here – once, at kernel build time – means the runtime launch path can forward it directly
+with no per-launch name matching (which was the original <code class="docutils literal notranslate"><span class="pre">_checkpoint_helpers</span></code> approach and is incompatible with
+member-ndarray flattening, since the flattened name is synthesised).</p>
+<p>See <code class="docutils literal notranslate"><span class="pre">docs/source/user_guide/graph.md</span></code> for the user-facing surface and <code class="docutils literal notranslate"><span class="pre">perso_hugh/doc/qipc/reentrant.md</span></code> for the
+design.</p>
+<section id="functions">
+<h2>Functions<a class="headerlink" href="#functions" title="Link to this heading">#</a></h2>
+<div class="pst-scrollable-table-container"><table class="autosummary longtable table autosummary">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.ast.ast_transformers.ndarray_arg_resolver.resolve_ndarray_kernel_arg_id" title="quadrants.lang.ast.ast_transformers.ndarray_arg_resolver.resolve_ndarray_kernel_arg_id"><code class="xref py py-obj docutils literal notranslate"><span class="pre">resolve_ndarray_kernel_arg_id</span></code></a>(→ tuple[str, int])</p></td>
+<td><p>Resolve <code class="docutils literal notranslate"><span class="pre">node</span></code> to <code class="docutils literal notranslate"><span class="pre">(label,</span> <span class="pre">flat_cpp_arg_id)</span></code> at AST-build time.</p></td>
+</tr>
+</tbody>
+</table>
 </div>
+</section>
+<section id="module-contents">
+<h2>Module Contents<a class="headerlink" href="#module-contents" title="Link to this heading">#</a></h2>
+<dl class="py function">
+<dt class="sig sig-object py" id="quadrants.lang.ast.ast_transformers.ndarray_arg_resolver.resolve_ndarray_kernel_arg_id">
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.ast.ast_transformers.ndarray_arg_resolver.</span></span><span class="sig-name descname"><span class="pre">resolve_ndarray_kernel_arg_id</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ctx</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../../ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext" title="quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext"><span class="pre">quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">kernel</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">node</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ast.expr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">usage</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">int</span><span class="p"><span class="pre">]</span></span></span></span><a class="reference internal" href="../../../../../../_modules/quadrants/lang/ast/ast_transformers/ndarray_arg_resolver.html#resolve_ndarray_kernel_arg_id"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.ast.ast_transformers.ndarray_arg_resolver.resolve_ndarray_kernel_arg_id" title="Link to this definition">#</a></dt>
+<dd><p>Resolve <code class="docutils literal notranslate"><span class="pre">node</span></code> to <code class="docutils literal notranslate"><span class="pre">(label,</span> <span class="pre">flat_cpp_arg_id)</span></code> at AST-build time.</p>
+<p>Shared between <code class="docutils literal notranslate"><span class="pre">qd.checkpoint(yield_on=...)</span></code> and <code class="docutils literal notranslate"><span class="pre">qd.graph_do_while(...)</span></code> to turn the control-flag argument
+into the flat C++ arg-id the runtime matches against. <code class="docutils literal notranslate"><span class="pre">node</span></code> is an <code class="docutils literal notranslate"><span class="pre">ast.Name</span></code> (a bare kernel parameter,
+e.g. <code class="docutils literal notranslate"><span class="pre">flag</span></code>) or an <code class="docutils literal notranslate"><span class="pre">ast.Attribute</span></code> chain (e.g. <code class="docutils literal notranslate"><span class="pre">self.flag</span></code> for a <code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code> owner, or
+<code class="docutils literal notranslate"><span class="pre">params.flag</span></code> where <code class="docutils literal notranslate"><span class="pre">params</span></code> is a <code class="docutils literal notranslate"><span class="pre">&#64;dataclasses.dataclass</span></code> kernel parameter). We build the expression
+through the normal AST machinery and read the arg-id off the resulting external-tensor expression – this
+unifies the bare-param and member-ndarray cases, since both flatten to a real ndarray kernel argument carrying
+its arg-id on the <code class="docutils literal notranslate"><span class="pre">ExternalTensorExpression</span></code>.</p>
+<p><code class="docutils literal notranslate"><span class="pre">usage</span></code> is the call form (e.g. <code class="docutils literal notranslate"><span class="pre">&quot;qd.checkpoint(yield_on=...)&quot;</span></code>) used in the error message. Raises
+<code class="docutils literal notranslate"><span class="pre">QuadrantsSyntaxError</span></code> if the expression does not resolve to an ndarray kernel argument.</p>
+</dd></dl>
+
 </section>
 </section>
 
@@ -389,20 +422,20 @@
                   
 <div class="prev-next-area">
     <a class="left-prev"
-       href="../ast_transformer_utils/index.html"
+       href="../function_def_transformer/index.html"
        title="previous page">
       <i class="fa-solid fa-angle-left"></i>
       <div class="prev-next-info">
         <p class="prev-next-subtitle">previous</p>
-        <p class="prev-next-title">quadrants.lang.ast.ast_transformer_utils</p>
+        <p class="prev-next-title">quadrants.lang.ast.ast_transformers.function_def_transformer</p>
       </div>
     </a>
     <a class="right-next"
-       href="call_transformer/index.html"
+       href="../../checkers/index.html"
        title="next page">
       <div class="prev-next-info">
         <p class="prev-next-subtitle">next</p>
-        <p class="prev-next-title">quadrants.lang.ast.ast_transformers.call_transformer</p>
+        <p class="prev-next-title">quadrants.lang.ast.checkers</p>
       </div>
       <i class="fa-solid fa-angle-right"></i>
     </a>
@@ -425,14 +458,18 @@
   </div>
   <nav id="pst-page-toc-nav" class="page-toc" aria-labelledby="pst-page-navigation-heading-2">
     <ul class="pst-show_toc_level nav section-nav flex-column">
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#submodules">Submodules</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#functions">Functions</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#module-contents">Module Contents</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.ast.ast_transformers.ndarray_arg_resolver.resolve_ndarray_kernel_arg_id"><code class="docutils literal notranslate"><span class="pre">resolve_ndarray_kernel_arg_id()</span></code></a></li>
+</ul>
+</li>
 </ul>
   </nav></div>
 
   <div class="sidebar-secondary-item">
 
   <div class="tocsection sourcelink">
-    <a href="../../../../../_sources/autoapi/quadrants/lang/ast/ast_transformers/index.rst.txt">
+    <a href="../../../../../../_sources/autoapi/quadrants/lang/ast/ast_transformers/ndarray_arg_resolver/index.rst.txt">
       <i class="fa-solid fa-file-lines"></i> Show Source
     </a>
   </div>
@@ -451,8 +488,8 @@
   </div>
   
   <!-- Scripts loaded after <body> so the DOM is not blocked -->
-  <script defer src="../../../../../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5"></script>
-<script defer src="../../../../../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5"></script>
+  <script defer src="../../../../../../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5"></script>
+<script defer src="../../../../../../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5"></script>
 
   <footer class="bd-footer">
 <div class="bd-footer__inner bd-page-width">
