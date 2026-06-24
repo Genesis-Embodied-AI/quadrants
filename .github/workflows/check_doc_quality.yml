@@ -134,18 +134,13 @@ jobs:
           - Backward references (to something earlier in the same file) are always fine.
           - References to OTHER docs/files; this rule is about ordering WITHIN a single file only.
           - Conventional preamble ordering (e.g. Prerequisites -> Installation -> Usage).
-          A plain term that is simply never defined belongs to Rule 1, not here; Rule 3 covers
-          ordering dependencies (concepts, examples, parameters, results) where the explanation DOES
-          exist in the file but appears too late. Do not double-flag the same issue under both rules.
           VIOLATION: a passage cannot be understood by a first-time reader at the point they reach
           it, because what it relies on is only introduced later in the same file.
 
           Read each listed file in full before judging it. You may open any other file in the repo
           (e.g. linked docs) to verify whether a term is defined elsewhere. Do NOT modify any files.
           Be precise and conservative: only flag clear violations, not borderline cases. Judge each
-          file independently against all three rules. Stop after reporting 10 violations in total,
-          but do not let one rule crowd out the others: if more than one rule has violations, make
-          sure each such rule is represented in your list before you stop.
+          file independently. Stop after finding 10 violations in total.
 
           If there are NO violations, your final output must start with the word PASS.
           If there ARE violations, your final output must start with the word FAIL, followed by a list
