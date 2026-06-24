@@ -515,6 +515,14 @@
 <span class="n">export</span> <span class="n">QUADRANTS_CMAKE_ARGS</span><span class="o">=</span><span class="s2">&quot;$QUADRANTS_CMAKE_ARGS -DLLVM_ROOT=/path/to/llvm&quot;</span>
 </pre></div>
 </div>
+<section id="building-with-the-amd-gpu-backend-linux">
+<h3>Building with the AMD GPU backend (Linux)<a class="headerlink" href="#building-with-the-amd-gpu-backend-linux" title="Link to this heading">#</a></h3>
+<p>The AMD GPU backend is Linux-only (it is force-disabled on macOS and Windows) and is off by default, so enable it explicitly through <code class="docutils literal notranslate"><span class="pre">CMAKE_ARGS</span></code>:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">./</span><span class="n">build</span><span class="o">.</span><span class="n">py</span> <span class="o">--</span><span class="n">shell</span>
+<span class="n">CMAKE_ARGS</span><span class="o">=</span><span class="s2">&quot;-DQD_WITH_AMDGPU=ON -DQD_WITH_CUDA=OFF&quot;</span> <span class="n">pip</span> <span class="n">install</span> <span class="o">--</span><span class="n">no</span><span class="o">-</span><span class="n">build</span><span class="o">-</span><span class="n">isolation</span> <span class="o">-</span><span class="n">e</span> <span class="o">.</span> <span class="o">-</span><span class="n">v</span>
+</pre></div>
+</div>
+</section>
 </section>
 <section id="advanced-usage">
 <h2>Advanced usage<a class="headerlink" href="#advanced-usage" title="Link to this heading">#</a></h2>
@@ -671,7 +679,10 @@
 </li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#creating-your-build-dev-environment">Creating your build/dev environment</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#build-py"><code class="docutils literal notranslate"><span class="pre">build.py</span></code></a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#building-the-package-for-release-purposes">Building the package for release purposes</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#building-the-package-for-release-purposes">Building the package for release purposes</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#building-with-the-amd-gpu-backend-linux">Building with the AMD GPU backend (Linux)</a></li>
+</ul>
+</li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#advanced-usage">Advanced usage</a><ul class="nav section-nav flex-column">
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#ci-convention-about-compilers-llvm">CI Convention about compilers/LLVM</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#building-llvm-for-debugging-it">Building LLVM for debugging it</a></li>
