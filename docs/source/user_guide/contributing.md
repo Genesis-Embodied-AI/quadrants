@@ -105,6 +105,15 @@ export LLVM_DIR="/path/to/llvm/"
 export QUADRANTS_CMAKE_ARGS="$QUADRANTS_CMAKE_ARGS -DLLVM_ROOT=/path/to/llvm"
 ```
 
+### Building with the AMD GPU backend (Linux)
+
+The AMD GPU backend is Linux-only (it is force-disabled on macOS and Windows) and is off by default, so enable it explicitly through `CMAKE_ARGS`:
+
+```
+./build.py --shell
+CMAKE_ARGS="-DQD_WITH_AMDGPU=ON -DQD_WITH_CUDA=OFF" pip install --no-build-isolation -e . -v
+```
+
 ## Advanced usage
 
 ### CI Convention about compilers/LLVM
