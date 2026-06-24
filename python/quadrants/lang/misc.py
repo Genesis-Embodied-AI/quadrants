@@ -3,7 +3,6 @@ import os
 import shutil
 import tempfile
 import warnings
-from contextlib import contextmanager
 from copy import deepcopy as _deepcopy
 
 from quadrants import _logging, _snode
@@ -13,6 +12,7 @@ from quadrants._lib.utils import get_os_name
 from quadrants.lang import impl, util
 from quadrants.lang.checkpoint import checkpoint
 from quadrants.lang.expr import Expr
+from quadrants.lang.graph_parallel import graph_parallel, graph_parallel_context
 from quadrants.lang.graph_status import GraphStatus
 from quadrants.lang.impl import axes, get_runtime
 from quadrants.profiler.kernel_profiler import get_default_kernel_profiler
@@ -750,56 +750,6 @@ def graph_do_while(condition) -> bool:
     Requires ``@qd.kernel(graph=True)``.
     """
     return bool(condition)
-
-
-@contextmanager
-def graph_parallel_context():
-    """Opens a fork/join region whose ``qd.graph_parallel()`` sections run concurrently.
-
-    Used as ``with qd.graph_parallel_context():`` inside a ``@qd.kernel(graph=True)`` kernel. The region's
-    body must contain only ``with qd.graph_parallel():`` blocks. Each ``qd.graph_parallel`` section is an
-    independent sequence of work; the ``qd.graph_parallel`` sections have no ordering relative to each
-    other and may execute concurrently, while everything after the region waits for *all* ``qd.graph_parallel``
-    sections to finish (the join). This is the graph analogue of ``qd.stream_parallel()`` (which is for
-    non-graph kernels): it lets independent stages -- e.g. qipc's point-triangle and edge-edge assembly
-    -- overlap inside a captured graph.
-
-    Concurrency contract (the author's responsibility): ``qd.graph_parallel`` sections must be data-race
-    free with respect to one another (no ``qd.graph_parallel`` section reads what another writes, no two
-    ``qd.graph_parallel`` sections write the same location). Calls *within* a ``qd.graph_parallel`` section
-    keep their program order.
-
-    Backend behavior:
-      - CUDA SM graph path: ``qd.graph_parallel`` sections become independent graph chains joined by an
-        empty node, so the runtime schedules them on parallel streams (real overlap).
-      - CPU / Vulkan / Metal / AMDGPU graph: correct results, ``qd.graph_parallel`` sections run serially
-        (the concurrency tags are honored only by the graph builder today).
-
-    Restrictions (enforced at kernel compile time):
-      - Must be used inside ``@qd.kernel(graph=True)``.
-      - The region body may contain only ``with qd.graph_parallel():`` blocks.
-      - Regions cannot be nested, and a ``qd.graph_parallel`` section body must be straight-line task work
-        (no nested ``qd.graph_do_while``, ``qd.checkpoint``, or ``qd.graph_parallel_context``).
-
-    This function should not be called directly at runtime; it is recognized and transformed during AST compilation.
-    At Python runtime (outside kernels) it is a no-op context manager.
-
-    See also ``docs/source/user_guide/graph.md``.
-    """
-    yield
-
-
-@contextmanager
-def graph_parallel():
-    """Declares one ``qd.graph_parallel`` section of an enclosing ``qd.graph_parallel_context()`` region.
-
-    Used as ``with qd.graph_parallel():`` directly inside a ``with qd.graph_parallel_context():`` block.
-    The ``qd.graph_parallel`` section's body is an independent sequence of work that may run concurrently
-    with the region's other ``qd.graph_parallel`` sections.
-
-    See ``qd.graph_parallel_context()`` for the full contract and backend behavior.
-    """
-    yield
 
 
 def global_thread_idx():
