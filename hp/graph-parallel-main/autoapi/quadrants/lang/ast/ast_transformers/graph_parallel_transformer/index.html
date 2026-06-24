@@ -372,9 +372,10 @@
 <p>Lives alongside <code class="docutils literal notranslate"><span class="pre">checkpoint_transformer.py</span></code> / <code class="docutils literal notranslate"><span class="pre">function_def_transformer.py</span></code> so that <code class="docutils literal notranslate"><span class="pre">ast_transformer.py</span></code> doesn’t
 have to grow per-feature. <code class="docutils literal notranslate"><span class="pre">ASTTransformer.build_With</span></code> forwards <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel_context()</span></code> regions and their
 <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel()</span></code> sections into the static methods here.</p>
-<p>A <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel_context()</span></code> region emits no IR tag of its own: each <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel()</span></code> section inside lowers
-to a stream-parallel group (via <code class="docutils literal notranslate"><span class="pre">begin/end_stream_parallel</span></code>), and the graph builder forks the distinct groups in a
-contiguous run and joins them. Regions are kept apart by the serial work between them. See
+<p>A <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel_context()</span></code> region tags its body with a per-kernel region id (via
+<code class="docutils literal notranslate"><span class="pre">begin/end_graph_parallel_context</span></code>) and each <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel()</span></code> section inside lowers to a stream-parallel group
+(via <code class="docutils literal notranslate"><span class="pre">begin/end_stream_parallel</span></code>). The graph builder forks the distinct groups of one region in a contiguous run and
+joins them; the region id keeps two back-to-back regions apart (each gets its own join). See
 <code class="docutils literal notranslate"><span class="pre">docs/source/user_guide/graph.md</span></code> for the user-facing surface.</p>
 <section id="classes">
 <h2>Classes<a class="headerlink" href="#classes" title="Link to this heading">#</a></h2>
@@ -410,10 +411,11 @@ here so misuse raises at the <code class="docutils literal notranslate"><span cl
 <em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">build_graph_parallel_context_with</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ctx</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../../ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext" title="quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext"><span class="pre">quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">node</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ast.With</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">build_stmts</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="../../../../../../_modules/quadrants/lang/ast/ast_transformers/graph_parallel_transformer.html#GraphParallelTransformer.build_graph_parallel_context_with"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.ast.ast_transformers.graph_parallel_transformer.GraphParallelTransformer.build_graph_parallel_context_with" title="Link to this definition">#</a></dt>
 <dd><p>Handles <code class="docutils literal notranslate"><span class="pre">with</span> <span class="pre">qd.graph_parallel_context():</span></code> fork/join regions.</p>
 <p>Validates the use-site (kernel must be graph=True, no nesting) and that the region body contains only
-<code class="docutils literal notranslate"><span class="pre">with</span> <span class="pre">qd.graph_parallel():</span></code> blocks, then walks the body. The region emits no IR tag of its own – each
-<code class="docutils literal notranslate"><span class="pre">qd.graph_parallel</span></code> section inside lowers to a stream-parallel group (via begin/end_stream_parallel), and the
-graph builder forks the distinct groups in a contiguous run and joins them. Regions are kept apart by the serial
-work between them.</p>
+<code class="docutils literal notranslate"><span class="pre">with</span> <span class="pre">qd.graph_parallel():</span></code> blocks, then walks the body. The region is bracketed with
+begin/end_graph_parallel_context() so its body carries a per-kernel region id, and each <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel</span></code>
+section inside lowers to a stream-parallel group (via begin/end_stream_parallel). The graph builder forks the
+distinct groups of one region in a contiguous run and joins them; the region id keeps two back-to-back regions
+apart (each gets its own join).</p>
 </dd></dl>
 
 <dl class="py method">

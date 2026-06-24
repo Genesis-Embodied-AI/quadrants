@@ -479,12 +479,6 @@
 <tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.misc.graph_do_while" title="quadrants.lang.misc.graph_do_while"><code class="xref py py-obj docutils literal notranslate"><span class="pre">graph_do_while</span></code></a>(→ bool)</p></td>
 <td><p>Marks a while loop as a CUDA graph do-while conditional node.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.misc.graph_parallel_context" title="quadrants.lang.misc.graph_parallel_context"><code class="xref py py-obj docutils literal notranslate"><span class="pre">graph_parallel_context</span></code></a>()</p></td>
-<td><p>Opens a fork/join region whose <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel()</span></code> sections run concurrently.</p></td>
-</tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.misc.graph_parallel" title="quadrants.lang.misc.graph_parallel"><code class="xref py py-obj docutils literal notranslate"><span class="pre">graph_parallel</span></code></a>()</p></td>
-<td><p>Declares one <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel</span></code> section of an enclosing <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel_context()</span></code> region.</p></td>
-</tr>
 <tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.misc.global_thread_idx" title="quadrants.lang.misc.global_thread_idx"><code class="xref py py-obj docutils literal notranslate"><span class="pre">global_thread_idx</span></code></a>()</p></td>
 <td><p>Returns the global thread id of this running thread,</p></td>
 </tr>
@@ -889,52 +883,6 @@ Requires <code class="docutils literal notranslate"><span class="pre">&#64;qd.ke
 </dd></dl>
 
 <dl class="py function">
-<dt class="sig sig-object py" id="quadrants.lang.misc.graph_parallel_context">
-<span class="sig-prename descclassname"><span class="pre">quadrants.lang.misc.</span></span><span class="sig-name descname"><span class="pre">graph_parallel_context</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/misc.html#graph_parallel_context"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.misc.graph_parallel_context" title="Link to this definition">#</a></dt>
-<dd><p>Opens a fork/join region whose <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel()</span></code> sections run concurrently.</p>
-<p>Used as <code class="docutils literal notranslate"><span class="pre">with</span> <span class="pre">qd.graph_parallel_context():</span></code> inside a <code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel(graph=True)</span></code> kernel. The region’s
-body must contain only <code class="docutils literal notranslate"><span class="pre">with</span> <span class="pre">qd.graph_parallel():</span></code> blocks. Each <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel</span></code> section is an
-independent sequence of work; the <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel</span></code> sections have no ordering relative to each
-other and may execute concurrently, while everything after the region waits for <em>all</em> <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel</span></code>
-sections to finish (the join). This is the graph analogue of <code class="docutils literal notranslate"><span class="pre">qd.stream_parallel()</span></code> (which is for
-non-graph kernels): it lets independent stages – e.g. qipc’s point-triangle and edge-edge assembly
-– overlap inside a captured graph.</p>
-<p>Concurrency contract (the author’s responsibility): <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel</span></code> sections must be data-race
-free with respect to one another (no <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel</span></code> section reads what another writes, no two
-<code class="docutils literal notranslate"><span class="pre">qd.graph_parallel</span></code> sections write the same location). Calls <em>within</em> a <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel</span></code> section
-keep their program order.</p>
-<dl class="simple">
-<dt>Backend behavior:</dt><dd><ul class="simple">
-<li><p>CUDA SM graph path: <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel</span></code> sections become independent graph chains joined by an
-empty node, so the runtime schedules them on parallel streams (real overlap).</p></li>
-<li><p>CPU / Vulkan / Metal / AMDGPU graph: correct results, <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel</span></code> sections run serially
-(the concurrency tags are honored only by the graph builder today).</p></li>
-</ul>
-</dd>
-<dt>Restrictions (enforced at kernel compile time):</dt><dd><ul class="simple">
-<li><p>Must be used inside <code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel(graph=True)</span></code>.</p></li>
-<li><p>The region body may contain only <code class="docutils literal notranslate"><span class="pre">with</span> <span class="pre">qd.graph_parallel():</span></code> blocks.</p></li>
-<li><p>Regions cannot be nested, and a <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel</span></code> section body must be straight-line task work
-(no nested <code class="docutils literal notranslate"><span class="pre">qd.graph_do_while</span></code>, <code class="docutils literal notranslate"><span class="pre">qd.checkpoint</span></code>, or <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel_context</span></code>).</p></li>
-</ul>
-</dd>
-</dl>
-<p>This function should not be called directly at runtime; it is recognized and transformed during AST compilation.
-At Python runtime (outside kernels) it is a no-op context manager.</p>
-<p>See also <code class="docutils literal notranslate"><span class="pre">docs/source/user_guide/graph.md</span></code>.</p>
-</dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="quadrants.lang.misc.graph_parallel">
-<span class="sig-prename descclassname"><span class="pre">quadrants.lang.misc.</span></span><span class="sig-name descname"><span class="pre">graph_parallel</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/misc.html#graph_parallel"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.misc.graph_parallel" title="Link to this definition">#</a></dt>
-<dd><p>Declares one <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel</span></code> section of an enclosing <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel_context()</span></code> region.</p>
-<p>Used as <code class="docutils literal notranslate"><span class="pre">with</span> <span class="pre">qd.graph_parallel():</span></code> directly inside a <code class="docutils literal notranslate"><span class="pre">with</span> <span class="pre">qd.graph_parallel_context():</span></code> block.
-The <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel</span></code> section’s body is an independent sequence of work that may run concurrently
-with the region’s other <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel</span></code> sections.</p>
-<p>See <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel_context()</span></code> for the full contract and backend behavior.</p>
-</dd></dl>
-
-<dl class="py function">
 <dt class="sig sig-object py" id="quadrants.lang.misc.global_thread_idx">
 <span class="sig-prename descclassname"><span class="pre">quadrants.lang.misc.</span></span><span class="sig-name descname"><span class="pre">global_thread_idx</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/misc.html#global_thread_idx"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.misc.global_thread_idx" title="Link to this definition">#</a></dt>
 <dd><p>Returns the global thread id of this running thread,
@@ -1064,8 +1012,6 @@ the fastcache cache keys depend on the compile config.</p>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.misc.assume_in_range"><code class="docutils literal notranslate"><span class="pre">assume_in_range()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.misc.loop_config"><code class="docutils literal notranslate"><span class="pre">loop_config()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.misc.graph_do_while"><code class="docutils literal notranslate"><span class="pre">graph_do_while()</span></code></a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.misc.graph_parallel_context"><code class="docutils literal notranslate"><span class="pre">graph_parallel_context()</span></code></a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.misc.graph_parallel"><code class="docutils literal notranslate"><span class="pre">graph_parallel()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.misc.global_thread_idx"><code class="docutils literal notranslate"><span class="pre">global_thread_idx()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.misc.mesh_patch_idx"><code class="docutils literal notranslate"><span class="pre">mesh_patch_idx()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.misc.is_extension_enabled"><code class="docutils literal notranslate"><span class="pre">is_extension_enabled()</span></code></a></li>

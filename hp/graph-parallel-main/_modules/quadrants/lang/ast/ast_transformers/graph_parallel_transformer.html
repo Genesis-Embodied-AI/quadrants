@@ -338,9 +338,10 @@
 <span class="sd">have to grow per-feature. ``ASTTransformer.build_With`` forwards ``qd.graph_parallel_context()`` regions and their</span>
 <span class="sd">``qd.graph_parallel()`` sections into the static methods here.</span>
 
-<span class="sd">A ``qd.graph_parallel_context()`` region emits no IR tag of its own: each ``qd.graph_parallel()`` section inside lowers</span>
-<span class="sd">to a stream-parallel group (via ``begin/end_stream_parallel``), and the graph builder forks the distinct groups in a</span>
-<span class="sd">contiguous run and joins them. Regions are kept apart by the serial work between them. See</span>
+<span class="sd">A ``qd.graph_parallel_context()`` region tags its body with a per-kernel region id (via</span>
+<span class="sd">``begin/end_graph_parallel_context``) and each ``qd.graph_parallel()`` section inside lowers to a stream-parallel group</span>
+<span class="sd">(via ``begin/end_stream_parallel``). The graph builder forks the distinct groups of one region in a contiguous run and</span>
+<span class="sd">joins them; the region id keeps two back-to-back regions apart (each gets its own join). See</span>
 <span class="sd">``docs/source/user_guide/graph.md`` for the user-facing surface.</span>
 <span class="sd">&quot;&quot;&quot;</span>
 
@@ -405,10 +406,11 @@
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Handles ``with qd.graph_parallel_context():`` fork/join regions.</span>
 
 <span class="sd">        Validates the use-site (kernel must be graph=True, no nesting) and that the region body contains only</span>
-<span class="sd">        ``with qd.graph_parallel():`` blocks, then walks the body. The region emits no IR tag of its own -- each</span>
-<span class="sd">        ``qd.graph_parallel`` section inside lowers to a stream-parallel group (via begin/end_stream_parallel), and the</span>
-<span class="sd">        graph builder forks the distinct groups in a contiguous run and joins them. Regions are kept apart by the serial</span>
-<span class="sd">        work between them.&quot;&quot;&quot;</span>
+<span class="sd">        ``with qd.graph_parallel():`` blocks, then walks the body. The region is bracketed with</span>
+<span class="sd">        begin/end_graph_parallel_context() so its body carries a per-kernel region id, and each ``qd.graph_parallel``</span>
+<span class="sd">        section inside lowers to a stream-parallel group (via begin/end_stream_parallel). The graph builder forks the</span>
+<span class="sd">        distinct groups of one region in a contiguous run and joins them; the region id keeps two back-to-back regions</span>
+<span class="sd">        apart (each gets its own join).&quot;&quot;&quot;</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">ctx</span><span class="o">.</span><span class="n">is_kernel</span><span class="p">:</span>
             <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">&quot;qd.graph_parallel_context() can only be used inside @qd.kernel, not @qd.func&quot;</span><span class="p">)</span>
         <span class="n">kernel</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">global_context</span><span class="o">.</span><span class="n">current_kernel</span>
@@ -420,9 +422,11 @@
             <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">&quot;qd.graph_parallel_context() cannot appear inside a qd.graph_parallel() body&quot;</span><span class="p">)</span>
         <span class="n">GraphParallelTransformer</span><span class="o">.</span><span class="n">_validate_graph_parallel_context_body</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">body</span><span class="p">)</span>
         <span class="n">ctx</span><span class="o">.</span><span class="n">_in_graph_parallel_context</span> <span class="o">=</span> <span class="kc">True</span>
+        <span class="n">ctx</span><span class="o">.</span><span class="n">ast_builder</span><span class="o">.</span><span class="n">begin_graph_parallel_context</span><span class="p">()</span>
         <span class="k">try</span><span class="p">:</span>
             <span class="n">build_stmts</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">body</span><span class="p">)</span>
         <span class="k">finally</span><span class="p">:</span>
+            <span class="n">ctx</span><span class="o">.</span><span class="n">ast_builder</span><span class="o">.</span><span class="n">end_graph_parallel_context</span><span class="p">()</span>
             <span class="n">ctx</span><span class="o">.</span><span class="n">_in_graph_parallel_context</span> <span class="o">=</span> <span class="kc">False</span>
         <span class="k">return</span> <span class="kc">None</span></div>
 

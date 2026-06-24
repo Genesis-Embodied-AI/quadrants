@@ -11,9 +11,10 @@ quadrants.lang.ast.ast_transformers.graph_parallel_transformer
    have to grow per-feature. ``ASTTransformer.build_With`` forwards ``qd.graph_parallel_context()`` regions and their
    ``qd.graph_parallel()`` sections into the static methods here.
 
-   A ``qd.graph_parallel_context()`` region emits no IR tag of its own: each ``qd.graph_parallel()`` section inside lowers
-   to a stream-parallel group (via ``begin/end_stream_parallel``), and the graph builder forks the distinct groups in a
-   contiguous run and joins them. Regions are kept apart by the serial work between them. See
+   A ``qd.graph_parallel_context()`` region tags its body with a per-kernel region id (via
+   ``begin/end_graph_parallel_context``) and each ``qd.graph_parallel()`` section inside lowers to a stream-parallel group
+   (via ``begin/end_stream_parallel``). The graph builder forks the distinct groups of one region in a contiguous run and
+   joins them; the region id keeps two back-to-back regions apart (each gets its own join). See
    ``docs/source/user_guide/graph.md`` for the user-facing surface.
 
 
@@ -55,10 +56,11 @@ Module Contents
       Handles ``with qd.graph_parallel_context():`` fork/join regions.
 
       Validates the use-site (kernel must be graph=True, no nesting) and that the region body contains only
-      ``with qd.graph_parallel():`` blocks, then walks the body. The region emits no IR tag of its own -- each
-      ``qd.graph_parallel`` section inside lowers to a stream-parallel group (via begin/end_stream_parallel), and the
-      graph builder forks the distinct groups in a contiguous run and joins them. Regions are kept apart by the serial
-      work between them.
+      ``with qd.graph_parallel():`` blocks, then walks the body. The region is bracketed with
+      begin/end_graph_parallel_context() so its body carries a per-kernel region id, and each ``qd.graph_parallel``
+      section inside lowers to a stream-parallel group (via begin/end_stream_parallel). The graph builder forks the
+      distinct groups of one region in a contiguous run and joins them; the region id keeps two back-to-back regions
+      apart (each gets its own join).
 
 
 
