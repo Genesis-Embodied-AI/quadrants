@@ -241,7 +241,7 @@ if (QD_WITH_GRAPHVIZ)
 endif()
 
 # Under scikit-build-core, generate and install the nanobind type stub (.pyi) + py.typed as an
-# install-time step. This replaces the old pybind11-stubgen / tools/gen_stubs.py hook with
+# install-time step. This replaces the old pybind11-stubgen + YAML-post-processing hook with
 # nanobind's built-in stub generator, which imports the freshly installed extension (a namespace
 # package of compiled artifacts under CMAKE_INSTALL_PREFIX) and writes the stub next to it.
 if (DEFINED SKBUILD_PROJECT_NAME AND QD_WITH_PYTHON)
