@@ -376,8 +376,8 @@ void export_lang(nb::module_ &m) {
             nb::gil_scoped_release release;
             return &program->create_kernel(body, name, autodiff_mode);
           },
-          nb::rv_policy::reference)
-      .def("create_function", &Program::create_function, nb::rv_policy::reference)
+          nb::arg("body"), nb::arg("name"), nb::arg("autodiff_mode"), nb::rv_policy::reference)
+      .def("create_function", &Program::create_function, nb::arg("func_key"), nb::rv_policy::reference)
       .def("create_sparse_matrix",
            [](Program *program, int n, int m, DataType dtype, std::string storage_format) {
              QD_ERROR_IF(!arch_is_cpu(program->compile_config().arch) && !arch_is_cuda(program->compile_config().arch),
@@ -572,7 +572,7 @@ void export_lang(nb::module_ &m) {
       .def("set_struct_arg_uint", &LaunchContextBuilder::set_struct_arg<uint64>)
       .def("set_struct_arg_float", &LaunchContextBuilder::set_struct_arg<double>)
       .def("set_arg_external_array_with_shape", &LaunchContextBuilder::set_arg_external_array_with_shape)
-      .def("set_arg_ndarray", &LaunchContextBuilder::set_arg_ndarray)
+      .def("set_arg_ndarray", &LaunchContextBuilder::set_arg_ndarray, nb::arg("arg_id"), nb::arg("arr"))
       .def("set_args_ndarray", &LaunchContextBuilder::set_args_ndarray)
       .def("set_arg_ndarray_with_grad", &LaunchContextBuilder::set_arg_ndarray_with_grad)
       .def("set_args_ndarray_with_grad", &LaunchContextBuilder::set_args_ndarray_with_grad)
@@ -661,7 +661,8 @@ void export_lang(nb::module_ &m) {
   m.def("insert_internal_func_call",
         [&](Operation *op, const ExprGroup &args) { return Expr::make<InternalFuncCallExpression>(op, args.exprs); });
 
-  m.def("make_get_element_expr", Expr::make<GetElementExpression, const Expr &, std::vector<int>, const DebugInfo &>);
+  m.def("make_get_element_expr", Expr::make<GetElementExpression, const Expr &, std::vector<int>, const DebugInfo &>,
+        nb::arg("expr"), nb::arg("indices"), nb::arg("dbg_info"));
 
   m.def("value_cast", static_cast<Expr (*)(const Expr &expr, DataType)>(cast));
   m.def("bits_cast", static_cast<Expr (*)(const Expr &expr, DataType)>(bit_cast));
@@ -786,11 +787,14 @@ void export_lang(nb::module_ &m) {
 
   m.def("make_rand_expr", Expr::make<RandExpression, const DataType &, const DebugInfo &>);
 
-  m.def("make_const_expr_bool", Expr::make<ConstExpression, const DataType &, uint1>);
+  m.def("make_const_expr_bool", Expr::make<ConstExpression, const DataType &, uint1>, nb::arg("dtype"),
+        nb::arg("value"));
 
-  m.def("make_const_expr_int", Expr::make<ConstExpression, const DataType &, int64>);
+  m.def("make_const_expr_int", Expr::make<ConstExpression, const DataType &, int64>, nb::arg("dtype"),
+        nb::arg("value"));
 
-  m.def("make_const_expr_fp", Expr::make<ConstExpression, const DataType &, float64>);
+  m.def("make_const_expr_fp", Expr::make<ConstExpression, const DataType &, float64>, nb::arg("dtype"),
+        nb::arg("value"));
 
   auto &&bin = nb::enum_<BinaryOpType>(m, "BinaryOpType", nb::is_arithmetic());
   for (int t = 0; t <= (int)BinaryOpType::undefined; t++)
@@ -979,7 +983,7 @@ void export_lang(nb::module_ &m) {
           [&](TypeFactory *factory, std::vector<int> shape, const DataType &element_type) {
             return factory->create_tensor_type(shape, element_type);
           },
-          nb::rv_policy::reference)
+          nb::arg("shape"), nb::arg("element_type"), nb::rv_policy::reference)
       .def(
           "get_struct_type",
           [&](TypeFactory *factory, std::vector<std::pair<DataType, std::string>> elements) {
