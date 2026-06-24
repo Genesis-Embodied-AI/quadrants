@@ -87,8 +87,14 @@ jobs:
           first use. Rule 1 targets terms BEYOND this core vocabulary: less-common or specialized
           APIs, internal subsystem names, project-specific abbreviations, and specialized
           GPU/compiler jargon.
+          Terms whose first occurrence is inside a clearly-marked advanced / under-the-hood /
+          internals / implementation section (the same kind of section described in Rule 2) do NOT
+          need to be defined: those sections are explicitly aimed at a more advanced / internal
+          reader, so internal jargon there is acceptable. Rule 1 applies to terms first used in the
+          normal, end-user-facing body of the doc. (A term first used in the main body still needs a
+          definition there even if it is also discussed later in such a section.)
           VIOLATION: a term the target reader probably does not know is used at its first occurrence
-          in the file without being defined there.
+          in the file (outside any advanced / under-the-hood section) without being defined there.
 
           RULE 2 — End-user relevance.
           A doc should only contain information that is useful to an end user. Internal /
