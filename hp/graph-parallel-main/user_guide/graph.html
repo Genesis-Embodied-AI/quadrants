@@ -616,7 +616,7 @@
 <section id="id1">
 <h3>Restrictions<a class="headerlink" href="#id1" title="Link to this heading">#</a></h3>
 <ul class="simple">
-<li><p>The counter ndarray may be swapped between calls: the cached graph reads each counter through an indirection slot that is refreshed on every launch, so passing a different ndarray (or alternating between several) replays the cached graph without rebuilding it.</p></li>
+<li><p>The counter ndarray may be swapped between calls. Passing a different ndarray (or alternating between several) replays the cached graph without rebuilding it.</p></li>
 </ul>
 </section>
 <section id="caveats">
@@ -714,7 +714,7 @@
 <section id="id2">
 <h3>Restrictions<a class="headerlink" href="#id2" title="Link to this heading">#</a></h3>
 <ul>
-<li><p>Must be used inside <code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel(graph=True,</span> <span class="pre">checkpoints=True)</span></code>. Without the flag, <code class="docutils literal notranslate"><span class="pre">qd.checkpoint(...)</span></code> raises <code class="docutils literal notranslate"><span class="pre">QuadrantsSyntaxError</span></code> at compile time with a fix-it pointing at <code class="docutils literal notranslate"><span class="pre">checkpoints=True</span></code>.</p></li>
+<li><p>Must be used inside <code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel(graph=True,</span> <span class="pre">checkpoints=True)</span></code>. Without the flag, <code class="docutils literal notranslate"><span class="pre">qd.checkpoint(...)</span></code> raises <code class="docutils literal notranslate"><span class="pre">QuadrantsSyntaxError</span></code> at compile time.</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">cp_id</span></code> must be an int literal or an <code class="docutils literal notranslate"><span class="pre">IntEnum</span></code> value, and must be unique across the kernel.</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">yield_on=</span></code> must be a kernel parameter that is a 0-d <code class="docutils literal notranslate"><span class="pre">qd.types.ndarray(qd.i32,</span> <span class="pre">ndim=0)</span></code>; expressions are not supported.</p></li>
 <li><p>Checkpoints cannot be nested inside other checkpoints. Checkpoints inside a <code class="docutils literal notranslate"><span class="pre">qd.graph_do_while</span></code> body are fine.</p></li>
@@ -991,6 +991,7 @@
 <section id="generating-qd-graph-parallel-sections-from-a-compile-time-sequence">
 <h3>Generating <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel</span></code> sections from a compile-time sequence<a class="headerlink" href="#generating-qd-graph-parallel-sections-from-a-compile-time-sequence" title="Link to this heading">#</a></h3>
 <p><code class="docutils literal notranslate"><span class="pre">qd.graph_parallel</span></code> sections do not have to be written out one by one. A <code class="docutils literal notranslate"><span class="pre">for</span> <span class="pre">...</span> <span class="pre">in</span> <span class="pre">qd.static(...)</span></code> loop is unrolled at compile time, so each iteration that contains a <code class="docutils literal notranslate"><span class="pre">with</span> <span class="pre">qd.graph_parallel():</span></code> becomes its own section — handy for forking one section per element of a static list (e.g. per contact type):</p>
+<p>(Note: See <a class="reference internal" href="compound_types.html"><span class="std std-doc">compound_types.md</span></a> for qd.data_oriented description)</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">data_oriented</span>
 <span class="k">class</span><span class="w"> </span><span class="nc">Solver</span><span class="p">:</span>
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
