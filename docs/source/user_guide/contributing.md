@@ -180,9 +180,17 @@ The agent reports up to 5 violations, each annotated with the host file's hotnes
 
 ### Doc quality check (`check_doc_quality.yml`)
 
-Uses an AI agent to review documentation changes for an end-user audience (someone writing Quadrants kernels in Python, not a compiler engineer). An *advanced / internal section* is a clearly-marked section whose heading contains "Advanced", "Under the hood", "Internals", or "Implementation"; it targets a more advanced reader rather than the typical end user. For each `docs/**/*.md` file added or modified in the PR, it reads the entire current file (not just the diff) and checks two things: (1) **undefined terms** — a term a typical user is unlikely to know (specialized or internal jargon, project-specific abbreviations) must be defined at its first use in that file, either inline or via a link to a doc that defines it, unless that first use is inside an advanced / internal section; (2) **end-user relevance** — internal / implementation / contributor-only material must be confined to an advanced / internal section.
+Uses an AI agent to review documentation changes for an end-user audience (someone writing Quadrants kernels in Python, not a compiler engineer).
 
-The following do not count as violations: references to public APIs that the author links to their docs and/or labels as public; brief reader-directed pointers suggesting the reader could contribute upstream or file an issue; the core public API vocabulary a user already knows (e.g. `@qd.kernel`, `@qd.func`, `qd.Template`, fields, ndarrays). The agent reports up to 10 violations. This check is delayed by 30 minutes, to avoid running repeatedly if multiple commits pushed with a short delay between each.
+Let's first define An *advanced / internal section* as a clearly-marked section whose heading contains "Advanced", "Under the hood", "Internals", or "Implementation"; it targets a more advanced reader rather than the typical end user.
+
+For each `docs/**/*.md` file added or modified in the PR, the CI agent reads the entire current file (not just the diff) and checks two things:
+- (1) **undefined terms** — a term a typical user is unlikely to know (specialized or internal jargon, project-specific abbreviations) must be defined at its first use in that file, either inline or via a link to a doc that defines it, unless that first use is inside an advanced / internal section;
+- (2) **end-user relevance** — internal / implementation / contributor-only material must be confined to an advanced / internal section.
+
+The following do not count as violations: references to public APIs that the author links to their docs and/or labels as public; brief reader-directed pointers suggesting the reader could contribute upstream or file an issue; the core public API vocabulary a user already knows (e.g. `@qd.kernel`, `@qd.func`, `qd.Template`, fields, ndarrays).
+
+The agent reports up to 10 violations. This check is delayed by 30 minutes, to avoid running repeatedly if multiple commits pushed with a short delay between each.
 
 ### PR change report (`pr_change_report.yml`)
 
