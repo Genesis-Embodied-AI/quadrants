@@ -105,6 +105,15 @@ export LLVM_DIR="/path/to/llvm/"
 export CMAKE_ARGS="$CMAKE_ARGS -DLLVM_ROOT=/path/to/llvm"
 ```
 
+### Building with the AMD GPU backend (Linux)
+
+The AMD GPU backend is Linux-only (it is force-disabled on macOS and Windows) and is off by default, so enable it explicitly through `CMAKE_ARGS`:
+
+```
+./build.py --shell
+CMAKE_ARGS="-DQD_WITH_AMDGPU=ON -DQD_WITH_CUDA=OFF" pip install --no-build-isolation -e . -v
+```
+
 ## Advanced usage
 
 ### CI Convention about compilers/LLVM
@@ -168,6 +177,12 @@ Uses an AI agent to verify that new or modified source code in a PR has correspo
 Uses an AI agent to flag feature-specific code being piled into heavily-tracked core files when it could live in its own feature-specific file instead. The concern is not that the new code is in the "wrong" place semantically — it is usually topically related to the host file — but that the host file is already a hot, central, frequently-edited file, and adding more self-contained feature code to it makes review, merge conflicts, and future churn worse. The fix is almost always to extract the feature-specific block (top-level function, class, large block, or even a cluster of new methods on an existing class) into its own module, with the host file delegating to it via a narrow interface.
 
 The agent reports up to 5 violations, each annotated with the host file's hotness numbers (commits / authors / size). This check is delayed by 30 minutes, to avoid running repeatedly if multiple commits pushed with a short delay between each.
+
+### Doc quality check (`check_doc_quality.yml`)
+
+Uses an AI agent to review documentation changes for an end-user audience (someone writing Quadrants kernels in Python, not a compiler engineer). For each `docs/**/*.md` file added or modified in the PR, it reads the entire current file (not just the diff) and checks two things: (1) **undefined terms** — a term a typical user is unlikely to know (specialized or internal jargon, project-specific abbreviations) must be defined at its first use in that file, either inline or via a link to a doc that defines it; (2) **end-user relevance** — internal / implementation / contributor-only material must be confined to a clearly-marked section whose heading contains "Advanced", "Under the hood", "Internals", or "Implementation".
+
+The following do not count as violations: references to public APIs that the author links to their docs and/or labels as public; brief reader-directed pointers suggesting the reader could contribute upstream or file an issue; the core public API vocabulary a user already knows (e.g. `@qd.kernel`, `@qd.func`, `qd.Template`, fields, ndarrays). The agent reports up to 10 violations. This check is delayed by 30 minutes, to avoid running repeatedly if multiple commits pushed with a short delay between each.
 
 ### PR change report (`pr_change_report.yml`)
 

@@ -515,6 +515,14 @@
 <span class="n">export</span> <span class="n">CMAKE_ARGS</span><span class="o">=</span><span class="s2">&quot;$CMAKE_ARGS -DLLVM_ROOT=/path/to/llvm&quot;</span>
 </pre></div>
 </div>
+<section id="building-with-the-amd-gpu-backend-linux">
+<h3>Building with the AMD GPU backend (Linux)<a class="headerlink" href="#building-with-the-amd-gpu-backend-linux" title="Link to this heading">#</a></h3>
+<p>The AMD GPU backend is Linux-only (it is force-disabled on macOS and Windows) and is off by default, so enable it explicitly through <code class="docutils literal notranslate"><span class="pre">CMAKE_ARGS</span></code>:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">./</span><span class="n">build</span><span class="o">.</span><span class="n">py</span> <span class="o">--</span><span class="n">shell</span>
+<span class="n">CMAKE_ARGS</span><span class="o">=</span><span class="s2">&quot;-DQD_WITH_AMDGPU=ON -DQD_WITH_CUDA=OFF&quot;</span> <span class="n">pip</span> <span class="n">install</span> <span class="o">--</span><span class="n">no</span><span class="o">-</span><span class="n">build</span><span class="o">-</span><span class="n">isolation</span> <span class="o">-</span><span class="n">e</span> <span class="o">.</span> <span class="o">-</span><span class="n">v</span>
+</pre></div>
+</div>
+</section>
 </section>
 <section id="advanced-usage">
 <h2>Advanced usage<a class="headerlink" href="#advanced-usage" title="Link to this heading">#</a></h2>
@@ -580,6 +588,11 @@
 <h3>Feature factorization check (<code class="docutils literal notranslate"><span class="pre">check_feature_factorization.yml</span></code>)<a class="headerlink" href="#feature-factorization-check-check-feature-factorization-yml" title="Link to this heading">#</a></h3>
 <p>Uses an AI agent to flag feature-specific code being piled into heavily-tracked core files when it could live in its own feature-specific file instead. The concern is not that the new code is in the “wrong” place semantically — it is usually topically related to the host file — but that the host file is already a hot, central, frequently-edited file, and adding more self-contained feature code to it makes review, merge conflicts, and future churn worse. The fix is almost always to extract the feature-specific block (top-level function, class, large block, or even a cluster of new methods on an existing class) into its own module, with the host file delegating to it via a narrow interface.</p>
 <p>The agent reports up to 5 violations, each annotated with the host file’s hotness numbers (commits / authors / size). This check is delayed by 30 minutes, to avoid running repeatedly if multiple commits pushed with a short delay between each.</p>
+</section>
+<section id="doc-quality-check-check-doc-quality-yml">
+<h3>Doc quality check (<code class="docutils literal notranslate"><span class="pre">check_doc_quality.yml</span></code>)<a class="headerlink" href="#doc-quality-check-check-doc-quality-yml" title="Link to this heading">#</a></h3>
+<p>Uses an AI agent to review documentation changes for an end-user audience (someone writing Quadrants kernels in Python, not a compiler engineer). For each <code class="docutils literal notranslate"><span class="pre">docs/**/*.md</span></code> file added or modified in the PR, it reads the entire current file (not just the diff) and checks two things: (1) <strong>undefined terms</strong> — a term a typical user is unlikely to know (specialized or internal jargon, project-specific abbreviations) must be defined at its first use in that file, either inline or via a link to a doc that defines it; (2) <strong>end-user relevance</strong> — internal / implementation / contributor-only material must be confined to a clearly-marked section whose heading contains “Advanced”, “Under the hood”, “Internals”, or “Implementation”.</p>
+<p>The following do not count as violations: references to public APIs that the author links to their docs and/or labels as public; brief reader-directed pointers suggesting the reader could contribute upstream or file an issue; the core public API vocabulary a user already knows (e.g. <code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel</span></code>, <code class="docutils literal notranslate"><span class="pre">&#64;qd.func</span></code>, <code class="docutils literal notranslate"><span class="pre">qd.Template</span></code>, fields, ndarrays). The agent reports up to 10 violations. This check is delayed by 30 minutes, to avoid running repeatedly if multiple commits pushed with a short delay between each.</p>
 </section>
 <section id="pr-change-report-pr-change-report-yml">
 <h3>PR change report (<code class="docutils literal notranslate"><span class="pre">pr_change_report.yml</span></code>)<a class="headerlink" href="#pr-change-report-pr-change-report-yml" title="Link to this heading">#</a></h3>
@@ -666,7 +679,10 @@
 </li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#creating-your-build-dev-environment">Creating your build/dev environment</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#build-py"><code class="docutils literal notranslate"><span class="pre">build.py</span></code></a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#building-the-package-for-release-purposes">Building the package for release purposes</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#building-the-package-for-release-purposes">Building the package for release purposes</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#building-with-the-amd-gpu-backend-linux">Building with the AMD GPU backend (Linux)</a></li>
+</ul>
+</li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#advanced-usage">Advanced usage</a><ul class="nav section-nav flex-column">
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#ci-convention-about-compilers-llvm">CI Convention about compilers/LLVM</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#building-llvm-for-debugging-it">Building LLVM for debugging it</a></li>
@@ -679,6 +695,7 @@
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#deleted-comments-check-check-deleted-comments-yml">Deleted comments check (<code class="docutils literal notranslate"><span class="pre">check_deleted_comments.yml</span></code>)</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#test-coverage-check-check-test-coverage-yml">Test coverage check (<code class="docutils literal notranslate"><span class="pre">check_test_coverage.yml</span></code>)</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#feature-factorization-check-check-feature-factorization-yml">Feature factorization check (<code class="docutils literal notranslate"><span class="pre">check_feature_factorization.yml</span></code>)</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#doc-quality-check-check-doc-quality-yml">Doc quality check (<code class="docutils literal notranslate"><span class="pre">check_doc_quality.yml</span></code>)</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#pr-change-report-pr-change-report-yml">PR change report (<code class="docutils literal notranslate"><span class="pre">pr_change_report.yml</span></code>)</a></li>
 </ul>
 </li>
