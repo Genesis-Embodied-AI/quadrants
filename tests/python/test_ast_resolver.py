@@ -44,11 +44,11 @@ def test_ast_resolver_chain():
     assert ASTResolver.resolve_to(node, qd.atomic_add, locals())
 
 
-def test_ast_resolver_wrong_ti():
+def test_ast_resolver_wrong_qd():
     import quadrants
 
     quadrants.init()
-    fake_ti = namedtuple("FakeTi", ["kernel"])
-    ti = fake_ti(kernel="fake")
+    fake_qd = namedtuple("FakeQd", ["kernel"])
+    qd = fake_qd(kernel="fake")
     node = ast.parse("qd.kernel", mode="eval").body
     assert not ASTResolver.resolve_to(node, quadrants.kernel, locals())

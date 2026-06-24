@@ -7,9 +7,9 @@ namespace quadrants::lang {
 
 /**
  * A unique key of a function.
- * |func_id| uniquely corresponds to a function template (@ti.func).
- * |instance_id| is for the template instantiations, i.e., a @ti.func
- * instantiated multiple times with different ti.template() parameters.
+ * |func_id| uniquely corresponds to a function template (@qd.func).
+ * |instance_id| is for the template instantiations, i.e., a @qd.func
+ * instantiated multiple times with different qd.template() parameters.
  * |func_name| is mostly for debugging/visualizing purpose, and doesn't need
  * to participate in the hash computation.
  */

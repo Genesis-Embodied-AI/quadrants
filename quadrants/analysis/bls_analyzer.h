@@ -39,7 +39,7 @@ class BLSAnalyzer : public BasicStmtVisitor {
   bool run();
 
  private:
-  // Generate the index bounds in a SNode (block). E.g., a dense(ti.ij, (2, 4))
+  // Generate the index bounds in a SNode (block). E.g., a dense(qd.ij, (2, 4))
   // SNode has index bounds [[0, 1], [0, 3]].
   static void generate_block_indices(SNode *snode, BlockIndices *indices);
 

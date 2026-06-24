@@ -27,7 +27,7 @@ inline std::string get_file_name_from_whole_path(const std::string &fn) {
 
 void write(std::string fn, const uint8 *data, std::size_t len) {
   mz_bool status;
-  QD_ERROR_UNLESS(quadrants::ends_with(fn, ".tcb.zip"), "Filename must end with .tcb.zip");
+  QD_ERROR_UNLESS(quadrants::ends_with(fn, ".qdb.zip"), "Filename must end with .qdb.zip");
 
   std::string fn_uncompressed = get_file_name_from_whole_path(fn);
   fn_uncompressed = std::string(fn_uncompressed.begin(),
@@ -49,7 +49,7 @@ void write(const std::string &fn, const std::string &data) {
 }
 
 std::vector<uint8> read(const std::string fn, bool verbose) {
-  QD_ERROR_UNLESS(quadrants::ends_with(fn, ".tcb.zip"), "Filename must end with .tcb.zip");
+  QD_ERROR_UNLESS(quadrants::ends_with(fn, ".qdb.zip"), "Filename must end with .qdb.zip");
 
   mz_zip_archive zip_archive;
   mz_zip_archive_file_stat file_stat;
