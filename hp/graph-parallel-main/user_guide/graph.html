@@ -431,7 +431,7 @@
 <p>Graphs reduce kernel launch overhead by capturing a sequence of GPU operations into a graph, then replaying it in a single launch.</p>
 <section id="backend-support">
 <h2>Backend support<a class="headerlink" href="#backend-support" title="Link to this heading">#</a></h2>
-<p><code class="docutils literal notranslate"><span class="pre">graph=True</span></code> and <code class="docutils literal notranslate"><span class="pre">graph_do_while</span></code> run on every backend. They are <em>hardware accelerated</em> on CUDA (via CUDA graphs) and AMDGPU (via HIP graphs); <code class="docutils literal notranslate"><span class="pre">graph_do_while</span></code> additionally requires CUDA SM 9.0+ / Hopper for its hardware-accelerated path. On other backends, <code class="docutils literal notranslate"><span class="pre">graph=True</span></code> is silently ignored and the kernel runs via the normal launch path, and <code class="docutils literal notranslate"><span class="pre">graph_do_while</span></code> falls back to a host-side do-while loop that copies the condition value GPU → host each iteration (causing a pipeline stall). <code class="docutils literal notranslate"><span class="pre">qd.checkpoint</span></code> gating runs entirely on the device on every GPU backend; only the CPU backend uses host-side gating.</p>
+<p><code class="docutils literal notranslate"><span class="pre">graph=True</span></code> and <code class="docutils literal notranslate"><span class="pre">graph_do_while</span></code> run on every backend. They are <em>hardware accelerated</em> on CUDA (via CUDA graphs) and AMDGPU (via HIP graphs); <code class="docutils literal notranslate"><span class="pre">graph_do_while</span></code> additionally requires <a class="reference external" href="https://developer.nvidia.com/cuda/gpus">CUDA SM 9.0+</a> for its hardware-accelerated path. On other backends, <code class="docutils literal notranslate"><span class="pre">graph=True</span></code> is silently ignored and the kernel runs via the normal launch path, and <code class="docutils literal notranslate"><span class="pre">graph_do_while</span></code> falls back to a host-side do-while loop. <code class="docutils literal notranslate"><span class="pre">qd.checkpoint</span></code> gating runs entirely on the device on every GPU backend.</p>
 <div class="pst-scrollable-table-container"><table class="table">
 <thead>
 <tr class="row-odd"><th class="head"><p>Feature</p></th>
@@ -505,7 +505,7 @@
 <span class="n">my_kernel</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span>  <span class="c1"># subsequent calls: replays the cached graph</span>
 </pre></div>
 </div>
-<p>This works the same way on CUDA and AMDGPU. The cache is keyed per (compiled-kernel-specialization, launch-id), so different template instantiations (different field bindings, etc.) get their own cached graph.</p>
+<p>This works the same way on CUDA and AMDGPU.</p>
 <section id="restrictions">
 <h3>Restrictions<a class="headerlink" href="#restrictions" title="Link to this heading">#</a></h3>
 <ul class="simple">
@@ -984,7 +984,7 @@
 <section id="semantics">
 <h3>Semantics<a class="headerlink" href="#semantics" title="Link to this heading">#</a></h3>
 <ul class="simple">
-<li><p><strong>Fork / join.</strong> Every <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel</span></code> section in the region forks from the work that precedes the region. All <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel</span></code> sections must finish before any work <em>after</em> the region begins (the join). On CUDA the join is a single empty graph node depending on every <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel</span></code> section’s last kernel.</p></li>
+<li><p><strong>Fork / join.</strong> Every <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel</span></code> section in the region forks from the work that precedes the region. All <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel</span></code> sections must finish before any work <em>after</em> the region begins (the join).</p></li>
 <li><p><strong><code class="docutils literal notranslate"><span class="pre">qd.graph_parallel</span></code> sections are independent — you guarantee it.</strong> Calls <em>within</em> a <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel</span></code> section keep their program order, but calls in <em>different</em> <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel</span></code> sections have no ordering. The <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel</span></code> sections must be data-race free with respect to one another: no <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel</span></code> section may read what another writes, and no two <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel</span></code> sections may write the same memory. Quadrants does not check this; getting it wrong gives nondeterministic results.</p></li>
 </ul>
 </section>
