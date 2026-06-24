@@ -132,7 +132,7 @@ void export_lang(nb::module_ &m) {
       .def("__call__",
            [](DataType *dtype, nb::args args, const nb::kwargs &kwargs) {
              // Defining __call__ here to make DataType callable in Python,
-             // which enables us to write `typing.Tuple[ti.i32, ti.i32]`.
+             // which enables us to write `typing.Tuple[qd.i32, qd.i32]`.
              throw QuadrantsSyntaxError(
                  "Quadrants data types cannot be called outside Quadrants "
                  "kernels.");
@@ -544,7 +544,7 @@ void export_lang(nb::module_ &m) {
   nb::class_<Kernel>(m, "KernelCxx")
       .def("no_activate",
            [](Kernel *self, SNode *snode) {
-             // TODO(#2193): Also apply to @ti.func?
+             // TODO(#2193): Also apply to @qd.func?
              self->no_activate.push_back(snode);
            })
       .def("to_string", &Kernel::to_string)

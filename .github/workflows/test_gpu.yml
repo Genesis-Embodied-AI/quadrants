@@ -83,7 +83,7 @@ jobs:
       - name: run tests
         run: |
           chmod +x quadrants_cpp_tests
-          export QD_LIB_DIR="$(python -c 'import quadrants as ti; print(ti.__path__[0])' | tail -n 1)/_lib/runtime"
+          export QD_LIB_DIR="$(python -c 'import quadrants as qd; print(qd.__path__[0])' | tail -n 1)/_lib/runtime"
           ./quadrants_cpp_tests --gtest_filter=-AMDGPU.*
   test_linux_cuda:
     name: Test Linux CUDA

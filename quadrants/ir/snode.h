@@ -15,7 +15,7 @@ class SNodeRwAccessorsBank;
 /**
  * Dimension (or axis) of a tensor.
  *
- * For example, in the frontend we have ti.ij, which is translated to
+ * For example, in the frontend we have qd.ij, which is translated to
  * {Axis{0}, Axis{1}}.
  */
 class Axis {
@@ -78,7 +78,7 @@ class SNode {
   std::vector<int> index_offsets;
   int num_active_indices{0};
   int physical_index_position[quadrants_max_num_indices]{};
-  // physical indices are (ti.i, ti.j, ti.k, ti.l, ...)
+  // physical indices are (qd.i, qd.j, qd.k, qd.l, ...)
   // physical_index_position[i] =
   // which physical index does the i-th virtual index (the one exposed to
   // programmers) refer to? i.e. in a[i, j, k], "i", "j", and "k" are virtual

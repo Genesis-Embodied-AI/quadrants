@@ -132,12 +132,12 @@ class LaunchContextBuilder {
                             const std::vector<int> &shape,
                             intptr_t devalloc_ptr_grad = 0);
   void set_arg_ndarray(int arg_id, const Ndarray &arr);
-  // Bulk processing of multiple individual Taichi NDarray arguments (without
+  // Bulk processing of multiple individual Quadrants NDarray arguments (without
   // any associated gradient) at the same time.
   // See 'set_arg_float' for details.
   void set_args_ndarray(const std::vector<int> &args_id, const std::vector<Ndarray *> &arrs);
   void set_arg_ndarray_with_grad(int arg_id, const Ndarray &arr, const Ndarray &arr_grad);
-  // Bulk processing of multiple individual Taichi NDarray arguments (along
+  // Bulk processing of multiple individual Quadrants NDarray arguments (along
   // with associated gradient) at the same time.
   // See 'set_arg_float' for details.
   void set_args_ndarray_with_grad(const std::vector<int> &args_id,

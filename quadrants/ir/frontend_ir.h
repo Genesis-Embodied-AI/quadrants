@@ -557,7 +557,7 @@ class MatrixFieldExpression : public Expression {
 
 /**
  * Creating a local matrix;
- * lowered from ti.Matrix
+ * lowered from qd.Matrix
  */
 class MatrixExpression : public Expression {
  public:
@@ -698,7 +698,7 @@ class IdExpression : public Expression {
   QD_DEFINE_ACCEPT_FOR_EXPRESSION
 };
 
-// ti.atomic_*() is an expression with side effect.
+// qd.atomic_*() is an expression with side effect.
 class AtomicOpExpression : public Expression {
  public:
   AtomicOpType op_type;

@@ -74,7 +74,7 @@ RhiReturn<VkFormat> buffer_format_ti_to_vk(BufferFormat f) {
 
 RhiReturn<BufferFormat> buffer_format_vk_to_ti(VkFormat f) {
   if (!buffer_format_map.exists(f)) {
-    RHI_LOG_ERROR("VkFormat cannot be mapped to ti");
+    RHI_LOG_ERROR("VkFormat cannot be mapped to qd");
     return {RhiResult::not_supported, BufferFormat::unknown};
   }
   return {RhiResult::success, buffer_format_map.backend2rhi.at(f)};
@@ -163,7 +163,7 @@ size_t VulkanPipelineCache::size() const noexcept {
 }
 
 VulkanPipeline::VulkanPipeline(const Params &params)
-    : ti_device_(*params.device), device_(params.device->vk_device()), name_(params.name) {
+    : qd_device_(*params.device), device_(params.device->vk_device()), name_(params.name) {
   create_descriptor_set_layout(params);
   create_shader_stages(params);
   create_pipeline_layout();
@@ -179,7 +179,7 @@ VulkanPipeline::VulkanPipeline(const Params &params,
                                const RasterParams &raster_params,
                                const std::vector<VertexInputBinding> &vertex_inputs,
                                const std::vector<VertexInputAttribute> &vertex_attrs)
-    : ti_device_(*params.device), device_(params.device->vk_device()), name_(params.name) {
+    : qd_device_(*params.device), device_(params.device->vk_device()), name_(params.name) {
   this->graphics_pipeline_template_ = std::make_unique<GraphicsPipelineTemplate>();
 
   create_descriptor_set_layout(params);
@@ -265,7 +265,7 @@ void VulkanPipeline::create_descriptor_set_layout(const Params &params) {
     for (SpvReflectDescriptorSet *desc_set : desc_sets) {
       uint32_t set_index = desc_set->set;
       if (set_templates_.find(set_index) == set_templates_.end()) {
-        set_templates_.insert({set_index, VulkanResourceSet(&ti_device_)});
+        set_templates_.insert({set_index, VulkanResourceSet(&qd_device_)});
       }
       VulkanResourceSet &set = set_templates_.at(set_index);
 
@@ -350,7 +350,7 @@ void VulkanPipeline::create_descriptor_set_layout(const Params &params) {
 
     set_layouts_.resize(set_templates_.size(), nullptr);
     for (auto &[index, layout_template] : set_templates_) {
-      set_layouts_[index] = ti_device_.get_desc_set_layout(layout_template);
+      set_layouts_[index] = qd_device_.get_desc_set_layout(layout_template);
     }
   }
 }
@@ -498,36 +498,36 @@ void VulkanPipeline::create_graphics_pipeline(const RasterParams &raster_params,
 
     for (int i = 0; i < raster_params.blending.size(); i++) {
       auto &state = graphics_pipeline_template_->blend_attachments[i];
-      auto &ti_param = raster_params.blending[i];
-      state.blendEnable = ti_param.enable;
-      if (ti_param.enable) {
+      auto &qd_param = raster_params.blending[i];
+      state.blendEnable = qd_param.enable;
+      if (qd_param.enable) {
         {
-          auto [res, op] = blend_op_ti_to_vk(ti_param.color.op);
+          auto [res, op] = blend_op_ti_to_vk(qd_param.color.op);
           RHI_ASSERT(res == RhiResult::success);
           state.colorBlendOp = op;
         }
         {
-          auto [res, factor] = blend_factor_ti_to_vk(ti_param.color.src_factor);
+          auto [res, factor] = blend_factor_ti_to_vk(qd_param.color.src_factor);
           RHI_ASSERT(res == RhiResult::success);
           state.srcColorBlendFactor = factor;
         }
         {
-          auto [res, factor] = blend_factor_ti_to_vk(ti_param.color.dst_factor);
+          auto [res, factor] = blend_factor_ti_to_vk(qd_param.color.dst_factor);
           RHI_ASSERT(res == RhiResult::success);
           state.dstColorBlendFactor = factor;
         }
         {
-          auto [res, op] = blend_op_ti_to_vk(ti_param.alpha.op);
+          auto [res, op] = blend_op_ti_to_vk(qd_param.alpha.op);
           RHI_ASSERT(res == RhiResult::success);
           state.alphaBlendOp = op;
         }
         {
-          auto [res, factor] = blend_factor_ti_to_vk(ti_param.alpha.src_factor);
+          auto [res, factor] = blend_factor_ti_to_vk(qd_param.alpha.src_factor);
           RHI_ASSERT(res == RhiResult::success);
           state.srcAlphaBlendFactor = factor;
         }
         {
-          auto [res, factor] = blend_factor_ti_to_vk(ti_param.alpha.dst_factor);
+          auto [res, factor] = blend_factor_ti_to_vk(qd_param.alpha.dst_factor);
           RHI_ASSERT(res == RhiResult::success);
           state.dstAlphaBlendFactor = factor;
         }
@@ -754,8 +754,8 @@ RasterResources &VulkanRasterResources::index_buffer(DevicePtr ptr, size_t index
   return *this;
 }
 
-VulkanCommandList::VulkanCommandList(VulkanDevice *ti_device, VulkanStream *stream, vkapi::IVkCommandBuffer buffer)
-    : ti_device_(ti_device), stream_(stream), device_(ti_device->vk_device()), buffer_(buffer) {
+VulkanCommandList::VulkanCommandList(VulkanDevice *qd_device, VulkanStream *stream, vkapi::IVkCommandBuffer buffer)
+    : qd_device_(qd_device), stream_(stream), device_(qd_device->vk_device()), buffer_(buffer) {
   VkCommandBufferBeginInfo info{};
   info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
   info.pNext = nullptr;
@@ -775,7 +775,7 @@ void VulkanCommandList::bind_pipeline(Pipeline *p) noexcept {
     return;
 
   if (pipeline->is_graphics()) {
-    vkapi::IVkPipeline vk_pipeline = ti_device_->vk_caps().dynamic_rendering
+    vkapi::IVkPipeline vk_pipeline = qd_device_->vk_caps().dynamic_rendering
                                          ? pipeline->graphics_pipeline_dynamic(current_renderpass_desc_)
                                          : pipeline->graphics_pipeline(current_renderpass_desc_, current_renderpass_);
     vkCmdBindPipeline(buffer_->buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk_pipeline->pipeline);
@@ -884,8 +884,8 @@ RhiResult VulkanCommandList::bind_raster_resources(RasterResources *_res) noexce
 }
 
 void VulkanCommandList::buffer_barrier(DevicePtr ptr, size_t size) noexcept {
-  auto buffer = ti_device_->get_vkbuffer(ptr);
-  size_t buffer_size = ti_device_->get_vkbuffer_size(ptr);
+  auto buffer = qd_device_->get_vkbuffer(ptr);
+  size_t buffer_size = qd_device_->get_vkbuffer_size(ptr);
 
   // Clamp to buffer size
   if (ptr.offset > buffer_size) {
@@ -958,8 +958,8 @@ void VulkanCommandList::memory_barrier() noexcept {
 }
 
 void VulkanCommandList::buffer_copy(DevicePtr dst, DevicePtr src, size_t size) noexcept {
-  size_t src_size = ti_device_->get_vkbuffer_size(src);
-  size_t dst_size = ti_device_->get_vkbuffer_size(dst);
+  size_t src_size = qd_device_->get_vkbuffer_size(src);
+  size_t dst_size = qd_device_->get_vkbuffer_size(dst);
 
   // Clamp to minimum available size
   if (saturate_uadd<size_t>(src.offset, size) > src_size) {
@@ -978,8 +978,8 @@ void VulkanCommandList::buffer_copy(DevicePtr dst, DevicePtr src, size_t size) n
   copy_region.dstOffset = dst.offset;
   copy_region.size = size;
 
-  auto src_buffer = ti_device_->get_vkbuffer(src);
-  auto dst_buffer = ti_device_->get_vkbuffer(dst);
+  auto src_buffer = qd_device_->get_vkbuffer(src);
+  auto dst_buffer = qd_device_->get_vkbuffer(dst);
   vkCmdCopyBuffer(buffer_->buffer, src_buffer->buffer, dst_buffer->buffer,
                   /*regionCount=*/1, &copy_region);
   buffer_->refs.push_back(src_buffer);
@@ -990,8 +990,8 @@ void VulkanCommandList::buffer_fill(DevicePtr ptr, size_t size, uint32_t data) n
   // Align to 4 bytes
   ptr.offset = ptr.offset & size_t(-4);
 
-  auto buffer = ti_device_->get_vkbuffer(ptr);
-  size_t buffer_size = ti_device_->get_vkbuffer_size(ptr);
+  auto buffer = qd_device_->get_vkbuffer(ptr);
+  size_t buffer_size = qd_device_->get_vkbuffer_size(ptr);
 
   // Check for overflow
   if (ptr.offset > buffer_size) {
@@ -1007,7 +1007,7 @@ void VulkanCommandList::buffer_fill(DevicePtr ptr, size_t size, uint32_t data) n
 }
 
 RhiResult VulkanCommandList::dispatch(uint32_t x, uint32_t y, uint32_t z) noexcept {
-  auto &dev_props = ti_device_->get_vk_physical_device_props();
+  auto &dev_props = qd_device_->get_vk_physical_device_props();
   if (x > dev_props.limits.maxComputeWorkGroupCount[0] || y > dev_props.limits.maxComputeWorkGroupCount[1] ||
       z > dev_props.limits.maxComputeWorkGroupCount[2]) {
     return RhiResult::not_supported;
@@ -1022,7 +1022,7 @@ RhiResult VulkanCommandList::dispatch_indirect(DevicePtr dim3_ptr) noexcept {
   // `VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT`, so as long as the caller used `Indirect` in `AllocParams::usage` this points
   // at a usable buffer. The byte offset is `dim3_ptr.offset`; Vulkan accepts any 4-byte-aligned offset for
   // `vkCmdDispatchIndirect` and the three u32 workgroup counts are 4-byte aligned by construction.
-  auto buffer = ti_device_->get_vkbuffer(dim3_ptr);
+  auto buffer = qd_device_->get_vkbuffer(dim3_ptr);
   if (!buffer) {
     return RhiResult::invalid_usage;
   }
@@ -1061,12 +1061,12 @@ void VulkanCommandList::begin_renderpass(int x0,
   viewport_height_ = render_area.extent.height;
 
   // Dynamic rendering codepath
-  if (ti_device_->vk_caps().dynamic_rendering) {
+  if (qd_device_->vk_caps().dynamic_rendering) {
     current_dynamic_targets_.clear();
 
     std::vector<VkRenderingAttachmentInfoKHR> color_attachment_infos(num_color_attachments);
     for (uint32_t i = 0; i < num_color_attachments; i++) {
-      auto [image, view, format] = ti_device_->get_vk_image(color_attachments[i]);
+      auto [image, view, format] = qd_device_->get_vk_image(color_attachments[i]);
       bool clear = color_clear[i];
       rp_desc.color_attachments.emplace_back(format, clear);
 
@@ -1102,7 +1102,7 @@ void VulkanCommandList::begin_renderpass(int x0,
 
     VkRenderingAttachmentInfo depth_attachment_info{};
     if (depth_attachment) {
-      auto [image, view, format] = ti_device_->get_vk_image(*depth_attachment);
+      auto [image, view, format] = qd_device_->get_vk_image(*depth_attachment);
       rp_desc.depth_attachment = format;
 
       depth_attachment_info.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
@@ -1132,7 +1132,7 @@ void VulkanCommandList::begin_renderpass(int x0,
   bool has_depth = false;
 
   if (depth_attachment) {
-    auto [image, view, format] = ti_device_->get_vk_image(*depth_attachment);
+    auto [image, view, format] = qd_device_->get_vk_image(*depth_attachment);
     rp_desc.depth_attachment = format;
     has_depth = true;
   } else {
@@ -1144,7 +1144,7 @@ void VulkanCommandList::begin_renderpass(int x0,
   VulkanFramebufferDesc fb_desc;
 
   for (uint32_t i = 0; i < num_color_attachments; i++) {
-    auto [image, view, format] = ti_device_->get_vk_image(color_attachments[i]);
+    auto [image, view, format] = qd_device_->get_vk_image(color_attachments[i]);
     rp_desc.color_attachments.emplace_back(format, color_clear[i]);
     fb_desc.attachments.push_back(view);
     clear_values[i].color =
@@ -1152,18 +1152,18 @@ void VulkanCommandList::begin_renderpass(int x0,
   }
 
   if (has_depth) {
-    auto [depth_image, depth_view, depth_format] = ti_device_->get_vk_image(*depth_attachment);
+    auto [depth_image, depth_view, depth_format] = qd_device_->get_vk_image(*depth_attachment);
     clear_values[num_color_attachments].depthStencil = VkClearDepthStencilValue{0.0, 0};
     fb_desc.attachments.push_back(depth_view);
   }
 
-  current_renderpass_ = ti_device_->get_renderpass(rp_desc);
+  current_renderpass_ = qd_device_->get_renderpass(rp_desc);
 
   fb_desc.width = x1 - x0;
   fb_desc.height = y1 - y0;
   fb_desc.renderpass = current_renderpass_;
 
-  current_framebuffer_ = ti_device_->get_framebuffer(fb_desc);
+  current_framebuffer_ = qd_device_->get_framebuffer(fb_desc);
 
   VkRenderPassBeginInfo begin_info{};
   begin_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
@@ -1180,7 +1180,7 @@ void VulkanCommandList::begin_renderpass(int x0,
 }
 
 void VulkanCommandList::end_renderpass() {
-  if (ti_device_->vk_caps().dynamic_rendering) {
+  if (qd_device_->vk_caps().dynamic_rendering) {
     vkCmdEndRenderingKHR(buffer_->buffer);
 
     if (0) {
@@ -1249,7 +1249,7 @@ void VulkanCommandList::draw_indexed_instance(uint32_t num_indicies,
 }
 
 void VulkanCommandList::image_transition(DeviceAllocation img, ImageLayout old_layout_, ImageLayout new_layout_) {
-  auto [image, view, format] = ti_device_->get_vk_image(img);
+  auto [image, view, format] = qd_device_->get_vk_image(img);
 
   VkImageLayout old_layout = image_layout_ti_to_vk(old_layout_);
   VkImageLayout new_layout = image_layout_ti_to_vk(new_layout_);
@@ -1336,8 +1336,8 @@ void VulkanCommandList::buffer_to_image(DeviceAllocation dst_img,
   VkBufferImageCopy copy_info{};
   buffer_image_copy_ti_to_vk(copy_info, src_buf.offset, params);
 
-  auto [image, view, format] = ti_device_->get_vk_image(dst_img);
-  auto buffer = ti_device_->get_vkbuffer(src_buf);
+  auto [image, view, format] = qd_device_->get_vk_image(dst_img);
+  auto buffer = qd_device_->get_vkbuffer(src_buf);
 
   vkCmdCopyBufferToImage(buffer_->buffer, buffer->buffer, image->image, image_layout_ti_to_vk(img_layout), 1,
                          &copy_info);
@@ -1352,8 +1352,8 @@ void VulkanCommandList::image_to_buffer(DevicePtr dst_buf,
   VkBufferImageCopy copy_info{};
   buffer_image_copy_ti_to_vk(copy_info, dst_buf.offset, params);
 
-  auto [image, view, format] = ti_device_->get_vk_image(src_img);
-  auto buffer = ti_device_->get_vkbuffer(dst_buf);
+  auto [image, view, format] = qd_device_->get_vk_image(src_img);
+  auto buffer = qd_device_->get_vkbuffer(dst_buf);
 
   vkCmdCopyImageToBuffer(buffer_->buffer, image->image, image_layout_ti_to_vk(img_layout), buffer->buffer, 1,
                          &copy_info);
@@ -1375,8 +1375,8 @@ void VulkanCommandList::copy_image(DeviceAllocation dst_img,
   copy.extent.height = params.height;
   copy.extent.depth = params.depth;
 
-  auto [dst_vk_image, dst_view, dst_format] = ti_device_->get_vk_image(dst_img);
-  auto [src_vk_image, src_view, src_format] = ti_device_->get_vk_image(src_img);
+  auto [dst_vk_image, dst_view, dst_format] = qd_device_->get_vk_image(dst_img);
+  auto [src_vk_image, src_view, src_format] = qd_device_->get_vk_image(src_img);
 
   vkCmdCopyImage(buffer_->buffer, src_vk_image->image, image_layout_ti_to_vk(src_img_layout), dst_vk_image->image,
                  image_layout_ti_to_vk(dst_img_layout), 1, &copy);
@@ -1401,8 +1401,8 @@ void VulkanCommandList::blit_image(DeviceAllocation dst_img,
   blit.dstSubresource.layerCount = 1;
   blit.dstOffsets[1] = blit_size;
 
-  auto [dst_vk_image, dst_view, dst_format] = ti_device_->get_vk_image(dst_img);
-  auto [src_vk_image, src_view, src_format] = ti_device_->get_vk_image(src_img);
+  auto [dst_vk_image, dst_view, dst_format] = qd_device_->get_vk_image(dst_img);
+  auto [src_vk_image, src_view, src_format] = qd_device_->get_vk_image(src_img);
 
   vkCmdBlitImage(buffer_->buffer, src_vk_image->image, image_layout_ti_to_vk(src_img_layout), dst_vk_image->image,
                  image_layout_ti_to_vk(dst_img_layout), 1, &blit, VK_FILTER_NEAREST);
@@ -1412,14 +1412,14 @@ void VulkanCommandList::blit_image(DeviceAllocation dst_img,
 }
 
 void VulkanCommandList::set_line_width(float width) {
-  if (ti_device_->vk_caps().wide_line) {
+  if (qd_device_->vk_caps().wide_line) {
     vkCmdSetLineWidth(buffer_->buffer, width);
   }
 }
 
 vkapi::IVkRenderPass VulkanCommandList::current_renderpass() {
-  if (ti_device_->vk_caps().dynamic_rendering) {
-    vkapi::IVkRenderPass rp = ti_device_->get_renderpass(current_renderpass_desc_);
+  if (qd_device_->vk_caps().dynamic_rendering) {
+    vkapi::IVkRenderPass rp = qd_device_->get_renderpass(current_renderpass_desc_);
     buffer_->refs.push_back(rp);
     return rp;
   }
@@ -1772,14 +1772,14 @@ Stream *VulkanDevice::get_compute_stream() {
 }
 
 void VulkanCommandList::begin_profiler_scope(const std::string &kernel_name) {
-  auto pool = vkapi::create_query_pool(ti_device_->vk_device());
+  auto pool = vkapi::create_query_pool(qd_device_->vk_device());
   vkCmdResetQueryPool(buffer_->buffer, pool->query_pool, 0, 2);
   vkCmdWriteTimestamp(buffer_->buffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, pool->query_pool, 0);
-  ti_device_->profiler_add_sampler(kernel_name, pool);
+  qd_device_->profiler_add_sampler(kernel_name, pool);
 }
 
 void VulkanCommandList::end_profiler_scope() {
-  auto pool = ti_device_->profiler_get_last_query_pool();
+  auto pool = qd_device_->profiler_get_last_query_pool();
   vkCmdWriteTimestamp(buffer_->buffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, pool->query_pool, 1);
 }
 

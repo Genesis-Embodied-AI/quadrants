@@ -36,7 +36,7 @@ class SNodeTreeManager;
 class CompiledQuadrantsKernel {
  public:
   struct Params {
-    const QuadrantsKernelAttributes *ti_kernel_attribs{nullptr};
+    const QuadrantsKernelAttributes *qd_kernel_attribs{nullptr};
     std::vector<std::vector<uint32_t>> spirv_bins;
     std::size_t num_snode_trees{0};
 
@@ -48,9 +48,9 @@ class CompiledQuadrantsKernel {
     PipelineCache *backend_cache{nullptr};
   };
 
-  explicit CompiledQuadrantsKernel(const Params &ti_params);
+  explicit CompiledQuadrantsKernel(const Params &qd_params);
 
-  const QuadrantsKernelAttributes &ti_kernel_attribs() const;
+  const QuadrantsKernelAttributes &qd_kernel_attribs() const;
 
   size_t num_pipelines() const;
 
@@ -64,7 +64,7 @@ class CompiledQuadrantsKernel {
   }
 
  private:
-  QuadrantsKernelAttributes ti_kernel_attribs_;
+  QuadrantsKernelAttributes qd_kernel_attribs_;
   std::vector<TaskAttributes> tasks_attribs_;
 
   [[maybe_unused]] Device *device_;
@@ -365,7 +365,7 @@ class QD_DLL_EXPORT GfxRuntime {
   // the assignment site for the MoltenVK SIGSEGV this guards against.
   size_t pending_launches_since_sync_{0};
 
-  std::vector<std::unique_ptr<CompiledQuadrantsKernel>> ti_kernels_;
+  std::vector<std::unique_ptr<CompiledQuadrantsKernel>> qd_kernels_;
 
   std::unordered_map<DeviceAllocation *, size_t> root_buffers_size_map_;
   std::unordered_map<DeviceAllocationId, ImageLayout> last_image_layouts_;
@@ -390,7 +390,7 @@ class QD_DLL_EXPORT GfxRuntime {
   std::unique_ptr<Pipeline> checkpoint_gate_pipeline_{nullptr};
   std::unique_ptr<Pipeline> checkpoint_yield_check_pipeline_{nullptr};
 
-  // Per-kernel-handle cached gating state. Indexed by `KernelHandle::get_launch_id()` (same indexing as `ti_kernels_`),
+  // Per-kernel-handle cached gating state. Indexed by `KernelHandle::get_launch_id()` (same indexing as `qd_kernels_`),
   // allocated lazily on the first checkpoint-bearing launch of each handle and reused across every subsequent launch of
   // that handle. Entries for non-checkpoint kernels (or pre-allocation slots for not-yet-launched handles) are left
   // default-constructed (`per_cp.empty()`); the launcher tests `state.per_cp.empty()` as the fast-path guard.
@@ -435,7 +435,7 @@ class QD_DLL_EXPORT GfxRuntime {
     std::vector<CheckpointPerCpState> per_cp;
   };
 
-  // Per-handle cached gating state. Resized to `ti_kernels_.size()` lazily; entries for handles that have never
+  // Per-handle cached gating state. Resized to `qd_kernels_.size()` lazily; entries for handles that have never
   // launched a checkpoint-bearing kernel have `per_cp.empty()` and skip the GPU- side gating path entirely (no buffers
   // allocated).
   std::vector<CheckpointHandleState> checkpoint_handle_states_;

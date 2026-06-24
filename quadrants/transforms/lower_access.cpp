@@ -86,7 +86,7 @@ class LowerAccess : public IRVisitor {
   VecStatement lower_ptr(GlobalPtrStmt *ptr, bool activate, SNodeOpType snode_op = SNodeOpType::undefined) {
     VecStatement lowered;
     if (snode_op == SNodeOpType::is_active) {
-      // For ti.is_active
+      // For qd.is_active
       QD_ASSERT(!activate);
     }
     PtrLowererImpl lowerer{ptr->snode, ptr->indices, snode_op, ptr->is_bit_vectorized, &lowered};

@@ -66,7 +66,7 @@ PtxCache::PtxCache(const Config config, const CompileConfig &compile_config, int
       auto _ = make_unlocker(lock_path);
       offline_cache::load_metadata_with_checking(cached_all_data_, filepath);
     } else {
-      QD_WARN("Lock {} failed. Please run 'ti cache clean -p {}' and try again.", lock_path, this->cache_dir_);
+      QD_WARN("Lock {} failed. Please run 'qd cache clean -p {}' and try again.", lock_path, this->cache_dir_);
     }
   }
 }
@@ -87,7 +87,7 @@ void PtxCache::dump() {
   auto lock_path = join_path(cache_dir_, kMetadataLockName);
 
   if (!lock_with_file(lock_path)) {
-    QD_WARN("Lock {} failed. Please run 'ti cache clean -p {}' and try again.", lock_path, cache_dir_);
+    QD_WARN("Lock {} failed. Please run 'qd cache clean -p {}' and try again.", lock_path, cache_dir_);
     wrapped_by_key_.clear();  // Ignore the caching kernels
     return;
   }

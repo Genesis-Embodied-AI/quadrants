@@ -150,10 +150,10 @@ source = [
 
 [tool.pytest.ini_options]
 filterwarnings = [
-    "ignore:Calling non-taichi function",
+    "ignore:Calling non-quadrants function",
     "ignore:`np.int` is a deprecated alias",
-    "ignore:Operator \"is\" in Taichi scope is deprecated",
-    "ignore:Operator \"is not\" in Taichi scope is deprecated"
+    "ignore:Operator \"is\" in Quadrants scope is deprecated",
+    "ignore:Operator \"is not\" in Quadrants scope is deprecated"
 ]
 
 [tool.yapf]

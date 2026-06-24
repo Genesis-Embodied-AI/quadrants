@@ -1122,7 +1122,7 @@ void SNodeOpExpression::flatten(FlattenContext *ctx) {
   auto ptr = ctx->push_back<GlobalPtrStmt>(snode, indices_stmt, true, is_cell_access, dbg_info);
   if (op_type == SNodeOpType::is_active) {
     if (!(snode->type == SNodeType::pointer || snode->type == SNodeType::hash || snode->type == SNodeType::bitmasked)) {
-      ErrorEmitter(QuadrantsTypeError(), this, "ti.is_active only works on pointer, hash or bitmasked nodes.");
+      ErrorEmitter(QuadrantsTypeError(), this, "qd.is_active only works on pointer, hash or bitmasked nodes.");
     }
     ctx->push_back<SNodeOpStmt>(SNodeOpType::is_active, snode, ptr, nullptr, dbg_info);
   } else if (op_type == SNodeOpType::length) {
@@ -1139,7 +1139,7 @@ void SNodeOpExpression::flatten(FlattenContext *ctx) {
     }
     ctx->push_back<LocalLoadStmt>(alloca, dbg_info);
     if (snode->type != SNodeType::dynamic) {
-      ErrorEmitter(QuadrantsTypeError(), this, "ti.append only works on dynamic nodes.");
+      ErrorEmitter(QuadrantsTypeError(), this, "qd.append only works on dynamic nodes.");
     }
   }
   stmt = ctx->back_stmt();
@@ -1325,7 +1325,7 @@ void ASTBuilder::insert_for(const Expr &s, const Expr &e, const std::function<vo
 Expr ASTBuilder::insert_thread_idx_expr() {
   auto loop = stack_.size() ? stack_.back()->parent_stmt() : nullptr;
   QD_ERROR_IF(arch_ != Arch::cuda && !arch_is_cpu(arch_) && arch_ != Arch::amdgpu,
-              "ti.thread_idx() is only available in cuda or cpu or amdgpu context.");
+              "qd.thread_idx() is only available in cuda or cpu or amdgpu context.");
   if (loop != nullptr) {
     auto i = stack_.size() - 1;
     while (!(loop->is<FrontendForStmt>())) {
@@ -1334,7 +1334,7 @@ Expr ASTBuilder::insert_thread_idx_expr() {
         break;
     }
   }
-  QD_ERROR_IF(!(loop && loop->is<FrontendForStmt>()), "ti.thread_idx() is only valid within loops.");
+  QD_ERROR_IF(!(loop && loop->is<FrontendForStmt>()), "qd.thread_idx() is only valid within loops.");
   return Expr::make<InternalFuncCallExpression>(Operations::get(InternalOp::linear_thread_idx), std::vector<Expr>{});
 }
 
@@ -1349,7 +1349,7 @@ Expr ASTBuilder::insert_patch_idx_expr(const DebugInfo &dbg_info) {
     }
   }
   QD_ERROR_IF(!(loop && loop->is<FrontendForStmt>() && loop->as<FrontendForStmt>()->mesh),
-              "ti.mesh_patch_idx() is only valid within mesh-for loops.");
+              "qd.mesh_patch_idx() is only valid within mesh-for loops.");
   return Expr::make<MeshPatchIndexExpression>(dbg_info);
 }
 
@@ -1524,7 +1524,7 @@ void ASTBuilder::begin_frontend_struct_for_on_snode(const ExprGroup &loop_vars,
                                                     const DebugInfo &dbg_info) {
   warn_if_named_nested_loop();
   QD_WARN_IF(for_loop_dec_.config.strictly_serialized,
-             "ti.loop_config(serialize=True) does not have effect on the struct for. "
+             "qd.loop_config(serialize=True) does not have effect on the struct for. "
              "The execution order is not guaranteed.");
   for_loop_dec_.config.stream_parallel_group_id = current_stream_parallel_group_id_;
   for_loop_dec_.config.graph_do_while_level_id = current_graph_do_while_level_id_;
@@ -1541,7 +1541,7 @@ void ASTBuilder::begin_frontend_struct_for_on_external_tensor(const ExprGroup &l
                                                               const DebugInfo &dbg_info) {
   warn_if_named_nested_loop();
   QD_WARN_IF(for_loop_dec_.config.strictly_serialized,
-             "ti.loop_config(serialize=True) does not have effect on the struct for. "
+             "qd.loop_config(serialize=True) does not have effect on the struct for. "
              "The execution order is not guaranteed.");
   for_loop_dec_.config.stream_parallel_group_id = current_stream_parallel_group_id_;
   for_loop_dec_.config.graph_do_while_level_id = current_graph_do_while_level_id_;
@@ -1560,7 +1560,7 @@ void ASTBuilder::begin_frontend_mesh_for(const Expr &i,
                                          const DebugInfo &dbg_info) {
   warn_if_named_nested_loop();
   QD_WARN_IF(for_loop_dec_.config.strictly_serialized,
-             "ti.loop_config(serialize=True) does not have effect on the mesh for. "
+             "qd.loop_config(serialize=True) does not have effect on the mesh for. "
              "The execution order is not guaranteed.");
   for_loop_dec_.config.stream_parallel_group_id = current_stream_parallel_group_id_;
   for_loop_dec_.config.graph_do_while_level_id = current_graph_do_while_level_id_;

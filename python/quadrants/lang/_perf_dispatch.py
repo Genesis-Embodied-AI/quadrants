@@ -352,7 +352,7 @@ def perf_dispatch(
     """
     This annotation designates a meta-function that can have one or more functions registered with it.
 
-    At runtime, gstaichi will try running each registered function in turn, and choose the fastest. Once
+    At runtime, quadrants will try running each registered function in turn, and choose the fastest. Once
     chosen, the fastest function will systematically be used, for the lifetime of the process. This is
     aimed for use where there are multiple possible functions, and no clear heuristic to
     choose between them.
