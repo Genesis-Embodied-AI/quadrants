@@ -121,7 +121,8 @@ def make_constant_expr(val, dtype):
             raise QuadrantsTypeError(
                 "Floating-point literals must be annotated with a floating-point type. For type casting, use `qd.cast`."
             )
-        return Expr(_qd_core.make_const_expr_fp(constant_dtype, val))
+        # nanobind's generated stub types this param as `float`; coerce np.floating -> native float.
+        return Expr(_qd_core.make_const_expr_fp(constant_dtype, float(val)))
 
     if isinstance(val, (int, np.integer)):
         constant_dtype = impl.get_runtime().default_ip if dtype is None else dtype
@@ -130,7 +131,8 @@ def make_constant_expr(val, dtype):
                 "Integer literals must be annotated with a integer type. For type casting, use `qd.cast`."
             )
         if _check_in_range(to_numpy_type(constant_dtype), val):
-            return Expr(_qd_core.make_const_expr_int(constant_dtype, _clamp_unsigned_to_range(np.int64, val)))
+            # nanobind's generated stub types this param as `int`; coerce np.integer -> native int.
+            return Expr(_qd_core.make_const_expr_int(constant_dtype, int(_clamp_unsigned_to_range(np.int64, val))))
         if dtype is None:
             raise QuadrantsTypeError(
                 f"Integer literal {val} exceeded the range of default_ip: {impl.get_runtime().default_ip}, please specify the dtype via e.g. `qd.u64({val})` or set a different `default_ip` in `qd.init()`"
