@@ -13,7 +13,6 @@
 #include "quadrants/program/py_print_buffer.h"
 #include "quadrants/python/exception.h"
 #include "quadrants/python/export.h"
-#include "quadrants/python/memory_usage_monitor.h"
 #include "quadrants/system/benchmark.h"
 #include "quadrants/system/hacked_signal_handler.h"
 #include "quadrants/system/profiler.h"
@@ -103,7 +102,6 @@ void export_misc(py::module &m) {
   });
   m.def("print_profile_info", [&]() { Profiling::get_instance().print_profile_info(); });
   m.def("clear_profile_info", [&]() { Profiling::get_instance().clear_profile_info(); });
-  m.def("start_memory_monitoring", start_memory_monitoring);
   m.def("get_repo_dir", get_repo_dir);
   m.def("get_python_package_dir", get_python_package_dir);
   m.def("set_python_package_dir", set_python_package_dir);
