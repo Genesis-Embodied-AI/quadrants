@@ -9,7 +9,7 @@ namespace quadrants::lang {
 
 namespace offline_cache {
 
-constexpr char kTiCacheFilenameExt[] = "tic";
+constexpr char kQdCacheFilenameExt[] = "qdc";
 
 template <>
 struct CacheCleanerUtils<CacheData> {
@@ -40,7 +40,7 @@ struct CacheCleanerUtils<CacheData> {
   // To check if a file is cache file
   static bool is_valid_cache_file(const CacheCleanerConfig &config, const std::string &name) {
     std::string ext = filename_extension(name);
-    return ext == kTiCacheFilenameExt;
+    return ext == kQdCacheFilenameExt;
   }
 };
 
@@ -56,7 +56,7 @@ KernelCompilationManager::KernelCompilationManager(Config config)
       auto _ = make_unlocker(lock_path);
       offline_cache::load_metadata_with_checking(cached_data_, filepath);
     } else {
-      QD_WARN("Lock {} failed. Please run 'ti cache clean -p {}' and try again.", lock_path, this->cache_dir_);
+      QD_WARN("Lock {} failed. Please run 'qd cache clean -p {}' and try again.", lock_path, this->cache_dir_);
     }
   }
 }
@@ -85,7 +85,7 @@ void KernelCompilationManager::dump() {
   auto lock_path = join_path(cache_dir_, kMetadataLockName);
 
   if (!lock_with_file(lock_path)) {
-    QD_WARN("Lock {} failed. Please run 'ti cache clean -p {}' and try again.", lock_path, cache_dir_);
+    QD_WARN("Lock {} failed. Please run 'qd cache clean -p {}' and try again.", lock_path, cache_dir_);
     caching_kernels_.clear();  // Ignore the caching kernels
     return;
   }

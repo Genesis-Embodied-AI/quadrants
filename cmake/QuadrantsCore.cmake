@@ -113,7 +113,7 @@ target_include_directories(${CORE_LIBRARY_NAME} PRIVATE external/PicoSHA2)
 target_include_directories(${CORE_LIBRARY_NAME} PRIVATE external/eigen)
 target_include_directories(${CORE_LIBRARY_NAME} PRIVATE external/FP16/include)
 
-target_link_libraries(${CORE_LIBRARY_NAME} PUBLIC ti_device_api)
+target_link_libraries(${CORE_LIBRARY_NAME} PUBLIC qd_device_api)
 
 if(QD_WITH_LLVM)
     if(DEFINED ENV{LLVM_DIR})

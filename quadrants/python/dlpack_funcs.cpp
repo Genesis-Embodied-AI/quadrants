@@ -211,7 +211,7 @@ pybind11::capsule field_to_dlpack(Program *program, SNode *snode, int element_nd
 
   if (tree_device_ptr.device == nullptr || tree_device_ptr.alloc_id == 0) {
     QD_ERROR(
-        "Field memory is not allocated. Please run 'ti.sync' before "
+        "Field memory is not allocated. Please run 'qd.sync' before "
         "'to_dlpack'.")
   }
 

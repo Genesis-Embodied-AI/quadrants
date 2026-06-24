@@ -162,7 +162,7 @@ class CacheCleaner {
     {
       std::string lock_path = quadrants::join_path(path, config.metadata_lock_name);
       if (!lock_with_file(lock_path)) {
-        QD_WARN("Lock {} failed. You can run 'ti cache clean -p {}' and try again.", lock_path, path);
+        QD_WARN("Lock {} failed. You can run 'qd cache clean -p {}' and try again.", lock_path, path);
         return;
       }
       auto _ = make_cleanup([&lock_path]() {

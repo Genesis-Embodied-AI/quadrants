@@ -111,15 +111,15 @@ class CPPTestItem(pytest.Item):
     def runtest(self):
         import quadrants as qd
 
-        ti_lib_dir = Path(qd.__path__[0]) / "_lib" / "runtime"
+        qd_lib_dir = Path(qd.__path__[0]) / "_lib" / "runtime"
 
-        with tempfile.TemporaryDirectory(prefix="ti-cpp-tests-") as tmpdir:
+        with tempfile.TemporaryDirectory(prefix="qd-cpp-tests-") as tmpdir:
             try:
                 env = os.environ.copy()
                 env.update(
                     {
                         "QD_DEVICE_MEMORY_GB": "0.5",
-                        "QD_LIB_DIR": str(ti_lib_dir),
+                        "QD_LIB_DIR": str(qd_lib_dir),
                     }
                 )
                 if self.script:

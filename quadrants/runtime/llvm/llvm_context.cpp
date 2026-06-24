@@ -1084,7 +1084,7 @@ template llvm::Value *QuadrantsLLVMContext::get_constant(unsigned long t);
 #endif
 
 auto make_slim_libdevice = [](const std::vector<std::string> &args) {
-  QD_ASSERT_INFO(args.size() == 1, "Usage: ti task make_slim_libdevice [libdevice.X.bc file]");
+  QD_ASSERT_INFO(args.size() == 1, "Usage: qd task make_slim_libdevice [libdevice.X.bc file]");
 
   auto ctx = std::make_unique<llvm::LLVMContext>();
   auto libdevice_module = module_from_bitcode_file(args[0], ctx.get());

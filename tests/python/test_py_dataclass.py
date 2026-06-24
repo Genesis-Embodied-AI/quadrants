@@ -23,7 +23,7 @@ def qd_type(use_ndarray: bool) -> Any:
 
 @pytest.fixture
 def qd_annotation(use_ndarray: bool) -> Any:
-    class TiTemplateBuilder:
+    class QdTemplateBuilder:
         """
         Allows qd_annotation[qd.i32, 2] to be legal
         """
@@ -33,7 +33,7 @@ def qd_annotation(use_ndarray: bool) -> Any:
 
     if use_ndarray:
         return qd.types.ndarray
-    return TiTemplateBuilder()
+    return QdTemplateBuilder()
 
 
 @test_utils.test()

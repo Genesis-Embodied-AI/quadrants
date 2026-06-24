@@ -26,12 +26,12 @@ class KernelLaunchHandle {
 
 class CompiledKernelDataFile {
  public:
-  static constexpr char kHeadStr[] = "TIC";
+  static constexpr char kHeadStr[] = "QDC";
   static constexpr std::size_t kHeadSize = std::size(kHeadStr);
   static constexpr std::size_t kHashSize = 64;
   enum class Err {
     kNoError,
-    kNotTicFile,
+    kNotQdcFile,
     kCorruptedFile,
     kOutOfMemory,
     kIOStreamError,
@@ -82,7 +82,7 @@ class CompiledKernelData {
  public:
   enum class Err {
     kNoError = 0,
-    kNotTicFile,
+    kNotQdcFile,
     kCorruptedFile,
     kParseMetadataFailed,
     kParseSrcCodeFailed,
@@ -91,8 +91,8 @@ class CompiledKernelData {
     kSerSrcCodeFailed,
     kIOStreamError,
     kOutOfMemory,
-    kTiWithoutLLVM,
-    kTiWithoutSpirv,
+    kQdWithoutLLVM,
+    kQdWithoutSpirv,
     kCompiledKernelDataBroken,
     kUnknown,
   };
