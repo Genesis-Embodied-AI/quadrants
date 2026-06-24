@@ -3,7 +3,7 @@
 set -ex
 
 pip install --group test
-export QD_LIB_DIR="$(python -c 'import quadrants as ti; print(ti.__path__[0])' | tail -n 1)/_lib/runtime"
+export QD_LIB_DIR="$(python -c 'import quadrants as qd; print(qd.__path__[0])' | tail -n 1)/_lib/runtime"
 ./build/quadrants_cpp_tests  --gtest_filter=-AMDGPU.*
 
 # Phase 1: run all tests except torch-dependent ones

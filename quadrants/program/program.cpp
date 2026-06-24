@@ -218,7 +218,7 @@ static void remove_rw_accessor_cache(SNode *parent_snode, SNodeRwAccessorsBank *
 void Program::destroy_snode_tree(SNodeTree *snode_tree) {
   QD_ASSERT(arch_uses_llvm(compile_config().arch) || compile_config().arch == Arch::vulkan);
 
-  // When accessing a ti.field at Python scope, SNodeRwAccessorsBank creates a Quadrants Kernel to read/write the field
+  // When accessing a qd.field at Python scope, SNodeRwAccessorsBank creates a Quadrants Kernel to read/write the field
   // in a JIT manner, which caches the compiled JIT Kernel so as to avoid recompilation when accessing the same field.
 
   // This cache uses the place-SNode's address (SNode*) as the key, which becomes unsafe once the SNodeTree gets
@@ -473,7 +473,7 @@ void Program::delete_ndarray(Ndarray *ndarray) {
   // [Note] Ndarray memory deallocation Ndarray's memory allocation is managed by Quadrants and Python can control this
   // via Quadrants indirectly. For example, when an ndarray is GC-ed in Python, it signals Quadrants to free its memory
   // allocation. But Quadrants will make sure **no pending kernels to be executed needs the ndarray** before it actually
-  // frees the memory. When `ti.reset()` is called, all ndarrays allocated in this program should be gone and no longer
+  // frees the memory. When `qd.reset()` is called, all ndarrays allocated in this program should be gone and no longer
   // valid in Python. This isn't the best implementation, ndarrays should be managed by quadrants runtime instead of
   // this giant program and it should be freed when: - Python GC signals quadrants that it's no longer useful - All
   // kernels using it are executed.

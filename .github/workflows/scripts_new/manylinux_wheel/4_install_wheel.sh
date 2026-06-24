@@ -3,4 +3,4 @@
 set -ex
 
 pip install dist/*.whl
-python -c 'import quadrants as ti; ti.init(arch=ti.cpu); print(ti.__version__)'
+python -c 'import quadrants as qd; qd.init(arch=qd.cpu); print(qd.__version__)'

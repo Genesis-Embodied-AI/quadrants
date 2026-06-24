@@ -145,7 +145,6 @@ endif()
 
 # No support of Python for any case quadrants is integrated
 # in another project as submodule.
-set(PYBIND11_VERSION "2.13.6" CACHE STRING "Pybind11 version to use")
 option(QD_WITH_PYTHON "Build with Python language binding" ON)
 if (QD_WITH_PYTHON)
     include(cmake/PythonNumpyPybind11.cmake)
@@ -231,12 +230,12 @@ configure_file(quadrants/common/commit_hash.h.in ${CMAKE_SOURCE_DIR}/quadrants/c
 
 option(QD_WITH_GRAPHVIZ "generate dependency graphs between targets" OFF)  # wheel-tag: viz
 if (QD_WITH_GRAPHVIZ)
-  set(GRAPHVIZ_GRAPH_NAME "ti_targets")
+  set(GRAPHVIZ_GRAPH_NAME "qd_targets")
   add_custom_target(graphviz ALL
       COMMAND cp ${CMAKE_SOURCE_DIR}/cmake/CMakeGraphVizOptions.cmake .
       COMMAND ${CMAKE_COMMAND} "--graphviz=${GRAPHVIZ_GRAPH_NAME}.dot" .
       COMMAND dot -Tpng ${GRAPHVIZ_GRAPH_NAME}.dot -o ${GRAPHVIZ_GRAPH_NAME}.png
-      COMMAND cp ti_targets.png ${CMAKE_SOURCE_DIR}/build
+      COMMAND cp qd_targets.png ${CMAKE_SOURCE_DIR}/build
       WORKING_DIRECTORY "${CMAKE_BINARY_DIR}"
   )
 endif()
