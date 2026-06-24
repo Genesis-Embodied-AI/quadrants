@@ -377,10 +377,10 @@ nb::capsule field_to_dlpack(Program *program, SNode *snode, int element_ndim, in
 }
 
 nb::capsule ndarray_to_dlpack(Program *program,
-                                    nb::object owner,
-                                    Ndarray *ndarray,
-                                    const std::vector<int> &layout,
-                                    bool versioned) {
+                              nb::object owner,
+                              Ndarray *ndarray,
+                              const std::vector<int> &layout,
+                              bool versioned) {
   Arch arch = program->compile_config().arch;
   validate_arch(arch);
 

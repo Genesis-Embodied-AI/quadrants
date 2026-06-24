@@ -18,7 +18,7 @@ namespace quadrants {
         ((nanobind::module_ *)m)                                                                               \
             ->def("create_" base_alias, static_cast<std::shared_ptr<class_name> (*)(const std::string &name)>( \
                                             &create_instance<class_name>));                                    \
-        ((nanobind::module_ *)m)                                                                              \
+        ((nanobind::module_ *)m)                                                                               \
             ->def("create_initialized_" base_alias,                                                            \
                   static_cast<std::shared_ptr<class_name> (*)(const std::string &name, const Config &config)>( \
                       &create_instance<class_name>));                                                          \

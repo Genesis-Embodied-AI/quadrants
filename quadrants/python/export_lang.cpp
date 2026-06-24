@@ -230,13 +230,12 @@ void export_lang(nb::module_ &m) {
       .def_rw("cuda_stack_limit", &CompileConfig::cuda_stack_limit)
       .def_rw("external_metal_command_queue", &CompileConfig::external_metal_command_queue)
       .def_rw("external_metal_command_queue_is_torch_queue",
-                     &CompileConfig::external_metal_command_queue_is_torch_queue);
+              &CompileConfig::external_metal_command_queue_is_torch_queue);
 
   m.def("reset_default_compile_config", [&]() { default_compile_config = CompileConfig(); });
 
   m.def(
-      "default_compile_config", [&]() -> CompileConfig & { return default_compile_config; },
-      nb::rv_policy::reference);
+      "default_compile_config", [&]() -> CompileConfig & { return default_compile_config; }, nb::rv_policy::reference);
 
   nb::class_<Program::KernelProfilerQueryResult>(m, "KernelProfilerQueryResult")
       .def_rw("counter", &Program::KernelProfilerQueryResult::counter)
@@ -330,8 +329,9 @@ void export_lang(nb::module_ &m) {
   program_class.def(nb::init<>())
       .def(
           "ndarray_to_dlpack",
-          [](Program *program, nb::object owner, Ndarray *ndarray, const std::vector<int> &layout,
-             bool versioned) { return ndarray_to_dlpack(program, owner, ndarray, layout, versioned); },
+          [](Program *program, nb::object owner, Ndarray *ndarray, const std::vector<int> &layout, bool versioned) {
+            return ndarray_to_dlpack(program, owner, ndarray, layout, versioned);
+          },
           nb::arg("owner"), nb::arg("ndarray"), nb::arg("layout") = std::vector<int>{}, nb::arg("versioned") = false)
       .def(
           "field_to_dlpack",
@@ -436,9 +436,8 @@ void export_lang(nb::module_ &m) {
   export_stream(m, program_class);
 
   nb::class_<CompileResult>(m, "CompileResult")
-      .def_prop_ro(
-          "compiled_kernel_data",
-          [](const CompileResult &self) -> const CompiledKernelData & { return self.compiled_kernel_data; })
+      .def_prop_ro("compiled_kernel_data",
+                   [](const CompileResult &self) -> const CompiledKernelData & { return self.compiled_kernel_data; })
       .def_ro("cache_hit", &CompileResult::cache_hit)
       .def_ro("cache_key", &CompileResult::cache_key);
 
@@ -472,8 +471,7 @@ void export_lang(nb::module_ &m) {
       .def("name", [](SNode *snode) { return snode->name; })
       .def("get_num_ch", [](SNode *snode) -> int { return (int)snode->ch.size(); })
       .def(
-          "get_ch", [](SNode *snode, int i) -> SNode * { return snode->ch[i].get(); },
-          nb::rv_policy::reference)
+          "get_ch", [](SNode *snode, int i) -> SNode * { return snode->ch[i].get(); }, nb::rv_policy::reference)
       .def("lazy_grad", &SNode::lazy_grad)
       .def("lazy_dual", &SNode::lazy_dual)
       .def("allocate_adjoint_checkbit", &SNode::allocate_adjoint_checkbit)
@@ -1253,7 +1251,7 @@ void export_lang(nb::module_ &m) {
   auto operationClass = nb::class_<Operation>(m, "Operation");
   auto internalOpClass = nb::class_<InternalOpScope>(m, "InternalOp");
 
-#define PER_INTERNAL_OP(x)                      \
+#define PER_INTERNAL_OP(x)            \
   internalOpClass.def_prop_ro_static( \
       #x, [](nb::object) { return Operations::get(InternalOp::x); }, nb::rv_policy::reference);
 #include "quadrants/inc/internal_ops.inc.h"
