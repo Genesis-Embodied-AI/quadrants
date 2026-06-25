@@ -765,14 +765,14 @@
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/kernel/index.html#quadrants.lang.kernel.Kernel.checkpoint_yield_on_args">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">checkpoint_yield_on_args</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span></div>
 
-        <span class="c1"># Flat C++ arg-ids (post-template) of each explicit checkpoint&#39;s `yield_on=` ndarray, resolved at AST-build</span>
-        <span class="c1"># time by `CheckpointTransformer.build_checkpoint_with` via `ASTTransformer._resolve_ndarray_kernel_arg_id`.</span>
-        <span class="c1"># Same indexing as `checkpoint_yield_on_args`: entry `i` is the flat arg-id the runtime uses to look up the</span>
-        <span class="c1"># ndarray&#39;s device pointer for the checkpoint whose internal cp_id is `i`. `-1` for implicit checkpoints</span>
-        <span class="c1"># (which never yield). Resolving at AST-build time uniformly handles bare kernel parameters</span>
-        <span class="c1"># (`yield_on=flag`), `@qd.data_oriented` member ndarrays (`yield_on=self.flag`), and</span>
-        <span class="c1"># `@dataclasses.dataclass` parameter members (`yield_on=params.flag`); the attribute forms cannot be</span>
-        <span class="c1"># resolved by the per-launch name match because `arg_metas[i].name` only carries top-level parameter names.</span>
+        <span class="c1"># Flat C++ arg-ids (post-template) of each explicit checkpoint&#39;s `yield_on=` ndarray, resolved at AST-build time</span>
+        <span class="c1"># by `CheckpointTransformer.build_checkpoint_with` via `ASTTransformer._resolve_ndarray_kernel_arg_id`. Same</span>
+        <span class="c1"># indexing as `checkpoint_yield_on_args`: entry `i` is the flat arg-id the runtime uses to look up the ndarray&#39;s</span>
+        <span class="c1"># device pointer for the checkpoint whose internal cp_id is `i`. `-1` for implicit checkpoints (which never</span>
+        <span class="c1"># yield). Resolving at AST-build time uniformly handles bare kernel parameters (`yield_on=flag`),</span>
+        <span class="c1"># `@qd.data_oriented` member ndarrays (`yield_on=self.flag`), and `@dataclasses.dataclass` parameter members</span>
+        <span class="c1"># (`yield_on=params.flag`); the attribute forms cannot be resolved by the per-launch name match because</span>
+        <span class="c1"># `arg_metas[i].name` only carries top-level parameter names.</span>
 <div class="viewcode-block" id="Kernel.checkpoint_yield_on_cpp_arg_ids">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/kernel/index.html#quadrants.lang.kernel.Kernel.checkpoint_yield_on_cpp_arg_ids">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">checkpoint_yield_on_cpp_arg_ids</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span></div>
@@ -880,10 +880,10 @@
                 <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">compiled_kernel_data_by_key</span><span class="p">[</span><span class="n">key</span><span class="p">]:</span>
                     <span class="bp">self</span><span class="o">.</span><span class="n">src_ll_cache_observations</span><span class="o">.</span><span class="n">cache_loaded</span> <span class="o">=</span> <span class="kc">True</span>
                     <span class="bp">self</span><span class="o">.</span><span class="n">used_py_dataclass_parameters_by_key_enforcing</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">cache_value</span><span class="o">.</span><span class="n">used_py_dataclass_parameters</span>
-                    <span class="c1"># Fast-cache restore skips AST transformation, so rebuild the AST-transformer-produced metadata</span>
-                    <span class="c1"># from the cache value: nested graph_do_while level table (with the AST-resolved flat C++ arg-id)</span>
-                    <span class="c1"># plus the per-checkpoint yield_on / user-label tables. Mirrors what</span>
-                    <span class="c1"># `function_def_transformer.py` + `checkpoint_transformer.py` + `build_While` would have written.</span>
+                    <span class="c1"># Fast-cache restore skips AST transformation, so rebuild the AST-transformer-produced metadata from</span>
+                    <span class="c1"># the cache value: nested graph_do_while level table (with the AST-resolved flat C++ arg-id) plus</span>
+                    <span class="c1"># the per-checkpoint yield_on / user-label tables. Mirrors what `function_def_transformer.py` +</span>
+                    <span class="c1"># `checkpoint_transformer.py` + `build_While` would have written.</span>
                     <span class="k">if</span> <span class="n">cache_value</span><span class="o">.</span><span class="n">graph_do_while_levels</span><span class="p">:</span>
                         <span class="bp">self</span><span class="o">.</span><span class="n">graph_do_while_levels</span> <span class="o">=</span> <span class="p">[</span>
                             <span class="n">GraphDoWhileLevel</span><span class="p">(</span><span class="n">cond_arg_name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span> <span class="n">parent_id</span><span class="o">=</span><span class="n">parent</span><span class="p">,</span> <span class="n">cond_cpp_arg_id</span><span class="o">=</span><span class="n">cpp_arg_id</span><span class="p">)</span>
@@ -893,13 +893,13 @@
                     <span class="k">if</span> <span class="n">cache_value</span><span class="o">.</span><span class="n">checkpoint_yield_on_args</span><span class="p">:</span>
                         <span class="bp">self</span><span class="o">.</span><span class="n">checkpoint_yield_on_args</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">cache_value</span><span class="o">.</span><span class="n">checkpoint_yield_on_args</span><span class="p">)</span>
                         <span class="bp">self</span><span class="o">.</span><span class="n">checkpoint_yield_on_cpp_arg_ids</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">cache_value</span><span class="o">.</span><span class="n">checkpoint_yield_on_cpp_arg_ids</span><span class="p">)</span>
-                        <span class="c1"># Pydantic coerces IntEnum -&gt; int at CacheValue construction time, so the raw labels are</span>
-                        <span class="c1"># plain ints after JSON round-trip. ``checkpoint_user_label_enum_qualnames`` carries the</span>
-                        <span class="c1"># parallel ``module.ClassQualName.MEMBER`` strings that ``_resolve_intenum_member`` uses</span>
-                        <span class="c1"># to rebuild the original ``IntEnum`` member -- preserving the documented contract that</span>
+                        <span class="c1"># Pydantic coerces IntEnum -&gt; int at CacheValue construction time, so the raw labels are plain</span>
+                        <span class="c1"># ints after JSON round-trip. ``checkpoint_user_label_enum_qualnames`` carries the parallel</span>
+                        <span class="c1"># ``module.ClassQualName.MEMBER`` strings that ``_resolve_intenum_member`` uses to rebuild the</span>
+                        <span class="c1"># original ``IntEnum`` member -- preserving the documented contract that</span>
                         <span class="c1"># ``qd.checkpoint(Stage.X, ...)`` surfaces as ``Stage.X`` (not the raw int) on</span>
-                        <span class="c1"># ``status.checkpoint``. Older v3 caches predate the qualname column, so we default any</span>
-                        <span class="c1"># missing slots to ``None`` -&gt; raw-int fallback (the same behaviour they had on v3).</span>
+                        <span class="c1"># ``status.checkpoint``. Older v3 caches predate the qualname column, so we default any missing</span>
+                        <span class="c1"># slots to ``None`` -&gt; raw-int fallback (the same behaviour they had on v3).</span>
                         <span class="n">raw_labels</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">cache_value</span><span class="o">.</span><span class="n">checkpoint_user_labels_by_cp_id</span><span class="p">)</span>
                         <span class="n">qualnames</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">cache_value</span><span class="o">.</span><span class="n">checkpoint_user_label_enum_qualnames</span><span class="p">)</span> <span class="ow">or</span> <span class="p">[</span><span class="kc">None</span><span class="p">]</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="n">raw_labels</span><span class="p">)</span>
                         <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">qualnames</span><span class="p">)</span> <span class="o">!=</span> <span class="nb">len</span><span class="p">(</span><span class="n">raw_labels</span><span class="p">):</span>

@@ -1846,10 +1846,10 @@
     <span class="k">def</span><span class="w"> </span><span class="nf">_is_graph_do_while_call</span><span class="p">(</span><span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">expr</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ast</span><span class="o">.</span><span class="n">expr</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;If *node* is ``qd.graph_do_while(arg)`` return the arg AST node, else None.</span>
 
-<span class="sd">        ``arg`` may be an ``ast.Name`` (a bare kernel parameter, e.g. ``counter``) or an ``ast.Attribute`` chain</span>
-<span class="sd">        (a ``@qd.data_oriented`` member ndarray such as ``self.counter`` or a ``@dataclasses.dataclass`` parameter</span>
-<span class="sd">        member such as ``params.counter``). The actual resolution to a kernel ndarray argument happens in</span>
-<span class="sd">        ``build_While`` via ``_resolve_ndarray_kernel_arg_id``.</span>
+<span class="sd">        ``arg`` may be an ``ast.Name`` (a bare kernel parameter, e.g. ``counter``) or an ``ast.Attribute`` chain (a</span>
+<span class="sd">        ``@qd.data_oriented`` member ndarray such as ``self.counter`` or a ``@dataclasses.dataclass`` parameter member</span>
+<span class="sd">        such as ``params.counter``). The actual resolution to a kernel ndarray argument happens in ``build_While`` via</span>
+<span class="sd">        ``_resolve_ndarray_kernel_arg_id``.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Call</span><span class="p">):</span>
             <span class="k">return</span> <span class="kc">None</span>
@@ -1870,10 +1870,10 @@
         <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">expr</span><span class="p">,</span>
         <span class="n">usage</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">int</span><span class="p">]:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Thin forwarding wrapper around ``ndarray_arg_resolver.resolve_ndarray_kernel_arg_id``; the actual logic</span>
-<span class="sd">        lives in module ``ast_transformers/ndarray_arg_resolver.py`` to keep this file from growing per-feature</span>
-<span class="sd">        (same pattern as ``_is_checkpoint_call`` / ``CheckpointTransformer``). Returns ``(label, flat_cpp_arg_id)``</span>
-<span class="sd">        or raises ``QuadrantsSyntaxError``.&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Thin forwarding wrapper around ``ndarray_arg_resolver.resolve_ndarray_kernel_arg_id``; the actual logic lives</span>
+<span class="sd">        in module ``ast_transformers/ndarray_arg_resolver.py`` to keep this file from growing per-feature (same pattern</span>
+<span class="sd">        as ``_is_checkpoint_call`` / ``CheckpointTransformer``). Returns ``(label, flat_cpp_arg_id)`` or raises</span>
+<span class="sd">        ``QuadrantsSyntaxError``.&quot;&quot;&quot;</span>
         <span class="c1"># pylint: disable-next=C0415,import-outside-toplevel</span>
         <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.ast.ast_transformers.ndarray_arg_resolver</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
             <span class="n">resolve_ndarray_kernel_arg_id</span><span class="p">,</span>
@@ -1910,10 +1910,10 @@
                     <span class="s2">&quot;qd.graph_do_while() must be at the kernel top level or directly nested inside &quot;</span>
                     <span class="s2">&quot;another qd.graph_do_while(); it cannot appear inside a for-loop.&quot;</span>
                 <span class="p">)</span>
-            <span class="c1"># Resolve the condition ndarray (bare parameter or @qd.data_oriented member) to its flat C++ arg-id at</span>
-            <span class="c1"># AST-build time -- the same id the runtime needs -- so the launch path forwards it directly with no</span>
-            <span class="c1"># per-launch name matching. ``cond_arg_name`` keeps the readable label (e.g. &quot;counter&quot; or &quot;self.counter&quot;)</span>
-            <span class="c1"># for introspection and for the legacy ``graph_do_while_arg`` alias surfaced on Kernel.</span>
+            <span class="c1"># Resolve the condition ndarray (bare parameter or @qd.data_oriented member) to its flat C++ arg-id at AST-</span>
+            <span class="c1"># build time -- the same id the runtime needs -- so the launch path forwards it directly with no per-launch</span>
+            <span class="c1"># name matching. ``cond_arg_name`` keeps the readable label (e.g. &quot;counter&quot; or &quot;self.counter&quot;) for</span>
+            <span class="c1"># introspection and for the legacy ``graph_do_while_arg`` alias surfaced on Kernel.</span>
             <span class="n">cond_label</span><span class="p">,</span> <span class="n">cond_cpp_arg_id</span> <span class="o">=</span> <span class="n">ASTTransformer</span><span class="o">.</span><span class="n">_resolve_ndarray_kernel_arg_id</span><span class="p">(</span>
                 <span class="n">ctx</span><span class="p">,</span> <span class="n">kernel</span><span class="p">,</span> <span class="n">graph_do_while_node</span><span class="p">,</span> <span class="s2">&quot;qd.graph_do_while(...)&quot;</span>
             <span class="p">)</span>

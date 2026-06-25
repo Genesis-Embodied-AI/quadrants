@@ -366,25 +366,25 @@
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">int</span><span class="p">]:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Resolve ``node`` to ``(label, flat_cpp_arg_id)`` at AST-build time.</span>
 
-<span class="sd">    Shared between ``qd.checkpoint(yield_on=...)`` and ``qd.graph_do_while(...)`` to turn the control-flag argument</span>
-<span class="sd">    into the flat C++ arg-id the runtime matches against. ``node`` is an ``ast.Name`` (a bare kernel parameter,</span>
-<span class="sd">    e.g. ``flag``) or an ``ast.Attribute`` chain (e.g. ``self.flag`` for a ``@qd.data_oriented`` owner, or</span>
-<span class="sd">    ``params.flag`` where ``params`` is a ``@dataclasses.dataclass`` kernel parameter). We build the expression</span>
-<span class="sd">    through the normal AST machinery and read the arg-id off the resulting external-tensor expression -- this</span>
-<span class="sd">    unifies the bare-param and member-ndarray cases, since both flatten to a real ndarray kernel argument carrying</span>
-<span class="sd">    its arg-id on the ``ExternalTensorExpression``.</span>
+<span class="sd">    Shared between ``qd.checkpoint(yield_on=...)`` and ``qd.graph_do_while(...)`` to turn the control-flag argument into</span>
+<span class="sd">    the flat C++ arg-id the runtime matches against. ``node`` is an ``ast.Name`` (a bare kernel parameter, e.g.</span>
+<span class="sd">    ``flag``) or an ``ast.Attribute`` chain (e.g. ``self.flag`` for a ``@qd.data_oriented`` owner, or ``params.flag``</span>
+<span class="sd">    where ``params`` is a ``@dataclasses.dataclass`` kernel parameter). We build the expression through the normal AST</span>
+<span class="sd">    machinery and read the arg-id off the resulting external-tensor expression -- this unifies the bare-param and</span>
+<span class="sd">    member-ndarray cases, since both flatten to a real ndarray kernel argument carrying its arg-id on the</span>
+<span class="sd">    ``ExternalTensorExpression``.</span>
 
 <span class="sd">    ``usage`` is the call form (e.g. ``&quot;qd.checkpoint(yield_on=...)&quot;``) used in the error message. Raises</span>
 <span class="sd">    ``QuadrantsSyntaxError`` if the expression does not resolve to an ndarray kernel argument.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="c1"># Local imports to avoid an ast_transformers -&gt; ast_transformer / any_array import cycle at module load:</span>
-    <span class="c1"># ``ast_transformer`` is the central transformer module that imports ``checkpoint_transformer`` (sibling of</span>
-    <span class="c1"># this file), and ``any_array`` pulls in core ndarray bindings that aren&#39;t needed for module import.</span>
-    <span class="c1"># pylint: disable-next=C0415,import-outside-toplevel</span>
+    <span class="c1"># ``ast_transformer`` is the central transformer module that imports ``checkpoint_transformer`` (sibling of this</span>
+    <span class="c1"># file), and ``any_array`` pulls in core ndarray bindings that aren&#39;t needed for module import.</span>
+    <span class="c1"># pylint: disable=import-outside-toplevel</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.any_array</span><span class="w"> </span><span class="kn">import</span> <span class="n">AnyArray</span>
     <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.ast.ast_transformer</span><span class="w"> </span><span class="kn">import</span> <span class="n">_qd_core</span><span class="p">,</span> <span class="n">build_stmt</span>
 
-    <span class="c1"># pylint: disable-next=C0415,import-outside-toplevel</span>
-    <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.any_array</span><span class="w"> </span><span class="kn">import</span> <span class="n">AnyArray</span>
+    <span class="c1"># pylint: enable=import-outside-toplevel</span>
 
     <span class="n">label</span> <span class="o">=</span> <span class="n">ast</span><span class="o">.</span><span class="n">unparse</span><span class="p">(</span><span class="n">node</span><span class="p">)</span>
     <span class="n">bad</span> <span class="o">=</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span>
