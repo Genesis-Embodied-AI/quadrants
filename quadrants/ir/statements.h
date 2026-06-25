@@ -1415,8 +1415,8 @@ class OffloadedStmt : public Stmt {
   MemoryAccessOptions mem_access_opt;
   int stream_parallel_group_id{0};
   // Per-kernel `qd.graph_parallel_context()` region id (0 outside any region). Set by `offload.cpp` from the source
-  // `RangeForStmt` / `StructForStmt`, read by the CUDA LLVM codegen to populate
-  // `OffloadedTask::graph_parallel_region_id` so the GraphManager keeps adjacent regions' fork/join groups apart.
+  // `RangeForStmt` / `StructForStmt`. The CUDA LLVM codegen copies it into `OffloadedTask::graph_parallel_region_id`
+  // so the GraphManager keeps adjacent regions' fork/join groups apart.
   int graph_parallel_region_id{0};
   // `cp_id` of the enclosing `qd.checkpoint(...)` block for this offloaded task (`-1` outside any checkpoint). Set by
   // `offload.cpp` from the source `RangeForStmt::checkpoint_id` / `StructForStmt::checkpoint_id`. Read by the CUDA /
