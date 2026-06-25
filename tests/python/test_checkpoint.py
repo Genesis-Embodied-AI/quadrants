@@ -233,8 +233,8 @@ def test_checkpoint_yield_on_nonexistent_arg_raises():
 @test_utils.test()
 def test_checkpoint_yield_on_must_be_name_or_attribute():
     """``yield_on=`` must reference an ndarray kernel argument -- either a bare ``ast.Name`` or an ``ast.Attribute``
-    chain (for ``@qd.data_oriented`` member ndarrays). Arbitrary expressions are not supported; pinning the
-    diagnostic so the user knows to refactor."""
+    chain (for ``@qd.data_oriented`` member ndarrays). Arbitrary expressions are not supported; pinning the diagnostic
+    so the user knows to refactor."""
 
     @qd.kernel(graph=True, checkpoints=True)
     def k(x: qd.types.ndarray(qd.i32, ndim=1), flag: qd.types.ndarray(qd.i32, ndim=0)):
@@ -859,18 +859,17 @@ def test_checkpoint_yield_exits_graph_do_while_early():
 # ``qd.checkpoint(yield_on=self.flag)`` and ``qd.checkpoint(yield_on=params.flag)`` (where ``params`` is a kernel
 # parameter typed as a ``@dataclasses.dataclass``) both resolve the member ndarray to a flat C++ arg-id at AST-build
 # time via ``ASTTransformer._resolve_ndarray_kernel_arg_id``: it builds the expression and reads the resolved
-# ``ExternalTensorExpression.arg_id``, so any attribute chain that ends up as a kernel ndarray arg works the same
-# way as a bare parameter name. This frees users from having to forward flag members as bare kernel parameters when
-# the rest of the kernel already operates on the dataclass / data-oriented owner.
+# ``ExternalTensorExpression.arg_id``, so any attribute chain that ends up as a kernel ndarray arg works the same way
+# as a bare parameter name. This frees users from having to forward flag members as bare kernel parameters when the
+# rest of the kernel already operates on the dataclass / data-oriented owner.
 # ----------------------------------------------------------------------------------------------------------------------
 
 
 @test_utils.test()
 def test_checkpoint_yield_on_data_oriented_member_metadata():
     """`yield_on=self.flag` is accepted and the resolved label is stored verbatim (``"self.flag"``) in
-    ``checkpoint_yield_on_args``, while ``checkpoint_yield_on_cpp_arg_ids`` carries the flat C++ arg-id the
-    runtime forwards to the launch context. Verifies the AST-build-time resolution path without booting the
-    backend."""
+    ``checkpoint_yield_on_args``, while ``checkpoint_yield_on_cpp_arg_ids`` carries the flat C++ arg-id the runtime
+    forwards to the launch context. Verifies the AST-build-time resolution path without booting the backend."""
     N = 4
 
     @qd.data_oriented
@@ -898,8 +897,8 @@ def test_checkpoint_yield_on_data_oriented_member_metadata():
 
 @test_utils.test()
 def test_checkpoint_yield_on_dataclass_member_metadata():
-    """`yield_on=params.flag` for a ``@dataclasses.dataclass`` kernel parameter takes the same AST-build-time
-    resolution path as ``self.flag`` for a ``@qd.data_oriented`` owner -- the resolved label round-trips into
+    """`yield_on=params.flag` for a ``@dataclasses.dataclass`` kernel parameter takes the same AST-build-time resolution
+    path as ``self.flag`` for a ``@qd.data_oriented`` owner -- the resolved label round-trips into
     ``checkpoint_yield_on_args`` and the flat arg-id lands in ``checkpoint_yield_on_cpp_arg_ids``."""
     import dataclasses  # pylint: disable=import-outside-toplevel
 
@@ -926,9 +925,9 @@ def test_checkpoint_yield_on_dataclass_member_metadata():
     np.testing.assert_array_equal(params.x.to_numpy(), np.ones(N, dtype=np.int32))
     assert step._primal.checkpoint_user_labels_by_cp_id == [0]
     # Dataclass-parameter member access gets pre-rewritten by the AST pipeline to a flattened parameter name
-    # (`__qd_params__qd_flag`) before the checkpoint transformer sees it, so the label round-trips in the
-    # flattened form. The functional contract -- a valid flat C++ arg-id is resolved and the kernel mutates the
-    # right ndarray -- is the same as for the bare-param / `self.flag` forms.
+    # (`__qd_params__qd_flag`) before the checkpoint transformer sees it, so the label round-trips in the flattened
+    # form. The functional contract -- a valid flat C++ arg-id is resolved and the kernel mutates the right ndarray --
+    # is the same as for the bare-param / `self.flag` forms.
     labels = step._primal.checkpoint_yield_on_args
     assert len(labels) == 1 and labels[0] is not None and "flag" in labels[0]
     cpp_ids = step._primal.checkpoint_yield_on_cpp_arg_ids
@@ -938,9 +937,9 @@ def test_checkpoint_yield_on_dataclass_member_metadata():
 @test_utils.test()
 def test_checkpoint_yield_on_dataclass_member_yields_and_resumes():
     """Behavioural round-trip for `yield_on=params.flag` -- mirror of the `self.flag` test below, using a
-    `@dataclasses.dataclass` kernel parameter instead of a `@qd.data_oriented` owner. The dataclass-member access
-    is pre-rewritten to a flattened parameter, so verifying the full yield/resume contract end-to-end is the only
-    way to confirm the right ndarray is wired up at launch."""
+    `@dataclasses.dataclass` kernel parameter instead of a `@qd.data_oriented` owner. The dataclass-member access is
+    pre-rewritten to a flattened parameter, so verifying the full yield/resume contract end-to-end is the only way to
+    confirm the right ndarray is wired up at launch."""
     import dataclasses  # pylint: disable=import-outside-toplevel
 
     if not _supports_checkpoint_yield_resume():
@@ -974,8 +973,8 @@ def test_checkpoint_yield_on_dataclass_member_yields_and_resumes():
     np.testing.assert_array_equal(params.x.to_numpy(), np.ones(N, dtype=np.int32))
     params.flag.from_numpy(np.array(0, dtype=np.int32))
     # `step` is a free-function kernel (not a bound class kernel), so `params` must be passed positionally to
-    # `resume` -- the data_oriented sibling test above can omit it because the dataclass member access is
-    # implicit through `sim.step`'s bound `self`.
+    # `resume` -- the data_oriented sibling test above can omit it because the dataclass member access is implicit
+    # through `sim.step`'s bound `self`.
     status = step.resume(params, from_checkpoint=8)
     assert not status.yielded
     np.testing.assert_array_equal(params.x.to_numpy(), np.full(N, 11, dtype=np.int32))
@@ -983,10 +982,10 @@ def test_checkpoint_yield_on_dataclass_member_yields_and_resumes():
 
 @test_utils.test()
 def test_checkpoint_yield_on_member_nonexistent_attribute_raises():
-    """`yield_on=self.nonexistent_attr` (attribute does not exist on the `@qd.data_oriented` owner) must raise a
-    user-facing `QuadrantsSyntaxError` at the `with` site -- the AST-time resolver wraps the underlying attribute
-    lookup failure in the same `does not resolve to an ndarray kernel parameter` diagnostic as the bare-name
-    nonexistent case, so users see one consistent error pattern."""
+    """`yield_on=self.nonexistent_attr` (attribute does not exist on the `@qd.data_oriented` owner) must raise a user-
+    facing `QuadrantsSyntaxError` at the `with` site -- the AST-time resolver wraps the underlying attribute lookup
+    failure in the same `does not resolve to an ndarray kernel parameter` diagnostic as the bare-name nonexistent case,
+    so users see one consistent error pattern."""
     N = 4
 
     @qd.data_oriented
@@ -1008,10 +1007,10 @@ def test_checkpoint_yield_on_member_nonexistent_attribute_raises():
 
 @test_utils.test()
 def test_checkpoint_yield_on_member_non_ndarray_attribute_raises():
-    """`yield_on=self.scalar` where `self.scalar` is a Python int (not an ndarray) must raise the same
-    `does not resolve to an ndarray kernel parameter` diagnostic -- the AST-time resolver builds the expression
-    but rejects it because the resulting Expr is not an `ExternalTensorExpression`. Pinning this so future
-    refactors of the resolver can't silently accept non-ndarray attributes and crash later in the launcher."""
+    """`yield_on=self.scalar` where `self.scalar` is a Python int (not an ndarray) must raise the same `does not resolve
+    to an ndarray kernel parameter` diagnostic -- the AST-time resolver builds the expression but rejects it because the
+    resulting Expr is not an `ExternalTensorExpression`. Pinning this so future refactors of the resolver can't silently
+    accept non-ndarray attributes and crash later in the launcher."""
     N = 4
 
     @qd.data_oriented
@@ -1034,8 +1033,8 @@ def test_checkpoint_yield_on_member_non_ndarray_attribute_raises():
 @test_utils.test()
 def test_checkpoint_yield_on_data_oriented_member_yields_and_resumes():
     """Behavioural round-trip for `yield_on=self.flag`: setting the member flag from inside the kernel yields, and
-    ``kernel.resume(from_checkpoint=...)`` skips ahead to the named checkpoint. Same surface contract as the bare-
-    parameter form (`test_checkpoint_yield_on_yields_and_resumes`); the only difference is where the flag lives."""
+    ``kernel.resume(from_checkpoint=...)`` skips ahead to the named checkpoint. Same surface contract as the
+    bare-parameter form (`test_checkpoint_yield_on_yields_and_resumes`); the only difference is where the flag lives."""
     if not _supports_checkpoint_yield_resume():
         pytest.skip("backend does not implement checkpoint yield/resume")
     N = 4
@@ -1073,8 +1072,8 @@ def test_checkpoint_yield_on_data_oriented_member_yields_and_resumes():
 
 # Module-level kernel for the fastcache-restoration test below. Lives outside any test so the child subprocess can
 # import the test module and reach it without re-creating the (closure-captured) outer scope. The kernel has to be
-# annotated with `fastcache=True` (=> implies `pure`) and lifted out of any decorator-bound owner so it qualifies
-# for the src_ll_cache path. We model the data_oriented owner as the `_FastcacheYieldOnSelfCheckpoint` class below.
+# annotated with `fastcache=True` (=> implies `pure`) and lifted out of any decorator-bound owner so it qualifies for
+# the src_ll_cache path. We model the data_oriented owner as the `_FastcacheYieldOnSelfCheckpoint` class below.
 
 
 @qd.data_oriented
@@ -1114,9 +1113,9 @@ def _fastcache_checkpoint_child(args: list[str]) -> None:
 
     primal = type(sim).step._primal
     # The schema-v3 fast-cache restore path must repopulate `checkpoint_yield_on_args` and
-    # `checkpoint_yield_on_cpp_arg_ids` from the cached `CacheValue` (since AST transformation is skipped on a
-    # cache hit). A regression here would surface as an empty `_forward_yield_on_table_to_ctx` call, silently
-    # breaking yield/resume on fast-cached checkpoint kernels.
+    # `checkpoint_yield_on_cpp_arg_ids` from the cached `CacheValue` (since AST transformation is skipped on a cache
+    # hit). A regression here would surface as an empty `_forward_yield_on_table_to_ctx` call, silently breaking
+    # yield/resume on fast-cached checkpoint kernels.
     labels = primal.checkpoint_yield_on_args
     cpp_ids = primal.checkpoint_yield_on_cpp_arg_ids
     assert (
@@ -1140,11 +1139,10 @@ def _fastcache_checkpoint_child(args: list[str]) -> None:
 @test_utils.test()
 def test_checkpoint_fastcache_restores_self_member_yield_on(tmp_path: pathlib.Path):
     """After a fast-cache restore in a fresh process, a `@qd.kernel(graph=True, checkpoints=True, fastcache=True)`
-    kernel with `yield_on=self.flag` must repopulate `checkpoint_yield_on_args` /
-    `checkpoint_yield_on_cpp_arg_ids` / `checkpoint_user_labels_by_cp_id` from the persisted ``CacheValue`` --
-    not from the AST transformer, which is skipped on a cache hit. Without the schema-v3 round-trip the launch
-    path's `forward_yield_on_table_to_ctx` would be a no-op and yield/resume would silently break for fast-cached
-    checkpoint kernels."""
+    kernel with `yield_on=self.flag` must repopulate `checkpoint_yield_on_args` / `checkpoint_yield_on_cpp_arg_ids` /
+    `checkpoint_user_labels_by_cp_id` from the persisted ``CacheValue`` -- not from the AST transformer, which is
+    skipped on a cache hit. Without the schema-v3 round-trip the launch path's `forward_yield_on_table_to_ctx` would
+    be a no-op and yield/resume would silently break for fast-cached checkpoint kernels."""
     assert qd.lang is not None
     arch = qd.lang.impl.current_cfg().arch.name
     env = dict(os.environ)
@@ -1207,8 +1205,8 @@ def _fastcache_intenum_child(args: list[str]) -> None:
 
     primal = _fastcache_intenum_kernel._primal
     labels = primal.checkpoint_user_labels_by_cp_id
-    # The schema-v4 round-trip must rebuild the IntEnum identity, not just the int equality. A regression here
-    # would show up as `labels == [10, 20]` (plain ints) breaking the documented contract that
+    # The schema-v4 round-trip must rebuild the IntEnum identity, not just the int equality. A regression here would
+    # show up as `labels == [10, 20]` (plain ints) breaking the documented contract that
     # `qd.checkpoint(Stage.X, ...)` surfaces as `Stage.X` (not the raw int) on `status.checkpoint`.
     assert labels == [
         _FastcacheStage.LOAD,
@@ -1225,12 +1223,12 @@ def _fastcache_intenum_child(args: list[str]) -> None:
 
 @test_utils.test()
 def test_checkpoint_fastcache_preserves_intenum_label_identity(tmp_path: pathlib.Path):
-    """Fast-cache restore must rebuild ``checkpoint_user_labels_by_cp_id`` with the original ``IntEnum`` members,
-    not just int-equal plain ints. Schema v4 adds a parallel ``checkpoint_user_label_enum_qualnames`` column so
-    ``_resolve_intenum_member`` can re-import the enum class on cache hit -- pydantic coerces ``IntEnum`` to
-    ``int`` at ``CacheValue`` construction, which would otherwise silently drop enum identity and break the
-    documented contract that ``qd.checkpoint(Stage.X, ...)`` surfaces as ``Stage.X`` (not the raw int) on
-    ``status.checkpoint`` after a fast-cache hit."""
+    """Fast-cache restore must rebuild ``checkpoint_user_labels_by_cp_id`` with the original ``IntEnum`` members, not
+    just int-equal plain ints. Schema v4 adds a parallel ``checkpoint_user_label_enum_qualnames`` column so
+    ``_resolve_intenum_member`` can re-import the enum class on cache hit -- pydantic coerces ``IntEnum`` to ``int`` at
+    ``CacheValue`` construction, which would otherwise silently drop enum identity and break the documented contract
+    that ``qd.checkpoint(Stage.X, ...)`` surfaces as ``Stage.X`` (not the raw int) on ``status.checkpoint`` after a
+    fast-cache hit."""
     assert qd.lang is not None
     arch = qd.lang.impl.current_cfg().arch.name
     env = dict(os.environ)
@@ -1290,8 +1288,8 @@ def test_checkpoint_emits_if_nodes_on_cuda_native():
 
 
 # Subprocess dispatch for fast-cache restoration tests above (mirrors the pattern in `test_graph_do_while.py`). The
-# parent test invokes us via `subprocess.run([sys.executable, __file__, <child_fn_name>, <json_args>])` so the
-# child runs in a fresh interpreter with a clean `qd.init` -- the only way to exercise the cross-process fast-cache
-# load path that ``Kernel._try_load_fastcache`` takes after a previous run has populated the on-disk cache.
+# parent test invokes us via `subprocess.run([sys.executable, __file__, <child_fn_name>, <json_args>])` so the child
+# runs in a fresh interpreter with a clean `qd.init` -- the only way to exercise the cross-process fast-cache load
+# path that ``Kernel._try_load_fastcache`` takes after a previous run has populated the on-disk cache.
 if __name__ == "__main__":
     globals()[sys.argv[1]](sys.argv[2:])

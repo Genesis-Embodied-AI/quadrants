@@ -1355,10 +1355,10 @@ class ASTTransformer(Builder):
     def _is_graph_do_while_call(node: ast.expr) -> ast.expr | None:
         """If *node* is ``qd.graph_do_while(arg)`` return the arg AST node, else None.
 
-        ``arg`` may be an ``ast.Name`` (a bare kernel parameter, e.g. ``counter``) or an ``ast.Attribute`` chain
-        (a ``@qd.data_oriented`` member ndarray such as ``self.counter`` or a ``@dataclasses.dataclass`` parameter
-        member such as ``params.counter``). The actual resolution to a kernel ndarray argument happens in
-        ``build_While`` via ``_resolve_ndarray_kernel_arg_id``.
+        ``arg`` may be an ``ast.Name`` (a bare kernel parameter, e.g. ``counter``) or an ``ast.Attribute`` chain (a
+        ``@qd.data_oriented`` member ndarray such as ``self.counter`` or a ``@dataclasses.dataclass`` parameter member
+        such as ``params.counter``). The actual resolution to a kernel ndarray argument happens in ``build_While`` via
+        ``_resolve_ndarray_kernel_arg_id``.
         """
         if not isinstance(node, ast.Call):
             return None
@@ -1379,10 +1379,10 @@ class ASTTransformer(Builder):
         node: ast.expr,
         usage: str,
     ) -> tuple[str, int]:
-        """Thin forwarding wrapper around ``ndarray_arg_resolver.resolve_ndarray_kernel_arg_id``; the actual logic
-        lives in module ``ast_transformers/ndarray_arg_resolver.py`` to keep this file from growing per-feature
-        (same pattern as ``_is_checkpoint_call`` / ``CheckpointTransformer``). Returns ``(label, flat_cpp_arg_id)``
-        or raises ``QuadrantsSyntaxError``."""
+        """Thin forwarding wrapper around ``ndarray_arg_resolver.resolve_ndarray_kernel_arg_id``; the actual logic lives
+        in module ``ast_transformers/ndarray_arg_resolver.py`` to keep this file from growing per-feature (same pattern
+        as ``_is_checkpoint_call`` / ``CheckpointTransformer``). Returns ``(label, flat_cpp_arg_id)`` or raises
+        ``QuadrantsSyntaxError``."""
         # pylint: disable-next=C0415,import-outside-toplevel
         from quadrants.lang.ast.ast_transformers.ndarray_arg_resolver import (
             resolve_ndarray_kernel_arg_id,
@@ -1417,10 +1417,10 @@ class ASTTransformer(Builder):
                     "qd.graph_do_while() must be at the kernel top level or directly nested inside "
                     "another qd.graph_do_while(); it cannot appear inside a for-loop."
                 )
-            # Resolve the condition ndarray (bare parameter or @qd.data_oriented member) to its flat C++ arg-id at
-            # AST-build time -- the same id the runtime needs -- so the launch path forwards it directly with no
-            # per-launch name matching. ``cond_arg_name`` keeps the readable label (e.g. "counter" or "self.counter")
-            # for introspection and for the legacy ``graph_do_while_arg`` alias surfaced on Kernel.
+            # Resolve the condition ndarray (bare parameter or @qd.data_oriented member) to its flat C++ arg-id at AST-
+            # build time -- the same id the runtime needs -- so the launch path forwards it directly with no per-launch
+            # name matching. ``cond_arg_name`` keeps the readable label (e.g. "counter" or "self.counter") for
+            # introspection and for the legacy ``graph_do_while_arg`` alias surfaced on Kernel.
             cond_label, cond_cpp_arg_id = ASTTransformer._resolve_ndarray_kernel_arg_id(
                 ctx, kernel, graph_do_while_node, "qd.graph_do_while(...)"
             )

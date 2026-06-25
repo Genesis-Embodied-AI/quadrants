@@ -20,23 +20,23 @@ from .hash_utils import hash_iterable_strings
 from .python_side_cache import PythonSideCache
 
 # Bumped whenever the persisted CacheValue schema changes (see create_cache_key). v2 replaced the single
-# graph_do_while_arg string with a nested level table. v3 added the AST-resolved flat C++ arg-ids for
-# qd.graph_do_while conditions and qd.checkpoint(yield_on=...) targets so the launch path can forward them
-# directly without per-launch name matching (necessary for @qd.data_oriented member ndarrays). v4 added the
-# per-slot `checkpoint_user_label_enum_qualnames` table so an IntEnum cp_id (e.g. `qd.checkpoint(Stage.SIM, ...)`)
-# round-trips through fast-cache restore as the original IntEnum member rather than the underlying int.
+# graph_do_while_arg string with a nested level table. v3 added the AST-resolved flat C++ arg-ids for qd.graph_do_while
+# conditions and qd.checkpoint(yield_on=...) targets so the launch path can forward them directly without per-launch
+# name matching (necessary for @qd.data_oriented member ndarrays). v4 added the per-slot
+# `checkpoint_user_label_enum_qualnames` table so an IntEnum cp_id (e.g. `qd.checkpoint(Stage.SIM, ...)`) round-trips
+# through fast-cache restore as the original IntEnum member rather than the underlying int.
 _CACHE_VALUE_SCHEMA_VERSION = "cachevalue-v4-intenum-qualnames"
 
 
 def _intenum_member_qualname(value: Any) -> str | None:
     """Return ``"module.ClassQualName.MEMBER"`` for an ``IntEnum`` member, else ``None``.
 
-    Stored alongside ``checkpoint_user_labels_by_cp_id`` so that ``_resolve_intenum_member`` can rebuild the
-    original enum member on fast-cache restore -- pydantic coerces ``IntEnum`` to plain ``int`` at ``CacheValue``
-    construction time (it sees ``list[int | None]``), which would otherwise silently break the documented
-    contract that ``qd.checkpoint(Stage.X, ...)`` round-trips ``Stage.X`` rather than the raw int through
-    ``status.checkpoint``. Returns ``None`` for plain ints, ``None`` labels, anonymous enums (no ``__module__``),
-    and other unsupported shapes -- the loader falls back to the raw int in those cases.
+    Stored alongside ``checkpoint_user_labels_by_cp_id`` so that ``_resolve_intenum_member`` can rebuild the original
+    enum member on fast-cache restore -- pydantic coerces ``IntEnum`` to plain ``int`` at ``CacheValue`` construction
+    time (it sees ``list[int | None]``), which would otherwise silently break the documented contract that
+    ``qd.checkpoint(Stage.X, ...)`` round-trips ``Stage.X`` rather than the raw int through ``status.checkpoint``.
+    Returns ``None`` for plain ints, ``None`` labels, anonymous enums (no ``__module__``), and other unsupported
+    shapes -- the loader falls back to the raw int in those cases.
     """
     if not isinstance(value, IntEnum):
         return None
@@ -52,20 +52,20 @@ def _intenum_member_qualname(value: Any) -> str | None:
 def _resolve_intenum_member(qualname: str | None, fallback: int | None) -> int | IntEnum | None:
     """Inverse of ``_intenum_member_qualname``: look up the enum member by ``"module.ClassQualName.MEMBER"``.
 
-    Returns the resolved ``IntEnum`` member if every step (module import, attribute walk) succeeds AND the member's
-    int value matches ``fallback`` (the raw int from ``checkpoint_user_labels_by_cp_id`` we already persisted).
-    Mismatch or any failure -- module renamed since the cache was written, enum class refactored, member removed,
-    etc. -- falls back to ``fallback`` so the user still gets a usable (if enum-identity-less) label rather than a
-    hard crash. ``None`` qualname / ``None`` fallback short-circuit to ``fallback`` for the plain-int label case.
+    Returns the resolved ``IntEnum`` member if every step (module import, attribute walk) succeeds AND the member's int
+    value matches ``fallback`` (the raw int from ``checkpoint_user_labels_by_cp_id`` we already persisted). Mismatch or
+    any failure -- module renamed since the cache was written, enum class refactored, member removed, etc. -- falls back
+    to ``fallback`` so the user still gets a usable (if enum-identity-less) label rather than a hard crash. ``None``
+    qualname / ``None`` fallback short-circuit to ``fallback`` for the plain-int label case.
     """
     if qualname is None or fallback is None:
         return fallback
     try:
-        # qualname is "module.path.Class[.Nested].MEMBER"; the MEMBER tail is always one segment, so rsplit once.
-        # The remaining cls_path mixes dotted module path + dotted class qualname; we try progressively shorter
-        # module prefixes until one imports, then resolve the rest as attribute chain. This handles top-level
-        # enums (``mymod.Stage.LOAD``), enums nested in classes (``mymod.Outer.Inner.MEMBER``), and enums in
-        # subpackages (``a.b.Stage.LOAD``) without needing the user to declare which prefix is the module.
+        # qualname is "module.path.Class[.Nested].MEMBER"; the MEMBER tail is always one segment, so rsplit once. The
+        # remaining cls_path mixes dotted module path + dotted class qualname; we try progressively shorter module
+        # prefixes until one imports, then resolve the rest as attribute chain. This handles top-level enums
+        # (``mymod.Stage.LOAD``), enums nested in classes (``mymod.Outer.Inner.MEMBER``), and enums in subpackages
+        # (``a.b.Stage.LOAD``) without needing the user to declare which prefix is the module.
         cls_path, _, member_name = qualname.rpartition(".")
         if not cls_path or not member_name:
             return fallback
@@ -140,27 +140,27 @@ class CacheValue(BaseModel):
     frontend_cache_key: str
     hashed_function_source_infos: list[HashedFunctionSourceInfo]
     used_py_dataclass_parameters: set[str]
-    # Nested graph_do_while level table as (cond_arg_name, parent_id, cond_cpp_arg_id) triples, indexed by level
-    # id. None / empty for kernels without graph_do_while. ``cond_cpp_arg_id`` is the flat C++ arg-id resolved at
-    # AST-build time by ``ASTTransformer._resolve_ndarray_kernel_arg_id`` and is required by the launch path to
-    # support `@qd.data_oriented` member conditions (`qd.graph_do_while(self.counter)`) -- name-matching against
-    # ``arg_metas`` only resolves top-level parameters.
+    # Nested graph_do_while level table as (cond_arg_name, parent_id, cond_cpp_arg_id) triples, indexed by level id.
+    # None / empty for kernels without graph_do_while. ``cond_cpp_arg_id`` is the flat C++ arg-id resolved at AST-build
+    # time by ``ASTTransformer._resolve_ndarray_kernel_arg_id`` and is required by the launch path to support
+    # `@qd.data_oriented` member conditions (`qd.graph_do_while(self.counter)`) -- name-matching against ``arg_metas``
+    # only resolves top-level parameters.
     graph_do_while_levels: list[tuple[str, int, int]] | None = None
     # AST-build-time-resolved checkpoint metadata, indexed by internal cp_id. Empty for kernels without any
     # `with qd.checkpoint(...)` block. See `Kernel.checkpoint_yield_on_args` /
     # `Kernel.checkpoint_yield_on_cpp_arg_ids` / `Kernel.checkpoint_user_labels_by_cp_id` for what each entry means.
-    # Restored alongside the C++-side cached kernel so the launch path can forward `yield_on=` arg-ids and
-    # translate `from_checkpoint=` labels without re-running the AST transformer.
+    # Restored alongside the C++-side cached kernel so the launch path can forward `yield_on=` arg-ids and translate
+    # `from_checkpoint=` labels without re-running the AST transformer.
     checkpoint_yield_on_args: list[str | None] = []
     checkpoint_yield_on_cpp_arg_ids: list[int] = []
     checkpoint_user_labels_by_cp_id: list[int | None] = []
-    # Parallel to ``checkpoint_user_labels_by_cp_id``: each entry is the dotted ``module.ClassQualName.MEMBER`` of
-    # the original ``IntEnum`` member the user passed as ``cp_id``, or ``None`` if the user passed a plain int (or
-    # for implicit auto-wrap checkpoints). On fast-cache restore the loader runs each entry through
+    # Parallel to ``checkpoint_user_labels_by_cp_id``: each entry is the dotted ``module.ClassQualName.MEMBER`` of the
+    # original ``IntEnum`` member the user passed as ``cp_id``, or ``None`` if the user passed a plain int (or for
+    # implicit auto-wrap checkpoints). On fast-cache restore the loader runs each entry through
     # ``_resolve_intenum_member`` to rebuild the IntEnum, preserving the documented contract that
-    # ``qd.checkpoint(Stage.X, ...)`` round-trips ``Stage.X`` (not the underlying int) through
-    # ``status.checkpoint`` and ``kernel.resume(from_checkpoint=...)`` -- pydantic coerces IntEnum to int at
-    # ``CacheValue`` construction time so the parallel qualname column is what carries the enum identity.
+    # ``qd.checkpoint(Stage.X, ...)`` round-trips ``Stage.X`` (not the underlying int) through ``status.checkpoint`` and
+    # ``kernel.resume(from_checkpoint=...)`` -- pydantic coerces IntEnum to int at ``CacheValue`` construction time so
+    # the parallel qualname column is what carries the enum identity.
     checkpoint_user_label_enum_qualnames: list[str | None] = []
 
 
@@ -174,11 +174,11 @@ def store(
     checkpoint_yield_on_cpp_arg_ids: list[int] | None = None,
     checkpoint_user_labels_by_cp_id: list[int | None] | None = None,
 ) -> None:
-    # `checkpoint_user_label_enum_qualnames` is derived from `checkpoint_user_labels_by_cp_id` here (rather than
-    # being plumbed through a separate kwarg from `Kernel.materialize`) so callers never have to think about the
-    # parallel column: they pass the live label list (which still holds the original ``IntEnum`` instances at
-    # store time, before pydantic's int-coercion strips identity in ``CacheValue.__init__``), and the qualname
-    # snapshot is recorded once here for the loader to consume.
+    # `checkpoint_user_label_enum_qualnames` is derived from `checkpoint_user_labels_by_cp_id` here (rather than being
+    # plumbed through a separate kwarg from `Kernel.materialize`) so callers never have to think about the parallel
+    # column: they pass the live label list (which still holds the original ``IntEnum`` instances at store time, before
+    # pydantic's int-coercion strips identity in ``CacheValue.__init__``), and the qualname snapshot is recorded once
+    # here for the loader to consume.
     """
     Note that unlike other caches, this cache is not going to store the actual value we want.
     This cache is only used for verification that our cache key is valid. Big picture:
@@ -232,9 +232,9 @@ def _try_load(cache_key: str) -> CacheValue | None:
 def load(cache_key: str) -> CacheValue | None:
     """Load a validated ``CacheValue`` for *cache_key* if one exists and its source hashes still match, else None.
 
-    Returns the full ``CacheValue`` (rather than the historical 3-tuple) so callers can pick off the
-    AST-transformer-produced metadata (graph_do_while levels, checkpoint tables) without the loader having to grow
-    a new return slot every time we cache a new piece of AST output.
+    Returns the full ``CacheValue`` (rather than the historical 3-tuple) so callers can pick off the AST-transformer-
+    produced metadata (graph_do_while levels, checkpoint tables) without the loader having to grow a new return slot
+    every time we cache a new piece of AST output.
     """
     cache_value = _try_load(cache_key)
     if cache_value is None:

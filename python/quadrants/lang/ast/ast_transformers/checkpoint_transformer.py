@@ -38,12 +38,12 @@ class CheckpointCallInfo:
 
     - ``cp_id``: the user-supplied label (an ``int`` or ``IntEnum`` value), or ``None`` for an auto-wrap implicit
       checkpoint.
-    - ``yield_on_node``: the ``ast.expr`` passed as ``yield_on=`` -- either an ``ast.Name`` (bare kernel parameter,
-      e.g. ``flag``) or an ``ast.Attribute`` chain (e.g. ``self.flag`` for a ``@qd.data_oriented`` owner, or
-      ``params.flag`` where ``params`` is a ``@dataclasses.dataclass`` kernel parameter). ``None`` for an implicit
-      checkpoint. ``build_checkpoint_with`` resolves the node to a flat C++ arg-id via
-      ``ASTTransformer._resolve_ndarray_kernel_arg_id`` so the runtime can forward it directly without per-launch
-      name matching.
+    - ``yield_on_node``: the ``ast.expr`` passed as ``yield_on=`` -- either an ``ast.Name`` (bare kernel parameter, e.g.
+      ``flag``) or an ``ast.Attribute`` chain (e.g. ``self.flag`` for a ``@qd.data_oriented`` owner, or ``params.flag``
+      where ``params`` is a ``@dataclasses.dataclass`` kernel parameter). ``None`` for an implicit checkpoint.
+      ``build_checkpoint_with`` resolves the node to a flat C++ arg-id via
+      ``ASTTransformer._resolve_ndarray_kernel_arg_id`` so the runtime can forward it directly without per-launch name
+      matching.
     - ``is_implicit``: ``True`` iff this Call was synthesised by ``auto_wrap_for_loops``.
     """
 
@@ -179,8 +179,8 @@ class CheckpointTransformer:
             )
         # `yield_on=` must point at an ndarray kernel argument -- a bare parameter (`yield_on=flag`), a
         # `@qd.data_oriented` member (`yield_on=self.flag`), or a `@dataclasses.dataclass` parameter member
-        # (`yield_on=params.flag`). Other expressions can't be lowered to a flat arg-id and are rejected here so
-        # the user gets a clear compile-time error at the `with` site.
+        # (`yield_on=params.flag`). Other expressions can't be lowered to a flat arg-id and are rejected here so the
+        # user gets a clear compile-time error at the `with` site.
         if not isinstance(yield_on_arg, (ast.Name, ast.Attribute)):
             raise QuadrantsSyntaxError(
                 "qd.checkpoint(yield_on=...) must reference a kernel ndarray argument -- e.g. `yield_on=flag` for "
@@ -228,12 +228,12 @@ class CheckpointTransformer:
         yield_on_label: str | None = None
         yield_on_cpp_arg_id: int = -1
         if not info.is_implicit:
-            # Resolve `yield_on=` (a bare parameter or `@qd.data_oriented` / `@dataclasses.dataclass` member
-            # ndarray) to its flat C++ arg-id at AST-build time. ``resolve_ndarray_kernel_arg_id`` raises a
-            # user-facing ``QuadrantsSyntaxError`` if the expression does not name a real ndarray kernel argument,
-            # which keeps the diagnostic at the `with` site instead of leaking into the launcher. Both the label
-            # (for ``checkpoint_yield_on_args`` / introspection) and the resolved arg-id (for the runtime) are
-            # stashed and forwarded to the launch path below.
+            # Resolve `yield_on=` (a bare parameter or `@qd.data_oriented` / `@dataclasses.dataclass` member ndarray) to
+            # its flat C++ arg-id at AST-build time. ``resolve_ndarray_kernel_arg_id`` raises a user-facing
+            # ``QuadrantsSyntaxError`` if the expression does not name a real ndarray kernel argument, which keeps the
+            # diagnostic at the `with` site instead of leaking into the launcher. Both the label (for
+            # ``checkpoint_yield_on_args`` / introspection) and the resolved arg-id (for the runtime) are stashed and
+            # forwarded to the launch path below.
             # pylint: disable-next=C0415,import-outside-toplevel
             from quadrants.lang.ast.ast_transformers.ndarray_arg_resolver import (
                 resolve_ndarray_kernel_arg_id,

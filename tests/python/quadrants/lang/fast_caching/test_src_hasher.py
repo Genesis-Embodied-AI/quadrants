@@ -151,12 +151,12 @@ def test_src_hasher_store_validate(monkeypatch: pytest.MonkeyPatch, tmp_path: pa
 def test_src_hasher_store_validate_round_trips_schema_v3_metadata(
     monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path, temporary_module
 ) -> None:
-    """Schema v3 (`cachevalue-v3-ast-resolved-ids`) added AST-resolved arg-id fields to the persisted ``CacheValue``
-    so the launch path can forward them after a fast-cache restore (which skips AST transformation). This test
-    pins the round-trip for the new fields -- ``graph_do_while_levels`` as 3-tuples carrying ``cond_cpp_arg_id``,
-    plus ``checkpoint_yield_on_args`` / ``checkpoint_yield_on_cpp_arg_ids`` / ``checkpoint_user_labels_by_cp_id``.
-    Without this, a schema bug (wrong tuple arity, dropped field, mis-typed BaseModel default) would only surface
-    via a hard-to-debug functional regression in a fast-cached checkpoint / graph_do_while kernel."""
+    """Schema v3 (`cachevalue-v3-ast-resolved-ids`) added AST-resolved arg-id fields to the persisted ``CacheValue`` so
+    the launch path can forward them after a fast-cache restore (which skips AST transformation). This test pins the
+    round-trip for the new fields -- ``graph_do_while_levels`` as 3-tuples carrying ``cond_cpp_arg_id``, plus
+    ``checkpoint_yield_on_args`` / ``checkpoint_yield_on_cpp_arg_ids`` / ``checkpoint_user_labels_by_cp_id``. Without
+    this, a schema bug (wrong tuple arity, dropped field, mis-typed BaseModel default) would only surface via a hard-to-
+    debug functional regression in a fast-cached checkpoint / graph_do_while kernel."""
     test_files_path = pathlib.Path("tests/python/quadrants/lang/fast_caching/test_files")
 
     offline_cache_path = tmp_path / "cache"
@@ -204,12 +204,12 @@ def test_src_hasher_store_validate_round_trips_schema_v3_metadata(
 def test_src_hasher_intenum_qualname_round_trip(
     monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path, temporary_module
 ) -> None:
-    """Schema v4 (`cachevalue-v4-intenum-qualnames`) added a parallel `checkpoint_user_label_enum_qualnames`
-    column so an ``IntEnum`` cp_id round-trips through fast-cache restore as the original enum member rather than
-    the underlying int. ``src_hasher.store`` derives the qualname column from the live label list (which still
-    holds the original ``IntEnum`` instances) before pydantic int-coerces them; ``_resolve_intenum_member``
-    re-imports the enum class on load. This test covers both the store-side derivation (mixed IntEnum / plain int
-    / None) and the load-side resolution (verifies identity is preserved, not just int equality)."""
+    """Schema v4 (`cachevalue-v4-intenum-qualnames`) added a parallel `checkpoint_user_label_enum_qualnames` column so
+    an ``IntEnum`` cp_id round-trips through fast-cache restore as the original enum member rather than the underlying
+    int. ``src_hasher.store`` derives the qualname column from the live label list (which still holds the original
+    ``IntEnum`` instances) before pydantic int-coerces them; ``_resolve_intenum_member`` re-imports the enum class on
+    load. This test covers both the store-side derivation (mixed IntEnum / plain int / None) and the load-side
+    resolution (verifies identity is preserved, not just int equality)."""
     test_files_path = pathlib.Path("tests/python/quadrants/lang/fast_caching/test_files")
     offline_cache_path = tmp_path / "cache"
     temp_import_path = tmp_path / "temp_import"
@@ -243,8 +243,8 @@ def test_src_hasher_intenum_qualname_round_trip(
         f"{_HasherTestStage.__module__}.{_HasherTestStage.__qualname__}.REDUCE",
     ]
 
-    # Resolver round-trip: rebuild each slot through `_resolve_intenum_member` and confirm enum identity (not
-    # just int-equality) is preserved.
+    # Resolver round-trip: rebuild each slot through `_resolve_intenum_member` and confirm enum identity (not just int-
+    # equality) is preserved.
     resolved = [
         src_hasher._resolve_intenum_member(qn, lbl)
         for qn, lbl in zip(loaded.checkpoint_user_label_enum_qualnames, loaded.checkpoint_user_labels_by_cp_id)
@@ -253,14 +253,14 @@ def test_src_hasher_intenum_qualname_round_trip(
     assert isinstance(resolved[0], _HasherTestStage)
     assert isinstance(resolved[2], _HasherTestStage)
 
-    # Resolver fallback: an unresolvable qualname (e.g. enum class moved/renamed since cache write) must drop
-    # back to the persisted int rather than raising, so a stale cache entry degrades gracefully.
+    # Resolver fallback: an unresolvable qualname (e.g. enum class moved/renamed since cache write) must drop back to
+    # the persisted int rather than raising, so a stale cache entry degrades gracefully.
     assert src_hasher._resolve_intenum_member("nonexistent.Module.Stage.LOAD", 5) == 5
 
 
 # Top-level IntEnum used by `test_src_hasher_intenum_qualname_round_trip` so the resolver can re-import it via
-# `importlib.import_module("tests.python.quadrants.lang.fast_caching.test_src_hasher")`. Lives at module scope
-# (not inside the test) for the same reason `_FastcacheStage` / `_Stage` do in `test_checkpoint.py`.
+# `importlib.import_module("tests.python.quadrants.lang.fast_caching.test_src_hasher")`. Lives at module scope (not
+# inside the test) for the same reason `_FastcacheStage` / `_Stage` do in `test_checkpoint.py`.
 class _HasherTestStage(IntEnum):
     LOAD = 5
     REDUCE = 9

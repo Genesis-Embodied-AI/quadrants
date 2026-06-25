@@ -31,25 +31,25 @@ def resolve_ndarray_kernel_arg_id(
 ) -> tuple[str, int]:
     """Resolve ``node`` to ``(label, flat_cpp_arg_id)`` at AST-build time.
 
-    Shared between ``qd.checkpoint(yield_on=...)`` and ``qd.graph_do_while(...)`` to turn the control-flag argument
-    into the flat C++ arg-id the runtime matches against. ``node`` is an ``ast.Name`` (a bare kernel parameter,
-    e.g. ``flag``) or an ``ast.Attribute`` chain (e.g. ``self.flag`` for a ``@qd.data_oriented`` owner, or
-    ``params.flag`` where ``params`` is a ``@dataclasses.dataclass`` kernel parameter). We build the expression
-    through the normal AST machinery and read the arg-id off the resulting external-tensor expression -- this
-    unifies the bare-param and member-ndarray cases, since both flatten to a real ndarray kernel argument carrying
-    its arg-id on the ``ExternalTensorExpression``.
+    Shared between ``qd.checkpoint(yield_on=...)`` and ``qd.graph_do_while(...)`` to turn the control-flag argument into
+    the flat C++ arg-id the runtime matches against. ``node`` is an ``ast.Name`` (a bare kernel parameter, e.g.
+    ``flag``) or an ``ast.Attribute`` chain (e.g. ``self.flag`` for a ``@qd.data_oriented`` owner, or ``params.flag``
+    where ``params`` is a ``@dataclasses.dataclass`` kernel parameter). We build the expression through the normal AST
+    machinery and read the arg-id off the resulting external-tensor expression -- this unifies the bare-param and
+    member-ndarray cases, since both flatten to a real ndarray kernel argument carrying its arg-id on the
+    ``ExternalTensorExpression``.
 
     ``usage`` is the call form (e.g. ``"qd.checkpoint(yield_on=...)"``) used in the error message. Raises
     ``QuadrantsSyntaxError`` if the expression does not resolve to an ndarray kernel argument.
     """
     # Local imports to avoid an ast_transformers -> ast_transformer / any_array import cycle at module load:
-    # ``ast_transformer`` is the central transformer module that imports ``checkpoint_transformer`` (sibling of
-    # this file), and ``any_array`` pulls in core ndarray bindings that aren't needed for module import.
-    # pylint: disable-next=C0415,import-outside-toplevel
+    # ``ast_transformer`` is the central transformer module that imports ``checkpoint_transformer`` (sibling of this
+    # file), and ``any_array`` pulls in core ndarray bindings that aren't needed for module import.
+    # pylint: disable=import-outside-toplevel
+    from quadrants.lang.any_array import AnyArray
     from quadrants.lang.ast.ast_transformer import _qd_core, build_stmt
 
-    # pylint: disable-next=C0415,import-outside-toplevel
-    from quadrants.lang.any_array import AnyArray
+    # pylint: enable=import-outside-toplevel
 
     label = ast.unparse(node)
     bad = QuadrantsSyntaxError(
