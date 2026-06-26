@@ -289,9 +289,9 @@ def k1(a: qd.type.NDArray, b: qd.type.NDArray, c: qd.type.NDArray):
     for i in range(c.shape[0]):
         fn_b(c, i)
 ```
-We have three top-level for loops, which we call 'offloaded tasks'. Each offloaded task is compiled into a separate GPU kernel. When we call `k1` from python, the c++ host-side code launches three gpu kernels.
+We have three top-level for loops, which we call 'offloaded tasks'. Each offloaded task is compiled into a separate GPU kernel. When we call `k1` from python, three gpu kernels are launched, from the host side.
 
-We can migrate it to graph by adding `graph=True`:
+We can migrate this qd.kernel to graph by adding `graph=True`:
 ```
 @qd.kernel(graph=True)
 def k1(a: qd.type.NDArray, b: qd.type.NDArray, c: qd.type.NDArray):
@@ -304,8 +304,8 @@ def k1(a: qd.type.NDArray, b: qd.type.NDArray, c: qd.type.NDArray):
 ```
 
 Results:
-- on hardware-accelerated platforms, we only launch a single graph from the host, rather than 3 kernels
-- on other platforms, there is no change: we still launch 3 gpu kernels: no change: not better, not worse
+- on hardware-accelerated platforms, we only launch a single graph from the host, rather than 3 separate kernels
+- on other platforms, there is no change: we still launch 3 separate kernels: no change: not better, not worse
 
 ### A while loop, conditional on a device-side scalar tensor
 
@@ -328,11 +328,10 @@ So, we have:
 - the kernel contains device code, which will run on the gpu
 - each iteration, we copy the value of cond, from the gpu to the host, and check the value
 - this causes a gpu pipeline stall:
-    - first we wait for the entire default stream gpu work to complete/drain
-    - then we wait for the value of cond to copy from the gpu to the host
-    - then we run the python code to check the value of cond
-    - if we continue the loop, we now have to run through the python and c++ machinery to prepare the gpu kernel launch
-    - then launch the gpu kernels inside k1
+    - first Quadrants wait for the entire default stream gpu work to complete/drain
+    - then Quadrants wait for the value of cond to copy from the gpu to the host
+    - then Quadrants run the python code to check the value of cond
+    - if we continue the loop, Quadrants now launches the gpu kernels inside k1
     - together, these steps can cause a noticeable delay, reducing throughput speed
 
 After migrating to graph with graph do while we have:
@@ -351,8 +350,6 @@ Now:
 - on supported hardware, the cond evaluation takes place on the gpu
     - and we avoid the gpu pipeline stall
 - on unsupported hardware, we still incur the pipeline stall, as before
-    - note that there will be some small acceleration, because the condition evaluation and kernel launch will take place entirely from c++, bypassing python
-    - no worse, incrementally better
 
 ### A fixed-size for loop
 
@@ -371,8 +368,8 @@ for _ in range(num_its):
 In this case, we have `num_its` launches of the three gpu kernels in k1
 - there is nothing on the host side that waits for anything to finish on the gpu-side
 - there is kernel launch latency associated with:
-    - running k1 from host-side python
-    - launching the gpu kernels for each of fn_1, fn_2, fn_3 from host-side c++
+    - running k1 from host-side
+    - launching the gpu kernels for each of fn_1, fn_2, fn_3, also from host-side
 
 After migrating to graph we have something like:
 ```
@@ -464,5 +461,4 @@ The effect in reality is situation dependent:
 In this case, our recommendation is:
 - use graph do while anyway, if you need it on any platform
     - this will ensure your code is compact and maintainable
-- if you need optimum 100% performance on unsupported platforms, then consider PRing onto quadrants an optimized graph implementation for your target platform
-    - advanced: for example it could somehow run MAX_ITER iterations anyway, similar to the earlier hand-rolled version, but via the graph abstraction, hence allowing the code to be compact, cross-platform, and also optimally fast
+- if you need optimum 100% performance on unsupported platforms, then consider PRing onto quadrants an optimized graph implementation for your target platform, or raising an issue
