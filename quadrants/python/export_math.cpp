@@ -50,28 +50,28 @@ struct VectorInitializer {};
 template <typename T>
 struct VectorInitializer<1, T> {
   static auto get() {
-    return py::init<T>();
+    return nb::init<T>();
   }
 };
 
 template <typename T>
 struct VectorInitializer<2, T> {
   static auto get() {
-    return py::init<T, T>();
+    return nb::init<T, T>();
   }
 };
 
 template <typename T>
 struct VectorInitializer<3, T> {
   static auto get() {
-    return py::init<T, T, T>();
+    return nb::init<T, T, T>();
   }
 };
 
 template <typename T>
 struct VectorInitializer<4, T> {
   static auto get() {
-    return py::init<T, T, T, T>();
+    return nb::init<T, T, T, T>();
   }
 };
 
@@ -115,7 +115,7 @@ template <int i,
 template <int i, typename VEC, typename Class, std::enable_if_t<get_dim<VEC>::value >= i + 1, int> = 0>
 void register_vec_field(Class &cls) {
   static const char *names[4] = {"x", "y", "z", "w"};
-  cls.def_readwrite(names[i], get_vec_field<i, VEC>::get());
+  cls.def_rw(names[i], get_vec_field<i, VEC>::get());
 }
 
 template <typename T>
@@ -123,16 +123,16 @@ struct VectorRegistration {};
 
 template <int dim, typename T, InstSetExt ISE>
 struct VectorRegistration<VectorND<dim, T, ISE>> {
-  static void run(py::module &m) {
+  static void run(nb::module_ &m) {
     using Vector = VectorND<dim, T, ISE>;
 
     // e.g. Vector4f
     std::string vector_name = std::string("Vector") + std::to_string(dim) + get_type_short_name<T>();
 
-    auto cls = py::class_<Vector>(m, vector_name.c_str());
+    auto cls = nb::class_<Vector>(m, vector_name.c_str());
     cls.def(VectorInitializer<dim, T>::get())
-        .def(py::init<T>())
-        .def("__len__", [](Vector *) { return Vector::dim; })
+        .def(nb::init<T>())
+        .def("__len__", [](Vector *) -> int { return Vector::dim; })
         .def("__getitem__", [](Vector *vec, int i) { return (*vec)[i]; });
 
     register_vec_field<0, Vector>(cls);
@@ -142,7 +142,7 @@ struct VectorRegistration<VectorND<dim, T, ISE>> {
   }
 };
 
-void export_math(py::module &m) {
+void export_math(nb::module_ &m) {
   VectorRegistration<Vector2f>::run(m);
   VectorRegistration<Vector3f>::run(m);
   VectorRegistration<Vector4f>::run(m);

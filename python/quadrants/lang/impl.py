@@ -386,6 +386,7 @@ def subscript(ast_builder, value, *_indices, skip_reordered=False):
                 dbg_info,
             )
         )
+    assert indices_expr_group is not None
     return Expr(ast_builder.expr_subscript(value.ptr, indices_expr_group, dbg_info))
 
 

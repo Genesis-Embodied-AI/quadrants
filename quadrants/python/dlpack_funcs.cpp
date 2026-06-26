@@ -3,6 +3,11 @@
 #include <algorithm>
 #include <vector>
 
+// nb::cast<std::string>() (torch version check below) is compiled in this translation unit, so the std::string
+// type caster must be visible here. Without it nanobind treats std::string as an unregistered bound type and
+// nb::cast throws std::bad_cast at runtime.
+#include <nanobind/stl/string.h>
+
 #include "dlpack/dlpack.h"
 
 #include "quadrants/program/ndarray.h"
@@ -22,6 +27,8 @@
 namespace quadrants {
 namespace lang {
 
+namespace nb = nanobind;
+
 void validate_arch(Arch arch) {
   if (!arch_is_cpu(arch) && !arch_is_cuda(arch) && !arch_is_metal(arch) && !arch_is_amdgpu(arch)) {
     QD_ERROR(
@@ -31,8 +38,8 @@ void validate_arch(Arch arch) {
 }
 
 bool check_torch_version_lte(int major, int minor, int patch) {
-  pybind11::module_ torch = pybind11::module_::import("torch");
-  std::string version = torch.attr("__version__").cast<std::string>();
+  nb::module_ torch = nb::module_::import_("torch");
+  std::string version = nb::cast<std::string>(torch.attr("__version__"));
 
   // Parse version string (e.g., "2.9.1" or "2.9.1+cu118")
   int vmajor = 0, vminor = 0, vpatch = 0;
@@ -191,7 +198,7 @@ int64_t *calc_strides(int64_t *shape, int full_ndim) {
   return strides;
 }
 
-pybind11::capsule field_to_dlpack(Program *program, SNode *snode, int element_ndim, int n, int m, bool versioned) {
+nb::capsule field_to_dlpack(Program *program, SNode *snode, int element_ndim, int n, int m, bool versioned) {
   if (!snode->is_path_all_dense) {
     QD_ERROR("Only dense fields are supported for dlpack conversion");
   }
@@ -346,7 +353,7 @@ pybind11::capsule field_to_dlpack(Program *program, SNode *snode, int element_nd
           vt->deleter(vt);
       }
     };
-    return pybind11::capsule(vt, "dltensor_versioned", capsule_deleter);
+    return nb::steal<nb::capsule>(PyCapsule_New(vt, "dltensor_versioned", +capsule_deleter));
   }
 
   auto *mt = new DLManagedTensor();
@@ -366,14 +373,14 @@ pybind11::capsule field_to_dlpack(Program *program, SNode *snode, int element_nd
         mt->deleter(mt);
     }
   };
-  return pybind11::capsule(mt, "dltensor", capsule_deleter);
+  return nb::steal<nb::capsule>(PyCapsule_New(mt, "dltensor", +capsule_deleter));
 }
 
-pybind11::capsule ndarray_to_dlpack(Program *program,
-                                    pybind11::object owner,
-                                    Ndarray *ndarray,
-                                    const std::vector<int> &layout,
-                                    bool versioned) {
+nb::capsule ndarray_to_dlpack(Program *program,
+                              nb::object owner,
+                              Ndarray *ndarray,
+                              const std::vector<int> &layout,
+                              bool versioned) {
   Arch arch = program->compile_config().arch;
   validate_arch(arch);
 
@@ -384,7 +391,7 @@ pybind11::capsule ndarray_to_dlpack(Program *program,
   }
 #endif
 
-  auto *owner_holder = new pybind11::object(owner);
+  auto *owner_holder = new nb::object(owner);
 
   DeviceAllocation devalloc = ndarray->get_device_allocation();
 
@@ -457,8 +464,8 @@ pybind11::capsule ndarray_to_dlpack(Program *program,
     vt->flags = 0;
     vt->dl_tensor = dl_tensor;
     vt->deleter = [](DLManagedTensorVersioned *self) {
-      auto *owner = reinterpret_cast<pybind11::object *>(self->manager_ctx);
-      pybind11::gil_scoped_acquire gil;
+      auto *owner = reinterpret_cast<nb::object *>(self->manager_ctx);
+      nb::gil_scoped_acquire gil;
       delete owner;  // DECREFs the Python object
       if (self->dl_tensor.shape != nullptr) {
         delete[] self->dl_tensor.shape;
@@ -473,15 +480,15 @@ pybind11::capsule ndarray_to_dlpack(Program *program,
           vt->deleter(vt);
       }
     };
-    return pybind11::capsule(vt, "dltensor_versioned", capsule_deleter);
+    return nb::steal<nb::capsule>(PyCapsule_New(vt, "dltensor_versioned", +capsule_deleter));
   }
 
   auto *mt = new DLManagedTensor();
   mt->dl_tensor = dl_tensor;
   mt->manager_ctx = owner_holder;
   mt->deleter = [](DLManagedTensor *self) {
-    auto *owner = reinterpret_cast<pybind11::object *>(self->manager_ctx);
-    pybind11::gil_scoped_acquire gil;
+    auto *owner = reinterpret_cast<nb::object *>(self->manager_ctx);
+    nb::gil_scoped_acquire gil;
     delete owner;  // DECREFs the Python object
     if (self->dl_tensor.shape != nullptr) {
       delete[] self->dl_tensor.shape;
@@ -496,7 +503,7 @@ pybind11::capsule ndarray_to_dlpack(Program *program,
         mt->deleter(mt);
     }
   };
-  return pybind11::capsule(mt, "dltensor", capsule_deleter);
+  return nb::steal<nb::capsule>(PyCapsule_New(mt, "dltensor", +capsule_deleter));
 }
 }  // namespace lang
 }  // namespace quadrants

@@ -147,7 +147,7 @@ endif()
 # in another project as submodule.
 option(QD_WITH_PYTHON "Build with Python language binding" ON)
 if (QD_WITH_PYTHON)
-    include(cmake/PythonNumpyPybind11.cmake)
+    include(cmake/PythonNanobind.cmake)
 endif()
 
 if (QD_WITH_BACKTRACE)
@@ -240,28 +240,18 @@ if (QD_WITH_GRAPHVIZ)
   )
 endif()
 
-# Under scikit-build-core, generate and install the pybind11 type stub (.pyi) + py.typed
-# as a post-install step. This replaces setup.py's DevelopWithStubs / BDistWheelWithStubs
-# cmdclasses; the classic setup.py build still performs stub generation itself. This runs
-# last (after the core extension is installed) so the freshly built module is importable
-# from CMAKE_INSTALL_PREFIX (where `quadrants` is a namespace package of installed artifacts).
-if (DEFINED SKBUILD_PROJECT_NAME)
-    if (Python_EXECUTABLE)
-        set(_QD_STUB_PYTHON "${Python_EXECUTABLE}")
-    else()
-        set(_QD_STUB_PYTHON "${PYTHON_EXECUTABLE}")
-    endif()
-    install(CODE "
-        message(STATUS \"Generating pybind11 type stubs ...\")
-        execute_process(
-            COMMAND \"${_QD_STUB_PYTHON}\" \"${CMAKE_SOURCE_DIR}/tools/gen_stubs.py\"
-                    --package-dir \"\${CMAKE_INSTALL_PREFIX}\"
-                    --output-dir \"\${CMAKE_INSTALL_PREFIX}/quadrants/_lib/core\"
-                    --repo-root \"${CMAKE_SOURCE_DIR}\"
-            RESULT_VARIABLE _qd_stub_rc
-        )
-        if (NOT _qd_stub_rc EQUAL 0)
-            message(FATAL_ERROR \"pybind11 stub generation failed (rc=\${_qd_stub_rc})\")
-        endif()
-    ")
+# Under scikit-build-core, generate and install the nanobind type stub (.pyi) + py.typed as an
+# install-time step. This replaces the old pybind11-stubgen + YAML-post-processing hook with
+# nanobind's built-in stub generator, which imports the freshly installed extension (a namespace
+# package of compiled artifacts under CMAKE_INSTALL_PREFIX) and writes the stub next to it.
+if (DEFINED SKBUILD_PROJECT_NAME AND QD_WITH_PYTHON)
+    nanobind_add_stub(
+        quadrants_python_stub
+        INSTALL_TIME
+        MODULE quadrants._lib.core.quadrants_python
+        OUTPUT ${QD_PY_INSTALL_ROOT}/_lib/core/quadrants_python.pyi
+        MARKER_FILE ${QD_PY_INSTALL_ROOT}/_lib/core/py.typed
+        PYTHON_PATH .
+        VERBOSE
+    )
 endif()

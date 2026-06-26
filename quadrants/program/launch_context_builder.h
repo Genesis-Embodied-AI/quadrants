@@ -59,7 +59,7 @@ class LaunchContextBuilder {
 
   void set_arg_float(int arg_id, float64 d);
   // Bulk processing of multiple scalar float arguments at the same time.
-  // This is mainly useful to mitigate pybind11 function call overhead.
+  // This is mainly useful to mitigate Python/C++ binding function call overhead.
   // In this context, 'args_id' is a vector gathering the position of each
   // of these scalar arguments in the corresponding kernel. As a result, the
   // length 'args_id' and 'vec' must be equal.
