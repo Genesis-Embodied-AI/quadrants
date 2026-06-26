@@ -563,7 +563,7 @@
 <section id="id1">
 <h3>Restrictions<a class="headerlink" href="#id1" title="Link to this heading">#</a></h3>
 <ul class="simple">
-<li><p>The counter ndarray may be swapped between calls: the cached graph reads each counter through an indirection slot that is refreshed on every launch, so passing a different ndarray (or alternating between several) replays the cached graph without rebuilding it.</p></li>
+<li><p>The counter ndarray may be swapped between calls: passing a different ndarray (or alternating between several) replays the cached graph without rebuilding it.</p></li>
 </ul>
 </section>
 <section id="caveats">
@@ -661,7 +661,7 @@
 <section id="id2">
 <h3>Restrictions<a class="headerlink" href="#id2" title="Link to this heading">#</a></h3>
 <ul>
-<li><p>Must be used inside <code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel(graph=True,</span> <span class="pre">checkpoints=True)</span></code>. Without the flag, <code class="docutils literal notranslate"><span class="pre">qd.checkpoint(...)</span></code> raises <code class="docutils literal notranslate"><span class="pre">QuadrantsSyntaxError</span></code> at compile time with a fix-it pointing at <code class="docutils literal notranslate"><span class="pre">checkpoints=True</span></code>.</p></li>
+<li><p>Must be used inside <code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel(graph=True,</span> <span class="pre">checkpoints=True)</span></code>. Without the flag, <code class="docutils literal notranslate"><span class="pre">qd.checkpoint(...)</span></code> raises <code class="docutils literal notranslate"><span class="pre">QuadrantsSyntaxError</span></code> at compile time.</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">cp_id</span></code> must be an int literal or an <code class="docutils literal notranslate"><span class="pre">IntEnum</span></code> value, and must be unique across the kernel.</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">yield_on=</span></code> must be a kernel parameter that is a 0-d <code class="docutils literal notranslate"><span class="pre">qd.types.ndarray(qd.i32,</span> <span class="pre">ndim=0)</span></code>; expressions are not supported.</p></li>
 <li><p>Checkpoints cannot be nested inside other checkpoints. Checkpoints inside a <code class="docutils literal notranslate"><span class="pre">qd.graph_do_while</span></code> body are fine.</p></li>
@@ -739,8 +739,8 @@
         <span class="n">fn_b</span><span class="p">(</span><span class="n">c</span><span class="p">,</span> <span class="n">i</span><span class="p">)</span>
 </pre></div>
 </div>
-<p>We have three top-level for loops, which we call ‘offloaded tasks’. Each offloaded task is compiled into a separate GPU kernel. When we call <code class="docutils literal notranslate"><span class="pre">k1</span></code> from python, the c++ host-side code launches three gpu kernels.</p>
-<p>We can migrate it to graph by adding <code class="docutils literal notranslate"><span class="pre">graph=True</span></code>:</p>
+<p>We have three top-level for loops, which we call ‘offloaded tasks’. Each offloaded task is compiled into a separate GPU kernel. When we call <code class="docutils literal notranslate"><span class="pre">k1</span></code> from python, three gpu kernels are launched, from the host side.</p>
+<p>We can migrate this qd.kernel to graph by adding <code class="docutils literal notranslate"><span class="pre">graph=True</span></code>:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span><span class="p">(</span><span class="n">graph</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">k1</span><span class="p">(</span><span class="n">a</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">type</span><span class="o">.</span><span class="n">NDArray</span><span class="p">,</span> <span class="n">b</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">type</span><span class="o">.</span><span class="n">NDArray</span><span class="p">,</span> <span class="n">c</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">type</span><span class="o">.</span><span class="n">NDArray</span><span class="p">):</span>
     <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">a</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>
@@ -753,8 +753,8 @@
 </div>
 <p>Results:</p>
 <ul class="simple">
-<li><p>on hardware-accelerated platforms, we only launch a single graph from the host, rather than 3 kernels</p></li>
-<li><p>on other platforms, there is no change: we still launch 3 gpu kernels: no change: not better, not worse</p></li>
+<li><p>on hardware-accelerated platforms, we only launch a single graph from the host, rather than 3 separate kernels</p></li>
+<li><p>on other platforms, there is no change: we still launch 3 separate kernels: no change: not better, not worse</p></li>
 </ul>
 </section>
 <section id="a-while-loop-conditional-on-a-device-side-scalar-tensor">
@@ -779,11 +779,10 @@
 <li><p>each iteration, we copy the value of cond, from the gpu to the host, and check the value</p></li>
 <li><p>this causes a gpu pipeline stall:</p>
 <ul>
-<li><p>first we wait for the entire default stream gpu work to complete/drain</p></li>
-<li><p>then we wait for the value of cond to copy from the gpu to the host</p></li>
-<li><p>then we run the python code to check the value of cond</p></li>
-<li><p>if we continue the loop, we now have to run through the python and c++ machinery to prepare the gpu kernel launch</p></li>
-<li><p>then launch the gpu kernels inside k1</p></li>
+<li><p>first Quadrants wait for the entire default stream gpu work to complete/drain</p></li>
+<li><p>then Quadrants wait for the value of cond to copy from the gpu to the host</p></li>
+<li><p>then Quadrants run the python code to check the value of cond</p></li>
+<li><p>if we continue the loop, Quadrants now launches the gpu kernels inside k1</p></li>
 <li><p>together, these steps can cause a noticeable delay, reducing throughput speed</p></li>
 </ul>
 </li>
@@ -806,12 +805,7 @@
 <li><p>and we avoid the gpu pipeline stall</p></li>
 </ul>
 </li>
-<li><p>on unsupported hardware, we still incur the pipeline stall, as before</p>
-<ul>
-<li><p>note that there will be some small acceleration, because the condition evaluation and kernel launch will take place entirely from c++, bypassing python</p></li>
-<li><p>no worse, incrementally better</p></li>
-</ul>
-</li>
+<li><p>on unsupported hardware, we still incur the pipeline stall, as before</p></li>
 </ul>
 </section>
 <section id="a-fixed-size-for-loop">
@@ -832,8 +826,8 @@
 <li><p>there is nothing on the host side that waits for anything to finish on the gpu-side</p></li>
 <li><p>there is kernel launch latency associated with:</p>
 <ul>
-<li><p>running k1 from host-side python</p></li>
-<li><p>launching the gpu kernels for each of fn_1, fn_2, fn_3 from host-side c++</p></li>
+<li><p>running k1 from host-side</p></li>
+<li><p>launching the gpu kernels for each of fn_1, fn_2, fn_3, also from host-side</p></li>
 </ul>
 </li>
 </ul>
@@ -948,11 +942,7 @@
 <li><p>this will ensure your code is compact and maintainable</p></li>
 </ul>
 </li>
-<li><p>if you need optimum 100% performance on unsupported platforms, then consider PRing onto quadrants an optimized graph implementation for your target platform</p>
-<ul>
-<li><p>for example it could somehow run MAX_ITER iterations anyway, similar to the earlier hand-rolled version, but via the graph abstraction, hence allowing the code to be compact, cross-platform, and also optimally fast</p></li>
-</ul>
-</li>
+<li><p>if you need optimum 100% performance on unsupported platforms, then consider PRing onto quadrants an optimized graph implementation for your target platform, or raising an issue</p></li>
 </ul>
 </section>
 </section>
