@@ -500,7 +500,7 @@
 </pre></div>
 </div>
 <p>We use <code class="docutils literal notranslate"><span class="pre">cmake</span></code> to build the C++ core. scikit-build-core puts the CMake build tree under <code class="docutils literal notranslate"><span class="pre">build/{wheel_tag}</span></code>, where the wheel tag encodes the Python version and host platform. For example: <code class="docutils literal notranslate"><span class="pre">build/cp310-cp310-linux_x86_64</span></code>.</p>
-<p>You can modify the cmake options to your liking in order to enable or disable some features you need or don’t need. To discover them, you can use <code class="docutils literal notranslate"><span class="pre">ccmake</span></code>:</p>
+<p>You can modify the cmake options to your liking in order to enable or disable some features you need or don’t need. To discover them, you can use <a class="reference external" href="https://cmake.org/cmake/help/latest/manual/ccmake.1.html">ccmake</a>:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">ccmake</span> <span class="n">build</span><span class="o">/</span><span class="n">cp310</span><span class="o">-</span><span class="n">cp310</span><span class="o">-</span><span class="n">linux_x86_64</span>
 </pre></div>
 </div>
