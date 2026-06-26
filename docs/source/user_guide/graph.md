@@ -75,7 +75,7 @@ solve(x, counter)
 
 The argument to `qd.graph_do_while()` must be the name of a scalar `qd.i32` ndarray parameter. The loop body repeats while this value is non-zero.
 
-- On CUDA SM 9.0+ (Hopper), this uses CUDA conditional while nodes — the entire iteration runs on the GPU with no host involvement.
+- On [CUDA SM 9.0+](https://developer.nvidia.com/cuda/gpus), this uses CUDA conditional while nodes — the entire iteration runs on the GPU with no host involvement.
 - On older CUDA GPUs, AMDGPU, and non-GPU backends, it falls back to a host-side do-while loop (see the [backend support table](#backend-support)).
 
 ### Patterns
@@ -151,7 +151,7 @@ Note that `qd.func`'s are inlined, so you can freely factorize these structures 
 
 ### Caveats
 
-On platforms without native device-side conditional graph nodes — currently CUDA pre-SM 9.0 and **AMDGPU** (HIP has no conditional / while node API as of ROCm 7.2) — the value of the `graph_do_while` parameter will be copied from the GPU to the host each iteration, in order to check whether we should continue iterating. This causes a GPU pipeline stall. For nested loops this host round-trip happens once per iteration of each loop level, and each loop-body task is replayed individually, so deeply nested loops on these backends pay correspondingly more host overhead (they remain correct, just slower than the CUDA SM 9.0+ native path). At the end of each loop iteration:
+On platforms without native device-side conditional graph nodes — currently CUDA pre-SM 9.0 and **AMDGPU** ([HIP](https://rocm.docs.amd.com/projects/HIP/en/latest/what_is_hip.html) has no conditional / while node API as of [ROCm](https://www.amd.com/en/products/software/rocm.html) 7.2) — the value of the `graph_do_while` parameter will be copied from the GPU to the host each iteration, in order to check whether we should continue iterating. This causes a GPU pipeline stall. For nested loops this host round-trip happens once per iteration of each loop level, and each loop-body task is replayed individually, so deeply nested loops on these backends pay correspondingly more host overhead (they remain correct, just slower than the CUDA SM 9.0+ native path). At the end of each loop iteration:
 - wait for GPU async queue to finish processing
 - copy condition value to hostside
 - evaluate condition value on hostside
@@ -393,11 +393,9 @@ k1(a, count)
 
 The recommendation is to use the graph do while here anyway, if you need it for any platform, in order to ensure the code is compact and maintainable.
 
-If you do want fixed-size for loops to run optimally on unsupported hardware platforms, we could add a specializd `qd.graph_range_for` function. This would:
-- on graph-do-while-supported hardware: handle adding the additional increment kernel
-- on graph-do-while-unsupported hardware: handle running the loop entirely on the host-side, to avoid adding a gpu pipeline stall
+If you do want fixed-size for loops to run optimally on unsupported hardware platforms, please raise an issue, and we can look into this.
 
-In practice, for our own kernels, i.e. in [genesis-world](https://github.com/Genesis-Embodied-AI/genesis-world), they largely fall under the do while formulation, see the previous section. However, also have some that used to be do while, but have been migrated to an optimized fixed-size, see next section.
+In practice, for our own [genesis-world](https://github.com/Genesis-Embodied-AI/genesis-world) kernels, they largely fall under the do while formulation, see the previous section. However, also have some that used to be do while, but have been migrated to an optimized fixed-size, see next section.
 
 ### A while loop, conditional on a device-side scalar tensor, that has been optimized into a fixed-size for loop
 
