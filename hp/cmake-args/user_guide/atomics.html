@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>Atomics &#8212; Quadrants 1.0.3 documentation</title>
+    <title>Atomics &#8212; Quadrants 1.1.1 documentation</title>
   
   
   
@@ -43,7 +43,7 @@
   <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5" />
 <link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5" />
 
-    <script src="../_static/documentation_options.js?v=baaebd52"></script>
+    <script src="../_static/documentation_options.js?v=58fbf978"></script>
     <script src="../_static/doctools.js?v=9bcbadda"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -63,7 +63,7 @@
     <link rel="prev" title="Automatic differentiation" href="autodiff.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="1.0.3" />
+  <meta name="docsearch:version" content="1.1.1" />
   
     
     <script src="../_static/searchtools.js"></script>
@@ -131,7 +131,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 1.0.3 documentation</p>
+    <p class="title logo__title">Quadrants 1.1.1 documentation</p>
   
 </a></div>
     
@@ -491,7 +491,7 @@
 </div>
 <p>A few cross-cutting notes that the cells above abbreviate:</p>
 <ul class="simple">
-<li><p><strong><code class="docutils literal notranslate"><span class="pre">atomic_sub</span></code> is not a separate op in the IR.</strong> <code class="docutils literal notranslate"><span class="pre">quadrants/ir/frontend_ir.cpp::AtomicOpExpression::flatten</span></code> rewrites every <code class="docutils literal notranslate"><span class="pre">atomic_sub(x,</span> <span class="pre">y)</span></code> into <code class="docutils literal notranslate"><span class="pre">atomic_add(x,</span> <span class="pre">-y)</span></code> before codegen sees it, so per-backend support and per-dtype behaviour are exactly those of <code class="docutils literal notranslate"><span class="pre">atomic_add</span></code>.</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">atomic_sub</span></code> is not a separate op in the IR.</strong> <code class="docutils literal notranslate"><span class="pre">quadrants/ir/frontend_ir.cpp::AtomicOpExpression::flatten</span></code> rewrites every <code class="docutils literal notranslate"><span class="pre">atomic_sub(x,</span> <span class="pre">y)</span></code> into <code class="docutils literal notranslate"><span class="pre">atomic_add(x,</span> <span class="pre">-y)</span></code> before codegen sees it, so per-backend support and per-dtype behavior are exactly those of <code class="docutils literal notranslate"><span class="pre">atomic_add</span></code>.</p></li>
 <li><p><strong>CAS-loop ops are noticeably slower than native atomics</strong>, especially under contention — every contending thread retries the load + compare-exchange until it wins. Prefer pre-aggregating into a register or shared array and issuing a single atomic at the end of the block where possible.</p></li>
 <li><p><strong>f16 floats always use a CAS loop</strong> (no native f16 atomic on any backend except SPIR-V with the right capability bit).</p></li>
 <li><p><strong>On CPU, “native” does not guarantee a single machine instruction.</strong> On x86 and other architectures without hardware float atomics, the compiler backend lowers native float <code class="docutils literal notranslate"><span class="pre">atomic_add</span></code> (and integer <code class="docutils literal notranslate"><span class="pre">min</span></code> / <code class="docutils literal notranslate"><span class="pre">max</span></code>) to a CAS loop in machine code. Under high contention the performance is similar to the explicit “CAS” entries; the difference is that “native” ops benefit from hardware acceleration where available.</p></li>
@@ -554,7 +554,7 @@
 </section>
 <section id="qd-atomic-sub-x-y-qd-atomic-mul-x-y">
 <h3><code class="docutils literal notranslate"><span class="pre">qd.atomic_sub(x,</span> <span class="pre">y)</span></code> / <code class="docutils literal notranslate"><span class="pre">qd.atomic_mul(x,</span> <span class="pre">y)</span></code><a class="headerlink" href="#qd-atomic-sub-x-y-qd-atomic-mul-x-y" title="Link to this heading">#</a></h3>
-<p>Atomic subtract and atomic multiply. <code class="docutils literal notranslate"><span class="pre">atomic_sub</span></code> is rewritten to <code class="docutils literal notranslate"><span class="pre">atomic_add(x,</span> <span class="pre">-y)</span></code> at IR-construction time (<code class="docutils literal notranslate"><span class="pre">quadrants/ir/frontend_ir.cpp::AtomicOpExpression::flatten</span></code>), so its per-backend behaviour is identical to <code class="docutils literal notranslate"><span class="pre">atomic_add</span></code>. <code class="docutils literal notranslate"><span class="pre">atomic_mul</span></code> always lowers to a CAS loop - no LLVM AtomicRMW or SPIR-V <code class="docutils literal notranslate"><span class="pre">OpAtomic*</span></code> op corresponds to multiply - and is intentionally not heavily optimised; prefer reducing to a different scheme on hot paths.</p>
+<p>Atomic subtract and atomic multiply. <code class="docutils literal notranslate"><span class="pre">atomic_sub</span></code> is rewritten to <code class="docutils literal notranslate"><span class="pre">atomic_add(x,</span> <span class="pre">-y)</span></code> at IR-construction time (<code class="docutils literal notranslate"><span class="pre">quadrants/ir/frontend_ir.cpp::AtomicOpExpression::flatten</span></code>), so its per-backend behavior is identical to <code class="docutils literal notranslate"><span class="pre">atomic_add</span></code>. <code class="docutils literal notranslate"><span class="pre">atomic_mul</span></code> always lowers to a CAS loop - no LLVM AtomicRMW or SPIR-V <code class="docutils literal notranslate"><span class="pre">OpAtomic*</span></code> op corresponds to multiply - and is intentionally not heavily optimized; prefer reducing to a different scheme on hot paths.</p>
 </section>
 <section id="qd-atomic-exchange-x-y">
 <h3><code class="docutils literal notranslate"><span class="pre">qd.atomic_exchange(x,</span> <span class="pre">y)</span></code><a class="headerlink" href="#qd-atomic-exchange-x-y" title="Link to this heading">#</a></h3>
@@ -628,18 +628,18 @@
 <td><p>LLVM <code class="docutils literal notranslate"><span class="pre">load</span> <span class="pre">volatile</span></code> → PTX <code class="docutils literal notranslate"><span class="pre">ld.volatile.global</span></code>.</p></td>
 </tr>
 <tr class="row-odd"><td><p>AMDGPU</p></td>
-<td><p>LLVM <code class="docutils literal notranslate"><span class="pre">load</span> <span class="pre">volatile</span></code> → unhoistable <code class="docutils literal notranslate"><span class="pre">global_load_*</span></code> (the optimiser is inhibited from forwarding / merging).</p></td>
+<td><p>LLVM <code class="docutils literal notranslate"><span class="pre">load</span> <span class="pre">volatile</span></code> → unhoistable <code class="docutils literal notranslate"><span class="pre">global_load_*</span></code> (the optimizer is inhibited from forwarding / merging).</p></td>
 </tr>
 <tr class="row-even"><td><p>Vulkan / Metal</p></td>
 <td><p>SPIR-V <code class="docutils literal notranslate"><span class="pre">OpLoad</span></code> with the <code class="docutils literal notranslate"><span class="pre">Volatile</span></code> <code class="docutils literal notranslate"><span class="pre">MemoryAccess</span></code> mask, propagated through SPIRV-Cross to a re-read on every use in the generated MSL / GLSL.</p></td>
 </tr>
 <tr class="row-odd"><td><p>CPU (x86_64)</p></td>
-<td><p>LLVM <code class="docutils literal notranslate"><span class="pre">load</span> <span class="pre">volatile</span></code> (the optimiser cannot hoist or merge it; the runtime cost is identical to an ordinary load on x86).</p></td>
+<td><p>LLVM <code class="docutils literal notranslate"><span class="pre">load</span> <span class="pre">volatile</span></code> (the optimizer cannot hoist or merge it; the runtime cost is identical to an ordinary load on x86).</p></td>
 </tr>
 </tbody>
 </table>
 </div>
-<p>Quadrants additionally suppresses the optimisations that would otherwise let an aliased rewrite slip past codegen:</p>
+<p>Quadrants additionally suppresses the optimizations that would otherwise let an aliased rewrite slip past codegen:</p>
 <ul class="simple">
 <li><p><code class="docutils literal notranslate"><span class="pre">cache_loop_invariant_global_vars</span></code> does not hoist a volatile load out of an enclosing loop.</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">simplify</span></code> does not replace a volatile load with the value of an earlier load of the same address.</p></li>
@@ -682,7 +682,7 @@
 <section id="atomic-visibility-scope-across-backends">
 <h3>Atomic visibility scope across backends<a class="headerlink" href="#atomic-visibility-scope-across-backends" title="Link to this heading">#</a></h3>
 <p>Every <code class="docutils literal notranslate"><span class="pre">qd.atomic_*</span></code> is emitted at <strong>device-wide scope</strong>: visible to all threads on the GPU executing the kernel, but not required to be coherent with the host CPU mid-kernel. The host only observes results once the kernel completes, at which point the launcher’s stream-sync flushes everything regardless. Choosing device scope (rather than the strongest “system” scope) lets every backend lower the op to a single hardware atomic instruction instead of a software CAS retry loop, which matters for correctness as much as for speed: under heavy contention, a CAS loop on a non-converging op like <code class="docutils literal notranslate"><span class="pre">atomic_xor</span></code> can livelock.</p>
-<p>You don’t normally need to think about scope as a user. It’s listed here so the per-backend behaviour is explicit:</p>
+<p>You don’t normally need to think about scope as a user. It’s listed here so the per-backend behavior is explicit:</p>
 <div class="pst-scrollable-table-container"><table class="table">
 <thead>
 <tr class="row-odd"><th class="head"><p>Backend</p></th>
