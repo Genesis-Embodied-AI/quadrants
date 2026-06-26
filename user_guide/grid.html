@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>Grid primitives &#8212; Quadrants 1.1.0 documentation</title>
+    <title>Grid primitives &#8212; Quadrants 1.1.1 documentation</title>
   
   
   
@@ -43,7 +43,7 @@
   <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5" />
 <link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5" />
 
-    <script src="../_static/documentation_options.js?v=fc837d61"></script>
+    <script src="../_static/documentation_options.js?v=58fbf978"></script>
     <script src="../_static/doctools.js?v=9bcbadda"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -63,7 +63,7 @@
     <link rel="prev" title="Block primitives" href="block.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="1.1.0" />
+  <meta name="docsearch:version" content="1.1.1" />
   
     
     <script src="../_static/searchtools.js"></script>
@@ -131,7 +131,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 1.1.0 documentation</p>
+    <p class="title logo__title">Quadrants 1.1.1 documentation</p>
   
 </a></div>
     
@@ -525,7 +525,7 @@
     <span class="k">pass</span>
 </pre></div>
 </div>
-<p><code class="docutils literal notranslate"><span class="pre">qd.volatile_load</span></code> lowers to LLVM <code class="docutils literal notranslate"><span class="pre">load</span> <span class="pre">volatile</span></code> on CUDA / AMDGPU and to <code class="docutils literal notranslate"><span class="pre">OpLoad</span></code> with the SPIR-V <code class="docutils literal notranslate"><span class="pre">Volatile</span></code> <code class="docutils literal notranslate"><span class="pre">MemoryAccess</span></code> mask on Vulkan / Metal — the optimiser is forbidden from hoisting / merging the load on every backend, with no per-iteration cache-flush or atomic-RMW overhead. See <a class="reference internal" href="atomics.html"><span class="std std-doc">atomics</span></a> for the full primitive description, including the producer-side pairing requirements (atomic store, or plain store + fence on non-Metal backends).</p>
+<p><code class="docutils literal notranslate"><span class="pre">qd.volatile_load</span></code> lowers to LLVM <code class="docutils literal notranslate"><span class="pre">load</span> <span class="pre">volatile</span></code> on CUDA / AMDGPU and to <code class="docutils literal notranslate"><span class="pre">OpLoad</span></code> with the SPIR-V <code class="docutils literal notranslate"><span class="pre">Volatile</span></code> <code class="docutils literal notranslate"><span class="pre">MemoryAccess</span></code> mask on Vulkan / Metal — the optimizer is forbidden from hoisting / merging the load on every backend, with no per-iteration cache-flush or atomic-RMW overhead. See <a class="reference internal" href="atomics.html"><span class="std std-doc">atomics</span></a> for the full primitive description, including the producer-side pairing requirements (atomic store, or plain store + fence on non-Metal backends).</p>
 </li>
 <li><p><strong>Fence inside the loop body</strong> (used in the example above; legacy approach):</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">while</span> <span class="n">flags</span><span class="p">[</span><span class="n">prev</span><span class="p">]</span> <span class="o">==</span> <span class="n">STATE_INVALID</span><span class="p">:</span>

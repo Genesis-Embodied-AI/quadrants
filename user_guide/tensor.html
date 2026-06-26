@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>Tensors &#8212; Quadrants 1.1.0 documentation</title>
+    <title>Tensors &#8212; Quadrants 1.1.1 documentation</title>
   
   
   
@@ -43,7 +43,7 @@
   <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5" />
 <link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5" />
 
-    <script src="../_static/documentation_options.js?v=fc837d61"></script>
+    <script src="../_static/documentation_options.js?v=58fbf978"></script>
     <script src="../_static/doctools.js?v=9bcbadda"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -63,7 +63,7 @@
     <link rel="prev" title="Per-thread linear algebra" href="linalg_per_thread.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="1.1.0" />
+  <meta name="docsearch:version" content="1.1.1" />
   
     
     <script src="../_static/searchtools.js"></script>
@@ -131,7 +131,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 1.1.0 documentation</p>
+    <p class="title logo__title">Quadrants 1.1.1 documentation</p>
   
 </a></div>
     
@@ -587,7 +587,7 @@
 <div class="pst-scrollable-table-container"><table class="table">
 <thead>
 <tr class="row-odd"><th class="head"><p>Value</p></th>
-<th class="head"><p>Behaviour</p></th>
+<th class="head"><p>Behavior</p></th>
 </tr>
 </thead>
 <tbody>
@@ -604,9 +604,9 @@
 </table>
 </div>
 <p><code class="docutils literal notranslate"><span class="pre">copy=False</span></code> and <code class="docutils literal notranslate"><span class="pre">copy=None</span></code> avoid both the buffer allocation and the copy kernel when zero-copy is available — the returned numpy array or torch tensor points directly at Quadrants’ existing memory. For a large tensor this eliminates a potentially expensive memcpy and a device-side kernel launch. Writes through the view are immediately visible to subsequent Quadrants kernels (and vice versa), removing the need for <code class="docutils literal notranslate"><span class="pre">to_torch</span></code> → modify → <code class="docutils literal notranslate"><span class="pre">from_torch</span></code> round-trips.</p>
-<p>The difference between <code class="docutils literal notranslate"><span class="pre">False</span></code> and <code class="docutils literal notranslate"><span class="pre">None</span></code>: <code class="docutils literal notranslate"><span class="pre">copy=False</span></code> raises <code class="docutils literal notranslate"><span class="pre">ValueError</span></code> when zero-copy is not supported (e.g. unsupported dtype or GPU-to-numpy), while <code class="docutils literal notranslate"><span class="pre">copy=None</span></code> silently falls back to a kernel copy in those cases. Use <code class="docutils literal notranslate"><span class="pre">copy=None</span></code> when you want zero-copy as a best-effort optimisation without having to handle exceptions.</p>
-<p>The tradeoff of zero-copy is lifetime coupling: the view is invalidated on <code class="docutils literal notranslate"><span class="pre">qd.reset()</span></code> or <code class="docutils literal notranslate"><span class="pre">qd.init()</span></code>, and on GPU you must be mindful of stream synchronisation when both frameworks write to the same buffer.</p>
-<p>This works identically on both backends. For the full support matrix (which backends/dtypes qualify, lifetime caveats, Metal synchronisation) see <a class="reference internal" href="interop.html#zero-copy-interop-via-dlpack"><span class="std std-ref"><code class="docutils literal notranslate"><span class="pre">interop</span></code></span></a>.</p>
+<p>The difference between <code class="docutils literal notranslate"><span class="pre">False</span></code> and <code class="docutils literal notranslate"><span class="pre">None</span></code>: <code class="docutils literal notranslate"><span class="pre">copy=False</span></code> raises <code class="docutils literal notranslate"><span class="pre">ValueError</span></code> when zero-copy is not supported (e.g. unsupported dtype or GPU-to-numpy), while <code class="docutils literal notranslate"><span class="pre">copy=None</span></code> silently falls back to a kernel copy in those cases. Use <code class="docutils literal notranslate"><span class="pre">copy=None</span></code> when you want zero-copy as a best-effort optimization without having to handle exceptions.</p>
+<p>The tradeoff of zero-copy is lifetime coupling: the view is invalidated on <code class="docutils literal notranslate"><span class="pre">qd.reset()</span></code> or <code class="docutils literal notranslate"><span class="pre">qd.init()</span></code>, and on GPU you must be mindful of stream synchronization when both frameworks write to the same buffer.</p>
+<p>This works identically on both backends. For the full support matrix (which backends/dtypes qualify, lifetime caveats, Metal synchronization) see <a class="reference internal" href="interop.html#zero-copy-interop-via-dlpack"><span class="std std-ref"><code class="docutils literal notranslate"><span class="pre">interop</span></code></span></a>.</p>
 <p>Gradient buffers behave identically: <code class="docutils literal notranslate"><span class="pre">a.grad.to_numpy()</span></code> returns the canonical view of the gradient.</p>
 </section>
 </section>

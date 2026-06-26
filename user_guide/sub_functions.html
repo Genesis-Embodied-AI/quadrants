@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>Sub-functions &#8212; Quadrants 1.1.0 documentation</title>
+    <title>Sub-functions &#8212; Quadrants 1.1.1 documentation</title>
   
   
   
@@ -43,7 +43,7 @@
   <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5" />
 <link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5" />
 
-    <script src="../_static/documentation_options.js?v=fc837d61"></script>
+    <script src="../_static/documentation_options.js?v=58fbf978"></script>
     <script src="../_static/doctools.js?v=9bcbadda"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -63,7 +63,7 @@
     <link rel="prev" title="qd.static" href="static.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="1.1.0" />
+  <meta name="docsearch:version" content="1.1.1" />
   
     
     <script src="../_static/searchtools.js"></script>
@@ -131,7 +131,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 1.1.0 documentation</p>
+    <p class="title logo__title">Quadrants 1.1.1 documentation</p>
   
 </a></div>
     
@@ -465,7 +465,7 @@
 </section>
 <section id="restricting-a-func-to-the-top-level-requires-top-level-true">
 <h2>Restricting a func to the top level (<code class="docutils literal notranslate"><span class="pre">requires_top_level=True</span></code>)<a class="headerlink" href="#restricting-a-func-to-the-top-level-requires-top-level-true" title="Link to this heading">#</a></h2>
-<p><strong>Experimental.</strong> <code class="docutils literal notranslate"><span class="pre">requires_top_level</span></code> is an experimental feature and its behaviour or API may change in a future release.</p>
+<p><strong>Experimental.</strong> <code class="docutils literal notranslate"><span class="pre">requires_top_level</span></code> is an experimental feature and its behavior or API may change in a future release.</p>
 <p>Some qd.func contain for-loops that are assumed and intended to be top-level for-loops, that each become separate offloaded tasks, and ultimately separate device kernels. If such qd.func’s are placed inside other for-loops, the qd.func will no longer generate the structure of offloaded tasks and device kernels assumed, and might either run very slowly, or crash, or give incorrect results.</p>
 <p>To enforce that a qd.func can only be used at top-level, a <code class="docutils literal notranslate"><span class="pre">qd.func</span></code> maybe be annotated with <code class="docutils literal notranslate"><span class="pre">qd.func(requires_top_level=True)</span></code>. This will throws <code class="docutils literal notranslate"><span class="pre">QuadrantsSyntaxError</span></code> at compile time if the <code class="docutils literal notranslate"><span class="pre">qd.func</span></code> is not called from top level.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">func</span><span class="p">(</span><span class="n">requires_top_level</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>

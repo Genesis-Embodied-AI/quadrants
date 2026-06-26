@@ -91,7 +91,7 @@ is therefore unsafe: LLVM's loop-invariant-code-motion will hoist the load out o
       pass
   ```
 
-  `qd.volatile_load` lowers to LLVM `load volatile` on CUDA / AMDGPU and to `OpLoad` with the SPIR-V `Volatile` `MemoryAccess` mask on Vulkan / Metal — the optimiser is forbidden from hoisting / merging the load on every backend, with no per-iteration cache-flush or atomic-RMW overhead. See [atomics](atomics.md) for the full primitive description, including the producer-side pairing requirements (atomic store, or plain store + fence on non-Metal backends).
+  `qd.volatile_load` lowers to LLVM `load volatile` on CUDA / AMDGPU and to `OpLoad` with the SPIR-V `Volatile` `MemoryAccess` mask on Vulkan / Metal — the optimizer is forbidden from hoisting / merging the load on every backend, with no per-iteration cache-flush or atomic-RMW overhead. See [atomics](atomics.md) for the full primitive description, including the producer-side pairing requirements (atomic store, or plain store + fence on non-Metal backends).
 
 - **Fence inside the loop body** (used in the example above; legacy approach):
 
