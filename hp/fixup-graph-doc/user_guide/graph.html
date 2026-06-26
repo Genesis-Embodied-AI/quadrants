@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>Graph &#8212; Quadrants 1.0.3 documentation</title>
+    <title>Graph &#8212; Quadrants 1.1.1 documentation</title>
   
   
   
@@ -43,7 +43,7 @@
   <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5" />
 <link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5" />
 
-    <script src="../_static/documentation_options.js?v=baaebd52"></script>
+    <script src="../_static/documentation_options.js?v=58fbf978"></script>
     <script src="../_static/doctools.js?v=9bcbadda"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -63,7 +63,7 @@
     <link rel="prev" title="Fastcache" href="fastcache.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="1.0.3" />
+  <meta name="docsearch:version" content="1.1.1" />
   
     
     <script src="../_static/searchtools.js"></script>
@@ -131,7 +131,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 1.0.3 documentation</p>
+    <p class="title logo__title">Quadrants 1.1.1 documentation</p>
   
 </a></div>
     
@@ -459,7 +459,7 @@
 <li><p><strong>No struct return values.</strong> Kernels that return values (e.g. <code class="docutils literal notranslate"><span class="pre">-&gt;</span> <span class="pre">qd.i32</span></code>) cannot use graphs. An error is raised if <code class="docutils literal notranslate"><span class="pre">graph=True</span></code> is set on such a kernel.</p></li>
 <li><p><strong>Primal kernels only.</strong> The <code class="docutils literal notranslate"><span class="pre">graph=True</span></code> flag is applied to the primal (forward) kernel only, not its adjoint (backward). <a class="reference internal" href="autodiff.html"><span class="std std-doc">Autodiff</span></a> kernels use the normal launch path.</p></li>
 <li><p><strong>Device-resident ndarrays.</strong> Graph mode bakes device pointers into the cached graph, so all ndarray arguments must be on the GPU. Passing a host-resident ndarray raises an error.</p></li>
-<li><p><a class="reference internal" href="streams.html"><span class="std std-doc">streams</span></a> are incompatible** with graph.</p></li>
+<li><p><a class="reference internal" href="streams.html"><span class="std std-doc">streams</span></a> are <strong>incompatible</strong> with graph.</p></li>
 </ul>
 </section>
 <section id="passing-different-arguments">
@@ -496,7 +496,7 @@
 </div>
 <p>The argument to <code class="docutils literal notranslate"><span class="pre">qd.graph_do_while()</span></code> must be the name of a scalar <code class="docutils literal notranslate"><span class="pre">qd.i32</span></code> ndarray parameter. The loop body repeats while this value is non-zero.</p>
 <ul class="simple">
-<li><p>On CUDA SM 9.0+ (Hopper), this uses CUDA conditional while nodes — the entire iteration runs on the GPU with no host involvement.</p></li>
+<li><p>On <a class="reference external" href="https://developer.nvidia.com/cuda/gpus">CUDA SM 9.0+</a>, this uses CUDA conditional while nodes — the entire iteration runs on the GPU with no host involvement.</p></li>
 <li><p>On older CUDA GPUs, AMDGPU, and non-GPU backends, it falls back to a host-side do-while loop (see the <a class="reference internal" href="#backend-support">backend support table</a>).</p></li>
 </ul>
 <section id="patterns">
@@ -568,7 +568,7 @@
 </section>
 <section id="caveats">
 <h3>Caveats<a class="headerlink" href="#caveats" title="Link to this heading">#</a></h3>
-<p>On platforms without native device-side conditional graph nodes — currently CUDA pre-SM 9.0 and <strong>AMDGPU</strong> (HIP has no conditional / while node API as of ROCm 7.2) — the value of the <code class="docutils literal notranslate"><span class="pre">graph_do_while</span></code> parameter will be copied from the GPU to the host each iteration, in order to check whether we should continue iterating. This causes a GPU pipeline stall. For nested loops this host round-trip happens once per iteration of each loop level, and each loop-body task is replayed individually, so deeply nested loops on these backends pay correspondingly more host overhead (they remain correct, just slower than the CUDA SM 9.0+ native path). At the end of each loop iteration:</p>
+<p>On platforms without native device-side conditional graph nodes — currently CUDA pre-SM 9.0 and <strong>AMDGPU</strong> (<a class="reference external" href="https://rocm.docs.amd.com/projects/HIP/en/latest/what_is_hip.html">HIP</a> has no conditional / while node API as of <a class="reference external" href="https://www.amd.com/en/products/software/rocm.html">ROCm</a> 7.2) — the value of the <code class="docutils literal notranslate"><span class="pre">graph_do_while</span></code> parameter will be copied from the GPU to the host each iteration, in order to check whether we should continue iterating. This causes a GPU pipeline stall. For nested loops this host round-trip happens once per iteration of each loop level, and each loop-body task is replayed individually, so deeply nested loops on these backends pay correspondingly more host overhead (they remain correct, just slower than the CUDA SM 9.0+ native path). At the end of each loop iteration:</p>
 <ul class="simple">
 <li><p>wait for GPU async queue to finish processing</p></li>
 <li><p>copy condition value to hostside</p></li>
@@ -628,7 +628,7 @@
 </ol>
 <p>The framework never writes into your <code class="docutils literal notranslate"><span class="pre">yield_on</span></code> buffer — you own it end-to-end. That means:</p>
 <ul class="simple">
-<li><p>Before the <strong>first</strong> launch, initialise it to <code class="docutils literal notranslate"><span class="pre">0</span></code> (a freshly allocated <code class="docutils literal notranslate"><span class="pre">qd.ndarray</span></code> is not guaranteed to be zeroed).</p></li>
+<li><p>Before the <strong>first</strong> launch, initialize it to <code class="docutils literal notranslate"><span class="pre">0</span></code> (a freshly allocated <code class="docutils literal notranslate"><span class="pre">qd.ndarray</span></code> is not guaranteed to be zeroed).</p></li>
 <li><p>:warning: Before each <strong>resume</strong> launch, reset it to <code class="docutils literal notranslate"><span class="pre">0</span></code> (otherwise the body of the same checkpoint sees the stale non-zero value and yields again on the same condition, looping forever).</p></li>
 </ul>
 </section>
@@ -640,7 +640,7 @@
 <li><p><code class="docutils literal notranslate"><span class="pre">status.checkpoint</span></code> — the <code class="docutils literal notranslate"><span class="pre">cp_id</span></code> label of the yielding checkpoint (or <code class="docutils literal notranslate"><span class="pre">None</span></code> when <code class="docutils literal notranslate"><span class="pre">yielded</span></code> is <code class="docutils literal notranslate"><span class="pre">False</span></code>).</p></li>
 </ul>
 <p>Resume by calling <code class="docutils literal notranslate"><span class="pre">kernel.resume(...,</span> <span class="pre">from_checkpoint=label)</span></code>. Everything before <code class="docutils literal notranslate"><span class="pre">label</span></code> in source order is skipped on the resume launch; everything from <code class="docutils literal notranslate"><span class="pre">label</span></code> onward runs normally. The canonical host loop:</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">overflow_flag</span><span class="p">[()]</span> <span class="o">=</span> <span class="mi">0</span>  <span class="c1"># initialise before the first launch</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">overflow_flag</span><span class="p">[()]</span> <span class="o">=</span> <span class="mi">0</span>  <span class="c1"># initialize before the first launch</span>
 <span class="n">status</span> <span class="o">=</span> <span class="n">step</span><span class="p">(</span><span class="n">arr</span><span class="p">,</span> <span class="n">overflow_flag</span><span class="p">,</span> <span class="n">newton_cond</span><span class="p">)</span>
 <span class="k">while</span> <span class="n">status</span><span class="o">.</span><span class="n">yielded</span><span class="p">:</span>
     <span class="n">handle_overflow_for</span><span class="p">(</span><span class="n">status</span><span class="o">.</span><span class="n">checkpoint</span><span class="p">,</span> <span class="o">...</span><span class="p">)</span>
@@ -867,12 +867,8 @@
 </li>
 </ul>
 <p>The recommendation is to use the graph do while here anyway, if you need it for any platform, in order to ensure the code is compact and maintainable.</p>
-<p>If you do want fixed-size for loops to run optimally on unsupported hardware platforms, we could add a specializd <code class="docutils literal notranslate"><span class="pre">qd.graph_range_for</span></code> function. This would:</p>
-<ul class="simple">
-<li><p>on graph-do-while-supported hardware: handle adding the additional increment kernel</p></li>
-<li><p>on graph-do-while-unsupported hardware: handle running the loop entirely on the host-side, to avoid adding a gpu pipeline stall</p></li>
-</ul>
-<p>In practice, for our own kernels, i.e. in <a class="reference external" href="https://github.com/Genesis-Embodied-AI/genesis-world">genesis-world</a>, they largely fall under the do while formulation, see the previous section. However, also have some that used to be do while, but have been migrated to an optimized fixed-size, see next section.</p>
+<p>If you do want fixed-size for loops to run optimally on unsupported hardware platforms, please raise an issue, and we can look into this.</p>
+<p>In practice, for our own <a class="reference external" href="https://github.com/Genesis-Embodied-AI/genesis-world">genesis-world</a> kernels, they largely fall under the do while formulation, see the previous section. However, also have some that used to be do while, but have been migrated to an optimized fixed-size, see next section.</p>
 </section>
 <section id="a-while-loop-conditional-on-a-device-side-scalar-tensor-that-has-been-optimized-into-a-fixed-size-for-loop">
 <h3>A while loop, conditional on a device-side scalar tensor, that has been optimized into a fixed-size for loop<a class="headerlink" href="#a-while-loop-conditional-on-a-device-side-scalar-tensor-that-has-been-optimized-into-a-fixed-size-for-loop" title="Link to this heading">#</a></h3>

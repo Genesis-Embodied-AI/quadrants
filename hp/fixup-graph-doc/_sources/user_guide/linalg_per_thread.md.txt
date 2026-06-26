@@ -97,8 +97,8 @@ Direct solve of `A @ x = b` via Gauss elimination with partial pivoting. Returns
 
 - Shapes 2×2 and 3×3.
 - The implementation asserts `A.n == A.m` and `A.m == b.n`.
-- Singular `A` is checked by a kernel `assert` (`"Matrix is singular in linear solve."`) inside the Gauss-elimination path. Kernel asserts only fire when the runtime is initialised with `qd.init(debug=True)` (see [debug](debug.md)) — under the default `debug=False` a singular input silently produces a divide-by-zero / NaN result with no diagnostic. If you need a signal in production, check singularity explicitly before calling `qd.solve` (e.g. `abs(A.determinant())` against a tolerance), or run development workloads with `debug=True` to catch the case.
-- Each call factorises `A` from scratch and back-substitutes for the given `b`.
+- Singular `A` is checked by a kernel `assert` (`"Matrix is singular in linear solve."`) inside the Gauss-elimination path. Kernel asserts only fire when the runtime is initialized with `qd.init(debug=True)` (see [debug](debug.md)) — under the default `debug=False` a singular input silently produces a divide-by-zero / NaN result with no diagnostic. If you need a signal in production, check singularity explicitly before calling `qd.solve` (e.g. `abs(A.determinant())` against a tolerance), or run development workloads with `debug=True` to catch the case.
+- Each call factorizes `A` from scratch and back-substitutes for the given `b`.
 
 ## Examples
 
@@ -173,7 +173,7 @@ def shape_match(A: qd.types.matrix(2, 2, qd.f32)) -> qd.types.matrix(2, 2, qd.f3
     return R
 ```
 
-The rotation factor `R` from `A = R @ S` is the rigid alignment that minimises `‖R - A‖_F` — the building block of position-based dynamics shape-matching.
+The rotation factor `R` from `A = R @ S` is the rigid alignment that minimizes `‖R - A‖_F` — the building block of position-based dynamics shape-matching.
 
 ## Shapes, performance, portability
 
