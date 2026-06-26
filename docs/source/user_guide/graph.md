@@ -2,20 +2,6 @@
 
 Graphs reduce kernel launch overhead by capturing a sequence of GPU operations into a graph, then replaying it in a single launch.
 
-## Backend support
-
-`graph=True` and `graph_do_while` run on every backend. They are *hardware accelerated* on CUDA (via CUDA graphs) and AMDGPU (via HIP graphs); `graph_do_while` additionally requires CUDA SM 9.0+ / Hopper for its hardware-accelerated path. On other backends, `graph=True` is silently ignored and the kernel runs via the normal launch path, and `graph_do_while` falls back to a host-side do-while loop that copies the condition value GPU → host each iteration (causing a pipeline stall). `qd.checkpoint` gating runs entirely on the device on every GPU backend; only the CPU backend uses host-side gating.
-
-| Feature | `qd.cuda` SM 9.0+ | `qd.cuda` < SM 9.0 | `qd.amdgpu` | `qd.metal` | `qd.vulkan` | `qd.cpu` |
-| --- | --- | --- | --- | --- | --- | --- |
-| `graph=True` | hardware accelerated | hardware accelerated | hardware accelerated | runs (no acceleration) | runs (no acceleration) | runs (no acceleration) |
-| `qd.graph_do_while` | hardware accelerated | host fallback | host fallback | host fallback | host fallback | host fallback |
-| `qd.checkpoint` | GPU-side | GPU-side | GPU-side | GPU-side | GPU-side | host-side |
-
-AMDGPU `graph_do_while` falls back to the host-side loop because HIP does not currently expose conditional / while graph nodes (as of ROCm 7.2).
-
-Nested and sibling `graph_do_while` loops (and mixing `graph_do_while` with top-level `for`-loops) are **experimental** for now — see [Nested loops and mixing with for-loops](#nested-loops-and-mixing-with-for-loops).
-
 ## Basic usage
 
 Add `graph=True` to a `@qd.kernel` decorator:
@@ -44,14 +30,16 @@ my_kernel(x, y)  # first call: builds and caches the graph
 my_kernel(x, y)  # subsequent calls: replays the cached graph
 ```
 
-This works the same way on CUDA and AMDGPU. The cache is keyed per (compiled-kernel-specialization, launch-id), so different template instantiations (different field bindings, etc.) get their own cached graph.
+This works the same way on CUDA and AMDGPU.
 
 ### Restrictions
 
 - **No struct return values.** Kernels that return values (e.g. `-> qd.i32`) cannot use graphs. An error is raised if `graph=True` is set on such a kernel.
-- **Primal kernels only.** The `graph=True` flag is applied to the primal (forward) kernel only, not its adjoint. Autodiff kernels use the normal launch path.
+- **Primal kernels only.** The `graph=True` flag is applied to the primal (forward) kernel only, not its adjoint (backward). [Autodiff](autodiff.md) kernels use the normal launch path.
 - **Device-resident ndarrays.** Graph mode bakes device pointers into the cached graph, so all ndarray arguments must be on the GPU. Passing a host-resident ndarray raises an error.
-- **`qd_stream` is incompatible** with `graph=True`. Choose one or the other.
+
+- [streams](streams.md) are **incompatible** with graph.
+
 
 ### Passing different arguments
 
@@ -89,7 +77,7 @@ solve(x, counter)
 
 The argument to `qd.graph_do_while()` must be the name of a scalar `qd.i32` ndarray parameter. The loop body repeats while this value is non-zero.
 
-- On CUDA SM 9.0+ (Hopper), this uses CUDA conditional while nodes — the entire iteration runs on the GPU with no host involvement.
+- On [CUDA SM 9.0+](https://developer.nvidia.com/cuda/gpus), this uses CUDA conditional while nodes — the entire iteration runs on the GPU with no host involvement.
 - On older CUDA GPUs, AMDGPU, and non-GPU backends, it falls back to a host-side do-while loop (see the [backend support table](#backend-support)).
 
 ### Patterns
@@ -161,11 +149,11 @@ Note that `qd.func`'s are inlined, so you can freely factorize these structures 
 
 ### Restrictions
 
-- The counter ndarray may be swapped between calls: the cached graph reads each counter through an indirection slot that is refreshed on every launch, so passing a different ndarray (or alternating between several) replays the cached graph without rebuilding it.
+- The counter ndarray may be swapped between calls: passing a different ndarray (or alternating between several) replays the cached graph without rebuilding it.
 
 ### Caveats
 
-On platforms without native device-side conditional graph nodes — currently CUDA pre-SM 9.0 and **AMDGPU** (HIP has no conditional / while node API as of ROCm 7.2) — the value of the `graph_do_while` parameter will be copied from the GPU to the host each iteration, in order to check whether we should continue iterating. This causes a GPU pipeline stall. For nested loops this host round-trip happens once per iteration of each loop level, and each loop-body task is replayed individually, so deeply nested loops on these backends pay correspondingly more host overhead (they remain correct, just slower than the CUDA SM 9.0+ native path). At the end of each loop iteration:
+On platforms without native device-side conditional graph nodes — currently CUDA pre-SM 9.0 and **AMDGPU** ([HIP](https://rocm.docs.amd.com/projects/HIP/en/latest/what_is_hip.html) has no conditional / while node API as of [ROCm](https://www.amd.com/en/products/software/rocm.html) 7.2) — the value of the `graph_do_while` parameter will be copied from the GPU to the host each iteration, in order to check whether we should continue iterating. This causes a GPU pipeline stall. For nested loops this host round-trip happens once per iteration of each loop level, and each loop-body task is replayed individually, so deeply nested loops on these backends pay correspondingly more host overhead (they remain correct, just slower than the CUDA SM 9.0+ native path). At the end of each loop iteration:
 - wait for GPU async queue to finish processing
 - copy condition value to hostside
 - evaluate condition value on hostside
@@ -179,7 +167,7 @@ Therefore on unsupported platforms, you might consider creating a second impleme
 
 ## Checkpoints with `qd.checkpoint` *(experimental)*
 
-> **Experimental.** `qd.checkpoint`, `qd.GraphStatus`, and `kernel.resume(from_checkpoint=...)` are experimental APIs. The shape of the public surface (the context-manager signature, the `@qd.kernel(checkpoints=True)` flag, the `GraphStatus` fields, the host-side resume loop, the error messages, and the cross-backend lowering details) may change in any future release without a deprecation cycle.
+> **Experimental.** `qd.checkpoint`, `qd.GraphStatus`, and `kernel.resume(from_checkpoint=...)` are experimental APIs, and may change in the near future, or be removed, or replaced.
 
 `qd.checkpoint` lets a graph kernel break partway through, surface a reason to the host, let the host fix things up, and resume from the same location on the next launch. An example use-case is an algorithm implemented as a graph that may need to allocate additional memory partway through, where the operations in the graph are in-place, and therefore cannot be rerun without changing/corrupting the output, and therefore for which simply retrying the whole graph from the start is not an option.
 
@@ -254,7 +242,7 @@ while status.yielded:
 
 ### Restrictions
 
-- Must be used inside `@qd.kernel(graph=True, checkpoints=True)`. Without the flag, `qd.checkpoint(...)` raises `QuadrantsSyntaxError` at compile time with a fix-it pointing at `checkpoints=True`.
+- Must be used inside `@qd.kernel(graph=True, checkpoints=True)`. Without the flag, `qd.checkpoint(...)` raises `QuadrantsSyntaxError` at compile time.
 - `cp_id` must be an int literal or an `IntEnum` value, and must be unique across the kernel.
 - `yield_on=` must be a kernel parameter that is a 0-d `qd.types.ndarray(qd.i32, ndim=0)`; expressions are not supported.
 - Checkpoints cannot be nested inside other checkpoints. Checkpoints inside a `qd.graph_do_while` body are fine.
@@ -268,7 +256,21 @@ while status.yielded:
           arr[i] = arr[i] + 1
   ```
 
-The restriction is by design: each top-level statement inside a checkpoint becomes its own GPU task / graph node, so silently wrapping bare statements would hide a sequence of N field writes ballooning into N kernel launches. Forcing the user to write the `for`-wrap themselves keeps the lowering visible and gives a single obvious place to fuse multiple writes into one task by sharing a single wrapper.
+The restriction is by design: each top-level statement inside a checkpoint becomes its own GPU task / graph node, so silently wrapping bare statements would hide a sequence of N field writes ballooning into N kernel launches.
+
+## Backend support
+
+`graph=True` and `graph_do_while` run on every backend. They are *hardware accelerated* on CUDA (via CUDA graphs) and AMDGPU (via HIP graphs); `graph_do_while` additionally requires [CUDA SM 9.0+](https://developer.nvidia.com/cuda/gpus) for its hardware-accelerated path. On other backends, `graph=True` is silently ignored and the kernel runs via the normal launch path, and `graph_do_while` falls back to a host-side do-while loop. `qd.checkpoint` gating runs entirely on the device on every GPU backend.
+
+| Feature | `qd.cuda` SM 9.0+ | `qd.cuda` < SM 9.0 | `qd.amdgpu` | `qd.metal` | `qd.vulkan` | `qd.cpu` |
+| --- | --- | --- | --- | --- | --- | --- |
+| `graph=True` | hardware accelerated | hardware accelerated | hardware accelerated | runs (no acceleration) | runs (no acceleration) | runs (no acceleration) |
+| `qd.graph_do_while` | hardware accelerated | host fallback | host fallback | host fallback | host fallback | host fallback |
+| `qd.checkpoint` | GPU-side | GPU-side | GPU-side | GPU-side | GPU-side | host-side |
+
+AMDGPU `graph_do_while` falls back to the host-side loop because HIP does not currently expose conditional / while graph nodes (as of ROCm 7.2).
+
+Nested and sibling `graph_do_while` loops (and mixing `graph_do_while` with top-level `for`-loops) are **experimental** for now — see [Nested loops and mixing with for-loops](#nested-loops-and-mixing-with-for-loops).
 
 ## Performance
 
@@ -287,9 +289,9 @@ def k1(a: qd.type.NDArray, b: qd.type.NDArray, c: qd.type.NDArray):
     for i in range(c.shape[0]):
         fn_b(c, i)
 ```
-We have three top-level for loops, which we call 'offloaded tasks'. Each offloaded task is compiled into a separate GPU kernel. When we call `k1` from python, the c++ host-side code launches three gpu kernels.
+We have three top-level for loops, which we call 'offloaded tasks'. Each offloaded task is compiled into a separate GPU kernel. When we call `k1` from python, three gpu kernels are launched, from the host side.
 
-We can migrate it to graph by adding `graph=True`:
+We can migrate this qd.kernel to graph by adding `graph=True`:
 ```
 @qd.kernel(graph=True)
 def k1(a: qd.type.NDArray, b: qd.type.NDArray, c: qd.type.NDArray):
@@ -302,8 +304,8 @@ def k1(a: qd.type.NDArray, b: qd.type.NDArray, c: qd.type.NDArray):
 ```
 
 Results:
-- on hardware-accelerated platforms, we only launch a single graph from the host, rather than 3 kernels
-- on other platforms, there is no change: we still launch 3 gpu kernels: no change: not better, not worse
+- on hardware-accelerated platforms, we only launch a single graph from the host, rather than 3 separate kernels
+- on other platforms, there is no change: we still launch 3 separate kernels: no change: not better, not worse
 
 ### A while loop, conditional on a device-side scalar tensor
 
@@ -326,11 +328,10 @@ So, we have:
 - the kernel contains device code, which will run on the gpu
 - each iteration, we copy the value of cond, from the gpu to the host, and check the value
 - this causes a gpu pipeline stall:
-    - first we wait for the entire default stream gpu work to complete/drain
-    - then we wait for the value of cond to copy from the gpu to the host
-    - then we run the python code to check the value of cond
-    - if we continue the loop, we now have to run through the python and c++ machinery to prepare the gpu kernel launch
-    - then launch the gpu kernels inside k1
+    - first Quadrants wait for the entire default stream gpu work to complete/drain
+    - then Quadrants wait for the value of cond to copy from the gpu to the host
+    - then Quadrants run the python code to check the value of cond
+    - if we continue the loop, Quadrants now launches the gpu kernels inside k1
     - together, these steps can cause a noticeable delay, reducing throughput speed
 
 After migrating to graph with graph do while we have:
@@ -349,8 +350,6 @@ Now:
 - on supported hardware, the cond evaluation takes place on the gpu
     - and we avoid the gpu pipeline stall
 - on unsupported hardware, we still incur the pipeline stall, as before
-    - note that there will be some small acceleration, because the condition evaluation and kernel launch will take place entirely from c++, bypassing python
-    - no worse, incrementally better
 
 ### A fixed-size for loop
 
@@ -369,8 +368,8 @@ for _ in range(num_its):
 In this case, we have `num_its` launches of the three gpu kernels in k1
 - there is nothing on the host side that waits for anything to finish on the gpu-side
 - there is kernel launch latency associated with:
-    - running k1 from host-side python
-    - launching the gpu kernels for each of fn_1, fn_2, fn_3 from host-side c++
+    - running k1 from host-side
+    - launching the gpu kernels for each of fn_1, fn_2, fn_3, also from host-side
 
 After migrating to graph we have something like:
 ```
@@ -393,11 +392,9 @@ k1(a, count)
 
 The recommendation is to use the graph do while here anyway, if you need it for any platform, in order to ensure the code is compact and maintainable.
 
-If you do want fixed-size for loops to run optimally on unsupported hardware platforms, we could add a specializd `qd.graph_range_for` function. This would:
-- on graph-do-while-supported hardware: handle adding the additional increment kernel
-- on graph-do-while-unsupported hardware: handle running the loop entirely on the host-side, to avoid adding a gpu pipeline stall
+If you do want fixed-size for loops to run optimally on unsupported hardware platforms, please raise an issue, and we can look into this.
 
-In practice, for our own kernels, i.e. in genesis-world, they largely fall under the do while formulation, see the previous section. However, also have some that used to be do while, but have been migrated to an optimized fixed-size, see next section.
+In practice, for our own [genesis-world](https://github.com/Genesis-Embodied-AI/genesis-world) kernels, they largely fall under the do while formulation, see the previous section. However, also have some that used to be do while, but have been migrated to an optimized fixed-size, see next section.
 
 ### A while loop, conditional on a device-side scalar tensor, that has been optimized into a fixed-size for loop
 
@@ -464,5 +461,4 @@ The effect in reality is situation dependent:
 In this case, our recommendation is:
 - use graph do while anyway, if you need it on any platform
     - this will ensure your code is compact and maintainable
-- if you need optimum 100% performance on unsupported platforms, then consider PRing onto quadrants an optimized graph implementation for your target platform
-    - for example it could somehow run MAX_ITER iterations anyway, similar to the earlier hand-rolled version, but via the graph abstraction, hence allowing the code to be compact, cross-platform, and also optimally fast
+- if you need optimum 100% performance on unsupported platforms, then consider PRing onto quadrants an optimized graph implementation for your target platform, or raising an issue
