@@ -84,7 +84,7 @@ To build the release package:
 
 We use `cmake` to build the C++ core. scikit-build-core puts the CMake build tree under `build/{wheel_tag}`, where the wheel tag encodes the Python version and host platform. For example: `build/cp310-cp310-linux_x86_64`.
 
-You can modify the cmake options to your liking in order to enable or disable some features you need or don't need. To discover them, you can use `ccmake`:
+You can modify the cmake options to your liking in order to enable or disable some features you need or don't need. To discover them, you can use [ccmake](https://cmake.org/cmake/help/latest/manual/ccmake.1.html):
 
 ```
 ccmake build/cp310-cp310-linux_x86_64
