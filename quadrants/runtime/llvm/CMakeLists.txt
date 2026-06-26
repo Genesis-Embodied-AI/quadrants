@@ -36,4 +36,4 @@ if (QD_WITH_AMDGPU)
     target_link_libraries(llvm_runtime PRIVATE ${llvm_amdgpu_libs})
 endif()
 
-target_link_libraries(llvm_runtime PRIVATE ti_device_api)
+target_link_libraries(llvm_runtime PRIVATE qd_device_api)

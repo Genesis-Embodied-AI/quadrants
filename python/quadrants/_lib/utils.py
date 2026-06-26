@@ -247,8 +247,9 @@ def warn_restricted_version():
 
     if get_os_name() == "linux":
         try:
+            import quadrants as qd  # pylint: disable=import-outside-toplevel
 
-            wheel_tag = try_get_wheel_tag(ti)
+            wheel_tag = try_get_wheel_tag(qd)
             if wheel_tag and "manylinux" in wheel_tag:
                 libc_ver = try_get_loaded_libc_version()
                 if libc_ver and libc_ver < (2, 27):

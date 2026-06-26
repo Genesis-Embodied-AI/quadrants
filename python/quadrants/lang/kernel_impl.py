@@ -331,7 +331,7 @@ def data_oriented(cls):
     Example::
 
         >>> @qd.data_oriented
-        >>> class TiArray:
+        >>> class QdArray:
         >>>     def __init__(self, n):
         >>>         self.x = qd.field(qd.f32, shape=n)
         >>>
@@ -340,7 +340,7 @@ def data_oriented(cls):
         >>>         for i in self.x:
         >>>             self.x[i] += 1.0
         >>>
-        >>> a = TiArray(32)
+        >>> a = QdArray(32)
         >>> a.inc()
 
     Args:
