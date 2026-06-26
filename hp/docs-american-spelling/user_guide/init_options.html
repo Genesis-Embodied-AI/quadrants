@@ -1,0 +1,727 @@
+
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="../" >
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>qd.init options &#8212; Quadrants 1.0.3 documentation</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "";
+  </script>
+  <!--
+    this give us a css class that will be invisible only if js is disabled
+  -->
+  <noscript>
+    <style>
+      .pst-js-only { display: none !important; }
+
+    </style>
+  </noscript>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="../_static/styles/theme.css?digest=a95f357e85573c9b56d5" rel="stylesheet" />
+<link href="../_static/styles/pydata-sphinx-theme.css?digest=a95f357e85573c9b56d5" rel="stylesheet" />
+
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=8f2a1f02" />
+    <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../_static/togglebutton.css?v=9c3e77be" />
+    <link rel="stylesheet" type="text/css" href="../_static/graphviz.css?v=4ae1632d" />
+    <link rel="stylesheet" type="text/css" href="../_static/sphinx-design.min.css?v=95c83b7e" />
+    <link rel="stylesheet" type="text/css" href="../_static/css/custom.css" />
+  
+  <!-- So that users can add custom icons -->
+  <script defer src="../_static/scripts/fontawesome.js?digest=a95f357e85573c9b56d5"></script>
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5" />
+<link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5" />
+
+    <script src="../_static/documentation_options.js?v=baaebd52"></script>
+    <script src="../_static/doctools.js?v=9bcbadda"></script>
+    <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../_static/copybutton.js?v=f281be69"></script>
+    <script>let toggleHintShow = 'Click to show';</script>
+    <script>let toggleHintHide = 'Click to hide';</script>
+    <script>let toggleOpenOnPrint = 'true';</script>
+    <script src="../_static/togglebutton.js?v=b8b12719"></script>
+    <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
+    <script src="../_static/design-tabs.js?v=f930bc37"></script>
+    <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'user_guide/init_options';</script>
+    <script>DOCUMENTATION_OPTIONS.search_as_you_type = false;</script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Unit testing" href="unit_testing.html" />
+    <link rel="prev" title="Performance Dispatch" href="perf_dispatch.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="docsearch:language" content="en"/>
+  <meta name="docsearch:version" content="1.0.3" />
+  
+    
+    <script src="../_static/searchtools.js"></script>
+    <script src="../_static/language_data.js"></script>
+    <script src="../searchindex.js"></script>
+  
+  </head>
+  <body data-default-mode="">
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+  
+  
+  
+  
+  <dialog id="pst-search-dialog">
+    
+<form class="bd-search d-flex align-items-center"
+      action="../search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         placeholder="Search the docs ..."
+         aria-label="Search the docs ..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form>
+  </dialog>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header id="pst-header" class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+<div class="bd-header__inner bd-page-width">
+  <button class="pst-navbar-icon sidebar-toggle primary-toggle" aria-label="Site navigation">
+    <span class="fa-solid fa-bars"></span>
+  </button>
+  
+  
+  <div class="col-lg-3 navbar-header-items__start">
+    
+      <div class="navbar-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="../index.html">
+  
+  
+  
+  
+  
+  
+    <p class="title logo__title">Quadrants 1.0.3 documentation</p>
+  
+</a></div>
+    
+  </div>
+  
+  <div class="col-lg-9 navbar-header-items">
+    
+    <div class="me-auto navbar-header-items__center">
+      
+        <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item current active">
+  <a class="nav-link nav-internal" href="index.html">
+    User guide
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../autoapi/index.html">
+    API Reference
+  </a>
+</li>
+
+  </ul>
+</nav></div>
+      
+    </div>
+    
+    
+    <div class="navbar-header-items__end">
+      
+        <div class="navbar-item navbar-persistent--container">
+          
+
+<button class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+        </div>
+      
+      
+        <div class="navbar-item">
+
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg fa-fw" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg fa-fw" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg fa-fw" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg fa-fw me-1"></i>System Settings</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg fa-fw me-1"></i>Light</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg fa-fw me-1"></i>Dark</button></li>
+  </ul>
+</div></div>
+      
+    </div>
+    
+  </div>
+  
+  
+    <div class="navbar-persistent--mobile">
+
+<button class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+    </div>
+  
+
+  
+    <button class="pst-navbar-icon sidebar-toggle secondary-toggle" aria-label="On this page">
+      <span class="fa-solid fa-outdent"></span>
+    </button>
+  
+</div>
+
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+      <dialog id="pst-primary-sidebar-modal"></dialog>
+      <div id="pst-primary-sidebar" class="bd-sidebar-primary bd-sidebar">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+      <div class="sidebar-header-items__center">
+        
+          
+          
+            <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item current active">
+  <a class="nav-link nav-internal" href="index.html">
+    User guide
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../autoapi/index.html">
+    API Reference
+  </a>
+</li>
+
+  </ul>
+</nav></div>
+          
+        
+      </div>
+    
+    
+    
+      <div class="sidebar-header-items__end">
+        
+          <div class="navbar-item">
+
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg fa-fw" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg fa-fw" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg fa-fw" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg fa-fw me-1"></i>System Settings</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg fa-fw me-1"></i>Light</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg fa-fw me-1"></i>Dark</button></li>
+  </ul>
+</div></div>
+        
+      </div>
+    
+  </div>
+  
+    <div class="sidebar-primary-items__start sidebar-primary__section">
+        <div class="sidebar-primary-item pst-sidebar-collapse"><button id="pst-collapse-sidebar-button" aria-expanded="true" aria-controls="pst-primary-sidebar"><svg class="pst-icon svg-inline--fa" role="img" aria-hidden="true" focusable="false" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
+    <path fill="currentColor" d="M3 15.5C2.36232 15.5 1.74874 15.2564 1.28478 14.8189C0.820828 14.3815 0.541576 13.7832 0.504167 13.1467L0.5 13L0.5 3C0.499965 2.36232 0.743605 1.74874 1.18107 1.28478C1.61854 0.820828 2.21676 0.541576 2.85333 0.504167L3 0.5L13 0.5C13.6377 0.499965 14.2513 0.743605 14.7152 1.18107C15.1792 1.61854 15.4584 2.21676 15.4958 2.85333L15.5 3L15.5 13C15.5 13.6377 15.2564 14.2513 14.8189 14.7152C14.3815 15.1792 13.7832 15.4584 13.1467 15.4958L13 15.5L3 15.5ZM3 13.8333L10.5 13.8333L10.5 2.16667L3 2.16667C2.79589 2.16669 2.59889 2.24163 2.44636 2.37726C2.29383 2.5129 2.19638 2.69979 2.1725 2.9025L2.16667 3L2.16667 13C2.16669 13.2041 2.24163 13.4011 2.37726 13.5536C2.5129 13.7062 2.69979 13.8036 2.9025 13.8275L3 13.8333ZM6.65583 10.325L6.5775 10.2558L4.91083 8.58917C4.76735 8.44567 4.68116 8.25476 4.66843 8.05223C4.65569 7.84971 4.71729 7.6495 4.84167 7.48917L4.91083 7.41083L6.5775 5.74417C6.72747 5.59471 6.9287 5.50794 7.14032 5.50148C7.35194 5.49502 7.55809 5.56935 7.7169 5.70937C7.8757 5.8494 7.97525 6.04463 7.99533 6.25539C8.01541 6.46616 7.95451 6.67667 7.825 6.84417L7.75583 6.9225L6.67917 8L7.75583 9.0775C7.89931 9.22099 7.98551 9.41191 7.99824 9.61443C8.01097 9.81695 7.94938 10.0172 7.825 10.1775L7.75583 10.2558C7.61234 10.3993 7.42142 10.4855 7.2189 10.4982C7.01638 10.511 6.81617 10.4494 6.65583 10.325Z"/>
+  </svg>
+  <span class="pst-collapse-sidebar-label">Collapse Sidebar</span>
+  <span class="pst-expand-sidebar-label">Expand Sidebar</span>
+</button></div>
+        <div class="sidebar-primary-item">
+
+<nav class="bd-docs-nav bd-links"
+     aria-label="Section Navigation">
+  <p class="bd-links__title" role="heading" aria-level="1">Section Navigation</p>
+  <div class="bd-toc-item navbar-nav"><p aria-level="2" class="caption" role="heading"><span class="caption-text">Getting started</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="getting_started.html">Getting started</a></li>
+<li class="toctree-l1"><a class="reference internal" href="supported_systems.html">Supported systems</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Core concepts</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="tensor_types.html">Tensor types</a></li>
+<li class="toctree-l1"><a class="reference internal" href="scalar_tensors.html">Scalar tensors</a></li>
+<li class="toctree-l1"><a class="reference internal" href="matrix_vector.html">Matrix and Vector</a></li>
+
+<li class="toctree-l1"><a class="reference internal" href="matrix_vector_per_thread.html">Per-thread matrix and vector operations</a></li>
+<li class="toctree-l1"><a class="reference internal" href="linalg_per_thread.html">Per-thread linear algebra</a></li>
+<li class="toctree-l1"><a class="reference internal" href="tensor.html">Tensors</a></li>
+<li class="toctree-l1"><a class="reference internal" href="compound_types.html">Compound types</a></li>
+<li class="toctree-l1"><a class="reference internal" href="buffer_view.html">BufferView</a></li>
+<li class="toctree-l1"><a class="reference internal" href="static.html">qd.static</a></li>
+<li class="toctree-l1"><a class="reference internal" href="sub_functions.html">Sub-functions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="parallelization.html">Parallelization</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Integration</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="interop.html">Numpy and Torch interop</a></li>
+<li class="toctree-l1"><a class="reference internal" href="metal_shared_queue.html">Shared Metal command queue (PyTorch MPS)</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Autodiff</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="autodiff.html">Automatic differentiation</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">SIMT primitives</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="atomics.html">Atomics</a></li>
+<li class="toctree-l1"><a class="reference internal" href="block.html">Block primitives</a></li>
+<li class="toctree-l1"><a class="reference internal" href="grid.html">Grid primitives</a></li>
+<li class="toctree-l1"><a class="reference internal" href="math.html">Math</a></li>
+<li class="toctree-l1"><a class="reference internal" href="subgroup.html">Subgroup primitives</a></li>
+<li class="toctree-l1"><a class="reference internal" href="tile.html">Register-resident tiles: <code class="docutils literal notranslate"><span class="pre">Tile16x16</span></code> and <code class="docutils literal notranslate"><span class="pre">Tile32x32</span></code></a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Algorithms</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="algorithms.html">Algorithms</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Performance</span></p>
+<ul class="current nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="fastcache.html">Fastcache</a></li>
+<li class="toctree-l1"><a class="reference internal" href="graph.html">Graph</a></li>
+<li class="toctree-l1"><a class="reference internal" href="streams.html">Streams</a></li>
+<li class="toctree-l1"><a class="reference internal" href="perf_dispatch.html">Performance Dispatch</a></li>
+<li class="toctree-l1 current active"><a class="current reference internal" href="#">qd.init options</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Testing</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="unit_testing.html">Unit testing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="kernel_coverage.html">Kernel code coverage</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Reference</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="unsupported_python.html">Python features in kernel scope</a></li>
+<li class="toctree-l1"><a class="reference internal" href="python_backend.html">Python backend</a></li>
+<li class="toctree-l1"><a class="reference internal" href="debug.html">Debug mode</a></li>
+<li class="toctree-l1"><a class="reference internal" href="quirks.html">Quirks</a></li>
+<li class="toctree-l1"><a class="reference internal" href="troubleshooting.html">Troubleshooting</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Advanced</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="optimization_passes.html">Optimization passes</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Contributing</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="contributing.html">Contributing to quadrants</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Internal</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="building_cudagraph_conditional_fatbin.html">Building the CUDA graph conditional fatbin</a></li>
+</ul>
+</div>
+</nav></div>
+    </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+      <div class="sidebar-primary-item">
+<div id="ethical-ad-placement"
+      class="flat"
+      data-ea-publisher="readthedocs"
+      data-ea-type="readthedocs-sidebar"
+      data-ea-manual="true">
+</div></div>
+  </div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item">
+
+<nav aria-label="Breadcrumb" class="d-print-none">
+  <ul class="bd-breadcrumbs">
+    
+    <li class="breadcrumb-item breadcrumb-home">
+      <a href="../index.html" class="nav-link" aria-label="Home">
+        <i class="fa-solid fa-home"></i>
+      </a>
+    </li>
+    
+    <li class="breadcrumb-item"><a href="index.html" class="nav-link">User guide</a></li>
+    
+    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">qd.init options</span></li>
+  </ul>
+</nav>
+</div>
+      
+    </div>
+  
+  
+</div>
+</div>
+              
+              
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <section class="tex2jax_ignore mathjax_ignore" id="qd-init-options">
+<h1>qd.init options<a class="headerlink" href="#qd-init-options" title="Link to this heading">#</a></h1>
+<p><code class="docutils literal notranslate"><span class="pre">qd.init(...)</span></code> accepts every field of the underlying <code class="docutils literal notranslate"><span class="pre">CompileConfig</span></code> struct as a keyword argument; the same fields are also reachable as environment variables of the form <code class="docutils literal notranslate"><span class="pre">QD_&lt;UPPERCASE_NAME&gt;</span></code> (e.g. <code class="docutils literal notranslate"><span class="pre">QD_OFFLINE_CACHE=0</span></code>). This page covers some of the knobs that are commonly tuned in practice. The underlying source of truth is <a class="reference external" href="https://github.com/Genesis-Embodied-AI/quadrants/blob/main/quadrants/program/compile_config.h"><code class="docutils literal notranslate"><span class="pre">quadrants/program/compile_config.h</span></code></a>.</p>
+<section id="caching">
+<h2>Caching<a class="headerlink" href="#caching" title="Link to this heading">#</a></h2>
+<section id="offline-cache">
+<h3><code class="docutils literal notranslate"><span class="pre">offline_cache</span></code><a class="headerlink" href="#offline-cache" title="Link to this heading">#</a></h3>
+<p>Whether the compilation caches <strong>persist on disk across Python invocations</strong>. Default <code class="docutils literal notranslate"><span class="pre">True</span></code>. The “offline” in the name refers to the fact that this cache outlives the process: it is what makes the <em>second</em> time you start a Python interpreter and run a kernel cheap, by reusing artifacts from the first run.</p>
+<p>Setting <code class="docutils literal notranslate"><span class="pre">offline_cache=False</span></code> is intended to emulate cold-start, i.e. a fresh Python process with no prior on-disk artifacts available. In-process caches operate independently of this flag: within a single Python session, identical kernels are never recompiled. The flag therefore controls only whether the next Python invocation observes a warm or a cold disk.</p>
+<p>When <code class="docutils literal notranslate"><span class="pre">offline_cache=True</span></code>, three persistent layers cooperate. The first two share the cache directory configured by <code class="docutils literal notranslate"><span class="pre">offline_cache_file_path</span></code> (default <code class="docutils literal notranslate"><span class="pre">~/.cache/quadrants/qdcache</span></code>); the third is owned by libcuda and lives outside that path.</p>
+<ol class="arabic simple">
+<li><p>The cross-backend kernel-IR / compiled-kernel cache (driven by <code class="docutils literal notranslate"><span class="pre">KernelCompilationManager</span></code>). When the IR-and-config hash hits, the previously compiled kernel data is loaded from disk and the entire compile pipeline is skipped. Active for every backend (CPU, CUDA, AMDGPU, Metal, Vulkan).</p></li>
+<li><p>The CUDA per-arch PTX cache, written under <code class="docutils literal notranslate"><span class="pre">&lt;offline_cache_file_path&gt;/ptx_cache_sm_*</span></code> (driven by <code class="docutils literal notranslate"><span class="pre">PtxCache</span></code>). When the LLVM-IR hash hits, the previously emitted PTX is loaded from disk and the LLVM-to-PTX compilation pipeline (LLVM optimization passes plus the NVPTX backend’s PTX emission) is skipped. <code class="docutils literal notranslate"><span class="pre">ptxas</span></code> itself runs later inside <code class="docutils literal notranslate"><span class="pre">cuModuleLoadDataEx</span></code> and is governed by Layer 3.</p></li>
+<li><p>The NVIDIA driver compute cache at <code class="docutils literal notranslate"><span class="pre">~/.nv/ComputeCache</span></code>, keyed by PTX content hash. When this hits, <code class="docutils literal notranslate"><span class="pre">ptxas</span></code> work is skipped because the SASS itself is reused. This cache is owned by libcuda and not by Quadrants.</p></li>
+</ol>
+<p>Setting <code class="docutils literal notranslate"><span class="pre">offline_cache=False</span></code> (or <code class="docutils literal notranslate"><span class="pre">QD_OFFLINE_CACHE=0</span></code>) disables every disk-persistent layer so a fresh Python session sees a true cold start:</p>
+<ul class="simple">
+<li><p>Layer 1 falls back to memory-only. The disk cache is not consulted for kernel data and new kernels are not persisted, so kernels are compiled from source on every Python invocation.</p></li>
+<li><p>Layer 2 falls back to memory-only. PTX is still cached within one process so kernels with identical LLVM IR share PTX output, but nothing is read from or written to disk.</p></li>
+<li><p>Layer 3 cannot be controlled by the libcuda environment variable <code class="docutils literal notranslate"><span class="pre">CUDA_CACHE_DISABLE</span></code> from inside Python because the variable is captured by libcuda at process start. Quadrants instead appends a per-process nonce comment to the PTX it submits to <code class="docutils literal notranslate"><span class="pre">cuModuleLoadDataEx</span></code>. The nonce is constant within one process - kernels with identical PTX still share a cubin in the same run - and changes between processes so cross-run hits cannot quietly serve stale SASS.</p></li>
+</ul>
+<p>When to set it to <code class="docutils literal notranslate"><span class="pre">False</span></code>:</p>
+<ul class="simple">
+<li><p>Taking compile-time profiles where any cached SASS would mask the real cost.</p></li>
+<li><p>Investigating a stale-cache bug or suspected cache corruption.</p></li>
+<li><p>Reproducing first-run behavior in CI matrix runs that would otherwise warm the caches across iterations.</p></li>
+</ul>
+<p>For normal use, leave it at <code class="docutils literal notranslate"><span class="pre">True</span></code>; the cache layers are the dominant source of fast warm-up.</p>
+</section>
+</section>
+<section id="compile-time-tuning">
+<h2>Compile-time tuning<a class="headerlink" href="#compile-time-tuning" title="Link to this heading">#</a></h2>
+<section id="cfg-optimization">
+<h3><code class="docutils literal notranslate"><span class="pre">cfg_optimization</span></code><a class="headerlink" href="#cfg-optimization" title="Link to this heading">#</a></h3>
+<p>Whether to run the control-flow-graph optimization pass. Default <code class="docutils literal notranslate"><span class="pre">True</span></code>. Setting it to <code class="docutils literal notranslate"><span class="pre">False</span></code> makes compilation up to 6x faster while costing 1-5% of runtime speed; consider disabling it if compile time is the bottleneck and the runtime delta is acceptable.</p>
+</section>
+<section id="fast-math">
+<h3><code class="docutils literal notranslate"><span class="pre">fast_math</span></code><a class="headerlink" href="#fast-math" title="Link to this heading">#</a></h3>
+<p>Whether to enable IEEE-relaxed floating-point optimizations (FMA fusion, no NaN / infinity / signed-zero guarantees). Default <code class="docutils literal notranslate"><span class="pre">True</span></code>. Disable when investigating numerical anomalies or running deterministic-tolerance tests.</p>
+</section>
+<section id="num-compile-threads">
+<h3><code class="docutils literal notranslate"><span class="pre">num_compile_threads</span></code><a class="headerlink" href="#num-compile-threads" title="Link to this heading">#</a></h3>
+<p>Number of host threads used when compiling kernels. Default <code class="docutils literal notranslate"><span class="pre">4</span></code>. Raise on machines with many idle cores compiling many kernels back-to-back; lower (or set to <code class="docutils literal notranslate"><span class="pre">1</span></code>) on memory-pressure-bound systems where concurrent LLVM compilations thrash.</p>
+</section>
+</section>
+<section id="reverse-mode-autodiff">
+<h2>Reverse-mode autodiff<a class="headerlink" href="#reverse-mode-autodiff" title="Link to this heading">#</a></h2>
+<p>See <a class="reference internal" href="autodiff.html"><span class="std std-doc">Autodiff</span></a> for the reverse-mode pipeline overview.</p>
+<section id="ad-stack-experimental-enabled">
+<h3><code class="docutils literal notranslate"><span class="pre">ad_stack_experimental_enabled</span></code><a class="headerlink" href="#ad-stack-experimental-enabled" title="Link to this heading">#</a></h3>
+<p>Enables the dynamic-loop reverse-mode pipeline (the <em>adstack</em>). Default <code class="docutils literal notranslate"><span class="pre">False</span></code>. Required when a reverse-mode kernel has a runtime-bounded loop carrying a non-linear primal; without it, such kernels either compile-error or produce silently-wrong gradients depending on the loop shape. See <a class="reference internal" href="autodiff.html#autodiff-with-dynamic-loops"><span class="std std-ref">Autodiff with dynamic loops</span></a> for the rules. Adstack-on is safe even when not strictly needed, but it does come with a few drawbacks:</p>
+<ul class="simple">
+<li><p><strong>Memory.</strong> The reverse pass replays each iteration of the dynamic loop, so the adstack stores per-iteration intermediate values for every thread. See <a class="reference internal" href="autodiff.html#memory-footprint"><span class="std std-ref">Memory footprint</span></a> for the exact formula and the knobs that shrink it (<code class="docutils literal notranslate"><span class="pre">ad_stack_size</span></code>, <code class="docutils literal notranslate"><span class="pre">ad_stack_sparse_threshold_bytes</span></code>).</p></li>
+<li><p><strong>Per-launch overhead.</strong> Every backward kernel launch incurs a small fixed CPU-to-GPU data transfer. Kernels whose dynamic loop is gated by a sparse predicate (e.g. <code class="docutils literal notranslate"><span class="pre">for</span> <span class="pre">i</span> <span class="pre">in</span> <span class="pre">range(n):</span> <span class="pre">if</span> <span class="pre">active[i]</span> <span class="pre">&gt;</span> <span class="pre">0:</span> <span class="pre">...</span></code>) additionally run a fast GPU pre-step that counts how many threads pass the gate so that the adstack can be tightly sized instead of upper-bounded by worst case.</p></li>
+</ul>
+<p><em>Note.</em> These drawbacks affect only reverse-mode kernels that actually use the adstack; forward-only kernels and reverse-mode kernels without a dynamic non-linear inner loop pay nothing extra. In other words, enabling adstack globally is effectively free except for kernels that need it anyway!</p>
+</section>
+<section id="ad-stack-size">
+<h3><code class="docutils literal notranslate"><span class="pre">ad_stack_size</span></code><a class="headerlink" href="#ad-stack-size" title="Link to this heading">#</a></h3>
+<p>Forces every adstack in the program to exactly <code class="docutils literal notranslate"><span class="pre">N</span></code> slots and bypasses the launch-time sizer. Default <code class="docutils literal notranslate"><span class="pre">0</span></code>, meaning “let the sizer decide” (the recommended setting for day-to-day use). Setting a positive <code class="docutils literal notranslate"><span class="pre">N</span></code> is meant for stress tests or working around a suspected sizer bug; it defeats the per-launch-exact sizing so every dispatch allocates the full <code class="docutils literal notranslate"><span class="pre">N</span></code> slots whether or not the kernel actually needs them. Has no effect when <code class="docutils literal notranslate"><span class="pre">ad_stack_experimental_enabled=False</span></code>.</p>
+</section>
+<section id="ad-stack-sparse-threshold-bytes">
+<h3><code class="docutils literal notranslate"><span class="pre">ad_stack_sparse_threshold_bytes</span></code><a class="headerlink" href="#ad-stack-sparse-threshold-bytes" title="Link to this heading">#</a></h3>
+<p>Cutoff (in bytes) below which the gate-passing-count sizing path described in <a class="reference internal" href="autodiff.html#memory-footprint"><span class="std std-ref">Memory footprint</span></a> is skipped in favor of the eager <code class="docutils literal notranslate"><span class="pre">dispatched_threads</span> <span class="pre">*</span> <span class="pre">stride</span></code> heap. Default <code class="docutils literal notranslate"><span class="pre">100</span> <span class="pre">MiB</span></code>. The sparse path saves memory on kernels of the shape <code class="docutils literal notranslate"><span class="pre">for</span> <span class="pre">i</span> <span class="pre">in</span> <span class="pre">range(...):</span> <span class="pre">if</span> <span class="pre">field[i]</span> <span class="pre">cmp</span> <span class="pre">literal:</span> <span class="pre">&lt;adstack</span> <span class="pre">work&gt;</span></code> but pays a per-launch reducer dispatch; below the threshold that overhead outweighs the savings. Set to <code class="docutils literal notranslate"><span class="pre">0</span></code> to always use the sparse path; lower it if the default still skips kernels you want shrunk. No effect when <code class="docutils literal notranslate"><span class="pre">ad_stack_experimental_enabled=False</span></code> or when the kernel has no such gate.</p>
+</section>
+</section>
+<section id="apple-metal">
+<h2>Apple Metal<a class="headerlink" href="#apple-metal" title="Link to this heading">#</a></h2>
+<section id="external-metal-command-queue">
+<h3><code class="docutils literal notranslate"><span class="pre">external_metal_command_queue</span></code><a class="headerlink" href="#external-metal-command-queue" title="Link to this heading">#</a></h3>
+<p>An <code class="docutils literal notranslate"><span class="pre">MTLCommandQueue*</span></code> pointer (as an integer) to use instead of creating a new Metal command queue. Default <code class="docutils literal notranslate"><span class="pre">0</span></code> (create a new queue). When non-zero, Quadrants dispatches all GPU work on the provided queue, which enables GPU-side ordering with other frameworks that share the same queue (most notably PyTorch MPS).</p>
+</section>
+<section id="external-metal-command-queue-is-torch-queue">
+<h3><code class="docutils literal notranslate"><span class="pre">external_metal_command_queue_is_torch_queue</span></code><a class="headerlink" href="#external-metal-command-queue-is-torch-queue" title="Link to this heading">#</a></h3>
+<p>Default <code class="docutils literal notranslate"><span class="pre">False</span></code>. Set to <code class="docutils literal notranslate"><span class="pre">True</span></code> when the <code class="docutils literal notranslate"><span class="pre">external_metal_command_queue</span></code> is PyTorch MPS’s command queue. This tells Quadrants that both frameworks share the same Metal queue, so the explicit <code class="docutils literal notranslate"><span class="pre">qd.sync()</span></code> / <code class="docutils literal notranslate"><span class="pre">torch.mps.synchronize()</span></code> calls at <code class="docutils literal notranslate"><span class="pre">to_torch</span></code> / <code class="docutils literal notranslate"><span class="pre">from_torch</span></code> interop points can be skipped. When <code class="docutils literal notranslate"><span class="pre">False</span></code> (or when no external queue is set), the interop syncs are preserved.</p>
+<p>See <a class="reference internal" href="metal_shared_queue.html"><span class="std std-doc">Shared Metal command queue</span></a> for the full setup guide, including how to extract the queue pointer from PyTorch and the synchronization implications.</p>
+</section>
+</section>
+<section id="debugging">
+<h2>Debugging<a class="headerlink" href="#debugging" title="Link to this heading">#</a></h2>
+<p>See <a class="reference internal" href="debug.html"><span class="std std-doc">Debug mode</span></a> for runnable examples and a typical develop / benchmark workflow.</p>
+<section id="debug">
+<h3><code class="docutils literal notranslate"><span class="pre">debug</span></code><a class="headerlink" href="#debug" title="Link to this heading">#</a></h3>
+<p>Default <code class="docutils literal notranslate"><span class="pre">False</span></code>. Turns on every available correctness check. Use while iterating on a kernel that produces wrong numerics or while developing a new compiler pass; turn off for benchmarks and production.</p>
+<p>Enables:</p>
+<ul class="simple">
+<li><p>field-bounds check on tensor indexing (out-of-range index raises <code class="docutils literal notranslate"><span class="pre">RuntimeError</span></code>);</p></li>
+<li><p>kernel <code class="docutils literal notranslate"><span class="pre">assert</span></code> statements;</p></li>
+<li><p>integer-overflow guards on arithmetic;</p></li>
+<li><p>IR verification after every compiler pass.</p></li>
+</ul>
+<p>The adstack-overflow check on reverse-mode autodiff runs unconditionally on every backend regardless of <code class="docutils literal notranslate"><span class="pre">debug</span></code>; see <a class="reference internal" href="autodiff.html"><span class="std std-doc">Autodiff -&gt; What can go wrong</span></a> for the contract.</p>
+<p><strong>Cost.</strong> Significant on both compile time (verifier walks the IR after every transform; extra runtime checks expand the emitted code; ~21s extra observed on adstack-heavy kernels) and runtime. For just the field-bounds check in a release build without the rest, use <a class="reference internal" href="#check-out-of-bound"><code class="docutils literal notranslate"><span class="pre">check_out_of_bound</span></code></a> below.</p>
+</section>
+<section id="check-out-of-bound">
+<h3><code class="docutils literal notranslate"><span class="pre">check_out_of_bound</span></code><a class="headerlink" href="#check-out-of-bound" title="Link to this heading">#</a></h3>
+<p>Default <code class="docutils literal notranslate"><span class="pre">False</span></code>. Enables the field-bounds check on tensor indexing - an out-of-range index raises <code class="docutils literal notranslate"><span class="pre">RuntimeError</span></code>.</p>
+<p><strong>Cost.</strong> Scales with how often kernels index into tensors. Cheaper than <code class="docutils literal notranslate"><span class="pre">debug=True</span></code>. Still leave off for benchmarks.</p>
+<p>Interaction with <code class="docutils literal notranslate"><span class="pre">debug</span></code>:</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>Flags</p></th>
+<th class="head"><p>Field bounds</p></th>
+<th class="head"><p>Other <code class="docutils literal notranslate"><span class="pre">debug</span></code> checks</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>neither</p></td>
+<td><p>off</p></td>
+<td><p>off</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">check_out_of_bound=True</span></code> only</p></td>
+<td><p>on</p></td>
+<td><p>off</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">debug=True</span></code></p></td>
+<td><p>on</p></td>
+<td><p>on</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">debug=True</span></code> always implies <code class="docutils literal notranslate"><span class="pre">check_out_of_bound=True</span></code> (the field-bounds check fires whenever debug mode is on).</p></li>
+</ul>
+<p>Per-backend support:</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>Backend</p></th>
+<th class="head"><p>Field bounds check</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>CPU</p></td>
+<td><p>with <code class="docutils literal notranslate"><span class="pre">check_out_of_bound=True</span></code> or <code class="docutils literal notranslate"><span class="pre">debug=True</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>CUDA</p></td>
+<td><p>with <code class="docutils literal notranslate"><span class="pre">check_out_of_bound=True</span></code> or <code class="docutils literal notranslate"><span class="pre">debug=True</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>AMDGPU</p></td>
+<td><p>with <code class="docutils literal notranslate"><span class="pre">check_out_of_bound=True</span></code> or <code class="docutils literal notranslate"><span class="pre">debug=True</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>Metal</p></td>
+<td><p>never (no in-kernel assertion mechanism)</p></td>
+</tr>
+<tr class="row-even"><td><p>Vulkan</p></td>
+<td><p>never (no in-kernel assertion mechanism)</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Metal and Vulkan lack the assertion extension that the field-bounds check relies on; <code class="docutils literal notranslate"><span class="pre">check_out_of_bound=True</span></code> is silently reset to <code class="docutils literal notranslate"><span class="pre">False</span></code> on those backends at <code class="docutils literal notranslate"><span class="pre">qd.init</span></code> time and a warning is logged.</p>
+</section>
+</section>
+</section>
+
+
+                </article>
+              
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+    <a class="left-prev"
+       href="perf_dispatch.html"
+       title="previous page">
+      <i class="fa-solid fa-angle-left"></i>
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">previous</p>
+        <p class="prev-next-title">Performance Dispatch</p>
+      </div>
+    </a>
+    <a class="right-next"
+       href="unit_testing.html"
+       title="next page">
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">next</p>
+        <p class="prev-next-title">Unit testing</p>
+      </div>
+      <i class="fa-solid fa-angle-right"></i>
+    </a>
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+                <dialog id="pst-secondary-sidebar-modal"></dialog>
+                <div id="pst-secondary-sidebar" class="bd-sidebar-secondary bd-toc"><div class="sidebar-secondary-items sidebar-secondary__inner">
+
+
+  <div class="sidebar-secondary-item">
+<div
+    id="pst-page-navigation-heading-2"
+    class="page-toc tocsection onthispage">
+    <i class="fa-solid fa-list"></i> On this page
+  </div>
+  <nav id="pst-page-toc-nav" class="page-toc" aria-labelledby="pst-page-navigation-heading-2">
+    <ul class="pst-show_toc_level nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#caching">Caching</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#offline-cache"><code class="docutils literal notranslate"><span class="pre">offline_cache</span></code></a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#compile-time-tuning">Compile-time tuning</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#cfg-optimization"><code class="docutils literal notranslate"><span class="pre">cfg_optimization</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#fast-math"><code class="docutils literal notranslate"><span class="pre">fast_math</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#num-compile-threads"><code class="docutils literal notranslate"><span class="pre">num_compile_threads</span></code></a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#reverse-mode-autodiff">Reverse-mode autodiff</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#ad-stack-experimental-enabled"><code class="docutils literal notranslate"><span class="pre">ad_stack_experimental_enabled</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#ad-stack-size"><code class="docutils literal notranslate"><span class="pre">ad_stack_size</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#ad-stack-sparse-threshold-bytes"><code class="docutils literal notranslate"><span class="pre">ad_stack_sparse_threshold_bytes</span></code></a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#apple-metal">Apple Metal</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#external-metal-command-queue"><code class="docutils literal notranslate"><span class="pre">external_metal_command_queue</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#external-metal-command-queue-is-torch-queue"><code class="docutils literal notranslate"><span class="pre">external_metal_command_queue_is_torch_queue</span></code></a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#debugging">Debugging</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#debug"><code class="docutils literal notranslate"><span class="pre">debug</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#check-out-of-bound"><code class="docutils literal notranslate"><span class="pre">check_out_of_bound</span></code></a></li>
+</ul>
+</li>
+</ul>
+  </nav></div>
+
+  <div class="sidebar-secondary-item">
+
+  <div class="tocsection sourcelink">
+    <a href="../_sources/user_guide/init_options.md.txt">
+      <i class="fa-solid fa-file-lines"></i> Show Source
+    </a>
+  </div>
+</div>
+
+</div></div>
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+          </footer>
+        
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script defer src="../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5"></script>
+<script defer src="../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5"></script>
+
+  <footer class="bd-footer">
+<div class="bd-footer__inner bd-page-width">
+  
+    <div class="footer-items__start">
+      
+        <div class="footer-item">
+
+  <p class="copyright">
+    
+      © Copyright 2025 Genesis AI Inc.
+      <br/>
+    
+  </p>
+</div>
+      
+        <div class="footer-item">
+
+  <p class="sphinx-version">
+    Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 8.1.3.
+    <br/>
+  </p>
+</div>
+      
+    </div>
+  
+  
+  
+    <div class="footer-items__end">
+      
+        <div class="footer-item">
+<p class="theme-version">
+  <!-- # L10n: Setting the PST URL as an argument as this does not need to be localized -->
+  Built with the <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a> 0.19.0.
+</p></div>
+      
+    </div>
+  
+</div>
+
+  </footer>
+  </body>
+</html>

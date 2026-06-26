@@ -1,0 +1,850 @@
+
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="../" >
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Block primitives &#8212; Quadrants 1.0.3 documentation</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "";
+  </script>
+  <!--
+    this give us a css class that will be invisible only if js is disabled
+  -->
+  <noscript>
+    <style>
+      .pst-js-only { display: none !important; }
+
+    </style>
+  </noscript>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="../_static/styles/theme.css?digest=a95f357e85573c9b56d5" rel="stylesheet" />
+<link href="../_static/styles/pydata-sphinx-theme.css?digest=a95f357e85573c9b56d5" rel="stylesheet" />
+
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=8f2a1f02" />
+    <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../_static/togglebutton.css?v=9c3e77be" />
+    <link rel="stylesheet" type="text/css" href="../_static/graphviz.css?v=4ae1632d" />
+    <link rel="stylesheet" type="text/css" href="../_static/sphinx-design.min.css?v=95c83b7e" />
+    <link rel="stylesheet" type="text/css" href="../_static/css/custom.css" />
+  
+  <!-- So that users can add custom icons -->
+  <script defer src="../_static/scripts/fontawesome.js?digest=a95f357e85573c9b56d5"></script>
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5" />
+<link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5" />
+
+    <script src="../_static/documentation_options.js?v=baaebd52"></script>
+    <script src="../_static/doctools.js?v=9bcbadda"></script>
+    <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../_static/copybutton.js?v=f281be69"></script>
+    <script>let toggleHintShow = 'Click to show';</script>
+    <script>let toggleHintHide = 'Click to hide';</script>
+    <script>let toggleOpenOnPrint = 'true';</script>
+    <script src="../_static/togglebutton.js?v=b8b12719"></script>
+    <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
+    <script src="../_static/design-tabs.js?v=f930bc37"></script>
+    <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'user_guide/block';</script>
+    <script>DOCUMENTATION_OPTIONS.search_as_you_type = false;</script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Grid primitives" href="grid.html" />
+    <link rel="prev" title="Atomics" href="atomics.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="docsearch:language" content="en"/>
+  <meta name="docsearch:version" content="1.0.3" />
+  
+    
+    <script src="../_static/searchtools.js"></script>
+    <script src="../_static/language_data.js"></script>
+    <script src="../searchindex.js"></script>
+  
+  </head>
+  <body data-default-mode="">
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+  
+  
+  
+  
+  <dialog id="pst-search-dialog">
+    
+<form class="bd-search d-flex align-items-center"
+      action="../search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         placeholder="Search the docs ..."
+         aria-label="Search the docs ..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form>
+  </dialog>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header id="pst-header" class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+<div class="bd-header__inner bd-page-width">
+  <button class="pst-navbar-icon sidebar-toggle primary-toggle" aria-label="Site navigation">
+    <span class="fa-solid fa-bars"></span>
+  </button>
+  
+  
+  <div class="col-lg-3 navbar-header-items__start">
+    
+      <div class="navbar-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="../index.html">
+  
+  
+  
+  
+  
+  
+    <p class="title logo__title">Quadrants 1.0.3 documentation</p>
+  
+</a></div>
+    
+  </div>
+  
+  <div class="col-lg-9 navbar-header-items">
+    
+    <div class="me-auto navbar-header-items__center">
+      
+        <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item current active">
+  <a class="nav-link nav-internal" href="index.html">
+    User guide
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../autoapi/index.html">
+    API Reference
+  </a>
+</li>
+
+  </ul>
+</nav></div>
+      
+    </div>
+    
+    
+    <div class="navbar-header-items__end">
+      
+        <div class="navbar-item navbar-persistent--container">
+          
+
+<button class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+        </div>
+      
+      
+        <div class="navbar-item">
+
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg fa-fw" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg fa-fw" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg fa-fw" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg fa-fw me-1"></i>System Settings</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg fa-fw me-1"></i>Light</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg fa-fw me-1"></i>Dark</button></li>
+  </ul>
+</div></div>
+      
+    </div>
+    
+  </div>
+  
+  
+    <div class="navbar-persistent--mobile">
+
+<button class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+    </div>
+  
+
+  
+    <button class="pst-navbar-icon sidebar-toggle secondary-toggle" aria-label="On this page">
+      <span class="fa-solid fa-outdent"></span>
+    </button>
+  
+</div>
+
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+      <dialog id="pst-primary-sidebar-modal"></dialog>
+      <div id="pst-primary-sidebar" class="bd-sidebar-primary bd-sidebar">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+      <div class="sidebar-header-items__center">
+        
+          
+          
+            <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item current active">
+  <a class="nav-link nav-internal" href="index.html">
+    User guide
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../autoapi/index.html">
+    API Reference
+  </a>
+</li>
+
+  </ul>
+</nav></div>
+          
+        
+      </div>
+    
+    
+    
+      <div class="sidebar-header-items__end">
+        
+          <div class="navbar-item">
+
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg fa-fw" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg fa-fw" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg fa-fw" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg fa-fw me-1"></i>System Settings</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg fa-fw me-1"></i>Light</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg fa-fw me-1"></i>Dark</button></li>
+  </ul>
+</div></div>
+        
+      </div>
+    
+  </div>
+  
+    <div class="sidebar-primary-items__start sidebar-primary__section">
+        <div class="sidebar-primary-item pst-sidebar-collapse"><button id="pst-collapse-sidebar-button" aria-expanded="true" aria-controls="pst-primary-sidebar"><svg class="pst-icon svg-inline--fa" role="img" aria-hidden="true" focusable="false" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
+    <path fill="currentColor" d="M3 15.5C2.36232 15.5 1.74874 15.2564 1.28478 14.8189C0.820828 14.3815 0.541576 13.7832 0.504167 13.1467L0.5 13L0.5 3C0.499965 2.36232 0.743605 1.74874 1.18107 1.28478C1.61854 0.820828 2.21676 0.541576 2.85333 0.504167L3 0.5L13 0.5C13.6377 0.499965 14.2513 0.743605 14.7152 1.18107C15.1792 1.61854 15.4584 2.21676 15.4958 2.85333L15.5 3L15.5 13C15.5 13.6377 15.2564 14.2513 14.8189 14.7152C14.3815 15.1792 13.7832 15.4584 13.1467 15.4958L13 15.5L3 15.5ZM3 13.8333L10.5 13.8333L10.5 2.16667L3 2.16667C2.79589 2.16669 2.59889 2.24163 2.44636 2.37726C2.29383 2.5129 2.19638 2.69979 2.1725 2.9025L2.16667 3L2.16667 13C2.16669 13.2041 2.24163 13.4011 2.37726 13.5536C2.5129 13.7062 2.69979 13.8036 2.9025 13.8275L3 13.8333ZM6.65583 10.325L6.5775 10.2558L4.91083 8.58917C4.76735 8.44567 4.68116 8.25476 4.66843 8.05223C4.65569 7.84971 4.71729 7.6495 4.84167 7.48917L4.91083 7.41083L6.5775 5.74417C6.72747 5.59471 6.9287 5.50794 7.14032 5.50148C7.35194 5.49502 7.55809 5.56935 7.7169 5.70937C7.8757 5.8494 7.97525 6.04463 7.99533 6.25539C8.01541 6.46616 7.95451 6.67667 7.825 6.84417L7.75583 6.9225L6.67917 8L7.75583 9.0775C7.89931 9.22099 7.98551 9.41191 7.99824 9.61443C8.01097 9.81695 7.94938 10.0172 7.825 10.1775L7.75583 10.2558C7.61234 10.3993 7.42142 10.4855 7.2189 10.4982C7.01638 10.511 6.81617 10.4494 6.65583 10.325Z"/>
+  </svg>
+  <span class="pst-collapse-sidebar-label">Collapse Sidebar</span>
+  <span class="pst-expand-sidebar-label">Expand Sidebar</span>
+</button></div>
+        <div class="sidebar-primary-item">
+
+<nav class="bd-docs-nav bd-links"
+     aria-label="Section Navigation">
+  <p class="bd-links__title" role="heading" aria-level="1">Section Navigation</p>
+  <div class="bd-toc-item navbar-nav"><p aria-level="2" class="caption" role="heading"><span class="caption-text">Getting started</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="getting_started.html">Getting started</a></li>
+<li class="toctree-l1"><a class="reference internal" href="supported_systems.html">Supported systems</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Core concepts</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="tensor_types.html">Tensor types</a></li>
+<li class="toctree-l1"><a class="reference internal" href="scalar_tensors.html">Scalar tensors</a></li>
+<li class="toctree-l1"><a class="reference internal" href="matrix_vector.html">Matrix and Vector</a></li>
+
+<li class="toctree-l1"><a class="reference internal" href="matrix_vector_per_thread.html">Per-thread matrix and vector operations</a></li>
+<li class="toctree-l1"><a class="reference internal" href="linalg_per_thread.html">Per-thread linear algebra</a></li>
+<li class="toctree-l1"><a class="reference internal" href="tensor.html">Tensors</a></li>
+<li class="toctree-l1"><a class="reference internal" href="compound_types.html">Compound types</a></li>
+<li class="toctree-l1"><a class="reference internal" href="buffer_view.html">BufferView</a></li>
+<li class="toctree-l1"><a class="reference internal" href="static.html">qd.static</a></li>
+<li class="toctree-l1"><a class="reference internal" href="sub_functions.html">Sub-functions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="parallelization.html">Parallelization</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Integration</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="interop.html">Numpy and Torch interop</a></li>
+<li class="toctree-l1"><a class="reference internal" href="metal_shared_queue.html">Shared Metal command queue (PyTorch MPS)</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Autodiff</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="autodiff.html">Automatic differentiation</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">SIMT primitives</span></p>
+<ul class="current nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="atomics.html">Atomics</a></li>
+<li class="toctree-l1 current active"><a class="current reference internal" href="#">Block primitives</a></li>
+<li class="toctree-l1"><a class="reference internal" href="grid.html">Grid primitives</a></li>
+<li class="toctree-l1"><a class="reference internal" href="math.html">Math</a></li>
+<li class="toctree-l1"><a class="reference internal" href="subgroup.html">Subgroup primitives</a></li>
+<li class="toctree-l1"><a class="reference internal" href="tile.html">Register-resident tiles: <code class="docutils literal notranslate"><span class="pre">Tile16x16</span></code> and <code class="docutils literal notranslate"><span class="pre">Tile32x32</span></code></a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Algorithms</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="algorithms.html">Algorithms</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Performance</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="fastcache.html">Fastcache</a></li>
+<li class="toctree-l1"><a class="reference internal" href="graph.html">Graph</a></li>
+<li class="toctree-l1"><a class="reference internal" href="streams.html">Streams</a></li>
+<li class="toctree-l1"><a class="reference internal" href="perf_dispatch.html">Performance Dispatch</a></li>
+<li class="toctree-l1"><a class="reference internal" href="init_options.html">qd.init options</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Testing</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="unit_testing.html">Unit testing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="kernel_coverage.html">Kernel code coverage</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Reference</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="unsupported_python.html">Python features in kernel scope</a></li>
+<li class="toctree-l1"><a class="reference internal" href="python_backend.html">Python backend</a></li>
+<li class="toctree-l1"><a class="reference internal" href="debug.html">Debug mode</a></li>
+<li class="toctree-l1"><a class="reference internal" href="quirks.html">Quirks</a></li>
+<li class="toctree-l1"><a class="reference internal" href="troubleshooting.html">Troubleshooting</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Advanced</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="optimization_passes.html">Optimization passes</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Contributing</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="contributing.html">Contributing to quadrants</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Internal</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="building_cudagraph_conditional_fatbin.html">Building the CUDA graph conditional fatbin</a></li>
+</ul>
+</div>
+</nav></div>
+    </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+      <div class="sidebar-primary-item">
+<div id="ethical-ad-placement"
+      class="flat"
+      data-ea-publisher="readthedocs"
+      data-ea-type="readthedocs-sidebar"
+      data-ea-manual="true">
+</div></div>
+  </div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item">
+
+<nav aria-label="Breadcrumb" class="d-print-none">
+  <ul class="bd-breadcrumbs">
+    
+    <li class="breadcrumb-item breadcrumb-home">
+      <a href="../index.html" class="nav-link" aria-label="Home">
+        <i class="fa-solid fa-home"></i>
+      </a>
+    </li>
+    
+    <li class="breadcrumb-item"><a href="index.html" class="nav-link">User guide</a></li>
+    
+    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">Block primitives</span></li>
+  </ul>
+</nav>
+</div>
+      
+    </div>
+  
+  
+</div>
+</div>
+              
+              
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <section class="tex2jax_ignore mathjax_ignore" id="block-primitives">
+<h1>Block primitives<a class="headerlink" href="#block-primitives" title="Link to this heading">#</a></h1>
+<p>Block-level primitives operate on the threads of a single CUDA thread block (CTA) / AMDGPU workgroup / Vulkan or Metal workgroup. They include thread barriers, memory fences, shared memory, and per-thread indexing helpers - the building blocks for cooperation among threads of the same block.</p>
+<p>Block ops live under <code class="docutils literal notranslate"><span class="pre">qd.simt.block</span></code>. They are written so the same Python source compiles to the right vendor primitive on each backend. As of this writing every op on this page is portable across CUDA, AMDGPU, Vulkan, and Metal; the only remaining caveat (called out in the support-table footnote below) is a perf trade-off for the emulated <code class="docutils literal notranslate"><span class="pre">block.sync_*_nonzero</span></code> ops on non-CUDA backends, not a correctness gap. If a future op is added that is not yet portable, the Python layer will raise <code class="docutils literal notranslate"><span class="pre">ValueError</span></code> at compile time on the unsupported backend.</p>
+<p>The closely-related device-scope memory fence is documented separately in <a class="reference internal" href="grid.html"><span class="std std-doc">grid</span></a>. Users picking between a block-scope and a device-scope fence should read that page for the device-scope side.</p>
+<section id="what-s-available">
+<h2>What’s available<a class="headerlink" href="#what-s-available" title="Link to this heading">#</a></h2>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>Op</p></th>
+<th class="head"><p>CUDA</p></th>
+<th class="head"><p>AMDGPU</p></th>
+<th class="head"><p>Vulkan</p></th>
+<th class="head"><p>Metal</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">block.sync()</span></code></p></td>
+<td><p>yes</p></td>
+<td><p>yes</p></td>
+<td><p>yes</p></td>
+<td><p>yes</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">block.sync_all_nonzero(predicate)</span></code></p></td>
+<td><p>yes</p></td>
+<td><p>yes*</p></td>
+<td><p>yes*</p></td>
+<td><p>yes*</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">block.sync_any_nonzero(predicate)</span></code></p></td>
+<td><p>yes</p></td>
+<td><p>yes*</p></td>
+<td><p>yes*</p></td>
+<td><p>yes*</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">block.sync_count_nonzero(predicate)</span></code></p></td>
+<td><p>yes</p></td>
+<td><p>yes*</p></td>
+<td><p>yes*</p></td>
+<td><p>yes*</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">block.mem_fence()</span></code></p></td>
+<td><p>yes</p></td>
+<td><p>yes</p></td>
+<td><p>yes</p></td>
+<td><p>yes</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">block.SharedArray(shape,</span> <span class="pre">dtype)</span></code></p></td>
+<td><p>yes</p></td>
+<td><p>yes</p></td>
+<td><p>yes</p></td>
+<td><p>yes</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">block.global_thread_idx()</span></code></p></td>
+<td><p>yes</p></td>
+<td><p>yes</p></td>
+<td><p>yes</p></td>
+<td><p>yes</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">block.thread_idx()</span></code></p></td>
+<td><p>yes</p></td>
+<td><p>yes</p></td>
+<td><p>yes</p></td>
+<td><p>yes</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">block.reduce_{add,min,max}(v,</span> <span class="pre">block_dim,</span> <span class="pre">dtype)</span></code></p></td>
+<td><p>yes</p></td>
+<td><p>yes</p></td>
+<td><p>yes</p></td>
+<td><p>yes</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">block.reduce_all_{add,min,max}(v,</span> <span class="pre">block_dim,</span> <span class="pre">dtype)</span></code></p></td>
+<td><p>yes</p></td>
+<td><p>yes</p></td>
+<td><p>yes</p></td>
+<td><p>yes</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">block.inclusive_{add,min,max}(v,</span> <span class="pre">block_dim,</span> <span class="pre">dtype)</span></code></p></td>
+<td><p>yes</p></td>
+<td><p>yes</p></td>
+<td><p>yes</p></td>
+<td><p>yes</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">block.exclusive_{add,min,max}(v,</span> <span class="pre">block_dim,</span> <span class="pre">...)</span></code></p></td>
+<td><p>yes</p></td>
+<td><p>yes</p></td>
+<td><p>yes</p></td>
+<td><p>yes</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">block.radix_rank_match_atomic_or(...)</span></code></p></td>
+<td><p>yes</p></td>
+<td><p>yes</p></td>
+<td><p>yes</p></td>
+<td><p>yes</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Vulkan and Metal share a SPIR-V codegen path (Metal goes through MoltenVK → MSL); they are listed as separate columns because a couple of ops have Metal-specific caveats called out below. Footnoted entries are still functional, just with the limitations the footnote describes.</p>
+<p>* On AMDGPU, Vulkan, and Metal the <code class="docutils literal notranslate"><span class="pre">block.sync_{all,any,count}_nonzero(p)</span></code> ops are <em>emulated</em> via shared memory (one shared <code class="docutils literal notranslate"><span class="pre">i32</span></code> slot + 2 block barriers + a single <code class="docutils literal notranslate"><span class="pre">atomic_add</span></code> per contributing thread) rather than a single hardware-fused barrier-with-reduction. CUDA has the fused NVPTX <code class="docutils literal notranslate"><span class="pre">barrier.cta.red.{and,or,popc}.aligned.all.sync</span></code> family of intrinsics so it stays on the fast path; the other backends do not have a direct analog (in particular, SPIR-V <code class="docutils literal notranslate"><span class="pre">OpGroupNonUniform*</span></code> only operates at subgroup scope reliably across Vulkan + Metal). All three reductions are routed through <code class="docutils literal notranslate"><span class="pre">atomic_add</span></code> rather than <code class="docutils literal notranslate"><span class="pre">atomic_or</span></code> / <code class="docutils literal notranslate"><span class="pre">atomic_and</span></code>: the latter trip a Metal-specific bug where <code class="docutils literal notranslate"><span class="pre">OpAtomicOr</span></code> on threadgroup memory silently no-ops via MoltenVK / SPIRV-Cross. The emulation is correct and portable but costs two <code class="docutils literal notranslate"><span class="pre">block.sync()</span></code>s plus one shared-memory atomic per call instead of a single barrier instruction; if you have an inner loop calling these ops millions of times, consider whether you can batch the predicate before reducing it.</p>
+<p><code class="docutils literal notranslate"><span class="pre">block.radix_rank_match_atomic_or</span></code> is portable across wave32 (CUDA, Vulkan-on-NVIDIA, Metal) and wave64 (AMDGPU - Quadrants pins every AMDGPU target to <code class="docutils literal notranslate"><span class="pre">+wavefrontsize64</span></code>). The match-mask shared-memory region picks its dtype at compile time: <code class="docutils literal notranslate"><span class="pre">i32</span></code> on wave32 (32-lane ballot fits in a single <code class="docutils literal notranslate"><span class="pre">i32</span></code>, with <code class="docutils literal notranslate"><span class="pre">subgroup.lanemask_le</span></code> and <code class="docutils literal notranslate"><span class="pre">clz</span></code> / <code class="docutils literal notranslate"><span class="pre">popcnt</span></code> on <code class="docutils literal notranslate"><span class="pre">u32</span></code>) and <code class="docutils literal notranslate"><span class="pre">i64</span></code> on wave64 (64-lane ballot needs 64 bits, with an inline u64 <code class="docutils literal notranslate"><span class="pre">lanemask_le</span></code> and <code class="docutils literal notranslate"><span class="pre">clz</span></code> / <code class="docutils literal notranslate"><span class="pre">popcnt</span></code> on <code class="docutils literal notranslate"><span class="pre">u64</span></code>). The two paths share steps 1–4 (per-subgroup histograms, column-sum upsweep, block exclusive scan, downsweep) and step 6 (publish bins + exclusive prefix); only the per-key match phase (step 5) diverges. Atomic <code class="docutils literal notranslate"><span class="pre">or</span></code> on <code class="docutils literal notranslate"><span class="pre">i64</span></code> shared memory is native on AMDGPU LDS; wave32 backends never see the <code class="docutils literal notranslate"><span class="pre">i64</span></code> path, so portability does not depend on SPIR-V / Metal supporting 64-bit threadgroup atomics.</p>
+<p>The <code class="docutils literal notranslate"><span class="pre">block.reduce_*</span></code> / <code class="docutils literal notranslate"><span class="pre">block.reduce_all_*</span></code> / <code class="docutils literal notranslate"><span class="pre">block.inclusive_*</span></code> / <code class="docutils literal notranslate"><span class="pre">block.exclusive_*</span></code> ops are <code class="docutils literal notranslate"><span class="pre">value</span></code>-dtype generic - the per-subgroup tree is <code class="docutils literal notranslate"><span class="pre">subgroup.shuffle*</span></code> of <code class="docutils literal notranslate"><span class="pre">value</span></code> and the inter-subgroup staging slot is <code class="docutils literal notranslate"><span class="pre">block.SharedArray(...,</span> <span class="pre">dtype)</span></code>, so any scalar dtype Quadrants supports for buffer / kernel I/O on the active backend is accepted. Practically that is <code class="docutils literal notranslate"><span class="pre">i32</span></code> / <code class="docutils literal notranslate"><span class="pre">i64</span></code> / <code class="docutils literal notranslate"><span class="pre">u32</span></code> / <code class="docutils literal notranslate"><span class="pre">u64</span></code> / <code class="docutils literal notranslate"><span class="pre">f32</span></code> / <code class="docutils literal notranslate"><span class="pre">f64</span></code> on CUDA, AMDGPU, and Vulkan-on-Linux; Metal and MoltenVK on Darwin do not support <code class="docutils literal notranslate"><span class="pre">i64</span></code> / <code class="docutils literal notranslate"><span class="pre">u64</span></code> / <code class="docutils literal notranslate"><span class="pre">f64</span></code> through their MSL/SPIR-V buffer paths, so kernels using those dtypes won’t compile there. Note also that none of the reduce / scan ops use <code class="docutils literal notranslate"><span class="pre">atomic_min</span></code> / <code class="docutils literal notranslate"><span class="pre">atomic_max</span></code> on floats (which would fall back to a CAS loop on every backend) - they reduce via <code class="docutils literal notranslate"><span class="pre">shuffle*</span></code> + per-thread folds in shared memory only.</p>
+<p>Naming note: <code class="docutils literal notranslate"><span class="pre">block.mem_sync()</span></code> was recently renamed to <code class="docutils literal notranslate"><span class="pre">block.mem_fence()</span></code> for consistency with the project’s “fence vs barrier” terminology. The old name is still available as a deprecated alias that emits <code class="docutils literal notranslate"><span class="pre">DeprecationWarning</span></code> on first use; new code should use <code class="docutils literal notranslate"><span class="pre">block.mem_fence()</span></code>.</p>
+</section>
+<section id="barrier-vs-fence-the-distinction-that-matters">
+<h2>Barrier vs fence: the distinction that matters<a class="headerlink" href="#barrier-vs-fence-the-distinction-that-matters" title="Link to this heading">#</a></h2>
+<p>Two of these ops sound similar but have very different semantics, and mixing them up deadlocks the GPU. The summary:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">block.sync()</span></code> is a <strong>thread-converging barrier</strong>. Every thread in the block must reach the call site before any thread proceeds. It also implies a memory fence at block scope.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">block.mem_fence()</span></code> is a <strong>memory fence only</strong>, at block scope. It orders memory operations but does not require thread convergence - it is safe to call from divergent control flow (e.g. inside <code class="docutils literal notranslate"><span class="pre">if</span> <span class="pre">tid</span> <span class="pre">==</span> <span class="pre">0</span></code>).</p></li>
+</ul>
+<p>Concretely:</p>
+<ul class="simple">
+<li><p>CUDA: <code class="docutils literal notranslate"><span class="pre">sync()</span></code> lowers to <code class="docutils literal notranslate"><span class="pre">__syncthreads()</span></code>; <code class="docutils literal notranslate"><span class="pre">mem_fence()</span></code> lowers to <code class="docutils literal notranslate"><span class="pre">__threadfence_block()</span></code> (a pure fence with no convergence requirement).</p></li>
+<li><p>AMDGPU: <code class="docutils literal notranslate"><span class="pre">sync()</span></code> lowers to <code class="docutils literal notranslate"><span class="pre">s_barrier</span></code>; <code class="docutils literal notranslate"><span class="pre">mem_fence()</span></code> lowers to <code class="docutils literal notranslate"><span class="pre">fence</span> <span class="pre">acquire_release</span> <span class="pre">syncscope(&quot;workgroup&quot;)</span></code>.</p></li>
+<li><p>Vulkan / Metal (SPIR-V): <code class="docutils literal notranslate"><span class="pre">sync()</span></code> lowers to <code class="docutils literal notranslate"><span class="pre">workgroupBarrier</span></code>; <code class="docutils literal notranslate"><span class="pre">mem_fence()</span></code> lowers to <code class="docutils literal notranslate"><span class="pre">workgroupMemoryBarrier</span></code>.</p></li>
+</ul>
+<p>Calling <code class="docutils literal notranslate"><span class="pre">sync()</span></code> from a path that not all threads reach (a divergent <code class="docutils literal notranslate"><span class="pre">if</span></code>, an early <code class="docutils literal notranslate"><span class="pre">return</span></code>, etc.) is a classic GPU deadlock and applies to all backends.</p>
+<p>The corresponding distinction at device scope is the grid-scope memory fence (memory fence across the entire grid, no thread synchronization), documented in <a class="reference internal" href="grid.html"><span class="std std-doc">grid</span></a>.</p>
+</section>
+<section id="semantics">
+<h2>Semantics<a class="headerlink" href="#semantics" title="Link to this heading">#</a></h2>
+<section id="block-sync">
+<h3><code class="docutils literal notranslate"><span class="pre">block.sync()</span></code><a class="headerlink" href="#block-sync" title="Link to this heading">#</a></h3>
+<p>A block-wide thread-converging barrier. All threads in the block stop at the call until every thread has reached it; once all have arrived, all proceed. Reads and writes issued before the barrier are visible to other threads in the block after the barrier.</p>
+<ul class="simple">
+<li><p>Lowers to <code class="docutils literal notranslate"><span class="pre">__syncthreads()</span></code> (<code class="docutils literal notranslate"><span class="pre">nvvm_barrier_cta_sync_aligned_all</span></code>) on CUDA, <code class="docutils literal notranslate"><span class="pre">s_barrier</span></code> on AMDGPU, <code class="docutils literal notranslate"><span class="pre">workgroupBarrier</span></code> on SPIR-V.</p></li>
+<li><p>Must be called from uniform control flow within the block. Calling from a divergent branch deadlocks.</p></li>
+</ul>
+</section>
+<section id="block-sync-all-nonzero-predicate-sync-any-nonzero-sync-count-nonzero">
+<h3><code class="docutils literal notranslate"><span class="pre">block.sync_all_nonzero(predicate)</span></code> / <code class="docutils literal notranslate"><span class="pre">sync_any_nonzero</span></code> / <code class="docutils literal notranslate"><span class="pre">sync_count_nonzero</span></code><a class="headerlink" href="#block-sync-all-nonzero-predicate-sync-any-nonzero-sync-count-nonzero" title="Link to this heading">#</a></h3>
+<p>Block-wide barriers that also reduce a per-thread <code class="docutils literal notranslate"><span class="pre">i32</span></code> predicate across the block:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">sync_all_nonzero(p)</span></code> returns non-zero if <code class="docutils literal notranslate"><span class="pre">p</span></code> is non-zero on <strong>every</strong> thread (logical AND).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">sync_any_nonzero(p)</span></code> returns non-zero if <code class="docutils literal notranslate"><span class="pre">p</span></code> is non-zero on <strong>any</strong> thread (logical OR).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">sync_count_nonzero(p)</span></code> returns the number of threads for which <code class="docutils literal notranslate"><span class="pre">p</span></code> is non-zero (popcount).</p></li>
+</ul>
+<p>Each call performs both the synchronization (same convergence requirement as <code class="docutils literal notranslate"><span class="pre">sync()</span></code>) and the reduction.</p>
+<ul class="simple">
+<li><p>On CUDA, this lowers to a single hardware-fused instruction from the NVPTX <code class="docutils literal notranslate"><span class="pre">barrier.cta.red</span></code> family - <code class="docutils literal notranslate"><span class="pre">block_barrier_and_i32</span></code>, <code class="docutils literal notranslate"><span class="pre">block_barrier_or_i32</span></code>, <code class="docutils literal notranslate"><span class="pre">block_barrier_count_i32</span></code>.</p></li>
+<li><p>On AMDGPU, Vulkan, and Metal, there is no direct hardware-fused barrier-with-reduction, so the op is emulated in Quadrants Python (<code class="docutils literal notranslate"><span class="pre">_block_reduce_*_emulated</span></code> in <code class="docutils literal notranslate"><span class="pre">python/quadrants/lang/simt/block.py</span></code>) as: lane 0 zeroes a 1-element <code class="docutils literal notranslate"><span class="pre">SharedArray(i32)</span></code> → <code class="docutils literal notranslate"><span class="pre">block.sync()</span></code> → every thread folds its predicate via <code class="docutils literal notranslate"><span class="pre">qd.atomic_or</span></code> / <code class="docutils literal notranslate"><span class="pre">qd.atomic_add</span></code> → <code class="docutils literal notranslate"><span class="pre">block.sync()</span></code> → every thread reads the broadcasted result. Two block barriers plus one shared-memory atomic per call. See the support-table footnote for the perf trade-off.</p></li>
+</ul>
+</section>
+<section id="block-mem-fence">
+<h3><code class="docutils literal notranslate"><span class="pre">block.mem_fence()</span></code><a class="headerlink" href="#block-mem-fence" title="Link to this heading">#</a></h3>
+<p>A block-scope memory fence. Orders memory operations issued by the calling thread so that prior writes are visible to other threads in the block before any subsequent read by the calling thread can be reordered ahead of the fence. It does <strong>not</strong> synchronize threads - no convergence requirement, so it is safe to call from divergent control flow (e.g. inside <code class="docutils literal notranslate"><span class="pre">if</span> <span class="pre">tid</span> <span class="pre">==</span> <span class="pre">0</span></code>) on every backend.</p>
+<ul>
+<li><p>Lowers to <code class="docutils literal notranslate"><span class="pre">__threadfence_block()</span></code> (<code class="docutils literal notranslate"><span class="pre">nvvm_membar_cta</span></code>) - the intended target - on CUDA, to an LLVM IR <code class="docutils literal notranslate"><span class="pre">fence</span> <span class="pre">acquire_release</span> <span class="pre">syncscope(&quot;workgroup&quot;)</span></code> on AMDGPU (which the AMDGCN backend lowers to the appropriate <code class="docutils literal notranslate"><span class="pre">s_waitcnt</span></code> / cache-flush sequence; emitted via a body-replacement in <code class="docutils literal notranslate"><span class="pre">llvm_context.cpp</span></code> rather than <code class="docutils literal notranslate"><span class="pre">__builtin_amdgcn_fence</span></code>, since the <code class="docutils literal notranslate"><span class="pre">runtime.cpp</span></code> is built with a host-targeted clang that doesn’t know AMDGCN builtins), and to <code class="docutils literal notranslate"><span class="pre">workgroupMemoryBarrier</span></code> on SPIR-V (Vulkan / Metal).</p></li>
+<li><p>Use this when one thread in the block needs to publish data to shared memory and have other threads observe it via polling, without going through a thread-converging barrier. The canonical pattern is a flag-published producer + spin-waiting consumers:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">if</span> <span class="n">tid</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+    <span class="n">shared</span><span class="p">[</span><span class="o">...</span><span class="p">]</span> <span class="o">=</span> <span class="n">computed_value</span>
+    <span class="n">qd</span><span class="o">.</span><span class="n">simt</span><span class="o">.</span><span class="n">block</span><span class="o">.</span><span class="n">mem_fence</span><span class="p">()</span>  <span class="c1"># order the data write before the flag store</span>
+    <span class="n">shared_flag</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1</span>
+<span class="k">else</span><span class="p">:</span>
+    <span class="k">while</span> <span class="n">shared_flag</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="k">pass</span>
+    <span class="n">use</span><span class="p">(</span><span class="n">shared</span><span class="p">[</span><span class="o">...</span><span class="p">])</span>  <span class="c1"># without the fence above, may observe stale shared[...]</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">block.sync()</span></code> does not work here - it deadlocks, because <code class="docutils literal notranslate"><span class="pre">tid</span> <span class="pre">==</span> <span class="pre">0</span></code> and the other threads take divergent paths and never converge at a single call site. <code class="docutils literal notranslate"><span class="pre">block.sync()</span></code> would also be sufficient by itself (it implies a block-scope fence) when the producer and consumers <em>can</em> converge; reach for <code class="docutils literal notranslate"><span class="pre">block.mem_fence()</span></code> specifically when they cannot.</p>
+</li>
+</ul>
+<p>The deprecated alias <code class="docutils literal notranslate"><span class="pre">block.mem_sync()</span></code> calls <code class="docutils literal notranslate"><span class="pre">block.mem_fence()</span></code> and emits a <code class="docutils literal notranslate"><span class="pre">DeprecationWarning</span></code> on first use.</p>
+</section>
+<section id="block-sharedarray-shape-dtype">
+<h3><code class="docutils literal notranslate"><span class="pre">block.SharedArray(shape,</span> <span class="pre">dtype)</span></code><a class="headerlink" href="#block-sharedarray-shape-dtype" title="Link to this heading">#</a></h3>
+<p>Allocates a shared-memory array, scoped to the calling block.</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">shape</span></code>: an <code class="docutils literal notranslate"><span class="pre">int</span></code> (1-D) or a <code class="docutils literal notranslate"><span class="pre">tuple</span></code> / <code class="docutils literal notranslate"><span class="pre">list</span></code> of <code class="docutils literal notranslate"><span class="pre">int</span></code>s (multi-dim). Must be compile-time constants - shared memory is statically allocated per block.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">dtype</span></code>: a scalar Quadrants dtype (<code class="docutils literal notranslate"><span class="pre">qd.f32</span></code>, <code class="docutils literal notranslate"><span class="pre">qd.i32</span></code>, …) or a <code class="docutils literal notranslate"><span class="pre">qd.types.matrix(...)</span></code> / <code class="docutils literal notranslate"><span class="pre">qd.types.vector(...)</span></code> type. Matrix types are flattened to their element tensor type.</p></li>
+</ul>
+<p>Element access uses the standard <code class="docutils literal notranslate"><span class="pre">arr[i]</span></code> / <code class="docutils literal notranslate"><span class="pre">arr[i,</span> <span class="pre">j]</span></code> subscript syntax inside a kernel.</p>
+<p>A worked example with <code class="docutils literal notranslate"><span class="pre">Tile16x16</span></code> interaction is in <a class="reference internal" href="tile.html"><span class="std std-doc">tile</span></a>.</p>
+</section>
+<section id="block-global-thread-idx">
+<h3><code class="docutils literal notranslate"><span class="pre">block.global_thread_idx()</span></code><a class="headerlink" href="#block-global-thread-idx" title="Link to this heading">#</a></h3>
+<p>Returns the global thread index of the calling thread within the kernel launch.</p>
+<p>On CUDA / AMDGPU this lowers to the in-block thread index (<code class="docutils literal notranslate"><span class="pre">nvvm_read_ptx_sreg_tid_x</span></code> / <code class="docutils literal notranslate"><span class="pre">amdgcn_workitem_id_x</span></code>) plus the grid offset that the offload framework adds; on Vulkan / Metal it lowers to <code class="docutils literal notranslate"><span class="pre">globalInvocationId</span></code> (MoltenVK maps this to MSL <code class="docutils literal notranslate"><span class="pre">thread_position_in_grid</span></code>).</p>
+<p>On CUDA / AMDGPU this is the natural way to identify which work-item a thread should process when the kernel uses <code class="docutils literal notranslate"><span class="pre">qd.loop_config(block_dim=...)</span></code> - together with <code class="docutils literal notranslate"><span class="pre">block_dim</span></code>, you can recover the in-block thread index via <code class="docutils literal notranslate"><span class="pre">global_thread_idx()</span> <span class="pre">%</span> <span class="pre">block_dim</span></code>.</p>
+</section>
+<section id="block-thread-idx">
+<h3><code class="docutils literal notranslate"><span class="pre">block.thread_idx()</span></code><a class="headerlink" href="#block-thread-idx" title="Link to this heading">#</a></h3>
+<p>Returns the in-block (workgroup-local) thread index of the calling thread. Available on every supported GPU backend.</p>
+<ul class="simple">
+<li><p>CUDA: <code class="docutils literal notranslate"><span class="pre">nvvm_read_ptx_sreg_tid_x</span></code> (i.e. <code class="docutils literal notranslate"><span class="pre">threadIdx.x</span></code>).</p></li>
+<li><p>AMDGPU: <code class="docutils literal notranslate"><span class="pre">amdgcn_workitem_id_x</span></code>.</p></li>
+<li><p>Vulkan: <code class="docutils literal notranslate"><span class="pre">localInvocationId</span></code> (<code class="docutils literal notranslate"><span class="pre">gl_LocalInvocationID.x</span></code>).</p></li>
+<li><p>Metal: same SPIR-V op as Vulkan; MoltenVK / SPIRV-Cross translates to MSL <code class="docutils literal notranslate"><span class="pre">thread_position_in_threadgroup</span></code>.</p></li>
+</ul>
+<p>This is the thread’s index <em>within its own block / workgroup</em>. To get the across-grid index, use <code class="docutils literal notranslate"><span class="pre">block.global_thread_idx()</span></code>. The historical workaround on CUDA / AMDGPU of recovering the in-block index via <code class="docutils literal notranslate"><span class="pre">global_thread_idx()</span> <span class="pre">%</span> <span class="pre">block_dim</span></code> is still valid but no longer necessary; prefer the direct <code class="docutils literal notranslate"><span class="pre">block.thread_idx()</span></code> call for clarity.</p>
+<p>Today only the X dimension is exposed (1-D blocks). For 2-D / 3-D blocks the calling code should compute the linear index from <code class="docutils literal notranslate"><span class="pre">block.thread_idx()</span></code> and the block-Y / Z dimensions itself, or stick to 1-D blocks (the dominant Quadrants idiom - <code class="docutils literal notranslate"><span class="pre">qd.loop_config(block_dim=N)</span></code> always sets the X extent).</p>
+</section>
+<section id="block-reduce-add-min-max-value-block-dim-dtype">
+<h3><code class="docutils literal notranslate"><span class="pre">block.reduce_{add,min,max}(value,</span> <span class="pre">block_dim,</span> <span class="pre">dtype)</span></code><a class="headerlink" href="#block-reduce-add-min-max-value-block-dim-dtype" title="Link to this heading">#</a></h3>
+<p>Block-scope reductions following the standard two-stage subgroup-reduction strategy: each subgroup reduces its lanes via a <code class="docutils literal notranslate"><span class="pre">shuffle_down</span></code> tree, lane 0 of each subgroup publishes the subgroup aggregate to shared memory, then thread 0 sequentially folds the subgroup aggregates with the same operator. The result is valid in <strong>thread 0 only</strong>; other threads retain partial values. For the broadcast-to-every-thread variants see <code class="docutils literal notranslate"><span class="pre">block.reduce_all_{add,min,max}</span></code> below.</p>
+<p>Arguments:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">value</span></code>: per-thread input.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">block_dim</span></code>: threads per block (compile-time <code class="docutils literal notranslate"><span class="pre">template()</span></code>). Must be a positive multiple of <code class="docutils literal notranslate"><span class="pre">subgroup.group_size()</span></code>, which resolves to 32 on CUDA / Metal / Vulkan-on-NVIDIA and 64 on AMDGPU. Passing a <code class="docutils literal notranslate"><span class="pre">block_dim</span></code> that is not a multiple of the subgroup size raises a compile-time error.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">dtype</span></code>: scalar dtype for the inter-subgroup shared-memory staging slot; must match <code class="docutils literal notranslate"><span class="pre">value</span></code>’s type.</p></li>
+</ul>
+<p>The calling thread’s block-local index is read internally via <code class="docutils literal notranslate"><span class="pre">block.thread_idx()</span></code>; the subgroup size is read from <code class="docutils literal notranslate"><span class="pre">subgroup.group_size()</span></code> at compile time. Neither is plumbed through as an argument.</p>
+<p>Cost: <code class="docutils literal notranslate"><span class="pre">log2(subgroup_size)</span></code> shuffles + 1 shared-memory write/read per subgroup + 1 <code class="docutils literal notranslate"><span class="pre">block.sync()</span></code> + <code class="docutils literal notranslate"><span class="pre">(block_dim</span> <span class="pre">/</span> <span class="pre">subgroup_size)</span> <span class="pre">-</span> <span class="pre">1</span></code> ops on thread 0. When the block is exactly one subgroup the shared-memory path is short-circuited at compile time.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">kern</span><span class="p">(</span><span class="n">src</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">ndim</span><span class="o">=</span><span class="mi">1</span><span class="p">),</span> <span class="n">out</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">ndim</span><span class="o">=</span><span class="mi">1</span><span class="p">)):</span>
+    <span class="n">qd</span><span class="o">.</span><span class="n">loop_config</span><span class="p">(</span><span class="n">block_dim</span><span class="o">=</span><span class="mi">128</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">N</span><span class="p">):</span>
+        <span class="n">agg</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">simt</span><span class="o">.</span><span class="n">block</span><span class="o">.</span><span class="n">reduce_add</span><span class="p">(</span><span class="n">src</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="mi">128</span><span class="p">,</span> <span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">qd</span><span class="o">.</span><span class="n">simt</span><span class="o">.</span><span class="n">block</span><span class="o">.</span><span class="n">thread_idx</span><span class="p">()</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">out</span><span class="p">[</span><span class="n">i</span> <span class="o">//</span> <span class="mi">128</span><span class="p">]</span> <span class="o">=</span> <span class="n">agg</span>
+</pre></div>
+</div>
+<p>A generic <code class="docutils literal notranslate"><span class="pre">block.reduce(value,</span> <span class="pre">block_dim,</span> <span class="pre">op,</span> <span class="pre">dtype)</span></code> is also available for custom associative operators (e.g. bitwise ops, custom monoids). It accepts an <code class="docutils literal notranslate"><span class="pre">op:</span> <span class="pre">template()</span></code> <code class="docutils literal notranslate"><span class="pre">&#64;qd.func</span></code> taking <code class="docutils literal notranslate"><span class="pre">(a,</span> <span class="pre">b)</span></code> and returning the same type as <code class="docutils literal notranslate"><span class="pre">value</span></code>.</p>
+</section>
+<section id="block-reduce-all-add-min-max-value-block-dim-dtype">
+<h3><code class="docutils literal notranslate"><span class="pre">block.reduce_all_{add,min,max}(value,</span> <span class="pre">block_dim,</span> <span class="pre">dtype)</span></code><a class="headerlink" href="#block-reduce-all-add-min-max-value-block-dim-dtype" title="Link to this heading">#</a></h3>
+<p>The broadcast variants of the above. Identical semantics, but the result is published to a one-slot <code class="docutils literal notranslate"><span class="pre">SharedArray</span></code> and read back by every thread after a second <code class="docutils literal notranslate"><span class="pre">block.sync()</span></code>. Use this when downstream code on every thread needs the block-wide aggregate (e.g. normalizing each thread’s value by the block sum). Cost: one extra <code class="docutils literal notranslate"><span class="pre">block.sync()</span></code> plus one shared-memory hop vs. the lane-0-only variants. The corresponding generic form is <code class="docutils literal notranslate"><span class="pre">block.reduce_all(value,</span> <span class="pre">block_dim,</span> <span class="pre">op,</span> <span class="pre">dtype)</span></code>.</p>
+</section>
+<section id="block-inclusive-add-min-max-value-block-dim-dtype">
+<h3><code class="docutils literal notranslate"><span class="pre">block.inclusive_{add,min,max}(value,</span> <span class="pre">block_dim,</span> <span class="pre">dtype)</span></code><a class="headerlink" href="#block-inclusive-add-min-max-value-block-dim-dtype" title="Link to this heading">#</a></h3>
+<p>Block-scope inclusive prefix scans via the standard two-stage subgroup-scan strategy: each subgroup does a Hillis-Steele scan via <code class="docutils literal notranslate"><span class="pre">subgroup</span></code> shuffles, the last lane of each subgroup publishes the subgroup aggregate to shared memory, then every thread sequentially folds the cross-subgroup prefix and applies its own subgroup’s prefix to its scan value. <strong>All threads receive a valid result.</strong> After the call, thread <code class="docutils literal notranslate"><span class="pre">i</span></code> holds <code class="docutils literal notranslate"><span class="pre">op(v[0],</span> <span class="pre">v[1],</span> <span class="pre">...,</span> <span class="pre">v[i])</span></code>.</p>
+<p>Args match <code class="docutils literal notranslate"><span class="pre">block.reduce_add</span></code> (<code class="docutils literal notranslate"><span class="pre">value,</span> <span class="pre">block_dim,</span> <span class="pre">dtype</span></code>). Cost: per-subgroup Hillis-Steele tree (<code class="docutils literal notranslate"><span class="pre">log2(subgroup_size)</span></code> shuffles) + 1 shared-memory write/read per subgroup + 1 <code class="docutils literal notranslate"><span class="pre">block.sync()</span></code> + <code class="docutils literal notranslate"><span class="pre">(block_dim</span> <span class="pre">/</span> <span class="pre">subgroup_size)</span> <span class="pre">-</span> <span class="pre">1</span></code> ops on every thread (the cross-subgroup prefix is computed redundantly to avoid a second barrier). When the block is exactly one subgroup the shared-memory path is short-circuited at compile time.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">kern</span><span class="p">(</span><span class="n">src</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">ndim</span><span class="o">=</span><span class="mi">1</span><span class="p">),</span> <span class="n">out</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">ndim</span><span class="o">=</span><span class="mi">1</span><span class="p">)):</span>
+    <span class="n">qd</span><span class="o">.</span><span class="n">loop_config</span><span class="p">(</span><span class="n">block_dim</span><span class="o">=</span><span class="mi">128</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">N</span><span class="p">):</span>
+        <span class="n">out</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">simt</span><span class="o">.</span><span class="n">block</span><span class="o">.</span><span class="n">inclusive_add</span><span class="p">(</span><span class="n">src</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="mi">128</span><span class="p">,</span> <span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>The corresponding generic form is <code class="docutils literal notranslate"><span class="pre">block.inclusive_scan(value,</span> <span class="pre">block_dim,</span> <span class="pre">op,</span> <span class="pre">dtype)</span></code> for custom monoids.</p>
+</section>
+<section id="block-exclusive-add-min-max-value-block-dim-dtype">
+<h3><code class="docutils literal notranslate"><span class="pre">block.exclusive_{add,min,max}(value,</span> <span class="pre">block_dim,</span> <span class="pre">dtype)</span></code><a class="headerlink" href="#block-exclusive-add-min-max-value-block-dim-dtype" title="Link to this heading">#</a></h3>
+<p>Block-scope exclusive prefix scans. Same strategy and cost profile as <code class="docutils literal notranslate"><span class="pre">inclusive_*</span></code>, but each thread receives the prefix <code class="docutils literal notranslate"><span class="pre">op(v[0],</span> <span class="pre">...,</span> <span class="pre">v[i-1])</span></code> instead - and thread 0 receives the operator’s identity, derived at compile time from <code class="docutils literal notranslate"><span class="pre">value</span></code>’s dtype:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">exclusive_add</span></code>: identity is the additive zero, built as <code class="docutils literal notranslate"><span class="pre">value</span> <span class="pre">-</span> <span class="pre">value</span></code> inside the body. After the call, thread 0 holds <code class="docutils literal notranslate"><span class="pre">0</span></code> in <code class="docutils literal notranslate"><span class="pre">value</span></code>’s dtype.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">exclusive_min</span></code>: identity is <code class="docutils literal notranslate"><span class="pre">+inf</span></code> for real dtypes, <code class="docutils literal notranslate"><span class="pre">np.iinfo(dtype).max</span></code> for integer dtypes (<code class="docutils literal notranslate"><span class="pre">UINT_MAX</span></code> for unsigned, <code class="docutils literal notranslate"><span class="pre">INT_MAX</span></code> for signed). Thread 0 holds this sentinel.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">exclusive_max</span></code>: identity is <code class="docutils literal notranslate"><span class="pre">-inf</span></code> for real dtypes, <code class="docutils literal notranslate"><span class="pre">np.iinfo(dtype).min</span></code> for signed integer dtypes, <code class="docutils literal notranslate"><span class="pre">0</span></code> for unsigned and bool. Thread 0 holds this sentinel.</p></li>
+</ul>
+<p>Mirrors the corresponding <code class="docutils literal notranslate"><span class="pre">subgroup.exclusive_{min,max}</span></code> API: callers no longer pass <code class="docutils literal notranslate"><span class="pre">identity</span></code> for the typed wrappers. Internally <code class="docutils literal notranslate"><span class="pre">exclusive_min</span></code> / <code class="docutils literal notranslate"><span class="pre">exclusive_max</span></code> are plain Python wrappers that introspect the dtype, emit a typed-constant identity Expr, and forward to the generic block scan; the generated IR is identical to the prior hand-supplied form.</p>
+<p>The corresponding generic form is <code class="docutils literal notranslate"><span class="pre">block.exclusive_scan(value,</span> <span class="pre">block_dim,</span> <span class="pre">op,</span> <span class="pre">identity,</span> <span class="pre">dtype)</span></code>, which still requires an explicit <code class="docutils literal notranslate"><span class="pre">identity</span></code> because the operator can be any custom monoid (no portable type-extreme to introspect for arbitrary ops).</p>
+</section>
+<section id="block-radix-rank-match-atomic-or-key-block-dim-radix-bits-bit-start-num-bits-bins-excl-prefix">
+<h3><code class="docutils literal notranslate"><span class="pre">block.radix_rank_match_atomic_or(key,</span> <span class="pre">block_dim,</span> <span class="pre">radix_bits,</span> <span class="pre">bit_start,</span> <span class="pre">num_bits,</span> <span class="pre">bins,</span> <span class="pre">excl_prefix)</span></code><a class="headerlink" href="#block-radix-rank-match-atomic-or-key-block-dim-radix-bits-bit-start-num-bits-bins-excl-prefix" title="Link to this heading">#</a></h3>
+<p>Block-level radix ranking via the atomic-OR match-and-count strategy (the workhorse of an SM90-style onesweep radix sort). Each thread holds one <code class="docutils literal notranslate"><span class="pre">u32</span></code> key; the function returns the key’s stable rank within the block under the digit <code class="docutils literal notranslate"><span class="pre">(key</span> <span class="pre">&gt;&gt;</span> <span class="pre">bit_start)</span> <span class="pre">&amp;</span> <span class="pre">((1</span> <span class="pre">&lt;&lt;</span> <span class="pre">num_bits)</span> <span class="pre">-</span> <span class="pre">1)</span></code>, and writes the per-digit count and exclusive-prefix arrays to two caller-supplied <code class="docutils literal notranslate"><span class="pre">block.SharedArray</span></code> outparams.</p>
+<p>Constraints (currently):</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">block_dim</span></code> must equal <code class="docutils literal notranslate"><span class="pre">1</span> <span class="pre">&lt;&lt;</span> <span class="pre">radix_bits</span></code> (each digit gets exactly one thread for the per-thread bin / exclusive-prefix output). Typical configuration is <code class="docutils literal notranslate"><span class="pre">radix_bits=8,</span> <span class="pre">block_dim=256</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">subgroup.group_size()</span></code> must be 32 (CUDA / Metal / Vulkan-on-NVIDIA) or 64 (AMDGPU). The match path picks its ballot dtype at compile time - <code class="docutils literal notranslate"><span class="pre">i32</span></code> on wave32, <code class="docutils literal notranslate"><span class="pre">i64</span></code> on wave64 - and the function <code class="docutils literal notranslate"><span class="pre">static_assert</span></code>s this at compile time.</p></li>
+<li><p>One key per thread (<code class="docutils literal notranslate"><span class="pre">items_per_thread</span> <span class="pre">=</span> <span class="pre">1</span></code>). Multi-item per thread is a future extension.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">num_bits</span> <span class="pre">&lt;=</span> <span class="pre">radix_bits</span></code>; <code class="docutils literal notranslate"><span class="pre">bit_start</span></code> is the offset of the digit’s low bit.</p></li>
+</ul>
+<p>Args:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">key</span></code>: per-thread <code class="docutils literal notranslate"><span class="pre">u32</span></code> input.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">block_dim</span></code>, <code class="docutils literal notranslate"><span class="pre">radix_bits</span></code>, <code class="docutils literal notranslate"><span class="pre">bit_start</span></code>, <code class="docutils literal notranslate"><span class="pre">num_bits</span></code>: all compile-time <code class="docutils literal notranslate"><span class="pre">template()</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">bins</span></code>: <code class="docutils literal notranslate"><span class="pre">block.SharedArray((1</span> <span class="pre">&lt;&lt;</span> <span class="pre">radix_bits,),</span> <span class="pre">qd.i32)</span></code>. After the call, <code class="docutils literal notranslate"><span class="pre">bins[d]</span></code> holds the count of keys whose digit equals <code class="docutils literal notranslate"><span class="pre">d</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">excl_prefix</span></code>: <code class="docutils literal notranslate"><span class="pre">block.SharedArray((1</span> <span class="pre">&lt;&lt;</span> <span class="pre">radix_bits,),</span> <span class="pre">qd.i32)</span></code>. After the call, <code class="docutils literal notranslate"><span class="pre">excl_prefix[d]</span></code> holds the exclusive prefix sum of <code class="docutils literal notranslate"><span class="pre">bins</span></code> up to digit <code class="docutils literal notranslate"><span class="pre">d</span></code>.</p></li>
+</ul>
+<p>The calling thread’s block-local index is read internally via <code class="docutils literal notranslate"><span class="pre">block.thread_idx()</span></code>.</p>
+<p>Cost: 2 <code class="docutils literal notranslate"><span class="pre">block.sync()</span></code> + a handful of <code class="docutils literal notranslate"><span class="pre">subgroup.sync()</span></code> calls + 1 block exclusive scan + per-key <code class="docutils literal notranslate"><span class="pre">atomic_or</span></code> + leader-only <code class="docutils literal notranslate"><span class="pre">atomic_add</span></code> on shared memory. Shared-memory footprint at the default <code class="docutils literal notranslate"><span class="pre">radix_bits=8</span></code> configuration: 4 KiB <code class="docutils literal notranslate"><span class="pre">i32</span></code> for the per-subgroup offsets + a match-mask region whose dtype is wave-size-specific - 4 KiB <code class="docutils literal notranslate"><span class="pre">i32</span></code> on wave32 (8 subgroups × 256 digits × 4 B) or 8 KiB <code class="docutils literal notranslate"><span class="pre">i64</span></code> on wave64 (4 subgroups × 256 digits × 8 B). So 8 KiB total on wave32, 12 KiB total on wave64.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">kern</span><span class="p">(</span><span class="n">keys_in</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">ndim</span><span class="o">=</span><span class="mi">1</span><span class="p">),</span> <span class="n">ranks_out</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">ndim</span><span class="o">=</span><span class="mi">1</span><span class="p">)):</span>
+    <span class="n">qd</span><span class="o">.</span><span class="n">loop_config</span><span class="p">(</span><span class="n">block_dim</span><span class="o">=</span><span class="mi">256</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">256</span><span class="p">):</span>
+        <span class="n">bins</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">simt</span><span class="o">.</span><span class="n">block</span><span class="o">.</span><span class="n">SharedArray</span><span class="p">((</span><span class="mi">256</span><span class="p">,),</span> <span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">)</span>
+        <span class="n">excl</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">simt</span><span class="o">.</span><span class="n">block</span><span class="o">.</span><span class="n">SharedArray</span><span class="p">((</span><span class="mi">256</span><span class="p">,),</span> <span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">)</span>
+        <span class="n">ranks_out</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">simt</span><span class="o">.</span><span class="n">block</span><span class="o">.</span><span class="n">radix_rank_match_atomic_or</span><span class="p">(</span>
+            <span class="n">keys_in</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="mi">256</span><span class="p">,</span> <span class="mi">8</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">8</span><span class="p">,</span> <span class="n">bins</span><span class="p">,</span> <span class="n">excl</span>
+        <span class="p">)</span>
+</pre></div>
+</div>
+<p>The function inserts the necessary <code class="docutils literal notranslate"><span class="pre">block.sync()</span></code> retires before returning, so callers can read <code class="docutils literal notranslate"><span class="pre">bins</span></code> / <code class="docutils literal notranslate"><span class="pre">excl_prefix</span></code> immediately after the call without an extra barrier.</p>
+</section>
+</section>
+<section id="related">
+<h2>Related<a class="headerlink" href="#related" title="Link to this heading">#</a></h2>
+<ul class="simple">
+<li><p><a class="reference internal" href="grid.html"><span class="std std-doc">grid</span></a> - the device-scope counterpart of <code class="docutils literal notranslate"><span class="pre">block.mem_fence()</span></code>. For coordination within a single block, prefer <code class="docutils literal notranslate"><span class="pre">block.mem_fence()</span></code> - it is cheaper.</p></li>
+<li><p><a class="reference internal" href="parallelization.html"><span class="std std-doc">parallelization</span></a> - kernel-launch and grid-stride patterns.</p></li>
+<li><p><a class="reference internal" href="subgroup.html"><span class="std std-doc">subgroup</span></a> - primitives that operate within a single subgroup (warp / wavefront), one tier below block scope.</p></li>
+<li><p><a class="reference internal" href="tile.html"><span class="std std-doc">tile</span></a> - <code class="docutils literal notranslate"><span class="pre">Tile16x16</span></code> and <code class="docutils literal notranslate"><span class="pre">Tile32x32</span></code> register-resident tiles, built on <code class="docutils literal notranslate"><span class="pre">subgroup.shuffle</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">qd.atomic_add</span></code> / <code class="docutils literal notranslate"><span class="pre">qd.atomic_min</span></code> / … - global-memory atomics, the other common cross-block coordination mechanism.</p></li>
+</ul>
+</section>
+</section>
+
+
+                </article>
+              
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+    <a class="left-prev"
+       href="atomics.html"
+       title="previous page">
+      <i class="fa-solid fa-angle-left"></i>
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">previous</p>
+        <p class="prev-next-title">Atomics</p>
+      </div>
+    </a>
+    <a class="right-next"
+       href="grid.html"
+       title="next page">
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">next</p>
+        <p class="prev-next-title">Grid primitives</p>
+      </div>
+      <i class="fa-solid fa-angle-right"></i>
+    </a>
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+                <dialog id="pst-secondary-sidebar-modal"></dialog>
+                <div id="pst-secondary-sidebar" class="bd-sidebar-secondary bd-toc"><div class="sidebar-secondary-items sidebar-secondary__inner">
+
+
+  <div class="sidebar-secondary-item">
+<div
+    id="pst-page-navigation-heading-2"
+    class="page-toc tocsection onthispage">
+    <i class="fa-solid fa-list"></i> On this page
+  </div>
+  <nav id="pst-page-toc-nav" class="page-toc" aria-labelledby="pst-page-navigation-heading-2">
+    <ul class="pst-show_toc_level nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#what-s-available">What’s available</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#barrier-vs-fence-the-distinction-that-matters">Barrier vs fence: the distinction that matters</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#semantics">Semantics</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#block-sync"><code class="docutils literal notranslate"><span class="pre">block.sync()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#block-sync-all-nonzero-predicate-sync-any-nonzero-sync-count-nonzero"><code class="docutils literal notranslate"><span class="pre">block.sync_all_nonzero(predicate)</span></code> / <code class="docutils literal notranslate"><span class="pre">sync_any_nonzero</span></code> / <code class="docutils literal notranslate"><span class="pre">sync_count_nonzero</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#block-mem-fence"><code class="docutils literal notranslate"><span class="pre">block.mem_fence()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#block-sharedarray-shape-dtype"><code class="docutils literal notranslate"><span class="pre">block.SharedArray(shape,</span> <span class="pre">dtype)</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#block-global-thread-idx"><code class="docutils literal notranslate"><span class="pre">block.global_thread_idx()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#block-thread-idx"><code class="docutils literal notranslate"><span class="pre">block.thread_idx()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#block-reduce-add-min-max-value-block-dim-dtype"><code class="docutils literal notranslate"><span class="pre">block.reduce_{add,min,max}(value,</span> <span class="pre">block_dim,</span> <span class="pre">dtype)</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#block-reduce-all-add-min-max-value-block-dim-dtype"><code class="docutils literal notranslate"><span class="pre">block.reduce_all_{add,min,max}(value,</span> <span class="pre">block_dim,</span> <span class="pre">dtype)</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#block-inclusive-add-min-max-value-block-dim-dtype"><code class="docutils literal notranslate"><span class="pre">block.inclusive_{add,min,max}(value,</span> <span class="pre">block_dim,</span> <span class="pre">dtype)</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#block-exclusive-add-min-max-value-block-dim-dtype"><code class="docutils literal notranslate"><span class="pre">block.exclusive_{add,min,max}(value,</span> <span class="pre">block_dim,</span> <span class="pre">dtype)</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#block-radix-rank-match-atomic-or-key-block-dim-radix-bits-bit-start-num-bits-bins-excl-prefix"><code class="docutils literal notranslate"><span class="pre">block.radix_rank_match_atomic_or(key,</span> <span class="pre">block_dim,</span> <span class="pre">radix_bits,</span> <span class="pre">bit_start,</span> <span class="pre">num_bits,</span> <span class="pre">bins,</span> <span class="pre">excl_prefix)</span></code></a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#related">Related</a></li>
+</ul>
+  </nav></div>
+
+  <div class="sidebar-secondary-item">
+
+  <div class="tocsection sourcelink">
+    <a href="../_sources/user_guide/block.md.txt">
+      <i class="fa-solid fa-file-lines"></i> Show Source
+    </a>
+  </div>
+</div>
+
+</div></div>
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+          </footer>
+        
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script defer src="../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5"></script>
+<script defer src="../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5"></script>
+
+  <footer class="bd-footer">
+<div class="bd-footer__inner bd-page-width">
+  
+    <div class="footer-items__start">
+      
+        <div class="footer-item">
+
+  <p class="copyright">
+    
+      © Copyright 2025 Genesis AI Inc.
+      <br/>
+    
+  </p>
+</div>
+      
+        <div class="footer-item">
+
+  <p class="sphinx-version">
+    Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 8.1.3.
+    <br/>
+  </p>
+</div>
+      
+    </div>
+  
+  
+  
+    <div class="footer-items__end">
+      
+        <div class="footer-item">
+<p class="theme-version">
+  <!-- # L10n: Setting the PST URL as an argument as this does not need to be localized -->
+  Built with the <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a> 0.19.0.
+</p></div>
+      
+    </div>
+  
+</div>
+
+  </footer>
+  </body>
+</html>
