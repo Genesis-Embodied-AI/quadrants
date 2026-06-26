@@ -22,7 +22,7 @@ All atomic ops follow the same shape: `qd.atomic_op(x, y)` performs `x = op(x, y
 
 A few cross-cutting notes that the cells above abbreviate:
 
-- **`atomic_sub` is not a separate op in the IR.** `quadrants/ir/frontend_ir.cpp::AtomicOpExpression::flatten` rewrites every `atomic_sub(x, y)` into `atomic_add(x, -y)` before codegen sees it, so per-backend support and per-dtype behaviour are exactly those of `atomic_add`.
+- **`atomic_sub` is not a separate op in the IR.** `quadrants/ir/frontend_ir.cpp::AtomicOpExpression::flatten` rewrites every `atomic_sub(x, y)` into `atomic_add(x, -y)` before codegen sees it, so per-backend support and per-dtype behavior are exactly those of `atomic_add`.
 - **CAS-loop ops are noticeably slower than native atomics**, especially under contention — every contending thread retries the load + compare-exchange until it wins. Prefer pre-aggregating into a register or shared array and issuing a single atomic at the end of the block where possible.
 - **f16 floats always use a CAS loop** (no native f16 atomic on any backend except SPIR-V with the right capability bit).
 - **On CPU, "native" does not guarantee a single machine instruction.** On x86 and other architectures without hardware float atomics, the compiler backend lowers native float `atomic_add` (and integer `min` / `max`) to a CAS loop in machine code. Under high contention the performance is similar to the explicit "CAS" entries; the difference is that "native" ops benefit from hardware acceleration where available.
@@ -71,7 +71,7 @@ Bitwise atomics. Integer dtypes only — passing `f32` / `f64` raises a type err
 
 ### `qd.atomic_sub(x, y)` / `qd.atomic_mul(x, y)`
 
-Atomic subtract and atomic multiply. `atomic_sub` is rewritten to `atomic_add(x, -y)` at IR-construction time (`quadrants/ir/frontend_ir.cpp::AtomicOpExpression::flatten`), so its per-backend behaviour is identical to `atomic_add`. `atomic_mul` always lowers to a CAS loop - no LLVM AtomicRMW or SPIR-V `OpAtomic*` op corresponds to multiply - and is intentionally not heavily optimised; prefer reducing to a different scheme on hot paths.
+Atomic subtract and atomic multiply. `atomic_sub` is rewritten to `atomic_add(x, -y)` at IR-construction time (`quadrants/ir/frontend_ir.cpp::AtomicOpExpression::flatten`), so its per-backend behavior is identical to `atomic_add`. `atomic_mul` always lowers to a CAS loop - no LLVM AtomicRMW or SPIR-V `OpAtomic*` op corresponds to multiply - and is intentionally not heavily optimized; prefer reducing to a different scheme on hot paths.
 
 ### `qd.atomic_exchange(x, y)`
 
@@ -149,11 +149,11 @@ val = qd.volatile_load(target)
 | Backend          | Lowering                                                                                  |
 |------------------|-------------------------------------------------------------------------------------------|
 | CUDA             | LLVM `load volatile` → PTX `ld.volatile.global`.                                          |
-| AMDGPU           | LLVM `load volatile` → unhoistable `global_load_*` (the optimiser is inhibited from forwarding / merging). |
+| AMDGPU           | LLVM `load volatile` → unhoistable `global_load_*` (the optimizer is inhibited from forwarding / merging). |
 | Vulkan / Metal   | SPIR-V `OpLoad` with the `Volatile` `MemoryAccess` mask, propagated through SPIRV-Cross to a re-read on every use in the generated MSL / GLSL. |
-| CPU (x86_64)     | LLVM `load volatile` (the optimiser cannot hoist or merge it; the runtime cost is identical to an ordinary load on x86). |
+| CPU (x86_64)     | LLVM `load volatile` (the optimizer cannot hoist or merge it; the runtime cost is identical to an ordinary load on x86). |
 
-Quadrants additionally suppresses the optimisations that would otherwise let an aliased rewrite slip past codegen:
+Quadrants additionally suppresses the optimizations that would otherwise let an aliased rewrite slip past codegen:
 
 - `cache_loop_invariant_global_vars` does not hoist a volatile load out of an enclosing loop.
 - `simplify` does not replace a volatile load with the value of an earlier load of the same address.
@@ -199,7 +199,7 @@ The decoupled-look-back scan in [grid](grid.md) shows the full pattern.
 
 Every `qd.atomic_*` is emitted at **device-wide scope**: visible to all threads on the GPU executing the kernel, but not required to be coherent with the host CPU mid-kernel. The host only observes results once the kernel completes, at which point the launcher's stream-sync flushes everything regardless. Choosing device scope (rather than the strongest "system" scope) lets every backend lower the op to a single hardware atomic instruction instead of a software CAS retry loop, which matters for correctness as much as for speed: under heavy contention, a CAS loop on a non-converging op like `atomic_xor` can livelock.
 
-You don't normally need to think about scope as a user. It's listed here so the per-backend behaviour is explicit:
+You don't normally need to think about scope as a user. It's listed here so the per-backend behavior is explicit:
 
 | Backend                 | Scope spelling in the IR          |
 |-------------------------|-----------------------------------|

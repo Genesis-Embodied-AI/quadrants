@@ -56,9 +56,9 @@ void print_all_units() {
   std::cout << all_units << " units in all." << std::endl;
 }
 
-void export_misc(py::module &m) {
-  py::class_<Config>(m, "Config");  // NOLINT(bugprone-unused-raii)
-  py::register_exception_translator([](std::exception_ptr p) {
+void export_misc(nb::module_ &m) {
+  nb::class_<Config>(m, "Config");  // NOLINT(bugprone-unused-raii)
+  nb::register_exception_translator([](const std::exception_ptr &p, void *) {
     try {
       if (p)
         std::rethrow_exception(p);
@@ -67,11 +67,11 @@ void export_misc(py::module &m) {
     }
   });
 
-  py::class_<Task, std::shared_ptr<Task>>(m, "Task")
+  nb::class_<Task>(m, "Task")
       .def("initialize", &Task::initialize)
       .def("run", static_cast<std::string (Task::*)(const std::vector<std::string> &)>(&Task::run));
 
-  py::class_<Benchmark, std::shared_ptr<Benchmark>>(m, "Benchmark")
+  nb::class_<Benchmark>(m, "Benchmark")
       .def("run", &Benchmark::run)
       .def("test", &Benchmark::test)
       .def("initialize", &Benchmark::initialize);
@@ -143,7 +143,7 @@ void export_misc(py::module &m) {
   m.def("with_vulkan", []() { return false; });
 #endif
 
-  py::class_<HackedSignalRegister>(m, "HackedSignalRegister").def(py::init<>());
+  nb::class_<HackedSignalRegister>(m, "HackedSignalRegister").def(nb::init<>());
 }
 
 }  // namespace quadrants

@@ -9,8 +9,10 @@
 
 namespace quadrants {
 
-PYBIND11_MODULE(quadrants_python, m) {
+NB_MODULE(quadrants_python, m) {
   m.doc() = "quadrants_python";
+
+  register_py_exception_translator();
 
   for (auto &kv : InterfaceHolder::get_instance()->methods) {
     kv.second(&m);
