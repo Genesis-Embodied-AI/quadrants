@@ -287,6 +287,13 @@ void *GraphManager::add_kernel_node(void *graph,
   return node;
 }
 
+void *GraphManager::add_empty_node(void *graph, const std::vector<void *> &deps) {
+  QD_ASSERT(!deps.empty());
+  void *node = nullptr;
+  CUDADriver::get_instance().graph_add_empty_node(&node, graph, deps.data(), deps.size());
+  return node;
+}
+
 unsigned long long GraphManager::create_cond_handle(void *graph) {
   void *cu_ctx = CUDAContext::get_instance().get_context();
   unsigned long long handle = 0;
@@ -393,6 +400,68 @@ void GraphManager::build_level(int parent_id,
       build_level(child, child_body, cursor, run_end, tasks, levels, cond_handles, cuda_module, cached, total_nodes);
       // Subsequent siblings in this body depend on the conditional node.
       prev_node = cond_node;
+      cursor = run_end;
+      continue;
+    }
+
+    // --- A qd.graph_parallel_context() fork/join region: a contiguous run of this level's direct, non-checkpoint
+    // tasks tagged with a nonzero stream_parallel_group_id (set by qd.graph_parallel()). Each distinct group id is one
+    // qd.graph_parallel section; the qd.graph_parallel sections fork from the region's entry (`prev_node`), run their
+    // tasks in order, and join into a single empty node so downstream work waits for all of them. CUDA's graph
+    // executor schedules the independent qd.graph_parallel section chains on separate streams -> real overlap.
+    //
+    // The run is bounded to a single region by graph_parallel_region_id: two qd.graph_parallel_context() regions
+    // written back-to-back (no serial task between them to break the run) carry distinct region ids, so each builds
+    // its own fork/join with its own join node. Without this guard the second region's sections would fork from the
+    // same entry as the first's and could run concurrently with -- and race -- the first region's work. ---
+    if (tasks[cursor].stream_parallel_group_id != 0 && tasks[cursor].checkpoint_id < 0) {
+      const int region_id = tasks[cursor].graph_parallel_region_id;
+      int run_end = cursor;
+      while (run_end < end && tasks[run_end].graph_do_while_level_id == parent_id && tasks[run_end].checkpoint_id < 0 &&
+             tasks[run_end].stream_parallel_group_id != 0 && tasks[run_end].graph_parallel_region_id == region_id) {
+        run_end++;
+      }
+      // Bucket the run's tasks by qd.graph_parallel section id, preserving first-seen (declaration) order.
+      std::vector<int> group_ids;
+      std::vector<std::vector<int>> parallel_sections;
+      for (int t = cursor; t < run_end; t++) {
+        const int g = tasks[t].stream_parallel_group_id;
+        int idx = -1;
+        for (int k = 0; k < (int)group_ids.size(); k++) {
+          if (group_ids[k] == g) {
+            idx = k;
+            break;
+          }
+        }
+        if (idx < 0) {
+          idx = (int)group_ids.size();
+          group_ids.push_back(g);
+          parallel_sections.emplace_back();
+        }
+        parallel_sections[idx].push_back(t);
+      }
+      void *ctx_ptr = &cached.persistent_ctx;
+      std::vector<void *> tails;
+      tails.reserve(parallel_sections.size());
+      for (auto &ps : parallel_sections) {
+        void *bp = prev_node;  // every qd.graph_parallel section forks from the region entry dependency
+        for (int t : ps) {
+          bp = add_kernel_node(target_graph, bp, cuda_module->lookup_function(tasks[t].name),
+                               (unsigned int)tasks[t].grid_dim, (unsigned int)tasks[t].block_dim,
+                               (unsigned int)tasks[t].dynamic_shared_array_bytes, &ctx_ptr);
+          ++total_nodes;
+        }
+        tails.push_back(bp);
+      }
+      // Join. A region with a single qd.graph_parallel section (e.g. an optional qd.graph_parallel section
+      // compiled out) has nothing to join, so just continue the chain from its tail; otherwise collect all
+      // tails into one empty successor node.
+      if (tails.size() == 1) {
+        prev_node = tails[0];
+      } else {
+        prev_node = add_empty_node(target_graph, tails);
+        ++total_nodes;
+      }
       cursor = run_end;
       continue;
     }

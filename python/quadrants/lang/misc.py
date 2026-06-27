@@ -12,6 +12,7 @@ from quadrants._lib.utils import get_os_name
 from quadrants.lang import impl, util
 from quadrants.lang.checkpoint import checkpoint
 from quadrants.lang.expr import Expr
+from quadrants.lang.graph_parallel import graph_parallel, graph_parallel_context
 from quadrants.lang.graph_status import GraphStatus
 from quadrants.lang.impl import axes, get_runtime
 from quadrants.profiler.kernel_profiler import get_default_kernel_profiler
@@ -745,7 +746,7 @@ def graph_do_while(condition) -> bool:
     iteration). The one structural rule is that a ``qd.graph_do_while`` ``while``-loop may appear only at the kernel top
     level or directly inside another ``graph_do_while`` body, not inside a ``for``-loop.
 
-    This function should not be called directly at runtime; it is recognised and transformed during AST compilation.
+    This function should not be called directly at runtime; it is recognized and transformed during AST compilation.
     Requires ``@qd.kernel(graph=True)``.
     """
     return bool(condition)
@@ -890,6 +891,8 @@ __all__ = [
     "GraphStatus",
     "checkpoint",
     "graph_do_while",
+    "graph_parallel_context",
+    "graph_parallel",
     "loop_config",
     "global_thread_idx",
     "assume_in_range",

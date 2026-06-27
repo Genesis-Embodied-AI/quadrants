@@ -320,6 +320,8 @@ void export_lang(nb::module_ &m) {
       .def("reset_snode_access_flag", &ASTBuilder::reset_snode_access_flag)
       .def("begin_stream_parallel", &ASTBuilder::begin_stream_parallel)
       .def("end_stream_parallel", &ASTBuilder::end_stream_parallel)
+      .def("begin_graph_parallel_context", &ASTBuilder::begin_graph_parallel_context)
+      .def("end_graph_parallel_context", &ASTBuilder::end_graph_parallel_context)
       .def("set_graph_do_while_level_id", &ASTBuilder::set_graph_do_while_level_id)
       .def("begin_checkpoint", &ASTBuilder::begin_checkpoint)
       .def("end_checkpoint", &ASTBuilder::end_checkpoint);

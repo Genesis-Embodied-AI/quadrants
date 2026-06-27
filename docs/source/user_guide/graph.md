@@ -4,15 +4,16 @@ Graphs reduce kernel launch overhead by capturing a sequence of GPU operations i
 
 ## Backend support
 
-`graph=True` and `graph_do_while` run on every backend. They are *hardware accelerated* on CUDA (via CUDA graphs) and AMDGPU (via HIP graphs); `graph_do_while` additionally requires CUDA SM 9.0+ / Hopper for its hardware-accelerated path. On other backends, `graph=True` is silently ignored and the kernel runs via the normal launch path, and `graph_do_while` falls back to a host-side do-while loop that copies the condition value GPU → host each iteration (causing a pipeline stall). `qd.checkpoint` gating runs entirely on the device on every GPU backend; only the CPU backend uses host-side gating.
+`graph=True` and `graph_do_while` run on every backend. They are *hardware accelerated* on CUDA (via CUDA graphs) and AMDGPU (via HIP graphs); `graph_do_while` additionally requires [CUDA SM 9.0+](https://developer.nvidia.com/cuda/gpus) for its hardware-accelerated path. On other backends, `graph=True` is silently ignored and the kernel runs via the normal launch path, and `graph_do_while` falls back to a host-side do-while loop. `qd.checkpoint` gating runs entirely on the device on every GPU backend.
 
 | Feature | `qd.cuda` SM 9.0+ | `qd.cuda` < SM 9.0 | `qd.amdgpu` | `qd.metal` | `qd.vulkan` | `qd.cpu` |
 | --- | --- | --- | --- | --- | --- | --- |
 | `graph=True` | hardware accelerated | hardware accelerated | hardware accelerated | runs (no acceleration) | runs (no acceleration) | runs (no acceleration) |
 | `qd.graph_do_while` | hardware accelerated | host fallback | host fallback | host fallback | host fallback | host fallback |
 | `qd.checkpoint` | GPU-side | GPU-side | GPU-side | GPU-side | GPU-side | host-side |
+| `qd.graph_parallel_context` / `qd.graph_parallel` (sections) | concurrent | concurrent | runs serially | runs serially | runs serially | runs serially |
 
-AMDGPU `graph_do_while` falls back to the host-side loop because HIP does not currently expose conditional / while graph nodes (as of ROCm 7.2).
+AMDGPU `graph_do_while` falls back to a host-side loop because HIP does not currently expose conditional / while graph nodes (as of ROCm 7.2).
 
 Nested and sibling `graph_do_while` loops (and mixing `graph_do_while` with top-level `for`-loops) are **experimental** for now — see [Nested loops and mixing with for-loops](#nested-loops-and-mixing-with-for-loops).
 
@@ -44,7 +45,7 @@ my_kernel(x, y)  # first call: builds and caches the graph
 my_kernel(x, y)  # subsequent calls: replays the cached graph
 ```
 
-This works the same way on CUDA and AMDGPU. The cache is keyed per (compiled-kernel-specialization, launch-id), so different template instantiations (different field bindings, etc.) get their own cached graph.
+This works the same way on CUDA and AMDGPU.
 
 ### Restrictions
 
@@ -122,7 +123,7 @@ def converge(x: qd.types.ndarray(qd.f32, ndim=1),
 
 ### Do-while semantics
 
-`graph_do_while` has **do-while** semantics: the kernel body always executes at least once before the condition is checked. This matches the behavior of CUDA conditional while nodes. The flag value must be >= 1 at launch time. Passing 0 with a kernel that decrements the counter will cause an infinite loop.
+`graph_do_while` has **do-while** semantics: the kernel body always executes at least once before the condition is checked. The flag value must be >= 1 at launch time. Passing 0 with a kernel that decrements the counter will cause an infinite loop.
 
 ### ndarray vs field
 
@@ -161,7 +162,7 @@ Note that `qd.func`'s are inlined, so you can freely factorize these structures 
 
 ### Restrictions
 
-- The counter ndarray may be swapped between calls: the cached graph reads each counter through an indirection slot that is refreshed on every launch, so passing a different ndarray (or alternating between several) replays the cached graph without rebuilding it.
+- The counter ndarray may be swapped between calls. Passing a different ndarray (or alternating between several) replays the cached graph without rebuilding it.
 
 ### Caveats
 
@@ -179,7 +180,7 @@ Therefore on unsupported platforms, you might consider creating a second impleme
 
 ## Checkpoints with `qd.checkpoint` *(experimental)*
 
-> **Experimental.** `qd.checkpoint`, `qd.GraphStatus`, and `kernel.resume(from_checkpoint=...)` are experimental APIs. The shape of the public surface (the context-manager signature, the `@qd.kernel(checkpoints=True)` flag, the `GraphStatus` fields, the host-side resume loop, the error messages, and the cross-backend lowering details) may change in any future release without a deprecation cycle.
+> **Experimental.** `qd.checkpoint`, `qd.GraphStatus`, and `kernel.resume(from_checkpoint=...)` are experimental APIs. The shape of the public surface (the context-manager signature, the `@qd.kernel(checkpoints=True)` flag, the `GraphStatus` fields, the host-side resume loop, the error messages, and the cross-backend compilation details) may change in any future release without a deprecation cycle.
 
 `qd.checkpoint` lets a graph kernel break partway through, surface a reason to the host, let the host fix things up, and resume from the same location on the next launch. An example use-case is an algorithm implemented as a graph that may need to allocate additional memory partway through, where the operations in the graph are in-place, and therefore cannot be rerun without changing/corrupting the output, and therefore for which simply retrying the whole graph from the start is not an option.
 
@@ -254,7 +255,7 @@ while status.yielded:
 
 ### Restrictions
 
-- Must be used inside `@qd.kernel(graph=True, checkpoints=True)`. Without the flag, `qd.checkpoint(...)` raises `QuadrantsSyntaxError` at compile time with a fix-it pointing at `checkpoints=True`.
+- Must be used inside `@qd.kernel(graph=True, checkpoints=True)`. Without the flag, `qd.checkpoint(...)` raises `QuadrantsSyntaxError` at compile time.
 - `cp_id` must be an int literal or an `IntEnum` value, and must be unique across the kernel.
 - `yield_on=` must be a kernel parameter that is a 0-d `qd.types.ndarray(qd.i32, ndim=0)`; expressions are not supported.
 - Checkpoints cannot be nested inside other checkpoints. Checkpoints inside a `qd.graph_do_while` body are fine.
@@ -268,7 +269,7 @@ while status.yielded:
           arr[i] = arr[i] + 1
   ```
 
-The restriction is by design: each top-level statement inside a checkpoint becomes its own GPU task / graph node, so silently wrapping bare statements would hide a sequence of N field writes ballooning into N kernel launches. Forcing the user to write the `for`-wrap themselves keeps the lowering visible and gives a single obvious place to fuse multiple writes into one task by sharing a single wrapper.
+The restriction is by design: each top-level statement inside a checkpoint becomes its own GPU task / graph node, so silently wrapping bare statements would hide a sequence of N field writes ballooning into N kernel launches. Forcing the user to write the `for`-wrap themselves keeps the mapping to GPU tasks visible and gives a single obvious place to fuse multiple writes into one task by sharing a single wrapper.
 
 ## Performance
 
@@ -393,11 +394,9 @@ k1(a, count)
 
 The recommendation is to use the graph do while here anyway, if you need it for any platform, in order to ensure the code is compact and maintainable.
 
-If you do want fixed-size for loops to run optimally on unsupported hardware platforms, we could add a specializd `qd.graph_range_for` function. This would:
-- on graph-do-while-supported hardware: handle adding the additional increment kernel
-- on graph-do-while-unsupported hardware: handle running the loop entirely on the host-side, to avoid adding a gpu pipeline stall
+If you need fixed-size for loops to run optimally on hardware without graph-do-while support, consider opening a PR for a dedicated helper that picks the host-side fallback automatically on those backends.
 
-In practice, for our own kernels, i.e. in genesis-world, they largely fall under the do while formulation, see the previous section. However, also have some that used to be do while, but have been migrated to an optimized fixed-size, see next section.
+In practice, most such loops fall under the do while formulation (see the previous section). Some that were originally do while have since been migrated to an optimized fixed-size form (see the next section).
 
 ### A while loop, conditional on a device-side scalar tensor, that has been optimized into a fixed-size for loop
 
@@ -465,4 +464,68 @@ In this case, our recommendation is:
 - use graph do while anyway, if you need it on any platform
     - this will ensure your code is compact and maintainable
 - if you need optimum 100% performance on unsupported platforms, then consider PRing onto quadrants an optimized graph implementation for your target platform
-    - for example it could somehow run MAX_ITER iterations anyway, similar to the earlier hand-rolled version, but via the graph abstraction, hence allowing the code to be compact, cross-platform, and also optimally fast
+
+## `qd.graph_parallel` sections with `qd.graph_parallel_context` *(experimental)*
+
+A `with qd.graph_parallel_context():` region lets you declare independent stages so the graph runs them concurrently.
+
+`qd.graph_parallel_context` is honored by the graph builder so it composes with `graph=True` and `graph_do_while`.
+
+```python
+@qd.kernel(graph=True)
+def step(...):
+    while qd.graph_do_while(ncond):
+        assemble_shared(...)                 # serial: feeds both `qd.graph_parallel` sections
+
+        with qd.graph_parallel_context():    # fork: `qd.graph_parallel` sections run concurrently
+            with qd.graph_parallel():            # point-triangle contacts
+                pt_assemble(...)
+                pt_hessian(...)
+            with qd.graph_parallel():            # edge-edge contacts (independent of pt)
+                ee_assemble(...)
+                ee_hessian(...)
+        # join: everything below waits for BOTH `qd.graph_parallel` sections to finish
+        merge_hessians(...)
+        precondition(...)
+```
+
+### Semantics
+
+- **Fork / join.** Every `qd.graph_parallel` section in the region forks from the work that precedes the region. All `qd.graph_parallel` sections must finish before any work *after* the region begins (the join).
+- **`qd.graph_parallel` sections are independent — you guarantee it.** Calls *within* a `qd.graph_parallel` section keep their program order, but calls in *different* `qd.graph_parallel` sections have no ordering. The `qd.graph_parallel` sections must be data-race free with respect to one another: no `qd.graph_parallel` section may read what another writes, and no two `qd.graph_parallel` sections may write the same memory. Quadrants does not check this; getting it wrong gives nondeterministic results.
+
+### Generating `qd.graph_parallel` sections from a compile-time sequence
+
+`qd.graph_parallel` sections do not have to be written out one by one. A `for ... in qd.static(...)` loop is unrolled at compile time, so each iteration that contains a `with qd.graph_parallel():` becomes its own section — handy for forking one section per element of a static list (e.g. per contact type):
+
+(Note: See [compound_types.md](compound_types.md) for qd.data_oriented description)
+```python
+@qd.data_oriented
+class Solver:
+    def __init__(self):
+        self.funcs = [self._assemble_pt, self._assemble_ee]   # static list of @qd.func members
+
+    @qd.kernel(graph=True)
+    def step(self):
+        with qd.graph_parallel_context():
+            for i in qd.static(range(len(self.funcs))):        # unrolls to one section per func
+                with qd.graph_parallel():
+                    self.funcs[i]()
+```
+
+The loop **must** be a `qd.static(...)` loop (its trip count is known at compile time). A plain runtime `for i in range(n):` is rejected — a runtime loop cannot be unrolled into independent sections.
+
+### Restrictions (enforced at kernel compile time)
+
+- `qd.graph_parallel_context` may contain only `with qd.graph_parallel():` blocks, optionally wrapped in `if qd.static(...)` (so an optional `qd.graph_parallel` section can be compiled in or out — e.g. enabling edge-edge contacts only when a feature flag is set) or `for ... in qd.static(...)` loops (generate one `qd.graph_parallel` section per element of a compile-time sequence).
+- `qd.graph_parallel()` may appear only directly inside a `qd.graph_parallel_context()`.
+- `qd.graph_parallel_context` cannot be nested, and a `qd.graph_parallel` section body must be straight-line task work — no `qd.graph_do_while`, `qd.checkpoint`, or nested `qd.graph_parallel_context` inside a `qd.graph_parallel` section (a `qd.graph_parallel_context` may, however, sit inside a `qd.graph_do_while` body, as shown above).
+
+### Backend behavior
+
+| backend | scheduling |
+| --- | --- |
+| CUDA | `qd.graph_parallel` sections run **concurrently** |
+| AMDGPU / CPU / Vulkan / Metal | `qd.graph_parallel` sections run **serially** |
+
+Because `qd.graph_parallel` sections are independent by construction, running them serially produces identical results — only the scheduling differs.
