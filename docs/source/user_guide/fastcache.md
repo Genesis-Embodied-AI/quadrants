@@ -96,7 +96,7 @@ Fastcache supports the following parameter types:
 | `torch.Tensor` | Yes | dtype, ndim |
 | `numpy.ndarray` | Yes | dtype, ndim |
 | `dataclasses.dataclass` | Yes | member types recursively; member values if annotated with `FIELD_METADATA_CACHE_VALUE` (see [Appendix — compound-type cache keying](#compound-type-cache-keying)) |
-| `@qd.data_oriented` objects | Yes | member types recursively; primitive member types and values baked into kernel (see [Appendix — compound-type cache keying](#compound-type-cache-keying)) |
+| `@qd.data_oriented` objects | Yes | member types recursively; primitive member types and values baked into kernel — unless declared `template_primitives=False`, in which case primitive members contribute their *type* only (see [Appendix — compound-type cache keying](#compound-type-cache-keying)) |
 | `qd.Template` primitives (int, float, bool) | Yes | type and value (baked into kernel) |
 | Non-template primitives (int, float, bool) | Yes | type only |
 | `enum.Enum` | Yes | name and value |
@@ -152,7 +152,7 @@ The args hasher walks compound-type kernel parameters recursively. For each leaf
 **`@qd.data_oriented`:** the walker descends into `vars(obj)`. For each child:
 
 - `qd.ndarray` member — `(dtype, ndim, layout)` is included in the cache key. Element values are not.
-- Primitive (`int` / `float` / `bool` / `enum.Enum`) member — value is baked into the kernel (same semantics as a `qd.Template` primitive). Two instances of the same class with different primitive member values get different cache entries.
+- Primitive (`int` / `float` / `bool` / `enum.Enum`) member — value is baked into the kernel (same semantics as a `qd.Template` primitive). Two instances of the same class with different primitive member values get different cache entries. **Exception:** if the class is declared `@qd.data_oriented(template_primitives=False)`, primitive members are lifted to runtime scalar args rather than baked, so only their *type* contributes to the cache key — two instances with different primitive values share one cache entry and changing a value does not recompile.
 - Nested `@qd.data_oriented` member — recurses.
 - Nested `dataclasses.dataclass` member — recurses (with the dataclass rules below).
 - `qd.field` member — fastcache is disabled for the entire kernel call. The kernel still runs via normal compilation; a warn-level log line is emitted.

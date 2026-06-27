@@ -108,6 +108,58 @@ def test_args_hasher_data_oriented() -> None:
 
 
 @test_utils.test()
+def test_args_hasher_data_oriented_template_primitives_value_not_keyed() -> None:
+    """A normal @qd.data_oriented bakes primitive members into the kernel, so the fastcache key includes their value.
+    @qd.data_oriented(template_primitives=False) lifts them to runtime scalar args instead, so the key must depend on
+    the primitive's *type* only — otherwise fastcache would recompile on every value change, defeating the feature."""
+
+    @qd.data_oriented(template_primitives=False)
+    class Runtime:
+        def __init__(self, k):
+            self.k = k
+
+    @qd.data_oriented
+    class Baked:
+        def __init__(self, k):
+            self.k = k
+
+    h = args_hasher.hash_args
+
+    # Lifted (runtime) primitive: value change -> same key.
+    h_rt = h(False, [Runtime(3)], [None])
+    assert h_rt is not None and not isinstance(h_rt, FastcacheSkip)
+    assert h_rt == h(False, [Runtime(7)], [None])
+
+    # Baked primitive (default): value change -> different key.
+    h_baked = h(False, [Baked(3)], [None])
+    assert h_baked is not None and not isinstance(h_baked, FastcacheSkip)
+    assert h_baked != h(False, [Baked(7)], [None])
+
+
+@test_utils.test()
+def test_args_hasher_data_oriented_template_primitives_nested_value_not_keyed() -> None:
+    """The type-only keying applies through nested template_primitives=False data_oriented members and alongside
+    ndarray members (the engine-F shape: Engine -> subsystem -> bare-primitive loop bound + ndarray buffers)."""
+
+    @qd.data_oriented(template_primitives=False)
+    class Inner:
+        def __init__(self, n_rt):
+            self.n_rt = n_rt
+            self.buf = qd.ndarray(qd.f64, shape=(4,))
+
+    @qd.data_oriented(template_primitives=False)
+    class Outer:
+        def __init__(self, n_rt):
+            self.cap = 1000
+            self.inner = Inner(n_rt)
+
+    h = args_hasher.hash_args
+    h4 = h(False, [Outer(4)], [None])
+    assert h4 is not None and not isinstance(h4, FastcacheSkip)
+    assert h4 == h(False, [Outer(6)], [None])
+
+
+@test_utils.test()
 def test_args_hasher_ndarray() -> None:
     seen = set()
     for dtype in [qd.i32, qd.i64, qd.f32, qd.f64]:
