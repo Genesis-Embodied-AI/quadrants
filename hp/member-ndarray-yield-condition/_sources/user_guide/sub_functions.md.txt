@@ -39,7 +39,7 @@ def compute(a: qd.Template) -> None:
 
 ## Restricting a func to the top level (`requires_top_level=True`)
 
-**Experimental.** `requires_top_level` is an experimental feature and its behaviour or API may change in a future release.
+**Experimental.** `requires_top_level` is an experimental feature and its behavior or API may change in a future release.
 
 Some qd.func contain for-loops that are assumed and intended to be top-level for-loops, that each become separate offloaded tasks, and ultimately separate device kernels. If such qd.func's are placed inside other for-loops, the qd.func will no longer generate the structure of offloaded tasks and device kernels assumed, and might either run very slowly, or crash, or give incorrect results.
 

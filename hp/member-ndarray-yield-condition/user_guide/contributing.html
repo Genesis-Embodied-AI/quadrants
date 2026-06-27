@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>Contributing to quadrants &#8212; Quadrants 1.0.3 documentation</title>
+    <title>Contributing to quadrants &#8212; Quadrants 1.1.1 documentation</title>
   
   
   
@@ -43,7 +43,7 @@
   <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5" />
 <link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5" />
 
-    <script src="../_static/documentation_options.js?v=baaebd52"></script>
+    <script src="../_static/documentation_options.js?v=58fbf978"></script>
     <script src="../_static/doctools.js?v=9bcbadda"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -63,7 +63,7 @@
     <link rel="prev" title="Optimization passes" href="optimization_passes.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="1.0.3" />
+  <meta name="docsearch:version" content="1.1.1" />
   
     
     <script src="../_static/searchtools.js"></script>
@@ -131,7 +131,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 1.0.3 documentation</p>
+    <p class="title logo__title">Quadrants 1.1.1 documentation</p>
   
 </a></div>
     
@@ -477,7 +477,7 @@
 </ul>
 <p><code class="docutils literal notranslate"><span class="pre">build.py</span></code> can be used at least two ways:</p>
 <ul class="simple">
-<li><p><code class="docutils literal notranslate"><span class="pre">build.py</span> <span class="pre">wheel</span></code> to build the wheel (via scikit-build-core, i.e. <code class="docutils literal notranslate"><span class="pre">pip</span> <span class="pre">wheel</span></code>)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">build.py</span> <span class="pre">wheel</span></code> to build the wheel (via <a class="reference external" href="https://scikit-build-core.readthedocs.io/en/latest/">scikit-build-core</a>, i.e. <code class="docutils literal notranslate"><span class="pre">pip</span> <span class="pre">wheel</span></code>)</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">build.py</span> <span class="pre">--shell</span></code> to enter a shell with environment variables set up as with <code class="docutils literal notranslate"><span class="pre">build.py</span> <span class="pre">wheel</span></code> in order to let you invoke yourself the commands.</p></li>
 </ul>
 <p>For incremental development, do an editable install (scikit-build-core “redirect” mode: the compiled core is installed and rebuilt on demand, Python edits are live):</p>
@@ -591,8 +591,16 @@
 </section>
 <section id="doc-quality-check-check-doc-quality-yml">
 <h3>Doc quality check (<code class="docutils literal notranslate"><span class="pre">check_doc_quality.yml</span></code>)<a class="headerlink" href="#doc-quality-check-check-doc-quality-yml" title="Link to this heading">#</a></h3>
-<p>Uses an AI agent to review documentation changes for an end-user audience (someone writing Quadrants kernels in Python, not a compiler engineer). For each <code class="docutils literal notranslate"><span class="pre">docs/**/*.md</span></code> file added or modified in the PR, it reads the entire current file (not just the diff) and checks two things: (1) <strong>undefined terms</strong> — a term a typical user is unlikely to know (specialized or internal jargon, project-specific abbreviations) must be defined at its first use in that file, either inline or via a link to a doc that defines it; (2) <strong>end-user relevance</strong> — internal / implementation / contributor-only material must be confined to a clearly-marked section whose heading contains “Advanced”, “Under the hood”, “Internals”, or “Implementation”.</p>
-<p>The following do not count as violations: references to public APIs that the author links to their docs and/or labels as public; brief reader-directed pointers suggesting the reader could contribute upstream or file an issue; the core public API vocabulary a user already knows (e.g. <code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel</span></code>, <code class="docutils literal notranslate"><span class="pre">&#64;qd.func</span></code>, <code class="docutils literal notranslate"><span class="pre">qd.Template</span></code>, fields, ndarrays). The agent reports up to 10 violations. This check is delayed by 30 minutes, to avoid running repeatedly if multiple commits pushed with a short delay between each.</p>
+<p>Uses an AI agent to review documentation changes for an end-user audience (someone writing Quadrants kernels in Python, not a compiler engineer).</p>
+<p>Let’s first define an <em>advanced / internal section</em> as a clearly-marked section whose heading contains “Advanced”, “Under the hood”, “Internals”, or “Implementation”; it targets a more advanced reader rather than the typical end user.</p>
+<p>For each <code class="docutils literal notranslate"><span class="pre">docs/**/*.md</span></code> file added or modified in the PR, the CI agent reads the entire current file (not just the diff) and checks three things:</p>
+<ul class="simple">
+<li><p>(1) <strong>undefined terms</strong> — a term a typical user is unlikely to know (specialized or internal jargon, project-specific abbreviations) must be defined at its first use in that file, either inline or via a link to a doc that defines it, unless that first use is inside an advanced / internal section;</p></li>
+<li><p>(2) <strong>end-user relevance</strong> — internal / implementation / contributor-only material must be confined to an advanced / internal section;</p></li>
+<li><p>(3) <strong>reading order</strong> — information must be ordered so a first-time reader can follow the file top-to-bottom in one pass, without forward references (a passage that can only be understood by reading something introduced later in the same file).</p></li>
+</ul>
+<p>The following do not count as violations: references to public APIs that the author links to their docs and/or labels as public; brief reader-directed pointers suggesting the reader could contribute upstream or file an issue; the core public API vocabulary a user already knows (e.g. <code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel</span></code>, <code class="docutils literal notranslate"><span class="pre">&#64;qd.func</span></code>, <code class="docutils literal notranslate"><span class="pre">qd.Template</span></code>, fields, ndarrays); and, for the reading-order check, an overview/roadmap near the top, optional “see below” pointers (where the current passage still reads fine on its own), and backward references.</p>
+<p>The agent reports up to 10 violations. This check is delayed by 30 minutes, to avoid running repeatedly if multiple commits pushed with a short delay between each.</p>
 </section>
 <section id="pr-change-report-pr-change-report-yml">
 <h3>PR change report (<code class="docutils literal notranslate"><span class="pre">pr_change_report.yml</span></code>)<a class="headerlink" href="#pr-change-report-pr-change-report-yml" title="Link to this heading">#</a></h3>

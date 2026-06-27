@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>Graph &#8212; Quadrants 1.0.3 documentation</title>
+    <title>Graph &#8212; Quadrants 1.1.1 documentation</title>
   
   
   
@@ -43,7 +43,7 @@
   <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5" />
 <link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5" />
 
-    <script src="../_static/documentation_options.js?v=baaebd52"></script>
+    <script src="../_static/documentation_options.js?v=58fbf978"></script>
     <script src="../_static/doctools.js?v=9bcbadda"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -63,7 +63,7 @@
     <link rel="prev" title="Fastcache" href="fastcache.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="1.0.3" />
+  <meta name="docsearch:version" content="1.1.1" />
   
     
     <script src="../_static/searchtools.js"></script>
@@ -131,7 +131,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 1.0.3 documentation</p>
+    <p class="title logo__title">Quadrants 1.1.1 documentation</p>
   
 </a></div>
     
@@ -673,7 +673,7 @@
 </ol>
 <p>The framework never writes into your <code class="docutils literal notranslate"><span class="pre">yield_on</span></code> buffer — you own it end-to-end. That means:</p>
 <ul class="simple">
-<li><p>Before the <strong>first</strong> launch, initialise it to <code class="docutils literal notranslate"><span class="pre">0</span></code> (a freshly allocated <code class="docutils literal notranslate"><span class="pre">qd.ndarray</span></code> is not guaranteed to be zeroed).</p></li>
+<li><p>Before the <strong>first</strong> launch, initialize it to <code class="docutils literal notranslate"><span class="pre">0</span></code> (a freshly allocated <code class="docutils literal notranslate"><span class="pre">qd.ndarray</span></code> is not guaranteed to be zeroed).</p></li>
 <li><p>:warning: Before each <strong>resume</strong> launch, reset it to <code class="docutils literal notranslate"><span class="pre">0</span></code> (otherwise the body of the same checkpoint sees the stale non-zero value and yields again on the same condition, looping forever).</p></li>
 </ul>
 </section>
@@ -685,7 +685,7 @@
 <li><p><code class="docutils literal notranslate"><span class="pre">status.checkpoint</span></code> — the <code class="docutils literal notranslate"><span class="pre">cp_id</span></code> label of the yielding checkpoint (or <code class="docutils literal notranslate"><span class="pre">None</span></code> when <code class="docutils literal notranslate"><span class="pre">yielded</span></code> is <code class="docutils literal notranslate"><span class="pre">False</span></code>).</p></li>
 </ul>
 <p>Resume by calling <code class="docutils literal notranslate"><span class="pre">kernel.resume(...,</span> <span class="pre">from_checkpoint=label)</span></code>. Everything before <code class="docutils literal notranslate"><span class="pre">label</span></code> in source order is skipped on the resume launch; everything from <code class="docutils literal notranslate"><span class="pre">label</span></code> onward runs normally. The canonical host loop:</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">overflow_flag</span><span class="p">[()]</span> <span class="o">=</span> <span class="mi">0</span>  <span class="c1"># initialise before the first launch</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">overflow_flag</span><span class="p">[()]</span> <span class="o">=</span> <span class="mi">0</span>  <span class="c1"># initialize before the first launch</span>
 <span class="n">status</span> <span class="o">=</span> <span class="n">step</span><span class="p">(</span><span class="n">arr</span><span class="p">,</span> <span class="n">overflow_flag</span><span class="p">,</span> <span class="n">newton_cond</span><span class="p">)</span>
 <span class="k">while</span> <span class="n">status</span><span class="o">.</span><span class="n">yielded</span><span class="p">:</span>
     <span class="n">handle_overflow_for</span><span class="p">(</span><span class="n">status</span><span class="o">.</span><span class="n">checkpoint</span><span class="p">,</span> <span class="o">...</span><span class="p">)</span>
