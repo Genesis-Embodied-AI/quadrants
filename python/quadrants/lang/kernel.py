@@ -517,9 +517,14 @@ class Kernel(FuncBase):
                     self._struct_ndarray_launch_info_by_key[key] = getattr(
                         ctx.global_context, "struct_ndarray_launch_info", []
                     )
-                    self._struct_primitive_launch_info_by_key[key] = getattr(
-                        ctx.global_context, "struct_primitive_launch_info", []
-                    )
+                    # Only record an entry when this key actually lifts primitives, so the dict stays empty for the
+                    # overwhelming majority of kernels (none use template_primitives=False). launch_kernel can then
+                    # skip the whole primitive-binding path with a single empty-dict check instead of paying a
+                    # per-launch ``.get(key)`` (tuple hash) on every cache-missing launch -- which is the hot path for
+                    # CPU / unbatched genesis steps that launch many tiny kernels.
+                    struct_primitive_launch_info = getattr(ctx.global_context, "struct_primitive_launch_info", [])
+                    if struct_primitive_launch_info:
+                        self._struct_primitive_launch_info_by_key[key] = struct_primitive_launch_info
                 else:
                     for used_parameters in pruning.used_vars_by_func_id.values():
                         new_used_parameters = set()
@@ -638,14 +643,17 @@ class Kernel(FuncBase):
             if struct_nd_info:
                 self._set_struct_ndarray_args(struct_nd_info, args, launch_ctx_buffer, is_launch_ctx_cacheable)
 
-            struct_prim_info = self._struct_primitive_launch_info_by_key.get(key)
-            if struct_prim_info:
-                self._set_struct_primitive_args(struct_prim_info, args, launch_ctx_buffer)
-                # Lifted primitives are read fresh from the live object on every launch (that is the whole point), so
-                # the prepared launch context must not be cached under ``args_hash`` (the hash keys on object id, not
-                # primitive value, so a cached context would serve stale values when the user mutates the member).
-                # Marking it non-cacheable keeps this kernel correct at the cost of rebuilding its context each launch.
-                is_launch_ctx_cacheable = False
+            # Empty for every kernel that doesn't use template_primitives=False (the common case), so this guard
+            # short-circuits without hashing ``key`` -- keeping the per-launch hot path free of added overhead.
+            if self._struct_primitive_launch_info_by_key:
+                struct_prim_info = self._struct_primitive_launch_info_by_key.get(key)
+                if struct_prim_info:
+                    self._set_struct_primitive_args(struct_prim_info, args, launch_ctx_buffer)
+                    # Lifted primitives are read fresh from the live object on every launch (that is the whole point),
+                    # so the prepared launch context must not be cached under ``args_hash`` (the hash keys on object
+                    # id, not primitive value, so a cached context would serve stale values when the user mutates the
+                    # member). Marking it non-cacheable keeps this kernel correct at the cost of rebuilding each launch.
+                    is_launch_ctx_cacheable = False
 
             kernel_args_count_by_type = defaultdict(int)
             kernel_args_count_by_type.update(
