@@ -1,6 +1,6 @@
 # Shared Metal command queue (PyTorch MPS)
 
-On Apple Silicon, Quadrants and PyTorch MPS both dispatch GPU work via Metal. By default each framework creates its own `MTLCommandQueue`, which means there is no GPU-level ordering between them. Every zero-copy interop point therefore requires explicit CPU-side synchronisation (`qd.sync()` and `torch.mps.synchronize()`) to guarantee data visibility.
+On Apple Silicon, Quadrants and PyTorch MPS both dispatch GPU work via Metal. By default each framework creates its own `MTLCommandQueue`, which means there is no GPU-level ordering between them. Every zero-copy interop point therefore requires explicit CPU-side synchronization (`qd.sync()` and `torch.mps.synchronize()`) to guarantee data visibility.
 
 The `external_metal_command_queue` option lets you pass PyTorch's command queue to Quadrants so that both frameworks share a single queue. Metal processes command buffers in commit order within a queue, so GPU-side ordering is automatic and the per-interop sync overhead is eliminated.
 
@@ -23,7 +23,7 @@ Two flags work together:
 - `external_metal_command_queue` — the raw `MTLCommandQueue*` pointer. Quadrants dispatches all GPU work on this queue instead of creating its own.
 - `external_metal_command_queue_is_torch_queue` — set to `True` when the queue comes from PyTorch MPS. This tells Quadrants that PyTorch shares the same queue, so the explicit interop syncs can be safely skipped. Defaults to `False`, which preserves the sync calls even when an external queue is provided (useful when the external queue belongs to a non-PyTorch framework).
 
-Once initialised with both flags:
+Once initialized with both flags:
 
 - `to_torch(copy=False)` no longer calls `qd.sync()` internally.
 - `to_torch(copy=True)` no longer calls `torch.mps.synchronize()` after the copy.
@@ -41,17 +41,17 @@ from quadrants.interop import get_mps_command_queue
 queue_ptr = get_mps_command_queue()  # returns int (raw pointer), or 0 on failure
 ```
 
-The function initialises PyTorch MPS if needed, then returns the `MTLCommandQueue*` as a Python `int`. It returns `0` if extraction fails (e.g. non-macOS platform, PyTorch not installed, MPS not available, or unsupported PyTorch build). The underlying C++ symbol (`_ZN2at3mps19getDefaultMPSStreamEv`) has been stable since PyTorch 1.13.
+The function initializes PyTorch MPS if needed, then returns the `MTLCommandQueue*` as a Python `int`. It returns `0` if extraction fails (e.g. non-macOS platform, PyTorch not installed, MPS not available, or unsupported PyTorch build). The underlying C++ symbol (`_ZN2at3mps19getDefaultMPSStreamEv`) has been stable since PyTorch 1.13.
 
 ## Init ordering
 
-`get_mps_command_queue()` handles PyTorch MPS initialisation internally, so you can call it before `qd.init()` without any manual setup:
+`get_mps_command_queue()` handles PyTorch MPS initialization internally, so you can call it before `qd.init()` without any manual setup:
 
 ```python
 import quadrants as qd
 from quadrants.interop import get_mps_command_queue
 
-queue_ptr = get_mps_command_queue()  # initialises MPS if needed
+queue_ptr = get_mps_command_queue()  # initializes MPS if needed
 qd.init(
     arch=qd.metal,
     external_metal_command_queue=queue_ptr,
