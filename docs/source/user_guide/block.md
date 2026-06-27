@@ -155,7 +155,7 @@ A generic `block.reduce(value, block_dim, op, dtype)` is also available for cust
 
 ### `block.reduce_all_{add,min,max}(value, block_dim, dtype)`
 
-The broadcast variants of the above. Identical semantics, but the result is published to a one-slot `SharedArray` and read back by every thread after a second `block.sync()`. Use this when downstream code on every thread needs the block-wide aggregate (e.g. normalising each thread's value by the block sum). Cost: one extra `block.sync()` plus one shared-memory hop vs. the lane-0-only variants. The corresponding generic form is `block.reduce_all(value, block_dim, op, dtype)`.
+The broadcast variants of the above. Identical semantics, but the result is published to a one-slot `SharedArray` and read back by every thread after a second `block.sync()`. Use this when downstream code on every thread needs the block-wide aggregate (e.g. normalizing each thread's value by the block sum). Cost: one extra `block.sync()` plus one shared-memory hop vs. the lane-0-only variants. The corresponding generic form is `block.reduce_all(value, block_dim, op, dtype)`.
 
 ### `block.inclusive_{add,min,max}(value, block_dim, dtype)`
 

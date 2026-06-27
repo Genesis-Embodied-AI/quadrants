@@ -61,7 +61,7 @@ jobs:
           /tmp/changed_docs.txt contains a newline-separated list of Markdown (.md) doc files (paths
           relative to the repo root) that were added or modified in this PR. For EACH file in that
           list, read the FULL current contents of the file (not just the diff) and review it against
-          the two rules below.
+          the three rules below.
 
           Target audience: an *end user* of Quadrants. That is, someone who writes GPU programs in
           Python using the Quadrants library (`@qd.kernel`, `@qd.func`, ndarrays, fields, etc.).
@@ -71,6 +71,12 @@ jobs:
           - is NOT a compiler engineer and does NOT know Quadrants' internal implementation — its IR,
             codegen, RHI / backend C++ code, pass pipeline, SNode internals, build system, etc. —
             unless the doc itself explains it.
+
+          Advanced / internal section (referenced by both rules below): a clearly delimited section
+          whose heading marks it as such — e.g. a heading containing "Advanced", "Under the hood",
+          "Internals", or "Implementation" — or a doc that is itself explicitly an advanced / internal
+          reference. Such a section is understood to be aimed at a more advanced / internal reader
+          rather than the typical end user.
 
           RULE 1 — Undefined terms.
           Scan each doc for terms a typical Quadrants user is unlikely to already know: Quadrants-
@@ -87,19 +93,20 @@ jobs:
           first use. Rule 1 targets terms BEYOND this core vocabulary: less-common or specialized
           APIs, internal subsystem names, project-specific abbreviations, and specialized
           GPU/compiler jargon.
+          Terms whose first occurrence is inside an advanced / internal section (defined above) do
+          NOT need to be defined: such sections are aimed at a more advanced / internal reader, so
+          internal jargon there is acceptable.
           VIOLATION: a term the target reader probably does not know is used at its first occurrence
-          in the file without being defined there.
+          in the file (outside any advanced / internal section) without being defined there.
 
           RULE 2 — End-user relevance.
           A doc should only contain information that is useful to an end user. Internal /
           implementation / contributor-only material (compiler internals, IR/codegen/backend
           mechanics, "how it works inside", maintenance notes, etc.) is allowed ONLY if it is
-          confined to a clearly delimited section whose heading marks it as such — e.g. a heading
-          containing "Advanced", "Under the hood", "Internals", or "Implementation". Body text in a
-          dedicated such section, or a doc that is itself explicitly an advanced/internal reference,
-          is fine.
+          confined to an advanced / internal section (defined above). Body text in such a section is
+          fine.
           The following are NOT scope violations (they are useful to end users) even when they
-          appear outside an advanced/internals section:
+          appear outside an advanced / internal section:
           - References to public, user-facing APIs. You do NOT need to independently work out
             whether a symbol is public — rely on the author's signals: if the symbol is linked to
             its documentation (a Markdown link) and/or explicitly presented as a public,
@@ -116,7 +123,26 @@ jobs:
           - FIXME / TODO markers left inline in a doc (e.g. "(FIXME: add stream.md)"). These are
             authoring notes; ignore them entirely — do not flag the marker or its contents.
           VIOLATION: internal / non-end-user material (subject to the carve-outs above) appears
-          outside of such a clearly-marked advanced / under-the-hood section.
+          outside of an advanced / internal section.
+
+          RULE 3 — Reading order (no forward references).
+          Within a single doc, information should be ordered so a first-time reader can follow it
+          top-to-bottom in one pass, without jumping ahead. A FORWARD REFERENCE is when a passage
+          depends on a concept, parameter, behavior, code element, or result that is only introduced
+          LATER in the SAME file, such that the reader cannot understand the current passage without
+          first reading the later one.
+          The following are NOT order violations:
+          - A brief overview / roadmap near the top that previews upcoming sections ("this guide
+            covers A, then B") — signposting the structure, not a dependency: the reader does not
+            need to understand A or B yet to keep reading.
+          - Optional "for more detail, see <section> below" pointers, where the current passage is
+            fully understandable WITHOUT following them. The test is: MUST read ahead to understand
+            (violation) vs more depth merely available later (fine).
+          - Backward references (to something earlier in the same file) are always fine.
+          - References to OTHER docs/files; this rule is about ordering WITHIN a single file only.
+          - Conventional preamble ordering (e.g. Prerequisites -> Installation -> Usage).
+          VIOLATION: a passage cannot be understood by a first-time reader at the point they reach
+          it, because what it relies on is only introduced later in the same file.
 
           Read each listed file in full before judging it. You may open any other file in the repo
           (e.g. linked docs) to verify whether a term is defined elsewhere. Do NOT modify any files.
@@ -126,8 +152,10 @@ jobs:
           If there are NO violations, your final output must start with the word PASS.
           If there ARE violations, your final output must start with the word FAIL, followed by a list
           of violations (up to 10), one per line, in the format:
-          <filepath>: [term|scope]: <brief description>
-          where [term] is a Rule 1 violation and [scope] is a Rule 2 violation.
+          <filepath>: [term|scope|order]: <brief description>
+          where [term] is a Rule 1 violation, [scope] is a Rule 2 violation, and [order] is a Rule 3
+          violation (for [order], cite both line numbers — what is used at line N is only introduced
+          at line M).
           PROMPT
           )" --model claude-4.6-opus-high-thinking --mode ask --output-format text --trust)
 
