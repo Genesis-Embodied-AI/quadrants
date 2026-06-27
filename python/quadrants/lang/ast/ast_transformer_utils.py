@@ -183,6 +183,20 @@ class ASTTransformerGlobalContext:
         self.pass_idx: int = pass_idx
         self.ndarray_to_any_array: dict[int, Any] = {}
         self.struct_ndarray_launch_info: list[tuple] = []
+        # Lifted-primitive support for ``@qd.data_oriented(template_primitives=False)``. Mirrors the two ndarray
+        # structures above, plus a provenance map driving the two-pass pruning.
+        # * ``struct_primitive_provenance`` maps ``(id(parent_obj), attr_name)`` to ``(flat_name, arg_idx, attr_chain,
+        #   kind)`` for every reachable primitive member of a flagged template arg. Built (cheaply, no kernel-arg
+        #   declaration) on every compilation pass. ``build_Attribute`` uses it to ``mark_used`` the accessed
+        #   primitives during the non-enforcing discovery pass.
+        # * ``struct_primitive_to_expr`` maps the same key to the arg-load ``Expr``. Populated only in the enforcing
+        #   pass, and only for primitives actually accessed by the body (pruning), so ``build_Attribute`` can return
+        #   the runtime scalar arg instead of baking the value.
+        # * ``struct_primitive_launch_info`` records ``(arg_id, template_arg_idx, attr_chain, kind)`` tuples (``kind``
+        #   in ``{'f', 'i', 'u'}``) so the launch path can read the live value and bind it.
+        self.struct_primitive_provenance: dict[tuple[int, str], tuple] = {}
+        self.struct_primitive_to_expr: dict[tuple[int, str], Any] = {}
+        self.struct_primitive_launch_info: list[tuple] = []
         # Caller-side `loop_depth` snapshot for the in-flight `@qd.func` invocation. Each func compile creates a fresh
         # `ASTTransformerFuncContext` with `loop_depth = 0`, so without this snapshot a non-static `range(...)` loop
         # inside a func body would not see any outer for-loops in the caller and would skip the backward-mode dynamic-

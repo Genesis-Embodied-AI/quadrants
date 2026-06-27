@@ -373,6 +373,9 @@ class Kernel(FuncBase):
 
         self.launch_context_buffer_cache = LaunchContextBufferCache()
         self._struct_ndarray_launch_info_by_key: dict[CompiledKernelKeyType, list] = {}
+        # Launch info for primitives lifted from ``@qd.data_oriented(template_primitives=False)`` template args (see
+        # ``_predeclare_struct_primitives``). Maps key -> list of ``(arg_id, template_arg_idx, attr_chain, kind)``.
+        self._struct_primitive_launch_info_by_key: dict[CompiledKernelKeyType, list] = {}
         self._mutable_nd_cached_key: CompiledKernelKeyType | None = None
         self._mutable_nd_cached_val: list = []
         self._tensor_unwrap_indices: tuple[int, ...] | None = None
@@ -514,6 +517,9 @@ class Kernel(FuncBase):
                     self._struct_ndarray_launch_info_by_key[key] = getattr(
                         ctx.global_context, "struct_ndarray_launch_info", []
                     )
+                    self._struct_primitive_launch_info_by_key[key] = getattr(
+                        ctx.global_context, "struct_primitive_launch_info", []
+                    )
                 else:
                     for used_parameters in pruning.used_vars_by_func_id.values():
                         new_used_parameters = set()
@@ -631,6 +637,15 @@ class Kernel(FuncBase):
             struct_nd_info = self._struct_ndarray_launch_info_by_key.get(key)
             if struct_nd_info:
                 self._set_struct_ndarray_args(struct_nd_info, args, launch_ctx_buffer, is_launch_ctx_cacheable)
+
+            struct_prim_info = self._struct_primitive_launch_info_by_key.get(key)
+            if struct_prim_info:
+                self._set_struct_primitive_args(struct_prim_info, args, launch_ctx_buffer)
+                # Lifted primitives are read fresh from the live object on every launch (that is the whole point), so
+                # the prepared launch context must not be cached under ``args_hash`` (the hash keys on object id, not
+                # primitive value, so a cached context would serve stale values when the user mutates the member).
+                # Marking it non-cacheable keeps this kernel correct at the cost of rebuilding its context each launch.
+                is_launch_ctx_cacheable = False
 
             kernel_args_count_by_type = defaultdict(int)
             kernel_args_count_by_type.update(
@@ -775,6 +790,26 @@ class Kernel(FuncBase):
                 launch_ctx_buffer[_QD_ARRAY].append((arg_id, v_primal))
             else:
                 launch_ctx_buffer[_QD_ARRAY_WITH_GRAD].append((arg_id, v_primal, v_grad))
+
+    @staticmethod
+    def _set_struct_primitive_args(
+        launch_info: list,
+        args: tuple,
+        launch_ctx_buffer: dict,
+    ) -> None:
+        """Set scalar kernel args lifted from ``@qd.data_oriented(template_primitives=False)`` template-arg primitive
+        members. Walks each recorded attr-chain to read the live value and buckets it by declared dtype kind (``'f'``
+        float, ``'i'`` signed int, ``'u'`` unsigned int), so the value is bound fresh on every launch."""
+        for arg_id, template_arg_idx, attr_chain, kind in launch_info:
+            obj = args[template_arg_idx]
+            for attr_name in attr_chain:
+                obj = getattr(obj, attr_name)
+            if kind == "f":
+                launch_ctx_buffer[_FLOAT].append((arg_id, float(obj)))
+            elif kind == "u":
+                launch_ctx_buffer[_UINT].append((arg_id, int(obj)))
+            else:
+                launch_ctx_buffer[_INT].append((arg_id, int(obj)))
 
     def ensure_compiled(self, *py_args: tuple[Any, ...]) -> tuple[Callable, int, AutodiffMode]:
         try:
