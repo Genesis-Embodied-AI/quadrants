@@ -102,7 +102,7 @@ scratch64 = qd.ndarray(qd.u64, shape=qd.algorithms.reduce_scratch_slots(N, D))
 
 ## Semantics
 
-The active ops below share a calling convention and several rules; these are stated once in **Common conventions**, and only the op-specific behaviour is repeated per op. The internal algorithm for each op is in [Under the hood](#under-the-hood).
+The active ops below share a calling convention and several rules; these are stated once in **Common conventions**, and only the op-specific behavior is repeated per op. The internal algorithm for each op is in [Under the hood](#under-the-hood).
 
 Each op section ends with a runnable toy example. They all assume this prelude:
 
