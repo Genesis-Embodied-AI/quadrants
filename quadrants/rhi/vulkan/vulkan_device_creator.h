@@ -66,11 +66,11 @@ class QD_DLL_EXPORT VulkanDeviceCreator {
   ~VulkanDeviceCreator();
 
   const VulkanDevice *device() const {
-    return ti_device_.get();
+    return qd_device_.get();
   }
 
   VulkanDevice *device() {
-    return ti_device_.get();
+    return qd_device_.get();
   }
 
  private:
@@ -88,7 +88,7 @@ class QD_DLL_EXPORT VulkanDeviceCreator {
   VkQueue compute_queue_{VK_NULL_HANDLE};
   VkQueue graphics_queue_{VK_NULL_HANDLE};
 
-  std::unique_ptr<VulkanDevice> ti_device_{nullptr};
+  std::unique_ptr<VulkanDevice> qd_device_{nullptr};
 
   Params params_;
 };

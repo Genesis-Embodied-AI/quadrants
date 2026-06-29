@@ -479,7 +479,7 @@ def test_ad_frac():
         return fractional
 
     @qd.kernel
-    def ti_frac(input_field: qd.template(), output_field: qd.template()):
+    def qd_frac(input_field: qd.template(), output_field: qd.template()):
         for i in input_field:
             output_field[i] = frac(input_field[i]) ** 2
 
@@ -496,7 +496,7 @@ def test_ad_frac():
     loss = qd.field(dtype=qd.f32, shape=(), needs_grad=True)
 
     with qd.ad.Tape(loss):
-        ti_frac(field0, field1)
+        qd_frac(field0, field1)
         calc_loss(field1, loss)
 
     grads = field0.grad.to_numpy()

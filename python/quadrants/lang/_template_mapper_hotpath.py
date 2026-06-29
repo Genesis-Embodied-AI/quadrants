@@ -382,7 +382,7 @@ def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: Annotati
     annotation_fields = getattr(annotation, _FIELDS, None)
     if annotation_fields is not None:
         # Some dataclasses may be declared as "frozen", which means that changing pointers of fields is not allowed.
-        # This property is sufficient to guarantee that its taichi "key" will never change and therefore can be stored
+        # This property is sufficient to guarantee that its quadrants "key" will never change and therefore can be stored
         # as a static attribute, much like its hash which is computed once and for all during instantiation.
         # Instead of strictly requiring being frozen, we only require the dataclass to be hashable. Any frozen dataclass
         # is hashable, but a user can enforce a dataclass to be consider frozen for a user perspective without being

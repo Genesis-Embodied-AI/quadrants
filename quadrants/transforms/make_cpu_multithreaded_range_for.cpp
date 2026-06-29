@@ -19,14 +19,14 @@ using TaskType = OffloadedStmt::TaskType;
  *
  * For example, the following code:
  *
- *   @ti.kernel
+ *   @qd.kernel
  *   def foo():
  *     for i in range(1024):
  *       a[i] = i
  *
  * becomes:
  *
- *   @ti.kernel
+ *   @qd.kernel
  *   def foo():
  *     for __thread_id in range(8):
  *       block_begin = __thread_id * 128

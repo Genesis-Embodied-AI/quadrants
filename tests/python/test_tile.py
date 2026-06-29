@@ -1,3 +1,4 @@
+import copy
 import subprocess
 import sys
 from pathlib import Path
@@ -8,11 +9,13 @@ import scipy.linalg
 
 import quadrants as qd
 from quadrants.lang.exception import QuadrantsSyntaxError
+from quadrants.lang.simt import _tile
 from quadrants.lang.simt._tile import (
     _make_tile,
     _TileSliceProxy,
     _VecSliceProxy,
 )
+from quadrants.types import primitive_types
 
 from tests import test_utils
 
@@ -1525,6 +1528,82 @@ def test_vec_proxy_syr_sub_3d(TILE, make_tile, tdim, m_size, tensor_type):
     k1(mat, vecs, out, K0, COL, tdim)
     col = V[1, K0 : K0 + tdim, COL]
     np.testing.assert_allclose(out.to_numpy(), R - np.outer(col, col), atol=1e-5)
+
+
+@test_utils.test(arch=qd.gpu)
+def test_vec_proxy_non_identity_dtype(TILE, make_tile, tdim, m_size):
+    """Regression: vec-proxy resolve must not depend on the register dtype's object identity.
+
+    ``qd.init(default_fp=...)`` stores a *deep copy* of the dtype as the runtime default_fp (see misc.py), and a
+    deep-copied ``DataType`` compares equal to ``qd.f32`` (same hash) but has an ``id`` outside
+    ``primitive_types.type_ids``.  ``_resolve_vec2d``/``_resolve_vec3d`` used to seed their per-thread scalar with
+    ``dtype(0.0)``, which the AST transformer only rewrites into a typed constant when ``id(dtype)`` is registered --
+    otherwise it falls through to a raw call and raises ``QuadrantsSyntaxError: Quadrants data types cannot be called
+    outside Quadrants kernels``.  Combined with the value-keyed, process-global tile cache (first-insert-wins, shared
+    across ``qd.init`` cycles), this surfaced as an xdist-order-dependent flake.  Build a tile from such a
+    non-identity dtype and exercise both the 2D and 3D vec-proxy paths.
+    """
+    nonid_dtype = copy.deepcopy(qd.f32)
+    assert nonid_dtype == qd.f32
+    assert id(nonid_dtype) not in primitive_types.type_ids  # precondition the old dtype(0.0) tripped on
+
+    # The tile-class cache is process-global and keyed by (N, dtype) value, so a previously cached identity-dtype
+    # class would mask the regression.  Drop the entry so the class is rebuilt capturing this non-identity dtype,
+    # and restore the cache afterwards so we don't leak a deepcopy-keyed entry into other tests.
+    cache = _tile._tile_cache
+    cache_key = (tdim, nonid_dtype)
+    cache.pop(cache_key, None)
+    try:
+        Tile = make_tile(nonid_dtype)
+        Ann = _ann(qd.field, qd.f32, 2)
+        K0 = tdim
+        COL = 5
+
+        mat = qd.field(qd.f32, (tdim, tdim))
+        vecs2 = qd.field(qd.f32, (m_size, m_size))
+        vecs3 = qd.field(qd.f32, (2, m_size, m_size))
+        out2 = qd.field(qd.f32, (tdim, tdim))
+        out3 = qd.field(qd.f32, (tdim, tdim))
+
+        @qd.kernel(fastcache=True)
+        def k2d(mat_arr: Ann, vecs_arr: Ann, out_arr: Ann, K0: qd.i32, COL: qd.i32, N: qd.Template):
+            qd.loop_config(block_dim=N)
+            tile_size = N
+            for _ in range(tile_size):
+                t = Tile.zeros()
+                t[:] = mat_arr[0:tile_size, 0:tile_size]
+                v = vecs_arr[K0 : K0 + Tile.SIZE, COL]  # 2D vec proxy -> _resolve_vec2d
+                t -= qd.outer(v, v)
+                out_arr[0:tile_size, 0:tile_size] = t
+
+        @qd.kernel(fastcache=True)
+        def k3d(mat_arr: Ann, vecs_arr: Ann, out_arr: Ann, K0: qd.i32, COL: qd.i32, N: qd.Template):
+            qd.loop_config(block_dim=N)
+            tile_size = N
+            for _ in range(tile_size):
+                t = Tile.zeros()
+                t[:] = mat_arr[0:tile_size, 0:tile_size]
+                v = vecs_arr[1, K0 : K0 + Tile.SIZE, COL]  # 3D vec proxy -> _resolve_vec3d
+                t -= qd.outer(v, v)
+                out_arr[0:tile_size, 0:tile_size] = t
+
+        rng = np.random.RandomState(321)
+        R = rng.randn(tdim, tdim).astype(np.float32)
+        V2 = rng.randn(m_size, m_size).astype(np.float32)
+        V3 = rng.randn(2, m_size, m_size).astype(np.float32)
+        mat.from_numpy(R)
+        vecs2.from_numpy(V2)
+        vecs3.from_numpy(V3)
+
+        k2d(mat, vecs2, out2, K0, COL, tdim)
+        k3d(mat, vecs3, out3, K0, COL, tdim)
+
+        col2 = V2[K0 : K0 + tdim, COL]
+        np.testing.assert_allclose(out2.to_numpy(), R - np.outer(col2, col2), atol=1e-5)
+        col3 = V3[1, K0 : K0 + tdim, COL]
+        np.testing.assert_allclose(out3.to_numpy(), R - np.outer(col3, col3), atol=1e-5)
+    finally:
+        cache.pop(cache_key, None)
 
 
 @test_utils.test(arch=qd.gpu)

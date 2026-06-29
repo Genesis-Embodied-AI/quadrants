@@ -2,16 +2,15 @@
 
 #include <optional>
 #include <string>
+#include <tuple>
 #include "quadrants/ir/snode.h"
 
 #if QD_WITH_LLVM
 #include "llvm/Config/llvm-config.h"
 #endif
 
-#include "pybind11/functional.h"
-#include "pybind11/pybind11.h"
-#include "pybind11/eigen.h"
-#include "pybind11/numpy.h"
+#include <nanobind/eigen/dense.h>
+#include <nanobind/eigen/sparse.h>
 
 #include "quadrants/ir/expression_ops.h"
 #include "quadrants/ir/frontend_ir.h"
@@ -50,16 +49,30 @@ std::string libdevice_path();
 }  // namespace quadrants::lang
 
 namespace quadrants {
-void export_lang(py::module &m) {
+
+namespace {
+// Tag type used purely to create a Python "InternalOp" namespace-class that exposes each internal op as a
+// static property. InternalOp itself is a C++ `enum class` and therefore cannot be bound via nb::class_.
+struct InternalOpScope {};
+}  // namespace
+
+void export_lang(nb::module_ &m) {
   using namespace quadrants::lang;
   using namespace std::placeholders;
 
-  py::register_exception<QuadrantsTypeError>(m, "QuadrantsTypeError", PyExc_TypeError);
-  py::register_exception<QuadrantsSyntaxError>(m, "QuadrantsSyntaxError", PyExc_SyntaxError);
-  py::register_exception<QuadrantsIndexError>(m, "QuadrantsIndexError", PyExc_IndexError);
-  py::register_exception<QuadrantsRuntimeError>(m, "QuadrantsRuntimeError", PyExc_RuntimeError);
-  py::register_exception<QuadrantsAssertionError>(m, "QuadrantsAssertionError", PyExc_AssertionError);
-  py::enum_<Arch>(m, "Arch", py::arithmetic())
+  // nb::exception registers the Python exception type (and its C++->Python translation) as a side
+  // effect of construction; the returned handle is intentionally discarded.
+  // NOLINTNEXTLINE(bugprone-unused-raii)
+  nb::exception<QuadrantsTypeError>(m, "QuadrantsTypeError", PyExc_TypeError);
+  // NOLINTNEXTLINE(bugprone-unused-raii)
+  nb::exception<QuadrantsSyntaxError>(m, "QuadrantsSyntaxError", PyExc_SyntaxError);
+  // NOLINTNEXTLINE(bugprone-unused-raii)
+  nb::exception<QuadrantsIndexError>(m, "QuadrantsIndexError", PyExc_IndexError);
+  // NOLINTNEXTLINE(bugprone-unused-raii)
+  nb::exception<QuadrantsRuntimeError>(m, "QuadrantsRuntimeError", PyExc_RuntimeError);
+  // NOLINTNEXTLINE(bugprone-unused-raii)
+  nb::exception<QuadrantsAssertionError>(m, "QuadrantsAssertionError", PyExc_AssertionError);
+  nb::enum_<Arch>(m, "Arch", nb::is_arithmetic())
 #define PER_ARCH(x) .value(#x, Arch::x)
 #include "quadrants/inc/archs.inc.h"
 #undef PER_ARCH
@@ -68,53 +81,53 @@ void export_lang(py::module &m) {
   m.def("arch_name", arch_name);
   m.def("arch_from_name", arch_from_name);
 
-  py::enum_<SNodeType>(m, "SNodeType", py::arithmetic())
+  nb::enum_<SNodeType>(m, "SNodeType", nb::is_arithmetic())
 #define PER_SNODE(x) .value(#x, SNodeType::x)
 #include "quadrants/inc/snodes.inc.h"
 #undef PER_SNODE
       .export_values();
 
-  py::enum_<Extension>(m, "Extension", py::arithmetic())
+  nb::enum_<Extension>(m, "Extension", nb::is_arithmetic())
 #define PER_EXTENSION(x) .value(#x, Extension::x)
 #include "quadrants/inc/extensions.inc.h"
 #undef PER_EXTENSION
       .export_values();
 
-  py::enum_<DeviceCapability>(m, "DeviceCapability", py::arithmetic())
+  nb::enum_<DeviceCapability>(m, "DeviceCapability", nb::is_arithmetic())
 #define PER_DEVICE_CAPABILITY(x) .value(#x, DeviceCapability::x)
 #include "quadrants/inc/rhi_constants.inc.h"
 #undef PER_DEVICE_CAPABILITY
       .export_values();
 
-  py::enum_<ExternalArrayLayout>(m, "Layout", py::arithmetic())
+  nb::enum_<ExternalArrayLayout>(m, "Layout", nb::is_arithmetic())
       .value("AOS", ExternalArrayLayout::kAOS)
       .value("SOA", ExternalArrayLayout::kSOA)
       .value("NULL", ExternalArrayLayout::kNull)
       .export_values();
 
-  py::enum_<AutodiffMode>(m, "AutodiffMode", py::arithmetic())
+  nb::enum_<AutodiffMode>(m, "AutodiffMode", nb::is_arithmetic())
       .value("NONE", AutodiffMode::kNone)
       .value("VALIDATION", AutodiffMode::kCheckAutodiffValid)
       .value("FORWARD", AutodiffMode::kForward)
       .value("REVERSE", AutodiffMode::kReverse)
       .export_values();
 
-  py::enum_<SNodeGradType>(m, "SNodeGradType", py::arithmetic())
+  nb::enum_<SNodeGradType>(m, "SNodeGradType", nb::is_arithmetic())
       .value("PRIMAL", SNodeGradType::kPrimal)
       .value("ADJOINT", SNodeGradType::kAdjoint)
       .value("DUAL", SNodeGradType::kDual)
       .value("ADJOINT_CHECKBIT", SNodeGradType::kAdjointCheckbit)
       .export_values();
 
-  py::enum_<BoundaryMode>(m, "BoundaryMode", py::arithmetic())
+  nb::enum_<BoundaryMode>(m, "BoundaryMode", nb::is_arithmetic())
       .value("UNSAFE", BoundaryMode::kUnsafe)
       .value("CLAMP", BoundaryMode::kClamp)
       .export_values();
 
   // TODO(type): This should be removed
-  py::class_<DataType>(m, "DataTypeCxx")
-      .def(py::init<Type *>())
-      .def(py::self == py::self)
+  nb::class_<DataType>(m, "DataTypeCxx")
+      .def(nb::init<Type *>())
+      .def(nb::self == nb::self)
       .def("__hash__", &DataType::hash)
       .def("to_string", &DataType::to_string)
       .def("__str__", &DataType::to_string)
@@ -122,146 +135,140 @@ void export_lang(py::module &m) {
       .def("element_type", &DataType::get_element_type)
       .def("ptr_removed", &DataType::ptr_removed)
       .def(
-          "get_ptr", [](DataType *dtype) -> Type * { return *dtype; }, py::return_value_policy::reference)
+          "get_ptr", [](DataType *dtype) -> Type * { return *dtype; }, nb::rv_policy::reference)
       .def("__call__",
-           [](DataType *dtype, py::args args, const py::kwargs &kwargs) {
+           [](DataType *dtype, nb::args args, const nb::kwargs &kwargs) {
              // Defining __call__ here to make DataType callable in Python,
-             // which enables us to write `typing.Tuple[ti.i32, ti.i32]`.
+             // which enables us to write `typing.Tuple[qd.i32, qd.i32]`.
              throw QuadrantsSyntaxError(
                  "Quadrants data types cannot be called outside Quadrants "
                  "kernels.");
            })
-      .def(py::pickle(
-          [](const DataType &dt) {
-            // Note: this only works for primitive types, which is fine for now.
-            auto primitive = dynamic_cast<const PrimitiveType *>((const Type *)dt);
-            QD_ASSERT(primitive);
-            return py::make_tuple((std::size_t)primitive->type);
-          },
-          [](py::tuple t) {
-            if (t.size() != 1)
-              throw std::runtime_error("Invalid state!");
+      .def("__getstate__",
+           [](const DataType &dt) {
+             // Note: this only works for primitive types, which is fine for now.
+             auto primitive = dynamic_cast<const PrimitiveType *>((const Type *)dt);
+             QD_ASSERT(primitive);
+             return std::make_tuple((std::size_t)primitive->type);
+           })
+      .def("__setstate__", [](DataType &dt, const std::tuple<std::size_t> &t) {
+        new (&dt) DataType(PrimitiveType::get((PrimitiveTypeID)std::get<0>(t)));
+      });
 
-            DataType dt = PrimitiveType::get((PrimitiveTypeID)(t[0].cast<std::size_t>()));
+  nb::class_<DebugInfo>(m, "DebugInfo")
+      .def(nb::init<>())
+      .def(nb::init<std::string>())
+      .def(nb::init<>())
+      .def_rw("tb", &DebugInfo::tb)
+      .def_rw("src_loc", &DebugInfo::src_loc);
 
-            return dt;
-          }));
-
-  py::class_<DebugInfo>(m, "DebugInfo")
-      .def(py::init<>())
-      .def(py::init<std::string>())
-      .def(py::init<>())
-      .def_readwrite("tb", &DebugInfo::tb)
-      .def_readwrite("src_loc", &DebugInfo::src_loc);
-
-  py::class_<CompileConfig>(m, "CompileConfig")
-      .def(py::init<>())
-      .def_readwrite("arch", &CompileConfig::arch)
-      .def_readwrite("opt_level", &CompileConfig::opt_level)
-      .def_readwrite("raise_on_templated_floats", &CompileConfig::raise_on_templated_floats)
-      .def_readwrite("print_ir", &CompileConfig::print_ir)
-      .def_readwrite("print_preprocessed_ir", &CompileConfig::print_preprocessed_ir)
-      .def_readwrite("print_ir_dbg_info", &CompileConfig::print_ir_dbg_info)
-      .def_readwrite("debug", &CompileConfig::debug)
-      .def_readwrite("cfg_optimization", &CompileConfig::cfg_optimization)
-      .def_readwrite("check_out_of_bound", &CompileConfig::check_out_of_bound)
-      .def_readwrite("print_accessor_ir", &CompileConfig::print_accessor_ir)
-      .def_readwrite("use_llvm", &CompileConfig::use_llvm)
-      .def_readwrite("print_struct_llvm_ir", &CompileConfig::print_struct_llvm_ir)
-      .def_readwrite("print_kernel_llvm_ir", &CompileConfig::print_kernel_llvm_ir)
-      .def_readwrite("print_kernel_llvm_ir_optimized", &CompileConfig::print_kernel_llvm_ir_optimized)
-      .def_readwrite("print_kernel_asm", &CompileConfig::print_kernel_asm)
-      .def_readwrite("print_kernel_amdgcn", &CompileConfig::print_kernel_amdgcn)
-      .def_readwrite("debug_dump_path", &CompileConfig::debug_dump_path)
-      .def_readwrite("simplify_before_lower_access", &CompileConfig::simplify_before_lower_access)
-      .def_readwrite("simplify_after_lower_access", &CompileConfig::simplify_after_lower_access)
-      .def_readwrite("lower_access", &CompileConfig::lower_access)
-      .def_readwrite("move_loop_invariant_outside_if", &CompileConfig::move_loop_invariant_outside_if)
-      .def_readwrite("cache_loop_invariant_global_vars", &CompileConfig::cache_loop_invariant_global_vars)
-      .def_readwrite("default_cpu_block_dim", &CompileConfig::default_cpu_block_dim)
-      .def_readwrite("cpu_block_dim_adaptive", &CompileConfig::cpu_block_dim_adaptive)
-      .def_readwrite("default_gpu_block_dim", &CompileConfig::default_gpu_block_dim)
-      .def_readwrite("gpu_max_reg", &CompileConfig::gpu_max_reg)
-      .def_readwrite("saturating_grid_dim", &CompileConfig::saturating_grid_dim)
-      .def_readwrite("max_block_dim", &CompileConfig::max_block_dim)
-      .def_readwrite("cpu_max_num_threads", &CompileConfig::cpu_max_num_threads)
-      .def_readwrite("random_seed", &CompileConfig::random_seed)
-      .def_readwrite("verbose_kernel_launches", &CompileConfig::verbose_kernel_launches)
-      .def_readwrite("verbose", &CompileConfig::verbose)
-      .def_readwrite("demote_dense_struct_fors", &CompileConfig::demote_dense_struct_fors)
-      .def_readwrite("kernel_profiler", &CompileConfig::kernel_profiler)
-      .def_readwrite("timeline", &CompileConfig::timeline)
-      .def_readwrite("default_fp", &CompileConfig::default_fp)
-      .def_readwrite("default_ip", &CompileConfig::default_ip)
-      .def_readwrite("default_up", &CompileConfig::default_up)
-      .def_readwrite("device_memory_GB", &CompileConfig::device_memory_GB)
-      .def_readwrite("device_memory_fraction", &CompileConfig::device_memory_fraction)
-      .def_readwrite("fast_math", &CompileConfig::fast_math)
-      .def_readwrite("advanced_optimization", &CompileConfig::advanced_optimization)
-      .def_readwrite("ad_stack_experimental_enabled", &CompileConfig::ad_stack_experimental_enabled)
-      .def_readwrite("ad_stack_size", &CompileConfig::ad_stack_size)
-      .def_readwrite("ad_stack_sparse_threshold_bytes", &CompileConfig::ad_stack_sparse_threshold_bytes)
-      .def_readwrite("flatten_if", &CompileConfig::flatten_if)
-      .def_readwrite("make_thread_local", &CompileConfig::make_thread_local)
-      .def_readwrite("make_block_local", &CompileConfig::make_block_local)
-      .def_readwrite("detect_read_only", &CompileConfig::detect_read_only)
-      .def_readwrite("real_matrix_scalarize", &CompileConfig::real_matrix_scalarize)
-      .def_readwrite("force_scalarize_matrix", &CompileConfig::force_scalarize_matrix)
-      .def_readwrite("half2_vectorization", &CompileConfig::half2_vectorization)
-      .def_readwrite("make_cpu_multithreading_loop", &CompileConfig::make_cpu_multithreading_loop)
-      .def_readwrite("quant_opt_store_fusion", &CompileConfig::quant_opt_store_fusion)
-      .def_readwrite("quant_opt_atomic_demotion", &CompileConfig::quant_opt_atomic_demotion)
-      .def_readwrite("make_mesh_block_local", &CompileConfig::make_mesh_block_local)
-      .def_readwrite("mesh_localize_to_end_mapping", &CompileConfig::mesh_localize_to_end_mapping)
-      .def_readwrite("mesh_localize_from_end_mapping", &CompileConfig::mesh_localize_from_end_mapping)
-      .def_readwrite("optimize_mesh_reordered_mapping", &CompileConfig::optimize_mesh_reordered_mapping)
-      .def_readwrite("mesh_localize_all_attr_mappings", &CompileConfig::mesh_localize_all_attr_mappings)
-      .def_readwrite("demote_no_access_mesh_fors", &CompileConfig::demote_no_access_mesh_fors)
-      .def_readwrite("experimental_auto_mesh_local", &CompileConfig::experimental_auto_mesh_local)
-      .def_readwrite("auto_mesh_local_default_occupacy", &CompileConfig::auto_mesh_local_default_occupacy)
-      .def_readwrite("offline_cache", &CompileConfig::offline_cache)
-      .def_readwrite("offline_cache_file_path", &CompileConfig::offline_cache_file_path)
-      .def_readwrite("offline_cache_cleaning_policy", &CompileConfig::offline_cache_cleaning_policy)
-      .def_readwrite("offline_cache_max_size_of_files", &CompileConfig::offline_cache_max_size_of_files)
-      .def_readwrite("offline_cache_cleaning_factor", &CompileConfig::offline_cache_cleaning_factor)
-      .def_readwrite("num_compile_threads", &CompileConfig::num_compile_threads)
-      .def_readwrite("vk_api_version", &CompileConfig::vk_api_version)
-      .def_readwrite("cuda_stack_limit", &CompileConfig::cuda_stack_limit)
-      .def_readwrite("external_metal_command_queue", &CompileConfig::external_metal_command_queue)
-      .def_readwrite("external_metal_command_queue_is_torch_queue",
-                     &CompileConfig::external_metal_command_queue_is_torch_queue);
+  nb::class_<CompileConfig>(m, "CompileConfig")
+      .def(nb::init<>())
+      .def_rw("arch", &CompileConfig::arch)
+      .def_rw("opt_level", &CompileConfig::opt_level)
+      .def_rw("raise_on_templated_floats", &CompileConfig::raise_on_templated_floats)
+      .def_rw("print_ir", &CompileConfig::print_ir)
+      .def_rw("print_preprocessed_ir", &CompileConfig::print_preprocessed_ir)
+      .def_rw("print_ir_dbg_info", &CompileConfig::print_ir_dbg_info)
+      .def_rw("debug", &CompileConfig::debug)
+      .def_rw("cfg_optimization", &CompileConfig::cfg_optimization)
+      .def_rw("check_out_of_bound", &CompileConfig::check_out_of_bound)
+      .def_rw("print_accessor_ir", &CompileConfig::print_accessor_ir)
+      .def_rw("use_llvm", &CompileConfig::use_llvm)
+      .def_rw("print_struct_llvm_ir", &CompileConfig::print_struct_llvm_ir)
+      .def_rw("print_kernel_llvm_ir", &CompileConfig::print_kernel_llvm_ir)
+      .def_rw("print_kernel_llvm_ir_optimized", &CompileConfig::print_kernel_llvm_ir_optimized)
+      .def_rw("print_kernel_asm", &CompileConfig::print_kernel_asm)
+      .def_rw("print_kernel_amdgcn", &CompileConfig::print_kernel_amdgcn)
+      .def_rw("debug_dump_path", &CompileConfig::debug_dump_path)
+      .def_rw("simplify_before_lower_access", &CompileConfig::simplify_before_lower_access)
+      .def_rw("simplify_after_lower_access", &CompileConfig::simplify_after_lower_access)
+      .def_rw("lower_access", &CompileConfig::lower_access)
+      .def_rw("move_loop_invariant_outside_if", &CompileConfig::move_loop_invariant_outside_if)
+      .def_rw("cache_loop_invariant_global_vars", &CompileConfig::cache_loop_invariant_global_vars)
+      .def_rw("default_cpu_block_dim", &CompileConfig::default_cpu_block_dim)
+      .def_rw("cpu_block_dim_adaptive", &CompileConfig::cpu_block_dim_adaptive)
+      .def_rw("default_gpu_block_dim", &CompileConfig::default_gpu_block_dim)
+      .def_rw("gpu_max_reg", &CompileConfig::gpu_max_reg)
+      .def_rw("saturating_grid_dim", &CompileConfig::saturating_grid_dim)
+      .def_rw("max_block_dim", &CompileConfig::max_block_dim)
+      .def_rw("cpu_max_num_threads", &CompileConfig::cpu_max_num_threads)
+      .def_rw("random_seed", &CompileConfig::random_seed)
+      .def_rw("verbose_kernel_launches", &CompileConfig::verbose_kernel_launches)
+      .def_rw("verbose", &CompileConfig::verbose)
+      .def_rw("demote_dense_struct_fors", &CompileConfig::demote_dense_struct_fors)
+      .def_rw("kernel_profiler", &CompileConfig::kernel_profiler)
+      .def_rw("timeline", &CompileConfig::timeline)
+      .def_rw("default_fp", &CompileConfig::default_fp)
+      .def_rw("default_ip", &CompileConfig::default_ip)
+      .def_rw("default_up", &CompileConfig::default_up)
+      .def_rw("device_memory_GB", &CompileConfig::device_memory_GB)
+      .def_rw("device_memory_fraction", &CompileConfig::device_memory_fraction)
+      .def_rw("fast_math", &CompileConfig::fast_math)
+      .def_rw("advanced_optimization", &CompileConfig::advanced_optimization)
+      .def_rw("ad_stack_experimental_enabled", &CompileConfig::ad_stack_experimental_enabled)
+      .def_rw("ad_stack_size", &CompileConfig::ad_stack_size)
+      .def_rw("ad_stack_sparse_threshold_bytes", &CompileConfig::ad_stack_sparse_threshold_bytes)
+      .def_rw("flatten_if", &CompileConfig::flatten_if)
+      .def_rw("make_thread_local", &CompileConfig::make_thread_local)
+      .def_rw("make_block_local", &CompileConfig::make_block_local)
+      .def_rw("detect_read_only", &CompileConfig::detect_read_only)
+      .def_rw("real_matrix_scalarize", &CompileConfig::real_matrix_scalarize)
+      .def_rw("force_scalarize_matrix", &CompileConfig::force_scalarize_matrix)
+      .def_rw("half2_vectorization", &CompileConfig::half2_vectorization)
+      .def_rw("make_cpu_multithreading_loop", &CompileConfig::make_cpu_multithreading_loop)
+      .def_rw("quant_opt_store_fusion", &CompileConfig::quant_opt_store_fusion)
+      .def_rw("quant_opt_atomic_demotion", &CompileConfig::quant_opt_atomic_demotion)
+      .def_rw("make_mesh_block_local", &CompileConfig::make_mesh_block_local)
+      .def_rw("mesh_localize_to_end_mapping", &CompileConfig::mesh_localize_to_end_mapping)
+      .def_rw("mesh_localize_from_end_mapping", &CompileConfig::mesh_localize_from_end_mapping)
+      .def_rw("optimize_mesh_reordered_mapping", &CompileConfig::optimize_mesh_reordered_mapping)
+      .def_rw("mesh_localize_all_attr_mappings", &CompileConfig::mesh_localize_all_attr_mappings)
+      .def_rw("demote_no_access_mesh_fors", &CompileConfig::demote_no_access_mesh_fors)
+      .def_rw("experimental_auto_mesh_local", &CompileConfig::experimental_auto_mesh_local)
+      .def_rw("auto_mesh_local_default_occupacy", &CompileConfig::auto_mesh_local_default_occupacy)
+      .def_rw("offline_cache", &CompileConfig::offline_cache)
+      .def_rw("offline_cache_file_path", &CompileConfig::offline_cache_file_path)
+      .def_rw("offline_cache_cleaning_policy", &CompileConfig::offline_cache_cleaning_policy)
+      .def_rw("offline_cache_max_size_of_files", &CompileConfig::offline_cache_max_size_of_files)
+      .def_rw("offline_cache_cleaning_factor", &CompileConfig::offline_cache_cleaning_factor)
+      .def_rw("num_compile_threads", &CompileConfig::num_compile_threads)
+      .def_rw("vk_api_version", &CompileConfig::vk_api_version)
+      .def_rw("cuda_stack_limit", &CompileConfig::cuda_stack_limit)
+      .def_rw("external_metal_command_queue", &CompileConfig::external_metal_command_queue)
+      .def_rw("external_metal_command_queue_is_torch_queue",
+              &CompileConfig::external_metal_command_queue_is_torch_queue);
 
   m.def("reset_default_compile_config", [&]() { default_compile_config = CompileConfig(); });
 
   m.def(
-      "default_compile_config", [&]() -> CompileConfig & { return default_compile_config; },
-      py::return_value_policy::reference);
+      "default_compile_config", [&]() -> CompileConfig & { return default_compile_config; }, nb::rv_policy::reference);
 
-  py::class_<Program::KernelProfilerQueryResult>(m, "KernelProfilerQueryResult")
-      .def_readwrite("counter", &Program::KernelProfilerQueryResult::counter)
-      .def_readwrite("min", &Program::KernelProfilerQueryResult::min)
-      .def_readwrite("max", &Program::KernelProfilerQueryResult::max)
-      .def_readwrite("avg", &Program::KernelProfilerQueryResult::avg);
+  nb::class_<Program::KernelProfilerQueryResult>(m, "KernelProfilerQueryResult")
+      .def_rw("counter", &Program::KernelProfilerQueryResult::counter)
+      .def_rw("min", &Program::KernelProfilerQueryResult::min)
+      .def_rw("max", &Program::KernelProfilerQueryResult::max)
+      .def_rw("avg", &Program::KernelProfilerQueryResult::avg);
 
-  py::class_<KernelProfileTracedRecord>(m, "KernelProfileTracedRecord")
-      .def_readwrite("register_per_thread", &KernelProfileTracedRecord::register_per_thread)
-      .def_readwrite("shared_mem_per_block", &KernelProfileTracedRecord::shared_mem_per_block)
-      .def_readwrite("grid_size", &KernelProfileTracedRecord::grid_size)
-      .def_readwrite("block_size", &KernelProfileTracedRecord::block_size)
-      .def_readwrite("active_blocks_per_multiprocessor", &KernelProfileTracedRecord::active_blocks_per_multiprocessor)
-      .def_readwrite("kernel_time", &KernelProfileTracedRecord::kernel_elapsed_time_in_ms)
-      .def_readwrite("base_time", &KernelProfileTracedRecord::time_since_base)
-      .def_readwrite("name", &KernelProfileTracedRecord::name)
-      .def_readwrite("metric_values", &KernelProfileTracedRecord::metric_values);
+  nb::class_<KernelProfileTracedRecord>(m, "KernelProfileTracedRecord")
+      .def_rw("register_per_thread", &KernelProfileTracedRecord::register_per_thread)
+      .def_rw("shared_mem_per_block", &KernelProfileTracedRecord::shared_mem_per_block)
+      .def_rw("grid_size", &KernelProfileTracedRecord::grid_size)
+      .def_rw("block_size", &KernelProfileTracedRecord::block_size)
+      .def_rw("active_blocks_per_multiprocessor", &KernelProfileTracedRecord::active_blocks_per_multiprocessor)
+      .def_rw("kernel_time", &KernelProfileTracedRecord::kernel_elapsed_time_in_ms)
+      .def_rw("base_time", &KernelProfileTracedRecord::time_since_base)
+      .def_rw("name", &KernelProfileTracedRecord::name)
+      .def_rw("metric_values", &KernelProfileTracedRecord::metric_values);
 
-  py::enum_<SNodeAccessFlag>(m, "SNodeAccessFlag", py::arithmetic())
+  nb::enum_<SNodeAccessFlag>(m, "SNodeAccessFlag", nb::is_arithmetic())
       .value("block_local", SNodeAccessFlag::block_local)
       .value("read_only", SNodeAccessFlag::read_only)
       .value("mesh_local", SNodeAccessFlag::mesh_local)
       .export_values();
 
   // Export ASTBuilder
-  py::class_<ASTBuilder>(m, "ASTBuilder")
+  nb::class_<ASTBuilder>(m, "ASTBuilder")
       .def("make_id_expr", &ASTBuilder::make_id_expr)
       .def("create_kernel_exprgroup_return", &ASTBuilder::create_kernel_exprgroup_return)
       .def("create_print", &ASTBuilder::create_print)
@@ -312,29 +319,35 @@ void export_lang(py::module &m) {
       .def("insert_snode_access_flag", &ASTBuilder::insert_snode_access_flag)
       .def("reset_snode_access_flag", &ASTBuilder::reset_snode_access_flag)
       .def("begin_stream_parallel", &ASTBuilder::begin_stream_parallel)
-      .def("end_stream_parallel", &ASTBuilder::end_stream_parallel);
+      .def("end_stream_parallel", &ASTBuilder::end_stream_parallel)
+      .def("set_graph_do_while_level_id", &ASTBuilder::set_graph_do_while_level_id)
+      .def("begin_checkpoint", &ASTBuilder::begin_checkpoint)
+      .def("end_checkpoint", &ASTBuilder::end_checkpoint);
 
   auto device_capability_config =
-      py::class_<DeviceCapabilityConfig>(m, "DeviceCapabilityConfig").def("get", &DeviceCapabilityConfig::get);
+      nb::class_<DeviceCapabilityConfig>(m, "DeviceCapabilityConfig").def("get", &DeviceCapabilityConfig::get);
 
-  auto compiled_kernel_data = py::class_<CompiledKernelData>(m, "CompiledKernelData")
+  auto compiled_kernel_data = nb::class_<CompiledKernelData>(m, "CompiledKernelData")
                                   .def("_debug_dump_to_string", &CompiledKernelData::debug_dump_to_string);
 
-  auto program_class = py::class_<Program>(m, "Program");
-  program_class.def(py::init<>())
+  // nanobind types are not weak-referenceable by default (pybind11 made all bound types so). The Python
+  // frontend holds weakrefs to the Program (kernel.py / stream.py), so opt in explicitly.
+  auto program_class = nb::class_<Program>(m, "Program", nb::is_weak_referenceable());
+  program_class.def(nb::init<>())
       .def(
           "ndarray_to_dlpack",
-          [](Program *program, pybind11::object owner, Ndarray *ndarray, const std::vector<int> &layout,
-             bool versioned) { return ndarray_to_dlpack(program, owner, ndarray, layout, versioned); },
-          py::arg("owner"), py::arg("ndarray"), py::arg("layout") = std::vector<int>{}, py::arg("versioned") = false)
+          [](Program *program, nb::object owner, Ndarray *ndarray, const std::vector<int> &layout, bool versioned) {
+            return ndarray_to_dlpack(program, owner, ndarray, layout, versioned);
+          },
+          nb::arg("owner"), nb::arg("ndarray"), nb::arg("layout") = std::vector<int>{}, nb::arg("versioned") = false)
       .def(
           "field_to_dlpack",
           [](Program *program, SNode *snode, int element_ndim, int n, int m, bool versioned) {
             return field_to_dlpack(program, snode, element_ndim, n, m, versioned);
           },
-          py::arg("snode"), py::arg("element_ndim"), py::arg("n"), py::arg("m"), py::arg("versioned") = false)
+          nb::arg("snode"), nb::arg("element_ndim"), nb::arg("n"), nb::arg("m"), nb::arg("versioned") = false)
       .def("_get_num_ndarrays", &Program::get_num_ndarrays)
-      .def("config", &Program::compile_config, py::return_value_policy::reference)
+      .def("config", &Program::compile_config, nb::rv_policy::reference)
       .def("sync_kernel_profiler", [](Program *program) { program->profiler->sync(); })
       .def("update_kernel_profiler", [](Program *program) { program->profiler->update(); })
       .def("clear_kernel_profiler", [](Program *program) { program->profiler->clear(); })
@@ -360,18 +373,18 @@ void export_lang(py::module &m) {
       .def("synchronize", &Program::synchronize_and_assert)
       .def("materialize_runtime", &Program::materialize_runtime)
       .def("get_snode_tree_size", &Program::get_snode_tree_size)
-      .def("get_snode_root", &Program::get_snode_root, py::return_value_policy::reference)
-      .def("load_fast_cache", &Program::load_fast_cache, py::return_value_policy::reference)
+      .def("get_snode_root", &Program::get_snode_root, nb::rv_policy::reference)
+      .def("load_fast_cache", &Program::load_fast_cache, nb::rv_policy::reference)
       .def("dump_cache_data_to_disk", &Program::dump_cache_data_to_disk)
       .def(
           "create_kernel",
           [](Program *program, const std::function<void(Kernel *)> &body, const std::string &name,
              AutodiffMode autodiff_mode) -> Kernel * {
-            py::gil_scoped_release release;
+            nb::gil_scoped_release release;
             return &program->create_kernel(body, name, autodiff_mode);
           },
-          py::return_value_policy::reference)
-      .def("create_function", &Program::create_function, py::return_value_policy::reference)
+          nb::arg("body"), nb::arg("name"), nb::arg("autodiff_mode"), nb::rv_policy::reference)
+      .def("create_function", &Program::create_function, nb::arg("func_key"), nb::rv_policy::reference)
       .def("create_sparse_matrix",
            [](Program *program, int n, int m, DataType dtype, std::string storage_format) {
              QD_ERROR_IF(!arch_is_cpu(program->compile_config().arch) && !arch_is_cuda(program->compile_config().arch),
@@ -397,8 +410,8 @@ void export_lang(py::module &m) {
               bool zero_fill, DebugInfo dbg_info) -> Ndarray * {
             return program->create_ndarray(dt, shape, layout, zero_fill, dbg_info);
           },
-          py::arg("dt"), py::arg("shape"), py::arg("layout") = ExternalArrayLayout::kNull, py::arg("zero_fill") = false,
-          py::arg("dbg_info") = DebugInfo(), py::return_value_policy::reference)
+          nb::arg("dt"), nb::arg("shape"), nb::arg("layout") = ExternalArrayLayout::kNull, nb::arg("zero_fill") = false,
+          nb::arg("dbg_info") = DebugInfo(), nb::rv_policy::reference)
       .def("delete_ndarray", &Program::delete_ndarray)
       .def("get_ndarray_data_ptr_as_int",
            [](Program *program, Ndarray *ndarray) { return program->get_ndarray_data_ptr_as_int(ndarray); })
@@ -409,7 +422,7 @@ void export_lang(py::module &m) {
       .def("fill_uint",
            [](Program *program, Ndarray *ndarray, uint32_t val) { program->fill_ndarray_fast_u32(ndarray, val); })
       .def("get_graphics_device", [](Program *program) { return program->get_graphics_device(); })
-      .def("compile_kernel", &Program::compile_kernel, py::return_value_policy::reference)
+      .def("compile_kernel", &Program::compile_kernel, nb::rv_policy::reference)
       .def("launch_kernel", &Program::launch_kernel)
       .def("get_device_caps", &Program::get_device_caps)
       .def("subgroup_size", &Program::subgroup_size)
@@ -417,6 +430,8 @@ void export_lang(py::module &m) {
       .def("get_graph_cache_used_on_last_call", &Program::get_graph_cache_used_on_last_call)
       .def("get_num_offloaded_tasks_on_last_call", &Program::get_num_offloaded_tasks_on_last_call)
       .def("get_graph_num_nodes_on_last_call", &Program::get_graph_num_nodes_on_last_call)
+      .def("get_graph_num_checkpoints_on_last_call", &Program::get_graph_num_checkpoints_on_last_call)
+      .def("get_graph_last_yield_cp_id_on_last_call", &Program::get_graph_last_yield_cp_id_on_last_call)
       .def("get_graph_total_builds", &Program::get_graph_total_builds)
       // Test-only introspection on the max-reducer dispatch counter. Leading underscore signals "internal, not part of
       // the public Python API"; quadrants tests reach these via `impl.get_runtime().prog`. They are intentionally not
@@ -427,45 +442,43 @@ void export_lang(py::module &m) {
            [](Program *program) { program->adstack_cache().reset_max_reducer_dispatch_count(); });
   export_stream(m, program_class);
 
-  py::class_<CompileResult>(m, "CompileResult")
-      .def_property_readonly(
-          "compiled_kernel_data",
-          [](const CompileResult &self) -> const CompiledKernelData & { return self.compiled_kernel_data; })
-      .def_readonly("cache_hit", &CompileResult::cache_hit)
-      .def_readonly("cache_key", &CompileResult::cache_key);
+  nb::class_<CompileResult>(m, "CompileResult")
+      .def_prop_ro("compiled_kernel_data",
+                   [](const CompileResult &self) -> const CompiledKernelData & { return self.compiled_kernel_data; })
+      .def_ro("cache_hit", &CompileResult::cache_hit)
+      .def_ro("cache_key", &CompileResult::cache_key);
 
-  py::class_<Axis>(m, "Axis").def(py::init<int>());
-  py::class_<SNode>(m, "SNodeCxx")
-      .def(py::init<>())
-      .def_readwrite("parent", &SNode::parent)
-      .def_readonly("type", &SNode::type)
-      .def_readonly("id", &SNode::id)
+  nb::class_<Axis>(m, "Axis").def(nb::init<int>());
+  nb::class_<SNode>(m, "SNodeCxx")
+      .def(nb::init<>())
+      .def_rw("parent", &SNode::parent)
+      .def_ro("type", &SNode::type)
+      .def_ro("id", &SNode::id)
       .def("get_snode_tree_id", &SNode::get_snode_tree_id)
-      .def_readonly("offset", &SNode::index_offsets)
+      .def_ro("offset", &SNode::index_offsets)
       .def("dense",
            (SNode & (SNode::*)(const std::vector<Axis> &, const std::vector<int> &, const DebugInfo &))(&SNode::dense),
-           py::return_value_policy::reference)
+           nb::rv_policy::reference)
       .def(
           "pointer",
           (SNode & (SNode::*)(const std::vector<Axis> &, const std::vector<int> &, const DebugInfo &))(&SNode::pointer),
-          py::return_value_policy::reference)
+          nb::rv_policy::reference)
       .def("hash",
            (SNode & (SNode::*)(const std::vector<Axis> &, const std::vector<int> &, const DebugInfo &))(&SNode::hash),
-           py::return_value_policy::reference)
-      .def("dynamic", &SNode::dynamic, py::return_value_policy::reference)
+           nb::rv_policy::reference)
+      .def("dynamic", &SNode::dynamic, nb::rv_policy::reference)
       .def("bitmasked",
            (SNode &
             (SNode::*)(const std::vector<Axis> &, const std::vector<int> &, const DebugInfo &))(&SNode::bitmasked),
-           py::return_value_policy::reference)
-      .def("bit_struct", &SNode::bit_struct, py::return_value_policy::reference)
-      .def("quant_array", &SNode::quant_array, py::return_value_policy::reference)
+           nb::rv_policy::reference)
+      .def("bit_struct", &SNode::bit_struct, nb::rv_policy::reference)
+      .def("quant_array", &SNode::quant_array, nb::rv_policy::reference)
       .def("place", &SNode::place)
       .def("data_type", [](SNode *snode) { return snode->dt; })
       .def("name", [](SNode *snode) { return snode->name; })
       .def("get_num_ch", [](SNode *snode) -> int { return (int)snode->ch.size(); })
       .def(
-          "get_ch", [](SNode *snode, int i) -> SNode * { return snode->ch[i].get(); },
-          py::return_value_policy::reference)
+          "get_ch", [](SNode *snode, int i) -> SNode * { return snode->ch[i].get(); }, nb::rv_policy::reference)
       .def("lazy_grad", &SNode::lazy_grad)
       .def("lazy_dual", &SNode::lazy_dual)
       .def("allocate_adjoint_checkbit", &SNode::allocate_adjoint_checkbit)
@@ -489,26 +502,29 @@ void export_lang(py::module &m) {
                                      snode->physical_index_position + quadrants_max_num_indices);
            })
       .def("num_active_indices", [](SNode *snode) { return snode->num_active_indices; })
-      .def_readonly("cell_size_bytes", &SNode::cell_size_bytes)
-      .def_readonly("offset_bytes_in_parent_cell", &SNode::offset_bytes_in_parent_cell);
+      .def_ro("cell_size_bytes", &SNode::cell_size_bytes)
+      .def_ro("offset_bytes_in_parent_cell", &SNode::offset_bytes_in_parent_cell);
 
-  py::class_<SNodeTree>(m, "SNodeTreeCxx")
+  nb::class_<SNodeTree>(m, "SNodeTreeCxx")
       .def("id", &SNodeTree::id)
       .def("destroy_snode_tree",
            [](SNodeTree *snode_tree, Program *program) { program->destroy_snode_tree(snode_tree); });
 
-  py::class_<DeviceAllocation>(m, "DeviceAllocation")
-      .def(py::init([](uint64_t device, uint64_t alloc_id) -> DeviceAllocation {
-             DeviceAllocation alloc;
-             alloc.device = (Device *)device;
-             alloc.alloc_id = (DeviceAllocationId)alloc_id;
-             return alloc;
-           }),
-           py::arg("device"), py::arg("alloc_id"))
-      .def_readonly("device", &DeviceAllocation::device)
-      .def_readonly("alloc_id", &DeviceAllocation::alloc_id);
+  nb::class_<DeviceAllocation>(m, "DeviceAllocation")
+      .def(
+          "__init__",
+          [](DeviceAllocation *self, uint64_t device, uint64_t alloc_id) {
+            new (self) DeviceAllocation();
+            self->device = (Device *)device;
+            self->alloc_id = (DeviceAllocationId)alloc_id;
+          },
+          nb::arg("device"), nb::arg("alloc_id"))
+      .def_ro("device", &DeviceAllocation::device)
+      .def_ro("alloc_id", &DeviceAllocation::alloc_id);
 
-  py::class_<Ndarray>(m, "NdarrayCxx")
+  // The frontend holds weakrefs to the underlying Ndarray (kernel launch-context cache eviction in
+  // kernel.py); nanobind types are not weak-referenceable by default, so opt in (pybind11 default).
+  nb::class_<Ndarray>(m, "NdarrayCxx", nb::is_weak_referenceable())
       .def("device_allocation_ptr", &Ndarray::get_device_allocation_ptr_as_int)
       .def("device_allocation", &Ndarray::get_device_allocation)
       .def("element_size", &Ndarray::get_element_size)
@@ -521,19 +537,19 @@ void export_lang(py::module &m) {
       .def("total_shape", &Ndarray::total_shape)
       .def("element_shape", &Ndarray::get_element_shape)
       .def("element_data_type", &Ndarray::get_element_data_type)
-      .def_readonly("dtype", &Ndarray::dtype)
-      .def_readonly("shape", &Ndarray::shape);
+      .def_ro("dtype", &Ndarray::dtype)
+      .def_ro("shape", &Ndarray::shape);
 
-  py::enum_<BufferFormat>(m, "Format")
+  nb::enum_<BufferFormat>(m, "Format")
 #define PER_BUFFER_FORMAT(x) .value(#x, BufferFormat::x)
 #include "quadrants/inc/rhi_constants.inc.h"
 #undef PER_EXTENSION
       ;
 
-  py::class_<Kernel>(m, "KernelCxx")
+  nb::class_<Kernel>(m, "KernelCxx")
       .def("no_activate",
            [](Kernel *self, SNode *snode) {
-             // TODO(#2193): Also apply to @ti.func?
+             // TODO(#2193): Also apply to @qd.func?
              self->no_activate.push_back(snode);
            })
       .def("to_string", &Kernel::to_string)
@@ -547,9 +563,9 @@ void export_lang(py::module &m) {
       .def("make_launch_context", &Kernel::make_launch_context)
       .def(
           "ast_builder", [](Kernel *self) -> ASTBuilder * { return &self->context->builder(); },
-          py::return_value_policy::reference);
+          nb::rv_policy::reference);
 
-  py::class_<LaunchContextBuilder>(m, "KernelLaunchContext")
+  nb::class_<LaunchContextBuilder>(m, "KernelLaunchContext")
       .def("copy", &LaunchContextBuilder::copy)
       .def("set_arg_int", &LaunchContextBuilder::set_arg_int)
       .def("set_args_int", &LaunchContextBuilder::set_args_int)
@@ -561,31 +577,34 @@ void export_lang(py::module &m) {
       .def("set_struct_arg_uint", &LaunchContextBuilder::set_struct_arg<uint64>)
       .def("set_struct_arg_float", &LaunchContextBuilder::set_struct_arg<double>)
       .def("set_arg_external_array_with_shape", &LaunchContextBuilder::set_arg_external_array_with_shape)
-      .def("set_arg_ndarray", &LaunchContextBuilder::set_arg_ndarray)
+      .def("set_arg_ndarray", &LaunchContextBuilder::set_arg_ndarray, nb::arg("arg_id"), nb::arg("arr"))
       .def("set_args_ndarray", &LaunchContextBuilder::set_args_ndarray)
       .def("set_arg_ndarray_with_grad", &LaunchContextBuilder::set_arg_ndarray_with_grad)
       .def("set_args_ndarray_with_grad", &LaunchContextBuilder::set_args_ndarray_with_grad)
       .def("get_struct_ret_int", &LaunchContextBuilder::get_struct_ret_int)
       .def("get_struct_ret_uint", &LaunchContextBuilder::get_struct_ret_uint)
       .def("get_struct_ret_float", &LaunchContextBuilder::get_struct_ret_float)
-      .def_readwrite("use_graph", &LaunchContextBuilder::use_graph)
-      .def_readwrite("graph_do_while_arg_id", &LaunchContextBuilder::graph_do_while_arg_id);
+      .def_rw("use_graph", &LaunchContextBuilder::use_graph)
+      .def("add_graph_do_while_level", &LaunchContextBuilder::add_graph_do_while_level)
+      .def_rw("checkpoint_yield_on_arg_ids", &LaunchContextBuilder::checkpoint_yield_on_arg_ids)
+      .def_rw("resume_from_checkpoint", &LaunchContextBuilder::resume_from_checkpoint);
 
-  py::class_<Function>(m, "Function")
+  nb::class_<Function>(m, "Function")
       .def("insert_scalar_param", &Function::insert_scalar_param)
       .def("insert_arr_param", &Function::insert_arr_param)
       .def("insert_ndarray_param", &Function::insert_ndarray_param)
       .def("insert_pointer_param", &Function::insert_pointer_param)
       .def("insert_ret", &Function::insert_ret)
-      .def("set_function_body", py::overload_cast<const std::function<void()> &>(&Function::set_function_body))
+      .def("set_function_body",
+           static_cast<void (Function::*)(const std::function<void()> &)>(&Function::set_function_body))
       .def("finalize_rets", &Function::finalize_rets)
       .def("finalize_params", &Function::finalize_params)
       .def(
           "ast_builder", [](Function *self) -> ASTBuilder * { return &self->context->builder(); },
-          py::return_value_policy::reference);
+          nb::rv_policy::reference);
 
-  py::class_<Expr> expr(m, "ExprCxx");
-  expr.def("snode", &Expr::snode, py::return_value_policy::reference)
+  nb::class_<Expr> expr(m, "ExprCxx");
+  expr.def("snode", &Expr::snode, nb::rv_policy::reference)
       .def("is_external_tensor_expr", [](Expr *expr) { return expr->is<ExternalTensorExpression>(); })
       .def("is_index_expr", [](Expr *expr) { return expr->is<IndexExpression>(); })
       .def("is_primal",
@@ -610,7 +629,7 @@ void export_lang(py::module &m) {
            [&](Expr *expr) -> int { return expr->cast<MatrixFieldExpression>()->dynamic_index_stride; })
       .def(
           "get_dt", [&](Expr *expr) -> const Type * { return expr->cast<FieldExpression>()->dt; },
-          py::return_value_policy::reference)
+          nb::rv_policy::reference)
       .def("get_ret_type", &Expr::get_ret_type)
       .def("get_rvalue_type", [](Expr *expr) { return expr->get_rvalue_type(); })
       .def("is_tensor", [](Expr *expr) { return expr->get_rvalue_type()->is<TensorType>(); })
@@ -637,17 +656,18 @@ void export_lang(py::module &m) {
         return (uint64)e->expr.get();
       });
 
-  py::class_<ExprGroup>(m, "ExprGroup")
-      .def(py::init<>())
+  nb::class_<ExprGroup>(m, "ExprGroup")
+      .def(nb::init<>())
       .def("size", [](ExprGroup *eg) { return eg->exprs.size(); })
       .def("push_back", &ExprGroup::push_back);
 
-  py::class_<Stmt>(m, "Stmt");  // NOLINT(bugprone-unused-raii)
+  nb::class_<Stmt>(m, "Stmt");  // NOLINT(bugprone-unused-raii)
 
   m.def("insert_internal_func_call",
         [&](Operation *op, const ExprGroup &args) { return Expr::make<InternalFuncCallExpression>(op, args.exprs); });
 
-  m.def("make_get_element_expr", Expr::make<GetElementExpression, const Expr &, std::vector<int>, const DebugInfo &>);
+  m.def("make_get_element_expr", Expr::make<GetElementExpression, const Expr &, std::vector<int>, const DebugInfo &>,
+        nb::arg("expr"), nb::arg("indices"), nb::arg("dbg_info"));
 
   m.def("value_cast", static_cast<Expr (*)(const Expr &expr, DataType)>(cast));
   m.def("bits_cast", static_cast<Expr (*)(const Expr &expr, DataType)>(bit_cast));
@@ -753,8 +773,10 @@ void export_lang(py::module &m) {
 
 #undef DEFINE_EXPRESSION_OP
 
-  m.def("make_global_load_stmt", Stmt::make<GlobalLoadStmt, Stmt *>);
-  m.def("make_global_store_stmt", Stmt::make<GlobalStoreStmt, Stmt *, Stmt *>);
+  // nanobind rejects None for pointer arguments by default; pybind11 mapped None -> nullptr. Opt back in with
+  // .none() so callers (incl. the binding-surface test) can pass None for these Stmt* operands.
+  m.def("make_global_load_stmt", Stmt::make<GlobalLoadStmt, Stmt *>, nb::arg().none());
+  m.def("make_global_store_stmt", Stmt::make<GlobalStoreStmt, Stmt *, Stmt *>, nb::arg().none(), nb::arg().none());
   m.def("make_frontend_assign_stmt", Stmt::make<FrontendAssignStmt, const Expr &, const Expr &, const DebugInfo &>);
 
   m.def("make_arg_load_expr",
@@ -770,19 +792,22 @@ void export_lang(py::module &m) {
 
   m.def("make_rand_expr", Expr::make<RandExpression, const DataType &, const DebugInfo &>);
 
-  m.def("make_const_expr_bool", Expr::make<ConstExpression, const DataType &, uint1>);
+  m.def("make_const_expr_bool", Expr::make<ConstExpression, const DataType &, uint1>, nb::arg("dtype"),
+        nb::arg("value"));
 
-  m.def("make_const_expr_int", Expr::make<ConstExpression, const DataType &, int64>);
+  m.def("make_const_expr_int", Expr::make<ConstExpression, const DataType &, int64>, nb::arg("dtype"),
+        nb::arg("value"));
 
-  m.def("make_const_expr_fp", Expr::make<ConstExpression, const DataType &, float64>);
+  m.def("make_const_expr_fp", Expr::make<ConstExpression, const DataType &, float64>, nb::arg("dtype"),
+        nb::arg("value"));
 
-  auto &&bin = py::enum_<BinaryOpType>(m, "BinaryOpType", py::arithmetic());
+  auto &&bin = nb::enum_<BinaryOpType>(m, "BinaryOpType", nb::is_arithmetic());
   for (int t = 0; t <= (int)BinaryOpType::undefined; t++)
     bin.value(binary_op_type_name(BinaryOpType(t)).c_str(), BinaryOpType(t));
   bin.export_values();
   m.def("make_binary_op_expr", Expr::make<BinaryOpExpression, const BinaryOpType &, const Expr &, const Expr &>);
 
-  auto &&unary = py::enum_<UnaryOpType>(m, "UnaryOpType", py::arithmetic());
+  auto &&unary = nb::enum_<UnaryOpType>(m, "UnaryOpType", nb::is_arithmetic());
   for (int t = 0; t <= (int)UnaryOpType::undefined; t++)
     unary.value(unary_op_type_name(UnaryOpType(t)).c_str(), UnaryOpType(t));
   unary.export_values();
@@ -872,9 +897,9 @@ void export_lang(py::module &m) {
     return Expr::make<MeshRelationAccessExpression>(mesh_ptr.ptr.get(), mesh_idx, to_type, neighbor_idx, dbg_info);
   });
 
-  py::class_<FunctionKey>(m, "FunctionKey")
-      .def(py::init<const std::string &, int, int>())
-      .def_readonly("instance_id", &FunctionKey::instance_id);
+  nb::class_<FunctionKey>(m, "FunctionKey")
+      .def(nb::init<const std::string &, int, int>())
+      .def_ro("instance_id", &FunctionKey::instance_id);
 
   m.def("test_throw", [] {
     try {
@@ -893,7 +918,10 @@ void export_lang(py::module &m) {
   m.def("host_arch", host_arch);
   m.def("arch_uses_llvm", arch_uses_llvm);
 
-  m.def("set_lib_dir", [&](const std::string &dir) { compiled_lib_dir = dir; });
+  // The Python caller passes a filesystem-encoded path as ``bytes`` (see _lib/utils.py:locale_encode). pybind11's
+  // std::string caster accepted bytes directly; nanobind's only accepts str, so take nb::bytes and copy the raw
+  // bytes to preserve non-UTF-8 path fidelity.
+  m.def("set_lib_dir", [&](nb::bytes dir) { compiled_lib_dir = std::string(dir.c_str(), dir.size()); });
   m.def("set_tmp_dir", [&](const std::string &dir) { runtime_tmp_dir = dir; });
 
   m.def("get_commit_hash", get_commit_hash);
@@ -941,26 +969,26 @@ void export_lang(py::module &m) {
 
   // Type system
 
-  py::class_<Type>(m, "Type").def("to_string", &Type::to_string);
+  nb::class_<Type>(m, "Type").def("to_string", &Type::to_string);
 
   m.def("promoted_type", promoted_type);
 
-  // Note that it is important to specify py::return_value_policy::reference for
+  // Note that it is important to specify nb::rv_policy::reference for
   // the factory methods, otherwise pybind11 will delete the Types owned by
   // TypeFactory on Python-scope pointer destruction.
-  py::class_<TypeFactory>(m, "TypeFactory")
-      .def("get_quant_int_type", &TypeFactory::get_quant_int_type, py::arg("num_bits"), py::arg("is_signed"),
-           py::arg("compute_type"), py::return_value_policy::reference)
-      .def("get_quant_fixed_type", &TypeFactory::get_quant_fixed_type, py::arg("digits_type"), py::arg("compute_type"),
-           py::arg("scale"), py::return_value_policy::reference)
-      .def("get_quant_float_type", &TypeFactory::get_quant_float_type, py::arg("digits_type"), py::arg("exponent_type"),
-           py::arg("compute_type"), py::return_value_policy::reference)
+  nb::class_<TypeFactory>(m, "TypeFactory")
+      .def("get_quant_int_type", &TypeFactory::get_quant_int_type, nb::arg("num_bits"), nb::arg("is_signed"),
+           nb::arg("compute_type"), nb::rv_policy::reference)
+      .def("get_quant_fixed_type", &TypeFactory::get_quant_fixed_type, nb::arg("digits_type"), nb::arg("compute_type"),
+           nb::arg("scale"), nb::rv_policy::reference)
+      .def("get_quant_float_type", &TypeFactory::get_quant_float_type, nb::arg("digits_type"), nb::arg("exponent_type"),
+           nb::arg("compute_type"), nb::rv_policy::reference)
       .def(
           "get_tensor_type",
           [&](TypeFactory *factory, std::vector<int> shape, const DataType &element_type) {
             return factory->create_tensor_type(shape, element_type);
           },
-          py::return_value_policy::reference)
+          nb::arg("shape"), nb::arg("element_type"), nb::rv_policy::reference)
       .def(
           "get_struct_type",
           [&](TypeFactory *factory, std::vector<std::pair<DataType, std::string>> elements) {
@@ -970,36 +998,36 @@ void export_lang(py::module &m) {
             }
             return DataType(factory->get_struct_type(members));
           },
-          py::return_value_policy::reference)
-      .def("get_ndarray_struct_type", &TypeFactory::get_ndarray_struct_type, py::arg("dt"), py::arg("ndim"),
-           py::arg("needs_grad"), py::return_value_policy::reference);
+          nb::rv_policy::reference)
+      .def("get_ndarray_struct_type", &TypeFactory::get_ndarray_struct_type, nb::arg("dt"), nb::arg("ndim"),
+           nb::arg("needs_grad"), nb::rv_policy::reference);
 
-  m.def("get_type_factory_instance", TypeFactory::get_instance, py::return_value_policy::reference);
+  m.def("get_type_factory_instance", TypeFactory::get_instance, nb::rv_policy::reference);
 
   // NOLINTNEXTLINE(bugprone-unused-raii)
-  py::class_<BitStructType>(m, "BitStructType");
-  py::class_<BitStructTypeBuilder>(m, "BitStructTypeBuilder")
-      .def(py::init<int>())
+  nb::class_<BitStructType>(m, "BitStructType");
+  nb::class_<BitStructTypeBuilder>(m, "BitStructTypeBuilder")
+      .def(nb::init<int>())
       .def("begin_placing_shared_exponent", &BitStructTypeBuilder::begin_placing_shared_exponent)
       .def("end_placing_shared_exponent", &BitStructTypeBuilder::end_placing_shared_exponent)
       .def("add_member", &BitStructTypeBuilder::add_member)
-      .def("build", &BitStructTypeBuilder::build, py::return_value_policy::reference);
+      .def("build", &BitStructTypeBuilder::build, nb::rv_policy::reference);
 
-  py::class_<SNodeRegistry>(m, "SNodeRegistry")
-      .def(py::init<>())
-      .def("create_root", &SNodeRegistry::create_root, py::return_value_policy::reference);
+  nb::class_<SNodeRegistry>(m, "SNodeRegistry")
+      .def(nb::init<>())
+      .def("create_root", &SNodeRegistry::create_root, nb::rv_policy::reference);
 
   m.def(
       "finalize_snode_tree",
       [](SNodeRegistry *registry, const SNode *root, Program *program, bool compile_only) -> SNodeTree * {
         return program->add_snode_tree(registry->finalize(root), compile_only);
       },
-      py::return_value_policy::reference);
+      nb::rv_policy::reference);
 
   // Sparse Matrix
-  py::class_<SparseMatrixBuilder>(m, "SparseMatrixBuilder")
-      .def(py::init<int, int, int, DataType, const std::string &>(), py::arg("rows"), py::arg("cols"),
-           py::arg("max_num_triplets"), py::arg("dt") = PrimitiveType::f32, py::arg("storage_format") = "col_major")
+  nb::class_<SparseMatrixBuilder>(m, "SparseMatrixBuilder")
+      .def(nb::init<int, int, int, DataType, const std::string &>(), nb::arg("rows"), nb::arg("cols"),
+           nb::arg("max_num_triplets"), nb::arg("dt") = PrimitiveType::f32, nb::arg("storage_format") = "col_major")
       .def("print_triplets_eigen", &SparseMatrixBuilder::print_triplets_eigen)
       .def("print_triplets_cuda", &SparseMatrixBuilder::print_triplets_cuda)
       .def("create_ndarray", [&](SparseMatrixBuilder *builder, Program *prog) { return builder->create_ndarray(prog); })
@@ -1009,10 +1037,10 @@ void export_lang(py::module &m) {
       .def("build_cuda", &SparseMatrixBuilder::build_cuda)
       .def("get_addr", [](SparseMatrixBuilder *mat) { return uint64(mat); });
 
-  py::class_<SparseMatrix>(m, "SparseMatrix")
-      .def(py::init<>())
-      .def(py::init<int, int, DataType>(), py::arg("rows"), py::arg("cols"), py::arg("dt") = PrimitiveType::f32)
-      .def(py::init<SparseMatrix &>())
+  nb::class_<SparseMatrix>(m, "SparseMatrix")
+      .def(nb::init<>())
+      .def(nb::init<int, int, DataType>(), nb::arg("rows"), nb::arg("cols"), nb::arg("dt") = PrimitiveType::f32)
+      .def(nb::init<SparseMatrix &>())
       .def("to_string", &SparseMatrix::to_string)
       .def("get_element", &SparseMatrix::get_element<float32>)
       .def("set_element", &SparseMatrix::set_element<float32>)
@@ -1023,18 +1051,18 @@ void export_lang(py::module &m) {
 
 #define MAKE_SPARSE_MATRIX(TYPE, STORAGE, VTYPE)                                                                   \
   using STORAGE##TYPE##EigenMatrix = Eigen::SparseMatrix<float##TYPE, Eigen::STORAGE>;                             \
-  py::class_<EigenSparseMatrix<STORAGE##TYPE##EigenMatrix>, SparseMatrix>(m, #VTYPE #STORAGE "_EigenSparseMatrix") \
-      .def(py::init<int, int, DataType>())                                                                         \
-      .def(py::init<EigenSparseMatrix<STORAGE##TYPE##EigenMatrix> &>())                                            \
-      .def(py::init<const STORAGE##TYPE##EigenMatrix &>())                                                         \
-      .def(py::self += py::self)                                                                                   \
-      .def(py::self + py::self)                                                                                    \
-      .def(py::self -= py::self)                                                                                   \
-      .def(py::self - py::self)                                                                                    \
-      .def(py::self *= float##TYPE())                                                                              \
-      .def(py::self *float##TYPE())                                                                                \
-      .def(float##TYPE() * py::self)                                                                               \
-      .def(py::self *py::self)                                                                                     \
+  nb::class_<EigenSparseMatrix<STORAGE##TYPE##EigenMatrix>, SparseMatrix>(m, #VTYPE #STORAGE "_EigenSparseMatrix") \
+      .def(nb::init<int, int, DataType>())                                                                         \
+      .def(nb::init<EigenSparseMatrix<STORAGE##TYPE##EigenMatrix> &>())                                            \
+      .def(nb::init<const STORAGE##TYPE##EigenMatrix &>())                                                         \
+      .def(nb::self += nb::self)                                                                                   \
+      .def(nb::self + nb::self)                                                                                    \
+      .def(nb::self -= nb::self)                                                                                   \
+      .def(nb::self - nb::self)                                                                                    \
+      .def(nb::self *= float##TYPE())                                                                              \
+      .def(nb::self *float##TYPE())                                                                                \
+      .def(float##TYPE() * nb::self)                                                                               \
+      .def(nb::self *nb::self)                                                                                     \
       .def("matmul", &EigenSparseMatrix<STORAGE##TYPE##EigenMatrix>::matmul)                                       \
       .def("spmv", &EigenSparseMatrix<STORAGE##TYPE##EigenMatrix>::spmv)                                           \
       .def("transpose", &EigenSparseMatrix<STORAGE##TYPE##EigenMatrix>::transpose)                                 \
@@ -1047,27 +1075,27 @@ void export_lang(py::module &m) {
   MAKE_SPARSE_MATRIX(64, ColMajor, d);
   MAKE_SPARSE_MATRIX(64, RowMajor, d);
 
-  py::class_<CuSparseMatrix, SparseMatrix>(m, "CuSparseMatrix")
-      .def(py::init<int, int, DataType>())
-      .def(py::init<const CuSparseMatrix &>())
+  nb::class_<CuSparseMatrix, SparseMatrix>(m, "CuSparseMatrix")
+      .def(nb::init<int, int, DataType>())
+      .def(nb::init<const CuSparseMatrix &>())
       .def("spmv", &CuSparseMatrix::nd_spmv)
-      .def(py::self + py::self)
-      .def(py::self - py::self)
-      .def(py::self * float32())
-      .def(float32() * py::self)
+      .def(nb::self + nb::self)
+      .def(nb::self - nb::self)
+      .def(nb::self * float32())
+      .def(float32() * nb::self)
       .def("matmul", &CuSparseMatrix::matmul)
       .def("transpose", &CuSparseMatrix::transpose)
       .def("get_element", &CuSparseMatrix::get_element)
       .def("to_string", &CuSparseMatrix::to_string);
 
-  py::class_<SparseSolver>(m, "SparseSolver")
+  nb::class_<SparseSolver>(m, "SparseSolver")
       .def("compute", &SparseSolver::compute)
       .def("analyze_pattern", &SparseSolver::analyze_pattern)
       .def("factorize", &SparseSolver::factorize)
       .def("info", &SparseSolver::info);
 
 #define REGISTER_EIGEN_SOLVER(dt, type, order, fd)                                                      \
-  py::class_<EigenSparseSolver##dt##type##order, SparseSolver>(m, "EigenSparseSolver" #dt #type #order) \
+  nb::class_<EigenSparseSolver##dt##type##order, SparseSolver>(m, "EigenSparseSolver" #dt #type #order) \
       .def("compute", &EigenSparseSolver##dt##type##order::compute)                                     \
       .def("analyze_pattern", &EigenSparseSolver##dt##type##order::analyze_pattern)                     \
       .def("factorize", &EigenSparseSolver##dt##type##order::factorize)                                 \
@@ -1088,7 +1116,7 @@ void export_lang(py::module &m) {
   REGISTER_EIGEN_SOLVER(float64, LU, AMD, d)
   REGISTER_EIGEN_SOLVER(float64, LU, COLAMD, d)
 
-  py::class_<CuSparseSolver, SparseSolver>(m, "CuSparseSolver")
+  nb::class_<CuSparseSolver, SparseSolver>(m, "CuSparseSolver")
       .def("compute", &CuSparseSolver::compute)
       .def("analyze_pattern", &CuSparseSolver::analyze_pattern)
       .def("factorize", &CuSparseSolver::factorize)
@@ -1099,8 +1127,8 @@ void export_lang(py::module &m) {
   m.def("make_cusparse_solver", &make_cusparse_solver);
 
   // Conjugate Gradient solver
-  py::class_<CG<Eigen::VectorXf, float>>(m, "CGf")
-      .def(py::init<SparseMatrix &, int, float, bool>())
+  nb::class_<CG<Eigen::VectorXf, float>>(m, "CGf")
+      .def(nb::init<SparseMatrix &, int, float, bool>())
       .def("solve", &CG<Eigen::VectorXf, float>::solve)
       .def("set_x", &CG<Eigen::VectorXf, float>::set_x)
       .def("get_x", &CG<Eigen::VectorXf, float>::get_x)
@@ -1108,8 +1136,8 @@ void export_lang(py::module &m) {
       .def("set_b", &CG<Eigen::VectorXf, float>::set_b)
       .def("set_b_ndarray", &CG<Eigen::VectorXf, float>::set_b_ndarray)
       .def("is_success", &CG<Eigen::VectorXf, float>::is_success);
-  py::class_<CG<Eigen::VectorXd, double>>(m, "CGd")
-      .def(py::init<SparseMatrix &, int, double, bool>())
+  nb::class_<CG<Eigen::VectorXd, double>>(m, "CGd")
+      .def(nb::init<SparseMatrix &, int, double, bool>())
       .def("solve", &CG<Eigen::VectorXd, double>::solve)
       .def("set_x", &CG<Eigen::VectorXd, double>::set_x)
       .def("set_x_ndarray", &CG<Eigen::VectorXd, double>::set_x_ndarray)
@@ -1124,24 +1152,24 @@ void export_lang(py::module &m) {
     return make_cg_solver<Eigen::VectorXd, double>(A, max_iters, tol, verbose);
   });
 
-  py::class_<CUCG>(m, "CUCG").def("solve", &CUCG::solve);
+  nb::class_<CUCG>(m, "CUCG").def("solve", &CUCG::solve);
   m.def("make_cucg_solver", make_cucg_solver);
 
   // Mesh Class
   // Mesh related.
-  py::enum_<mesh::MeshTopology>(m, "MeshTopology", py::arithmetic())
+  nb::enum_<mesh::MeshTopology>(m, "MeshTopology", nb::is_arithmetic())
       .value("Triangle", mesh::MeshTopology::Triangle)
       .value("Tetrahedron", mesh::MeshTopology::Tetrahedron)
       .export_values();
 
-  py::enum_<mesh::MeshElementType>(m, "MeshElementType", py::arithmetic())
+  nb::enum_<mesh::MeshElementType>(m, "MeshElementType", nb::is_arithmetic())
       .value("Vertex", mesh::MeshElementType::Vertex)
       .value("Edge", mesh::MeshElementType::Edge)
       .value("Face", mesh::MeshElementType::Face)
       .value("Cell", mesh::MeshElementType::Cell)
       .export_values();
 
-  py::enum_<mesh::MeshRelationType>(m, "MeshRelationType", py::arithmetic())
+  nb::enum_<mesh::MeshRelationType>(m, "MeshRelationType", nb::is_arithmetic())
       .value("VV", mesh::MeshRelationType::VV)
       .value("VE", mesh::MeshRelationType::VE)
       .value("VF", mesh::MeshRelationType::VF)
@@ -1160,14 +1188,14 @@ void export_lang(py::module &m) {
       .value("CC", mesh::MeshRelationType::CC)
       .export_values();
 
-  py::enum_<mesh::ConvType>(m, "ConvType", py::arithmetic())
+  nb::enum_<mesh::ConvType>(m, "ConvType", nb::is_arithmetic())
       .value("l2g", mesh::ConvType::l2g)
       .value("l2r", mesh::ConvType::l2r)
       .value("g2r", mesh::ConvType::g2r)
       .export_values();
 
-  py::class_<mesh::Mesh>(m, "Mesh");        // NOLINT(bugprone-unused-raii)
-  py::class_<mesh::MeshPtr>(m, "MeshPtr");  // NOLINT(bugprone-unused-raii)
+  nb::class_<mesh::Mesh>(m, "Mesh");        // NOLINT(bugprone-unused-raii)
+  nb::class_<mesh::MeshPtr>(m, "MeshPtr");  // NOLINT(bugprone-unused-raii)
 
   m.def("element_order", mesh::element_order);
   m.def("from_end_element_order", mesh::from_end_element_order);
@@ -1183,7 +1211,7 @@ void export_lang(py::module &m) {
         mesh::MeshPtr mesh_ptr = mesh::MeshPtr{mesh_shared};
         return mesh_ptr;
       },
-      py::return_value_policy::reference);
+      nb::rv_policy::reference);
 
   // ad-hoc setters
   m.def("set_owned_offset", [](mesh::MeshPtr &mesh_ptr, mesh::MeshElementType type, SNode *snode) {
@@ -1227,12 +1255,12 @@ void export_lang(py::module &m) {
 #endif
   });
 
-  auto operationClass = py::class_<Operation>(m, "Operation");
-  auto internalOpClass = py::class_<InternalOp>(m, "InternalOp");
+  auto operationClass = nb::class_<Operation>(m, "Operation");
+  auto internalOpClass = nb::class_<InternalOpScope>(m, "InternalOp");
 
-#define PER_INTERNAL_OP(x)                      \
-  internalOpClass.def_property_readonly_static( \
-      #x, [](py::object) { return Operations::get(InternalOp::x); }, py::return_value_policy::reference);
+#define PER_INTERNAL_OP(x)            \
+  internalOpClass.def_prop_ro_static( \
+      #x, [](nb::object) { return Operations::get(InternalOp::x); }, nb::rv_policy::reference);
 #include "quadrants/inc/internal_ops.inc.h"
 #undef PER_INTERNAL_OP
 }

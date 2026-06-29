@@ -36,6 +36,11 @@ from quadrants._lib.core.quadrants_python import (
 )
 from quadrants._tensor_wrapper import _TENSOR_WRAPPER_TYPES
 from quadrants.lang import _kernel_impl_dataclass, impl, runtime_ops
+
+# `qd.checkpoint` pause / resume model helpers. See `kernel_checkpoint.py` for the full extracted surface; `Kernel`
+# delegates the resume-cookie validation, label translation, per-launch yield_on= arg-id table build, and GraphStatus
+# construction to those free functions so this hot file doesn't accrete checkpoint-feature-specific blocks.
+from quadrants.lang import kernel_checkpoint as _checkpoint_helpers
 from quadrants.lang._fast_caching import src_hasher
 from quadrants.lang._template_mapper_hotpath import chain_has_mutable_container
 from quadrants.lang._wrap_inspect import FunctionSourceInfo, get_source_info_and_src
@@ -99,17 +104,17 @@ class LaunchContextBufferCache:
     # pointers, the address of these pointers cannot change, and the set of parameters is fixed.
     # The lifetime of a cache entry is bound to the lifetime of any of its input arguments: the first being garbage
     # collected will invalidate the entire entry. Moreover, the entire cache registry is bound to the lifetime of the
-    # taichi prog itself, which means that calling `qd.reset()` will automatically clear the cache. Note that the cache
+    # quadrants prog itself, which means that calling `qd.reset()` will automatically clear the cache. Note that the cache
     # stores wear references to pointers, so it does not hold alife any allocated memory.
     def __init__(self) -> None:
-        # Keep track of taichi runtime to automatically clear cache if destroyed
+        # Keep track of quadrants runtime to automatically clear cache if destroyed
         self._prog_weakref: ReferenceType[Program] | None = None
 
         # The cache key corresponds to the hash of the (packed) python-side input arguments of the kernel.
         # * '_launch_ctx_cache' is storing a backup of the launch context BEFORE ever calling the kernel.
         # * '_launch_ctx_cache_tracker' is used for bounding the lifetime of a cache entry to its corresponding set of
-        #   input arguments. Internally, this is done by wrapping all Taichi ndarrays as weak reference.
-        # * '_prog_weakref'is used for bounding the lifetime of the entire cache to the Taichi programm managing all
+        #   input arguments. Internally, this is done by wrapping all Quadrants ndarrays as weak reference.
+        # * '_prog_weakref'is used for bounding the lifetime of the entire cache to the Quadrants programm managing all
         #   the launch context being stored in cache.
         # See 'launch_kernel' for details regarding the intended use of caching.
         self._launch_ctx_cache: dict["ArgsHash", KernelLaunchContext] = {}
@@ -165,7 +170,7 @@ class LaunchContextBufferCache:
                 prog, partial(LaunchContextBufferCache._destroy_callback, ReferenceType(self))
             )
         else:
-            # Since we already store a weak reference to taichi program, it is much faster to use it rather than
+            # Since we already store a weak reference to quadrants program, it is much faster to use it rather than
             # paying the overhead of calling pybind11 functions (~200ns vs 5ns).
             prog = self._prog_weakref()
         assert prog is not None
@@ -234,6 +239,13 @@ class ASTGenerator:
             # be available to use in build_Call, later.
             tree = _kernel_impl_dataclass.unpack_ast_struct_expressions(self.tree, struct_locals=struct_locals)
             ctx.only_parse_function_def = self.only_parse_function_def
+            # Rebuild the graph_do_while level table from scratch each compilation pass (build_While appends to it as it
+            # walks the AST). Skip when only_parse_function_def: the body is not walked, so build_While never runs to
+            # repopulate it -- and on a fast-cache restore the table was already rebuilt from the cached (cond_arg_name,
+            # parent_id) pairs in _try_load_fastcache.
+            if not ctx.only_parse_function_def:
+                self.current_kernel.graph_do_while_levels = []
+                self.current_kernel._graph_do_while_level_stack = []
             transform_tree(tree, ctx)
             if not ctx.is_real_function and not ctx.only_parse_function_def:
                 if self.current_kernel.return_type and ctx.returned != ReturnStatus.ReturnedValue:
@@ -276,6 +288,17 @@ class ASTGenerator:
         return node  # Basic types (str, int, None, etc.)
 
 
+@dataclasses.dataclass
+class GraphDoWhileLevel:
+    """One nested ``qd.graph_do_while`` loop in a ``graph=True`` kernel, indexed by level id (assigned
+    outer-before-inner by the AST transformer). Mirrors the C++ ``GraphDoWhileLevel``."""
+
+    cond_arg_name: str
+    parent_id: int
+    # Resolved C++ arg index of the condition ndarray (filled during launch-arg iteration).
+    cond_cpp_arg_id: int = -1
+
+
 class Kernel(FuncBase):
     counter = 0
 
@@ -306,7 +329,31 @@ class Kernel(FuncBase):
         self.materialized_kernels: dict[CompiledKernelKeyType, KernelCxx] = {}
         self.has_print = False
         self.use_graph: bool = False
+        # Opt-in flag set by `@qd.kernel(graph=True, checkpoints=True)`. When True, the AST transformer enables
+        # `qd.checkpoint(...)` recognition AND auto-wraps every top-level for-loop that isn't already inside a `with
+        # qd.checkpoint(...)` block in an implicit no-yield checkpoint. When False, any use of `qd.checkpoint(...)` in
+        # the kernel body is rejected at compile time with a fix-it pointing at `checkpoints=True`.
+        self.use_checkpoints: bool = False
+        # Legacy single-loop arg name, kept for reporting/back-compat; equals the outermost level's condition arg for
+        # nested kernels. The authoritative data is `graph_do_while_levels`.
         self.graph_do_while_arg: str | None = None
+        # Nested graph_do_while level table, indexed by level id (outer before inner). Rebuilt each compilation pass by
+        # the AST transformer; serialized to the launch context at launch.
+        self.graph_do_while_levels: list[GraphDoWhileLevel] = []
+        # Transient stack of active level ids, used only while transforming the AST.
+        self._graph_do_while_level_stack: list[int] = []
+        # Per-checkpoint metadata, one entry per `with qd.checkpoint(...)` block (explicit AND auto-injected implicit)
+        # in declaration order. List index is the checkpoint's internal `cp_id` (0, 1, 2, ... dense, flat across the
+        # kernel). Each entry is the name of the `yield_on=` kernel parameter, or `None` for implicit checkpoints (which
+        # never yield). Populated by the AST transformer; empty means the kernel uses no checkpoints.
+        self.checkpoint_yield_on_args: list[str | None] = []
+        # User-facing labels for explicit checkpoints. Same indexing as `checkpoint_yield_on_args`: entry `i` is the int
+        # (or IntEnum value) the user passed as the first positional arg of `qd.checkpoint(cp_id, yield_on)` for the
+        # checkpoint whose internal cp_id is `i`. Implicit checkpoints (auto-wrapped) get `None` (they have no
+        # user-facing label and can never appear in `GraphStatus.checkpoint`). The label is preserved as-is so an
+        # `IntEnum` round-trips: writing `qd.checkpoint(Stage.SIM, ...)` and then reading `status.checkpoint` returns
+        # `Stage.SIM` rather than the raw int.
+        self.checkpoint_user_labels_by_cp_id: list[int | None] = []
         self.quadrants_callable: QuadrantsCallable | None = None
         self.visited_functions: set[FunctionSourceInfo] = set()
         self.kernel_function_info: FunctionSourceInfo | None = None
@@ -350,10 +397,10 @@ class Kernel(FuncBase):
                 self.raise_on_templated_floats, kernel_source_info, args, self.arg_metas
             )
             used_py_dataclass_parameters = None
-            cached_graph_do_while_arg: str | None = None
+            cached_graph_do_while_levels: list[tuple[str, int]] | None = None
             if self.fast_checksum:
                 self.src_ll_cache_observations.cache_key_generated = True
-                used_py_dataclass_parameters, frontend_cache_key, cached_graph_do_while_arg = src_hasher.load(  # type: ignore[reportAssignmentType]
+                used_py_dataclass_parameters, frontend_cache_key, cached_graph_do_while_levels = src_hasher.load(  # type: ignore[reportAssignmentType]
                     self.fast_checksum
                 )
             if used_py_dataclass_parameters is not None and frontend_cache_key is not None:
@@ -369,8 +416,14 @@ class Kernel(FuncBase):
                 if self.compiled_kernel_data_by_key[key]:
                     self.src_ll_cache_observations.cache_loaded = True
                     self.used_py_dataclass_parameters_by_key_enforcing[key] = used_py_dataclass_parameters
-                    if cached_graph_do_while_arg is not None:
-                        self.graph_do_while_arg = cached_graph_do_while_arg
+                    # Fast-cache restore skips AST transformation, so rebuild the gdw level table (and the legacy
+                    # outermost-arg alias) from the cached (cond_arg_name, parent_id) pairs.
+                    if cached_graph_do_while_levels:
+                        self.graph_do_while_levels = [
+                            GraphDoWhileLevel(cond_arg_name=name, parent_id=parent)
+                            for name, parent in cached_graph_do_while_levels
+                        ]
+                        self.graph_do_while_arg = self.graph_do_while_levels[0].cond_arg_name
                     return used_py_dataclass_parameters
 
         elif self.quadrants_callable and not self.quadrants_callable.is_pure and self.runtime.print_non_pure:
@@ -479,7 +532,13 @@ class Kernel(FuncBase):
                 runtime._current_global_context = None
 
     def launch_kernel(
-        self, key, t_kernel: KernelCxx, compiled_kernel_data: CompiledKernelData | None, *args, qd_stream=None
+        self,
+        key,
+        t_kernel: KernelCxx,
+        compiled_kernel_data: CompiledKernelData | None,
+        *args,
+        qd_stream=None,
+        _resume_from_checkpoint: int | None = None,
     ) -> Any:
         assert len(args) == len(self.arg_metas), f"{len(self.arg_metas)} arguments needed but {len(args)} provided"
 
@@ -528,6 +587,13 @@ class Kernel(FuncBase):
             is_launch_ctx_cacheable = True
             template_num = 0
             i_out = 0
+            # Hoist the `kernel has any yield_on= checkpoint` predicate out of the per-arg loop so non-checkpoint
+            # kernels (the overwhelming majority) skip the helper function call entirely on every arg. Gated on
+            # `use_checkpoints` first so non-checkpoint kernels pay only one attribute lookup, not the list-truthy
+            # check on every cache-miss build.
+            _kernel_has_yield_on_checkpoint = self.use_checkpoints and bool(self.checkpoint_yield_on_args)
+            if _kernel_has_yield_on_checkpoint:
+                _checkpoint_helpers.init_yield_on_arg_id_table(self)
             for i_in, val in enumerate(args):
                 needed_ = self.arg_metas[i_in].annotation
                 if needed_ is template or type(needed_) is template:
@@ -541,8 +607,12 @@ class Kernel(FuncBase):
                 # which weakens API/type safety and can route the wrong struct type through launch.
                 if getattr(val, "_qd_all_field", False) and getattr(needed_, _FIELDS, None) is not None:
                     continue
-                if self.graph_do_while_arg is not None and self.arg_metas[i_in].name == self.graph_do_while_arg:
-                    self._graph_do_while_cpp_arg_id = i_out - template_num
+                if self.graph_do_while_levels:
+                    for _gdw_level in self.graph_do_while_levels:
+                        if self.arg_metas[i_in].name == _gdw_level.cond_arg_name:
+                            _gdw_level.cond_cpp_arg_id = i_out - template_num
+                if _kernel_has_yield_on_checkpoint:
+                    _checkpoint_helpers.maybe_record_yield_on_arg(self, self.arg_metas[i_in].name, i_out - template_num)
                 num_args_, is_launch_ctx_cacheable_ = self._recursive_set_args(
                     self.used_py_dataclass_parameters_by_key_enforcing[key],
                     self.arg_metas[i_in].name,
@@ -590,7 +660,7 @@ class Kernel(FuncBase):
         try:
             prog = impl.get_runtime().prog
             if not compiled_kernel_data:
-                # Store Taichi program config and device cap for efficiency because they are used at multiple places
+                # Store Quadrants program config and device cap for efficiency because they are used at multiple places
                 prog_config = prog.config()
                 prog_device_cap = prog.get_device_caps()
 
@@ -604,7 +674,9 @@ class Kernel(FuncBase):
                         self.fast_checksum,
                         self.visited_functions,
                         self.used_py_dataclass_parameters_by_key_enforcing[key],
-                        graph_do_while_arg=self.graph_do_while_arg,  # type: ignore[reportCallIssue]
+                        graph_do_while_levels=[  # type: ignore[reportCallIssue]
+                            (level.cond_arg_name, level.parent_id) for level in self.graph_do_while_levels
+                        ],
                     )
                     self.src_ll_cache_observations.cache_stored = True
             self._last_compiled_kernel_data = compiled_kernel_data
@@ -614,8 +686,22 @@ class Kernel(FuncBase):
                     "qd_stream is not compatible with graph=True kernels. "
                     "See docs/source/user_guide/streams.md for details."
                 )
-            if self.graph_do_while_arg is not None and hasattr(self, "_graph_do_while_cpp_arg_id"):
-                launch_ctx.graph_do_while_arg_id = self._graph_do_while_cpp_arg_id
+            for _gdw_level in self.graph_do_while_levels:
+                launch_ctx.add_graph_do_while_level(_gdw_level.cond_cpp_arg_id, _gdw_level.parent_id)
+            # Single `use_checkpoints` gate around the entire checkpoint-wiring block so non-checkpoint kernels skip
+            # both per-launch checks (yield-on table forward + resume_point copy) with one attribute lookup. Matches
+            # the equivalent fast-path gate in `__call__`.
+            if self.use_checkpoints:
+                if self.checkpoint_yield_on_args:
+                    _checkpoint_helpers.forward_yield_on_table_to_ctx(self, launch_ctx)
+                # `_resume_from_checkpoint` is `None` for fresh launches (host-side default 0 in
+                # `LaunchContextBuilder`, which means "run every checkpoint"). When `Kernel.resume` plumbs an int
+                # through, copy it onto the launch context so the GraphManager's `launch_cached_graph` memcpys it into
+                # the device-side `resume_point` slot instead of clearing to 0. Slice 2 implementation;
+                # pre-CUDA-12.4 / non-CUDA backends ignore the value since they don't have a resume_point slot today
+                # (slices 4-6 will add an indirect-dispatch equivalent).
+                if _resume_from_checkpoint is not None:
+                    launch_ctx.resume_from_checkpoint = int(_resume_from_checkpoint)
             stream_handle = qd_stream.handle if qd_stream is not None else 0
             if stream_handle:
                 prog.set_current_cuda_stream(stream_handle)
@@ -704,6 +790,23 @@ class Kernel(FuncBase):
     @_shell_pop_print
     def __call__(self, *py_args, **kwargs) -> Any:
         qd_stream = kwargs.pop("qd_stream", None)
+        # `use_checkpoints` is the kernel-construction-time flag set by `@qd.kernel(graph=True, checkpoints=True)`. The
+        # `_qd_from_checkpoint` kwarg can only be injected by `QuadrantsCallable.resume()`, which is the user-facing
+        # entry that requires `use_checkpoints=True`. So for the dominant (non-checkpoint) launch path we can skip the
+        # entire resume-cookie / GraphStatus surface with a single attribute lookup, keeping per-launch overhead in line
+        # with `main`. The same single gate also guards the post-launch `maybe_build_graph_status` branch.
+        if self.use_checkpoints:
+            # Pop the resume cookie before anything else touches kwargs -- the AST mapper sees user parameter names
+            # only, so a stray `from_checkpoint=` would raise "unexpected kwarg". `_resume_from_checkpoint` is the
+            # resolved cp_id to copy into the device-side `resume_point` slot before launch; `None` means "fresh start,
+            # reset to 0". Plumbed via `Kernel.resume()` only; users do not pass this directly.
+            _resume_from_checkpoint = kwargs.pop("_qd_from_checkpoint", None)
+            # `validate_resume_cookie` only does work when a resume cookie was actually passed; skip the function call
+            # entirely otherwise so the dominant non-resume call path stays clear of the checkpoint helpers.
+            if _resume_from_checkpoint is not None:
+                _checkpoint_helpers.validate_resume_cookie(self, _resume_from_checkpoint)
+        else:
+            _resume_from_checkpoint = None
         if qd_stream is not None and self.autodiff_mode != _NONE:
             raise RuntimeError(
                 "qd_stream is not compatible with autodiff kernels. Streams cannot be used with "
@@ -776,8 +879,50 @@ class Kernel(FuncBase):
         kernel_cpp = self.materialized_kernels[key]
         compiled_kernel_data = self.compiled_kernel_data_by_key.get(key, None)
         self.launch_observations.found_kernel_in_materialize_cache = compiled_kernel_data is not None
-        ret = self.launch_kernel(key, kernel_cpp, compiled_kernel_data, *py_args, qd_stream=qd_stream)
+        # Hot-path fast lane: for non-checkpoint kernels (`use_checkpoints=False`), skip every piece of checkpoint
+        # plumbing -- no label translation, no extra kwarg on `launch_kernel`, no post-launch GraphStatus build. This
+        # restores per-launch overhead to parity with `main` for the overwhelming majority of kernels (~120k launches/s
+        # on field-CPU benchmarks; every Python-frame nanosecond here shows up as 1-4% on small envs).
+        if not self.use_checkpoints:
+            ret = self.launch_kernel(key, kernel_cpp, compiled_kernel_data, *py_args, qd_stream=qd_stream)
+            if compiled_kernel_data is None:
+                assert self._last_compiled_kernel_data is not None
+                self.compiled_kernel_data_by_key[key] = self._last_compiled_kernel_data
+            return ret
+        # Checkpoint-enabled slow path: translate the user-supplied `from_checkpoint=` label into the dense,
+        # source-order internal cp_id the runtime uses. Translation happens here (after `ensure_compiled`) because
+        # `checkpoint_user_labels_by_cp_id` is populated during AST processing inside `ensure_compiled`.
+        if _resume_from_checkpoint is not None:
+            _resume_from_checkpoint = _checkpoint_helpers.translate_user_label_to_internal_cp_id(
+                self, _resume_from_checkpoint
+            )
+        # Only forward `_resume_from_checkpoint` when the caller actually supplied one (i.e. via `Kernel.resume(...)`).
+        # Otherwise omit the kwarg entirely so subclasses / monkeypatches of `launch_kernel` that pre-date this kwarg
+        # keep working unmodified. The host-side default in `LaunchContextBuilder` is 0 ("run every checkpoint"), which
+        # matches the `None` semantics in `launch_kernel`.
+        if _resume_from_checkpoint is None:
+            ret = self.launch_kernel(
+                key,
+                kernel_cpp,
+                compiled_kernel_data,
+                *py_args,
+                qd_stream=qd_stream,
+            )
+        else:
+            ret = self.launch_kernel(
+                key,
+                kernel_cpp,
+                compiled_kernel_data,
+                *py_args,
+                qd_stream=qd_stream,
+                _resume_from_checkpoint=_resume_from_checkpoint,
+            )
         if compiled_kernel_data is None:
             assert self._last_compiled_kernel_data is not None
             self.compiled_kernel_data_by_key[key] = self._last_compiled_kernel_data
+        # Surface a GraphStatus for kernels with `qd.checkpoint(yield_on=...)` so the host can drive the qipc-style
+        # re-entrant loop. Kernels without yield-capable checkpoints get `ret` (typically `None`) passed through;
+        # short-circuit the helper call so the hot non-checkpoint path doesn't even enter the Python frame.
+        if self.checkpoint_yield_on_args:
+            return _checkpoint_helpers.maybe_build_graph_status(self, ret)
         return ret
