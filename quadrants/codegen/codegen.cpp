@@ -81,7 +81,20 @@ LLVMCompiledKernel KernelCodeGen::compile_kernel_to_module() {
       auto cnt = [&](const std::function<bool(Stmt *)> &pred) {
         return (int)irpass::analysis::gather_statements(task, pred).size();
       };
+      // Execution structure: task type + launch dims + trip count. With identical IR content, a parallel->serial
+      // demotion or a shrunken grid would be the mechanism (same body statements, executed by far fewer threads).
+      std::string ttype = "?";
+      int grid = -1, block = -1, trip = -1;
+      if (task->is<OffloadedStmt>()) {
+        auto *off = task->as<OffloadedStmt>();
+        ttype = OffloadedStmt::task_type_name(off->task_type);
+        grid = off->grid_dim;
+        block = off->block_dim;
+        if (off->const_begin && off->const_end)
+          trip = off->end_value - off->begin_value;
+      }
       std::cerr << "[CSE_STATS] mode=" << irpass::cse_mode() << " task=" << i
+                << " type=" << ttype << " grid=" << grid << " block=" << block << " trip=" << trip
                 << " total=" << irpass::analysis::count_statements(task)
                 << " gload=" << cnt([](Stmt *s) { return s->is<GlobalLoadStmt>(); })
                 << " gstore=" << cnt([](Stmt *s) { return s->is<GlobalStoreStmt>(); })
