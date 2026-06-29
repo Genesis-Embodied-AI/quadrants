@@ -9,13 +9,12 @@ import scipy.linalg
 
 import quadrants as qd
 from quadrants.lang.exception import QuadrantsSyntaxError
-from quadrants.lang.simt import _tile16, _tile32
-from quadrants.lang.simt._tile16 import (
-    _make_tile16x16,
+from quadrants.lang.simt import _tile
+from quadrants.lang.simt._tile import (
+    _make_tile,
     _TileSliceProxy,
     _VecSliceProxy,
 )
-from quadrants.lang.simt._tile32 import _make_tile32x32
 from quadrants.types import primitive_types
 
 from tests import test_utils
@@ -28,15 +27,20 @@ _EPS_VALS = {qd.f32: 1e-6, qd.f64: 1e-14}
 
 
 # --- Parametrize over tile size ----------------------------------------------------------------
+import functools as _functools  # noqa: E402
 import types as _types  # noqa: E402
 
 _TILE_PARAMS = [
     pytest.param(
-        _types.SimpleNamespace(proxy=qd.simt.Tile16x16, make=_make_tile16x16, size=16, m_size=40, name="tile16"),
+        _types.SimpleNamespace(
+            proxy=qd.simt.Tile16x16, make=_functools.partial(_make_tile, 16), size=16, m_size=40, name="tile16"
+        ),
         id="tile16",
     ),
     pytest.param(
-        _types.SimpleNamespace(proxy=qd.simt.Tile32x32, make=_make_tile32x32, size=32, m_size=80, name="tile32"),
+        _types.SimpleNamespace(
+            proxy=qd.simt.Tile32x32, make=_functools.partial(_make_tile, 32), size=32, m_size=80, name="tile32"
+        ),
         id="tile32",
     ),
 ]
@@ -424,7 +428,7 @@ def test_store_partial_cols_untouched(TILE, make_tile, tdim, m_size, tensor_type
 
 
 def test_make_caching(TILE, make_tile, tdim, m_size):
-    """_make_tile16x16 must return the same object for the same dtype."""
+    """_make_tile must return the same object for the same (N, dtype)."""
     a = make_tile(qd.f32)
     b = make_tile(qd.f32)
     assert a is b
@@ -1543,11 +1547,12 @@ def test_vec_proxy_non_identity_dtype(TILE, make_tile, tdim, m_size):
     assert nonid_dtype == qd.f32
     assert id(nonid_dtype) not in primitive_types.type_ids  # precondition the old dtype(0.0) tripped on
 
-    # The tile-class cache is process-global and keyed by dtype value, so a previously cached identity-dtype class
-    # would mask the regression.  Drop the entry so the class is rebuilt capturing this non-identity dtype, and
-    # restore the cache afterwards so we don't leak a deepcopy-keyed entry into other tests.
-    cache = _tile16._tile16_cache if TILE is qd.simt.Tile16x16 else _tile32._tile32_cache
-    cache.pop(nonid_dtype, None)
+    # The tile-class cache is process-global and keyed by (N, dtype) value, so a previously cached identity-dtype
+    # class would mask the regression.  Drop the entry so the class is rebuilt capturing this non-identity dtype,
+    # and restore the cache afterwards so we don't leak a deepcopy-keyed entry into other tests.
+    cache = _tile._tile_cache
+    cache_key = (tdim, nonid_dtype)
+    cache.pop(cache_key, None)
     try:
         Tile = make_tile(nonid_dtype)
         Ann = _ann(qd.field, qd.f32, 2)
@@ -1598,7 +1603,7 @@ def test_vec_proxy_non_identity_dtype(TILE, make_tile, tdim, m_size):
         col3 = V3[1, K0 : K0 + tdim, COL]
         np.testing.assert_allclose(out3.to_numpy(), R - np.outer(col3, col3), atol=1e-5)
     finally:
-        cache.pop(nonid_dtype, None)
+        cache.pop(cache_key, None)
 
 
 @test_utils.test(arch=qd.gpu)
