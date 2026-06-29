@@ -46,6 +46,9 @@ bool alg_simp(IRNode *root, const CompileConfig &config);
 bool demote_operations(IRNode *root, const CompileConfig &config);
 bool binary_op_simplify(IRNode *root, const CompileConfig &config);
 bool whole_kernel_cse(IRNode *root);
+// DIAGNOSTIC (cse-diag): CSE scoping selected by QD_CSE_MODE; see whole_kernel_cse.cpp.
+bool offload_scoped_cse(IRNode *root, const std::string &phase);
+const std::string &cse_mode();
 bool extract_constant(IRNode *root, const CompileConfig &config);
 bool unreachable_code_elimination(IRNode *root);
 bool loop_invariant_code_motion(IRNode *root, const CompileConfig &config);

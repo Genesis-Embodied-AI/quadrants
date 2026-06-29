@@ -5,7 +5,10 @@
 #include "quadrants/ir/visitors.h"
 #include "quadrants/system/profiler.h"
 
+#include <cstdlib>
+#include <string>
 #include <typeindex>
+#include <vector>
 
 namespace quadrants::lang {
 
@@ -260,10 +263,88 @@ class WholeKernelCSE : public BasicStmtVisitor {
   }
 };
 
+namespace {
+
+// Collect the top-level offloaded tasks of |root| iff |root| is an already-offloaded kernel body (a Block whose
+// statements are all OffloadedStmt). Empty otherwise. Mirrors cfg_optimization::collect_offloaded_tasks.
+std::vector<OffloadedStmt *> collect_offloaded_tasks(IRNode *root) {
+  std::vector<OffloadedStmt *> tasks;
+  auto *block = root->cast<Block>();
+  if (block == nullptr || block->statements.empty()) {
+    return tasks;
+  }
+  for (auto &stmt : block->statements) {
+    if (!stmt->is<OffloadedStmt>()) {
+      return {};
+    }
+  }
+  for (auto &stmt : block->statements) {
+    tasks.push_back(stmt->as<OffloadedStmt>());
+  }
+  return tasks;
+}
+
+// Run CSE on a single offloaded task, scoped to that task alone via a throwaway wrapper block (same idiom as
+// cfg_optimization::optimize_one_task).
+bool cse_one_task(Block *parent, OffloadedStmt *off) {
+  const int location = parent->locate(off);
+  QD_ASSERT(location != -1);
+  Block wrapper;
+  wrapper.insert(parent->extract(off));
+  const bool modified = WholeKernelCSE::run(&wrapper);
+  parent->insert(wrapper.extract(off), location);
+  return modified;
+}
+
+}  // namespace
+
 namespace irpass {
+
+// DIAGNOSTIC ONLY (cse-diag branch). QD_CSE_MODE selects how/where CSE runs, so one binary can A/B every
+// hypothesis about the per-offload-CSE runtime regression. Default "whole" == origin/main behaviour.
+//   whole      : whole-kernel CSE in every full_simplify call (baseline / origin/main).
+//   none       : no CSE anywhere.
+//   migration  : ditch CSE pre-offload (simplify_I/II/pre_autodiff/post_autodiff), per-task post-offload.
+//   keep_pre   : whole-kernel CSE pre-offload, per-task post-offload (isolates whether pre-offload CSE matters).
+//   experiment : no CSE in full_simplify; per-task CSE once in compile_kernel_to_module (the exp2 approach).
+const std::string &cse_mode() {
+  static const std::string mode = []() {
+    const char *e = std::getenv("QD_CSE_MODE");
+    return std::string(e != nullptr ? e : "whole");
+  }();
+  return mode;
+}
+
 bool whole_kernel_cse(IRNode *root) {
   QD_AUTO_PROF;
   return WholeKernelCSE::run(root);
+}
+
+bool offload_scoped_cse(IRNode *root, const std::string &phase) {
+  QD_AUTO_PROF;
+  const std::string &mode = cse_mode();
+  if (mode == "whole") {
+    return WholeKernelCSE::run(root);
+  }
+  if (mode == "none" || mode == "experiment") {
+    return false;  // experiment runs CSE per-task in compile_kernel_to_module instead
+  }
+  // mode == "migration" or "keep_pre"
+  auto tasks = collect_offloaded_tasks(root);
+  if (!tasks.empty()) {
+    auto *block = root->as<Block>();
+    bool modified = false;
+    for (auto *off : tasks) {
+      modified |= cse_one_task(block, off);
+    }
+    return modified;
+  }
+  const bool pre_offload_compile_phase = phase == "simplify_I" || phase == "simplify_II" ||
+                                         phase == "pre_autodiff" || phase == "post_autodiff";
+  if (pre_offload_compile_phase) {
+    return mode == "keep_pre" ? WholeKernelCSE::run(root) : false;
+  }
+  return WholeKernelCSE::run(root);  // function bodies / lone OffloadedStmt / unit tests
 }
 }  // namespace irpass
 

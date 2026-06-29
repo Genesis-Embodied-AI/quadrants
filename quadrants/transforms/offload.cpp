@@ -5,7 +5,10 @@
 #include "quadrants/ir/visitors.h"
 #include "quadrants/program/program.h"
 
+#include <cstdlib>
+#include <iostream>
 #include <set>
+#include <string>
 #include <unordered_map>
 #include <utility>
 
@@ -475,6 +478,12 @@ class IdentifyValuesUsedInOtherOffloads : public BasicStmtVisitor {
                              OffloadedRanges *offloaded_ranges) {
     IdentifyValuesUsedInOtherOffloads pass(config, stmt_to_offloaded, offloaded_ranges);
     root->accept(&pass);
+    // DIAGNOSTIC (cse-diag): cross-task spill = #local values promoted to the global-tmp buffer + its byte size.
+    // Pre-offload CSE shrinks the monolithic IR before this pass runs, so it directly drives these numbers.
+    if (const char *e = std::getenv("QD_LOG_GLOBAL_TMP"); e != nullptr && std::string(e) == "1") {
+      std::cerr << "[GLOBAL_TMP] promoted=" << pass.local_to_global_.size() << " bytes=" << pass.global_offset_
+                << std::endl;
+    }
     return pass.local_to_global_;
   }
 

@@ -70,6 +70,10 @@ LLVMCompiledKernel KernelCodeGen::compile_kernel_to_module() {
 
       Block blk;
       blk.insert(std::move(offload));
+      // DIAGNOSTIC (cse-diag): QD_CSE_MODE=experiment reproduces exp2 (per-task CSE here, none in full_simplify).
+      if (irpass::cse_mode() == "experiment") {
+        irpass::whole_kernel_cse(&blk);
+      }
       auto new_data = this->compile_task(i, compile_config_, nullptr, &blk);
       data[i] = std::make_unique<LLVMCompiledTask>(std::move(new_data));
     };
