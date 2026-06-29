@@ -48,3 +48,14 @@ Module Contents
 
 
 
+   .. py:method:: resolve_value(node, scope)
+      :staticmethod:
+
+
+      Resolve an AST Name/Attribute node to a Python object.
+
+      Same traversal as resolve_to but returns the resolved object (or None) instead of comparing against a wanted
+      value.
+
+
+

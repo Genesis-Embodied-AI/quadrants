@@ -12,6 +12,8 @@ Submodules
 
    /autoapi/quadrants/lang/simt/block/index
    /autoapi/quadrants/lang/simt/grid/index
+   /autoapi/quadrants/lang/simt/reductions/index
+   /autoapi/quadrants/lang/simt/sorting/index
    /autoapi/quadrants/lang/simt/subgroup/index
    /autoapi/quadrants/lang/simt/tile_slicing/index
    /autoapi/quadrants/lang/simt/warp/index

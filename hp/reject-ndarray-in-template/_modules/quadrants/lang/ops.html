@@ -7,7 +7,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>quadrants.lang.ops &#8212; Quadrants 0.7.4 documentation</title>
+    <title>quadrants.lang.ops &#8212; Quadrants 1.1.1 documentation</title>
   
   
   
@@ -26,8 +26,8 @@
   </noscript>
   
   <!-- Loaded before other Sphinx assets -->
-  <link href="../../../_static/styles/theme.css?digest=55c26ed414f5f8a31ebb" rel="stylesheet" />
-<link href="../../../_static/styles/pydata-sphinx-theme.css?digest=55c26ed414f5f8a31ebb" rel="stylesheet" />
+  <link href="../../../_static/styles/theme.css?digest=a95f357e85573c9b56d5" rel="stylesheet" />
+<link href="../../../_static/styles/pydata-sphinx-theme.css?digest=a95f357e85573c9b56d5" rel="stylesheet" />
 
     <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=8f2a1f02" />
     <link rel="stylesheet" type="text/css" href="../../../_static/copybutton.css?v=76b2166b" />
@@ -37,12 +37,12 @@
     <link rel="stylesheet" type="text/css" href="../../../_static/css/custom.css" />
   
   <!-- So that users can add custom icons -->
-  <script defer src="../../../_static/scripts/fontawesome.js?digest=55c26ed414f5f8a31ebb"></script>
+  <script defer src="../../../_static/scripts/fontawesome.js?digest=a95f357e85573c9b56d5"></script>
   <!-- Pre-loaded scripts that we'll load fully later -->
-  <link rel="preload" as="script" href="../../../_static/scripts/bootstrap.js?digest=55c26ed414f5f8a31ebb" />
-<link rel="preload" as="script" href="../../../_static/scripts/pydata-sphinx-theme.js?digest=55c26ed414f5f8a31ebb" />
+  <link rel="preload" as="script" href="../../../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5" />
+<link rel="preload" as="script" href="../../../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5" />
 
-    <script src="../../../_static/documentation_options.js?v=020ce317"></script>
+    <script src="../../../_static/documentation_options.js?v=58fbf978"></script>
     <script src="../../../_static/doctools.js?v=9bcbadda"></script>
     <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -60,7 +60,7 @@
     <link rel="search" title="Search" href="../../../search.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="0.7.4" />
+  <meta name="docsearch:version" content="1.1.1" />
   
     
     <script src="../../../_static/searchtools.js"></script>
@@ -128,7 +128,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 0.7.4 documentation</p>
+    <p class="title logo__title">Quadrants 1.1.1 documentation</p>
   
 </a></div>
     
@@ -176,11 +176,18 @@
       
         <div class="navbar-item">
 
-<button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button pst-js-only" aria-label="Color mode" data-bs-title="Color mode"  data-bs-placement="bottom" data-bs-toggle="tooltip">
-  <i class="theme-switch fa-solid fa-sun                fa-lg" data-mode="light" title="Light"></i>
-  <i class="theme-switch fa-solid fa-moon               fa-lg" data-mode="dark"  title="Dark"></i>
-  <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"  title="System Settings"></i>
-</button></div>
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg fa-fw" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg fa-fw" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg fa-fw" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg fa-fw me-1"></i>System Settings</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg fa-fw me-1"></i>Light</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg fa-fw me-1"></i>Dark</button></li>
+  </ul>
+</div></div>
       
     </div>
     
@@ -251,11 +258,18 @@
         
           <div class="navbar-item">
 
-<button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button pst-js-only" aria-label="Color mode" data-bs-title="Color mode"  data-bs-placement="bottom" data-bs-toggle="tooltip">
-  <i class="theme-switch fa-solid fa-sun                fa-lg" data-mode="light" title="Light"></i>
-  <i class="theme-switch fa-solid fa-moon               fa-lg" data-mode="dark"  title="Dark"></i>
-  <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"  title="System Settings"></i>
-</button></div>
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg fa-fw" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg fa-fw" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg fa-fw" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg fa-fw me-1"></i>System Settings</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg fa-fw me-1"></i>Light</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg fa-fw me-1"></i>Dark</button></li>
+  </ul>
+</div></div>
         
       </div>
     
@@ -927,8 +941,16 @@
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">popcnt</span><span class="p">(</span><span class="n">a</span><span class="p">):</span>
-    <span class="k">def</span><span class="w"> </span><span class="nf">_popcnt</span><span class="p">(</span><span class="n">x</span><span class="p">):</span>
-        <span class="k">return</span> <span class="nb">bin</span><span class="p">(</span><span class="n">x</span><span class="p">)</span><span class="o">.</span><span class="n">count</span><span class="p">(</span><span class="s2">&quot;1&quot;</span><span class="p">)</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_popcnt</span><span class="p">(</span><span class="n">_</span><span class="p">):</span>
+        <span class="c1"># No Python fallback: popcnt is bitwidth-dependent (a u64 with the top bit set should return 64, not 1), but</span>
+        <span class="c1"># once the value reaches here it&#39;s a plain Python int with no width attached. Worse, `bin(x).count(&quot;1&quot;)`</span>
+        <span class="c1"># quietly drops the sign and reports `popcnt(-1) == 1` instead of 32 / 64. The path is only hit on the</span>
+        <span class="c1"># `qd.python` backend or from ad-hoc module-level calls; native backends route through the IR / codegen.</span>
+        <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">(</span>
+            <span class="s2">&quot;qd.math.popcnt has no Python fallback: the result depends on the operand&#39;s bitwidth &quot;</span>
+            <span class="s2">&quot;(i32 vs i64), which is lost once the value is a plain Python int. Run on a real backend &quot;</span>
+            <span class="s2">&quot;(qd.x64 / qd.cuda / qd.amdgpu / qd.vulkan / qd.metal).&quot;</span>
+        <span class="p">)</span>
 
     <span class="k">return</span> <span class="n">_unary_operation</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">expr_popcnt</span><span class="p">,</span> <span class="n">_popcnt</span><span class="p">,</span> <span class="n">a</span><span class="p">)</span>
 
@@ -1531,15 +1553,50 @@
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">clz</span><span class="p">(</span><span class="n">a</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Count the number of leading zeros for a 32bit integer&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Count the number of leading zero bits in ``a``.</span>
 
-    <span class="k">def</span><span class="w"> </span><span class="nf">_clz</span><span class="p">(</span><span class="n">x</span><span class="p">):</span>
-        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">32</span><span class="p">):</span>
-            <span class="k">if</span> <span class="mi">2</span><span class="o">**</span><span class="n">i</span> <span class="o">&gt;</span> <span class="n">x</span><span class="p">:</span>
-                <span class="k">return</span> <span class="mi">32</span> <span class="o">-</span> <span class="n">i</span>
-        <span class="k">return</span> <span class="mi">0</span>
+<span class="sd">    Accepts ``i32``, ``u32``, ``i64`` and ``u64`` on every supported backend; the result is always returned as an</span>
+<span class="sd">    ``i32`` in ``[0, bitwidth(a)]`` (``clz(0) == bitwidth(a)``). The count is over the unsigned bit pattern, so</span>
+<span class="sd">    ``clz(-1) == 0`` regardless of input signedness.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_clz</span><span class="p">(</span><span class="n">_</span><span class="p">):</span>
+        <span class="c1"># No Python fallback: clz is bitwidth-dependent (`clz(0) == 32` for i32 but `64` for i64, and `clz(-1) == 0`</span>
+        <span class="c1"># requires interpreting -1 as the unsigned all-bits-set pattern at a known width). Once the value reaches here</span>
+        <span class="c1"># it&#39;s a plain Python int with no width attached, so no single answer is correct. The old hard-coded 32-bit</span>
+        <span class="c1"># implementation silently returned wrong values for negatives and 64-bit inputs. This path is only hit on the</span>
+        <span class="c1"># `qd.python` backend or from ad-hoc module-level calls; native backends route through the IR / codegen and</span>
+        <span class="c1"># never see it.</span>
+        <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">(</span>
+            <span class="s2">&quot;qd.math.clz has no Python fallback: the result depends on the operand&#39;s bitwidth &quot;</span>
+            <span class="s2">&quot;(i32 vs i64), which is lost once the value is a plain Python int. Run on a real backend &quot;</span>
+            <span class="s2">&quot;(qd.x64 / qd.cuda / qd.amdgpu / qd.vulkan / qd.metal).&quot;</span>
+        <span class="p">)</span>
 
     <span class="k">return</span> <span class="n">_unary_operation</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">expr_clz</span><span class="p">,</span> <span class="n">_clz</span><span class="p">,</span> <span class="n">a</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">ffs</span><span class="p">(</span><span class="n">a</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Find first (lowest) set bit in ``a``.</span>
+
+<span class="sd">    Returns the 1-indexed position of the lowest set bit in ``a`` as an ``i32``, with ``ffs(0) == 0`` (the CUDA</span>
+<span class="sd">    ``__ffs`` convention). Accepts ``i32``, ``u32``, ``i64`` and ``u64`` on every supported backend; the count is over</span>
+<span class="sd">    the unsigned bit pattern, so ``ffs(-1) == 1`` regardless of input signedness.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_ffs</span><span class="p">(</span><span class="n">_</span><span class="p">):</span>
+        <span class="c1"># No Python fallback: ffs is bitwidth-dependent (an i32 that wraps around to 0 should return 0, but the same</span>
+        <span class="c1"># numeric value in Python&#39;s arbitrary-precision int would return its real bit position). Once the value reaches</span>
+        <span class="c1"># here it&#39;s a plain Python int with no width attached, so there&#39;s no single answer that matches native backends.</span>
+        <span class="c1"># This path is only hit on the `qd.python` backend or from ad-hoc module-level calls; native backends route</span>
+        <span class="c1"># through the IR / codegen and never see it. Same treatment as popcnt / clz for consistency.</span>
+        <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">(</span>
+            <span class="s2">&quot;qd.math.ffs has no Python fallback: the result depends on the operand&#39;s bitwidth &quot;</span>
+            <span class="s2">&quot;(i32 vs i64), which is lost once the value is a plain Python int. Run on a real backend &quot;</span>
+            <span class="s2">&quot;(qd.x64 / qd.cuda / qd.amdgpu / qd.vulkan / qd.metal).&quot;</span>
+        <span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">_unary_operation</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">expr_ffs</span><span class="p">,</span> <span class="n">_ffs</span><span class="p">,</span> <span class="n">a</span><span class="p">)</span>
 
 
 <span class="nd">@writeback_binary</span>
@@ -1846,6 +1903,159 @@
 
 
 <span class="nd">@writeback_binary</span>
+<div class="viewcode-block" id="atomic_exchange">
+<a class="viewcode-back" href="../../../autoapi/quadrants/lang/ops/index.html#quadrants.lang.ops.atomic_exchange">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">atomic_exchange</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Atomically swap the value of `x` with `y`, and return the old value of `x`.</span>
+
+<span class="sd">    Unlike the other `qd.atomic_*` ops, the new value of `x` does not depend on its old value: `x` is unconditionally</span>
+<span class="sd">    overwritten with `y`. Useful for lock-free hand-off / claim-a-slot patterns where you want to atomically grab</span>
+<span class="sd">    whatever was at a location while leaving a fresh value behind.</span>
+
+<span class="sd">    `x` must be a writable target, constant expressions or scalars are not allowed.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        x, y (Union[:mod:`~quadrants.types.primitive_types`, :class:`~quadrants.Matrix`]): \</span>
+<span class="sd">            The input. When both are matrices they must have the same shape.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        The old value of `x`.</span>
+
+<span class="sd">    Example::</span>
+
+<span class="sd">        &gt;&gt;&gt; @qd.kernel</span>
+<span class="sd">        &gt;&gt;&gt; def test():</span>
+<span class="sd">        &gt;&gt;&gt;     x = 7</span>
+<span class="sd">        &gt;&gt;&gt;     z = qd.atomic_exchange(x, 42)</span>
+<span class="sd">        &gt;&gt;&gt;     print(x)  # 42, the new value of x</span>
+<span class="sd">        &gt;&gt;&gt;     print(z)  # 7,  the old value of x</span>
+<span class="sd">        &gt;&gt;&gt;</span>
+<span class="sd">        &gt;&gt;&gt;     qd.atomic_exchange(1, x)  # will raise QuadrantsSyntaxError</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="n">impl</span><span class="o">.</span><span class="n">is_python_backend</span><span class="p">():</span>
+        <span class="n">old</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">item</span><span class="p">()</span>
+        <span class="n">x</span><span class="p">[()]</span> <span class="o">=</span> <span class="n">y</span>
+        <span class="k">return</span> <span class="n">old</span>
+
+    <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">expr_init</span><span class="p">(</span><span class="n">expr</span><span class="o">.</span><span class="n">Expr</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">expr_atomic_xchg</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">y</span><span class="o">.</span><span class="n">ptr</span><span class="p">),</span> <span class="n">dbg_info</span><span class="o">=</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">DebugInfo</span><span class="p">(</span><span class="n">stack_info</span><span class="p">())))</span></div>
+
+
+
+<div class="viewcode-block" id="atomic_cas">
+<a class="viewcode-back" href="../../../autoapi/quadrants/lang/ops/index.html#quadrants.lang.ops.atomic_cas">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">atomic_cas</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">expected</span><span class="p">,</span> <span class="n">desired</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Atomically compare-and-swap: if the current value of `x` equals `expected`, write `desired` into `x`.</span>
+<span class="sd">    Returns the value originally at `x` (regardless of whether the swap happened).</span>
+
+<span class="sd">    The user determines whether the swap actually fired by comparing the returned value against `expected`::</span>
+
+<span class="sd">        old = qd.atomic_cas(x, expected, desired)</span>
+<span class="sd">        success = (old == expected)</span>
+
+<span class="sd">    This matches the shape of CUDA&#39;s `atomicCAS` and SPIR-V&#39;s `OpAtomicCompareExchange`. CAS is the basic</span>
+<span class="sd">    primitive on top of which arbitrary atomic read-modify-write operations can be built with a retry loop.</span>
+
+<span class="sd">    Currently integer dtypes only -- f32 / f64 will raise a trace-time type error. `x` must be a writable</span>
+<span class="sd">    target; constant expressions or scalars are not allowed.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        x: the destination memory location (lvalue: field element, ndarray element, matrix slot).</span>
+<span class="sd">        expected: the value `x` is required to currently hold for the swap to fire.</span>
+<span class="sd">        desired: the value to write into `x` if `*x == expected`.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        The value originally at `x`.</span>
+
+<span class="sd">    Example::</span>
+
+<span class="sd">        &gt;&gt;&gt; @qd.kernel</span>
+<span class="sd">        &gt;&gt;&gt; def take_slot():</span>
+<span class="sd">        &gt;&gt;&gt;     # Try to claim the slot only if it is currently empty (== 0).</span>
+<span class="sd">        &gt;&gt;&gt;     old = qd.atomic_cas(slot[None], 0, my_id)</span>
+<span class="sd">        &gt;&gt;&gt;     if old == 0:</span>
+<span class="sd">        &gt;&gt;&gt;         # we won the race; the slot is ours</span>
+<span class="sd">        &gt;&gt;&gt;         ...</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="n">impl</span><span class="o">.</span><span class="n">is_python_backend</span><span class="p">():</span>
+        <span class="n">old</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">item</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">old</span> <span class="o">==</span> <span class="n">expected</span><span class="p">:</span>
+            <span class="n">x</span><span class="p">[()]</span> <span class="o">=</span> <span class="n">desired</span>
+        <span class="k">return</span> <span class="n">old</span>
+    <span class="c1"># Mirror @writeback_binary&#39;s Field guard: passing a raw Field (rather than `field[None]`) would otherwise</span>
+    <span class="c1"># blow up later with a confusing AttributeError on `x.ptr`. Surface a clear QuadrantsSyntaxError instead.</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">Field</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span>
+            <span class="s2">&quot;cannot use a Field directly as the first operand of &#39;atomic_cas&#39;; index it first (e.g. `field[None]`)&quot;</span>
+        <span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="p">(</span><span class="n">is_quadrants_expr</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="ow">and</span> <span class="n">x</span><span class="o">.</span><span class="n">ptr</span><span class="o">.</span><span class="n">is_lvalue</span><span class="p">()):</span>
+        <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">&quot;cannot use a non-writable target as the first operand of &#39;atomic_cas&#39;&quot;</span><span class="p">)</span>
+    <span class="n">expected_e</span> <span class="o">=</span> <span class="n">wrap_if_not_expr</span><span class="p">(</span><span class="n">expected</span><span class="p">)</span>
+    <span class="n">desired_e</span> <span class="o">=</span> <span class="n">wrap_if_not_expr</span><span class="p">(</span><span class="n">desired</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">expr_init</span><span class="p">(</span>
+        <span class="n">expr</span><span class="o">.</span><span class="n">Expr</span><span class="p">(</span>
+            <span class="n">_qd_core</span><span class="o">.</span><span class="n">expr_atomic_cas</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">expected_e</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">desired_e</span><span class="o">.</span><span class="n">ptr</span><span class="p">),</span>
+            <span class="n">dbg_info</span><span class="o">=</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">DebugInfo</span><span class="p">(</span><span class="n">stack_info</span><span class="p">()),</span>
+        <span class="p">)</span>
+    <span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="volatile_load">
+<a class="viewcode-back" href="../../../autoapi/quadrants/lang/ops/index.html#quadrants.lang.ops.volatile_load">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">volatile_load</span><span class="p">(</span><span class="n">target</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Read `target` with volatile semantics: the compiler is forbidden from caching, hoisting, or merging the</span>
+<span class="sd">    load with prior reads of the same address.  Required for spin-wait patterns where another thread or block</span>
+<span class="sd">    writes the cell and the reader must observe the update on every iteration.</span>
+
+<span class="sd">    Without this primitive, a loop like ::</span>
+
+<span class="sd">        while flags[prev] == STATE_INVALID:</span>
+<span class="sd">            pass</span>
+
+<span class="sd">    is undefined: the compiler may hoist the `flags[prev]` load out of the loop and the spin becomes infinite.</span>
+<span class="sd">    The portable workarounds (`grid.mem_fence()` inside the loop, or `atomic_add(flags[prev], 0)`) are both</span>
+<span class="sd">    correct but pay an order-of-magnitude perf tax over a real volatile read.</span>
+
+<span class="sd">    Codegen on every backend:</span>
+
+<span class="sd">    * CUDA / AMDGPU: LLVM `load volatile`, lowered to `ld.volatile.global` (PTX) /  unhoistable `global_load_*`</span>
+<span class="sd">      (AMDGPU).</span>
+<span class="sd">    * Vulkan / Metal: SPIR-V `OpLoad` with the `Volatile` `MemoryAccess` mask, propagated through SPIRV-Cross to</span>
+<span class="sd">      a re-read on every use in the generated MSL / GLSL.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        target: a global lvalue (field / ndarray subscript).  Function-scope local arrays are rejected -- a</span>
+<span class="sd">            local cannot be observed by another thread, so a volatile load there would be meaningless.</span>
+
+<span class="sd">    Returns:</span>
+<span class="sd">        The freshly-read value of `target`, with the same dtype an ordinary read would produce.</span>
+
+<span class="sd">    Example::</span>
+
+<span class="sd">        &gt;&gt;&gt; @qd.kernel</span>
+<span class="sd">        &gt;&gt;&gt; def lookback_scan(...):</span>
+<span class="sd">        &gt;&gt;&gt;     # block-level decoupled-look-back scan: spin until the predecessor publishes its aggregate</span>
+<span class="sd">        &gt;&gt;&gt;     while qd.volatile_load(flags[prev]) == STATE_INVALID:</span>
+<span class="sd">        &gt;&gt;&gt;         pass</span>
+<span class="sd">        &gt;&gt;&gt;     prev_agg = qd.volatile_load(aggregates[prev])</span>
+
+<span class="sd">    See also:</span>
+<span class="sd">        `qd.atomic_*` for the read-modify-write side; `qd.simt.grid.mem_fence` for the heavyweight</span>
+<span class="sd">        device-scope fence that was the only correct (but slow) workaround before this primitive existed.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="n">impl</span><span class="o">.</span><span class="n">is_python_backend</span><span class="p">():</span>
+        <span class="k">return</span> <span class="n">target</span><span class="o">.</span><span class="n">item</span><span class="p">()</span> <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">target</span><span class="p">,</span> <span class="s2">&quot;item&quot;</span><span class="p">)</span> <span class="k">else</span> <span class="n">target</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">target</span><span class="p">,</span> <span class="n">Field</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span>
+            <span class="s2">&quot;cannot pass a Field directly to &#39;qd.volatile_load&#39;; index it first (e.g. `field[None]`)&quot;</span>
+        <span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="p">(</span><span class="n">is_quadrants_expr</span><span class="p">(</span><span class="n">target</span><span class="p">)</span> <span class="ow">and</span> <span class="n">target</span><span class="o">.</span><span class="n">ptr</span><span class="o">.</span><span class="n">is_lvalue</span><span class="p">()):</span>
+        <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">&quot;qd.volatile_load requires an lvalue (field / ndarray subscript) as its argument&quot;</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">expr_init</span><span class="p">(</span><span class="n">expr</span><span class="o">.</span><span class="n">Expr</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">expr_volatile_load</span><span class="p">(</span><span class="n">target</span><span class="o">.</span><span class="n">ptr</span><span class="p">),</span> <span class="n">dbg_info</span><span class="o">=</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">DebugInfo</span><span class="p">(</span><span class="n">stack_info</span><span class="p">())))</span></div>
+
+
+
+<span class="nd">@writeback_binary</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">assign</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">):</span>
     <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">compiling_callable</span><span class="o">.</span><span class="n">ast_builder</span><span class="p">()</span><span class="o">.</span><span class="n">expr_assign</span><span class="p">(</span><span class="n">a</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">b</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">DebugInfo</span><span class="p">(</span><span class="n">stack_info</span><span class="p">()))</span>
     <span class="k">return</span> <span class="n">a</span>
@@ -1933,6 +2143,9 @@
     <span class="s2">&quot;atomic_min&quot;</span><span class="p">,</span>
     <span class="s2">&quot;atomic_add&quot;</span><span class="p">,</span>
     <span class="s2">&quot;atomic_mul&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;atomic_exchange&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;atomic_cas&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;volatile_load&quot;</span><span class="p">,</span>
     <span class="s2">&quot;bit_cast&quot;</span><span class="p">,</span>
     <span class="s2">&quot;bit_shr&quot;</span><span class="p">,</span>
     <span class="s2">&quot;cast&quot;</span><span class="p">,</span>
@@ -1986,8 +2199,8 @@
   </div>
   
   <!-- Scripts loaded after <body> so the DOM is not blocked -->
-  <script defer src="../../../_static/scripts/bootstrap.js?digest=55c26ed414f5f8a31ebb"></script>
-<script defer src="../../../_static/scripts/pydata-sphinx-theme.js?digest=55c26ed414f5f8a31ebb"></script>
+  <script defer src="../../../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5"></script>
+<script defer src="../../../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5"></script>
 
   <footer class="bd-footer">
 <div class="bd-footer__inner bd-page-width">
@@ -2021,7 +2234,7 @@
         <div class="footer-item">
 <p class="theme-version">
   <!-- # L10n: Setting the PST URL as an argument as this does not need to be localized -->
-  Built with the <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a> 0.17.1.
+  Built with the <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a> 0.19.0.
 </p></div>
       
     </div>

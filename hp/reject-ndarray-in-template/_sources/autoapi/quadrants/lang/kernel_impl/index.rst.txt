@@ -19,17 +19,29 @@ Functions
 Module Contents
 ---------------
 
-.. py:function:: func(fn: F, is_real_function: bool = False) -> F
+.. py:function:: func(fn: F, *, is_real_function: bool = ..., requires_top_level: bool = ...) -> F
+                 func(fn: None = ..., *, is_real_function: bool = ..., requires_top_level: bool = ...) -> Callable[[F], F]
 
    Marks a function as callable in Quadrants-scope.
 
    This decorator transforms a Python function into a Quadrants one. Quadrants
    will JIT compile it into native instructions.
 
+   Can be applied bare (``@qd.func``) or with parameters (``@qd.func(requires_top_level=True)``).
+
    :param fn: The Python function to be decorated
    :type fn: Callable
    :param is_real_function: Whether the function is a real function
    :type is_real_function: bool
+   :param requires_top_level: **Experimental** (behaviour/API may change). If True, the func may only
+                              be called at the **top level** of a kernel (or directly inside a ``while qd.graph_do_while(...)``
+                              body). Calling it nested inside ordinary runtime ``for`` / ``if`` / ``while`` control flow raises a
+                              :class:`QuadrantsSyntaxError` at compile time. Intended for multi-phase device ops whose per-phase
+                              top-level ``for`` loops must each lower to their own offloaded launch (e.g. the ``qd.algorithms``
+                              reductions / scans / sort); nesting the call demotes those loops out of top-level position,
+                              collapsing the inter-phase grid-wide barriers and silently corrupting the result. ``qd.static``
+                              (compile-time) loops do not trip the check.
+   :type requires_top_level: bool
 
    :returns: The decorated function
    :rtype: Callable
@@ -64,8 +76,8 @@ Module Contents
    :rtype: Callable
 
 
-.. py:function:: kernel(_fn: None = None, *, pure: bool = False, graph: bool = False) -> Callable[[Any], Any]
-                 kernel(_fn: Any, *, pure: bool = False, graph: bool = False) -> Any
+.. py:function:: kernel(_fn: None = None, *, pure: bool = False, graph: bool = False, checkpoints: bool = False) -> Callable[[Any], Any]
+                 kernel(_fn: Any, *, pure: bool = False, graph: bool = False, checkpoints: bool = False) -> Any
 
    Marks a function as a Quadrants kernel.
 
@@ -80,6 +92,10 @@ Module Contents
                  into a CUDA graph on first launch and replayed on subsequent
                  launches, reducing per-kernel launch overhead. Non-CUDA backends
                  are not supported currently.
+   :param checkpoints: If True, opt into the (experimental) ``qd.checkpoint`` pause / resume model.
+                       ``with qd.checkpoint(cp_id, yield_on=flag):`` blocks in the kernel body become pause points the host can
+                       resume from via ``kernel.resume(from_checkpoint=cp_id)``. Requires ``graph=True``.
+                       ``qd.checkpoint(...)`` in the body is rejected unless this flag is set.
 
    Example::
 
@@ -104,7 +120,7 @@ Module Contents
    Example::
 
        >>> @qd.data_oriented
-       >>> class TiArray:
+       >>> class QdArray:
        >>>     def __init__(self, n):
        >>>         self.x = qd.field(qd.f32, shape=n)
        >>>
@@ -113,7 +129,7 @@ Module Contents
        >>>         for i in self.x:
        >>>             self.x[i] += 1.0
        >>>
-       >>> a = TiArray(32)
+       >>> a = QdArray(32)
        >>> a.inc()
 
    :param cls: the class to be decorated

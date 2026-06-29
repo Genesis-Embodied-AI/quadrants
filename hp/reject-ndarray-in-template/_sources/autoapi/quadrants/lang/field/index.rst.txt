@@ -84,6 +84,25 @@ Module Contents
 
 
 
+   .. py:method:: has_grad() -> bool
+
+      Whether this field's adjoint (reverse-mode gradient) SNode is allocated.
+
+      ``self.grad`` is non-``None`` for every real-dtype field (the wrapper is allocated up-front so
+      ``qd.root.lazy_grad()`` can populate it later); the actual placed-or-not signal is whether the underlying
+      SNode has been placed via ``needs_grad=True``, ``qd.root.lazy_grad()``, or an explicit
+      ``qd.root.dense(...).place(field.grad)``. Mirrors ``self.snode.ptr.has_adjoint()``.
+
+
+
+   .. py:method:: has_dual() -> bool
+
+      Whether this field's dual (forward-mode gradient) SNode is allocated.
+
+      Same semantics as :meth:`has_grad` for the dual companion. Mirrors ``self.snode.ptr.has_dual()``.
+
+
+
    .. py:method:: fill(val: int | float) -> None
       :abstractmethod:
 
@@ -95,7 +114,8 @@ Module Contents
 
       Converts `self` to a numpy array.
 
-      :param copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises.
+      :param copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises,
+                   ``None`` uses zero-copy when available and falls back to a copy otherwise.
 
       :returns: The result numpy array.
       :rtype: numpy.ndarray
@@ -110,7 +130,8 @@ Module Contents
 
       :param device: The desired device of returned tensor.
       :type device: torch.device, optional
-      :param copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises.
+      :param copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises,
+                   ``None`` uses zero-copy when available and falls back to a copy otherwise.
 
       :returns: The result torch tensor.
       :rtype: torch.tensor
@@ -189,7 +210,8 @@ Module Contents
       Converts this field to a ``numpy.ndarray``.
 
       :param dtype: Optional target numpy dtype.
-      :param copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises.
+      :param copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises,
+                   ``None`` uses zero-copy when available and falls back to a copy otherwise.
 
 
 
@@ -198,7 +220,8 @@ Module Contents
       Converts this field to a ``torch.Tensor``.
 
       :param device: Optional torch device for the returned tensor.
-      :param copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises.
+      :param copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises,
+                   ``None`` uses zero-copy when available and falls back to a copy otherwise.
 
 
 

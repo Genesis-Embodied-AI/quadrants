@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>quadrants.lang.matrix &#8212; Quadrants 0.7.4 documentation</title>
+    <title>quadrants.lang.matrix &#8212; Quadrants 1.1.1 documentation</title>
   
   
   
@@ -27,8 +27,8 @@
   </noscript>
   
   <!-- Loaded before other Sphinx assets -->
-  <link href="../../../../_static/styles/theme.css?digest=55c26ed414f5f8a31ebb" rel="stylesheet" />
-<link href="../../../../_static/styles/pydata-sphinx-theme.css?digest=55c26ed414f5f8a31ebb" rel="stylesheet" />
+  <link href="../../../../_static/styles/theme.css?digest=a95f357e85573c9b56d5" rel="stylesheet" />
+<link href="../../../../_static/styles/pydata-sphinx-theme.css?digest=a95f357e85573c9b56d5" rel="stylesheet" />
 
     <link rel="stylesheet" type="text/css" href="../../../../_static/pygments.css?v=8f2a1f02" />
     <link rel="stylesheet" type="text/css" href="../../../../_static/copybutton.css?v=76b2166b" />
@@ -38,12 +38,12 @@
     <link rel="stylesheet" type="text/css" href="../../../../_static/css/custom.css" />
   
   <!-- So that users can add custom icons -->
-  <script defer src="../../../../_static/scripts/fontawesome.js?digest=55c26ed414f5f8a31ebb"></script>
+  <script defer src="../../../../_static/scripts/fontawesome.js?digest=a95f357e85573c9b56d5"></script>
   <!-- Pre-loaded scripts that we'll load fully later -->
-  <link rel="preload" as="script" href="../../../../_static/scripts/bootstrap.js?digest=55c26ed414f5f8a31ebb" />
-<link rel="preload" as="script" href="../../../../_static/scripts/pydata-sphinx-theme.js?digest=55c26ed414f5f8a31ebb" />
+  <link rel="preload" as="script" href="../../../../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5" />
+<link rel="preload" as="script" href="../../../../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5" />
 
-    <script src="../../../../_static/documentation_options.js?v=020ce317"></script>
+    <script src="../../../../_static/documentation_options.js?v=58fbf978"></script>
     <script src="../../../../_static/doctools.js?v=9bcbadda"></script>
     <script src="../../../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../../../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -55,6 +55,8 @@
     <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
     <script src="../../../../_static/design-tabs.js?v=f930bc37"></script>
     <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
+    <script>window.MathJax = {"options": {"processHtmlClass": "tex2jax_process|mathjax_process|math|output_area"}}</script>
+    <script defer="defer" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
     <script>DOCUMENTATION_OPTIONS.pagename = 'autoapi/quadrants/lang/matrix/index';</script>
     <script>DOCUMENTATION_OPTIONS.search_as_you_type = false;</script>
     <link rel="index" title="Index" href="../../../../genindex.html" />
@@ -63,7 +65,7 @@
     <link rel="prev" title="quadrants.lang.kernel_impl" href="../kernel_impl/index.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="0.7.4" />
+  <meta name="docsearch:version" content="1.1.1" />
   
     
     <script src="../../../../_static/searchtools.js"></script>
@@ -131,7 +133,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 0.7.4 documentation</p>
+    <p class="title logo__title">Quadrants 1.1.1 documentation</p>
   
 </a></div>
     
@@ -179,11 +181,18 @@
       
         <div class="navbar-item">
 
-<button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button pst-js-only" aria-label="Color mode" data-bs-title="Color mode"  data-bs-placement="bottom" data-bs-toggle="tooltip">
-  <i class="theme-switch fa-solid fa-sun                fa-lg" data-mode="light" title="Light"></i>
-  <i class="theme-switch fa-solid fa-moon               fa-lg" data-mode="dark"  title="Dark"></i>
-  <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"  title="System Settings"></i>
-</button></div>
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg fa-fw" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg fa-fw" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg fa-fw" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg fa-fw me-1"></i>System Settings</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg fa-fw me-1"></i>Light</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg fa-fw me-1"></i>Dark</button></li>
+  </ul>
+</div></div>
       
     </div>
     
@@ -256,11 +265,18 @@
         
           <div class="navbar-item">
 
-<button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button pst-js-only" aria-label="Color mode" data-bs-title="Color mode"  data-bs-placement="bottom" data-bs-toggle="tooltip">
-  <i class="theme-switch fa-solid fa-sun                fa-lg" data-mode="light" title="Light"></i>
-  <i class="theme-switch fa-solid fa-moon               fa-lg" data-mode="dark"  title="Dark"></i>
-  <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"  title="System Settings"></i>
-</button></div>
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg fa-fw" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg fa-fw" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg fa-fw" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg fa-fw me-1"></i>System Settings</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg fa-fw me-1"></i>Light</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg fa-fw me-1"></i>Dark</button></li>
+  </ul>
+</div></div>
         
       </div>
     
@@ -634,6 +650,32 @@ of its elements.</p>
 <dt class="sig sig-object py" id="quadrants.lang.matrix.Matrix.norm_sqr">
 <span class="sig-name descname"><span class="pre">norm_sqr</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/matrix.html#Matrix.norm_sqr"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.matrix.Matrix.norm_sqr" title="Link to this definition">#</a></dt>
 <dd><p>Returns the sum of the absolute squares of its elements.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="quadrants.lang.matrix.Matrix.frobenius_inner">
+<span class="sig-name descname"><span class="pre">frobenius_inner</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">other</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/matrix.html#Matrix.frobenius_inner"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.matrix.Matrix.frobenius_inner" title="Link to this definition">#</a></dt>
+<dd><p>Returns the Frobenius inner product <span class="math notranslate nohighlight">\(\langle A, B \rangle = \sum_{ij} A_{ij} B_{ij}\)</span>.</p>
+<p>Both operands must have the same shape. Defined for any tensor shape (vector or matrix); for matrices this
+is the standard Frobenius inner product, and <a class="reference internal" href="#quadrants.lang.matrix.Matrix.norm_sqr" title="quadrants.lang.matrix.Matrix.norm_sqr"><code class="xref py py-meth docutils literal notranslate"><span class="pre">norm_sqr()</span></code></a> is the special case <code class="docutils literal notranslate"><span class="pre">A.frobenius_inner(A)</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>other</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">Matrix</span></code>) – The other operand. Must have the same shape as <code class="docutils literal notranslate"><span class="pre">self</span></code>.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The scalar Frobenius inner product.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>DataType</p>
+</dd>
+</dl>
+<p>Example:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">A</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">Matrix</span><span class="p">([[</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">],</span> <span class="p">[</span><span class="mf">3.0</span><span class="p">,</span> <span class="mf">4.0</span><span class="p">]])</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">B</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">Matrix</span><span class="p">([[</span><span class="mf">5.0</span><span class="p">,</span> <span class="mf">6.0</span><span class="p">],</span> <span class="p">[</span><span class="mf">7.0</span><span class="p">,</span> <span class="mf">8.0</span><span class="p">]])</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">A</span><span class="o">.</span><span class="n">frobenius_inner</span><span class="p">(</span><span class="n">B</span><span class="p">)</span>
+<span class="go">70.0</span>
+</pre></div>
+</div>
 </dd></dl>
 
 <dl class="py method">
@@ -1213,7 +1255,8 @@ matrix field, the numpy array always has n+2 dims, even for 1x1, 1xn, nx1 matrix
 keep_dims=False, the resulting numpy array should skip the matrix dims with size 1. For example, a 4x1
 or 1x4 matrix field with 5x6x7 elements results in an array of shape 5x6x7x4.</p></li>
 <li><p><strong>dtype</strong> (<em>DataType</em><em>, </em><em>optional</em>) – The desired data type of returned numpy array.</p></li>
-<li><p><strong>copy</strong> – <code class="docutils literal notranslate"><span class="pre">True</span></code> (default) returns an independent copy, <code class="docutils literal notranslate"><span class="pre">False</span></code> requires zero-copy or raises.</p></li>
+<li><p><strong>copy</strong> – <code class="docutils literal notranslate"><span class="pre">True</span></code> (default) returns an independent copy, <code class="docutils literal notranslate"><span class="pre">False</span></code> requires zero-copy or raises,
+<code class="docutils literal notranslate"><span class="pre">None</span></code> uses zero-copy when available and falls back to a copy otherwise.</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
@@ -1235,7 +1278,8 @@ or 1x4 matrix field with 5x6x7 elements results in an array of shape 5x6x7x4.</p
 <li><p><strong>device</strong> (<em>torch.device</em><em>, </em><em>optional</em>) – The desired device of returned tensor.</p></li>
 <li><p><strong>keep_dims</strong> (<em>bool</em><em>, </em><em>optional</em>) – Whether to keep the dimension after conversion.
 See <code class="xref py py-meth docutils literal notranslate"><span class="pre">to_numpy()</span></code> for more detailed explanation.</p></li>
-<li><p><strong>copy</strong> – <code class="docutils literal notranslate"><span class="pre">True</span></code> (default) returns an independent copy, <code class="docutils literal notranslate"><span class="pre">False</span></code> requires zero-copy or raises.</p></li>
+<li><p><strong>copy</strong> – <code class="docutils literal notranslate"><span class="pre">True</span></code> (default) returns an independent copy, <code class="docutils literal notranslate"><span class="pre">False</span></code> requires zero-copy or raises,
+<code class="docutils literal notranslate"><span class="pre">None</span></code> uses zero-copy when available and falls back to a copy otherwise.</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
@@ -1323,7 +1367,8 @@ See <code class="xref py py-meth docutils literal notranslate"><span class="pre"
 <dd><p>Converts this ndarray to a <code class="docutils literal notranslate"><span class="pre">numpy.ndarray</span></code>.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>copy</strong> – <code class="docutils literal notranslate"><span class="pre">True</span></code> (default) returns an independent copy, <code class="docutils literal notranslate"><span class="pre">False</span></code> requires zero-copy or raises.</p>
+<dd class="field-odd"><p><strong>copy</strong> – <code class="docutils literal notranslate"><span class="pre">True</span></code> (default) returns an independent copy, <code class="docutils literal notranslate"><span class="pre">False</span></code> requires zero-copy or raises,
+<code class="docutils literal notranslate"><span class="pre">None</span></code> uses zero-copy when available and falls back to a copy otherwise.</p>
 </dd>
 </dl>
 <p>Example:</p>
@@ -1357,7 +1402,8 @@ See <code class="xref py py-meth docutils literal notranslate"><span class="pre"
 <p>Mirrors <a class="reference internal" href="#quadrants.lang.matrix.MatrixField.to_torch" title="quadrants.lang.matrix.MatrixField.to_torch"><code class="xref py py-meth docutils literal notranslate"><span class="pre">MatrixField.to_torch()</span></code></a>.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>copy</strong> – <code class="docutils literal notranslate"><span class="pre">True</span></code> (default) returns an independent copy, <code class="docutils literal notranslate"><span class="pre">False</span></code> requires zero-copy or raises.</p>
+<dd class="field-odd"><p><strong>copy</strong> – <code class="docutils literal notranslate"><span class="pre">True</span></code> (default) returns an independent copy, <code class="docutils literal notranslate"><span class="pre">False</span></code> requires zero-copy or raises,
+<code class="docutils literal notranslate"><span class="pre">None</span></code> uses zero-copy when available and falls back to a copy otherwise.</p>
 </dd>
 </dl>
 </dd></dl>
@@ -1427,7 +1473,8 @@ See <code class="xref py py-meth docutils literal notranslate"><span class="pre"
 <dd><p>Converts this vector ndarray to a <code class="docutils literal notranslate"><span class="pre">numpy.ndarray</span></code>.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>copy</strong> – <code class="docutils literal notranslate"><span class="pre">True</span></code> (default) returns an independent copy, <code class="docutils literal notranslate"><span class="pre">False</span></code> requires zero-copy or raises.</p>
+<dd class="field-odd"><p><strong>copy</strong> – <code class="docutils literal notranslate"><span class="pre">True</span></code> (default) returns an independent copy, <code class="docutils literal notranslate"><span class="pre">False</span></code> requires zero-copy or raises,
+<code class="docutils literal notranslate"><span class="pre">None</span></code> uses zero-copy when available and falls back to a copy otherwise.</p>
 </dd>
 </dl>
 <p>Example:</p>
@@ -1463,7 +1510,8 @@ See <code class="xref py py-meth docutils literal notranslate"><span class="pre"
 <p>Mirrors <a class="reference internal" href="#quadrants.lang.matrix.MatrixField.to_torch" title="quadrants.lang.matrix.MatrixField.to_torch"><code class="xref py py-meth docutils literal notranslate"><span class="pre">MatrixField.to_torch()</span></code></a> on the vector code path.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>copy</strong> – <code class="docutils literal notranslate"><span class="pre">True</span></code> (default) returns an independent copy, <code class="docutils literal notranslate"><span class="pre">False</span></code> requires zero-copy or raises.</p>
+<dd class="field-odd"><p><strong>copy</strong> – <code class="docutils literal notranslate"><span class="pre">True</span></code> (default) returns an independent copy, <code class="docutils literal notranslate"><span class="pre">False</span></code> requires zero-copy or raises,
+<code class="docutils literal notranslate"><span class="pre">None</span></code> uses zero-copy when available and falls back to a copy otherwise.</p>
 </dd>
 </dl>
 </dd></dl>
@@ -1542,6 +1590,7 @@ See <code class="xref py py-meth docutils literal notranslate"><span class="pre"
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.matrix.Matrix.norm"><code class="docutils literal notranslate"><span class="pre">Matrix.norm()</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.matrix.Matrix.norm_inv"><code class="docutils literal notranslate"><span class="pre">Matrix.norm_inv()</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.matrix.Matrix.norm_sqr"><code class="docutils literal notranslate"><span class="pre">Matrix.norm_sqr()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.matrix.Matrix.frobenius_inner"><code class="docutils literal notranslate"><span class="pre">Matrix.frobenius_inner()</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.matrix.Matrix.max"><code class="docutils literal notranslate"><span class="pre">Matrix.max()</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.matrix.Matrix.min"><code class="docutils literal notranslate"><span class="pre">Matrix.min()</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.matrix.Matrix.any"><code class="docutils literal notranslate"><span class="pre">Matrix.any()</span></code></a></li>
@@ -1634,8 +1683,8 @@ See <code class="xref py py-meth docutils literal notranslate"><span class="pre"
   </div>
   
   <!-- Scripts loaded after <body> so the DOM is not blocked -->
-  <script defer src="../../../../_static/scripts/bootstrap.js?digest=55c26ed414f5f8a31ebb"></script>
-<script defer src="../../../../_static/scripts/pydata-sphinx-theme.js?digest=55c26ed414f5f8a31ebb"></script>
+  <script defer src="../../../../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5"></script>
+<script defer src="../../../../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5"></script>
 
   <footer class="bd-footer">
 <div class="bd-footer__inner bd-page-width">
@@ -1669,7 +1718,7 @@ See <code class="xref py py-meth docutils literal notranslate"><span class="pre"
         <div class="footer-item">
 <p class="theme-version">
   <!-- # L10n: Setting the PST URL as an argument as this does not need to be localized -->
-  Built with the <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a> 0.17.1.
+  Built with the <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a> 0.19.0.
 </p></div>
       
     </div>

@@ -7,7 +7,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>quadrants.lang.impl &#8212; Quadrants 0.7.4 documentation</title>
+    <title>quadrants.lang.impl &#8212; Quadrants 1.1.1 documentation</title>
   
   
   
@@ -26,8 +26,8 @@
   </noscript>
   
   <!-- Loaded before other Sphinx assets -->
-  <link href="../../../_static/styles/theme.css?digest=55c26ed414f5f8a31ebb" rel="stylesheet" />
-<link href="../../../_static/styles/pydata-sphinx-theme.css?digest=55c26ed414f5f8a31ebb" rel="stylesheet" />
+  <link href="../../../_static/styles/theme.css?digest=a95f357e85573c9b56d5" rel="stylesheet" />
+<link href="../../../_static/styles/pydata-sphinx-theme.css?digest=a95f357e85573c9b56d5" rel="stylesheet" />
 
     <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=8f2a1f02" />
     <link rel="stylesheet" type="text/css" href="../../../_static/copybutton.css?v=76b2166b" />
@@ -37,12 +37,12 @@
     <link rel="stylesheet" type="text/css" href="../../../_static/css/custom.css" />
   
   <!-- So that users can add custom icons -->
-  <script defer src="../../../_static/scripts/fontawesome.js?digest=55c26ed414f5f8a31ebb"></script>
+  <script defer src="../../../_static/scripts/fontawesome.js?digest=a95f357e85573c9b56d5"></script>
   <!-- Pre-loaded scripts that we'll load fully later -->
-  <link rel="preload" as="script" href="../../../_static/scripts/bootstrap.js?digest=55c26ed414f5f8a31ebb" />
-<link rel="preload" as="script" href="../../../_static/scripts/pydata-sphinx-theme.js?digest=55c26ed414f5f8a31ebb" />
+  <link rel="preload" as="script" href="../../../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5" />
+<link rel="preload" as="script" href="../../../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5" />
 
-    <script src="../../../_static/documentation_options.js?v=020ce317"></script>
+    <script src="../../../_static/documentation_options.js?v=58fbf978"></script>
     <script src="../../../_static/doctools.js?v=9bcbadda"></script>
     <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -60,7 +60,7 @@
     <link rel="search" title="Search" href="../../../search.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="0.7.4" />
+  <meta name="docsearch:version" content="1.1.1" />
   
     
     <script src="../../../_static/searchtools.js"></script>
@@ -128,7 +128,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 0.7.4 documentation</p>
+    <p class="title logo__title">Quadrants 1.1.1 documentation</p>
   
 </a></div>
     
@@ -176,11 +176,18 @@
       
         <div class="navbar-item">
 
-<button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button pst-js-only" aria-label="Color mode" data-bs-title="Color mode"  data-bs-placement="bottom" data-bs-toggle="tooltip">
-  <i class="theme-switch fa-solid fa-sun                fa-lg" data-mode="light" title="Light"></i>
-  <i class="theme-switch fa-solid fa-moon               fa-lg" data-mode="dark"  title="Dark"></i>
-  <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"  title="System Settings"></i>
-</button></div>
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg fa-fw" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg fa-fw" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg fa-fw" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg fa-fw me-1"></i>System Settings</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg fa-fw me-1"></i>Light</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg fa-fw me-1"></i>Dark</button></li>
+  </ul>
+</div></div>
       
     </div>
     
@@ -251,11 +258,18 @@
         
           <div class="navbar-item">
 
-<button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button pst-js-only" aria-label="Color mode" data-bs-title="Color mode"  data-bs-placement="bottom" data-bs-toggle="tooltip">
-  <i class="theme-switch fa-solid fa-sun                fa-lg" data-mode="light" title="Light"></i>
-  <i class="theme-switch fa-solid fa-moon               fa-lg" data-mode="dark"  title="Dark"></i>
-  <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"  title="System Settings"></i>
-</button></div>
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg fa-fw" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg fa-fw" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg fa-fw" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg fa-fw me-1"></i>System Settings</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg fa-fw me-1"></i>Light</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg fa-fw me-1"></i>Dark</button></li>
+  </ul>
+</div></div>
         
       </div>
     
@@ -321,7 +335,7 @@
 <span class="kn">import</span><span class="w"> </span><span class="nn">threading</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">weakref</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">types</span><span class="w"> </span><span class="kn">import</span> <span class="n">FunctionType</span><span class="p">,</span> <span class="n">MethodType</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">TYPE_CHECKING</span><span class="p">,</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Iterable</span><span class="p">,</span> <span class="n">Sequence</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">TYPE_CHECKING</span><span class="p">,</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Callable</span><span class="p">,</span> <span class="n">Iterable</span><span class="p">,</span> <span class="n">Sequence</span>
 
 <span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
 
@@ -343,6 +357,7 @@
     <span class="n">QuadrantsRuntimeError</span><span class="p">,</span>
     <span class="n">QuadrantsSyntaxError</span><span class="p">,</span>
     <span class="n">QuadrantsTypeError</span><span class="p">,</span>
+    <span class="n">handle_exception_from_cpp</span><span class="p">,</span>
 <span class="p">)</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.expr</span><span class="w"> </span><span class="kn">import</span> <span class="n">Expr</span><span class="p">,</span> <span class="n">make_expr_group</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.field</span><span class="w"> </span><span class="kn">import</span> <span class="n">Field</span><span class="p">,</span> <span class="n">ScalarField</span>
@@ -421,7 +436,21 @@
     <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">rhs</span><span class="p">,</span> <span class="n">BufferView</span><span class="p">):</span>
         <span class="k">return</span> <span class="n">rhs</span>
     <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">rhs</span><span class="p">,</span> <span class="n">Struct</span><span class="p">):</span>
-        <span class="k">return</span> <span class="n">Struct</span><span class="p">(</span><span class="n">rhs</span><span class="o">.</span><span class="n">to_dict</span><span class="p">(</span><span class="n">include_methods</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">include_ndim</span><span class="o">=</span><span class="kc">True</span><span class="p">))</span>
+        <span class="c1"># Build the rewrap dict from ``__entries`` directly rather than via ``to_dict()``: ``to_dict()`` recursively</span>
+        <span class="c1"># flattens nested Structs to plain dicts, which then rebuild without their ``_qd_unpacked_groups`` tag. By</span>
+        <span class="c1"># keeping nested Struct instances intact, ``Struct.__init__`` calls ``expr_init`` on each entry, recursing here</span>
+        <span class="c1"># and preserving the tag on every nested level.</span>
+        <span class="n">d</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">rhs</span><span class="o">.</span><span class="n">_Struct__entries</span><span class="p">)</span>  <span class="c1"># type: ignore[attr-defined]  # name-mangled access</span>
+        <span class="k">if</span> <span class="n">rhs</span><span class="o">.</span><span class="n">_Struct__methods</span><span class="p">:</span>  <span class="c1"># type: ignore[attr-defined]</span>
+            <span class="n">d</span><span class="p">[</span><span class="s2">&quot;__struct_methods&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">rhs</span><span class="o">.</span><span class="n">_Struct__methods</span>  <span class="c1"># type: ignore[attr-defined]</span>
+        <span class="n">new_struct</span> <span class="o">=</span> <span class="n">Struct</span><span class="p">(</span><span class="n">d</span><span class="p">)</span>
+        <span class="c1"># Preserve unpacked-vector group metadata on this level (nested levels are handled by the recursion above).</span>
+        <span class="c1"># ``setattr`` (rather than attribute assignment) sidesteps pyright&#39;s ``reportAttributeAccessIssue``; ``Struct``</span>
+        <span class="c1"># doesn&#39;t statically declare this attribute -- it&#39;s a per-instance metadata tag.</span>
+        <span class="n">groups</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">rhs</span><span class="p">,</span> <span class="s2">&quot;_qd_unpacked_groups&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">groups</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="nb">setattr</span><span class="p">(</span><span class="n">new_struct</span><span class="p">,</span> <span class="s2">&quot;_qd_unpacked_groups&quot;</span><span class="p">,</span> <span class="n">groups</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">new_struct</span>
     <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">rhs</span><span class="p">,</span> <span class="nb">list</span><span class="p">):</span>
         <span class="k">return</span> <span class="p">[</span><span class="n">expr_init</span><span class="p">(</span><span class="n">e</span><span class="p">)</span> <span class="k">for</span> <span class="n">e</span> <span class="ow">in</span> <span class="n">rhs</span><span class="p">]</span>
     <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">rhs</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">):</span>
@@ -642,7 +671,15 @@
         <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">StructField</span><span class="p">):</span>
             <span class="n">entries</span> <span class="o">=</span> <span class="p">{</span><span class="n">k</span><span class="p">:</span> <span class="n">subscript</span><span class="p">(</span><span class="n">ast_builder</span><span class="p">,</span> <span class="n">v</span><span class="p">,</span> <span class="o">*</span><span class="n">indices</span><span class="p">)</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">value</span><span class="o">.</span><span class="n">_items</span><span class="p">}</span>
             <span class="n">entries</span><span class="p">[</span><span class="s2">&quot;__struct_methods&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">value</span><span class="o">.</span><span class="n">struct_methods</span>
-            <span class="k">return</span> <span class="n">_IntermediateStruct</span><span class="p">(</span><span class="n">entries</span><span class="p">)</span>
+            <span class="n">struct</span> <span class="o">=</span> <span class="n">_IntermediateStruct</span><span class="p">(</span><span class="n">entries</span><span class="p">)</span>
+            <span class="c1"># Carry ``_qd_unpacked_groups`` from the originating ``StructType`` (attached to the ``StructField`` in</span>
+            <span class="c1"># ``StructType.field``) onto the per-index intermediate struct so the AST transformer recognises</span>
+            <span class="c1"># ``f[i].r[k]`` as an unpacked-vector group access. Nested StructFields contribute their own tags via the</span>
+            <span class="c1"># recursive ``subscript`` call above, so ``outer_field[i].inner.r[k]`` also works.</span>
+            <span class="n">groups</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="s2">&quot;_qd_unpacked_groups&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">groups</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="nb">setattr</span><span class="p">(</span><span class="n">struct</span><span class="p">,</span> <span class="s2">&quot;_qd_unpacked_groups&quot;</span><span class="p">,</span> <span class="n">groups</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">struct</span>
         <span class="k">return</span> <span class="n">Expr</span><span class="p">(</span><span class="n">ast_builder</span><span class="o">.</span><span class="n">expr_subscript</span><span class="p">(</span><span class="n">_var</span><span class="p">,</span> <span class="n">indices_expr_group</span><span class="p">,</span> <span class="n">dbg_info</span><span class="p">))</span>
     <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">AnyArray</span><span class="p">):</span>
         <span class="k">assert</span> <span class="n">indices_expr_group</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
@@ -682,6 +719,7 @@
                 <span class="n">dbg_info</span><span class="p">,</span>
             <span class="p">)</span>
         <span class="p">)</span>
+    <span class="k">assert</span> <span class="n">indices_expr_group</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
     <span class="k">return</span> <span class="n">Expr</span><span class="p">(</span><span class="n">ast_builder</span><span class="o">.</span><span class="n">expr_subscript</span><span class="p">(</span><span class="n">value</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">indices_expr_group</span><span class="p">,</span> <span class="n">dbg_info</span><span class="p">))</span>
 
 
@@ -774,12 +812,17 @@
 
     <span class="k">def</span><span class="w"> </span><span class="nf">set_default_fp</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">fp</span><span class="p">):</span>
         <span class="k">assert</span> <span class="n">fp</span> <span class="ow">in</span> <span class="p">[</span><span class="n">f16</span><span class="p">,</span> <span class="n">f32</span><span class="p">,</span> <span class="n">f64</span><span class="p">]</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">default_fp</span> <span class="o">=</span> <span class="n">fp</span>
+        <span class="c1"># qd.init() deep-copies the default_fp arg (misc.py), yielding a DataType that is == but not identical to</span>
+        <span class="c1"># the registered primitive singleton -- its id is then absent from primitive_types.type_ids, which silently</span>
+        <span class="c1"># breaks id-based type recognition for anything that resolves a dtype via get_runtime().default_fp (e.g. the</span>
+        <span class="c1"># simt tile proxies). Re-bind to the canonical singleton so identity is preserved.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">default_fp</span> <span class="o">=</span> <span class="p">{</span><span class="n">f16</span><span class="p">:</span> <span class="n">f16</span><span class="p">,</span> <span class="n">f32</span><span class="p">:</span> <span class="n">f32</span><span class="p">,</span> <span class="n">f64</span><span class="p">:</span> <span class="n">f64</span><span class="p">}[</span><span class="n">fp</span><span class="p">]</span>
         <span class="n">default_cfg</span><span class="p">()</span><span class="o">.</span><span class="n">default_fp</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">default_fp</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">set_default_ip</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ip</span><span class="p">):</span>
         <span class="k">assert</span> <span class="n">ip</span> <span class="ow">in</span> <span class="p">[</span><span class="n">i32</span><span class="p">,</span> <span class="n">i64</span><span class="p">]</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">default_ip</span> <span class="o">=</span> <span class="n">ip</span>
+        <span class="c1"># See set_default_fp: canonicalize to the registered singleton so id-based type checks keep working.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">default_ip</span> <span class="o">=</span> <span class="p">{</span><span class="n">i32</span><span class="p">:</span> <span class="n">i32</span><span class="p">,</span> <span class="n">i64</span><span class="p">:</span> <span class="n">i64</span><span class="p">}[</span><span class="n">ip</span><span class="p">]</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">default_up</span> <span class="o">=</span> <span class="n">u32</span> <span class="k">if</span> <span class="n">ip</span> <span class="o">==</span> <span class="n">i32</span> <span class="k">else</span> <span class="n">u64</span>
         <span class="n">default_cfg</span><span class="p">()</span><span class="o">.</span><span class="n">default_ip</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">default_ip</span>
         <span class="n">default_cfg</span><span class="p">()</span><span class="o">.</span><span class="n">default_up</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">default_up</span>
@@ -895,7 +938,13 @@
             <span class="k">return</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">materialize</span><span class="p">()</span>
         <span class="k">assert</span> <span class="bp">self</span><span class="o">.</span><span class="n">_prog</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">_prog</span><span class="o">.</span><span class="n">synchronize</span><span class="p">()</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_prog</span><span class="o">.</span><span class="n">synchronize</span><span class="p">()</span>
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="n">wrapped</span> <span class="o">=</span> <span class="n">handle_exception_from_cpp</span><span class="p">(</span><span class="n">e</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">wrapped</span> <span class="ow">is</span> <span class="n">e</span><span class="p">:</span>
+                <span class="k">raise</span>
+            <span class="k">raise</span> <span class="n">wrapped</span> <span class="kn">from</span><span class="w"> </span><span class="kc">None</span>
 
 
 <span class="n">pyquadrants</span> <span class="o">=</span> <span class="n">PyQuadrants</span><span class="p">()</span>
@@ -903,6 +952,14 @@
 
 <span class="k">def</span><span class="w"> </span><span class="nf">get_runtime</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="n">PyQuadrants</span><span class="p">:</span>
     <span class="k">return</span> <span class="n">pyquadrants</span>
+
+
+<span class="n">_reset_hooks</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">Callable</span><span class="p">[[],</span> <span class="kc">None</span><span class="p">]]</span> <span class="o">=</span> <span class="p">[]</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">on_reset</span><span class="p">(</span><span class="n">hook</span><span class="p">:</span> <span class="n">Callable</span><span class="p">[[],</span> <span class="kc">None</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Register a callback to be invoked on ``reset()``.  Invalidates module-level caches without coupling.&quot;&quot;&quot;</span>
+    <span class="n">_reset_hooks</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">hook</span><span class="p">)</span>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">reset</span><span class="p">():</span>
@@ -916,9 +973,9 @@
     <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">old_kernels</span><span class="p">:</span>
         <span class="n">k</span><span class="o">.</span><span class="n">reset</span><span class="p">()</span>
     <span class="n">_qd_core</span><span class="o">.</span><span class="n">reset_default_compile_config</span><span class="p">()</span>
-    <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._func_base</span><span class="w"> </span><span class="kn">import</span> <span class="n">_frozen_dc_plans</span>  <span class="c1"># pylint: disable=C0415</span>
 
-    <span class="n">_frozen_dc_plans</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span>
+    <span class="k">for</span> <span class="n">hook</span> <span class="ow">in</span> <span class="n">_reset_hooks</span><span class="p">:</span>
+        <span class="n">hook</span><span class="p">()</span>
 
 
 <span class="nd">@quadrants_scope</span>
@@ -1104,10 +1161,8 @@
         <span class="k">if</span> <span class="n">prog</span><span class="o">.</span><span class="n">config</span><span class="p">()</span><span class="o">.</span><span class="n">debug</span><span class="p">:</span>
             <span class="c1"># adjoint checkbit</span>
             <span class="n">x_grad_checkbit</span> <span class="o">=</span> <span class="n">Expr</span><span class="p">(</span><span class="n">prog</span><span class="o">.</span><span class="n">make_id_expr</span><span class="p">(</span><span class="s2">&quot;&quot;</span><span class="p">))</span>
-            <span class="n">dtype</span> <span class="o">=</span> <span class="n">u8</span>
-            <span class="k">if</span> <span class="n">prog</span><span class="o">.</span><span class="n">config</span><span class="p">()</span><span class="o">.</span><span class="n">arch</span> <span class="o">==</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">vulkan</span><span class="p">:</span>
-                <span class="n">dtype</span> <span class="o">=</span> <span class="n">i32</span>
-            <span class="n">x_grad_checkbit</span><span class="o">.</span><span class="n">ptr</span> <span class="o">=</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">expr_field</span><span class="p">(</span><span class="n">x_grad_checkbit</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">cook_dtype</span><span class="p">(</span><span class="n">dtype</span><span class="p">))</span>
+            <span class="n">checkbit_dtype</span> <span class="o">=</span> <span class="n">i32</span> <span class="k">if</span> <span class="n">prog</span><span class="o">.</span><span class="n">config</span><span class="p">()</span><span class="o">.</span><span class="n">arch</span> <span class="o">==</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">vulkan</span> <span class="k">else</span> <span class="n">u8</span>
+            <span class="n">x_grad_checkbit</span><span class="o">.</span><span class="n">ptr</span> <span class="o">=</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">expr_field</span><span class="p">(</span><span class="n">x_grad_checkbit</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">cook_dtype</span><span class="p">(</span><span class="n">checkbit_dtype</span><span class="p">))</span>
             <span class="n">x_grad_checkbit</span><span class="o">.</span><span class="n">ptr</span><span class="o">.</span><span class="n">set_name</span><span class="p">(</span><span class="n">name</span> <span class="o">+</span> <span class="s2">&quot;.grad_checkbit&quot;</span><span class="p">)</span>
             <span class="n">x_grad_checkbit</span><span class="o">.</span><span class="n">ptr</span><span class="o">.</span><span class="n">set_grad_type</span><span class="p">(</span><span class="n">SNodeGradType</span><span class="o">.</span><span class="n">ADJOINT_CHECKBIT</span><span class="p">)</span>
             <span class="n">x</span><span class="o">.</span><span class="n">ptr</span><span class="o">.</span><span class="n">set_adjoint_checkbit</span><span class="p">(</span><span class="n">x_grad_checkbit</span><span class="o">.</span><span class="n">ptr</span><span class="p">)</span>
@@ -1123,7 +1178,7 @@
     <span class="k">elif</span> <span class="n">needs_grad</span> <span class="ow">or</span> <span class="n">needs_dual</span><span class="p">:</span>
         <span class="k">raise</span> <span class="n">QuadrantsRuntimeError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">dtype</span><span class="si">}</span><span class="s2"> is not supported for field with `needs_grad=True` or `needs_dual=True`.&quot;</span><span class="p">)</span>
 
-    <span class="k">return</span> <span class="n">x</span><span class="p">,</span> <span class="n">x_grad</span><span class="p">,</span> <span class="n">x_dual</span>
+    <span class="k">return</span> <span class="n">x</span><span class="p">,</span> <span class="n">x_grad</span><span class="p">,</span> <span class="n">x_dual</span><span class="p">,</span> <span class="n">x_grad_checkbit</span>
 
 
 <span class="nd">@python_scope</span>
@@ -1136,7 +1191,7 @@
     <span class="n">needs_grad</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
     <span class="n">needs_dual</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
 <span class="p">):</span>
-    <span class="n">x</span><span class="p">,</span> <span class="n">x_grad</span><span class="p">,</span> <span class="n">x_dual</span> <span class="o">=</span> <span class="n">create_field_member</span><span class="p">(</span><span class="n">dtype</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">needs_grad</span><span class="p">,</span> <span class="n">needs_dual</span><span class="p">)</span>
+    <span class="n">x</span><span class="p">,</span> <span class="n">x_grad</span><span class="p">,</span> <span class="n">x_dual</span><span class="p">,</span> <span class="n">x_grad_checkbit</span> <span class="o">=</span> <span class="n">create_field_member</span><span class="p">(</span><span class="n">dtype</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">needs_grad</span><span class="p">,</span> <span class="n">needs_dual</span><span class="p">)</span>
     <span class="n">x</span> <span class="o">=</span> <span class="n">ScalarField</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
     <span class="k">if</span> <span class="n">x_grad</span><span class="p">:</span>
         <span class="n">x_grad</span> <span class="o">=</span> <span class="n">ScalarField</span><span class="p">(</span><span class="n">x_grad</span><span class="p">)</span>
@@ -1144,6 +1199,9 @@
     <span class="k">if</span> <span class="n">x_dual</span><span class="p">:</span>
         <span class="n">x_dual</span> <span class="o">=</span> <span class="n">ScalarField</span><span class="p">(</span><span class="n">x_dual</span><span class="p">)</span>
         <span class="n">x</span><span class="o">.</span><span class="n">_set_dual</span><span class="p">(</span><span class="n">x_dual</span><span class="p">)</span>
+    <span class="n">x_grad_checkbit_field</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="k">if</span> <span class="n">x_grad_checkbit</span> <span class="ow">and</span> <span class="n">needs_grad</span><span class="p">:</span>
+        <span class="n">x_grad_checkbit_field</span> <span class="o">=</span> <span class="n">ScalarField</span><span class="p">(</span><span class="n">x_grad_checkbit</span><span class="p">)</span>
 
     <span class="k">if</span> <span class="n">shape</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
         <span class="k">if</span> <span class="n">offset</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
@@ -1199,6 +1257,15 @@
         <span class="n">_create_snode</span><span class="p">(</span><span class="n">flat_axis_seq</span><span class="p">,</span> <span class="n">shape_seq</span><span class="p">,</span> <span class="n">same_level</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span><span class="o">.</span><span class="n">place</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">offset</span><span class="o">=</span><span class="n">phys_offset</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">needs_grad</span><span class="p">:</span>
             <span class="n">_create_snode</span><span class="p">(</span><span class="n">flat_axis_seq</span><span class="p">,</span> <span class="n">shape_seq</span><span class="p">,</span> <span class="n">same_level</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span><span class="o">.</span><span class="n">place</span><span class="p">(</span><span class="n">x_grad</span><span class="p">,</span> <span class="n">offset</span><span class="o">=</span><span class="n">phys_offset</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">x_grad_checkbit_field</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="c1"># Place the debug-mode adjoint checkbit in its own dense container, sibling to primal/adjoint denses.</span>
+                <span class="c1"># Adding it as a child of the primal&#39;s dense (the legacy `make_lazy_place` path) changes that dense&#39;s</span>
+                <span class="c1"># cell layout from `{primal}` to `{primal, checkbit}`, which silently corrupts kernel codegen for</span>
+                <span class="c1"># non-validation reverse-mode kernels - gradients drop to zero in tests like the Genesis rigid-solver</span>
+                <span class="c1"># finite-difference vs analytic check.</span>
+                <span class="n">_create_snode</span><span class="p">(</span><span class="n">flat_axis_seq</span><span class="p">,</span> <span class="n">shape_seq</span><span class="p">,</span> <span class="n">same_level</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span><span class="o">.</span><span class="n">place</span><span class="p">(</span>
+                    <span class="n">x_grad_checkbit_field</span><span class="p">,</span> <span class="n">offset</span><span class="o">=</span><span class="n">phys_offset</span>
+                <span class="p">)</span>
         <span class="k">if</span> <span class="n">needs_dual</span><span class="p">:</span>
             <span class="n">_create_snode</span><span class="p">(</span><span class="n">flat_axis_seq</span><span class="p">,</span> <span class="n">shape_seq</span><span class="p">,</span> <span class="n">same_level</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span><span class="o">.</span><span class="n">place</span><span class="p">(</span><span class="n">x_dual</span><span class="p">,</span> <span class="n">offset</span><span class="o">=</span><span class="n">phys_offset</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">order</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
@@ -1780,8 +1847,8 @@
   </div>
   
   <!-- Scripts loaded after <body> so the DOM is not blocked -->
-  <script defer src="../../../_static/scripts/bootstrap.js?digest=55c26ed414f5f8a31ebb"></script>
-<script defer src="../../../_static/scripts/pydata-sphinx-theme.js?digest=55c26ed414f5f8a31ebb"></script>
+  <script defer src="../../../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5"></script>
+<script defer src="../../../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5"></script>
 
   <footer class="bd-footer">
 <div class="bd-footer__inner bd-page-width">
@@ -1815,7 +1882,7 @@
         <div class="footer-item">
 <p class="theme-version">
   <!-- # L10n: Setting the PST URL as an argument as this does not need to be localized -->
-  Built with the <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a> 0.17.1.
+  Built with the <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a> 0.19.0.
 </p></div>
       
     </div>

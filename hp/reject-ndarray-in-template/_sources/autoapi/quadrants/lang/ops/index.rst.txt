@@ -41,6 +41,9 @@ Functions
    quadrants.lang.ops.atomic_and
    quadrants.lang.ops.atomic_or
    quadrants.lang.ops.atomic_xor
+   quadrants.lang.ops.atomic_exchange
+   quadrants.lang.ops.atomic_cas
+   quadrants.lang.ops.volatile_load
    quadrants.lang.ops.max
    quadrants.lang.ops.min
 
@@ -786,6 +789,110 @@ Module Contents
        >>>     print(z)  # [-1, 0, 1], the old value of x
        >>>
        >>>     qd.atomic_xor(1, x)  # will raise QuadrantsSyntaxError
+
+
+.. py:function:: atomic_exchange(x, y)
+
+   Atomically swap the value of `x` with `y`, and return the old value of `x`.
+
+   Unlike the other `qd.atomic_*` ops, the new value of `x` does not depend on its old value: `x` is unconditionally
+   overwritten with `y`. Useful for lock-free hand-off / claim-a-slot patterns where you want to atomically grab
+   whatever was at a location while leaving a fresh value behind.
+
+   `x` must be a writable target, constant expressions or scalars are not allowed.
+
+   :param x: The input. When both are matrices they must have the same shape.
+   :type x: Union[:mod:`~quadrants.types.primitive_types`, :class:`~quadrants.Matrix`]
+   :param y: The input. When both are matrices they must have the same shape.
+   :type y: Union[:mod:`~quadrants.types.primitive_types`, :class:`~quadrants.Matrix`]
+
+   :returns: The old value of `x`.
+
+   Example::
+
+       >>> @qd.kernel
+       >>> def test():
+       >>>     x = 7
+       >>>     z = qd.atomic_exchange(x, 42)
+       >>>     print(x)  # 42, the new value of x
+       >>>     print(z)  # 7,  the old value of x
+       >>>
+       >>>     qd.atomic_exchange(1, x)  # will raise QuadrantsSyntaxError
+
+
+.. py:function:: atomic_cas(x, expected, desired)
+
+   Atomically compare-and-swap: if the current value of `x` equals `expected`, write `desired` into `x`.
+   Returns the value originally at `x` (regardless of whether the swap happened).
+
+   The user determines whether the swap actually fired by comparing the returned value against `expected`::
+
+       old = qd.atomic_cas(x, expected, desired)
+       success = (old == expected)
+
+   This matches the shape of CUDA's `atomicCAS` and SPIR-V's `OpAtomicCompareExchange`. CAS is the basic
+   primitive on top of which arbitrary atomic read-modify-write operations can be built with a retry loop.
+
+   Currently integer dtypes only -- f32 / f64 will raise a trace-time type error. `x` must be a writable
+   target; constant expressions or scalars are not allowed.
+
+   :param x: the destination memory location (lvalue: field element, ndarray element, matrix slot).
+   :param expected: the value `x` is required to currently hold for the swap to fire.
+   :param desired: the value to write into `x` if `*x == expected`.
+
+   :returns: The value originally at `x`.
+
+   Example::
+
+       >>> @qd.kernel
+       >>> def take_slot():
+       >>>     # Try to claim the slot only if it is currently empty (== 0).
+       >>>     old = qd.atomic_cas(slot[None], 0, my_id)
+       >>>     if old == 0:
+       >>>         # we won the race; the slot is ours
+       >>>         ...
+
+
+.. py:function:: volatile_load(target)
+
+   Read `target` with volatile semantics: the compiler is forbidden from caching, hoisting, or merging the
+   load with prior reads of the same address.  Required for spin-wait patterns where another thread or block
+   writes the cell and the reader must observe the update on every iteration.
+
+   Without this primitive, a loop like ::
+
+       while flags[prev] == STATE_INVALID:
+           pass
+
+   is undefined: the compiler may hoist the `flags[prev]` load out of the loop and the spin becomes infinite.
+   The portable workarounds (`grid.mem_fence()` inside the loop, or `atomic_add(flags[prev], 0)`) are both
+   correct but pay an order-of-magnitude perf tax over a real volatile read.
+
+   Codegen on every backend:
+
+   * CUDA / AMDGPU: LLVM `load volatile`, lowered to `ld.volatile.global` (PTX) /  unhoistable `global_load_*`
+     (AMDGPU).
+   * Vulkan / Metal: SPIR-V `OpLoad` with the `Volatile` `MemoryAccess` mask, propagated through SPIRV-Cross to
+     a re-read on every use in the generated MSL / GLSL.
+
+   :param target: a global lvalue (field / ndarray subscript).  Function-scope local arrays are rejected -- a
+                  local cannot be observed by another thread, so a volatile load there would be meaningless.
+
+   :returns: The freshly-read value of `target`, with the same dtype an ordinary read would produce.
+
+   Example::
+
+       >>> @qd.kernel
+       >>> def lookback_scan(...):
+       >>>     # block-level decoupled-look-back scan: spin until the predecessor publishes its aggregate
+       >>>     while qd.volatile_load(flags[prev]) == STATE_INVALID:
+       >>>         pass
+       >>>     prev_agg = qd.volatile_load(aggregates[prev])
+
+   .. seealso::
+
+      `qd.atomic_*` for the read-modify-write side; `qd.simt.grid.mem_fence` for the heavyweight
+      device-scope fence that was the only correct (but slow) workaround before this primitive existed.
 
 
 .. py:function:: max(*args)

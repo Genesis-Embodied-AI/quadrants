@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>quadrants.lang.simt.block &#8212; Quadrants 0.7.4 documentation</title>
+    <title>quadrants.lang.simt.block &#8212; Quadrants 1.1.1 documentation</title>
   
   
   
@@ -27,8 +27,8 @@
   </noscript>
   
   <!-- Loaded before other Sphinx assets -->
-  <link href="../../../../../_static/styles/theme.css?digest=55c26ed414f5f8a31ebb" rel="stylesheet" />
-<link href="../../../../../_static/styles/pydata-sphinx-theme.css?digest=55c26ed414f5f8a31ebb" rel="stylesheet" />
+  <link href="../../../../../_static/styles/theme.css?digest=a95f357e85573c9b56d5" rel="stylesheet" />
+<link href="../../../../../_static/styles/pydata-sphinx-theme.css?digest=a95f357e85573c9b56d5" rel="stylesheet" />
 
     <link rel="stylesheet" type="text/css" href="../../../../../_static/pygments.css?v=8f2a1f02" />
     <link rel="stylesheet" type="text/css" href="../../../../../_static/copybutton.css?v=76b2166b" />
@@ -38,12 +38,12 @@
     <link rel="stylesheet" type="text/css" href="../../../../../_static/css/custom.css" />
   
   <!-- So that users can add custom icons -->
-  <script defer src="../../../../../_static/scripts/fontawesome.js?digest=55c26ed414f5f8a31ebb"></script>
+  <script defer src="../../../../../_static/scripts/fontawesome.js?digest=a95f357e85573c9b56d5"></script>
   <!-- Pre-loaded scripts that we'll load fully later -->
-  <link rel="preload" as="script" href="../../../../../_static/scripts/bootstrap.js?digest=55c26ed414f5f8a31ebb" />
-<link rel="preload" as="script" href="../../../../../_static/scripts/pydata-sphinx-theme.js?digest=55c26ed414f5f8a31ebb" />
+  <link rel="preload" as="script" href="../../../../../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5" />
+<link rel="preload" as="script" href="../../../../../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5" />
 
-    <script src="../../../../../_static/documentation_options.js?v=020ce317"></script>
+    <script src="../../../../../_static/documentation_options.js?v=58fbf978"></script>
     <script src="../../../../../_static/doctools.js?v=9bcbadda"></script>
     <script src="../../../../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../../../../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -63,7 +63,7 @@
     <link rel="prev" title="quadrants.lang.simt" href="../index.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="0.7.4" />
+  <meta name="docsearch:version" content="1.1.1" />
   
     
     <script src="../../../../../_static/searchtools.js"></script>
@@ -131,7 +131,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 0.7.4 documentation</p>
+    <p class="title logo__title">Quadrants 1.1.1 documentation</p>
   
 </a></div>
     
@@ -179,11 +179,18 @@
       
         <div class="navbar-item">
 
-<button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button pst-js-only" aria-label="Color mode" data-bs-title="Color mode"  data-bs-placement="bottom" data-bs-toggle="tooltip">
-  <i class="theme-switch fa-solid fa-sun                fa-lg" data-mode="light" title="Light"></i>
-  <i class="theme-switch fa-solid fa-moon               fa-lg" data-mode="dark"  title="Dark"></i>
-  <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"  title="System Settings"></i>
-</button></div>
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg fa-fw" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg fa-fw" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg fa-fw" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg fa-fw me-1"></i>System Settings</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg fa-fw me-1"></i>Light</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg fa-fw me-1"></i>Dark</button></li>
+  </ul>
+</div></div>
       
     </div>
     
@@ -256,11 +263,18 @@
         
           <div class="navbar-item">
 
-<button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button pst-js-only" aria-label="Color mode" data-bs-title="Color mode"  data-bs-placement="bottom" data-bs-toggle="tooltip">
-  <i class="theme-switch fa-solid fa-sun                fa-lg" data-mode="light" title="Light"></i>
-  <i class="theme-switch fa-solid fa-moon               fa-lg" data-mode="dark"  title="Dark"></i>
-  <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"  title="System Settings"></i>
-</button></div>
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg fa-fw" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg fa-fw" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg fa-fw" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg fa-fw me-1"></i>System Settings</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg fa-fw me-1"></i>Light</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg fa-fw me-1"></i>Dark</button></li>
+  </ul>
+</div></div>
         
       </div>
     
@@ -381,14 +395,68 @@
 <tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.simt.block.sync_count_nonzero" title="quadrants.lang.simt.block.sync_count_nonzero"><code class="xref py py-obj docutils literal notranslate"><span class="pre">sync_count_nonzero</span></code></a>(predicate)</p></td>
 <td><p></p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.simt.block.mem_sync" title="quadrants.lang.simt.block.mem_sync"><code class="xref py py-obj docutils literal notranslate"><span class="pre">mem_sync</span></code></a>()</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.simt.block.mem_fence" title="quadrants.lang.simt.block.mem_fence"><code class="xref py py-obj docutils literal notranslate"><span class="pre">mem_fence</span></code></a>()</p></td>
 <td><p></p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.simt.block.thread_idx" title="quadrants.lang.simt.block.thread_idx"><code class="xref py py-obj docutils literal notranslate"><span class="pre">thread_idx</span></code></a>()</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.simt.block.mem_sync" title="quadrants.lang.simt.block.mem_sync"><code class="xref py py-obj docutils literal notranslate"><span class="pre">mem_sync</span></code></a>()</p></td>
 <td><p></p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.simt.block.global_thread_idx" title="quadrants.lang.simt.block.global_thread_idx"><code class="xref py py-obj docutils literal notranslate"><span class="pre">global_thread_idx</span></code></a>()</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.simt.block.thread_idx" title="quadrants.lang.simt.block.thread_idx"><code class="xref py py-obj docutils literal notranslate"><span class="pre">thread_idx</span></code></a>()</p></td>
 <td><p></p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.simt.block.global_thread_idx" title="quadrants.lang.simt.block.global_thread_idx"><code class="xref py py-obj docutils literal notranslate"><span class="pre">global_thread_idx</span></code></a>()</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.simt.block.reduce" title="quadrants.lang.simt.block.reduce"><code class="xref py py-obj docutils literal notranslate"><span class="pre">reduce</span></code></a>(value, block_dim, op, dtype)</p></td>
+<td><p>Block-scope reduction under a generic associative <code class="docutils literal notranslate"><span class="pre">op</span></code>.  Result is valid in <strong>thread 0 only</strong>; other threads</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.simt.block.reduce_all" title="quadrants.lang.simt.block.reduce_all"><code class="xref py py-obj docutils literal notranslate"><span class="pre">reduce_all</span></code></a>(value, block_dim, op, dtype)</p></td>
+<td><p>Block-scope reduction under a generic associative <code class="docutils literal notranslate"><span class="pre">op</span></code>, broadcast to every thread.  Costs one extra</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.simt.block.reduce_add" title="quadrants.lang.simt.block.reduce_add"><code class="xref py py-obj docutils literal notranslate"><span class="pre">reduce_add</span></code></a>(value, block_dim, dtype)</p></td>
+<td><p>Block-scope sum reduction.  Result valid in <strong>thread 0 only</strong>.  See <cite>reduce</cite> for the argument contract.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.simt.block.reduce_min" title="quadrants.lang.simt.block.reduce_min"><code class="xref py py-obj docutils literal notranslate"><span class="pre">reduce_min</span></code></a>(value, block_dim, dtype)</p></td>
+<td><p>Block-scope min reduction.  Result valid in <strong>thread 0 only</strong>.  See <cite>reduce</cite> for the argument contract.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.simt.block.reduce_max" title="quadrants.lang.simt.block.reduce_max"><code class="xref py py-obj docutils literal notranslate"><span class="pre">reduce_max</span></code></a>(value, block_dim, dtype)</p></td>
+<td><p>Block-scope max reduction.  Result valid in <strong>thread 0 only</strong>.  See <cite>reduce</cite> for the argument contract.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.simt.block.reduce_all_add" title="quadrants.lang.simt.block.reduce_all_add"><code class="xref py py-obj docutils literal notranslate"><span class="pre">reduce_all_add</span></code></a>(value, block_dim, dtype)</p></td>
+<td><p>Block-scope sum reduction with the result broadcast to every thread.  See <cite>reduce_add</cite> for the cheaper</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.simt.block.reduce_all_min" title="quadrants.lang.simt.block.reduce_all_min"><code class="xref py py-obj docutils literal notranslate"><span class="pre">reduce_all_min</span></code></a>(value, block_dim, dtype)</p></td>
+<td><p>Block-scope min reduction broadcast to every thread.  See <cite>reduce_all_add</cite>.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.simt.block.reduce_all_max" title="quadrants.lang.simt.block.reduce_all_max"><code class="xref py py-obj docutils literal notranslate"><span class="pre">reduce_all_max</span></code></a>(value, block_dim, dtype)</p></td>
+<td><p>Block-scope max reduction broadcast to every thread.  See <cite>reduce_all_add</cite>.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.simt.block.inclusive_scan" title="quadrants.lang.simt.block.inclusive_scan"><code class="xref py py-obj docutils literal notranslate"><span class="pre">inclusive_scan</span></code></a>(value, block_dim, op, dtype)</p></td>
+<td><p>Block-scope inclusive scan under a generic associative <code class="docutils literal notranslate"><span class="pre">op</span></code>.  Every thread receives a valid result.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.simt.block.exclusive_scan" title="quadrants.lang.simt.block.exclusive_scan"><code class="xref py py-obj docutils literal notranslate"><span class="pre">exclusive_scan</span></code></a>(value, block_dim, op, identity, dtype)</p></td>
+<td><p>Block-scope exclusive scan under a generic associative <code class="docutils literal notranslate"><span class="pre">op</span></code> with explicit <code class="docutils literal notranslate"><span class="pre">identity</span></code>.  Every thread receives</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.simt.block.inclusive_add" title="quadrants.lang.simt.block.inclusive_add"><code class="xref py py-obj docutils literal notranslate"><span class="pre">inclusive_add</span></code></a>(value, block_dim, dtype)</p></td>
+<td><p>Block-scope inclusive prefix sum.  After the call, thread <code class="docutils literal notranslate"><span class="pre">i</span></code> holds <code class="docutils literal notranslate"><span class="pre">v[0]</span> <span class="pre">+</span> <span class="pre">v[1]</span> <span class="pre">+</span> <span class="pre">...</span> <span class="pre">+</span> <span class="pre">v[i]</span></code>.  See</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.simt.block.inclusive_min" title="quadrants.lang.simt.block.inclusive_min"><code class="xref py py-obj docutils literal notranslate"><span class="pre">inclusive_min</span></code></a>(value, block_dim, dtype)</p></td>
+<td><p>Block-scope inclusive prefix min.  See <cite>inclusive_scan</cite> for the argument contract.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.simt.block.inclusive_max" title="quadrants.lang.simt.block.inclusive_max"><code class="xref py py-obj docutils literal notranslate"><span class="pre">inclusive_max</span></code></a>(value, block_dim, dtype)</p></td>
+<td><p>Block-scope inclusive prefix max.  See <cite>inclusive_scan</cite> for the argument contract.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.simt.block.exclusive_add" title="quadrants.lang.simt.block.exclusive_add"><code class="xref py py-obj docutils literal notranslate"><span class="pre">exclusive_add</span></code></a>(value, block_dim, dtype)</p></td>
+<td><p>Block-scope exclusive prefix sum.  After the call, thread <code class="docutils literal notranslate"><span class="pre">i</span> <span class="pre">&gt;</span> <span class="pre">0</span></code> holds <code class="docutils literal notranslate"><span class="pre">v[0]</span> <span class="pre">+</span> <span class="pre">v[1]</span> <span class="pre">+</span> <span class="pre">...</span> <span class="pre">+</span> <span class="pre">v[i-1]</span></code> and</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.simt.block.exclusive_min" title="quadrants.lang.simt.block.exclusive_min"><code class="xref py py-obj docutils literal notranslate"><span class="pre">exclusive_min</span></code></a>(value, block_dim, dtype)</p></td>
+<td><p>Block-scope exclusive prefix min.  After the call, thread <code class="docutils literal notranslate"><span class="pre">i</span> <span class="pre">&gt;</span> <span class="pre">0</span></code> holds <code class="docutils literal notranslate"><span class="pre">min(v[0],</span> <span class="pre">...,</span> <span class="pre">v[i-1])</span></code> and</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.simt.block.exclusive_max" title="quadrants.lang.simt.block.exclusive_max"><code class="xref py py-obj docutils literal notranslate"><span class="pre">exclusive_max</span></code></a>(value, block_dim, dtype)</p></td>
+<td><p>Block-scope exclusive prefix max.  After the call, thread <code class="docutils literal notranslate"><span class="pre">i</span> <span class="pre">&gt;</span> <span class="pre">0</span></code> holds <code class="docutils literal notranslate"><span class="pre">max(v[0],</span> <span class="pre">...,</span> <span class="pre">v[i-1])</span></code> and</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.simt.block.radix_rank_match_atomic_or" title="quadrants.lang.simt.block.radix_rank_match_atomic_or"><code class="xref py py-obj docutils literal notranslate"><span class="pre">radix_rank_match_atomic_or</span></code></a>(key, block_dim, radix_bits, ...)</p></td>
+<td><p>Block-level radix rank via the atomic-OR match-and-count strategy.</p></td>
 </tr>
 </tbody>
 </table>
@@ -419,6 +487,11 @@
 <dl class="py function">
 <dt class="sig sig-object py" id="quadrants.lang.simt.block.sync_count_nonzero">
 <span class="sig-prename descclassname"><span class="pre">quadrants.lang.simt.block.</span></span><span class="sig-name descname"><span class="pre">sync_count_nonzero</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">predicate</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/quadrants/lang/simt/block.html#sync_count_nonzero"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.simt.block.sync_count_nonzero" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="quadrants.lang.simt.block.mem_fence">
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.simt.block.</span></span><span class="sig-name descname"><span class="pre">mem_fence</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/quadrants/lang/simt/block.html#mem_fence"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.simt.block.mem_fence" title="Link to this definition">#</a></dt>
 <dd></dd></dl>
 
 <dl class="py function">
@@ -454,6 +527,188 @@
 <span class="sig-name descname"><span class="pre">subscript</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">indices</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/quadrants/lang/simt/block.html#SharedArray.subscript"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.simt.block.SharedArray.subscript" title="Link to this definition">#</a></dt>
 <dd></dd></dl>
 
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="quadrants.lang.simt.block.reduce">
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.simt.block.</span></span><span class="sig-name descname"><span class="pre">reduce</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">block_dim</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">template</span><span class="p"><span class="pre">(</span></span><span class="p"><span class="pre">)</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">op</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">template</span><span class="p"><span class="pre">(</span></span><span class="p"><span class="pre">)</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dtype</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">template</span><span class="p"><span class="pre">(</span></span><span class="p"><span class="pre">)</span></span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/quadrants/lang/simt/block.html#reduce"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.simt.block.reduce" title="Link to this definition">#</a></dt>
+<dd><p>Block-scope reduction under a generic associative <code class="docutils literal notranslate"><span class="pre">op</span></code>.  Result is valid in <strong>thread 0 only</strong>; other threads
+retain partial values.  Use <cite>reduce_all</cite> if you need the result on every thread.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>value</strong> – per-thread input.</p></li>
+<li><p><strong>block_dim</strong> – threads per block (template).  Must be a positive multiple of <code class="docutils literal notranslate"><span class="pre">subgroup.group_size()</span></code> (32 on CUDA
+/ Metal / Vulkan-on-NVIDIA, 64 on AMDGPU).</p></li>
+<li><p><strong>op</strong> – <code class="docutils literal notranslate"><span class="pre">&#64;qd.func</span></code> taking two values and returning the same type as <code class="docutils literal notranslate"><span class="pre">value</span></code>; callers can plug in custom
+associative monoids (bitwise ops, multiplicative, matrix-multiply, etc.) without re-implementing the
+per-subgroup + shared-mem skeleton.  See <cite>reduce_add</cite> for the standard sum specialization.</p></li>
+<li><p><strong>dtype</strong> – scalar dtype for the inter-subgroup shared-memory staging slot (must match <code class="docutils literal notranslate"><span class="pre">value</span></code>’s type).</p></li>
+</ul>
+</dd>
+</dl>
+<p>The calling thread’s block-local index is read internally via <cite>block.thread_idx()</cite>; the subgroup size is read from
+<cite>subgroup.group_size()</cite> at compile time.  When the block is exactly one subgroup the shared-memory path is
+short-circuited at compile time and the call costs only the per-subgroup tree.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="quadrants.lang.simt.block.reduce_all">
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.simt.block.</span></span><span class="sig-name descname"><span class="pre">reduce_all</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">block_dim</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">template</span><span class="p"><span class="pre">(</span></span><span class="p"><span class="pre">)</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">op</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">template</span><span class="p"><span class="pre">(</span></span><span class="p"><span class="pre">)</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dtype</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">template</span><span class="p"><span class="pre">(</span></span><span class="p"><span class="pre">)</span></span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/quadrants/lang/simt/block.html#reduce_all"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.simt.block.reduce_all" title="Link to this definition">#</a></dt>
+<dd><p>Block-scope reduction under a generic associative <code class="docutils literal notranslate"><span class="pre">op</span></code>, broadcast to every thread.  Costs one extra
+<code class="docutils literal notranslate"><span class="pre">block.sync()</span></code> plus a one-slot shared-memory broadcast vs. <cite>reduce</cite>.  See <cite>reduce</cite> for the operator contract.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="quadrants.lang.simt.block.reduce_add">
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.simt.block.</span></span><span class="sig-name descname"><span class="pre">reduce_add</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">block_dim</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">template</span><span class="p"><span class="pre">(</span></span><span class="p"><span class="pre">)</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dtype</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">template</span><span class="p"><span class="pre">(</span></span><span class="p"><span class="pre">)</span></span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/quadrants/lang/simt/block.html#reduce_add"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.simt.block.reduce_add" title="Link to this definition">#</a></dt>
+<dd><p>Block-scope sum reduction.  Result valid in <strong>thread 0 only</strong>.  See <cite>reduce</cite> for the argument contract.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="quadrants.lang.simt.block.reduce_min">
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.simt.block.</span></span><span class="sig-name descname"><span class="pre">reduce_min</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">block_dim</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">template</span><span class="p"><span class="pre">(</span></span><span class="p"><span class="pre">)</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dtype</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">template</span><span class="p"><span class="pre">(</span></span><span class="p"><span class="pre">)</span></span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/quadrants/lang/simt/block.html#reduce_min"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.simt.block.reduce_min" title="Link to this definition">#</a></dt>
+<dd><p>Block-scope min reduction.  Result valid in <strong>thread 0 only</strong>.  See <cite>reduce</cite> for the argument contract.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="quadrants.lang.simt.block.reduce_max">
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.simt.block.</span></span><span class="sig-name descname"><span class="pre">reduce_max</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">block_dim</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">template</span><span class="p"><span class="pre">(</span></span><span class="p"><span class="pre">)</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dtype</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">template</span><span class="p"><span class="pre">(</span></span><span class="p"><span class="pre">)</span></span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/quadrants/lang/simt/block.html#reduce_max"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.simt.block.reduce_max" title="Link to this definition">#</a></dt>
+<dd><p>Block-scope max reduction.  Result valid in <strong>thread 0 only</strong>.  See <cite>reduce</cite> for the argument contract.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="quadrants.lang.simt.block.reduce_all_add">
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.simt.block.</span></span><span class="sig-name descname"><span class="pre">reduce_all_add</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">block_dim</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">template</span><span class="p"><span class="pre">(</span></span><span class="p"><span class="pre">)</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dtype</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">template</span><span class="p"><span class="pre">(</span></span><span class="p"><span class="pre">)</span></span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/quadrants/lang/simt/block.html#reduce_all_add"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.simt.block.reduce_all_add" title="Link to this definition">#</a></dt>
+<dd><p>Block-scope sum reduction with the result broadcast to every thread.  See <cite>reduce_add</cite> for the cheaper
+thread-0-only variant and <cite>reduce</cite> for the argument contract.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="quadrants.lang.simt.block.reduce_all_min">
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.simt.block.</span></span><span class="sig-name descname"><span class="pre">reduce_all_min</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">block_dim</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">template</span><span class="p"><span class="pre">(</span></span><span class="p"><span class="pre">)</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dtype</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">template</span><span class="p"><span class="pre">(</span></span><span class="p"><span class="pre">)</span></span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/quadrants/lang/simt/block.html#reduce_all_min"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.simt.block.reduce_all_min" title="Link to this definition">#</a></dt>
+<dd><p>Block-scope min reduction broadcast to every thread.  See <cite>reduce_all_add</cite>.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="quadrants.lang.simt.block.reduce_all_max">
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.simt.block.</span></span><span class="sig-name descname"><span class="pre">reduce_all_max</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">block_dim</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">template</span><span class="p"><span class="pre">(</span></span><span class="p"><span class="pre">)</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dtype</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">template</span><span class="p"><span class="pre">(</span></span><span class="p"><span class="pre">)</span></span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/quadrants/lang/simt/block.html#reduce_all_max"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.simt.block.reduce_all_max" title="Link to this definition">#</a></dt>
+<dd><p>Block-scope max reduction broadcast to every thread.  See <cite>reduce_all_add</cite>.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="quadrants.lang.simt.block.inclusive_scan">
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.simt.block.</span></span><span class="sig-name descname"><span class="pre">inclusive_scan</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">block_dim</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">template</span><span class="p"><span class="pre">(</span></span><span class="p"><span class="pre">)</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">op</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">template</span><span class="p"><span class="pre">(</span></span><span class="p"><span class="pre">)</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dtype</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">template</span><span class="p"><span class="pre">(</span></span><span class="p"><span class="pre">)</span></span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/quadrants/lang/simt/block.html#inclusive_scan"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.simt.block.inclusive_scan" title="Link to this definition">#</a></dt>
+<dd><p>Block-scope inclusive scan under a generic associative <code class="docutils literal notranslate"><span class="pre">op</span></code>.  Every thread receives a valid result.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>value</strong> – per-thread input.</p></li>
+<li><p><strong>block_dim</strong> – threads per block (template).  Must be a positive multiple of <code class="docutils literal notranslate"><span class="pre">subgroup.group_size()</span></code> (32 on CUDA
+/ Metal / Vulkan-on-NVIDIA, 64 on AMDGPU).</p></li>
+<li><p><strong>op</strong> – <code class="docutils literal notranslate"><span class="pre">&#64;qd.func</span></code> taking two values and returning the same type as <code class="docutils literal notranslate"><span class="pre">value</span></code>; callers can plug in custom
+associative monoids without re-implementing the per-subgroup + shared-mem skeleton.  See <cite>inclusive_add</cite>
+for the standard sum specialization.</p></li>
+<li><p><strong>dtype</strong> – scalar dtype for the inter-subgroup shared-memory staging slot; must match <code class="docutils literal notranslate"><span class="pre">value</span></code>’s type.</p></li>
+</ul>
+</dd>
+</dl>
+<p>The calling thread’s block-local index is read internally via <cite>block.thread_idx()</cite>; the subgroup size is read from
+<cite>subgroup.group_size()</cite> at compile time.  When the block is exactly one subgroup the cross-subgroup shared-memory
+path is short-circuited at compile time and the call costs only the per-subgroup Hillis-Steele tree.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="quadrants.lang.simt.block.exclusive_scan">
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.simt.block.</span></span><span class="sig-name descname"><span class="pre">exclusive_scan</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">block_dim</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">template</span><span class="p"><span class="pre">(</span></span><span class="p"><span class="pre">)</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">op</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">template</span><span class="p"><span class="pre">(</span></span><span class="p"><span class="pre">)</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">identity</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dtype</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">template</span><span class="p"><span class="pre">(</span></span><span class="p"><span class="pre">)</span></span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/quadrants/lang/simt/block.html#exclusive_scan"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.simt.block.exclusive_scan" title="Link to this definition">#</a></dt>
+<dd><p>Block-scope exclusive scan under a generic associative <code class="docutils literal notranslate"><span class="pre">op</span></code> with explicit <code class="docutils literal notranslate"><span class="pre">identity</span></code>.  Every thread receives
+a valid result; thread 0 holds <code class="docutils literal notranslate"><span class="pre">identity</span></code> and thread <code class="docutils literal notranslate"><span class="pre">i</span> <span class="pre">&gt;</span> <span class="pre">0</span></code> holds <code class="docutils literal notranslate"><span class="pre">op(v[0],</span> <span class="pre">...,</span> <span class="pre">v[i-1])</span></code>.</p>
+<p>See <cite>inclusive_scan</cite> for the per-arg contract; in addition this op takes an explicit <code class="docutils literal notranslate"><span class="pre">identity</span></code> because exclusive
+scan needs a definite value for thread 0 (and for the sentinel paths in <cite>exclusive_min</cite> / <cite>exclusive_max</cite>).  See
+<cite>exclusive_add</cite> for the additive specialization which derives a zero identity automatically.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="quadrants.lang.simt.block.inclusive_add">
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.simt.block.</span></span><span class="sig-name descname"><span class="pre">inclusive_add</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">block_dim</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">template</span><span class="p"><span class="pre">(</span></span><span class="p"><span class="pre">)</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dtype</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">template</span><span class="p"><span class="pre">(</span></span><span class="p"><span class="pre">)</span></span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/quadrants/lang/simt/block.html#inclusive_add"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.simt.block.inclusive_add" title="Link to this definition">#</a></dt>
+<dd><p>Block-scope inclusive prefix sum.  After the call, thread <code class="docutils literal notranslate"><span class="pre">i</span></code> holds <code class="docutils literal notranslate"><span class="pre">v[0]</span> <span class="pre">+</span> <span class="pre">v[1]</span> <span class="pre">+</span> <span class="pre">...</span> <span class="pre">+</span> <span class="pre">v[i]</span></code>.  See
+<cite>inclusive_scan</cite> for the argument contract.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="quadrants.lang.simt.block.inclusive_min">
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.simt.block.</span></span><span class="sig-name descname"><span class="pre">inclusive_min</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">block_dim</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">template</span><span class="p"><span class="pre">(</span></span><span class="p"><span class="pre">)</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dtype</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">template</span><span class="p"><span class="pre">(</span></span><span class="p"><span class="pre">)</span></span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/quadrants/lang/simt/block.html#inclusive_min"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.simt.block.inclusive_min" title="Link to this definition">#</a></dt>
+<dd><p>Block-scope inclusive prefix min.  See <cite>inclusive_scan</cite> for the argument contract.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="quadrants.lang.simt.block.inclusive_max">
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.simt.block.</span></span><span class="sig-name descname"><span class="pre">inclusive_max</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">block_dim</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">template</span><span class="p"><span class="pre">(</span></span><span class="p"><span class="pre">)</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dtype</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">template</span><span class="p"><span class="pre">(</span></span><span class="p"><span class="pre">)</span></span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/quadrants/lang/simt/block.html#inclusive_max"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.simt.block.inclusive_max" title="Link to this definition">#</a></dt>
+<dd><p>Block-scope inclusive prefix max.  See <cite>inclusive_scan</cite> for the argument contract.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="quadrants.lang.simt.block.exclusive_add">
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.simt.block.</span></span><span class="sig-name descname"><span class="pre">exclusive_add</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">block_dim</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">template</span><span class="p"><span class="pre">(</span></span><span class="p"><span class="pre">)</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dtype</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">template</span><span class="p"><span class="pre">(</span></span><span class="p"><span class="pre">)</span></span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/quadrants/lang/simt/block.html#exclusive_add"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.simt.block.exclusive_add" title="Link to this definition">#</a></dt>
+<dd><p>Block-scope exclusive prefix sum.  After the call, thread <code class="docutils literal notranslate"><span class="pre">i</span> <span class="pre">&gt;</span> <span class="pre">0</span></code> holds <code class="docutils literal notranslate"><span class="pre">v[0]</span> <span class="pre">+</span> <span class="pre">v[1]</span> <span class="pre">+</span> <span class="pre">...</span> <span class="pre">+</span> <span class="pre">v[i-1]</span></code> and
+thread 0 holds the additive identity (zero, in <code class="docutils literal notranslate"><span class="pre">value</span></code>’s dtype, derived as <code class="docutils literal notranslate"><span class="pre">value</span> <span class="pre">-</span> <span class="pre">value</span></code>).  See
+<cite>exclusive_scan</cite> for the argument contract.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="quadrants.lang.simt.block.exclusive_min">
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.simt.block.</span></span><span class="sig-name descname"><span class="pre">exclusive_min</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">block_dim</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">template</span><span class="p"><span class="pre">(</span></span><span class="p"><span class="pre">)</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dtype</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">template</span><span class="p"><span class="pre">(</span></span><span class="p"><span class="pre">)</span></span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/quadrants/lang/simt/block.html#exclusive_min"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.simt.block.exclusive_min" title="Link to this definition">#</a></dt>
+<dd><p>Block-scope exclusive prefix min.  After the call, thread <code class="docutils literal notranslate"><span class="pre">i</span> <span class="pre">&gt;</span> <span class="pre">0</span></code> holds <code class="docutils literal notranslate"><span class="pre">min(v[0],</span> <span class="pre">...,</span> <span class="pre">v[i-1])</span></code> and
+thread 0 holds the dtype-derived identity: <code class="docutils literal notranslate"><span class="pre">+inf</span></code> for real dtypes, <code class="docutils literal notranslate"><span class="pre">np.iinfo(dtype).max</span></code> for integer dtypes
+(<code class="docutils literal notranslate"><span class="pre">UINT_MAX</span></code> for unsigned, <code class="docutils literal notranslate"><span class="pre">INT_MAX</span></code> for signed).  See <cite>exclusive_scan</cite> for the underlying contract.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="quadrants.lang.simt.block.exclusive_max">
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.simt.block.</span></span><span class="sig-name descname"><span class="pre">exclusive_max</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">block_dim</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">template</span><span class="p"><span class="pre">(</span></span><span class="p"><span class="pre">)</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dtype</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">template</span><span class="p"><span class="pre">(</span></span><span class="p"><span class="pre">)</span></span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/quadrants/lang/simt/block.html#exclusive_max"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.simt.block.exclusive_max" title="Link to this definition">#</a></dt>
+<dd><p>Block-scope exclusive prefix max.  After the call, thread <code class="docutils literal notranslate"><span class="pre">i</span> <span class="pre">&gt;</span> <span class="pre">0</span></code> holds <code class="docutils literal notranslate"><span class="pre">max(v[0],</span> <span class="pre">...,</span> <span class="pre">v[i-1])</span></code> and
+thread 0 holds the dtype-derived identity: <code class="docutils literal notranslate"><span class="pre">-inf</span></code> for real dtypes, <code class="docutils literal notranslate"><span class="pre">np.iinfo(dtype).min</span></code> for signed integer
+dtypes, <code class="docutils literal notranslate"><span class="pre">0</span></code> for unsigned and bool.  See <cite>exclusive_scan</cite> for the underlying contract.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="quadrants.lang.simt.block.radix_rank_match_atomic_or">
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.simt.block.</span></span><span class="sig-name descname"><span class="pre">radix_rank_match_atomic_or</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">key</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">block_dim</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">template</span><span class="p"><span class="pre">(</span></span><span class="p"><span class="pre">)</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">radix_bits</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">template</span><span class="p"><span class="pre">(</span></span><span class="p"><span class="pre">)</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">bit_start</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">template</span><span class="p"><span class="pre">(</span></span><span class="p"><span class="pre">)</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">num_bits</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">template</span><span class="p"><span class="pre">(</span></span><span class="p"><span class="pre">)</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">bins</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">excl_prefix</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/quadrants/lang/simt/block.html#radix_rank_match_atomic_or"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.simt.block.radix_rank_match_atomic_or" title="Link to this definition">#</a></dt>
+<dd><p>Block-level radix rank via the atomic-OR match-and-count strategy.</p>
+<p>Returns the calling thread’s stable rank within the block under digit
+<code class="docutils literal notranslate"><span class="pre">(key</span> <span class="pre">&gt;&gt;</span> <span class="pre">bit_start)</span> <span class="pre">&amp;</span> <span class="pre">((1</span> <span class="pre">&lt;&lt;</span> <span class="pre">num_bits)</span> <span class="pre">-</span> <span class="pre">1)</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>key</strong> – <code class="docutils literal notranslate"><span class="pre">u32</span></code> key, one per thread.</p></li>
+<li><p><strong>block_dim</strong> – threads per block (template).  Must equal <code class="docutils literal notranslate"><span class="pre">RADIX_DIGITS</span> <span class="pre">=</span> <span class="pre">1</span> <span class="pre">&lt;&lt;</span> <span class="pre">radix_bits</span></code>: each digit gets
+exactly one thread for the per-thread bin/excl_prefix output.</p></li>
+<li><p><strong>radix_bits</strong> – number of bits in the digit (template).  Typical onesweep value is 8, giving 256 digits.</p></li>
+<li><p><strong>bit_start</strong> – starting bit of the digit (template).  Used as <code class="docutils literal notranslate"><span class="pre">key</span> <span class="pre">&gt;&gt;</span> <span class="pre">bit_start</span></code>.</p></li>
+<li><p><strong>num_bits</strong> – actual digit width in bits (template), with <code class="docutils literal notranslate"><span class="pre">num_bits</span> <span class="pre">&lt;=</span> <span class="pre">radix_bits</span></code>.  Bits
+<code class="docutils literal notranslate"><span class="pre">[bit_start,</span> <span class="pre">bit_start</span> <span class="pre">+</span> <span class="pre">num_bits)</span></code> of <code class="docutils literal notranslate"><span class="pre">key</span></code> are extracted.</p></li>
+<li><p><strong>bins</strong> – <code class="docutils literal notranslate"><span class="pre">block.SharedArray((1</span> <span class="pre">&lt;&lt;</span> <span class="pre">radix_bits,),</span> <span class="pre">qd.i32)</span></code> outparam.  After the call, <code class="docutils literal notranslate"><span class="pre">bins[d]</span></code> holds the count
+of keys whose digit equals <code class="docutils literal notranslate"><span class="pre">d</span></code>.  Caller is responsible for allocating this array exactly once per kernel.</p></li>
+<li><p><strong>excl_prefix</strong> – <code class="docutils literal notranslate"><span class="pre">block.SharedArray((1</span> <span class="pre">&lt;&lt;</span> <span class="pre">radix_bits,),</span> <span class="pre">qd.i32)</span></code> outparam.  After the call, <code class="docutils literal notranslate"><span class="pre">excl_prefix[d]</span></code>
+holds the exclusive prefix sum of <code class="docutils literal notranslate"><span class="pre">bins</span></code> up to digit <code class="docutils literal notranslate"><span class="pre">d</span></code>.  Caller allocates as for <code class="docutils literal notranslate"><span class="pre">bins</span></code>.</p></li>
+</ul>
+</dd>
+</dl>
+<p>The calling thread’s block-local index is read internally via <cite>block.thread_idx()</cite>; the subgroup size is read from
+<cite>subgroup.group_size()</cite> at compile time.  Supports both wave32 (CUDA, Vulkan-on-NVIDIA, Metal) and wave64
+(AMDGPU - Quadrants pins every AMDGPU target to <code class="docutils literal notranslate"><span class="pre">+wavefrontsize64</span></code>).  Dispatches to one of two private
+implementations at compile time based on subgroup size; the match-mask shared-memory region’s dtype is the only
+semantic difference (<code class="docutils literal notranslate"><span class="pre">i32</span></code> on wave32, <code class="docutils literal notranslate"><span class="pre">i64</span></code> on wave64), but Quadrants’ AST transformer doesn’t carry locals
+across <code class="docutils literal notranslate"><span class="pre">if</span> <span class="pre">impl.static</span></code> branches so the two paths are written as separate <code class="docutils literal notranslate"><span class="pre">&#64;func</span></code> bodies.  Atomic <code class="docutils literal notranslate"><span class="pre">or</span></code> on
+<code class="docutils literal notranslate"><span class="pre">i64</span></code> shared memory is native on AMDGPU’s LDS; wave32 backends never see the <code class="docutils literal notranslate"><span class="pre">i64</span></code> path so portability does
+not depend on SPIR-V / Metal supporting 64-bit threadgroup atomics.</p>
+<p>Pre/post: caller must guarantee uniform control flow on entry; the function inserts the necessary <code class="docutils literal notranslate"><span class="pre">block.sync()</span></code>
+and <code class="docutils literal notranslate"><span class="pre">subgroup.sync()</span></code> retires.  After the call, <code class="docutils literal notranslate"><span class="pre">bins</span></code> and <code class="docutils literal notranslate"><span class="pre">excl_prefix</span></code> are visible to every thread without
+a further <code class="docutils literal notranslate"><span class="pre">block.sync()</span></code> (we sync internally before exit).</p>
+<p>Cost: <code class="docutils literal notranslate"><span class="pre">~items_per_thread</span></code> atomic_or + atomic_add per pass on shared memory + 2 <code class="docutils literal notranslate"><span class="pre">block.sync()</span></code> + 1 block
+exclusive scan + <code class="docutils literal notranslate"><span class="pre">BLOCK_SUBGROUPS</span></code> ops per thread for the column-sum upsweep.  Shared-memory footprint at the
+default <code class="docutils literal notranslate"><span class="pre">radix_bits=8</span></code>: 4 KiB <code class="docutils literal notranslate"><span class="pre">i32</span></code> for subgroup offsets + 4 KiB <code class="docutils literal notranslate"><span class="pre">i32</span></code> (wave32) or 8 KiB <code class="docutils literal notranslate"><span class="pre">i64</span></code> (wave64)
+for the match-mask region - so 8 KiB total on wave32, 12 KiB on wave64.</p>
 </dd></dl>
 
 </section>
@@ -514,6 +769,7 @@
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.simt.block.sync_all_nonzero"><code class="docutils literal notranslate"><span class="pre">sync_all_nonzero()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.simt.block.sync_any_nonzero"><code class="docutils literal notranslate"><span class="pre">sync_any_nonzero()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.simt.block.sync_count_nonzero"><code class="docutils literal notranslate"><span class="pre">sync_count_nonzero()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.simt.block.mem_fence"><code class="docutils literal notranslate"><span class="pre">mem_fence()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.simt.block.mem_sync"><code class="docutils literal notranslate"><span class="pre">mem_sync()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.simt.block.thread_idx"><code class="docutils literal notranslate"><span class="pre">thread_idx()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.simt.block.global_thread_idx"><code class="docutils literal notranslate"><span class="pre">global_thread_idx()</span></code></a></li>
@@ -523,6 +779,23 @@
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.simt.block.SharedArray.subscript"><code class="docutils literal notranslate"><span class="pre">SharedArray.subscript()</span></code></a></li>
 </ul>
 </li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.simt.block.reduce"><code class="docutils literal notranslate"><span class="pre">reduce()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.simt.block.reduce_all"><code class="docutils literal notranslate"><span class="pre">reduce_all()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.simt.block.reduce_add"><code class="docutils literal notranslate"><span class="pre">reduce_add()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.simt.block.reduce_min"><code class="docutils literal notranslate"><span class="pre">reduce_min()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.simt.block.reduce_max"><code class="docutils literal notranslate"><span class="pre">reduce_max()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.simt.block.reduce_all_add"><code class="docutils literal notranslate"><span class="pre">reduce_all_add()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.simt.block.reduce_all_min"><code class="docutils literal notranslate"><span class="pre">reduce_all_min()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.simt.block.reduce_all_max"><code class="docutils literal notranslate"><span class="pre">reduce_all_max()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.simt.block.inclusive_scan"><code class="docutils literal notranslate"><span class="pre">inclusive_scan()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.simt.block.exclusive_scan"><code class="docutils literal notranslate"><span class="pre">exclusive_scan()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.simt.block.inclusive_add"><code class="docutils literal notranslate"><span class="pre">inclusive_add()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.simt.block.inclusive_min"><code class="docutils literal notranslate"><span class="pre">inclusive_min()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.simt.block.inclusive_max"><code class="docutils literal notranslate"><span class="pre">inclusive_max()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.simt.block.exclusive_add"><code class="docutils literal notranslate"><span class="pre">exclusive_add()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.simt.block.exclusive_min"><code class="docutils literal notranslate"><span class="pre">exclusive_min()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.simt.block.exclusive_max"><code class="docutils literal notranslate"><span class="pre">exclusive_max()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.simt.block.radix_rank_match_atomic_or"><code class="docutils literal notranslate"><span class="pre">radix_rank_match_atomic_or()</span></code></a></li>
 </ul>
 </li>
 </ul>
@@ -550,8 +823,8 @@
   </div>
   
   <!-- Scripts loaded after <body> so the DOM is not blocked -->
-  <script defer src="../../../../../_static/scripts/bootstrap.js?digest=55c26ed414f5f8a31ebb"></script>
-<script defer src="../../../../../_static/scripts/pydata-sphinx-theme.js?digest=55c26ed414f5f8a31ebb"></script>
+  <script defer src="../../../../../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5"></script>
+<script defer src="../../../../../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5"></script>
 
   <footer class="bd-footer">
 <div class="bd-footer__inner bd-page-width">
@@ -585,7 +858,7 @@
         <div class="footer-item">
 <p class="theme-version">
   <!-- # L10n: Setting the PST URL as an argument as this does not need to be localized -->
-  Built with the <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a> 0.17.1.
+  Built with the <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a> 0.19.0.
 </p></div>
       
     </div>

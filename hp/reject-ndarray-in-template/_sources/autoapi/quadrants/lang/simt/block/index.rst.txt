@@ -22,9 +22,27 @@ Functions
    quadrants.lang.simt.block.sync_all_nonzero
    quadrants.lang.simt.block.sync_any_nonzero
    quadrants.lang.simt.block.sync_count_nonzero
+   quadrants.lang.simt.block.mem_fence
    quadrants.lang.simt.block.mem_sync
    quadrants.lang.simt.block.thread_idx
    quadrants.lang.simt.block.global_thread_idx
+   quadrants.lang.simt.block.reduce
+   quadrants.lang.simt.block.reduce_all
+   quadrants.lang.simt.block.reduce_add
+   quadrants.lang.simt.block.reduce_min
+   quadrants.lang.simt.block.reduce_max
+   quadrants.lang.simt.block.reduce_all_add
+   quadrants.lang.simt.block.reduce_all_min
+   quadrants.lang.simt.block.reduce_all_max
+   quadrants.lang.simt.block.inclusive_scan
+   quadrants.lang.simt.block.exclusive_scan
+   quadrants.lang.simt.block.inclusive_add
+   quadrants.lang.simt.block.inclusive_min
+   quadrants.lang.simt.block.inclusive_max
+   quadrants.lang.simt.block.exclusive_add
+   quadrants.lang.simt.block.exclusive_min
+   quadrants.lang.simt.block.exclusive_max
+   quadrants.lang.simt.block.radix_rank_match_atomic_or
 
 
 Module Contents
@@ -39,6 +57,8 @@ Module Contents
 .. py:function:: sync_any_nonzero(predicate)
 
 .. py:function:: sync_count_nonzero(predicate)
+
+.. py:function:: mem_fence()
 
 .. py:function:: mem_sync()
 
@@ -55,5 +75,162 @@ Module Contents
 
 
    .. py:method:: subscript(*indices)
+
+
+.. py:function:: reduce(value, block_dim: template(), op: template(), dtype: template())
+
+   Block-scope reduction under a generic associative ``op``.  Result is valid in **thread 0 only**; other threads
+   retain partial values.  Use `reduce_all` if you need the result on every thread.
+
+   :param value: per-thread input.
+   :param block_dim: threads per block (template).  Must be a positive multiple of ``subgroup.group_size()`` (32 on CUDA
+                     / Metal / Vulkan-on-NVIDIA, 64 on AMDGPU).
+   :param op: ``@qd.func`` taking two values and returning the same type as ``value``; callers can plug in custom
+              associative monoids (bitwise ops, multiplicative, matrix-multiply, etc.) without re-implementing the
+              per-subgroup + shared-mem skeleton.  See `reduce_add` for the standard sum specialization.
+   :param dtype: scalar dtype for the inter-subgroup shared-memory staging slot (must match ``value``'s type).
+
+   The calling thread's block-local index is read internally via `block.thread_idx()`; the subgroup size is read from
+   `subgroup.group_size()` at compile time.  When the block is exactly one subgroup the shared-memory path is
+   short-circuited at compile time and the call costs only the per-subgroup tree.
+
+
+.. py:function:: reduce_all(value, block_dim: template(), op: template(), dtype: template())
+
+   Block-scope reduction under a generic associative ``op``, broadcast to every thread.  Costs one extra
+   ``block.sync()`` plus a one-slot shared-memory broadcast vs. `reduce`.  See `reduce` for the operator contract.
+
+
+.. py:function:: reduce_add(value, block_dim: template(), dtype: template())
+
+   Block-scope sum reduction.  Result valid in **thread 0 only**.  See `reduce` for the argument contract.
+
+
+.. py:function:: reduce_min(value, block_dim: template(), dtype: template())
+
+   Block-scope min reduction.  Result valid in **thread 0 only**.  See `reduce` for the argument contract.
+
+
+.. py:function:: reduce_max(value, block_dim: template(), dtype: template())
+
+   Block-scope max reduction.  Result valid in **thread 0 only**.  See `reduce` for the argument contract.
+
+
+.. py:function:: reduce_all_add(value, block_dim: template(), dtype: template())
+
+   Block-scope sum reduction with the result broadcast to every thread.  See `reduce_add` for the cheaper
+   thread-0-only variant and `reduce` for the argument contract.
+
+
+.. py:function:: reduce_all_min(value, block_dim: template(), dtype: template())
+
+   Block-scope min reduction broadcast to every thread.  See `reduce_all_add`.
+
+
+.. py:function:: reduce_all_max(value, block_dim: template(), dtype: template())
+
+   Block-scope max reduction broadcast to every thread.  See `reduce_all_add`.
+
+
+.. py:function:: inclusive_scan(value, block_dim: template(), op: template(), dtype: template())
+
+   Block-scope inclusive scan under a generic associative ``op``.  Every thread receives a valid result.
+
+   :param value: per-thread input.
+   :param block_dim: threads per block (template).  Must be a positive multiple of ``subgroup.group_size()`` (32 on CUDA
+                     / Metal / Vulkan-on-NVIDIA, 64 on AMDGPU).
+   :param op: ``@qd.func`` taking two values and returning the same type as ``value``; callers can plug in custom
+              associative monoids without re-implementing the per-subgroup + shared-mem skeleton.  See `inclusive_add`
+              for the standard sum specialization.
+   :param dtype: scalar dtype for the inter-subgroup shared-memory staging slot; must match ``value``'s type.
+
+   The calling thread's block-local index is read internally via `block.thread_idx()`; the subgroup size is read from
+   `subgroup.group_size()` at compile time.  When the block is exactly one subgroup the cross-subgroup shared-memory
+   path is short-circuited at compile time and the call costs only the per-subgroup Hillis-Steele tree.
+
+
+.. py:function:: exclusive_scan(value, block_dim: template(), op: template(), identity, dtype: template())
+
+   Block-scope exclusive scan under a generic associative ``op`` with explicit ``identity``.  Every thread receives
+   a valid result; thread 0 holds ``identity`` and thread ``i > 0`` holds ``op(v[0], ..., v[i-1])``.
+
+   See `inclusive_scan` for the per-arg contract; in addition this op takes an explicit ``identity`` because exclusive
+   scan needs a definite value for thread 0 (and for the sentinel paths in `exclusive_min` / `exclusive_max`).  See
+   `exclusive_add` for the additive specialization which derives a zero identity automatically.
+
+
+.. py:function:: inclusive_add(value, block_dim: template(), dtype: template())
+
+   Block-scope inclusive prefix sum.  After the call, thread ``i`` holds ``v[0] + v[1] + ... + v[i]``.  See
+   `inclusive_scan` for the argument contract.
+
+
+.. py:function:: inclusive_min(value, block_dim: template(), dtype: template())
+
+   Block-scope inclusive prefix min.  See `inclusive_scan` for the argument contract.
+
+
+.. py:function:: inclusive_max(value, block_dim: template(), dtype: template())
+
+   Block-scope inclusive prefix max.  See `inclusive_scan` for the argument contract.
+
+
+.. py:function:: exclusive_add(value, block_dim: template(), dtype: template())
+
+   Block-scope exclusive prefix sum.  After the call, thread ``i > 0`` holds ``v[0] + v[1] + ... + v[i-1]`` and
+   thread 0 holds the additive identity (zero, in ``value``'s dtype, derived as ``value - value``).  See
+   `exclusive_scan` for the argument contract.
+
+
+.. py:function:: exclusive_min(value, block_dim: template(), dtype: template())
+
+   Block-scope exclusive prefix min.  After the call, thread ``i > 0`` holds ``min(v[0], ..., v[i-1])`` and
+   thread 0 holds the dtype-derived identity: ``+inf`` for real dtypes, ``np.iinfo(dtype).max`` for integer dtypes
+   (``UINT_MAX`` for unsigned, ``INT_MAX`` for signed).  See `exclusive_scan` for the underlying contract.
+
+
+.. py:function:: exclusive_max(value, block_dim: template(), dtype: template())
+
+   Block-scope exclusive prefix max.  After the call, thread ``i > 0`` holds ``max(v[0], ..., v[i-1])`` and
+   thread 0 holds the dtype-derived identity: ``-inf`` for real dtypes, ``np.iinfo(dtype).min`` for signed integer
+   dtypes, ``0`` for unsigned and bool.  See `exclusive_scan` for the underlying contract.
+
+
+.. py:function:: radix_rank_match_atomic_or(key, block_dim: template(), radix_bits: template(), bit_start: template(), num_bits: template(), bins, excl_prefix)
+
+   Block-level radix rank via the atomic-OR match-and-count strategy.
+
+   Returns the calling thread's stable rank within the block under digit
+   ``(key >> bit_start) & ((1 << num_bits) - 1)``.
+
+   :param key: ``u32`` key, one per thread.
+   :param block_dim: threads per block (template).  Must equal ``RADIX_DIGITS = 1 << radix_bits``: each digit gets
+                     exactly one thread for the per-thread bin/excl_prefix output.
+   :param radix_bits: number of bits in the digit (template).  Typical onesweep value is 8, giving 256 digits.
+   :param bit_start: starting bit of the digit (template).  Used as ``key >> bit_start``.
+   :param num_bits: actual digit width in bits (template), with ``num_bits <= radix_bits``.  Bits
+                    ``[bit_start, bit_start + num_bits)`` of ``key`` are extracted.
+   :param bins: ``block.SharedArray((1 << radix_bits,), qd.i32)`` outparam.  After the call, ``bins[d]`` holds the count
+                of keys whose digit equals ``d``.  Caller is responsible for allocating this array exactly once per kernel.
+   :param excl_prefix: ``block.SharedArray((1 << radix_bits,), qd.i32)`` outparam.  After the call, ``excl_prefix[d]``
+                       holds the exclusive prefix sum of ``bins`` up to digit ``d``.  Caller allocates as for ``bins``.
+
+   The calling thread's block-local index is read internally via `block.thread_idx()`; the subgroup size is read from
+   `subgroup.group_size()` at compile time.  Supports both wave32 (CUDA, Vulkan-on-NVIDIA, Metal) and wave64
+   (AMDGPU - Quadrants pins every AMDGPU target to ``+wavefrontsize64``).  Dispatches to one of two private
+   implementations at compile time based on subgroup size; the match-mask shared-memory region's dtype is the only
+   semantic difference (``i32`` on wave32, ``i64`` on wave64), but Quadrants' AST transformer doesn't carry locals
+   across ``if impl.static`` branches so the two paths are written as separate ``@func`` bodies.  Atomic ``or`` on
+   ``i64`` shared memory is native on AMDGPU's LDS; wave32 backends never see the ``i64`` path so portability does
+   not depend on SPIR-V / Metal supporting 64-bit threadgroup atomics.
+
+   Pre/post: caller must guarantee uniform control flow on entry; the function inserts the necessary ``block.sync()``
+   and ``subgroup.sync()`` retires.  After the call, ``bins`` and ``excl_prefix`` are visible to every thread without
+   a further ``block.sync()`` (we sync internally before exit).
+
+   Cost: ``~items_per_thread`` atomic_or + atomic_add per pass on shared memory + 2 ``block.sync()`` + 1 block
+   exclusive scan + ``BLOCK_SUBGROUPS`` ops per thread for the column-sum upsweep.  Shared-memory footprint at the
+   default ``radix_bits=8``: 4 KiB ``i32`` for subgroup offsets + 4 KiB ``i32`` (wave32) or 8 KiB ``i64`` (wave64)
+   for the match-mask region - so 8 KiB total on wave32, 12 KiB on wave64.
 
 

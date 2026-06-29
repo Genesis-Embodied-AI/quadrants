@@ -1,0 +1,947 @@
+
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="../" >
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Atomics &#8212; Quadrants 1.1.1 documentation</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "";
+  </script>
+  <!--
+    this give us a css class that will be invisible only if js is disabled
+  -->
+  <noscript>
+    <style>
+      .pst-js-only { display: none !important; }
+
+    </style>
+  </noscript>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="../_static/styles/theme.css?digest=a95f357e85573c9b56d5" rel="stylesheet" />
+<link href="../_static/styles/pydata-sphinx-theme.css?digest=a95f357e85573c9b56d5" rel="stylesheet" />
+
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=8f2a1f02" />
+    <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../_static/togglebutton.css?v=9c3e77be" />
+    <link rel="stylesheet" type="text/css" href="../_static/graphviz.css?v=4ae1632d" />
+    <link rel="stylesheet" type="text/css" href="../_static/sphinx-design.min.css?v=95c83b7e" />
+    <link rel="stylesheet" type="text/css" href="../_static/css/custom.css" />
+  
+  <!-- So that users can add custom icons -->
+  <script defer src="../_static/scripts/fontawesome.js?digest=a95f357e85573c9b56d5"></script>
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5" />
+<link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5" />
+
+    <script src="../_static/documentation_options.js?v=58fbf978"></script>
+    <script src="../_static/doctools.js?v=9bcbadda"></script>
+    <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../_static/copybutton.js?v=f281be69"></script>
+    <script>let toggleHintShow = 'Click to show';</script>
+    <script>let toggleHintHide = 'Click to hide';</script>
+    <script>let toggleOpenOnPrint = 'true';</script>
+    <script src="../_static/togglebutton.js?v=b8b12719"></script>
+    <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
+    <script src="../_static/design-tabs.js?v=f930bc37"></script>
+    <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'user_guide/atomics';</script>
+    <script>DOCUMENTATION_OPTIONS.search_as_you_type = false;</script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Block primitives" href="block.html" />
+    <link rel="prev" title="Automatic differentiation" href="autodiff.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="docsearch:language" content="en"/>
+  <meta name="docsearch:version" content="1.1.1" />
+  
+    
+    <script src="../_static/searchtools.js"></script>
+    <script src="../_static/language_data.js"></script>
+    <script src="../searchindex.js"></script>
+  
+  </head>
+  <body data-default-mode="">
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+  
+  
+  
+  
+  <dialog id="pst-search-dialog">
+    
+<form class="bd-search d-flex align-items-center"
+      action="../search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         placeholder="Search the docs ..."
+         aria-label="Search the docs ..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form>
+  </dialog>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header id="pst-header" class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+<div class="bd-header__inner bd-page-width">
+  <button class="pst-navbar-icon sidebar-toggle primary-toggle" aria-label="Site navigation">
+    <span class="fa-solid fa-bars"></span>
+  </button>
+  
+  
+  <div class="col-lg-3 navbar-header-items__start">
+    
+      <div class="navbar-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="../index.html">
+  
+  
+  
+  
+  
+  
+    <p class="title logo__title">Quadrants 1.1.1 documentation</p>
+  
+</a></div>
+    
+  </div>
+  
+  <div class="col-lg-9 navbar-header-items">
+    
+    <div class="me-auto navbar-header-items__center">
+      
+        <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item current active">
+  <a class="nav-link nav-internal" href="index.html">
+    User guide
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../autoapi/index.html">
+    API Reference
+  </a>
+</li>
+
+  </ul>
+</nav></div>
+      
+    </div>
+    
+    
+    <div class="navbar-header-items__end">
+      
+        <div class="navbar-item navbar-persistent--container">
+          
+
+<button class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+        </div>
+      
+      
+        <div class="navbar-item">
+
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg fa-fw" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg fa-fw" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg fa-fw" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg fa-fw me-1"></i>System Settings</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg fa-fw me-1"></i>Light</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg fa-fw me-1"></i>Dark</button></li>
+  </ul>
+</div></div>
+      
+    </div>
+    
+  </div>
+  
+  
+    <div class="navbar-persistent--mobile">
+
+<button class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+    </div>
+  
+
+  
+    <button class="pst-navbar-icon sidebar-toggle secondary-toggle" aria-label="On this page">
+      <span class="fa-solid fa-outdent"></span>
+    </button>
+  
+</div>
+
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+      <dialog id="pst-primary-sidebar-modal"></dialog>
+      <div id="pst-primary-sidebar" class="bd-sidebar-primary bd-sidebar">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+      <div class="sidebar-header-items__center">
+        
+          
+          
+            <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item current active">
+  <a class="nav-link nav-internal" href="index.html">
+    User guide
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../autoapi/index.html">
+    API Reference
+  </a>
+</li>
+
+  </ul>
+</nav></div>
+          
+        
+      </div>
+    
+    
+    
+      <div class="sidebar-header-items__end">
+        
+          <div class="navbar-item">
+
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg fa-fw" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg fa-fw" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg fa-fw" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg fa-fw me-1"></i>System Settings</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg fa-fw me-1"></i>Light</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg fa-fw me-1"></i>Dark</button></li>
+  </ul>
+</div></div>
+        
+      </div>
+    
+  </div>
+  
+    <div class="sidebar-primary-items__start sidebar-primary__section">
+        <div class="sidebar-primary-item pst-sidebar-collapse"><button id="pst-collapse-sidebar-button" aria-expanded="true" aria-controls="pst-primary-sidebar"><svg class="pst-icon svg-inline--fa" role="img" aria-hidden="true" focusable="false" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
+    <path fill="currentColor" d="M3 15.5C2.36232 15.5 1.74874 15.2564 1.28478 14.8189C0.820828 14.3815 0.541576 13.7832 0.504167 13.1467L0.5 13L0.5 3C0.499965 2.36232 0.743605 1.74874 1.18107 1.28478C1.61854 0.820828 2.21676 0.541576 2.85333 0.504167L3 0.5L13 0.5C13.6377 0.499965 14.2513 0.743605 14.7152 1.18107C15.1792 1.61854 15.4584 2.21676 15.4958 2.85333L15.5 3L15.5 13C15.5 13.6377 15.2564 14.2513 14.8189 14.7152C14.3815 15.1792 13.7832 15.4584 13.1467 15.4958L13 15.5L3 15.5ZM3 13.8333L10.5 13.8333L10.5 2.16667L3 2.16667C2.79589 2.16669 2.59889 2.24163 2.44636 2.37726C2.29383 2.5129 2.19638 2.69979 2.1725 2.9025L2.16667 3L2.16667 13C2.16669 13.2041 2.24163 13.4011 2.37726 13.5536C2.5129 13.7062 2.69979 13.8036 2.9025 13.8275L3 13.8333ZM6.65583 10.325L6.5775 10.2558L4.91083 8.58917C4.76735 8.44567 4.68116 8.25476 4.66843 8.05223C4.65569 7.84971 4.71729 7.6495 4.84167 7.48917L4.91083 7.41083L6.5775 5.74417C6.72747 5.59471 6.9287 5.50794 7.14032 5.50148C7.35194 5.49502 7.55809 5.56935 7.7169 5.70937C7.8757 5.8494 7.97525 6.04463 7.99533 6.25539C8.01541 6.46616 7.95451 6.67667 7.825 6.84417L7.75583 6.9225L6.67917 8L7.75583 9.0775C7.89931 9.22099 7.98551 9.41191 7.99824 9.61443C8.01097 9.81695 7.94938 10.0172 7.825 10.1775L7.75583 10.2558C7.61234 10.3993 7.42142 10.4855 7.2189 10.4982C7.01638 10.511 6.81617 10.4494 6.65583 10.325Z"/>
+  </svg>
+  <span class="pst-collapse-sidebar-label">Collapse Sidebar</span>
+  <span class="pst-expand-sidebar-label">Expand Sidebar</span>
+</button></div>
+        <div class="sidebar-primary-item">
+
+<nav class="bd-docs-nav bd-links"
+     aria-label="Section Navigation">
+  <p class="bd-links__title" role="heading" aria-level="1">Section Navigation</p>
+  <div class="bd-toc-item navbar-nav"><p aria-level="2" class="caption" role="heading"><span class="caption-text">Getting started</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="getting_started.html">Getting started</a></li>
+<li class="toctree-l1"><a class="reference internal" href="supported_systems.html">Supported systems</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Core concepts</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="tensor_types.html">Tensor types</a></li>
+<li class="toctree-l1"><a class="reference internal" href="scalar_tensors.html">Scalar tensors</a></li>
+<li class="toctree-l1"><a class="reference internal" href="matrix_vector.html">Matrix and Vector</a></li>
+
+<li class="toctree-l1"><a class="reference internal" href="matrix_vector_per_thread.html">Per-thread matrix and vector operations</a></li>
+<li class="toctree-l1"><a class="reference internal" href="linalg_per_thread.html">Per-thread linear algebra</a></li>
+<li class="toctree-l1"><a class="reference internal" href="tensor.html">Tensors</a></li>
+<li class="toctree-l1"><a class="reference internal" href="compound_types.html">Compound types</a></li>
+<li class="toctree-l1"><a class="reference internal" href="buffer_view.html">BufferView</a></li>
+<li class="toctree-l1"><a class="reference internal" href="static.html">qd.static</a></li>
+<li class="toctree-l1"><a class="reference internal" href="sub_functions.html">Sub-functions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="parallelization.html">Parallelization</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Integration</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="interop.html">Numpy and Torch interop</a></li>
+<li class="toctree-l1"><a class="reference internal" href="metal_shared_queue.html">Shared Metal command queue (PyTorch MPS)</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Autodiff</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="autodiff.html">Automatic differentiation</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">SIMT primitives</span></p>
+<ul class="current nav bd-sidenav">
+<li class="toctree-l1 current active"><a class="current reference internal" href="#">Atomics</a></li>
+<li class="toctree-l1"><a class="reference internal" href="block.html">Block primitives</a></li>
+<li class="toctree-l1"><a class="reference internal" href="grid.html">Grid primitives</a></li>
+<li class="toctree-l1"><a class="reference internal" href="math.html">Math</a></li>
+<li class="toctree-l1"><a class="reference internal" href="subgroup.html">Subgroup primitives</a></li>
+<li class="toctree-l1"><a class="reference internal" href="tile.html">Register-resident tiles: <code class="docutils literal notranslate"><span class="pre">Tile16x16</span></code> and <code class="docutils literal notranslate"><span class="pre">Tile32x32</span></code></a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Algorithms</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="algorithms.html">Algorithms</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Performance</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="fastcache.html">Fastcache</a></li>
+<li class="toctree-l1"><a class="reference internal" href="graph.html">Graph</a></li>
+<li class="toctree-l1"><a class="reference internal" href="streams.html">Streams</a></li>
+<li class="toctree-l1"><a class="reference internal" href="perf_dispatch.html">Performance Dispatch</a></li>
+<li class="toctree-l1"><a class="reference internal" href="init_options.html">qd.init options</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Testing</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="unit_testing.html">Unit testing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="kernel_coverage.html">Kernel code coverage</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Reference</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="unsupported_python.html">Python features in kernel scope</a></li>
+<li class="toctree-l1"><a class="reference internal" href="python_backend.html">Python backend</a></li>
+<li class="toctree-l1"><a class="reference internal" href="debug.html">Debug mode</a></li>
+<li class="toctree-l1"><a class="reference internal" href="quirks.html">Quirks</a></li>
+<li class="toctree-l1"><a class="reference internal" href="troubleshooting.html">Troubleshooting</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Advanced</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="optimization_passes.html">Optimization passes</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Contributing</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="contributing.html">Contributing to quadrants</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Internal</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="building_cudagraph_conditional_fatbin.html">Building the CUDA graph conditional fatbin</a></li>
+</ul>
+</div>
+</nav></div>
+    </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+      <div class="sidebar-primary-item">
+<div id="ethical-ad-placement"
+      class="flat"
+      data-ea-publisher="readthedocs"
+      data-ea-type="readthedocs-sidebar"
+      data-ea-manual="true">
+</div></div>
+  </div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item">
+
+<nav aria-label="Breadcrumb" class="d-print-none">
+  <ul class="bd-breadcrumbs">
+    
+    <li class="breadcrumb-item breadcrumb-home">
+      <a href="../index.html" class="nav-link" aria-label="Home">
+        <i class="fa-solid fa-home"></i>
+      </a>
+    </li>
+    
+    <li class="breadcrumb-item"><a href="index.html" class="nav-link">User guide</a></li>
+    
+    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">Atomics</span></li>
+  </ul>
+</nav>
+</div>
+      
+    </div>
+  
+  
+</div>
+</div>
+              
+              
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <section class="tex2jax_ignore mathjax_ignore" id="atomics">
+<h1>Atomics<a class="headerlink" href="#atomics" title="Link to this heading">#</a></h1>
+<p>Atomic read-modify-write operations on a single memory location. They do not synchronize threads; the only ordering they provide is the per-location atomicity of the read-modify-write itself. For cooperative ops across threads see the <code class="docutils literal notranslate"><span class="pre">qd.simt.block.*</span></code>, <code class="docutils literal notranslate"><span class="pre">qd.simt.subgroup.*</span></code>, and <code class="docutils literal notranslate"><span class="pre">qd.simt.grid.*</span></code> namespaces. Bit-counting helpers on integer registers (<code class="docutils literal notranslate"><span class="pre">qd.math.popcnt</span></code>, <code class="docutils literal notranslate"><span class="pre">qd.math.clz</span></code>) are documented in <a class="reference internal" href="math.html"><span class="std std-doc">math</span></a>.</p>
+<p>The companion read-side primitive <code class="docutils literal notranslate"><span class="pre">qd.volatile_load(target)</span></code> is documented at the end of this page (<code class="docutils literal notranslate"><span class="pre">###</span> <span class="pre">qd.volatile_load(target)</span></code>); it pairs with atomic stores in producer / consumer patterns where the reader must observe every update from another thread or block, and is the recommended approach for spin-wait loops.</p>
+<section id="what-s-available">
+<h2>What’s available<a class="headerlink" href="#what-s-available" title="Link to this heading">#</a></h2>
+<p>All atomic ops follow the same shape: <code class="docutils literal notranslate"><span class="pre">qd.atomic_op(x,</span> <span class="pre">y)</span></code> performs <code class="docutils literal notranslate"><span class="pre">x</span> <span class="pre">=</span> <span class="pre">op(x,</span> <span class="pre">y)</span></code> atomically and returns the <strong>old</strong> value of <code class="docutils literal notranslate"><span class="pre">x</span></code>. <code class="docutils literal notranslate"><span class="pre">x</span></code> must be a writable memory target (a field element, ndarray element, or matrix slot); scalars and constant expressions are not allowed.</p>
+<p>“int” below means any of <code class="docutils literal notranslate"><span class="pre">i32</span></code> / <code class="docutils literal notranslate"><span class="pre">u32</span></code> / <code class="docutils literal notranslate"><span class="pre">i64</span></code> / <code class="docutils literal notranslate"><span class="pre">u64</span></code>. “Floats” means any of <code class="docutils literal notranslate"><span class="pre">f16</span></code> / <code class="docutils literal notranslate"><span class="pre">f32</span></code> / <code class="docutils literal notranslate"><span class="pre">f64</span></code>. Unless otherwise noted, “native” means the op lowers to a single hardware atomic instruction (or its SPIR-V / LLVM-IR equivalent), and “CAS” means a software compare-and-swap loop emitted around a non-atomic compute.</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>Op</p></th>
+<th class="head"><p>CUDA</p></th>
+<th class="head"><p>AMDGPU</p></th>
+<th class="head"><p>SPIR-V (Vulkan / Metal)</p></th>
+<th class="head"><p>CPU</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">atomic_add</span></code></p></td>
+<td><p>int / f32 native; f64 native (sm_60+)</p></td>
+<td><p>int / f32 native; f64 hardware-dependent</p></td>
+<td><p>int native; f16 / f32 / f64 capability-gated, else CAS</p></td>
+<td><p>int / f32 / f64 native; f16 via CAS</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">atomic_sub</span></code></p></td>
+<td><p>rewritten to <code class="docutils literal notranslate"><span class="pre">atomic_add(x,</span> <span class="pre">-y)</span></code> at IR-construction time — see note below</p></td>
+<td><p>(same)</p></td>
+<td><p>(same)</p></td>
+<td><p>(same)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">atomic_mul</span></code></p></td>
+<td><p>CAS on every dtype</p></td>
+<td><p>CAS</p></td>
+<td><p>CAS</p></td>
+<td><p>CAS</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">atomic_min</span></code>, <code class="docutils literal notranslate"><span class="pre">atomic_max</span></code></p></td>
+<td><p>int native; floats via CAS</p></td>
+<td><p>int native; floats via CAS</p></td>
+<td><p>int native; floats via CAS</p></td>
+<td><p>int native; floats via CAS</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">atomic_and</span></code>, <code class="docutils literal notranslate"><span class="pre">atomic_or</span></code>, <code class="docutils literal notranslate"><span class="pre">atomic_xor</span></code></p></td>
+<td><p>int only (native)</p></td>
+<td><p>int only (native)</p></td>
+<td><p>int only (native)</p></td>
+<td><p>int only (native)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">atomic_exchange</span></code></p></td>
+<td><p>int / float native (<code class="docutils literal notranslate"><span class="pre">atomicExch</span></code>)</p></td>
+<td><p>int / float native (<code class="docutils literal notranslate"><span class="pre">*_atomic_swap</span></code>)</p></td>
+<td><p>int native; f32 / f64 global via uint-bitcast <code class="docutils literal notranslate"><span class="pre">OpAtomicExchange</span></code>; f16, shared float, workgroup f64 deferred‡</p></td>
+<td><p>int / float native (<code class="docutils literal notranslate"><span class="pre">xchg</span></code>)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">atomic_cas</span></code></p></td>
+<td><p>int native (<code class="docutils literal notranslate"><span class="pre">atomicCAS</span></code>)</p></td>
+<td><p>int native (<code class="docutils literal notranslate"><span class="pre">*_atomic_cmpswap</span></code>)</p></td>
+<td><p>int native (<code class="docutils literal notranslate"><span class="pre">OpAtomicCompareExchange</span></code>); f32 / f64 rejected at compile time§</p></td>
+<td><p>int native (<code class="docutils literal notranslate"><span class="pre">cmpxchg</span></code>)</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>A few cross-cutting notes that the cells above abbreviate:</p>
+<ul class="simple">
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">atomic_sub</span></code> is not a separate op in the IR.</strong> <code class="docutils literal notranslate"><span class="pre">quadrants/ir/frontend_ir.cpp::AtomicOpExpression::flatten</span></code> rewrites every <code class="docutils literal notranslate"><span class="pre">atomic_sub(x,</span> <span class="pre">y)</span></code> into <code class="docutils literal notranslate"><span class="pre">atomic_add(x,</span> <span class="pre">-y)</span></code> before codegen sees it, so per-backend support and per-dtype behavior are exactly those of <code class="docutils literal notranslate"><span class="pre">atomic_add</span></code>.</p></li>
+<li><p><strong>CAS-loop ops are noticeably slower than native atomics</strong>, especially under contention — every contending thread retries the load + compare-exchange until it wins. Prefer pre-aggregating into a register or shared array and issuing a single atomic at the end of the block where possible.</p></li>
+<li><p><strong>f16 floats always use a CAS loop</strong> (no native f16 atomic on any backend except SPIR-V with the right capability bit).</p></li>
+<li><p><strong>On CPU, “native” does not guarantee a single machine instruction.</strong> On x86 and other architectures without hardware float atomics, the compiler backend lowers native float <code class="docutils literal notranslate"><span class="pre">atomic_add</span></code> (and integer <code class="docutils literal notranslate"><span class="pre">min</span></code> / <code class="docutils literal notranslate"><span class="pre">max</span></code>) to a CAS loop in machine code. Under high contention the performance is similar to the explicit “CAS” entries; the difference is that “native” ops benefit from hardware acceleration where available.</p></li>
+<li><p><strong>SPIR-V capability bits</strong> (<code class="docutils literal notranslate"><span class="pre">spirv_has_atomic_float_add</span></code>, <code class="docutils literal notranslate"><span class="pre">spirv_has_atomic_float64_add</span></code>, <code class="docutils literal notranslate"><span class="pre">spirv_has_atomic_float16_add</span></code>) decide whether <code class="docutils literal notranslate"><span class="pre">atomic_add</span></code> lowers to native <code class="docutils literal notranslate"><span class="pre">OpAtomicFAddEXT</span></code> or a uint-backed CAS — the dispatch happens per-call inside <code class="docutils literal notranslate"><span class="pre">quadrants/codegen/spirv/spirv_codegen.cpp</span></code>.</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">i64</span></code> / <code class="docutils literal notranslate"><span class="pre">u64</span></code> atomic RMW is not portable to Metal.</strong> Metal Shading Language only exposes 64-bit atomics as <code class="docutils literal notranslate"><span class="pre">atomic_fetch_min</span></code> / <code class="docutils literal notranslate"><span class="pre">atomic_fetch_max</span></code> on <code class="docutils literal notranslate"><span class="pre">uint64</span></code> (Apple GPU family 9+, M3 / A17); <code class="docutils literal notranslate"><span class="pre">atomic_add</span></code> / <code class="docutils literal notranslate"><span class="pre">sub</span></code> / <code class="docutils literal notranslate"><span class="pre">mul</span></code> and the bitwise family are unavailable on every Apple GPU. The Metal RHI today over-advertises <code class="docutils literal notranslate"><span class="pre">spirv_has_atomic_int64</span></code> (gated on Apple7 / Mac2 in <code class="docutils literal notranslate"><span class="pre">quadrants/rhi/metal/metal_device.mm</span></code>), so 64-bit integer atomics under Metal fail at pipeline create time with <code class="docutils literal notranslate"><span class="pre">RhiResult=-1</span></code>. Use <code class="docutils literal notranslate"><span class="pre">i32</span></code> / <code class="docutils literal notranslate"><span class="pre">u32</span></code> for Metal portability. CUDA, AMDGPU, and Vulkan with <code class="docutils literal notranslate"><span class="pre">VK_KHR_shader_atomic_int64</span></code> are unaffected.</p></li>
+</ul>
+<p>† <code class="docutils literal notranslate"><span class="pre">i64</span></code> / <code class="docutils literal notranslate"><span class="pre">u64</span></code> atomic RMW is <strong>not portable to Metal</strong>. Metal Shading Language only exposes 64-bit atomics as <code class="docutils literal notranslate"><span class="pre">atomic_fetch_min</span></code> / <code class="docutils literal notranslate"><span class="pre">atomic_fetch_max</span></code> on <code class="docutils literal notranslate"><span class="pre">uint64</span></code>, starting at Apple GPU family 9 (M3 / A17 and newer); <code class="docutils literal notranslate"><span class="pre">atomic_add</span></code> / <code class="docutils literal notranslate"><span class="pre">sub</span></code> / <code class="docutils literal notranslate"><span class="pre">mul</span></code> and the bitwise family are unavailable on every Apple GPU. The Metal RHI today over-advertises <code class="docutils literal notranslate"><span class="pre">spirv_has_atomic_int64</span></code> (gated on Apple7 / Mac2 in <code class="docutils literal notranslate"><span class="pre">quadrants/rhi/metal/metal_device.mm</span></code>), so trying to use 64-bit integer atomics under Metal currently fails at pipeline create time with <code class="docutils literal notranslate"><span class="pre">RhiResult=-1</span></code> (“SPIR-V shader was rejected by the backend”). Use <code class="docutils literal notranslate"><span class="pre">i32</span></code> / <code class="docutils literal notranslate"><span class="pre">u32</span></code> if you need cross-Metal portability. CUDA, AMDGPU, and Vulkan with <code class="docutils literal notranslate"><span class="pre">VK_KHR_shader_atomic_int64</span></code> are unaffected.</p>
+<p>‡ <code class="docutils literal notranslate"><span class="pre">atomic_exchange</span></code> on <code class="docutils literal notranslate"><span class="pre">f16</span></code>, on shared (<code class="docutils literal notranslate"><span class="pre">qd.simt.block.SharedArray</span></code>) float arrays, and on f64 in workgroup memory is not yet wired up. Global-memory <code class="docutils literal notranslate"><span class="pre">atomic_exchange</span></code> on every other dtype/backend combination listed above is supported; the SPIR-V path bitcasts through the corresponding uint type so no <code class="docutils literal notranslate"><span class="pre">spirv_has_atomic_float_*</span></code> capability is required.</p>
+<p>§ <code class="docutils literal notranslate"><span class="pre">atomic_cas</span></code> on <code class="docutils literal notranslate"><span class="pre">f32</span></code> / <code class="docutils literal notranslate"><span class="pre">f64</span></code> is rejected at compile time (raises <code class="docutils literal notranslate"><span class="pre">QuadrantsTypeError</span></code>). Integer CAS (<code class="docutils literal notranslate"><span class="pre">i32</span></code> / <code class="docutils literal notranslate"><span class="pre">u32</span></code> / <code class="docutils literal notranslate"><span class="pre">i64</span></code> / <code class="docutils literal notranslate"><span class="pre">u64</span></code>) is supported on every backend listed in the table above, with the same Metal caveat for <code class="docutils literal notranslate"><span class="pre">i64</span></code> / <code class="docutils literal notranslate"><span class="pre">u64</span></code> (†) as the rest of the 64-bit integer atomic family.</p>
+<p>All atomic ops can be called on either global memory (fields, ndarrays) or block-shared memory (<code class="docutils literal notranslate"><span class="pre">qd.simt.block.SharedArray</span></code>). They are sequentially consistent on the location they touch; they are <strong>not</strong> memory fences for the rest of the address space - to publish other writes alongside an atomic, pair the atomic with <code class="docutils literal notranslate"><span class="pre">qd.simt.block.mem_fence()</span></code> (block scope) or <code class="docutils literal notranslate"><span class="pre">qd.simt.grid.mem_fence()</span></code> (device scope).</p>
+</section>
+<section id="semantics">
+<h2>Semantics<a class="headerlink" href="#semantics" title="Link to this heading">#</a></h2>
+<section id="qd-atomic-add-x-y-and-the-rest-of-the-family">
+<h3><code class="docutils literal notranslate"><span class="pre">qd.atomic_add(x,</span> <span class="pre">y)</span></code> - and the rest of the family<a class="headerlink" href="#qd-atomic-add-x-y-and-the-rest-of-the-family" title="Link to this heading">#</a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">old</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">atomic_add</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span>
+<span class="c1"># Effect:</span>
+<span class="c1">#   tmp = load(x)</span>
+<span class="c1">#   store(x, op(tmp, y))</span>
+<span class="c1">#   old = tmp</span>
+<span class="c1"># all three steps execute as a single atomic transaction on x.</span>
+</pre></div>
+</div>
+<p>Properties common to every <code class="docutils literal notranslate"><span class="pre">qd.atomic_*</span></code>:</p>
+<ul class="simple">
+<li><p><strong>Returns the old value</strong>, not the new one. This matches CUDA’s <code class="docutils literal notranslate"><span class="pre">atomicAdd</span></code> and is what enables building reservation patterns: <code class="docutils literal notranslate"><span class="pre">slot</span> <span class="pre">=</span> <span class="pre">qd.atomic_add(counter,</span> <span class="pre">1)</span></code> gives every thread a unique index.</p></li>
+<li><p><strong>Per-location atomicity, no fence on the rest of memory.</strong> Writes you issued before an atomic on <code class="docutils literal notranslate"><span class="pre">x</span></code> are not necessarily visible to other threads after they observe the new <code class="docutils literal notranslate"><span class="pre">x</span></code>. Pair the atomic with <code class="docutils literal notranslate"><span class="pre">qd.simt.block.mem_fence()</span></code> or <code class="docutils literal notranslate"><span class="pre">qd.simt.grid.mem_fence()</span></code> if you need that ordering.</p></li>
+<li><p><strong>Vector / matrix arguments fan out element-wise.</strong> <code class="docutils literal notranslate"><span class="pre">qd.atomic_add(field_of_vec3,</span> <span class="pre">qd.Vector([1.0,</span> <span class="pre">2.0,</span> <span class="pre">3.0]))</span></code> issues three independent scalar atomic-adds, one per component. There is no all-or-nothing guarantee across the components.</p></li>
+</ul>
+</section>
+<section id="qd-atomic-min-x-y-qd-atomic-max-x-y">
+<h3><code class="docutils literal notranslate"><span class="pre">qd.atomic_min(x,</span> <span class="pre">y)</span></code> / <code class="docutils literal notranslate"><span class="pre">qd.atomic_max(x,</span> <span class="pre">y)</span></code><a class="headerlink" href="#qd-atomic-min-x-y-qd-atomic-max-x-y" title="Link to this heading">#</a></h3>
+<p>Atomically writes back <code class="docutils literal notranslate"><span class="pre">min(x,</span> <span class="pre">y)</span></code> (resp. <code class="docutils literal notranslate"><span class="pre">max(x,</span> <span class="pre">y)</span></code>); returns the old value of <code class="docutils literal notranslate"><span class="pre">x</span></code>. Float min/max are <code class="docutils literal notranslate"><span class="pre">minNum</span></code> / <code class="docutils literal notranslate"><span class="pre">maxNum</span></code>-style: if exactly one operand is <code class="docutils literal notranslate"><span class="pre">NaN</span></code>, the non-<code class="docutils literal notranslate"><span class="pre">NaN</span></code> operand wins.</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>Backends</p></th>
+<th class="head"><p><code class="docutils literal notranslate"><span class="pre">f16</span></code></p></th>
+<th class="head"><p><code class="docutils literal notranslate"><span class="pre">f32</span></code>, <code class="docutils literal notranslate"><span class="pre">f64</span></code></p></th>
+<th class="head"><p>Both inputs <code class="docutils literal notranslate"><span class="pre">NaN</span></code></p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>CPU, CUDA, AMDGPU (LLVM)</p></td>
+<td><p>CAS over <code class="docutils literal notranslate"><span class="pre">llvm.minnum</span></code> / <code class="docutils literal notranslate"><span class="pre">llvm.maxnum</span></code></p></td>
+<td><p>LLVM <code class="docutils literal notranslate"><span class="pre">atomicrmw</span> <span class="pre">fmin</span></code> / <code class="docutils literal notranslate"><span class="pre">fmax</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">NaN</span></code> (per LLVM <code class="docutils literal notranslate"><span class="pre">minnum</span></code> / <code class="docutils literal notranslate"><span class="pre">maxnum</span></code> spec)</p></td>
+</tr>
+<tr class="row-odd"><td><p>Vulkan, Metal (SPIR-V)</p></td>
+<td><p>capability-gated, usually unsupported</p></td>
+<td><p>CAS loop with GLSL <code class="docutils literal notranslate"><span class="pre">FMin</span></code> / <code class="docutils literal notranslate"><span class="pre">FMax</span></code></p></td>
+<td><p>undefined per spec; <code class="docutils literal notranslate"><span class="pre">NaN</span></code> in practice</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="qd-atomic-and-x-y-qd-atomic-or-x-y-qd-atomic-xor-x-y">
+<h3><code class="docutils literal notranslate"><span class="pre">qd.atomic_and(x,</span> <span class="pre">y)</span></code> / <code class="docutils literal notranslate"><span class="pre">qd.atomic_or(x,</span> <span class="pre">y)</span></code> / <code class="docutils literal notranslate"><span class="pre">qd.atomic_xor(x,</span> <span class="pre">y)</span></code><a class="headerlink" href="#qd-atomic-and-x-y-qd-atomic-or-x-y-qd-atomic-xor-x-y" title="Link to this heading">#</a></h3>
+<p>Bitwise atomics. Integer dtypes only — passing <code class="docutils literal notranslate"><span class="pre">f32</span></code> / <code class="docutils literal notranslate"><span class="pre">f64</span></code> raises a type error at compile time.</p>
+</section>
+<section id="qd-atomic-sub-x-y-qd-atomic-mul-x-y">
+<h3><code class="docutils literal notranslate"><span class="pre">qd.atomic_sub(x,</span> <span class="pre">y)</span></code> / <code class="docutils literal notranslate"><span class="pre">qd.atomic_mul(x,</span> <span class="pre">y)</span></code><a class="headerlink" href="#qd-atomic-sub-x-y-qd-atomic-mul-x-y" title="Link to this heading">#</a></h3>
+<p>Atomic subtract and atomic multiply. <code class="docutils literal notranslate"><span class="pre">atomic_sub</span></code> is rewritten to <code class="docutils literal notranslate"><span class="pre">atomic_add(x,</span> <span class="pre">-y)</span></code> at IR-construction time (<code class="docutils literal notranslate"><span class="pre">quadrants/ir/frontend_ir.cpp::AtomicOpExpression::flatten</span></code>), so its per-backend behavior is identical to <code class="docutils literal notranslate"><span class="pre">atomic_add</span></code>. <code class="docutils literal notranslate"><span class="pre">atomic_mul</span></code> always lowers to a CAS loop - no LLVM AtomicRMW or SPIR-V <code class="docutils literal notranslate"><span class="pre">OpAtomic*</span></code> op corresponds to multiply - and is intentionally not heavily optimized; prefer reducing to a different scheme on hot paths.</p>
+</section>
+<section id="qd-atomic-exchange-x-y">
+<h3><code class="docutils literal notranslate"><span class="pre">qd.atomic_exchange(x,</span> <span class="pre">y)</span></code><a class="headerlink" href="#qd-atomic-exchange-x-y" title="Link to this heading">#</a></h3>
+<p>Atomically writes <code class="docutils literal notranslate"><span class="pre">y</span></code> into <code class="docutils literal notranslate"><span class="pre">x</span></code> and returns the old value of <code class="docutils literal notranslate"><span class="pre">x</span></code>. Unlike the other <code class="docutils literal notranslate"><span class="pre">qd.atomic_*</span></code> ops the new value of <code class="docutils literal notranslate"><span class="pre">x</span></code> does <strong>not</strong> depend on its old value - <code class="docutils literal notranslate"><span class="pre">x</span></code> is unconditionally overwritten. The exchange always succeeds; there is no retry / failure path.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">old</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">atomic_exchange</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span>
+<span class="c1"># Effect:</span>
+<span class="c1">#   tmp = load(x)</span>
+<span class="c1">#   store(x, y)</span>
+<span class="c1">#   old = tmp</span>
+<span class="c1"># all three steps execute as a single atomic transaction on x.</span>
+</pre></div>
+</div>
+<p>Lowers to one native instruction on every backend (CUDA <code class="docutils literal notranslate"><span class="pre">atomicExch</span></code>, AMDGPU <code class="docutils literal notranslate"><span class="pre">buffer_atomic_swap</span></code> / <code class="docutils literal notranslate"><span class="pre">global_atomic_swap</span></code>, SPIR-V <code class="docutils literal notranslate"><span class="pre">OpAtomicExchange</span></code>, x86 <code class="docutils literal notranslate"><span class="pre">xchg</span></code>). Useful for take-ownership / hand-off patterns:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">my_old_task</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">atomic_exchange</span><span class="p">(</span><span class="n">slot</span><span class="p">,</span> <span class="n">NO_TASK</span><span class="p">)</span>
+<span class="k">if</span> <span class="n">my_old_task</span> <span class="o">!=</span> <span class="n">NO_TASK</span><span class="p">:</span>
+    <span class="n">process</span><span class="p">(</span><span class="n">my_old_task</span><span class="p">)</span>
+<span class="c1"># Whatever was in `slot` is now mine to process; I left NO_TASK behind for the next worker.  No retry needed - exchange</span>
+<span class="c1"># always succeeds.</span>
+</pre></div>
+</div>
+<p>Vector / matrix arguments fan out per component, same as the rest of the <code class="docutils literal notranslate"><span class="pre">qd.atomic_*</span></code> family: a <code class="docutils literal notranslate"><span class="pre">qd.atomic_exchange(field_of_vec3,</span> <span class="pre">qd.Vector([...]))</span></code> issues three independent scalar exchanges, one per slot, with no all-or-nothing guarantee across the components.</p>
+</section>
+<section id="qd-atomic-cas-x-expected-desired">
+<h3><code class="docutils literal notranslate"><span class="pre">qd.atomic_cas(x,</span> <span class="pre">expected,</span> <span class="pre">desired)</span></code><a class="headerlink" href="#qd-atomic-cas-x-expected-desired" title="Link to this heading">#</a></h3>
+<p>Atomic compare-and-swap: writes <code class="docutils literal notranslate"><span class="pre">desired</span></code> into <code class="docutils literal notranslate"><span class="pre">x</span></code> if and only if <code class="docutils literal notranslate"><span class="pre">x</span></code> currently equals <code class="docutils literal notranslate"><span class="pre">expected</span></code>, and unconditionally returns the value originally at <code class="docutils literal notranslate"><span class="pre">x</span></code>. The user recovers whether the swap actually fired with one comparison:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">old</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">atomic_cas</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">expected</span><span class="p">,</span> <span class="n">desired</span><span class="p">)</span>
+<span class="c1"># Effect:</span>
+<span class="c1">#   tmp = load(x)</span>
+<span class="c1">#   if tmp == expected: store(x, desired)</span>
+<span class="c1">#   old = tmp</span>
+<span class="c1"># all three steps (load, conditional store, return-old) execute as a single atomic transaction on x.</span>
+
+<span class="n">success</span> <span class="o">=</span> <span class="p">(</span><span class="n">old</span> <span class="o">==</span> <span class="n">expected</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>This is the basic primitive on top of which arbitrary atomic read-modify-write operations can be built with a retry loop. Returning the prior value (rather than a <code class="docutils literal notranslate"><span class="pre">(prior,</span> <span class="pre">success)</span></code> pair) matches CUDA <code class="docutils literal notranslate"><span class="pre">atomicCAS</span></code> and SPIR-V <code class="docutils literal notranslate"><span class="pre">OpAtomicCompareExchange</span></code>; lowers to one native instruction on every backend (CUDA <code class="docutils literal notranslate"><span class="pre">atomicCAS</span></code>, AMDGPU <code class="docutils literal notranslate"><span class="pre">*_atomic_cmpswap</span></code>, SPIR-V <code class="docutils literal notranslate"><span class="pre">OpAtomicCompareExchange</span></code>, x86 <code class="docutils literal notranslate"><span class="pre">cmpxchg</span></code>).</p>
+<p>CAS-loop pattern for ops the framework doesn’t expose natively (e.g. atomic-max-of-some-derived-quantity):</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">cas_loop_max</span><span class="p">():</span>
+    <span class="c1"># Atomically: x = max(x, candidate). The framework already has atomic_max for primitives, but the same</span>
+    <span class="c1"># shape works for any reduction whose backend support is missing.</span>
+    <span class="k">for</span> <span class="n">_attempt</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">MAX_RETRIES</span><span class="p">):</span>
+        <span class="n">cur</span> <span class="o">=</span> <span class="n">x</span><span class="p">[</span><span class="kc">None</span><span class="p">]</span>
+        <span class="n">new</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">cur</span><span class="p">,</span> <span class="n">candidate</span><span class="p">)</span>
+        <span class="n">old</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">atomic_cas</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="kc">None</span><span class="p">],</span> <span class="n">cur</span><span class="p">,</span> <span class="n">new</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">old</span> <span class="o">==</span> <span class="n">cur</span><span class="p">:</span>
+            <span class="k">break</span>  <span class="c1"># CAS landed; we&#39;re done.</span>
+        <span class="c1"># Otherwise some other thread won the race; loop back and re-read.</span>
+</pre></div>
+</div>
+<p>Currently restricted to integer dtypes (<code class="docutils literal notranslate"><span class="pre">i32</span></code> / <code class="docutils literal notranslate"><span class="pre">u32</span></code> / <code class="docutils literal notranslate"><span class="pre">i64</span></code> / <code class="docutils literal notranslate"><span class="pre">u64</span></code>); float CAS is rejected at compile time. The Metal <code class="docutils literal notranslate"><span class="pre">i64</span></code> / <code class="docutils literal notranslate"><span class="pre">u64</span></code> caveat in the support table footnote applies here too. There is no shared-memory CAS path yet.</p>
+</section>
+<section id="qd-volatile-load-target">
+<h3><code class="docutils literal notranslate"><span class="pre">qd.volatile_load(target)</span></code><a class="headerlink" href="#qd-volatile-load-target" title="Link to this heading">#</a></h3>
+<p>Read <code class="docutils literal notranslate"><span class="pre">target</span></code> from memory with <strong>volatile</strong> semantics: the compiler is forbidden from caching, hoisting, or merging the load with prior reads of the same address. Strictly speaking this is not an atomic op (it does not modify the cell, and per-thread it is no more atomic than an ordinary load) — it lives on this page because it is the read-side counterpart to <code class="docutils literal notranslate"><span class="pre">qd.atomic_*</span></code> in producer / consumer patterns. Without it, a spin-wait loop reading the location written by another thread or block is undefined at the LLVM-IR / SPIR-V level.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">val</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">volatile_load</span><span class="p">(</span><span class="n">target</span><span class="p">)</span>
+<span class="c1"># Effect:</span>
+<span class="c1">#   load(target) — but the load is guaranteed to actually go to memory on every call,</span>
+<span class="c1">#   not be reused from a register or hoisted out of an enclosing loop.</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">target</span></code> must be a global lvalue (a field or ndarray subscript); function-scope local arrays are rejected because a local cannot be observed by another thread. Bit-packed quant snodes are also rejected (per-field volatile semantics on a shared physical word are not meaningful).</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>Backend</p></th>
+<th class="head"><p>Lowering</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>CUDA</p></td>
+<td><p>LLVM <code class="docutils literal notranslate"><span class="pre">load</span> <span class="pre">volatile</span></code> → PTX <code class="docutils literal notranslate"><span class="pre">ld.volatile.global</span></code>.</p></td>
+</tr>
+<tr class="row-odd"><td><p>AMDGPU</p></td>
+<td><p>LLVM <code class="docutils literal notranslate"><span class="pre">load</span> <span class="pre">volatile</span></code> → unhoistable <code class="docutils literal notranslate"><span class="pre">global_load_*</span></code> (the optimizer is inhibited from forwarding / merging).</p></td>
+</tr>
+<tr class="row-even"><td><p>Vulkan / Metal</p></td>
+<td><p>SPIR-V <code class="docutils literal notranslate"><span class="pre">OpLoad</span></code> with the <code class="docutils literal notranslate"><span class="pre">Volatile</span></code> <code class="docutils literal notranslate"><span class="pre">MemoryAccess</span></code> mask, propagated through SPIRV-Cross to a re-read on every use in the generated MSL / GLSL.</p></td>
+</tr>
+<tr class="row-odd"><td><p>CPU (x86_64)</p></td>
+<td><p>LLVM <code class="docutils literal notranslate"><span class="pre">load</span> <span class="pre">volatile</span></code> (the optimizer cannot hoist or merge it; the runtime cost is identical to an ordinary load on x86).</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Quadrants additionally suppresses the optimizations that would otherwise let an aliased rewrite slip past codegen:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">cache_loop_invariant_global_vars</span></code> does not hoist a volatile load out of an enclosing loop.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">simplify</span></code> does not replace a volatile load with the value of an earlier load of the same address.</p></li>
+<li><p>On CUDA, the <code class="docutils literal notranslate"><span class="pre">__ldg</span></code> / <code class="docutils literal notranslate"><span class="pre">!invariant.load</span></code> read-only-cache fast path is suppressed for volatile loads (the two attributes are contradictory).</p></li>
+</ul>
+<section id="spin-wait-pattern-the-canonical-use-case">
+<h4>Spin-wait pattern (the canonical use case)<a class="headerlink" href="#spin-wait-pattern-the-canonical-use-case" title="Link to this heading">#</a></h4>
+<p>The naive approach</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">while</span> <span class="n">flags</span><span class="p">[</span><span class="n">prev</span><span class="p">]</span> <span class="o">==</span> <span class="n">STATE_INVALID</span><span class="p">:</span>
+    <span class="k">pass</span>
+</pre></div>
+</div>
+<p>is undefined: the compiler may hoist <code class="docutils literal notranslate"><span class="pre">flags[prev]</span></code> out of the loop, turning the spin into an infinite loop. <code class="docutils literal notranslate"><span class="pre">qd.volatile_load</span></code> is the cheapest correct approach on every backend:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">while</span> <span class="n">qd</span><span class="o">.</span><span class="n">volatile_load</span><span class="p">(</span><span class="n">flags</span><span class="p">[</span><span class="n">prev</span><span class="p">])</span> <span class="o">==</span> <span class="n">STATE_INVALID</span><span class="p">:</span>
+    <span class="k">pass</span>
+</pre></div>
+</div>
+<p>The two older workarounds remain correct but pay a perf tax over the volatile load:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">qd.simt.grid.mem_fence()</span></code> inside the loop body — drains the device-scope cache on every iteration. Order-of-magnitude more expensive than a volatile read on contemporary hardware. Also does <strong>not</strong> help on Metal / Vulkan-on-macOS (the Metal device-scope fence only orders atomic accesses; see <a class="reference internal" href="grid.html"><span class="std std-doc">grid</span></a>).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">qd.atomic_or(flags[prev],</span> <span class="pre">0)</span></code> — forces a memory round-trip via an atomic RMW. Pays for the read-modify-write hardware path even though we only want to read; contention with concurrent stores is worse than a plain volatile load.</p></li>
+</ul>
+<p><code class="docutils literal notranslate"><span class="pre">qd.volatile_load</span></code> works on every backend uniformly, has no contention overhead, and matches what CUDA / OpenCL programmers reach for in the same situation.</p>
+</section>
+<section id="pairing-with-the-producer">
+<h4>Pairing with the producer<a class="headerlink" href="#pairing-with-the-producer" title="Link to this heading">#</a></h4>
+<p>A volatile load only orders the location it reads. To make other writes from the producer visible to the reader after the volatile load observes the new value, the producer must publish through an ordering primitive — either an atomic store (the Metal-portable choice; see the per-store atomic ops above), or a plain store followed by <code class="docutils literal notranslate"><span class="pre">qd.simt.grid.mem_fence()</span></code> (CUDA / AMDGPU / native Vulkan only).</p>
+<p>The decoupled-look-back scan in <a class="reference internal" href="grid.html"><span class="std std-doc">grid</span></a> shows the full pattern.</p>
+</section>
+</section>
+</section>
+<section id="performance-and-portability-notes">
+<h2>Performance and portability notes<a class="headerlink" href="#performance-and-portability-notes" title="Link to this heading">#</a></h2>
+<ul class="simple">
+<li><p><strong>Atomic contention is the silent killer of throughput.</strong> The cost of <code class="docutils literal notranslate"><span class="pre">qd.atomic_add(counter,</span> <span class="pre">1)</span></code> from every thread is dominated by serialization at the location, not by the per-thread arithmetic. If many threads hit the same slot, prefer a two-stage scheme: per-warp / per-block reduction first (<code class="docutils literal notranslate"><span class="pre">qd.simt.block.reduce</span></code> if available, or <code class="docutils literal notranslate"><span class="pre">qd.simt.subgroup.reduce_add</span></code>), then a single atomic per warp / block.</p></li>
+<li><p><strong>Pair atomics with the right fence scope.</strong> A bare atomic only orders the location it touches. To make other writes visible to readers that observe the new atomic value, follow the atomic with a fence: block-scope (<code class="docutils literal notranslate"><span class="pre">qd.simt.block.mem_fence()</span></code>) for shared-memory publishing, or grid-scope (<code class="docutils literal notranslate"><span class="pre">qd.simt.grid.mem_fence()</span></code>) for cross-block coordination.</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">f64</span></code> atomics fall off the fast path</strong> on most backends; if you only need monotonic accumulation, consider Kahan summation in registers and a single atomic-add at the end of the block.</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">atomic_mul</span></code> is generally a CAS loop</strong> under the hood; don’t put it on the hot path.</p></li>
+</ul>
+<section id="atomic-visibility-scope-across-backends">
+<h3>Atomic visibility scope across backends<a class="headerlink" href="#atomic-visibility-scope-across-backends" title="Link to this heading">#</a></h3>
+<p>Every <code class="docutils literal notranslate"><span class="pre">qd.atomic_*</span></code> is emitted at <strong>device-wide scope</strong>: visible to all threads on the GPU executing the kernel, but not required to be coherent with the host CPU mid-kernel. The host only observes results once the kernel completes, at which point the launcher’s stream-sync flushes everything regardless. Choosing device scope (rather than the strongest “system” scope) lets every backend lower the op to a single hardware atomic instruction instead of a software CAS retry loop, which matters for correctness as much as for speed: under heavy contention, a CAS loop on a non-converging op like <code class="docutils literal notranslate"><span class="pre">atomic_xor</span></code> can livelock.</p>
+<p>You don’t normally need to think about scope as a user. It’s listed here so the per-backend behavior is explicit:</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>Backend</p></th>
+<th class="head"><p>Scope spelling in the IR</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>CPU (x86_64)</p></td>
+<td><p>LLVM <code class="docutils literal notranslate"><span class="pre">seq_cst</span></code> (System)</p></td>
+</tr>
+<tr class="row-odd"><td><p>CUDA (NVPTX)</p></td>
+<td><p>LLVM <code class="docutils literal notranslate"><span class="pre">seq_cst</span></code> (System)</p></td>
+</tr>
+<tr class="row-even"><td><p>AMDGPU</p></td>
+<td><p>LLVM <code class="docutils literal notranslate"><span class="pre">seq_cst</span> <span class="pre">syncscope(&quot;agent&quot;)</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>Vulkan / Metal (SPIR-V)</p></td>
+<td><p>SPIR-V <code class="docutils literal notranslate"><span class="pre">Scope</span> <span class="pre">=</span> <span class="pre">Device</span></code></p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>CPU and CUDA lower system-scope atomics directly to a single hardware instruction, so they leave the LLVM default alone. AMDGPU’s LLVM backend, in contrast, refuses to use its native single-instruction atomics at system scope (it would have to add cache-flush instructions that don’t exist for that op), and silently falls back to a CAS loop; setting <code class="docutils literal notranslate"><span class="pre">syncscope(&quot;agent&quot;)</span></code> is what unlocks the native <code class="docutils literal notranslate"><span class="pre">flat_atomic_xor</span></code> / <code class="docutils literal notranslate"><span class="pre">global_atomic_xor</span></code> / <code class="docutils literal notranslate"><span class="pre">flat_atomic_smin</span></code> / <code class="docutils literal notranslate"><span class="pre">flat_atomic_add_f32</span></code> / … SPIR-V backends spell the same idea with the <code class="docutils literal notranslate"><span class="pre">Device</span></code> scope token. The user-visible semantics are identical across all four.</p>
+</section>
+<section id="native-instruction-vs-cas-fallback">
+<h3>Native instruction vs CAS fallback<a class="headerlink" href="#native-instruction-vs-cas-fallback" title="Link to this heading">#</a></h3>
+<p>The tables below reflect what the in-tree LLVM emits today for Quadrants’ default targets (x86_64; CUDA <code class="docutils literal notranslate"><span class="pre">sm_60+</span></code>; AMDGPU <code class="docutils literal notranslate"><span class="pre">gfx942</span></code> / MI300X at <code class="docutils literal notranslate"><span class="pre">syncscope(&quot;agent&quot;)</span></code>; Vulkan/Metal via SPIR-V). Older / different GFX generations are footnoted.</p>
+<p><strong>Integer atomics</strong> (<code class="docutils literal notranslate"><span class="pre">i32</span></code>, <code class="docutils literal notranslate"><span class="pre">u32</span></code>, <code class="docutils literal notranslate"><span class="pre">i64</span></code>, <code class="docutils literal notranslate"><span class="pre">u64</span></code>):</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>Op</p></th>
+<th class="head"><p>CPU (x86_64)</p></th>
+<th class="head"><p>CUDA</p></th>
+<th class="head"><p>AMDGPU</p></th>
+<th class="head"><p>Vulkan / Metal (SPIR-V)</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">atomic_add</span></code>, <code class="docutils literal notranslate"><span class="pre">atomic_sub</span></code></p></td>
+<td><p>✅</p></td>
+<td><p>✅</p></td>
+<td><p>✅</p></td>
+<td><p>✅</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">atomic_and</span></code>, <code class="docutils literal notranslate"><span class="pre">atomic_or</span></code>, <code class="docutils literal notranslate"><span class="pre">atomic_xor</span></code></p></td>
+<td><p>✅¹</p></td>
+<td><p>✅</p></td>
+<td><p>✅</p></td>
+<td><p>✅</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">atomic_min</span></code>, <code class="docutils literal notranslate"><span class="pre">atomic_max</span></code></p></td>
+<td><p>🟡</p></td>
+<td><p>✅</p></td>
+<td><p>✅</p></td>
+<td><p>✅</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">atomic_mul</span></code></p></td>
+<td><p>🟡</p></td>
+<td><p>🟡</p></td>
+<td><p>🟡</p></td>
+<td><p>🟡</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p><strong>Floating-point atomics</strong> (<code class="docutils literal notranslate"><span class="pre">f32</span></code>, <code class="docutils literal notranslate"><span class="pre">f64</span></code>):</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>Op</p></th>
+<th class="head"><p>CPU (x86_64)</p></th>
+<th class="head"><p>CUDA</p></th>
+<th class="head"><p>AMDGPU</p></th>
+<th class="head"><p>Vulkan / Metal (SPIR-V)</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">atomic_add</span></code>, <code class="docutils literal notranslate"><span class="pre">atomic_sub</span></code></p></td>
+<td><p>🟡</p></td>
+<td><p>✅</p></td>
+<td><p>✅²</p></td>
+<td><p>✅³</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">atomic_min</span></code>, <code class="docutils literal notranslate"><span class="pre">atomic_max</span></code></p></td>
+<td><p>🟡</p></td>
+<td><p>🟡</p></td>
+<td><p>🟡²</p></td>
+<td><p>🟡</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">atomic_mul</span></code></p></td>
+<td><p>🟡</p></td>
+<td><p>🟡</p></td>
+<td><p>🟡</p></td>
+<td><p>🟡</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Key:</p>
+<ul class="simple">
+<li><p>✅ — single hardware atomic instruction (<code class="docutils literal notranslate"><span class="pre">lock</span></code>-prefixed x86, PTX <code class="docutils literal notranslate"><span class="pre">atom.*</span></code>, AMDGPU <code class="docutils literal notranslate"><span class="pre">flat_atomic_*</span></code>, or SPIR-V <code class="docutils literal notranslate"><span class="pre">OpAtomic*</span></code>).</p></li>
+<li><p>🟡 — software <code class="docutils literal notranslate"><span class="pre">cmpxchg</span></code> / <code class="docutils literal notranslate"><span class="pre">cmpswap</span></code> retry loop.</p></li>
+</ul>
+<p><code class="docutils literal notranslate"><span class="pre">f16</span></code> atomics are CAS on every backend (Quadrants forces a CAS loop built from <code class="docutils literal notranslate"><span class="pre">llvm.minnum</span></code> / <code class="docutils literal notranslate"><span class="pre">llvm.maxnum</span></code> / <code class="docutils literal notranslate"><span class="pre">fadd</span></code>), and on Vulkan / Metal are additionally gated on <code class="docutils literal notranslate"><span class="pre">spirv_has_atomic_float16_*</span></code> device capabilities.</p>
+<p>¹ <code class="docutils literal notranslate"><span class="pre">lock</span> <span class="pre">and</span></code> / <code class="docutils literal notranslate"><span class="pre">or</span></code> / <code class="docutils literal notranslate"><span class="pre">xor</span></code> are single-instruction on x86, but they don’t expose the old value. When the <code class="docutils literal notranslate"><span class="pre">qd.atomic_*</span></code> return value is unused (the common case — fire-and-forget update) LLVM emits the single <code class="docutils literal notranslate"><span class="pre">lock</span></code> op. When the old value is consumed, x86 falls back to a <code class="docutils literal notranslate"><span class="pre">cmpxchg</span></code> loop.</p>
+<p>² AMDGPU float-atomic support is GFX-dependent. Empirically with the bundled LLVM:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">gfx942</span></code> (CDNA3 / MI300X, Quadrants’ default AMDGPU target): <code class="docutils literal notranslate"><span class="pre">atomic_add</span></code> f32 / f64 are native (<code class="docutils literal notranslate"><span class="pre">flat_atomic_add_f32</span></code> / <code class="docutils literal notranslate"><span class="pre">_f64</span></code>), <code class="docutils literal notranslate"><span class="pre">atomic_min</span></code> / <code class="docutils literal notranslate"><span class="pre">max</span></code> f64 are native (<code class="docutils literal notranslate"><span class="pre">flat_atomic_min_f64</span></code> / <code class="docutils literal notranslate"><span class="pre">max_f64</span></code>); f32 min/max still expand to CAS.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">gfx906</span></code>, <code class="docutils literal notranslate"><span class="pre">gfx90a</span></code>, <code class="docutils literal notranslate"><span class="pre">gfx1030</span></code>, <code class="docutils literal notranslate"><span class="pre">gfx1100</span></code>: all f32 / f64 float atomics expand to CAS.</p></li>
+</ul>
+<p>³ SPIR-V float <code class="docutils literal notranslate"><span class="pre">atomic_add</span></code> lowers to <code class="docutils literal notranslate"><span class="pre">OpAtomicFAddEXT</span></code> when the matching <code class="docutils literal notranslate"><span class="pre">spirv_has_atomic_float{32,64}_add</span></code> capability is present on the device, and to a CAS loop with a GLSL.std.450 payload otherwise. Quadrants does not currently emit <code class="docutils literal notranslate"><span class="pre">OpAtomicFMinEXT</span></code> / <code class="docutils literal notranslate"><span class="pre">OpAtomicFMaxEXT</span></code>, so float min/max is always CAS on SPIR-V backends.</p>
+</section>
+</section>
+<section id="related">
+<h2>Related<a class="headerlink" href="#related" title="Link to this heading">#</a></h2>
+<ul class="simple">
+<li><p><a class="reference internal" href="math.html"><span class="std std-doc">math</span></a> - <code class="docutils literal notranslate"><span class="pre">qd.math.*</span></code>, including the bit-counting helpers (<code class="docutils literal notranslate"><span class="pre">popcnt</span></code>, <code class="docutils literal notranslate"><span class="pre">clz</span></code>) commonly paired with atomics in select / compact patterns.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">qd.simt.block.*</span></code> - block-scope barriers and memory fences (<code class="docutils literal notranslate"><span class="pre">qd.simt.block.mem_fence()</span></code>).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">qd.simt.subgroup.*</span></code> - warp-scope reductions and shuffles, the recommended pre-aggregation step before an atomic.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">qd.simt.grid.*</span></code> - device-scope memory fence (<code class="docutils literal notranslate"><span class="pre">qd.simt.grid.mem_fence()</span></code>); see <a class="reference internal" href="grid.html"><span class="std std-doc">grid</span></a>.</p></li>
+<li><p><a class="reference internal" href="parallelization.html"><span class="std std-doc">parallelization</span></a> - thread-synchronization patterns and how atomics fit into the broader synchronization story.</p></li>
+</ul>
+</section>
+</section>
+
+
+                </article>
+              
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+    <a class="left-prev"
+       href="autodiff.html"
+       title="previous page">
+      <i class="fa-solid fa-angle-left"></i>
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">previous</p>
+        <p class="prev-next-title">Automatic differentiation</p>
+      </div>
+    </a>
+    <a class="right-next"
+       href="block.html"
+       title="next page">
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">next</p>
+        <p class="prev-next-title">Block primitives</p>
+      </div>
+      <i class="fa-solid fa-angle-right"></i>
+    </a>
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+                <dialog id="pst-secondary-sidebar-modal"></dialog>
+                <div id="pst-secondary-sidebar" class="bd-sidebar-secondary bd-toc"><div class="sidebar-secondary-items sidebar-secondary__inner">
+
+
+  <div class="sidebar-secondary-item">
+<div
+    id="pst-page-navigation-heading-2"
+    class="page-toc tocsection onthispage">
+    <i class="fa-solid fa-list"></i> On this page
+  </div>
+  <nav id="pst-page-toc-nav" class="page-toc" aria-labelledby="pst-page-navigation-heading-2">
+    <ul class="pst-show_toc_level nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#what-s-available">What’s available</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#semantics">Semantics</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#qd-atomic-add-x-y-and-the-rest-of-the-family"><code class="docutils literal notranslate"><span class="pre">qd.atomic_add(x,</span> <span class="pre">y)</span></code> - and the rest of the family</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#qd-atomic-min-x-y-qd-atomic-max-x-y"><code class="docutils literal notranslate"><span class="pre">qd.atomic_min(x,</span> <span class="pre">y)</span></code> / <code class="docutils literal notranslate"><span class="pre">qd.atomic_max(x,</span> <span class="pre">y)</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#qd-atomic-and-x-y-qd-atomic-or-x-y-qd-atomic-xor-x-y"><code class="docutils literal notranslate"><span class="pre">qd.atomic_and(x,</span> <span class="pre">y)</span></code> / <code class="docutils literal notranslate"><span class="pre">qd.atomic_or(x,</span> <span class="pre">y)</span></code> / <code class="docutils literal notranslate"><span class="pre">qd.atomic_xor(x,</span> <span class="pre">y)</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#qd-atomic-sub-x-y-qd-atomic-mul-x-y"><code class="docutils literal notranslate"><span class="pre">qd.atomic_sub(x,</span> <span class="pre">y)</span></code> / <code class="docutils literal notranslate"><span class="pre">qd.atomic_mul(x,</span> <span class="pre">y)</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#qd-atomic-exchange-x-y"><code class="docutils literal notranslate"><span class="pre">qd.atomic_exchange(x,</span> <span class="pre">y)</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#qd-atomic-cas-x-expected-desired"><code class="docutils literal notranslate"><span class="pre">qd.atomic_cas(x,</span> <span class="pre">expected,</span> <span class="pre">desired)</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#qd-volatile-load-target"><code class="docutils literal notranslate"><span class="pre">qd.volatile_load(target)</span></code></a><ul class="nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#spin-wait-pattern-the-canonical-use-case">Spin-wait pattern (the canonical use case)</a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#pairing-with-the-producer">Pairing with the producer</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#performance-and-portability-notes">Performance and portability notes</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#atomic-visibility-scope-across-backends">Atomic visibility scope across backends</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#native-instruction-vs-cas-fallback">Native instruction vs CAS fallback</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#related">Related</a></li>
+</ul>
+  </nav></div>
+
+  <div class="sidebar-secondary-item">
+
+  <div class="tocsection sourcelink">
+    <a href="../_sources/user_guide/atomics.md.txt">
+      <i class="fa-solid fa-file-lines"></i> Show Source
+    </a>
+  </div>
+</div>
+
+</div></div>
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+          </footer>
+        
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script defer src="../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5"></script>
+<script defer src="../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5"></script>
+
+  <footer class="bd-footer">
+<div class="bd-footer__inner bd-page-width">
+  
+    <div class="footer-items__start">
+      
+        <div class="footer-item">
+
+  <p class="copyright">
+    
+      © Copyright 2025 Genesis AI Inc.
+      <br/>
+    
+  </p>
+</div>
+      
+        <div class="footer-item">
+
+  <p class="sphinx-version">
+    Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 8.1.3.
+    <br/>
+  </p>
+</div>
+      
+    </div>
+  
+  
+  
+    <div class="footer-items__end">
+      
+        <div class="footer-item">
+<p class="theme-version">
+  <!-- # L10n: Setting the PST URL as an argument as this does not need to be localized -->
+  Built with the <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a> 0.19.0.
+</p></div>
+      
+    </div>
+  
+</div>
+
+  </footer>
+  </body>
+</html>

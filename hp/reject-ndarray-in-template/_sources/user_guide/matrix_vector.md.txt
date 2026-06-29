@@ -1,6 +1,6 @@
 # Matrix and Vector
 
-Quadrants provides `qd.Matrix` and `qd.Vector` types for small, fixed-size linear algebra inside kernels. These are stored in GPU registers and are unrolled at compile time, so they are fast — but should be kept small for best performance (more than 32 elements total will trigger a warning).
+Quadrants provides `qd.Matrix` and `qd.Vector` types for small, fixed-size linear algebra inside kernels. These are stored in GPU registers and are unrolled at compile time, so they are fast — but should be kept small for best performance (more than 144 elements total — i.e. larger than 12×12 — will trigger a warning).
 
 `qd.Vector` is a special case of `qd.Matrix` with one column.
 
@@ -83,87 +83,181 @@ def transform(
 
 ## Operations
 
-### Arithmetic
+Element-wise arithmetic, dot / cross / outer products, norms, transpose / determinant / trace / inverse, Frobenius inner product, and matrix-vector / matrix-matrix multiply all live on a separate page since they all run **per thread, in registers, with no cross-thread cooperation**. See [matrix_vector_per_thread](matrix_vector_per_thread.md).
 
-Standard arithmetic works element-wise:
+For per-thread *numerical* algorithms (SVD, symmetric eigendecomposition, polar decomposition, linear solve) see [linalg_per_thread](linalg_per_thread.md).
 
-```python
-@qd.func
-def example() -> None:
-    a = qd.Vector([1.0, 2.0, 3.0])
-    b = qd.Vector([4.0, 5.0, 6.0])
-
-    c = a + b       # [5.0, 7.0, 9.0]
-    d = a * 2.0     # [2.0, 4.0, 6.0]
-    e = a * b       # element-wise: [4.0, 10.0, 18.0]
-```
-
-### Dot and cross product
-
-```python
-@qd.func
-def products() -> None:
-    a = qd.Vector([1.0, 0.0, 0.0])
-    b = qd.Vector([0.0, 1.0, 0.0])
-
-    d = a.dot(b)      # 0.0
-    c = a.cross(b)    # [0.0, 0.0, 1.0]
-```
-
-`cross` works for 2D vectors (returns a scalar) and 3D vectors (returns a vector).
-
-### Norm and normalize
-
-```python
-@qd.func
-def norms() -> None:
-    v = qd.Vector([3.0, 4.0])
-
-    length = v.norm()              # 5.0
-    length_sq = v.norm_sqr()       # 25.0
-    unit = v.normalized()          # [0.6, 0.8]
-    inv_len = v.norm_inv()         # 0.2
-```
-
-Pass an `eps` argument for numerical safety: `v.normalized(eps=1e-8)`.
-
-### Matrix operations
-
-```python
-@qd.func
-def mat_ops() -> None:
-    m = qd.Matrix([[1.0, 2.0], [3.0, 4.0]])
-
-    t = m.transpose()       # [[1, 3], [2, 4]]
-    d = m.determinant()     # -2.0
-    tr = m.trace()          # 5.0
-    inv = m.inverse()       # [[-2, 1], [1.5, -0.5]]
-```
-
-`inverse()` and `determinant()` support matrices up to 4x4.
-
-### Matrix-vector multiply
-
-Use the `@` operator:
-
-```python
-@qd.func
-def mat_vec() -> None:
-    m = qd.Matrix([[1.0, 0.0], [0.0, 2.0]])
-    v = qd.Vector([3.0, 4.0])
-
-    result = m @ v    # [3.0, 8.0]
-```
-
-### Other operations
-
-- `qd.Matrix.diag(dim, val)` — create a diagonal matrix
-- `a.outer_product(b)` — outer product of two vectors
+For cross-thread / sparse linear algebra (CG, sparse direct solvers) see `qd.linalg.*` (separate, not yet covered in user guide).
 
 ## Size limit
 
-Matrices and vectors are unrolled into scalar registers at compile time. Using more than 32 elements (e.g. a 6x6 matrix) will trigger a warning and may cause very long compile times. For larger matrices, use a field instead:
+Matrices and vectors are unrolled into scalar registers at compile time. Using more than 144 elements (i.e. larger than 12×12) will trigger a warning and may cause very long compile times. For larger matrices, use a field instead:
 
 ```python
 large = qd.field(qd.f32, shape=(64, 64))
 ```
+
+The 144-element threshold is set by the largest size officially supported by the per-thread linalg APIs (`Matrix.inverse` up to 12×12; `qd.sym_eig` and `qd.make_spd` cap lower, at 6×6) — those internal constructions stay below the warning threshold.
+
+## Storage layout: packed vs unpacked vectors
+
+`qd.types.vector(N, dtype)` accepts an optional `unpacked: bool = False` kwarg that controls how the vector is laid out in per-thread memory when used as a `@qd.dataclass` field. The kwarg does not affect the *value type* — the field still holds a vector — it only affects the storage layout.
+
+- `unpacked=False` (default): the field is stored as a single group of `N` scalars. The compiler keeps the whole vector in registers, or, if there is insufficient register storage, spills the whole vector to "local" memory (which despite the name lives in off-chip DRAM and is slow). It is all-or-nothing per vector.
+- `unpacked=True`: the field is stored as `N` independent scalar slots. The compiler can decide per slot whether to keep it in a register or spill it. Under register pressure this can be the difference between "most of the vector still lives in registers" and "the entire vector is in DRAM".
+
+```python
+@qd.dataclass
+class Tile:
+    r: qd.types.vector(32, qd.f32, unpacked=True)
+```
+
+The flag is consumed at class-definition time. `@qd.dataclass` expands the field into `N` synthetic scalar members `_r0.._r{N-1}`, and each `obj.r[i]` (for python-int / `qd.static`-resolved `i`) is lowered to a direct reference to the i-th synthetic member. The generated LLVM IR / PTX is byte-identical to declaring `N` named scalar fields by hand (`r0: qd.f32`, `r1: qd.f32`, ...), but the source keeps the indexed read/write syntax.
+
+### What works on each layout
+
+| operation / property                                                                  | packed                                                                                                    | unpacked                                                                                                                         |
+|---------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------|
+| `obj.r[i]` with python-int / `qd.static`-resolved `i`                                 | yes                                                                                                       | yes                                                                                                                              |
+| `obj.r[k]` with runtime `k`                                                           | yes                                                                                                       | no                                                                                                                               |
+| vector arithmetic / reductions on `obj.r` (`obj.r + other`, `obj.r * 2`, `obj.r.norm()`, `obj.r.dot(...)`, ...) | yes                                                                                                       | no                                                                                                                               |
+| swizzle on `obj.r` (`obj.r.xy`, ...)                                                  | yes                                                                                                       | no                                                                                                                               |
+| pass `obj.r` across a `@qd.func` boundary                                             | yes                                                                                                       | no                                                                                                                               |
+| copy `obj.r` into shared memory as a unit                                             | yes                                                                                                       | no                                                                                                                               |
+| use the type as a kernel-arg / `@qd.func` parameter type                              | yes                                                                                                       | raises `QuadrantsSyntaxError`                                                                                                    |
+| instantiate as a kernel-local value (`T(...)`), `T.field(...)`, `T.ndarray(...)`      | yes                                                                                                       | raises `QuadrantsSyntaxError`                                                                                                    |
+| **compile-time speed**                                                                | faster (one storage slot per field)                                                                       | slower (`N` synthetic members per field, more IR to process)                                                                     |
+| **runtime speed**                                                                     | whole vector lives in registers, or spills to local memory as a unit if the register budget is exceeded   | same as packed when there's no register pressure; faster than packed under pressure (only the slots that don't fit spill)        |
+
+### When to choose `unpacked=True` vs `unpacked=False`
+
+Generally, the trade-off is compile time vs runtime, assuming you don't need any of the plethora of functionalities that packed offers you (see the table above). The target use-case that unpacked was built for was holding a tile of size 16x16 or 32x32, in a warp of threads, where each thread in the warp holds a single row of 16 or 32 values. In this case, the size of each row is pre-determined (either 16 or 32, templated), which meets one pre-requisite of using unpacked. We want all values to ideally be stored in registers. However, when we start holding multiple 32x32 tiles in a warp, we found that we were spilling entire 32-length vectors into local memory, causing very noticeable slowdowns. Migrating to use hand-coded scalars, instead of vectors, was faster, but painful to write, and very slow to compile. Using unpacked vectors is as fast as hand-coded scalars, but faster to compile.
+
+In such a scenario, we prefer to use for loops, to avoid having to unroll for-loops by hand. But we can use static for loops, satisfying the condition of only ever indexing with python int or qd.static resolved values. i.e. something like:
+
+```
+    for i in qd.static(range(32)):
+        # Do something with tile.r[i], where tile is the qd.dataclass, and tile.r is the unpacked vector.
+```
+
+We can then see the runtime/compile time trade-off because:
+- static unrolled loops increase compile time
+- using unpacked vectors increases compile time, compared to packed vectors
+
+However:
+- static unrolled loops, and unpacked vectors run much faster at runtime
+- the compile time of unpacked vectors is still much faster than hand coded scalars
+
+The issue with hand coded scalars is that you either have to literally hand-code everything, or you end up writing convenience functions like:
+
+```
+def get_r(i):
+    if i == 0:
+        return tile.r0
+    if i == 1:
+        return tile.r1
+    ...
+```
+
+Such functions cause heavy IR bloat, and slow down runtime considerably, and/or slow down compile time too, depending on exact implementation choices made.
+
+Using unpacked vector gives:
+- compact code => easy to maintain
+- fast runtime code
+- fast compile time (relative to certain hand-coded approaches).
+
+### Constraints
+
+- **Only valid as a `@qd.dataclass` field annotation.** The `unpacked=True` flag is consumed by `@qd.dataclass`. Attempting to instantiate the type as a value (`T(...)`, `T.field(...)`, `T.ndarray(...)`), use it as a kernel-arg / `@qd.func` parameter type, or apply it on a `@dataclasses.dataclass` raises `QuadrantsSyntaxError`. If you need a value type, drop `unpacked=True`.
+- **Indexed access only.** The supported pattern is `obj.r[i]` for python-int / `qd.static`-resolved `i`. Operations that treat `obj.r` itself as a vector value — vector arithmetic, reductions, swizzle, runtime indexing, passing the field across a `@qd.func` boundary, copying into shared memory as a unit — are not supported on an unpacked field today, even though the value type is a vector. If you need any of those, use plain `qd.types.vector(N, dtype)`.
+- **Synthetic field-name collisions are rejected.** The expansion uses the convention `_{group_name}{i}` (e.g. `_r0`, `_r1`, ..., `_r31`). Declaring your own field with one of those names raises `QuadrantsSyntaxError` at class-decoration time.
+
+### Mixing with other fields
+
+`unpacked=True` fields compose with anything else allowed on `@qd.dataclass`: scalars, plain vectors, matrices, other unpacked vectors, nested dataclasses.
+
+```python
+@qd.dataclass
+class TwoTiles:
+    a: qd.types.vector(32, qd.f32, unpacked=True)
+    b: qd.types.vector(32, qd.f32, unpacked=True)
+    scale: qd.f32
+```
+
+The generated struct in this example has 65 scalar members (`_a0..._a31`, `_b0..._b31`, `scale`).
+
+# Advanced
+
+## How the packed vs unpacked layout differs at the LLVM level
+
+A plain `qd.types.vector(N, dtype)` field on a `@qd.dataclass` lowers to a single stack-allocated group of `N` packed scalars. LLVM's optimizer attempts to decompose that group into `N` per-slot register-resident values, but the decomposition is conservative: under high register pressure (e.g. two concurrent 32×32 tiles in a Cholesky + triangular solve) the optimizer bails out and the whole vector spills to local memory as a unit.
+
+`qd.types.vector(N, dtype, unpacked=True)` expands to `N` independent scalar stack slots, one per element, so the optimizer can promote each slot to a register independently and the register allocator can spill only the slots it has to. That is exactly what the hand-rolled `r0..r{N-1}` form produces; the generated LLVM IR / PTX matches it byte-for-byte.
+
+## How to check for spills
+
+Quadrants compiles LLVM -> PTX directly via the LLVM NVPTX target — it does not invoke `nvcc` / `ptxas` at compile time, so the familiar `ptxas --verbose` "X bytes spill stores" output is not produced inline. To get that diagnostic you dump the PTX from Quadrants and run `ptxas -v` on it yourself. Three workflows, in order of usefulness:
+
+### 1. Dump PTX, run `ptxas -v` offline
+
+```python
+qd.init(
+    arch=qd.cuda,
+    print_kernel_asm=True,    # dump PTX to CWD as quadrants_kernel_nvptx_NNNN.ptx
+    offline_cache=False,      # bypass the kernel cache so the dump fires every time
+)
+```
+
+Run your kernel once. For each `quadrants_kernel_nvptx_NNNN.ptx` file in the working directory:
+
+```bash
+ptxas --verbose -arch=sm_86 quadrants_kernel_nvptx_0007.ptx -o /dev/null 2>&1 | grep -E "spill|stack"
+```
+
+Sample output:
+
+```
+ptxas info    : Used 64 registers, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 96 registers, 384 bytes stack frame, 256 bytes spill stores, 128 bytes spill loads
+```
+
+`spill stores` + `spill loads` > 0 means the register allocator gave up on something. `stack frame` > 0 indicates local memory in use (which is usually, but not always, spills — `qd.simt.shared_array` and explicitly addressed locals also count).
+
+Adjust `-arch=sm_XX` to match your GPU (`sm_86` = Ampere consumer / RTX 30, `sm_89` = Ada / RTX 40, `sm_90` = Hopper).
+
+### 2. Inspect the PTX directly for local-memory loads / stores
+
+NVIDIA's PTX assembly uses the mnemonics `ld.local` and `st.local` for loads and stores against per-thread local memory (off-chip DRAM). Any kernel that spills must contain these mnemonics. Grep the dumped PTX for them:
+
+```bash
+grep -nE "ld\.local|st\.local" quadrants_kernel_nvptx_0007.ptx | head -20
+```
+
+Matches that aren't from deliberate `qd.simt.shared_array` accesses (those use the shared-memory mnemonics `ld.shared` / `st.shared`, not the `.local` ones) are spill traffic.
+
+### 3. Runtime spill counters via Nsight Compute (most authoritative)
+
+```bash
+ncu --set full --section MemoryWorkloadAnalysis ./your_program
+```
+
+Look at the "Memory Workload Analysis -> Local Memory" section. This reports *actually executed* local-memory loads / stores, which catches issues `ptxas` doesn't (e.g. driver-stage JIT spills on a different GPU, hot-path-only spills that static analysis misses).
+
+### Also useful: post-optimization LLVM IR
+
+```python
+qd.init(arch=qd.cuda, print_kernel_llvm_ir_optimized=True)
+```
+
+Dumps `quadrants_kernel_cuda_llvm_ir_optimized_NNNN.ll`. In LLVM IR, every per-function stack allocation appears as an `alloca` instruction. The optimizer tries to promote each `alloca` into a register-resident value; any `alloca` that survives the optimizer into the post-optimization dump is a stack slot it couldn't promote, and it will become PTX local memory. Grep for them:
+
+```bash
+grep -nE "alloca" quadrants_kernel_cuda_llvm_ir_optimized_0007.ll | head
+```
+
+### Gotcha: the offline cache
+
+`print_kernel_asm` and `print_kernel_llvm_ir*` only fire on the first compile per kernel-key. If your kernel is already in the offline cache, the dump won't be regenerated. Either:
+
+- pass `offline_cache=False` to `qd.init` (cleanest), or
+- delete the cache (path is printed at `qd.init` time; typically under `~/.cache/quadrants/`).

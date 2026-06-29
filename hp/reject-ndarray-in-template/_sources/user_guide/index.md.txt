@@ -17,6 +17,8 @@ supported_systems
 tensor_types
 scalar_tensors
 matrix_vector
+matrix_vector_per_thread
+linalg_per_thread
 tensor
 compound_types
 buffer_view
@@ -31,6 +33,7 @@ parallelization
 :titlesonly:
 
 interop
+metal_shared_queue
 ```
 
 ```{toctree}
@@ -46,8 +49,20 @@ autodiff
 :maxdepth: 1
 :titlesonly:
 
+atomics
+block
+grid
+math
 subgroup
-tile16
+tile
+```
+
+```{toctree}
+:caption: Algorithms
+:maxdepth: 1
+:titlesonly:
+
+algorithms
 ```
 
 ```{toctree}
@@ -57,6 +72,7 @@ tile16
 
 fastcache
 graph
+streams
 perf_dispatch
 init_options
 ```
@@ -66,6 +82,7 @@ init_options
 :maxdepth: 1
 :titlesonly:
 
+unit_testing
 kernel_coverage
 ```
 
@@ -79,6 +96,14 @@ python_backend
 debug
 quirks
 troubleshooting
+```
+
+```{toctree}
+:caption: Advanced
+:maxdepth: 1
+:titlesonly:
+
+optimization_passes
 ```
 
 ```{toctree}

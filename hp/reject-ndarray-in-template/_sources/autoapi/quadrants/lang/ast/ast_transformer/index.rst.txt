@@ -368,6 +368,11 @@ Module Contents
 
 
 
+   .. py:method:: build_With(ctx: quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node: ast.With) -> None
+      :staticmethod:
+
+
+
    .. py:method:: build_Pass(ctx: quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node: ast.Pass) -> None
       :staticmethod:
 
