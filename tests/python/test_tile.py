@@ -88,18 +88,18 @@ def test_zeros(TILE, make_tile, tdim, m_size, tensor_type, qd_dtype, use_zeros_a
     Ann = _ann(tensor_type, qd_dtype, 2)
 
     @qd.kernel(fastcache=True)
-    def k1(dst_arr: Ann, N: qd.Template):
+    def k1(dst_arr: Ann, N: qd.Template, use_alias: qd.Template):
         qd.loop_config(block_dim=N)
         tile_size = N
         for _ in range(tile_size):
-            if qd.static(use_zeros_alias):
+            if qd.static(use_alias):
                 t = Tile.zeros()
                 t._store(dst_arr, 0, tile_size, 0, tile_size)
             else:
                 t = Tile()
                 t._store(dst_arr, 0, tile_size, 0, tile_size)
 
-    k1(dst, tdim)
+    k1(dst, tdim, use_zeros_alias)
     np.testing.assert_allclose(dst.to_numpy(), np.zeros((tdim, tdim), dtype=np_dtype))
 
 
@@ -117,7 +117,7 @@ def test_eye(TILE, make_tile, tdim, m_size, tensor_type, qd_dtype, inplace):
     Ann = _ann(tensor_type, qd_dtype, 2)
 
     @qd.kernel(fastcache=True)
-    def k1(src_arr: Ann, dst_arr: Ann, N: qd.Template):
+    def k1(src_arr: Ann, dst_arr: Ann, N: qd.Template, inplace: qd.Template):
         qd.loop_config(block_dim=N)
         tile_size = N
         for _ in range(tile_size):
@@ -132,7 +132,7 @@ def test_eye(TILE, make_tile, tdim, m_size, tensor_type, qd_dtype, inplace):
 
     data = np.arange(tdim * tdim, dtype=np_dtype).reshape(tdim, tdim) + 100.0
     src.from_numpy(data)
-    k1(src, dst, tdim)
+    k1(src, dst, tdim, inplace)
     np.testing.assert_allclose(dst.to_numpy(), np.eye(tdim, dtype=np_dtype))
 
 
@@ -907,7 +907,7 @@ def test_load_slice_errors(TILE, make_tile, tdim, m_size, bad_slice, match):
     dst = qd.ndarray(qd.f32, (tdim, tdim))
 
     @qd.kernel(fastcache=True)
-    def k1(s: qd.types.NDArray[qd.f32, 2], d: qd.types.NDArray[qd.f32, 2], N: qd.Template):
+    def k1(s: qd.types.NDArray[qd.f32, 2], d: qd.types.NDArray[qd.f32, 2], N: qd.Template, bad_slice: qd.Template):
         qd.loop_config(block_dim=N)
         tile_size = N
         for _ in range(tile_size):
@@ -923,7 +923,7 @@ def test_load_slice_errors(TILE, make_tile, tdim, m_size, bad_slice, match):
             d[0:tile_size, 0:tile_size] = t
 
     with pytest.raises(QuadrantsSyntaxError, match=match):
-        k1(src, dst, tdim)
+        k1(src, dst, tdim, bad_slice)
 
 
 @pytest.mark.parametrize(
@@ -942,7 +942,7 @@ def test_store_slice_errors(TILE, make_tile, tdim, m_size, bad_slice, match):
     dst = qd.ndarray(qd.f32, (tdim, tdim))
 
     @qd.kernel(fastcache=True)
-    def k1(s: qd.types.NDArray[qd.f32, 2], d: qd.types.NDArray[qd.f32, 2], N: qd.Template):
+    def k1(s: qd.types.NDArray[qd.f32, 2], d: qd.types.NDArray[qd.f32, 2], N: qd.Template, bad_slice: qd.Template):
         qd.loop_config(block_dim=N)
         tile_size = N
         for _ in range(tile_size):
@@ -958,7 +958,7 @@ def test_store_slice_errors(TILE, make_tile, tdim, m_size, bad_slice, match):
                 d[0:, 0:tile_size] = t
 
     with pytest.raises(QuadrantsSyntaxError, match=match):
-        k1(src, dst, tdim)
+        k1(src, dst, tdim, bad_slice)
 
 
 @test_utils.test(arch=qd.gpu)
@@ -1104,7 +1104,7 @@ def test_vec_slice_errors(TILE, make_tile, tdim, m_size, bad_slice):
     dst = qd.ndarray(qd.f32, (tdim, tdim))
 
     @qd.kernel(fastcache=True)
-    def k1(s: qd.types.NDArray[qd.f32, 2], d: qd.types.NDArray[qd.f32, 2], N: qd.Template):
+    def k1(s: qd.types.NDArray[qd.f32, 2], d: qd.types.NDArray[qd.f32, 2], N: qd.Template, bad_slice: qd.Template):
         qd.loop_config(block_dim=N)
         tile_size = N
         for _ in range(tile_size):
@@ -1117,7 +1117,7 @@ def test_vec_slice_errors(TILE, make_tile, tdim, m_size, bad_slice):
             d[0:tile_size, 0:tile_size] = t
 
     with pytest.raises(QuadrantsSyntaxError, match="both start and stop"):
-        k1(src, dst, tdim)
+        k1(src, dst, tdim, bad_slice)
 
 
 # =============================================================================
@@ -1328,7 +1328,14 @@ def test_shared_array_partial_cols(TILE, make_tile, tdim, m_size, partial_store,
     dst = qd.field(dtype=qd.f32, shape=(tdim, tdim))
 
     @qd.kernel(fastcache=True)
-    def k1(src_f: qd.Template, dst_f: qd.Template, NCOLS: qd.i32, N: qd.Template):
+    def k1(
+        src_f: qd.Template,
+        dst_f: qd.Template,
+        NCOLS: qd.i32,
+        N: qd.Template,
+        partial_store: qd.Template,
+        partial_load: qd.Template,
+    ):
         qd.loop_config(block_dim=N)
         tile_size = N
         for _ in range(tile_size):
@@ -1356,7 +1363,7 @@ def test_shared_array_partial_cols(TILE, make_tile, tdim, m_size, partial_store,
 
     data = np.arange(tdim * tdim, dtype=np.float32).reshape(tdim, tdim) + 1.0
     src.from_numpy(data)
-    k1(src, dst, NCOLS, tdim)
+    k1(src, dst, NCOLS, tdim, partial_store, partial_load)
     result = dst.to_numpy()
     np.testing.assert_allclose(result[:, :NCOLS], data[:, :NCOLS])
     if partial_load:

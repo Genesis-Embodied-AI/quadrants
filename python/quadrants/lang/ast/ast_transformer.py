@@ -97,11 +97,18 @@ class ASTTransformer(Builder):
         if isinstance(node, (ast.stmt, ast.expr)) and isinstance(node.ptr, Expr):
             node.ptr.dbg_info = _qd_core.DebugInfo(ctx.get_pos_info(node))
             node.ptr.ptr.set_dbg_info(node.ptr.dbg_info)
-        if ctx.is_pure and node.violates_pure and not ctx.static_scope_status.is_in_static_scope:
-            if isinstance(node.ptr, (float, int, Field)):
+        # ``qd.static`` is intentionally NOT a purity escape hatch: a captured module global is still flagged inside
+        # a static scope, since its value never enters the fastcache key regardless of static wrapping.
+        if ctx.is_pure and node.violates_pure:
+            # ``str`` is included alongside the numeric/``Field`` types: a captured string only affects a kernel through
+            # compile-time ``qd.static`` branches, and its value never enters the fastcache key, so it is cache-unsafe
+            # in exactly the same way as a captured int/float.
+            if isinstance(node.ptr, (float, int, str, Field)):
                 if not _is_quadrants_internal_file(ctx.file):
                     message = f"[PURE.VIOLATION] WARNING: Accessing global variable {node.id} {type(node.ptr)} {node.violates_pure_reason}"
-                    if node.id.upper() == node.id:
+                    # Transition period: violations inside a ``qd.static`` scope only warn instead of raising, giving
+                    # downstream code time to migrate such constants to kernel params. ``UPPERCASE`` names also warn.
+                    if node.id.upper() == node.id or ctx.is_in_static_scope():
                         warnings.warn(message)
                     else:
                         raise exception.QuadrantsCompilationError(message)
@@ -782,8 +789,10 @@ class ASTTransformer(Builder):
             node.violates_pure = node.value.violates_pure
             if node.violates_pure:
                 node.violates_pure_reason = node.value.violates_pure_reason
-            if ctx.is_pure and node.violates_pure and not ctx.static_scope_status.is_in_static_scope:
-                if isinstance(node.ptr, (int, float, Field)):
+            # ``qd.static`` is intentionally NOT a purity escape hatch (see ``build_Name``).
+            if ctx.is_pure and node.violates_pure:
+                # ``str`` included for the same reason as in ``build_Name``: a captured string is cache-unsafe.
+                if isinstance(node.ptr, (int, float, str, Field)):
                     violation = True
                     if violation and isinstance(node.ptr, enum.Enum):
                         violation = False
@@ -793,7 +802,8 @@ class ASTTransformer(Builder):
                         violation = False
                     if violation:
                         message = f"[PURE.VIOLATION] WARNING: Accessing global var {node.attr} from outside function scope within pure kernel {node.value.violates_pure_reason}"
-                        if node.attr.upper() == node.attr:
+                        # Transition period (see ``build_Name``): ``qd.static`` scope downgrades this to a warning.
+                        if node.attr.upper() == node.attr or ctx.is_in_static_scope():
                             warnings.warn(message)
                         else:
                             raise exception.QuadrantsCompilationError(message)
