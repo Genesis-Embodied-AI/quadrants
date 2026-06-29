@@ -383,6 +383,57 @@ class StmtFieldManager {
   mark_fields_registered(); \
   io(field_manager)
 
+// The graph-region a statement belongs to, for `@qd.kernel(graph=True)` kernels. Captures the
+// innermost `qd.graph_do_while()` nesting level and the `qd.stream_parallel()` concurrency group at the
+// point in the source where the statement was written. Stamped on every frontend statement by
+// `ASTBuilder::insert`, propagated onto lowered statements by `lower_ast`, and read by `offload.cpp` so
+// that serial (non-for) work is flushed into an offloaded task tagged with the level it was written at --
+// rather than the level of whatever for-loop happens to flush the pending-serial bucket next. The
+// defaults below (`-1` / `0`) mean "kernel top level, no concurrency group", which is the correct
+// neutral value for ordinary (non-graph) kernels and for statements created by passes outside a graph
+// region. For-loop statements additionally carry the same two values in their own dedicated fields (set
+// from the `ForLoopConfig`); those are left in place for now.
+//
+struct GraphRegionTag {
+  int graph_do_while_level_id{-1};
+  int stream_parallel_group_id{0};
+  // `cp_id` (see `quadrants/lang/checkpoint.py`) of the enclosing `qd.checkpoint(...)` block, or `-1` outside any
+  // checkpoint. Stamped on every frontend statement by `ASTBuilder::insert` (from `current_checkpoint_id_`) so a
+  // SIDE-EFFECTING serial task tagged with a real checkpoint can be gated/skipped on `resume(from_checkpoint=...)`
+  // exactly like a range-for in that checkpoint. The PURE-bucket fallback in `offload.cpp` deliberately leaves
+  // `checkpoint_id = -1` (always-run) so a hoisted loop bound / shared constant a later task reads is never gated away
+  // on a resume launch.
+  int checkpoint_id{-1};
+  // `is_set` distinguishes a tag that was explicitly stamped at a known program point (frontend
+  // build via ASTBuilder::insert, lowering via FlattenContext, or the region-propagating
+  // insert_before_me / replace_with helpers) from a tag that's still at its struct default because
+  // it was never touched. A bare top-level statement has graph_do_while_level_id=-1 with is_set=true,
+  // whereas a stmt manufactured by a later compiler pass that didn't go through any of those paths
+  // also reads as graph_do_while_level_id=-1 but with is_set=false; the offloader treats only the
+  // former as a trustworthy signal of where the work belongs. Excluded from operator==/!= so the
+  // bucket-region comparison in `push_serial_statement` only cares about the actual region.
+  bool is_set{false};
+
+  GraphRegionTag() = default;
+  // 2-arg ctor: (level, group). Defaults checkpoint_id to -1 ("not inside any checkpoint"). Use at call sites that
+  // don't know / don't care about checkpoint_id (e.g., pure-only fallback tag in offload.cpp).
+  GraphRegionTag(int level, int group) : graph_do_while_level_id(level), stream_parallel_group_id(group), is_set(true) {
+  }
+  // 3-arg ctor: (level, group, checkpoint). Used by `ASTBuilder::insert` to stamp the active region on every frontend
+  // statement.
+  GraphRegionTag(int level, int group, int checkpoint)
+      : graph_do_while_level_id(level), stream_parallel_group_id(group), checkpoint_id(checkpoint), is_set(true) {
+  }
+
+  bool operator==(const GraphRegionTag &o) const {
+    return graph_do_while_level_id == o.graph_do_while_level_id &&
+           stream_parallel_group_id == o.stream_parallel_group_id && checkpoint_id == o.checkpoint_id;
+  }
+  bool operator!=(const GraphRegionTag &o) const {
+    return !(*this == o);
+  }
+};
+
 class Stmt : public IRNode {
  protected:
   std::vector<Stmt **> operands;
@@ -398,6 +449,9 @@ class Stmt : public IRNode {
   bool fields_registered;
   DataType ret_type;
   DebugInfo dbg_info;
+  // Graph-region this statement belongs to (see GraphRegionTag). Only meaningful for statements
+  // that can end up at the offloader's root level as serial work; ignored otherwise.
+  GraphRegionTag region_tag;
 
   Stmt();
   Stmt(const Stmt &stmt);

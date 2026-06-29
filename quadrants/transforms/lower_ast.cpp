@@ -33,10 +33,14 @@ class LowerAST : public IRVisitor {
   std::unordered_set<Stmt *> detected_fors_with_break_;
   Block *current_block_;
   int current_block_depth_;
+  // Graph-region of the frontend statement currently being lowered. Copied into every FlattenContext
+  // so the lowered statements inherit the source statement's region (see GraphRegionTag / offload.cpp).
+  GraphRegionTag current_lowering_tag_;
 
   FlattenContext make_flatten_ctx() {
     FlattenContext fctx;
     fctx.current_block = this->current_block_;
+    fctx.region_tag = this->current_lowering_tag_;
     return fctx;
   }
 
@@ -53,9 +57,14 @@ class LowerAST : public IRVisitor {
     this->current_block_ = stmt_list;
     auto stmts = make_raw_pointer_list(stmt_list->statements);
     current_block_depth_++;
+    auto backup_tag = this->current_lowering_tag_;
     for (auto &stmt : stmts) {
+      // Carry the source statement's graph-region into lowering so the statements it expands into
+      // (loads / binops / stores, and any inlined operands) inherit it via make_flatten_ctx().
+      this->current_lowering_tag_ = stmt->region_tag;
       stmt->accept(this);
     }
+    this->current_lowering_tag_ = backup_tag;
     current_block_depth_--;
     this->current_block_ = backup_block;
   }
@@ -223,6 +232,8 @@ class LowerAST : public IRVisitor {
       new_for->loop_name = stmt->loop_name;
       new_for->index_offsets = offsets;
       new_for->stream_parallel_group_id = stmt->stream_parallel_group_id;
+      new_for->checkpoint_id = stmt->checkpoint_id;
+      new_for->graph_do_while_level_id = stmt->graph_do_while_level_id;
       VecStatement new_statements;
       for (int i = 0; i < (int)stmt->loop_var_ids.size(); i++) {
         Stmt *loop_index = new_statements.push_back<LoopIndexStmt>(new_for.get(), snode->physical_index_position[i]);
@@ -258,6 +269,8 @@ class LowerAST : public IRVisitor {
                                                       /*range_hint=*/fmt::format("arg ({})", fmt::join(arg_id, ", ")),
                                                       /*loop_name=*/stmt->loop_name);
       new_for->stream_parallel_group_id = stmt->stream_parallel_group_id;
+      new_for->checkpoint_id = stmt->checkpoint_id;
+      new_for->graph_do_while_level_id = stmt->graph_do_while_level_id;
       VecStatement new_statements;
       Stmt *loop_index = new_statements.push_back<LoopIndexStmt>(new_for.get(), 0);
       for (int i = (int)shape.size() - 1; i >= 0; i--) {
@@ -272,6 +285,7 @@ class LowerAST : public IRVisitor {
     } else if (stmt->mesh) {
       auto &&new_for = std::make_unique<MeshForStmt>(stmt->mesh, stmt->element_type, std::move(stmt->body),
                                                      stmt->is_bit_vectorized, stmt->num_cpu_threads, stmt->block_dim);
+      new_for->graph_do_while_level_id = stmt->graph_do_while_level_id;
       new_for->body->insert(std::make_unique<LoopIndexStmt>(new_for.get(), 0), 0);
       new_for->body->local_var_to_stmt[stmt->loop_var_ids[0]] = new_for->body->statements[0].get();
       new_for->mem_access_opt = stmt->mem_access_opt;
@@ -292,6 +306,8 @@ class LowerAST : public IRVisitor {
                                                         stmt->strictly_serialized, /*range_hint=*/"",
                                                         /*loop_name=*/stmt->loop_name);
         new_for->stream_parallel_group_id = stmt->stream_parallel_group_id;
+        new_for->checkpoint_id = stmt->checkpoint_id;
+        new_for->graph_do_while_level_id = stmt->graph_do_while_level_id;
         new_for->body->insert(std::make_unique<LoopIndexStmt>(new_for.get(), 0), 0);
         new_for->body->local_var_to_stmt[stmt->loop_var_ids[0]] = new_for->body->statements[0].get();
         fctx.push_back(std::move(new_for));

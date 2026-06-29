@@ -680,6 +680,40 @@ i32 quadrants_assert_format_ctx(RuntimeContext *context,
   return 0;
 }
 
+// By-value variants taking up to 8 arguments in registers, called by the bounds-check codegen from a cold block
+// reached only on failure. Passing the arguments by value keeps the hot path of checked accesses free of any
+// argument buffer (per-site stack allocation) and marshalling stores; 8 covers one index per axis for every
+// supported tensor rank, and richer asserts fall back to the buffer variants above.
+void quadrants_assert_format_args8(LLVMRuntime *runtime,
+                                   const char *format,
+                                   int num_arguments,
+                                   uint64 arg0,
+                                   uint64 arg1,
+                                   uint64 arg2,
+                                   uint64 arg3,
+                                   uint64 arg4,
+                                   uint64 arg5,
+                                   uint64 arg6,
+                                   uint64 arg7) {
+  uint64 arguments[8] = {arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7};
+  quadrants_assert_format(runtime, 0, format, num_arguments, arguments);
+}
+
+i32 quadrants_assert_format_ctx_args8(RuntimeContext *context,
+                                      const char *format,
+                                      int num_arguments,
+                                      uint64 arg0,
+                                      uint64 arg1,
+                                      uint64 arg2,
+                                      uint64 arg3,
+                                      uint64 arg4,
+                                      uint64 arg5,
+                                      uint64 arg6,
+                                      uint64 arg7) {
+  uint64 arguments[8] = {arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7};
+  return quadrants_assert_format_ctx(context, 0, format, num_arguments, arguments);
+}
+
 void quadrants_assert_runtime(LLVMRuntime *runtime, u1 test, const char *msg) {
   quadrants_assert_format(runtime, test, msg, 0, nullptr);
 }
@@ -727,8 +761,8 @@ Ptr LLVMRuntime::allocate_from_reserved_memory(PreallocatedMemoryChunk &memory_c
     // whole kernel execution immediately.
     __assertfail(
         "Out of CUDA pre-allocated memory.\n"
-        "Consider using ti.init(device_memory_fraction=0.9) or "
-        "ti.init(device_memory_GB=4) to allocate more"
+        "Consider using qd.init(device_memory_fraction=0.9) or "
+        "qd.init(device_memory_GB=4) to allocate more"
         " GPU memory",
         "Quadrants JIT", 0, "allocate_from_reserved_memory", 1);
 #endif

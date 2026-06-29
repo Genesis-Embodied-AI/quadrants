@@ -337,7 +337,7 @@ class VulkanPipeline : public Pipeline {
     VkGraphicsPipelineCreateInfo pipeline_info{};
   };
 
-  VulkanDevice &ti_device_;          // not owned
+  VulkanDevice &qd_device_;          // not owned
   VkDevice device_{VK_NULL_HANDLE};  // not owned
 
   std::string name_;
@@ -359,7 +359,7 @@ class VulkanPipeline : public Pipeline {
 
 class VulkanCommandList : public CommandList {
  public:
-  VulkanCommandList(VulkanDevice *ti_device, VulkanStream *stream, vkapi::IVkCommandBuffer buffer);
+  VulkanCommandList(VulkanDevice *qd_device, VulkanStream *stream, vkapi::IVkCommandBuffer buffer);
   ~VulkanCommandList() override;
 
   void bind_pipeline(Pipeline *p) noexcept final;
@@ -371,6 +371,7 @@ class VulkanCommandList : public CommandList {
   void buffer_copy(DevicePtr dst, DevicePtr src, size_t size) noexcept final;
   void buffer_fill(DevicePtr ptr, size_t size, uint32_t data) noexcept final;
   RhiResult dispatch(uint32_t x, uint32_t y = 1, uint32_t z = 1) noexcept final;
+  RhiResult dispatch_indirect(DevicePtr dim3_ptr) noexcept final;
   void begin_renderpass(int x0,
                         int y0,
                         int x1,
@@ -429,7 +430,7 @@ class VulkanCommandList : public CommandList {
 
  private:
   bool finalized_{false};
-  VulkanDevice *ti_device_;
+  VulkanDevice *qd_device_;
   VulkanStream *stream_;
   VkDevice device_;
   vkapi::IVkCommandBuffer buffer_;

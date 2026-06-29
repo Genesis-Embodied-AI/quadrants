@@ -108,7 +108,7 @@ qd.sync()
 end = time.time()
 ```
 
-In addition, whilst it looks like we aren't using the gpu before this, in fact we are: when we create the NDArray, the ndarray needs to be created in GPU memory, and again this happens asynchronously. So before calling start we also add qd.sync():
+In addition, while it looks like we aren't using the gpu before this, in fact we are: when we create the NDArray, the ndarray needs to be created in GPU memory, and again this happens asynchronously. So before calling start we also add qd.sync():
 
 ```python
 qd.sync()

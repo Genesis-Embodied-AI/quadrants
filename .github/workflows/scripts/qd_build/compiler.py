@@ -15,7 +15,7 @@ from pathlib import Path
 # -- own --
 from .cmake import cmake_args
 from .dep import download_dep
-from .misc import banner, error, get_cache_home, warn
+from .misc import banner, error, warn
 from .tinysh import powershell
 
 
@@ -49,10 +49,13 @@ def setup_clang(as_compiler=True) -> None:
         clang = join(brew_prefix, "opt", "llvm@22", "bin", "clang")
         clangpp = join(brew_prefix, "opt", "llvm@22", "bin", "clang++")
     elif (u.system, u.machine) == ("Windows", "AMD64"):
-        out = get_cache_home() / "clang-22-1-0"
-        url = "https://github.com/Genesis-Embodied-AI/quadrants-sdk-builds/releases/download/llvm-22.1.0-202603120808/taichi-llvm-22.1.0-windows-amd64.zip"
-        download_dep(url, out, force=True)
-        clang = str(out / "bin" / "clang++.exe").replace("\\", "\\\\")
+        # The clang++ we need on Windows ships inside the same LLVM toolchain archive that
+        # setup_llvm() downloads, so reuse that extracted copy rather than fetching/unpacking a
+        # second identical zip. This also keeps the LLVM version + build_version defined only in
+        # llvm.py instead of being duplicated here.
+        from .llvm import setup_llvm
+
+        clang = str(Path(setup_llvm()) / "bin" / "clang++.exe").replace("\\", "\\\\")
         clangpp = clang
     else:
         raise RuntimeError(f"Unsupported platform: {u.system} {u.machine}")

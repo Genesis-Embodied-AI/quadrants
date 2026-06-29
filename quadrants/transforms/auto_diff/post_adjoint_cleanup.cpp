@@ -328,9 +328,9 @@ Support for TensorType: How to handle MatrixPtrStmt & MatrixInitStmt
 
 [Original Quadrants Code]
 
-@ti.kernel
+@qd.kernel
 def test(...):
-    b = ti.Vector([0, 1, 2, 3])
+    b = qd.Vector([0, 1, 2, 3])
     b[2] = 100
     y = b[3] * b[2] * x
 

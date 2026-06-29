@@ -20,9 +20,9 @@ struct SNodeDescriptor {
 
   // Total number of CELLS of this SNode
   // For example, for a layout of
-  // ti.root
-  //   .dense(ti.ij, (3, 2))  // S1
-  //   .dense(ti.ij, (5, 3))  // S2
+  // qd.root
+  //   .dense(qd.ij, (3, 2))  // S1
+  //   .dense(qd.ij, (5, 3))  // S2
   // |total_num_cells_from_root| for S2 is 3x2x5x3 = 90. That is, S2 has a total
   // of 90 cells. Note that the number of S2 (container) itself is 3x2=6!
   size_t total_num_cells_from_root = 0;

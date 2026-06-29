@@ -131,7 +131,7 @@ TEST(CompiledKernelDataTest, Error) {
     ser_data[2] = 'D';  // 'C' -> 'D'
     auto fckd = std::make_unique<FakeCompiledKernelData>();
     std::istringstream iss(ser_data);
-    EXPECT_EQ(fckd->load(iss), Err::kNotTicFile);
+    EXPECT_EQ(fckd->load(iss), Err::kNotQdcFile);
   }
 
   {  // Corrupted File

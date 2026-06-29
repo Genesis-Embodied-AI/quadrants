@@ -31,16 +31,16 @@ std::string runtime_lib_dir() {
   if (!compiled_lib_dir.empty()) {
     folder = compiled_lib_dir;
   } else {
-    auto ti_lib_dir = getenv("QD_LIB_DIR");
-    QD_ERROR_IF(!ti_lib_dir,
+    auto qd_lib_dir = getenv("QD_LIB_DIR");
+    QD_ERROR_IF(!qd_lib_dir,
                 "If you are running the quadrants_cpp_tests please set $QD_LIB_DIR "
                 "to $QUADRANTS_INSTALL_DIR/_lib/runtime. $QUADRANTS_INSTALL_DIR can be "
                 "retrieved from quadrants.__path__[0] in python. You can also use this "
                 "script to populate $QD_LIB_DIR:\n\n"
-                "export QD_LIB_DIR=$(python -c \"import os; import quadrants as ti; "
-                "p = os.path.join(ti.__path__[0], '_lib', 'runtime'); print(p)\" | "
+                "export QD_LIB_DIR=$(python -c \"import os; import quadrants as qd; "
+                "p = os.path.join(qd.__path__[0], '_lib', 'runtime'); print(p)\" | "
                 "tail -n 1)");
-    folder = std::string(ti_lib_dir);
+    folder = std::string(qd_lib_dir);
   }
   return folder;
 }

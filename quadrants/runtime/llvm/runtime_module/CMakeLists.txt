@@ -23,7 +23,7 @@ function(COMPILE_LLVM_RUNTIME rtm_arch)
         WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
     )
     add_dependencies(${CORE_LIBRARY_NAME} "generate_llvm_runtime_${rtm_arch}")
-    install(FILES "${CMAKE_SOURCE_DIR}/quadrants/runtime/llvm/runtime_module/runtime_${arch}.bc" DESTINATION ${CMAKE_INSTALL_PREFIX}/python/quadrants/_lib/runtime)
+    install(FILES "${CMAKE_SOURCE_DIR}/quadrants/runtime/llvm/runtime_module/runtime_${arch}.bc" DESTINATION ${CMAKE_INSTALL_PREFIX}/${QD_PY_INSTALL_ROOT}/_lib/runtime)
 
 endfunction()
 
@@ -34,7 +34,7 @@ function(COMPILE_CUSTOM_CUDA_LIBRARY cuda_path)
         WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
     )
     add_dependencies(${CORE_LIBRARY_NAME} "generate_cuda_library")
-    install(FILES "${CMAKE_SOURCE_DIR}/quadrants/runtime/llvm/runtime_module/cuda_runtime-cuda-nvptx64-nvidia-cuda-sm_60.bc" DESTINATION ${CMAKE_INSTALL_PREFIX}/python/quadrants/_lib/runtime)
+    install(FILES "${CMAKE_SOURCE_DIR}/quadrants/runtime/llvm/runtime_module/cuda_runtime-cuda-nvptx64-nvidia-cuda-sm_60.bc" DESTINATION ${CMAKE_INSTALL_PREFIX}/${QD_PY_INSTALL_ROOT}/_lib/runtime)
 
 endfunction()
 

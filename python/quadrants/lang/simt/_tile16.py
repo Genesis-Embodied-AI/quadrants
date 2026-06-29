@@ -673,7 +673,12 @@ def _make_tile16x16_class(dtype):
             arr_row_stop = arr.shape[0]
             if arr_row_stop < row_stop:
                 row_stop = arr_row_stop
-            v = dtype(0.0)
+            # Use qd.cast, not dtype(0.0): the AST transformer only treats a call as a type construction when
+            # id(dtype) is in primitive_types.type_ids, but a dtype resolved from a deep-copied default_fp (e.g. after
+            # qd.init(default_fp=qd.f32)) has a different id and falls through to a raw call, raising "Quadrants data
+            # types cannot be called outside Quadrants kernels". qd.cast is identity-independent and folds to the same
+            # typed constant.
+            v = qd.cast(0.0, dtype)
             if row_start + tid < row_stop:
                 v = arr[row_start + tid, col]
             return v
@@ -685,7 +690,12 @@ def _make_tile16x16_class(dtype):
             arr_row_stop = arr.shape[1]
             if arr_row_stop < row_stop:
                 row_stop = arr_row_stop
-            v = dtype(0.0)
+            # Use qd.cast, not dtype(0.0): the AST transformer only treats a call as a type construction when
+            # id(dtype) is in primitive_types.type_ids, but a dtype resolved from a deep-copied default_fp (e.g. after
+            # qd.init(default_fp=qd.f32)) has a different id and falls through to a raw call, raising "Quadrants data
+            # types cannot be called outside Quadrants kernels". qd.cast is identity-independent and folds to the same
+            # typed constant.
+            v = qd.cast(0.0, dtype)
             if row_start + tid < row_stop:
                 v = arr[batch, row_start + tid, col]
             return v

@@ -28,15 +28,33 @@ _NONE, _REVERSE = (
 F = TypeVar("F", bound=Callable)
 
 
-def func(fn: F, is_real_function: bool = False) -> F:
+@overload
+def func(fn: F, *, is_real_function: bool = ..., requires_top_level: bool = ...) -> F: ...
+
+
+@overload
+def func(fn: None = ..., *, is_real_function: bool = ..., requires_top_level: bool = ...) -> Callable[[F], F]: ...
+
+
+def func(fn=None, *, is_real_function=False, requires_top_level=False):
     """Marks a function as callable in Quadrants-scope.
 
     This decorator transforms a Python function into a Quadrants one. Quadrants
     will JIT compile it into native instructions.
 
+    Can be applied bare (``@qd.func``) or with parameters (``@qd.func(requires_top_level=True)``).
+
     Args:
         fn (Callable): The Python function to be decorated
         is_real_function (bool): Whether the function is a real function
+        requires_top_level (bool): **Experimental** (behaviour/API may change). If True, the func may only
+            be called at the **top level** of a kernel (or directly inside a ``while qd.graph_do_while(...)``
+            body). Calling it nested inside ordinary runtime ``for`` / ``if`` / ``while`` control flow raises a
+            :class:`QuadrantsSyntaxError` at compile time. Intended for multi-phase device ops whose per-phase
+            top-level ``for`` loops must each lower to their own offloaded launch (e.g. the ``qd.algorithms``
+            reductions / scans / sort); nesting the call demotes those loops out of top-level position,
+            collapsing the inter-phase grid-wide barriers and silently corrupting the result. ``qd.static``
+            (compile-time) loops do not trip the check.
 
     Returns:
         Callable: The decorated function
@@ -51,15 +69,27 @@ def func(fn: F, is_real_function: bool = False) -> F:
         >>> def run():
         >>>     print(foo(40))  # 42
     """
-    is_classfunc = _inside_class(level_of_class_stackframe=3 + is_real_function)
 
-    fun = Func(fn, _classfunc=is_classfunc, is_real_function=is_real_function)
-    quadrants_callable = QuadrantsCallable(fn, fun)
-    quadrants_callable._is_quadrants_function = True
-    quadrants_callable._is_real_function = is_real_function
+    def decorator(fn: F, _bare: bool = False) -> F:
+        # Bare ``@qd.func`` reaches ``decorator`` from inside ``func`` (one extra stack frame); the
+        # factory form ``@qd.func(...)`` is invoked directly by Python. Add the extra level in the
+        # bare case so ``_inside_class`` inspects the user's class/def frame in both forms (mirrors
+        # the offset handling in ``kernel``).
+        level = (4 if _bare else 3) + is_real_function
+        is_classfunc = _inside_class(level_of_class_stackframe=level)
 
-    update_wrapper(quadrants_callable, fn)
-    return cast(F, quadrants_callable)
+        fun = Func(fn, _classfunc=is_classfunc, is_real_function=is_real_function)
+        quadrants_callable = QuadrantsCallable(fn, fun)
+        quadrants_callable._is_quadrants_function = True
+        quadrants_callable._is_real_function = is_real_function
+        quadrants_callable._qd_requires_top_level = requires_top_level
+
+        update_wrapper(quadrants_callable, fn)
+        return cast(F, quadrants_callable)
+
+    if fn is None:
+        return decorator
+    return decorator(fn, _bare=True)
 
 
 def real_func(fn: Callable) -> QuadrantsCallable:
@@ -128,6 +158,7 @@ def _kernel_impl(
     level_of_class_stackframe: int,
     verbose: bool = False,
     graph: bool = False,
+    checkpoints: bool = False,
 ) -> QuadrantsCallable:
     # Can decorators determine if a function is being defined inside a class?
     # https://stackoverflow.com/a/8793684/12003165
@@ -138,6 +169,8 @@ def _kernel_impl(
     primal = Kernel(_func, autodiff_mode=_NONE, _is_classkernel=is_classkernel)
     adjoint = Kernel(_func, autodiff_mode=_REVERSE, _is_classkernel=is_classkernel)
     primal.use_graph = graph
+    primal.use_checkpoints = checkpoints
+    adjoint.use_checkpoints = checkpoints
     # Having |primal| contains |grad| makes the tape work.
     primal.grad = adjoint
 
@@ -179,7 +212,9 @@ def _kernel_impl(
 @overload
 # TODO: This callable should be Callable[[F], F].
 # See comments below.
-def kernel(_fn: None = None, *, pure: bool = False, graph: bool = False) -> Callable[[Any], Any]: ...
+def kernel(
+    _fn: None = None, *, pure: bool = False, graph: bool = False, checkpoints: bool = False
+) -> Callable[[Any], Any]: ...
 
 
 # TODO: This next overload should return F, but currently that will cause issues
@@ -189,7 +224,7 @@ def kernel(_fn: None = None, *, pure: bool = False, graph: bool = False) -> Call
 # However, by making it return Any, we can make the pure parameter
 # change now, without breaking pyright.
 @overload
-def kernel(_fn: Any, *, pure: bool = False, graph: bool = False) -> Any: ...
+def kernel(_fn: Any, *, pure: bool = False, graph: bool = False, checkpoints: bool = False) -> Any: ...
 
 
 def kernel(
@@ -198,6 +233,7 @@ def kernel(
     pure: bool | None = None,
     fastcache: bool = False,
     graph: bool = False,
+    checkpoints: bool = False,
 ):
     """
     Marks a function as a Quadrants kernel.
@@ -214,6 +250,10 @@ def kernel(
             into a CUDA graph on first launch and replayed on subsequent
             launches, reducing per-kernel launch overhead. Non-CUDA backends
             are not supported currently.
+        checkpoints: If True, opt into the (experimental) ``qd.checkpoint`` pause / resume model.
+            ``with qd.checkpoint(cp_id, yield_on=flag):`` blocks in the kernel body become pause points the host can
+            resume from via ``kernel.resume(from_checkpoint=cp_id)``. Requires ``graph=True``.
+            ``qd.checkpoint(...)`` in the body is rejected unless this flag is set.
 
     Example::
 
@@ -233,7 +273,12 @@ def kernel(
         else:
             level = 4
 
-        wrapped = _kernel_impl(fn, level_of_class_stackframe=level, graph=graph)
+        if checkpoints and not graph:
+            raise QuadrantsSyntaxError(
+                f"@qd.kernel({fn.__name__!r}, checkpoints=True) requires graph=True; "
+                "the checkpoint resume model is only meaningful for graph kernels."
+            )
+        wrapped = _kernel_impl(fn, level_of_class_stackframe=level, graph=graph, checkpoints=checkpoints)
         wrapped.is_pure = pure is not None and pure or fastcache
         if pure is not None:
             warnings_helper.warn_once(
@@ -286,7 +331,7 @@ def data_oriented(cls):
     Example::
 
         >>> @qd.data_oriented
-        >>> class TiArray:
+        >>> class QdArray:
         >>>     def __init__(self, n):
         >>>         self.x = qd.field(qd.f32, shape=n)
         >>>
@@ -295,7 +340,7 @@ def data_oriented(cls):
         >>>         for i in self.x:
         >>>             self.x[i] += 1.0
         >>>
-        >>> a = TiArray(32)
+        >>> a = QdArray(32)
         >>> a.inc()
 
     Args:

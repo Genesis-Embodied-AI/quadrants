@@ -205,12 +205,15 @@ def test(arch=None, exclude=None, require=None, **options):
                 exclude_arch = pair
 
             assert (exclude_arch is not None) or (exclude_sys is not None)
-            if exclude_arch and exclude_sys:
+            # Use explicit ``is not None`` rather than truthiness: nanobind enum members are falsy when their
+            # integer value is 0 (e.g. Arch.x64 == 0), unlike pybind11 enums which were always truthy. A bare
+            # ``if exclude_arch`` would therefore silently skip excluding the x64/cpu arch.
+            if exclude_arch is not None and exclude_sys is not None:
                 if exclude_arch == arch and exclude_sys == system:
                     return True
-            elif exclude_arch and exclude_arch == arch:
+            elif exclude_arch is not None and exclude_arch == arch:
                 return True
-            elif exclude_sys and exclude_sys == system:
+            elif exclude_sys is not None and exclude_sys == system:
                 return True
 
         return False

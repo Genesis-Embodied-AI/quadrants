@@ -84,15 +84,15 @@ def test_atan2():
         y[0] = qd.i32(1)
         return qd.atan2(x[0], y[0])
 
-    ti_res0 = test_case_0()
+    qd_res0 = test_case_0()
     np_res0 = np.arctan2(2, 1)
 
-    ti_res1 = test_case_1()
+    qd_res1 = test_case_1()
     np_res1 = np.arctan2(2, 1)
 
-    ti_res2 = test_case_2()
+    qd_res2 = test_case_2()
     np_res2 = np.arctan2(3, 1)
 
-    assert np.allclose(ti_res0, np_res0)
-    assert np.allclose(ti_res1, np_res1)
-    assert np.allclose(ti_res2, np_res2)
+    assert np.allclose(qd_res0, np_res0)
+    assert np.allclose(qd_res1, np_res1)
+    assert np.allclose(qd_res2, np_res2)
