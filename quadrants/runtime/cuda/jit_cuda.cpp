@@ -86,6 +86,9 @@ JITSessionCUDA::JITSessionCUDA(QuadrantsLLVMContext *tlctx,
 }
 
 JITModule *JITSessionCUDA::add_module(std::unique_ptr<llvm::Module> M, int max_reg) {
+  // Phase-breakdown instrumentation (see per-task cache migration doc, Part 3). Parent scope for
+  // the module->PTX->cubin path; compile_module_to_ptx already carries QD_AUTO_PROF and nests here.
+  quadrants::ScopedProfiler _prof_add_module("jit_add_module");
   const char *dump_ir_env = std::getenv(DUMP_IR_ENV.data());
   const char *load_ptx_env = std::getenv("QUADRANTS_LOAD_PTX");
 
@@ -169,7 +172,10 @@ JITModule *JITSessionCUDA::add_module(std::unique_ptr<llvm::Module> M, int max_r
 
   QD_ASSERT(num_options <= max_num_options);
 
-  CUDADriver::get_instance().module_load_data_ex(&cuda_module, ptx.c_str(), num_options, options, option_values);
+  {
+    quadrants::ScopedProfiler _prof_modload("jit: module_load_data_ex (ptx->cubin)");
+    CUDADriver::get_instance().module_load_data_ex(&cuda_module, ptx.c_str(), num_options, options, option_values);
+  }
   QD_TRACE("CUDA module load time : {}ms", (Time::get_time() - t) * 1000);
   // cudaModules.push_back(cudaModule);
   modules.push_back(std::make_unique<JITModuleCUDA>(cuda_module));

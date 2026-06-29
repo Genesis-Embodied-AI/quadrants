@@ -13,6 +13,7 @@
 #include "quadrants/codegen/amdgpu/codegen_amdgpu.h"
 #endif
 #include "quadrants/system/timer.h"
+#include "quadrants/system/profiler.h"
 #include "quadrants/ir/analysis.h"
 #include "quadrants/ir/transforms.h"
 #include "quadrants/analysis/offline_cache_util.h"
@@ -56,29 +57,46 @@ std::unique_ptr<KernelCodeGen> KernelCodeGen::create(const CompileConfig &compil
 #ifdef QD_WITH_LLVM
 
 LLVMCompiledKernel KernelCodeGen::compile_kernel_to_module() {
+  // Phase-breakdown instrumentation for the per-task vs per-kernel cache analysis (see
+  // perso_hugh/doc/quadrants_per_task_cache_migration_2026jun22.md, Part 3). The nested
+  // ScopedProfiler scopes expose where cold-compile latency goes; dump with
+  // qd.core.print_profile_info(). The per-task scope measures wall-clock of the parallel
+  // codegen section (main thread waits in flush()), not summed per-thread CPU time.
+  quadrants::ScopedProfiler _prof_ck_total("compile_kernel_to_module");
+
   auto block = dynamic_cast<Block *>(ir);
   auto &worker = get_llvm_program(kernel->program)->compilation_workers;
   QD_ASSERT(block);
 
   auto &offloads = block->statements;
   std::vector<std::unique_ptr<LLVMCompiledTask>> data(offloads.size());
-  for (int i = 0; i < offloads.size(); i++) {
-    auto compile_func = [&, i] {
-      tlctx_.fetch_this_thread_struct_module();
-      auto offload = irpass::analysis::clone(offloads[i].get());
-      irpass::re_id(offload.get());
+  {
+    quadrants::ScopedProfiler _prof_ck_codegen("ck_phase: per_task_codegen (parallel wall)");
+    for (int i = 0; i < offloads.size(); i++) {
+      auto compile_func = [&, i] {
+        tlctx_.fetch_this_thread_struct_module();
+        auto offload = irpass::analysis::clone(offloads[i].get());
+        irpass::re_id(offload.get());
 
-      Block blk;
-      blk.insert(std::move(offload));
-      auto new_data = this->compile_task(i, compile_config_, nullptr, &blk);
-      data[i] = std::make_unique<LLVMCompiledTask>(std::move(new_data));
-    };
-    worker.enqueue(compile_func);
+        Block blk;
+        blk.insert(std::move(offload));
+        auto new_data = this->compile_task(i, compile_config_, nullptr, &blk);
+        data[i] = std::make_unique<LLVMCompiledTask>(std::move(new_data));
+      };
+      worker.enqueue(compile_func);
+    }
+    worker.flush();
   }
-  worker.flush();
 
-  auto llvm_compiled_kernel = tlctx_.link_compiled_tasks(std::move(data));
-  optimize_module(llvm_compiled_kernel.module.get());
+  LLVMCompiledKernel llvm_compiled_kernel;
+  {
+    quadrants::ScopedProfiler _prof_ck_link("ck_phase: link_compiled_tasks");
+    llvm_compiled_kernel = tlctx_.link_compiled_tasks(std::move(data));
+  }
+  {
+    quadrants::ScopedProfiler _prof_ck_opt("ck_phase: optimize_module");
+    optimize_module(llvm_compiled_kernel.module.get());
+  }
   return llvm_compiled_kernel;
 }
 
