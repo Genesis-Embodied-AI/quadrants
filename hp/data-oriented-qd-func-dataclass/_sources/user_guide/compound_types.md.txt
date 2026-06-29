@@ -244,7 +244,7 @@ state.step()
 
 ### Under the hood
 
-Like `dataclasses.dataclass`, a `@qd.data_oriented` object is Python-only — the compiler flattens it into individual kernel parameters and the object itself has no kernel-side representation. Unlike `dataclasses.dataclass` it needs no member annotations: the compiler reads the live instance's attributes directly. Primitive members are baked into the kernel as constants, so each distinct primitive value compiles a new specialised kernel.
+Like `dataclasses.dataclass`, a `@qd.data_oriented` object is Python-only — the compiler flattens it into individual kernel parameters and the object itself has no kernel-side representation. Unlike `dataclasses.dataclass` it needs no member annotations: the compiler reads the live instance's attributes directly. Primitive members are baked into the kernel as constants, so each distinct primitive value compiles a new specialized kernel.
 
 ## qd.dataclass / qd.types.struct
 
@@ -317,7 +317,7 @@ Unlike the other two compound types, `@qd.dataclass` is a real kernel-side type 
 
 ## Nesting compatibility
 
-This table summarises which member types are allowed inside which container type. "yes" means the member is walked correctly when the container is passed to a kernel; "no" means the member is ignored or the combination raises an error.
+This table summarizes which member types are allowed inside which container type. "yes" means the member is walked correctly when the container is passed to a kernel; "no" means the member is ignored or the combination raises an error.
 
 | Container ↓ &nbsp;&nbsp;&nbsp; / &nbsp;&nbsp;&nbsp; Member → | `qd.ndarray` | `qd.field` | primitive | `dataclasses.dataclass` | `@qd.data_oriented` | `@qd.dataclass` |
 |---|:---:|:---:|:---:|:---:|:---:|:---:|
@@ -341,7 +341,7 @@ Practical consequence:
 
 ### Reassigning ndarray members
 
-For `@qd.data_oriented` containers passed via `qd.Template`, reassigning an ndarray member between kernel launches is supported, including changes to `dtype`, `ndim`, or layout. A new specialised kernel is compiled and cached for the new shape; subsequent launches with the original shape continue to use the original cached kernel. (For `@dataclasses.dataclass` containers — passed via the dataclass-type annotation — the member binding follows the standard dataclass mutability rules: frozen dataclasses can't rebind, non-frozen ones can, and a rebind triggers a fresh kernel arg setup on the next launch.)
+For `@qd.data_oriented` containers passed via `qd.Template`, reassigning an ndarray member between kernel launches is supported, including changes to `dtype`, `ndim`, or layout. A new specialized kernel is compiled and cached for the new shape; subsequent launches with the original shape continue to use the original cached kernel. (For `@dataclasses.dataclass` containers — passed via the dataclass-type annotation — the member binding follows the standard dataclass mutability rules: frozen dataclasses can't rebind, non-frozen ones can, and a rebind triggers a fresh kernel arg setup on the next launch.)
 
 This support is only available on `@qd.data_oriented` classes *without* the [`stable_members=True`](#stable_members) opt-in. Setting `stable_members=True` is a promise that ndarray members on instances of the class are never reassigned; if you break that promise the previously compiled kernel is silently reused against the new ndarray.
 

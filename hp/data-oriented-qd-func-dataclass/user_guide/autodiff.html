@@ -708,7 +708,7 @@
 <p><code class="docutils literal notranslate"><span class="pre">qd.init()</span></code> exposes two escape hatches:</p>
 <ul class="simple">
 <li><p><code class="docutils literal notranslate"><span class="pre">ad_stack_size=N</span></code> (default <code class="docutils literal notranslate"><span class="pre">0</span></code>): forces every adstack to exactly <code class="docutils literal notranslate"><span class="pre">N</span></code> slots and bypasses the sizer. Leave at <code class="docutils literal notranslate"><span class="pre">0</span></code> in day-to-day use; positive <code class="docutils literal notranslate"><span class="pre">N</span></code> is for stress tests or working around a suspected sizer bug.</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">ad_stack_sparse_threshold_bytes=B</span></code> (default <code class="docutils literal notranslate"><span class="pre">100</span> <span class="pre">MiB</span></code>): cutoff below which the gate-passing-count sizing of <a class="reference internal" href="#memory-footprint">Memory footprint</a> is skipped in favour of the eager <code class="docutils literal notranslate"><span class="pre">dispatched_threads</span> <span class="pre">*</span> <span class="pre">stride</span></code> heap. The sparse path saves memory but pays a per-launch reducer dispatch; below <code class="docutils literal notranslate"><span class="pre">B</span></code> of conservative heap, that overhead outweighs the savings. Set to <code class="docutils literal notranslate"><span class="pre">0</span></code> to always use the sparse path; lower it if the default still skips kernels you want shrunk.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">ad_stack_sparse_threshold_bytes=B</span></code> (default <code class="docutils literal notranslate"><span class="pre">100</span> <span class="pre">MiB</span></code>): cutoff below which the gate-passing-count sizing of <a class="reference internal" href="#memory-footprint">Memory footprint</a> is skipped in favor of the eager <code class="docutils literal notranslate"><span class="pre">dispatched_threads</span> <span class="pre">*</span> <span class="pre">stride</span></code> heap. The sparse path saves memory but pays a per-launch reducer dispatch; below <code class="docutils literal notranslate"><span class="pre">B</span></code> of conservative heap, that overhead outweighs the savings. Set to <code class="docutils literal notranslate"><span class="pre">0</span></code> to always use the sparse path; lower it if the default still skips kernels you want shrunk.</p></li>
 </ul>
 </section>
 <section id="memory-footprint">
@@ -826,7 +826,7 @@
 </section>
 <section id="appendix-a-types-of-dynamic-loops-supported-by-reverse-mode-ad">
 <h2>Appendix A: types of dynamic loops supported by reverse-mode AD<a class="headerlink" href="#appendix-a-types-of-dynamic-loops-supported-by-reverse-mode-ad" title="Link to this heading">#</a></h2>
-<p>The compiler recognises the following bound shapes for adstack-aware loops:</p>
+<p>The compiler recognizes the following bound shapes for adstack-aware loops:</p>
 <div class="pst-scrollable-table-container"><table class="table">
 <thead>
 <tr class="row-odd"><th class="head"><p>Bound shape</p></th>

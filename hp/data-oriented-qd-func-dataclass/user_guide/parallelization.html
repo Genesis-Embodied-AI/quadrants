@@ -495,7 +495,7 @@
 </section>
 <section id="does-gpu-kernel-launch-latency-matter">
 <h2>Does GPU kernel launch latency matter?<a class="headerlink" href="#does-gpu-kernel-launch-latency-matter" title="Link to this heading">#</a></h2>
-<p>Kernel launch can be done in parallel whilst the previously launched kernel is still running. This means that if the previously launched kernel takes longer to run than the launch time for the new kernel, then the kernel launch latency will be perfectly hidden.</p>
+<p>Kernel launch can be done in parallel while the previously launched kernel is still running. This means that if the previously launched kernel takes longer to run than the launch time for the new kernel, then the kernel launch latency will be perfectly hidden.</p>
 <p>It’s important to try to make sure that the work done by each kernel is sufficient to hide the kernel launch latency, otherwise the launch latency will be a bottleneck to maximum performance.</p>
 <p>If kernel launch latency is a bottleneck, then you can look into:</p>
 <ul class="simple">

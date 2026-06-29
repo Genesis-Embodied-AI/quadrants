@@ -712,7 +712,7 @@ my_struct.b[37] 5
 </section>
 <section id="id1">
 <h3>Under the hood<a class="headerlink" href="#id1" title="Link to this heading">#</a></h3>
-<p>Like <code class="docutils literal notranslate"><span class="pre">dataclasses.dataclass</span></code>, a <code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code> object is Python-only — the compiler flattens it into individual kernel parameters and the object itself has no kernel-side representation. Unlike <code class="docutils literal notranslate"><span class="pre">dataclasses.dataclass</span></code> it needs no member annotations: the compiler reads the live instance’s attributes directly. Primitive members are baked into the kernel as constants, so each distinct primitive value compiles a new specialised kernel.</p>
+<p>Like <code class="docutils literal notranslate"><span class="pre">dataclasses.dataclass</span></code>, a <code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code> object is Python-only — the compiler flattens it into individual kernel parameters and the object itself has no kernel-side representation. Unlike <code class="docutils literal notranslate"><span class="pre">dataclasses.dataclass</span></code> it needs no member annotations: the compiler reads the live instance’s attributes directly. Primitive members are baked into the kernel as constants, so each distinct primitive value compiles a new specialized kernel.</p>
 </section>
 </section>
 <section id="qd-dataclass-qd-types-struct">
@@ -778,7 +778,7 @@ my_struct.b[37] 5
 </section>
 <section id="nesting-compatibility">
 <h2>Nesting compatibility<a class="headerlink" href="#nesting-compatibility" title="Link to this heading">#</a></h2>
-<p>This table summarises which member types are allowed inside which container type. “yes” means the member is walked correctly when the container is passed to a kernel; “no” means the member is ignored or the combination raises an error.</p>
+<p>This table summarizes which member types are allowed inside which container type. “yes” means the member is walked correctly when the container is passed to a kernel; “no” means the member is ignored or the combination raises an error.</p>
 <div class="pst-scrollable-table-container"><table class="table">
 <thead>
 <tr class="row-odd"><th class="head"><p>Container ↓     /     Member →</p></th>
@@ -851,7 +851,7 @@ my_struct.b[37] 5
 </section>
 <section id="reassigning-ndarray-members">
 <h3>Reassigning ndarray members<a class="headerlink" href="#reassigning-ndarray-members" title="Link to this heading">#</a></h3>
-<p>For <code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code> containers passed via <code class="docutils literal notranslate"><span class="pre">qd.Template</span></code>, reassigning an ndarray member between kernel launches is supported, including changes to <code class="docutils literal notranslate"><span class="pre">dtype</span></code>, <code class="docutils literal notranslate"><span class="pre">ndim</span></code>, or layout. A new specialised kernel is compiled and cached for the new shape; subsequent launches with the original shape continue to use the original cached kernel. (For <code class="docutils literal notranslate"><span class="pre">&#64;dataclasses.dataclass</span></code> containers — passed via the dataclass-type annotation — the member binding follows the standard dataclass mutability rules: frozen dataclasses can’t rebind, non-frozen ones can, and a rebind triggers a fresh kernel arg setup on the next launch.)</p>
+<p>For <code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code> containers passed via <code class="docutils literal notranslate"><span class="pre">qd.Template</span></code>, reassigning an ndarray member between kernel launches is supported, including changes to <code class="docutils literal notranslate"><span class="pre">dtype</span></code>, <code class="docutils literal notranslate"><span class="pre">ndim</span></code>, or layout. A new specialized kernel is compiled and cached for the new shape; subsequent launches with the original shape continue to use the original cached kernel. (For <code class="docutils literal notranslate"><span class="pre">&#64;dataclasses.dataclass</span></code> containers — passed via the dataclass-type annotation — the member binding follows the standard dataclass mutability rules: frozen dataclasses can’t rebind, non-frozen ones can, and a rebind triggers a fresh kernel arg setup on the next launch.)</p>
 <p>This support is only available on <code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code> classes <em>without</em> the <a class="reference internal" href="#stable-members"><code class="docutils literal notranslate"><span class="pre">stable_members=True</span></code></a> opt-in. Setting <code class="docutils literal notranslate"><span class="pre">stable_members=True</span></code> is a promise that ndarray members on instances of the class are never reassigned; if you break that promise the previously compiled kernel is silently reused against the new ndarray.</p>
 </section>
 <section id="restrictions">

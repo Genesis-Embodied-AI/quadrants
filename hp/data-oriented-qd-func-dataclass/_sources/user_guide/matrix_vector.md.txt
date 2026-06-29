@@ -190,9 +190,9 @@ The generated struct in this example has 65 scalar members (`_a0..._a31`, `_b0..
 
 ## How the packed vs unpacked layout differs at the LLVM level
 
-A plain `qd.types.vector(N, dtype)` field on a `@qd.dataclass` lowers to a single stack-allocated group of `N` packed scalars. LLVM's optimiser attempts to decompose that group into `N` per-slot register-resident values, but the decomposition is conservative: under high register pressure (e.g. two concurrent 32×32 tiles in a Cholesky + triangular solve) the optimiser bails out and the whole vector spills to local memory as a unit.
+A plain `qd.types.vector(N, dtype)` field on a `@qd.dataclass` lowers to a single stack-allocated group of `N` packed scalars. LLVM's optimizer attempts to decompose that group into `N` per-slot register-resident values, but the decomposition is conservative: under high register pressure (e.g. two concurrent 32×32 tiles in a Cholesky + triangular solve) the optimizer bails out and the whole vector spills to local memory as a unit.
 
-`qd.types.vector(N, dtype, unpacked=True)` expands to `N` independent scalar stack slots, one per element, so the optimiser can promote each slot to a register independently and the register allocator can spill only the slots it has to. That is exactly what the hand-rolled `r0..r{N-1}` form produces; the generated LLVM IR / PTX matches it byte-for-byte.
+`qd.types.vector(N, dtype, unpacked=True)` expands to `N` independent scalar stack slots, one per element, so the optimizer can promote each slot to a register independently and the register allocator can spill only the slots it has to. That is exactly what the hand-rolled `r0..r{N-1}` form produces; the generated LLVM IR / PTX matches it byte-for-byte.
 
 ## How to check for spills
 
@@ -243,13 +243,13 @@ ncu --set full --section MemoryWorkloadAnalysis ./your_program
 
 Look at the "Memory Workload Analysis -> Local Memory" section. This reports *actually executed* local-memory loads / stores, which catches issues `ptxas` doesn't (e.g. driver-stage JIT spills on a different GPU, hot-path-only spills that static analysis misses).
 
-### Also useful: post-optimisation LLVM IR
+### Also useful: post-optimization LLVM IR
 
 ```python
 qd.init(arch=qd.cuda, print_kernel_llvm_ir_optimized=True)
 ```
 
-Dumps `quadrants_kernel_cuda_llvm_ir_optimized_NNNN.ll`. In LLVM IR, every per-function stack allocation appears as an `alloca` instruction. The optimiser tries to promote each `alloca` into a register-resident value; any `alloca` that survives the optimiser into the post-optimisation dump is a stack slot it couldn't promote, and it will become PTX local memory. Grep for them:
+Dumps `quadrants_kernel_cuda_llvm_ir_optimized_NNNN.ll`. In LLVM IR, every per-function stack allocation appears as an `alloca` instruction. The optimizer tries to promote each `alloca` into a register-resident value; any `alloca` that survives the optimizer into the post-optimization dump is a stack slot it couldn't promote, and it will become PTX local memory. Grep for them:
 
 ```bash
 grep -nE "alloca" quadrants_kernel_cuda_llvm_ir_optimized_0007.ll | head

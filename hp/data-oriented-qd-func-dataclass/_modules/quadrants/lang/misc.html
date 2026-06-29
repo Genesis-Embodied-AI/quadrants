@@ -343,7 +343,9 @@
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._lib.core.quadrants_python</span><span class="w"> </span><span class="kn">import</span> <span class="n">Extension</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._lib.utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_os_name</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">impl</span><span class="p">,</span> <span class="n">util</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.checkpoint</span><span class="w"> </span><span class="kn">import</span> <span class="n">checkpoint</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.expr</span><span class="w"> </span><span class="kn">import</span> <span class="n">Expr</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.graph_status</span><span class="w"> </span><span class="kn">import</span> <span class="n">GraphStatus</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.impl</span><span class="w"> </span><span class="kn">import</span> <span class="n">axes</span><span class="p">,</span> <span class="n">get_runtime</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.profiler.kernel_profiler</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_default_kernel_profiler</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.types.primitive_types</span><span class="w"> </span><span class="kn">import</span> <span class="n">f32</span><span class="p">,</span> <span class="n">f64</span><span class="p">,</span> <span class="n">i32</span><span class="p">,</span> <span class="n">i64</span>
@@ -1159,16 +1161,28 @@
 <span class="k">def</span><span class="w"> </span><span class="nf">graph_do_while</span><span class="p">(</span><span class="n">condition</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Marks a while loop as a CUDA graph do-while conditional node.</span>
 
-<span class="sd">    Used as ``while qd.graph_do_while(flag):`` inside a</span>
-<span class="sd">    ``@qd.kernel(graph=True)`` kernel. The loop body repeats while</span>
+<span class="sd">    Used as ``while qd.graph_do_while(flag):`` inside a ``@qd.kernel(graph=True)`` kernel. The loop body repeats while</span>
 <span class="sd">    ``flag`` (a scalar ``qd.i32`` ndarray) is non-zero.</span>
 
-<span class="sd">    On SM 9.0+ (Hopper) GPUs this compiles to a native CUDA graph</span>
-<span class="sd">    conditional while node. On older CUDA GPUs and non-CUDA backends</span>
-<span class="sd">    it falls back to a host-side do-while loop.</span>
+<span class="sd">    On SM 9.0+ (Hopper) GPUs this compiles to a native CUDA graph conditional while node. On older CUDA GPUs and</span>
+<span class="sd">    non-CUDA backends it falls back to a host-side do-while loop.</span>
 
-<span class="sd">    This function should not be called directly at runtime; it is</span>
-<span class="sd">    recognised and transformed during AST compilation.</span>
+<span class="sd">    Only statements **inside** the ``while qd.graph_do_while(...):`` block repeat. Work placed before or after the block</span>
+<span class="sd">    at the kernel top level -- a ``for``-loop or a bare statement -- runs exactly once, so one-time init / writeback can</span>
+<span class="sd">    live in the same kernel (or in separate non-graph kernels). Loop-carried state held in global memory carries</span>
+<span class="sd">    normally between iterations because nothing outside the loop body resets it.</span>
+
+<span class="sd">    .. warning::</span>
+<span class="sd">        Reset the condition flag **outside** the loop body, never inside it. A reset such as ``counter[()] = N`` placed</span>
+<span class="sd">        within the ``while`` block is re-applied every iteration and the loop never terminates. Reset it before the loop</span>
+<span class="sd">        (a bare top-level statement runs once) or on the host between launches (``counter.fill(N)``).</span>
+
+<span class="sd">    Bare statements (assignments, ``if``, ``@qd.func`` calls) are allowed at the kernel top level and inside a</span>
+<span class="sd">    ``graph_do_while`` body; each runs at the loop level it is written at (top level = once, inside a loop = every</span>
+<span class="sd">    iteration). The one structural rule is that a ``qd.graph_do_while`` ``while``-loop may appear only at the kernel top</span>
+<span class="sd">    level or directly inside another ``graph_do_while`` body, not inside a ``for``-loop.</span>
+
+<span class="sd">    This function should not be called directly at runtime; it is recognised and transformed during AST compilation.</span>
 <span class="sd">    Requires ``@qd.kernel(graph=True)``.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">return</span> <span class="nb">bool</span><span class="p">(</span><span class="n">condition</span><span class="p">)</span></div>
@@ -1323,6 +1337,8 @@
     <span class="s2">&quot;python&quot;</span><span class="p">,</span>
     <span class="s2">&quot;vulkan&quot;</span><span class="p">,</span>
     <span class="s2">&quot;extension&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;GraphStatus&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;checkpoint&quot;</span><span class="p">,</span>
     <span class="s2">&quot;graph_do_while&quot;</span><span class="p">,</span>
     <span class="s2">&quot;loop_config&quot;</span><span class="p">,</span>
     <span class="s2">&quot;global_thread_idx&quot;</span><span class="p">,</span>
