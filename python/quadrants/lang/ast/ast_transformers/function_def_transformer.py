@@ -32,6 +32,7 @@ from quadrants.lang.ast.ast_transformers.checkpoint_transformer import (
 from quadrants.lang.ast.symbol_resolver import ASTResolver
 from quadrants.lang.buffer_view import BufferView
 from quadrants.lang.exception import (
+    QuadrantsCompilationError,
     QuadrantsSyntaxError,
 )
 from quadrants.lang.matrix import MatrixType
@@ -235,10 +236,6 @@ class FunctionDefTransformer:
         ``ctx.global_context.struct_ndarray_launch_info`` so the launch path can populate the corresponding slots in the
         launch context.
         """
-        from quadrants.lang.util import cook_dtype  # pylint: disable=C0415
-
-        cache = ctx.global_context.ndarray_to_any_array
-        launch_info = ctx.global_context.struct_ndarray_launch_info
 
         # ``_seen`` set guards against attribute-graph cycles in user containers (e.g. Genesis ``sim.solver.sim is
         # sim``). Without it this walker recurses infinitely on the back-edge and blows the Python stack at compile
@@ -267,25 +264,16 @@ class FunctionDefTransformer:
                         _walk_obj(attr_val, arg_idx, (*path, attr_name), seen)
 
         def _register_ndarray(nd, arg_idx, attr_chain):
-            key = id(nd)
-            if key in cache:
-                return
-            from quadrants._lib import core as _qd_core  # pylint: disable=C0415
-
-            element_type = cook_dtype(nd.element_type)
-            ndim = len(nd._physical_shape)
-            needs_grad = nd.grad is not None
-            layout = getattr(nd, "_qd_layout", None)
-            name = f"__qd_struct_nd_{key}"
-            arg_id_vec = impl.get_runtime().compiling_callable.insert_ndarray_param(
-                element_type, ndim, name, needs_grad
+            param_name = ctx.func.arg_metas[arg_idx].name
+            attr_path = ".".join(attr_chain)
+            raise QuadrantsCompilationError(
+                f"Kernel parameter '{param_name}' is annotated as qd.template(), but "
+                f"'{param_name}.{attr_path}' is a qd.ndarray. Passing ndarrays through "
+                f"template structs is not supported because it bypasses argument pruning "
+                f"and degrades launch performance. Use a concrete struct annotation "
+                f"(e.g. a @dataclass type hint) instead of qd.template() for struct "
+                f"parameters that contain ndarrays."
             )
-            arr = any_array.AnyArray(
-                _qd_core.make_external_tensor_expr(element_type, ndim, arg_id_vec, needs_grad, BoundaryMode.UNSAFE),
-                _qd_layout=layout,
-            )
-            cache[key] = arr
-            launch_info.append((arg_id_vec[0], arg_idx, attr_chain))
 
         assert ctx.py_args is not None
         for i, arg_meta in enumerate(ctx.func.arg_metas):

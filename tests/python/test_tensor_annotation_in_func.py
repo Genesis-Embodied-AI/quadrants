@@ -13,6 +13,7 @@ import numpy as np
 import pytest
 
 import quadrants as qd
+from quadrants.lang.exception import QuadrantsCompilationError
 
 from tests import test_utils
 
@@ -80,8 +81,12 @@ def test_tensor_struct_field_kernel_data_oriented(backend):
         for i in range(N):
             st.vals[i] = i * 3
 
-    fill(s)
-    np.testing.assert_array_equal(t.to_numpy(), np.arange(N) * 3)
+    if backend == qd.Backend.NDARRAY:
+        with pytest.raises(QuadrantsCompilationError, match="qd.template.*qd.ndarray"):
+            fill(s)
+    else:
+        fill(s)
+        np.testing.assert_array_equal(t.to_numpy(), np.arange(N) * 3)
 
 
 # ---------------------------------------------------------------------------
@@ -114,8 +119,12 @@ def test_tensor_struct_field_func_via_template(backend):
             st.vals[i] = i
         inc_all(st)
 
-    run(s)
-    np.testing.assert_array_equal(t.to_numpy(), np.arange(N) + 10)
+    if backend == qd.Backend.NDARRAY:
+        with pytest.raises(QuadrantsCompilationError, match="qd.template.*qd.ndarray"):
+            run(s)
+    else:
+        run(s)
+        np.testing.assert_array_equal(t.to_numpy(), np.arange(N) + 10)
 
 
 # ---------------------------------------------------------------------------
@@ -148,8 +157,12 @@ def test_tensor_wrapper_in_struct_field_unwraps(backend):
         for i in range(N):
             write(st, i, i * 7)
 
-    run(s)
-    np.testing.assert_array_equal(t.to_numpy(), np.arange(N) * 7)
+    if backend == qd.Backend.NDARRAY:
+        with pytest.raises(QuadrantsCompilationError, match="qd.template.*qd.ndarray"):
+            run(s)
+    else:
+        run(s)
+        np.testing.assert_array_equal(t.to_numpy(), np.arange(N) * 7)
 
 
 # ---------------------------------------------------------------------------
@@ -181,8 +194,12 @@ def test_mixed_tensor_and_scalar_struct_fields(backend):
         for i in range(N):
             scaled_fill(st, i)
 
-    run(s)
-    np.testing.assert_array_equal(t.to_numpy(), np.arange(N) * 5)
+    if backend == qd.Backend.NDARRAY:
+        with pytest.raises(QuadrantsCompilationError, match="qd.template.*qd.ndarray"):
+            run(s)
+    else:
+        run(s)
+        np.testing.assert_array_equal(t.to_numpy(), np.arange(N) * 5)
 
 
 # ---------------------------------------------------------------------------
@@ -254,10 +271,14 @@ def test_tensor_struct_vector_field_roundtrip(backend):
             for j in qd.static(range(3)):
                 st.vals[i][j] = i * 10.0 + j
 
-    fill(s)
-    arr = t.to_numpy()
-    assert arr.shape == (N, 3)
-    assert arr[2, 1] == pytest.approx(21.0)
+    if backend == qd.Backend.NDARRAY:
+        with pytest.raises(QuadrantsCompilationError, match="qd.template.*qd.ndarray"):
+            fill(s)
+    else:
+        fill(s)
+        arr = t.to_numpy()
+        assert arr.shape == (N, 3)
+        assert arr[2, 1] == pytest.approx(21.0)
 
 
 # ---------------------------------------------------------------------------
