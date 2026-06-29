@@ -16,7 +16,7 @@ The quadrants project was originally forked from [Taichi](https://github.com/tai
 
 > 太极生两仪，两仪生四象
 >
-> The Supreme Polarity (Taichi) gives rise to the Two Modes (Ying & Yang), which in turn give rise to the Four Forms (_Quadrants_).
+> The Supreme Polarity (Taichi) gives rise to the Two Modes (Yin & Yang), which in turn give rise to the Four Forms (_Quadrants_).
 
 _Quadrants_ captures the idea of progression originated from taichi — built on the same foundation, evolving in its own direction while acknowledging its roots.
 This project is now fully independent and does not aim to maintain backward compatibility with upstream Taichi.
@@ -54,7 +54,7 @@ To focus the compiler and reduce maintenance burden, we removed: GUI/GGUI, C-API
 
 ### SIMT primitives
 
-* **[Tile16x16](https://genesis-embodied-ai.github.io/quadrants/user_guide/tile16.html)** — register-resident 16×16 matrix tiles with Cholesky, triangular solve, and rank-1 updates; 5× faster than shared-memory baselines on blocked linear algebra
+* **[Tile16x16 / Tile32x32](https://genesis-embodied-ai.github.io/quadrants/user_guide/tile.html)** — register-resident 16×16 and 32×32 matrix tiles with Cholesky, triangular solve, and rank-1 updates; 5× faster than shared-memory baselines on blocked linear algebra
 * **[Subgroup ops](https://genesis-embodied-ai.github.io/quadrants/user_guide/subgroup.html)** — cross-platform `shuffle`, `shuffle_down`, `reduce_add`, `reduce_all_add` across CUDA, AMDGPU, Metal and Vulkan
 
 ### Autodiff

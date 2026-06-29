@@ -115,16 +115,77 @@ def determinant(mat):
     return None
 
 
-@preconditions(square_matrix, dim_lt(0, 5))
+@pyfunc
+def _inverse_lu(mat):
+    """Inverse of an N×N matrix via Gauss elimination with partial pivoting.
+
+    Generic over N (up to the precondition cap). Loops are all ``static(range)`` so the kernel is fully unrolled at
+    compile time; pivot row indices are runtime integers. Used by :func:`inverse` for ``N >= 5`` (sizes 1–4 keep the
+    existing closed-form cofactor expansions).
+
+    Algorithm: maintain a working copy ``a`` (in-place LU with partial pivoting, row index ``pivot`` chosen by
+    largest |column entry|) and a parallel matrix ``b`` initialised to identity. Apply the same row swaps + row
+    reductions to both ``a`` and ``b``; at the end ``a`` holds U (on / above diag) and L (strictly below, with
+    implicit unit diagonal), and ``b`` holds ``L⁻¹ P`` where ``P`` is the permutation matrix. The inverse is then
+    read off column-by-column by back-solving ``U x = b[:, c]``.
+    """
+    shape = static(mat.get_shape())
+    n = static(shape[0])
+    zero_elem = mat[0, 0] * 0
+    one_elem = zero_elem + 1
+
+    a = _filled_matrix(n, n, None, zero_elem)
+    b = _filled_matrix(n, n, None, zero_elem)
+    for i in static(range(n)):
+        for j in static(range(n)):
+            a[i, j] = mat[i, j]
+        b[i, i] = one_elem
+
+    for k in static(range(n)):
+        pivot = k
+        pivot_abs = ops_mod.abs(a[k, k])
+        for p in static(range(k + 1, n)):
+            cur_abs = ops_mod.abs(a[p, k])
+            if cur_abs > pivot_abs:
+                pivot_abs = cur_abs
+                pivot = p
+        if pivot != k:
+            for j in static(range(n)):
+                ta = a[k, j]
+                a[k, j] = a[pivot, j]
+                a[pivot, j] = ta
+                tb = b[k, j]
+                b[k, j] = b[pivot, j]
+                b[pivot, j] = tb
+        for i in static(range(k + 1, n)):
+            m = a[i, k] / a[k, k]
+            a[i, k] = m
+            for j in static(range(k + 1, n)):
+                a[i, j] = a[i, j] - m * a[k, j]
+            for j in static(range(n)):
+                b[i, j] = b[i, j] - m * b[k, j]
+
+    inv = _filled_matrix(n, n, None, zero_elem)
+    for col in static(range(n)):
+        for i in static(range(n - 1, -1, -1)):
+            s = b[i, col]
+            for j in static(range(i + 1, n)):
+                s = s - a[i, j] * inv[j, col]
+            inv[i, col] = s / a[i, i]
+    return inv
+
+
+@preconditions(square_matrix, dim_lt(0, 13))
 @pyfunc
 def inverse(mat):
     shape = static(mat.get_shape())
     if static(shape[0] == 1):
         return Matrix([[1.0 / mat[0, 0]]])
-    inv_determinant = 1.0 / determinant(mat)
     if static(shape[0] == 2):
+        inv_determinant = 1.0 / determinant(mat)
         return inv_determinant * Matrix([[mat[1, 1], -mat[0, 1]], [-mat[1, 0], mat[0, 0]]])
     if static(shape[0] == 3):
+        inv_determinant = 1.0 / determinant(mat)
         return inv_determinant * Matrix(
             [
                 [
@@ -136,6 +197,7 @@ def inverse(mat):
             ]
         )
     if static(shape[0] == 4):
+        inv_determinant = 1.0 / determinant(mat)
         return inv_determinant * Matrix(
             [
                 [
@@ -164,8 +226,7 @@ def inverse(mat):
                 for j in static(range(4))
             ]
         )
-    # unreachable
-    return None
+    return _inverse_lu(mat)
 
 
 @preconditions(check_transpose)
@@ -191,6 +252,16 @@ def sum(mat):  # pylint: disable=W0622
 @pyfunc
 def norm_sqr(mat):
     return sum(mat * mat)
+
+
+@preconditions(
+    arg_at(0, assert_tensor),
+    arg_at(1, assert_tensor),
+    same_shapes,
+)
+@pyfunc
+def frobenius_inner(mat_x, mat_y):
+    return sum(mat_x * mat_y)
 
 
 @preconditions(arg_at(0, assert_tensor))

@@ -524,11 +524,130 @@ std::unique_ptr<llvm::Module> QuadrantsLLVMContext::module_from_file(const std::
       patch_intrinsic("thread_idx", llvm::Intrinsic::amdgcn_workitem_id_x);
       patch_intrinsic("block_thread_idx", llvm::Intrinsic::amdgcn_workitem_id_x);
       patch_intrinsic("block_idx", llvm::Intrinsic::amdgcn_workgroup_id_x);
-      patch_intrinsic("block_barrier", llvm::Intrinsic::amdgcn_s_barrier, false);
+
+      // Synthesize ``block_barrier`` as ``fence release "workgroup" -> s_barrier -> fence acquire "workgroup"`` (the
+      // same sequence HIP's ``__syncthreads()`` emits via ``__work_group_barrier`` in
+      // ``hip/amd_detail/amd_device_functions.h``). The bare ``llvm.amdgcn.s.barrier`` intrinsic only emits the
+      // ``s_barrier`` instruction; without the surrounding fences, LDS writes issued before the barrier are not
+      // guaranteed to be visible to other lanes after the barrier on RDNA3 because the AMDGCN backend has no
+      // memory-model edge tying the barrier to prior stores. Symptom that motivated this fix: at ``BLOCK_DIM=256`` /
+      // ``NUM_SUBGROUPS=4``, ``block.reduce`` reads stale garbage from its inter-subgroup ``SharedArray`` at
+      // ``NBLOCKS>=~200`` (intermittent below, near-deterministic above) -- exactly the "publish to LDS, barrier,
+      // read LDS" pattern that needs the release/acquire pair to be sound.
+      {
+        auto func = module->getFunction("block_barrier");
+        if (func) {
+          func->deleteBody();
+          auto bb = llvm::BasicBlock::Create(*ctx, "entry", func);
+          IRBuilder<> builder(*ctx);
+          builder.SetInsertPoint(bb);
+          llvm::SyncScope::ID workgroup = ctx->getOrInsertSyncScopeID("workgroup");
+          builder.CreateFence(llvm::AtomicOrdering::Release, workgroup);
+          builder.CreateIntrinsic(llvm::Intrinsic::amdgcn_s_barrier, llvm::ArrayRef<llvm::Type *>{},
+                                  llvm::ArrayRef<llvm::Value *>{});
+          builder.CreateFence(llvm::AtomicOrdering::Acquire, workgroup);
+          builder.CreateRetVoid();
+          QuadrantsLLVMContext::mark_inline(func);
+        }
+      }
       patch_intrinsic("amdgpu_clock_i64", llvm::Intrinsic::amdgcn_s_memtime);
       patch_intrinsic("amdgpu_ds_bpermute", llvm::Intrinsic::amdgcn_ds_bpermute);
+      // ``llvm.amdgcn.permlane64`` exchanges a 32-bit value between lanes ``i`` and ``i ^ 32`` in a single instruction.
+      // We use it to extend the SIMD32-scoped ``ds_bpermute`` (every shuffle op lowers to that) into a wave64-aware
+      // cross-half shuffle on RDNA: ``ds_bpermute`` reads within the lane's own 32-lane SIMD cluster, ``permlane64``
+      // brings the other SIMD's value to this lane, and we select between the two based on which half the target lane
+      // sits in. See ``amdgpu_cross_half_shuffle_i32`` in runtime.cpp. The instruction is gfx940+ (CDNA3) and gfx11+
+      // (RDNA3+) only -- on earlier wave64-capable targets (gfx9xx CDNA1/2, gfx10.x RDNA1/2) the AMDGPU LLVM backend
+      // hits "Cannot select" while lowering the intrinsic, so we have to provide a software emulation.
+      //
+      // The emulation is a wave-local LDS roundtrip: each lane writes its ``value`` to ``lds[wave_base + lane]``,
+      // a wavefront-scope acquire-release fence lowers to ``s_waitcnt lgkmcnt(0)`` (drains outstanding LDS writes),
+      // and each lane then reads ``lds[wave_base + (lane ^ 32)]``. On RDNA wave64-emulation the two SIMD32 halves of
+      // the wave issue store / load in two passes apiece, but the waitcnt between them guarantees both halves' stores
+      // are committed to LDS before either half's loads issue, so the cross-half routing is correct.  ``wave_base``
+      // is ``(workitem.id.x >> 6) << 6``, scoping the LDS slot to a single wave so multi-wave workgroups don't
+      // collide.  The LDS buffer is a 1024-entry per-workgroup global (4 KiB) -- enough for the AMDGPU 1024-thread
+      // workgroup max at wave64.  The buffer is only materialised on this code path, so kernels on permlane64-capable
+      // hardware (the common case) pay zero LDS for cross-half shuffles.
+      //
+      // The intrinsic is overloaded on its element type (signature ``T -> T`` for any 32-bit-or-smaller ``T``), so we
+      // have to pass the explicit ``i32`` type alongside the ID -- otherwise ``CreateIntrinsic`` segfaults inside
+      // ``getDeclaration()`` while resolving the mangled name.
+      auto mcpu_str = AMDGPUContext::get_instance().get_mcpu();
+      bool has_permlane64 = (mcpu_str == "gfx940" || mcpu_str == "gfx941" || mcpu_str == "gfx942" ||
+                             mcpu_str.substr(0, 5) == "gfx11" || mcpu_str.substr(0, 5) == "gfx12");
+      // Escape hatch for validating the LDS software emulation on hardware that natively supports
+      // ``v_permlane64_b32``: setting ``QD_AMDGPU_FORCE_PERMLANE64_FALLBACK=1`` forces the JIT to take the LDS path
+      // even on gfx11+ / gfx940+, so we can exercise the fallback on a working AMD box (gfx1100 / gfx942) without
+      // needing a gfx10.x runner.  Has no effect on non-AMDGPU backends.
+      if (const char *force_fallback = std::getenv("QD_AMDGPU_FORCE_PERMLANE64_FALLBACK")) {
+        if (force_fallback[0] == '1') {
+          has_permlane64 = false;
+        }
+      }
+      if (has_permlane64) {
+        patch_intrinsic("amdgpu_permlane64", llvm::Intrinsic::amdgcn_permlane64, true, {llvm::Type::getInt32Ty(*ctx)});
+      } else if (auto permlane64_func = module->getFunction("amdgpu_permlane64")) {
+        // LDS-based software emulation.  Layout: ``[1024 x i32] addrspace(3)`` indexed by ``wave_base + lane``.
+        auto i32_ty = llvm::Type::getInt32Ty(*ctx);
+        auto buf_ty = llvm::ArrayType::get(i32_ty, 1024);
+        auto lds_global = llvm::cast_or_null<llvm::GlobalVariable>(module->getNamedValue("__amdgpu_permlane64_lds"));
+        if (!lds_global) {
+          lds_global =
+              new llvm::GlobalVariable(*module, buf_ty, /*isConstant=*/false, llvm::GlobalValue::InternalLinkage,
+                                       llvm::UndefValue::get(buf_ty), "__amdgpu_permlane64_lds",
+                                       /*InsertBefore=*/nullptr, llvm::GlobalValue::NotThreadLocal, /*AddressSpace=*/3);
+          lds_global->setAlignment(llvm::Align(4));
+        }
+
+        permlane64_func->deleteBody();
+        auto bb = llvm::BasicBlock::Create(*ctx, "entry", permlane64_func);
+        IRBuilder<> builder(*ctx);
+        builder.SetInsertPoint(bb);
+
+        // lane = mbcnt_hi(-1, mbcnt_lo(-1, 0))
+        auto neg_one = llvm::ConstantInt::get(i32_ty, -1, /*IsSigned=*/true);
+        auto zero32 = llvm::ConstantInt::get(i32_ty, 0);
+        auto mbcnt_lo_fn = llvm::Intrinsic::getOrInsertDeclaration(module.get(), llvm::Intrinsic::amdgcn_mbcnt_lo);
+        auto mbcnt_hi_fn = llvm::Intrinsic::getOrInsertDeclaration(module.get(), llvm::Intrinsic::amdgcn_mbcnt_hi);
+        llvm::Value *mbcnt_lo_args[] = {neg_one, zero32};
+        auto lane_lo = builder.CreateCall(mbcnt_lo_fn, llvm::ArrayRef<llvm::Value *>(mbcnt_lo_args));
+        llvm::Value *mbcnt_hi_args[] = {neg_one, lane_lo};
+        auto lane = builder.CreateCall(mbcnt_hi_fn, llvm::ArrayRef<llvm::Value *>(mbcnt_hi_args));
+
+        // wave_base = (workitem.id.x >> 6) << 6 (wave64-scoped slot offset within the workgroup LDS buffer).
+        auto tid_fn = llvm::Intrinsic::getOrInsertDeclaration(module.get(), llvm::Intrinsic::amdgcn_workitem_id_x);
+        auto tid = builder.CreateCall(tid_fn);
+        auto wave_id = builder.CreateLShr(tid, llvm::ConstantInt::get(i32_ty, 6));
+        auto wave_base = builder.CreateShl(wave_id, llvm::ConstantInt::get(i32_ty, 6));
+        auto slot = builder.CreateAdd(wave_base, lane);
+
+        // lds[slot] = value
+        auto value_arg = &*permlane64_func->arg_begin();
+        llvm::Value *store_idxs[] = {zero32, slot};
+        auto store_ptr = builder.CreateInBoundsGEP(buf_ty, lds_global, llvm::ArrayRef<llvm::Value *>(store_idxs));
+        builder.CreateStore(value_arg, store_ptr);
+
+        // Wavefront-scope acquire-release fence -> ``s_waitcnt lgkmcnt(0)`` on AMDGPU; orders LDS writes against
+        // subsequent LDS reads within the wave without touching cross-wave state (avoids the ``s_barrier`` that a
+        // workgroup-scope fence would emit, which deadlocks if only some waves in the workgroup reach this point).
+        llvm::SyncScope::ID wave_scope = ctx->getOrInsertSyncScopeID("wavefront");
+        builder.CreateFence(llvm::AtomicOrdering::AcquireRelease, wave_scope);
+
+        // partner_lane = lane ^ 32; result = lds[wave_base + partner_lane]
+        auto partner_lane = builder.CreateXor(lane, llvm::ConstantInt::get(i32_ty, 32));
+        auto partner_slot = builder.CreateAdd(wave_base, partner_lane);
+        llvm::Value *load_idxs[] = {zero32, partner_slot};
+        auto load_ptr = builder.CreateInBoundsGEP(buf_ty, lds_global, llvm::ArrayRef<llvm::Value *>(load_idxs));
+        auto result = builder.CreateAlignedLoad(i32_ty, load_ptr, llvm::Align(4));
+        builder.CreateRet(result);
+
+        QuadrantsLLVMContext::mark_inline(permlane64_func);
+      }
       patch_intrinsic("amdgpu_mbcnt_lo", llvm::Intrinsic::amdgcn_mbcnt_lo);
       patch_intrinsic("amdgpu_mbcnt_hi", llvm::Intrinsic::amdgcn_mbcnt_hi);
+      patch_intrinsic("amdgpu_ballot_w32", llvm::Intrinsic::amdgcn_ballot, true, {llvm::Type::getInt32Ty(*ctx)});
+      patch_intrinsic("amdgpu_ballot_w64", llvm::Intrinsic::amdgcn_ballot, true, {llvm::Type::getInt64Ty(*ctx)});
 
       // Patch warp_size() for AMDGPU. The shared `cuda_kernel_utils.inc.h` stub returns 32, which is baked into the
       // runtime bitcode by the host clang front-end. Without this patch, AMDGPU code that uses `warp_size()` (e.g. the
@@ -633,7 +752,20 @@ void QuadrantsLLVMContext::link_module_with_cuda_libdevice(std::unique_ptr<llvm:
 
   libdevice_module->setTargetTriple(llvm::Triple("nvptx64-nvidia-cuda"));
   strip_nvvmir_version(libdevice_module.get());
-  module->setDataLayout(libdevice_module->getDataLayout());
+
+  // `slim_libdevice.10.bc` ships without an explicit `target datalayout` line (only the `nvptx64-nvidia-gpulibs`
+  // triple), so its `getDataLayout()` returns the empty LLVM-default DL where `i64` ABI alignment is 4 bytes.
+  // Previously we copied that empty DL straight into the kernel module, which made every CreateStore / CreateLoad
+  // of i64 emit `align 4` -> the NVPTX backend then split each `align 4` i64 store into two `st.b32` halves, and
+  // ptxas in turn mis-combined those halves into a single `ST.E.64` that dropped the low 32 bits of values produced
+  // by f64 / i64 arithmetic (single 64-bit virtual reg holding the full bit pattern). End result: silent precision
+  // loss for `bit_cast(scan_result_f64, u64)` and friends.
+  //
+  // Pin the canonical NVPTX64 DL (matches LLVM's `NVPTXTargetMachine::computeDataLayout(is64Bit=true,
+  // UseShortPointers=false)`) so CreateStore / CreateLoad see `i64:64` and emit single aligned `st.b64` / `ld.b64`.
+  static const char *kNVPTX64DataLayout = "e-p6:32:32-i64:64-i128:128-v16:16-v32:32-n16:32:64";
+  module->setDataLayout(kNVPTX64DataLayout);
+  libdevice_module->setDataLayout(kNVPTX64DataLayout);
 
   bool failed = llvm::Linker::linkModules(*module, std::move(libdevice_module));
   if (failed) {
@@ -952,7 +1084,7 @@ template llvm::Value *QuadrantsLLVMContext::get_constant(unsigned long t);
 #endif
 
 auto make_slim_libdevice = [](const std::vector<std::string> &args) {
-  QD_ASSERT_INFO(args.size() == 1, "Usage: ti task make_slim_libdevice [libdevice.X.bc file]");
+  QD_ASSERT_INFO(args.size() == 1, "Usage: qd task make_slim_libdevice [libdevice.X.bc file]");
 
   auto ctx = std::make_unique<llvm::LLVMContext>();
   auto libdevice_module = module_from_bitcode_file(args[0], ctx.get());

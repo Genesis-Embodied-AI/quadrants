@@ -1,5 +1,6 @@
 import dataclasses
 import gc
+import warnings
 from dataclasses import dataclass, fields
 from pathlib import Path
 from typing import Any
@@ -22,7 +23,7 @@ def qd_type(use_ndarray: bool) -> Any:
 
 @pytest.fixture
 def qd_annotation(use_ndarray: bool) -> Any:
-    class TiTemplateBuilder:
+    class QdTemplateBuilder:
         """
         Allows qd_annotation[qd.i32, 2] to be legal
         """
@@ -32,7 +33,7 @@ def qd_annotation(use_ndarray: bool) -> Any:
 
     if use_ndarray:
         return qd.types.ndarray
-    return TiTemplateBuilder()
+    return QdTemplateBuilder()
 
 
 @test_utils.test()
@@ -2852,3 +2853,79 @@ def test_pruning_iterate_function_no_iterate() -> None:
     assert my_struct._f1[0, 0] == 101
     assert my_struct._f2[0, 0] == 102
     assert kernel_args_count_by_type[KernelBatchedArgType.QD_ARRAY] == 3
+
+
+@test_utils.test()
+def test_dataclass_with_template_emits_deprecation_warning():
+    """A frozen ``@dataclasses.dataclass`` passed into a ``qd.Template``-annotated kernel parameter must emit a
+    ``DeprecationWarning`` at materialize time. The pattern was never an intentional Quadrants pattern (the template
+    walker happens to handle dataclass-shaped objects, but the supported annotation is the dataclass type itself).
+    The warning is emitted from ``Kernel.materialize`` after the cache-hit early return, so it fires once per
+    (kernel, spec-key) and stays off the steady-state launch hot path. See ``compound_types.md`` Overview."""
+
+    @dataclass(frozen=True)
+    class Foo:
+        x: object = None
+
+    x = qd.ndarray(qd.f32, shape=(4,))
+    f = Foo(x=x)
+
+    @qd.kernel
+    def run(foo: qd.Template):
+        for i in range(4):
+            foo.x[i] = float(i)
+
+    with pytest.warns(DeprecationWarning, match="qd.Template-annotated kernel parameter"):
+        run(f)
+
+
+@test_utils.test()
+def test_data_oriented_with_template_does_not_emit_deprecation_warning():
+    """The canonical ``@qd.data_oriented`` + ``qd.Template`` path must NOT emit the deprecation warning. The
+    materialize-side check excludes ``@qd.data_oriented`` instances via ``is_data_oriented(val)`` because doubly-decorated
+    objects (``@qd.data_oriented`` over ``@dataclasses.dataclass``) are a legitimate pattern routed through the
+    data-oriented path."""
+
+    @qd.data_oriented
+    class Foo:
+        def __init__(self, x):
+            self.x = x
+
+    x = qd.ndarray(qd.f32, shape=(4,))
+    f = Foo(x=x)
+
+    @qd.kernel
+    def run(foo: qd.Template):
+        for i in range(4):
+            foo.x[i] = float(i)
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        run(f)
+    matching = [w for w in caught if issubclass(w.category, DeprecationWarning) and "qd.Template" in str(w.message)]
+    assert matching == [], f"unexpected DeprecationWarning(s): {[str(w.message) for w in matching]}"
+
+
+@test_utils.test()
+def test_typed_dataclass_does_not_emit_deprecation_warning():
+    """The recommended path — frozen ``@dataclasses.dataclass`` passed as a typed kernel parameter (the dataclass
+    type itself) — must NOT emit the deprecation warning. Only the ``qd.Template`` outer-annotation path is
+    deprecated; the typed-dataclass flatten-to-args path is the supported pattern."""
+
+    @dataclass(frozen=True)
+    class Foo:
+        x: qd.types.NDArray[qd.f32, 1]
+
+    x = qd.ndarray(qd.f32, shape=(4,))
+    f = Foo(x=x)
+
+    @qd.kernel
+    def run(foo: Foo):
+        for i in range(4):
+            foo.x[i] = float(i)
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        run(f)
+    matching = [w for w in caught if issubclass(w.category, DeprecationWarning) and "qd.Template" in str(w.message)]
+    assert matching == [], f"unexpected DeprecationWarning(s): {[str(w.message) for w in matching]}"

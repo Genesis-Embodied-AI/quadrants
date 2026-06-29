@@ -200,7 +200,7 @@ SNode::SNode(int depth, SNodeType t, SNodeFieldMap *snode_to_fields, SNodeRwAcce
 
 SNode::SNode(const SNode &) {
   QD_NOT_IMPLEMENTED;  // Copying an SNode is forbidden. However we need the
-                       // definition here to make pybind11 happy.
+                       // definition here to make the Python bindings happy.
 }
 
 std::string SNode::get_node_type_name() const {

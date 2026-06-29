@@ -30,6 +30,18 @@ struct RuntimeContext {
   // after each assert call when this is set, and the task runner breaks out
   // of its loop.
   int32_t cpu_assert_failed{0};
+
+  // qd.checkpoint() GPU-side gating: device pointers (NOT host pointers) to single int32 scalars the cached graph
+  // allocates per launch. Used by the codegen-emitted prologue at the start of every cp_id >= 0 body kernel:
+  //   if (checkpoint_resume_point_ptr && *checkpoint_resume_point_ptr > cp_id) return;
+  //   if (checkpoint_yield_signal_ptr && *checkpoint_yield_signal_ptr != -1) return;
+  // The prologue is the gating mechanism on pre-Hopper CUDA (which has no conditional-graph-node support); on SM 9.0+
+  // the conditional gate already prevents the body kernel from launching, so the prologue is dead code in the common
+  // path but stays in for correctness on the rare overlapping-gate case. Null on kernels without checkpoints, and on
+  // all non-CUDA backends (CPU does host-branch gating before the launch; Vulkan / Metal use indirect-dispatch gating
+  // via SPIR-V gate shaders that don't go through RuntimeContext).
+  int32_t *checkpoint_resume_point_ptr{nullptr};
+  int32_t *checkpoint_yield_signal_ptr{nullptr};
 };
 
 #if defined(QD_RUNTIME_HOST)

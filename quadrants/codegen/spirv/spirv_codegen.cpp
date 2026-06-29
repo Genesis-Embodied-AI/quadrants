@@ -94,9 +94,9 @@ TaskCodegen::TaskCodegen(const Params &params)
       compiled_structs_(params.compiled_structs),
       ctx_attribs_(params.ctx_attribs),
       task_name_(params.task_ir->loop_name.empty()
-                     ? fmt::format("{}_t{:02d}", params.ti_kernel_name, params.task_id_in_kernel)
+                     ? fmt::format("{}_t{:02d}", params.qd_kernel_name, params.task_id_in_kernel)
                      : fmt::format("{}_t{:02d}_{}",
-                                   params.ti_kernel_name,
+                                   params.qd_kernel_name,
                                    params.task_id_in_kernel,
                                    params.task_ir->loop_name)) {
   allow_undefined_visitor = true;
@@ -186,6 +186,10 @@ TaskCodegen::Result TaskCodegen::run() {
   if (adstack_analysis.bound_expr.has_value()) {
     task_attribs_.ad_stack.bound_expr = *adstack_analysis.bound_expr;
   }
+
+  // Carry the (possibly nested) graph_do_while loop level through to the SPIR-V task attributes so the GFX host-side
+  // do-while driver can reconstruct the loop nesting from the flat task list (mirrors the LLVM OffloadedTask tag).
+  task_attribs_.graph_do_while_level_id = task_ir_->graph_do_while_level_id;
 
   if (task_ir_->task_type == OffloadedTaskType::serial) {
     generate_serial_kernel(task_ir_);
@@ -726,7 +730,7 @@ void TaskCodegen::visit(GlobalStoreStmt *stmt) {
 void TaskCodegen::visit(GlobalLoadStmt *stmt) {
   auto dt = stmt->element_type();
 
-  auto val = load_buffer(stmt->src, dt);
+  auto val = load_buffer(stmt->src, dt, stmt->is_volatile);
 
   ir_->register_value(stmt->raw_name(), val);
 }
@@ -1481,6 +1485,16 @@ inline bool TaskCodegen::ends_with(std::string const &value, std::string const &
 void TaskCodegen::visit(InternalFuncStmt *stmt) {
   spirv::Value val;
 
+  // Note: the SPIR-V-only `subgroupAdd` / `subgroupMul` / `subgroupMin` / `subgroupMax` / `subgroupAnd` /
+  // `subgroupOr` / `subgroupXor` reductions have been removed.  Likewise the
+  // `subgroupInclusive{Add,Mul,Min,Max,And,Or,Xor}` ops are gone: all seven are implemented as portable ``@qd.func``
+  // Hillis-Steele scans over `subgroupShuffleUp` in Python, so the SPIR-V codegen branch and the matching internal-op
+  // registrations have been removed.  An ``InternalFuncStmt`` carrying one of those removed names would fall through
+  // the dispatcher below and hit the final ``QD_ERROR``, surfacing the mismatch instead of registering a
+  // default-constructed ``spirv::Value`` and producing invalid SPIR-V at run time.
+
+  const std::unordered_set<std::string> shuffle_ops{"subgroupShuffleDown", "subgroupShuffleUp", "subgroupShuffle"};
+
   if (stmt->func_name == "composite_extract_0") {
     val = ir_->make_value(spv::OpCompositeExtract, ir_->f32_type(), ir_->query_value(stmt->args[0]->raw_name()), 0);
   } else if (stmt->func_name == "composite_extract_1") {
@@ -1489,17 +1503,7 @@ void TaskCodegen::visit(InternalFuncStmt *stmt) {
     val = ir_->make_value(spv::OpCompositeExtract, ir_->f32_type(), ir_->query_value(stmt->args[0]->raw_name()), 2);
   } else if (stmt->func_name == "composite_extract_3") {
     val = ir_->make_value(spv::OpCompositeExtract, ir_->f32_type(), ir_->query_value(stmt->args[0]->raw_name()), 3);
-  }
-
-  // Note: the SPIR-V-only `subgroupAdd` / `subgroupMul` / `subgroupMin` / `subgroupMax` / `subgroupAnd` /
-  // `subgroupOr` / `subgroupXor` reductions have been removed.  Likewise the
-  // `subgroupInclusive{Add,Mul,Min,Max,And,Or,Xor}` ops are gone: all seven are implemented as portable ``@qd.func``
-  // Hillis-Steele scans over `subgroupShuffleUp` in Python, so the SPIR-V codegen branch and the matching internal-op
-  // registrations have been removed.
-
-  const std::unordered_set<std::string> shuffle_ops{"subgroupShuffleDown", "subgroupShuffleUp", "subgroupShuffle"};
-
-  if (stmt->func_name == "workgroupBarrier") {
+  } else if (stmt->func_name == "workgroupBarrier") {
     ir_->make_inst(spv::OpControlBarrier, ir_->int_immediate_number(ir_->i32_type(), spv::ScopeWorkgroup),
                    ir_->int_immediate_number(ir_->i32_type(), spv::ScopeWorkgroup),
                    ir_->int_immediate_number(ir_->i32_type(), spv::MemorySemanticsWorkgroupMemoryMask |
@@ -1545,8 +1549,6 @@ void TaskCodegen::visit(InternalFuncStmt *stmt) {
                                                                   spv::MemorySemanticsWorkgroupMemoryMask |
                                                                   spv::MemorySemanticsAcquireReleaseMask));
     val = ir_->const_i32_zero_;
-  } else if (stmt->func_name == "subgroupSize") {
-    val = ir_->cast(ir_->i32_type(), ir_->get_subgroup_size());
   } else if (stmt->func_name == "subgroupInvocationId") {
     val = ir_->cast(ir_->i32_type(), ir_->get_subgroup_invocation_id());
   } else if (stmt->func_name == "subgroupBroadcast") {
@@ -1554,6 +1556,32 @@ void TaskCodegen::visit(InternalFuncStmt *stmt) {
     auto index = ir_->query_value(stmt->args[1]->raw_name());
     val = ir_->make_value(spv::OpGroupNonUniformBroadcast, value.stype,
                           ir_->int_immediate_number(ir_->i32_type(), spv::ScopeSubgroup), value, index);
+  } else if (stmt->func_name == "subgroupBallotU32") {
+    // ``OpGroupNonUniformBallot`` produces a uvec4 of 128 ballot bits.  Component 0 covers lanes 0..31, which is
+    // exactly what the ``u32`` ballot form ( ``ballot_first_n``) advertises; lanes 32..63 (on wave64 backends) are not
+    // represented in the u32 result, matching the AMDGPU / CUDA u32 forms.
+    auto predicate = ir_->query_value(stmt->args[0]->raw_name());
+    auto pred_bool =
+        ir_->make_value(spv::OpINotEqual, ir_->bool_type(), predicate, ir_->int_immediate_number(ir_->i32_type(), 0));
+    auto ballot_vec = ir_->make_value(spv::OpGroupNonUniformBallot, ir_->v4_u32_type(),
+                                      ir_->int_immediate_number(ir_->i32_type(), spv::ScopeSubgroup), pred_bool);
+    val = ir_->make_value(spv::OpCompositeExtract, ir_->u32_type(), ballot_vec, 0);
+  } else if (stmt->func_name == "subgroupBallotU64") {
+    // For the full-subgroup u64 form we extract components 0 and 1 (lanes 0..31 and 32..63 respectively) and pack
+    // them into a single u64: ``u64(hi) << 32 | u64(lo)``.  On wave32 component 1 is naturally zero (no lanes 32+
+    // exist), so the high half of the result is zero and the API is uniform across wavefront modes.
+    auto predicate = ir_->query_value(stmt->args[0]->raw_name());
+    auto pred_bool =
+        ir_->make_value(spv::OpINotEqual, ir_->bool_type(), predicate, ir_->int_immediate_number(ir_->i32_type(), 0));
+    auto ballot_vec = ir_->make_value(spv::OpGroupNonUniformBallot, ir_->v4_u32_type(),
+                                      ir_->int_immediate_number(ir_->i32_type(), spv::ScopeSubgroup), pred_bool);
+    auto lo = ir_->make_value(spv::OpCompositeExtract, ir_->u32_type(), ballot_vec, 0);
+    auto hi = ir_->make_value(spv::OpCompositeExtract, ir_->u32_type(), ballot_vec, 1);
+    auto lo64 = ir_->cast(ir_->u64_type(), lo);
+    auto hi64 = ir_->cast(ir_->u64_type(), hi);
+    auto shift = ir_->uint_immediate_number(ir_->u64_type(), 32u);
+    auto hi_shifted = ir_->make_value(spv::OpShiftLeftLogical, ir_->u64_type(), hi64, shift);
+    val = ir_->make_value(spv::OpBitwiseOr, ir_->u64_type(), lo64, hi_shifted);
   } else if (shuffle_ops.find(stmt->func_name) != shuffle_ops.end()) {
     auto arg0 = ir_->query_value(stmt->args[0]->raw_name());
     auto arg1 = ir_->query_value(stmt->args[1]->raw_name());
@@ -1583,6 +1611,8 @@ void TaskCodegen::visit(InternalFuncStmt *stmt) {
       // Return 0 if shader clock is not supported
       val = ir_->int_immediate_number(ir_->i64_type(), 0);
     }
+  } else {
+    QD_ERROR("Unsupported InternalFuncStmt for SPIR-V codegen: {}", stmt->func_name);
   }
   ir_->register_value(stmt->raw_name(), val);
 }
@@ -2038,6 +2068,11 @@ void TaskCodegen::generate_serial_kernel(OffloadedStmt *stmt) {
   task_attribs_.task_type = OffloadedTaskType::serial;
   task_attribs_.advisory_total_num_threads = 1;
   task_attribs_.advisory_num_threads_per_group = 1;
+  // Slice 4 (Vulkan / Metal): propagate the `qd.checkpoint(...)` id off the offloaded statement onto the SPIR-V task
+  // attribs so `GfxRuntime::launch_kernel`'s host-branch gating loop can skip / yield-check this task. Mirrors
+  // `current_task->checkpoint_id = stmt->checkpoint_id;` in the LLVM codegen paths; without this every Vulkan/Metal
+  // task would carry the field's `-1` default and every checkpoint body would run unconditionally on those backends.
+  task_attribs_.checkpoint_id = stmt->checkpoint_id;
 
   // The computation for a single work is wrapped inside a function, so that
   // we can do grid-strided loop.
@@ -2087,6 +2122,8 @@ void TaskCodegen::gen_array_range(Stmt *stmt) {
 void TaskCodegen::generate_range_for_kernel(OffloadedStmt *stmt) {
   task_attribs_.name = task_name_;
   task_attribs_.task_type = OffloadedTaskType::range_for;
+  // See `generate_serial_kernel`'s `checkpoint_id` comment.
+  task_attribs_.checkpoint_id = stmt->checkpoint_id;
 
   task_attribs_.range_for_attribs = TaskAttributes::RangeForAttributes();
   auto &range_for_attribs = task_attribs_.range_for_attribs.value();
@@ -2273,6 +2310,8 @@ void TaskCodegen::generate_range_for_kernel(OffloadedStmt *stmt) {
 void TaskCodegen::generate_struct_for_kernel(OffloadedStmt *stmt) {
   task_attribs_.name = task_name_;
   task_attribs_.task_type = OffloadedTaskType::struct_for;
+  // See `generate_serial_kernel`'s `checkpoint_id` comment.
+  task_attribs_.checkpoint_id = stmt->checkpoint_id;
   task_attribs_.advisory_total_num_threads = 65536;
   task_attribs_.advisory_num_threads_per_group = 128;
 
@@ -2412,30 +2451,36 @@ static DataType pick_buffer_access_type(DataType dt, const spirv::Value &ptr_val
   return ir.get_quadrants_uint_type(dt);
 }
 
-spirv::Value TaskCodegen::load_buffer(const Stmt *ptr, DataType dt) {
+spirv::Value TaskCodegen::load_buffer(const Stmt *ptr, DataType dt, bool is_volatile) {
   spirv::Value ptr_val = ir_->query_value(ptr->raw_name());
 
-  DataType ti_buffer_type = pick_buffer_access_type(dt, ptr_val, *ir_);
+  DataType qd_buffer_type = pick_buffer_access_type(dt, ptr_val, *ir_);
 
-  auto buf_ptr = at_buffer(ptr, ti_buffer_type);
-  auto val_bits = ir_->load_variable(buf_ptr, ir_->get_primitive_type(ti_buffer_type));
+  auto buf_ptr = at_buffer(ptr, qd_buffer_type);
+  // The Metal-global `use_volatile_buffer_access_` flag (set on every buffer in the constructor) marks the storage
+  // *buffer* as volatile, which protects against MoltenVK's coarse-grained LICM bug.  `is_volatile` here is a
+  // per-load opt-in for `qd.volatile_load`: the OpLoad itself carries the `Volatile` `MemoryAccess` mask so the
+  // SPIR-V optimiser cannot forward / merge this specific read with prior reads of the same address, even when
+  // the surrounding buffer is not blanket-decorated.
+  auto val_bits = is_volatile ? ir_->load_variable_volatile(buf_ptr, ir_->get_primitive_type(qd_buffer_type))
+                              : ir_->load_variable(buf_ptr, ir_->get_primitive_type(qd_buffer_type));
   if (dt->is_primitive(PrimitiveTypeID::u1))
     return ir_->cast(ir_->bool_type(), val_bits);
-  return ti_buffer_type == dt ? val_bits : ir_->make_value(spv::OpBitcast, ir_->get_primitive_type(dt), val_bits);
+  return qd_buffer_type == dt ? val_bits : ir_->make_value(spv::OpBitcast, ir_->get_primitive_type(dt), val_bits);
 }
 
 void TaskCodegen::store_buffer(const Stmt *ptr, spirv::Value val) {
   spirv::Value ptr_val = ir_->query_value(ptr->raw_name());
 
-  DataType ti_buffer_type = pick_buffer_access_type(val.stype.dt, ptr_val, *ir_);
+  DataType qd_buffer_type = pick_buffer_access_type(val.stype.dt, ptr_val, *ir_);
   if (val.stype.dt->is_primitive(PrimitiveTypeID::u1)) {
     // Stores go through i8 (matching the original path) so a signed i1 narrowing is preserved.
-    ti_buffer_type = PrimitiveType::i8;
+    qd_buffer_type = PrimitiveType::i8;
   }
 
-  auto buf_ptr = at_buffer(ptr, ti_buffer_type);
+  auto buf_ptr = at_buffer(ptr, qd_buffer_type);
   spirv::Value val_bits;
-  if (val.stype.dt == ti_buffer_type) {
+  if (val.stype.dt == qd_buffer_type) {
     val_bits = val;
   } else if (val.stype.dt->is_primitive(PrimitiveTypeID::u1)) {
     // SPIR-V `OpBitcast` rejects bool operands (spec: operand must be numerical scalar / vector or pointer). A direct
@@ -2446,9 +2491,9 @@ void TaskCodegen::store_buffer(const Stmt *ptr, spirv::Value val) {
     // picking `1` or `0` of the target type - the canonical spec-compliant way to widen a bool, matching what
     // `load_buffer` already does on the reverse path and keeping the "bool serialises as 0 / 1" behaviour every user of
     // `to_numpy()` / `from_numpy()` depends on.
-    val_bits = ir_->cast(ir_->get_primitive_type(ti_buffer_type), val);
+    val_bits = ir_->cast(ir_->get_primitive_type(qd_buffer_type), val);
   } else {
-    val_bits = ir_->make_value(spv::OpBitcast, ir_->get_primitive_type(ti_buffer_type), val);
+    val_bits = ir_->make_value(spv::OpBitcast, ir_->get_primitive_type(qd_buffer_type), val);
   }
   ir_->store_variable(buf_ptr, val_bits);
 }
@@ -3281,7 +3326,7 @@ void KernelCodegen::run(QuadrantsKernelAttributes &kernel_attribs,
     std::filesystem::create_directories(ir_dump_dir);
   }
   if (dump_ir) {
-    std::filesystem::path filename = ir_dump_dir / (params_.ti_kernel_name + "_before_final_spirv.ll");
+    std::filesystem::path filename = ir_dump_dir / (params_.qd_kernel_name + "_before_final_spirv.ll");
     if (std::ofstream out_file(filename); out_file) {
       std::string outString;
       irpass::print(const_cast<IRNode *>(params_.ir_root), &outString);
@@ -3296,7 +3341,7 @@ void KernelCodegen::run(QuadrantsKernelAttributes &kernel_attribs,
     tp.task_id_in_kernel = i;
     tp.compiled_structs = params_.compiled_structs;
     tp.ctx_attribs = &ctx_attribs_;
-    tp.ti_kernel_name = fmt::format("{}_{}", params_.ti_kernel_name, i);
+    tp.qd_kernel_name = fmt::format("{}_{}", params_.qd_kernel_name, i);
     tp.arch = params_.arch;
     tp.caps = &params_.caps;
     tp.compile_config = params_.compile_config;
@@ -3341,7 +3386,7 @@ void KernelCodegen::run(QuadrantsKernelAttributes &kernel_attribs,
           "SPIRV optimization failed");
       spirv_msg_flush_dedup();
       if (spirv_opt_id_overflow_seen) {
-        QD_WARN("SPIR-V ID overflow detected during optimization of '{}'", tp.ti_kernel_name);
+        QD_WARN("SPIR-V ID overflow detected during optimization of '{}'", tp.qd_kernel_name);
       }
       if (result || spirv_opt_id_overflow_seen) {
         success = false;
@@ -3365,7 +3410,7 @@ void KernelCodegen::run(QuadrantsKernelAttributes &kernel_attribs,
 
       std::string spirv_asm;
       spirv_tools_->Disassemble(spirv, &spirv_asm);
-      auto kernel_name = tp.ti_kernel_name;
+      auto kernel_name = tp.qd_kernel_name;
       QD_WARN("SPIR-V Assembly dump for {} :\n{}\n\n", kernel_name, spirv_asm);
 
       std::ofstream fout(kernel_name + ".spv", std::ios::binary | std::ios::out);
@@ -3377,15 +3422,15 @@ void KernelCodegen::run(QuadrantsKernelAttributes &kernel_attribs,
       QD_ERROR_IF(!success,
                   "SPIR-V optimization failed for '{}' due to ID-space overflow. "
                   "The kernel is too large for the SPIRV-Tools optimizer pipeline.",
-                  tp.ti_kernel_name);
+                  tp.qd_kernel_name);
     } else {
-      QD_ERROR_IF(!success, "SPIR-V optimization failed for '{}'.", tp.ti_kernel_name);
+      QD_ERROR_IF(!success, "SPIR-V optimization failed for '{}'.", tp.qd_kernel_name);
     }
     kernel_attribs.tasks_attribs.push_back(std::move(task_res.task_attribs));
     generated_spirv.push_back(std::move(optimized_spv));
   }
   kernel_attribs.ctx_attribs = std::move(ctx_attribs_);
-  kernel_attribs.name = params_.ti_kernel_name;
+  kernel_attribs.name = params_.qd_kernel_name;
 }
 
 }  // namespace spirv

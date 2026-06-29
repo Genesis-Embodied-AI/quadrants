@@ -25,7 +25,7 @@ KernelCompiler::CKDPtr KernelCompiler::compile(const CompileConfig &compile_conf
                                                IRNode &chi_ir) const {
   QD_TRACE("VK codegen for Quadrants kernel={}", kernel_def.name);
   KernelCodegen::Params params;
-  params.ti_kernel_name = kernel_def.name;
+  params.qd_kernel_name = kernel_def.name;
   params.kernel = &kernel_def;
   params.ir_root = &chi_ir;
   params.compiled_structs = *config_.compiled_struct_data;

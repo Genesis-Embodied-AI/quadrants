@@ -302,9 +302,9 @@ class Matrix(QuadrantsOperations):
                 self.entries = np.array(arr, None if dt is None else to_numpy_type(dt))
                 self.is_host_access = False
 
-        if self.n * self.m > 32:
+        if self.n * self.m > 144:
             warning(
-                f"Quadrants matrices/vectors with {self.n}x{self.m} > 32 entries are not suggested."
+                f"Quadrants matrices/vectors with {self.n}x{self.m} > 144 entries are not suggested."
                 " Matrices/vectors will be automatically unrolled at compile-time for performance."
                 " So the compilation time could be extremely long if the matrix size is too big."
                 " You may use a field to store a large matrix like this, e.g.:\n"
@@ -633,6 +633,30 @@ class Matrix(QuadrantsOperations):
         from quadrants.lang import matrix_ops
 
         return matrix_ops.norm_sqr(self)
+
+    def frobenius_inner(self, other):
+        """Returns the Frobenius inner product :math:`\\langle A, B \\rangle = \\sum_{ij} A_{ij} B_{ij}`.
+
+        Both operands must have the same shape. Defined for any tensor shape (vector or matrix); for matrices this
+        is the standard Frobenius inner product, and :meth:`norm_sqr` is the special case ``A.frobenius_inner(A)``.
+
+        Args:
+            other (:class:`~quadrants.Matrix`): The other operand. Must have the same shape as ``self``.
+
+        Returns:
+            DataType: The scalar Frobenius inner product.
+
+        Example::
+
+            >>> A = qd.Matrix([[1.0, 2.0], [3.0, 4.0]])
+            >>> B = qd.Matrix([[5.0, 6.0], [7.0, 8.0]])
+            >>> A.frobenius_inner(B)
+            70.0
+        """
+        # pylint: disable=C0415
+        from quadrants.lang import matrix_ops
+
+        return matrix_ops.frobenius_inner(self, other)
 
     def max(self):
         """Returns the maximum element value."""
@@ -1728,8 +1752,21 @@ class MatrixType(CompoundType):
 
 
 class VectorType(MatrixType):
-    def __init__(self, n, dtype):
+    def __init__(self, n, dtype, unpacked: bool = False):
         super().__init__(n, 1, 1, dtype)
+        # Per-thread storage-layout marker. When set, the type is only valid as a ``@qd.dataclass`` field annotation;
+        # ``__call__`` / ``field()`` / ``ndarray()`` refuse to instantiate, since the unpacked layout has no meaning
+        # outside of the @qd.dataclass field-expansion path. The flag itself is consumed by ``StructType.__init__``;
+        # this class is otherwise unaware of it.
+        self._is_unpacked = bool(unpacked)
+
+    def _reject_if_unpacked(self, what: str):
+        if self._is_unpacked:
+            raise QuadrantsSyntaxError(
+                f"cannot {what} a vector declared with unpacked=True; the unpacked layout is only honored on "
+                "``@qd.dataclass`` field annotations. Either drop ``unpacked=True`` or use the type in an annotation "
+                "like ``r: qd.types.vector(N, dtype, unpacked=True)`` on a class decorated with @qd.dataclass."
+            )
 
     def __call__(self, *args):
         """Return a vector matching the shape and dtype.
@@ -1753,6 +1790,7 @@ class VectorType(MatrixType):
                 >>> v = vec3(1)
 
         """
+        self._reject_if_unpacked("instantiate")
         if len(args) == 0:
             raise QuadrantsSyntaxError("Custom type instances need to be created with an initial value.")
         if len(args) == 1:
@@ -1800,14 +1838,17 @@ class VectorType(MatrixType):
         return make_matrix_with_shape(entries, [self.n], self.dtype)
 
     def field(self, **kwargs):
+        self._reject_if_unpacked("create a field of")
         return Vector.field(self.n, dtype=self.dtype, **kwargs)
 
     def ndarray(self, **kwargs):
+        self._reject_if_unpacked("create an ndarray of")
         return Vector.ndarray(self.n, dtype=self.dtype, **kwargs)
 
     def to_string(self):
         dtype_str = self.dtype.to_string() if self.dtype is not None else ""
-        return f"VectorType[{self.n}, {dtype_str}]"
+        suffix = ", unpacked=True" if self._is_unpacked else ""
+        return f"VectorType[{self.n}, {dtype_str}{suffix}]"
 
 
 class MatrixNdarray(Ndarray):

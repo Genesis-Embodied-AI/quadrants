@@ -323,6 +323,9 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
     auto ptr = llvm_val[stmt->src];
     auto ptr_type = stmt->src->ret_type->as<PointerType>();
     if (ptr_type->is_bit_pointer()) {
+      // See the matching guard in `TaskCodeGenLLVM::create_global_load`: per-field volatile semantics on a quant
+      // bit-packed snode are not meaningful, and no public API exposes the combination today.
+      QD_ASSERT(!stmt->is_volatile);
       auto val_type = ptr_type->get_pointee_type();
       auto get_ch = stmt->src->as<GetChStmt>();
       auto physical_type = tlctx->get_data_type(get_ch->input_snode->physical_type);
@@ -341,8 +344,14 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
                                              get_ch->output_snode->id_in_bit_struct);
       }
     } else {
-      // Byte pointer case.
-      llvm_val[stmt] = builder->CreateLoad(tlctx->get_data_type(stmt->ret_type), ptr);
+      // Byte pointer case.  `setVolatile(true)` keeps AMDGPU's optimiser from hoisting the load out of a
+      // spin-wait loop or merging it with a prior load of the same address; LLVM lowers it to the standard
+      // `global_load_*` family with the no-merge / no-hoist invariant preserved.
+      auto *load = builder->CreateLoad(tlctx->get_data_type(stmt->ret_type), ptr);
+      if (stmt->is_volatile) {
+        load->setVolatile(true);
+      }
+      llvm_val[stmt] = load;
     }
   }
 
@@ -361,6 +370,14 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
       emit_amdgpu_gc(stmt);
     } else {
       init_offloaded_task_function(stmt);
+      // GPU-side checkpoint gating prologue: HIP 7.2 has no conditional graph nodes and no indirect-dispatch primitive,
+      // so AMDGPU follows the same self-gating pattern as pre-Hopper CUDA -- every cp_id >= 0 body kernel reads
+      // `RuntimeContext::checkpoint_*_ptr` and early-returns when its checkpoint should be skipped. The flat HIP graph
+      // build path in `runtime/amdgpu/graph_manager.cpp` populates the device pointers in `persistent_ctx` once per
+      // launch.
+      if (stmt->checkpoint_id >= 0) {
+        emit_checkpoint_gate_prologue(stmt->checkpoint_id);
+      }
       if (stmt->task_type == Type::serial) {
         stmt->body->accept(this);
       } else if (stmt->task_type == Type::range_for) {
@@ -400,6 +417,7 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
       }
       current_task->block_dim = stmt->block_dim;
       current_task->stream_parallel_group_id = stmt->stream_parallel_group_id;
+      current_task->checkpoint_id = stmt->checkpoint_id;
       QD_ASSERT(current_task->grid_dim != 0);
       QD_ASSERT(current_task->block_dim != 0);
       // Host-side adstack sizing, same scheme as codegen_cuda: tight `grid_dim * block_dim` for
@@ -451,15 +469,27 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
       llvm_val[stmt] = emit_amdgpu_shuffle_up(
           /* value=*/llvm_val[stmt->args[0]],
           /* dt=*/stmt->args[0]->ret_type, offset);
+    } else if (stmt->func_name == "subgroupBallotU32") {
+      // We always lower to ``llvm.amdgcn.ballot.i64`` and truncate to i32, on both wave32 and wave64.  In principle
+      // ``llvm.amdgcn.ballot.i32`` exists exactly for this case and is documented as well-defined on wave64 (PR
+      // https://github.com/llvm/llvm-project/pull/71556 in LLVM 18: SETCC at wavefront width, then zext/trunc to the
+      // requested return type, i.e. the low 32 bits = lanes 0..31's predicates on wave64).  In practice the LLVM
+      // versions we've tested (20 and 22.1.0) still fail to select ``ballot.i32`` on gfx942 when the predicate is a
+      // non-constant ``i1`` — isel hits "Cannot select: AMDGPUISD::SETCC ..." for the ``i1 -> i32 != 0`` predicate
+      // shape that ``ballot_first_n`` produces in real kernels.  ``ballot.i64 + trunc to i32`` works around the bug
+      // and produces identical assembly (same single ``v_cmp_*_e64`` + low-half store) since LLVM's CSE folds the
+      // i64 ballot's high half away as soon as the trunc is observed.  See min repro in the PR thread; the workaround
+      // costs nothing and is robust regardless of upstream LLVM fix status.
+      auto ballot64 = call("amdgpu_ballot_u64", llvm_val[stmt->args[0]]);
+      llvm_val[stmt] = builder->CreateTrunc(ballot64, llvm::Type::getInt32Ty(*llvm_context));
+    } else if (stmt->func_name == "subgroupBallotU64") {
+      // ``llvm.amdgcn.ballot.i64`` returns a 64-bit ballot for the full subgroup: on wave64 every lane contributes;
+      // on wave32 only lanes 0..31 contribute and bits 32..63 of the result are zero.  Either way the i64 return is
+      // uniform across wavefront modes, which is what ``ballot`` advertises to the user.  ``ballot.i64``
+      // on either wave32 or wave64 selects cleanly in current LLVM (only the i32 form has the isel bug noted above).
+      llvm_val[stmt] = call("amdgpu_ballot_u64", llvm_val[stmt->args[0]]);
     } else if (stmt->func_name == "subgroupInvocationId") {
       llvm_val[stmt] = call("amdgpu_lane_id");
-    } else if (stmt->func_name == "subgroupSize") {
-      // AMDGPU wavefront size is 32 (RDNA / wave32) or 64 (CDNA, GFX9, RDNA wave64).  The `llvm.amdgcn.wavefrontsize`
-      // intrinsic returns the wavefront size as i32; the AMDGPU backend folds it to 32 or 64 at codegen time based on
-      // the function's `+wavefrontsize32` / `+wavefrontsize64` target feature.  Returning the intrinsic (rather than a
-      // Quadrants-side constant) lets LLVM pick the right value for the active wavefront mode without Quadrants
-      // having to track it.
-      llvm_val[stmt] = builder->CreateIntrinsic(Intrinsic::amdgcn_wavefrontsize, ArrayRef<llvm::Value *>{});
     } else if (stmt->func_name == "subgroupBarrier") {
       // Wave-scope thread reconvergence barrier.  `llvm.amdgcn.wave.barrier` is the LLVM intrinsic AMDGPU exposes for
       // wave-level sync: on chips where waves are lockstep (GCN) it acts as a compiler reordering barrier; on RDNA it

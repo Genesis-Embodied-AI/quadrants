@@ -2,6 +2,8 @@
 
 Atomic read-modify-write operations on a single memory location. They do not synchronize threads; the only ordering they provide is the per-location atomicity of the read-modify-write itself. For cooperative ops across threads see the `qd.simt.block.*`, `qd.simt.subgroup.*`, and `qd.simt.grid.*` namespaces. Bit-counting helpers on integer registers (`qd.math.popcnt`, `qd.math.clz`) are documented in [math](math.md).
 
+The companion read-side primitive `qd.volatile_load(target)` is documented at the end of this page (`### qd.volatile_load(target)`); it pairs with atomic stores in producer / consumer patterns where the reader must observe every update from another thread or block, and is the recommended approach for spin-wait loops.
+
 ## What's available
 
 All atomic ops follow the same shape: `qd.atomic_op(x, y)` performs `x = op(x, y)` atomically and returns the **old** value of `x`. `x` must be a writable memory target (a field element, ndarray element, or matrix slot); scalars and constant expressions are not allowed.
@@ -16,11 +18,11 @@ All atomic ops follow the same shape: `qd.atomic_op(x, y)` performs `x = op(x, y
 | `atomic_min`, `atomic_max`                  | int native; floats via CAS                 | int native; floats via CAS            | int native; floats via CAS                             | int native; floats via CAS       |
 | `atomic_and`, `atomic_or`, `atomic_xor`     | int only (native)                          | int only (native)                     | int only (native)                                      | int only (native)                |
 | `atomic_exchange`                           | int / float native (`atomicExch`)          | int / float native (`*_atomic_swap`)  | int native; f32 / f64 global via uint-bitcast `OpAtomicExchange`; f16, shared float, workgroup f64 deferred‡ | int / float native (`xchg`)      |
-| `atomic_cas`                                | int native (`atomicCAS`)                   | int native (`*_atomic_cmpswap`)       | int native (`OpAtomicCompareExchange`); f32 / f64 rejected at trace time§                                 | int native (`cmpxchg`)           |
+| `atomic_cas`                                | int native (`atomicCAS`)                   | int native (`*_atomic_cmpswap`)       | int native (`OpAtomicCompareExchange`); f32 / f64 rejected at compile time§                               | int native (`cmpxchg`)           |
 
 A few cross-cutting notes that the cells above abbreviate:
 
-- **`atomic_sub` is not a separate op in the IR.** `quadrants/ir/frontend_ir.cpp::AtomicOpExpression::flatten` rewrites every `atomic_sub(x, y)` into `atomic_add(x, -y)` before codegen sees it, so per-backend support and per-dtype behaviour are exactly those of `atomic_add`.
+- **`atomic_sub` is not a separate op in the IR.** `quadrants/ir/frontend_ir.cpp::AtomicOpExpression::flatten` rewrites every `atomic_sub(x, y)` into `atomic_add(x, -y)` before codegen sees it, so per-backend support and per-dtype behavior are exactly those of `atomic_add`.
 - **CAS-loop ops are noticeably slower than native atomics**, especially under contention — every contending thread retries the load + compare-exchange until it wins. Prefer pre-aggregating into a register or shared array and issuing a single atomic at the end of the block where possible.
 - **f16 floats always use a CAS loop** (no native f16 atomic on any backend except SPIR-V with the right capability bit).
 - **On CPU, "native" does not guarantee a single machine instruction.** On x86 and other architectures without hardware float atomics, the compiler backend lowers native float `atomic_add` (and integer `min` / `max`) to a CAS loop in machine code. Under high contention the performance is similar to the explicit "CAS" entries; the difference is that "native" ops benefit from hardware acceleration where available.
@@ -31,7 +33,7 @@ A few cross-cutting notes that the cells above abbreviate:
 
 ‡ `atomic_exchange` on `f16`, on shared (`qd.simt.block.SharedArray`) float arrays, and on f64 in workgroup memory is not yet wired up. Global-memory `atomic_exchange` on every other dtype/backend combination listed above is supported; the SPIR-V path bitcasts through the corresponding uint type so no `spirv_has_atomic_float_*` capability is required.
 
-§ `atomic_cas` on `f32` / `f64` is rejected at trace time (raises `QuadrantsTypeError`). Integer CAS (`i32` / `u32` / `i64` / `u64`) is supported on every backend listed in the table above, with the same Metal caveat for `i64` / `u64` (†) as the rest of the 64-bit integer atomic family.
+§ `atomic_cas` on `f32` / `f64` is rejected at compile time (raises `QuadrantsTypeError`). Integer CAS (`i32` / `u32` / `i64` / `u64`) is supported on every backend listed in the table above, with the same Metal caveat for `i64` / `u64` (†) as the rest of the 64-bit integer atomic family.
 
 All atomic ops can be called on either global memory (fields, ndarrays) or block-shared memory (`qd.simt.block.SharedArray`). They are sequentially consistent on the location they touch; they are **not** memory fences for the rest of the address space - to publish other writes alongside an atomic, pair the atomic with `qd.simt.block.mem_fence()` (block scope) or `qd.simt.grid.mem_fence()` (device scope).
 
@@ -65,11 +67,11 @@ Atomically writes back `min(x, y)` (resp. `max(x, y)`); returns the old value of
 
 ### `qd.atomic_and(x, y)` / `qd.atomic_or(x, y)` / `qd.atomic_xor(x, y)`
 
-Bitwise atomics. Integer dtypes only - passing `f32` / `f64` raises a type error at trace time.
+Bitwise atomics. Integer dtypes only — passing `f32` / `f64` raises a type error at compile time.
 
 ### `qd.atomic_sub(x, y)` / `qd.atomic_mul(x, y)`
 
-Atomic subtract and atomic multiply. `atomic_sub` is rewritten to `atomic_add(x, -y)` at IR-construction time (`quadrants/ir/frontend_ir.cpp::AtomicOpExpression::flatten`), so its per-backend behaviour is identical to `atomic_add`. `atomic_mul` always lowers to a CAS loop - no LLVM AtomicRMW or SPIR-V `OpAtomic*` op corresponds to multiply - and is intentionally not heavily optimised; prefer reducing to a different scheme on hot paths.
+Atomic subtract and atomic multiply. `atomic_sub` is rewritten to `atomic_add(x, -y)` at IR-construction time (`quadrants/ir/frontend_ir.cpp::AtomicOpExpression::flatten`), so its per-backend behavior is identical to `atomic_add`. `atomic_mul` always lowers to a CAS loop - no LLVM AtomicRMW or SPIR-V `OpAtomic*` op corresponds to multiply - and is intentionally not heavily optimized; prefer reducing to a different scheme on hot paths.
 
 ### `qd.atomic_exchange(x, y)`
 
@@ -129,7 +131,62 @@ def cas_loop_max():
         # Otherwise some other thread won the race; loop back and re-read.
 ```
 
-Currently restricted to integer dtypes (`i32` / `u32` / `i64` / `u64`); float CAS is rejected at trace time. The Metal `i64` / `u64` caveat in the support table footnote applies here too. There is no shared-memory CAS path yet.
+Currently restricted to integer dtypes (`i32` / `u32` / `i64` / `u64`); float CAS is rejected at compile time. The Metal `i64` / `u64` caveat in the support table footnote applies here too. There is no shared-memory CAS path yet.
+
+### `qd.volatile_load(target)`
+
+Read `target` from memory with **volatile** semantics: the compiler is forbidden from caching, hoisting, or merging the load with prior reads of the same address. Strictly speaking this is not an atomic op (it does not modify the cell, and per-thread it is no more atomic than an ordinary load) — it lives on this page because it is the read-side counterpart to `qd.atomic_*` in producer / consumer patterns. Without it, a spin-wait loop reading the location written by another thread or block is undefined at the LLVM-IR / SPIR-V level.
+
+```python
+val = qd.volatile_load(target)
+# Effect:
+#   load(target) — but the load is guaranteed to actually go to memory on every call,
+#   not be reused from a register or hoisted out of an enclosing loop.
+```
+
+`target` must be a global lvalue (a field or ndarray subscript); function-scope local arrays are rejected because a local cannot be observed by another thread. Bit-packed quant snodes are also rejected (per-field volatile semantics on a shared physical word are not meaningful).
+
+| Backend          | Lowering                                                                                  |
+|------------------|-------------------------------------------------------------------------------------------|
+| CUDA             | LLVM `load volatile` → PTX `ld.volatile.global`.                                          |
+| AMDGPU           | LLVM `load volatile` → unhoistable `global_load_*` (the optimizer is inhibited from forwarding / merging). |
+| Vulkan / Metal   | SPIR-V `OpLoad` with the `Volatile` `MemoryAccess` mask, propagated through SPIRV-Cross to a re-read on every use in the generated MSL / GLSL. |
+| CPU (x86_64)     | LLVM `load volatile` (the optimizer cannot hoist or merge it; the runtime cost is identical to an ordinary load on x86). |
+
+Quadrants additionally suppresses the optimizations that would otherwise let an aliased rewrite slip past codegen:
+
+- `cache_loop_invariant_global_vars` does not hoist a volatile load out of an enclosing loop.
+- `simplify` does not replace a volatile load with the value of an earlier load of the same address.
+- On CUDA, the `__ldg` / `!invariant.load` read-only-cache fast path is suppressed for volatile loads (the two attributes are contradictory).
+
+#### Spin-wait pattern (the canonical use case)
+
+The naive approach
+
+```python
+while flags[prev] == STATE_INVALID:
+    pass
+```
+
+is undefined: the compiler may hoist `flags[prev]` out of the loop, turning the spin into an infinite loop. `qd.volatile_load` is the cheapest correct approach on every backend:
+
+```python
+while qd.volatile_load(flags[prev]) == STATE_INVALID:
+    pass
+```
+
+The two older workarounds remain correct but pay a perf tax over the volatile load:
+
+- `qd.simt.grid.mem_fence()` inside the loop body — drains the device-scope cache on every iteration. Order-of-magnitude more expensive than a volatile read on contemporary hardware. Also does **not** help on Metal / Vulkan-on-macOS (the Metal device-scope fence only orders atomic accesses; see [grid](grid.md)).
+- `qd.atomic_or(flags[prev], 0)` — forces a memory round-trip via an atomic RMW. Pays for the read-modify-write hardware path even though we only want to read; contention with concurrent stores is worse than a plain volatile load.
+
+`qd.volatile_load` works on every backend uniformly, has no contention overhead, and matches what CUDA / OpenCL programmers reach for in the same situation.
+
+#### Pairing with the producer
+
+A volatile load only orders the location it reads. To make other writes from the producer visible to the reader after the volatile load observes the new value, the producer must publish through an ordering primitive — either an atomic store (the Metal-portable choice; see the per-store atomic ops above), or a plain store followed by `qd.simt.grid.mem_fence()` (CUDA / AMDGPU / native Vulkan only).
+
+The decoupled-look-back scan in [grid](grid.md) shows the full pattern.
 
 ## Performance and portability notes
 
@@ -142,7 +199,7 @@ Currently restricted to integer dtypes (`i32` / `u32` / `i64` / `u64`); float CA
 
 Every `qd.atomic_*` is emitted at **device-wide scope**: visible to all threads on the GPU executing the kernel, but not required to be coherent with the host CPU mid-kernel. The host only observes results once the kernel completes, at which point the launcher's stream-sync flushes everything regardless. Choosing device scope (rather than the strongest "system" scope) lets every backend lower the op to a single hardware atomic instruction instead of a software CAS retry loop, which matters for correctness as much as for speed: under heavy contention, a CAS loop on a non-converging op like `atomic_xor` can livelock.
 
-You don't normally need to think about scope as a user. It's listed here so the per-backend behaviour is explicit:
+You don't normally need to think about scope as a user. It's listed here so the per-backend behavior is explicit:
 
 | Backend                 | Scope spelling in the IR          |
 |-------------------------|-----------------------------------|

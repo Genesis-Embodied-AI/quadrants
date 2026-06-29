@@ -342,7 +342,10 @@ void Operations::init_internals() {
   // Vulkan ops:
   // workgroupBarrier, workgroupMemoryBarrier, localInvocationId,
   // vkGlobalThreadIdx, subgroupBarrier, subgroupMemoryBarrier, subgroupElect,
-  // subgroupBroadcast, subgroupSize, subgroupInvocationId,
+  // subgroupBroadcast, subgroupInvocationId,
+  // (subgroupSize is intentionally absent: ``qd.simt.subgroup.group_size()`` resolves to a Python ``int`` at compile
+  // time via ``Program::subgroup_size()`` and is folded into the IR as a literal on every backend; see
+  // ``inc/internal_ops.inc.h``.)
   // (subgroupInclusive{Add,Mul,Min,Max,And,Or,Xor}: portable ``@qd.func`` Hillis-Steele scans over
   // `subgroupShuffleUp`; no internal ops needed.)
 
@@ -361,10 +364,13 @@ void Operations::init_internals() {
   POLY_OP(subgroupShuffle, false, Signature({}, {ValueT, !u32}, ValueT));
   POLY_OP(subgroupShuffleDown, false, Signature({}, {ValueT, !u32}, ValueT));
   POLY_OP(subgroupShuffleUp, false, Signature({}, {ValueT, !u32}, ValueT));
-  PLAIN_OP(subgroupSize, i32, false);
+  PLAIN_OP(subgroupBallotU32, u32, false, i32);
+  PLAIN_OP(subgroupBallotU64, u64, false, i32);
+  // ``subgroupSize`` is no longer an internal op; ``qd.simt.subgroup.group_size()`` resolves at compile time via
+  // ``Program::subgroup_size()`` and folds into the IR as a literal on every backend.
   PLAIN_OP(subgroupInvocationId, i32, false);
   // subgroupAdd / subgroupMul / subgroupMin / subgroupMax / subgroupAnd / subgroupOr / subgroupXor
-  // are intentionally absent: the portable `subgroup.reduce_add(value, log2_size)` (and equivalents)
+  // are intentionally absent: the portable `subgroup.reduce_add_tiled(value, log2_size)` (and equivalents)
   // are implemented in Python on top of `subgroupShuffleDown` / `subgroupShuffle` and are the
   // supported APIs on all backends.
 #undef POLY_OP

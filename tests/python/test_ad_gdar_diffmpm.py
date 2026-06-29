@@ -5,14 +5,25 @@ import quadrants as qd
 from tests import test_utils
 
 
+# Defaults shrink particle / grid / steps counts so the JIT compile + AD-tape replay stays cheap; the slow-marked
+# entry keeps the original (N=30, n_grid=120, steps=32) workload that runs on --run-slow. The point of the test is
+# that the AD-validation checker fires on the global-data-access violation in g2p (`v[f, p] = new_v`), which happens
+# on the first substep regardless of size.
+@pytest.mark.parametrize(
+    "particles_side,n_grid_size,num_steps",
+    [
+        (8, 32, 4),
+        pytest.param(30, 120, 32, marks=pytest.mark.slow),
+    ],
+)
 @test_utils.test(require=qd.extension.assertion, debug=True)
-def test_gdar_mpm():
+def test_gdar_mpm(particles_side, n_grid_size, num_steps):
     real = qd.f32
 
     dim = 2
-    N = 30  # reduce to 30 if run out of GPU memory
+    N = particles_side
     n_particles = N * N
-    n_grid = 120
+    n_grid = n_grid_size
     dx = 1 / n_grid
     inv_dx = 1 / dx
     dt = 3e-4
@@ -21,8 +32,8 @@ def test_gdar_mpm():
     E = 100
     mu = E
     la = E
-    max_steps = 32
-    steps = 32
+    max_steps = num_steps
+    steps = num_steps
     gravity = 9.8
     target = [0.3, 0.6]
 

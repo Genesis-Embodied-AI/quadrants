@@ -597,8 +597,12 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
 
   void visit(GlobalLoadStmt *stmt) override {
     if (auto get_ch = stmt->src->cast<GetChStmt>()) {
-      bool should_cache_as_read_only =
-          current_offload->mem_access_opt.has_flag(get_ch->output_snode, SNodeAccessFlag::read_only);
+      // A volatile load explicitly opts out of caching: the read-only-cache path goes through `create_intrinsic_load`
+      // which on CUDA lowers to `__ldg` / attaches `!invariant.load`, both of which let the optimiser hoist or reuse
+      // the value -- the exact behaviour `qd.volatile_load` exists to suppress.  Keep the per-snode `read_only` flag
+      // for non-volatile loads so existing kernels keep their fast path.
+      bool should_cache_as_read_only = !stmt->is_volatile && current_offload->mem_access_opt.has_flag(
+                                                                 get_ch->output_snode, SNodeAccessFlag::read_only);
       create_global_load(stmt, should_cache_as_read_only);
     } else {
       create_global_load(stmt, false);
@@ -624,6 +628,16 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
       emit_cuda_gc(stmt);
     } else {
       init_offloaded_task_function(stmt);
+      // GPU-side checkpoint gating prologue: emit a per-task early-return at the top of `func_body_bb` reading
+      // `RuntimeContext::checkpoint_resume_point_ptr` and `RuntimeContext::checkpoint_yield_signal_ptr`. The prologue
+      // is the gating mechanism on pre-Hopper CUDA (which has no conditional-graph-node support); on SM 9.0+ it is dead
+      // code in the common path (the conditional gate prevents launch entirely) but stays in for correctness on the
+      // rare overlapping-gate case where some yield-check kernel earlier in the same launched graph set yield_signal
+      // between the conditional gate's evaluation and the body's execution. See `runtime/cuda/graph_manager.cpp` for
+      // the host side that populates the device pointers in `persistent_ctx`.
+      if (stmt->checkpoint_id >= 0) {
+        emit_checkpoint_gate_prologue(stmt->checkpoint_id);
+      }
       if (stmt->task_type == Type::serial) {
         stmt->body->accept(this);
       } else if (stmt->task_type == Type::range_for) {
@@ -659,6 +673,7 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
       current_task->block_dim = stmt->block_dim;
       current_task->dynamic_shared_array_bytes = dynamic_shared_array_bytes;
       current_task->stream_parallel_group_id = stmt->stream_parallel_group_id;
+      current_task->checkpoint_id = stmt->checkpoint_id;
       QD_ASSERT(current_task->grid_dim != 0);
       QD_ASSERT(current_task->block_dim != 0);
       // Host-side adstack sizing. For non-range_for and for const-bound range_for the launcher uses
@@ -764,12 +779,16 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
           /* value=*/llvm_val[stmt->args[0]],
           /* dt=*/stmt->args[0]->ret_type,
           /* offset=*/llvm_val[stmt->args[1]]);
+    } else if (stmt->func_name == "subgroupBallotU32") {
+      llvm_val[stmt] = call("cuda_ballot_i32", llvm_val[stmt->args[0]]);
+    } else if (stmt->func_name == "subgroupBallotU64") {
+      // CUDA warps are always 32 lanes; there is no native 64-bit ballot.  Zero-extend the i32 result to i64 so the
+      // u64 form has well-defined high 32 bits (always zero) and the public ``ballot`` API can return a
+      // uniform u64 across backends.
+      auto ballot32 = call("cuda_ballot_i32", llvm_val[stmt->args[0]]);
+      llvm_val[stmt] = builder->CreateZExt(ballot32, llvm::Type::getInt64Ty(*llvm_context));
     } else if (stmt->func_name == "subgroupInvocationId") {
       llvm_val[stmt] = call("cuda_lane_id");
-    } else if (stmt->func_name == "subgroupSize") {
-      // CUDA warp size is statically 32 on every supported NVIDIA arch (sm_30+).  Encoding it as a constant lets the
-      // optimizer fold it into address arithmetic and loop bounds, the same way `warpSize` does in CUDA C++.
-      llvm_val[stmt] = tlctx->get_constant(32);
     } else if (stmt->func_name == "subgroupBarrier") {
       // Subgroup-scope thread reconvergence barrier.  Maps to `__syncwarp(0xFFFFFFFF)` via the existing `warp_barrier`
       // runtime helper, which is patched to `nvvm_bar_warp_sync`.  Caller contract is uniform-CF + all lanes active

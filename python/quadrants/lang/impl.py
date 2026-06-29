@@ -103,7 +103,21 @@ def expr_init(rhs):
     if isinstance(rhs, BufferView):
         return rhs
     if isinstance(rhs, Struct):
-        return Struct(rhs.to_dict(include_methods=True, include_ndim=True))
+        # Build the rewrap dict from ``__entries`` directly rather than via ``to_dict()``: ``to_dict()`` recursively
+        # flattens nested Structs to plain dicts, which then rebuild without their ``_qd_unpacked_groups`` tag. By
+        # keeping nested Struct instances intact, ``Struct.__init__`` calls ``expr_init`` on each entry, recursing here
+        # and preserving the tag on every nested level.
+        d = dict(rhs._Struct__entries)  # type: ignore[attr-defined]  # name-mangled access
+        if rhs._Struct__methods:  # type: ignore[attr-defined]
+            d["__struct_methods"] = rhs._Struct__methods  # type: ignore[attr-defined]
+        new_struct = Struct(d)
+        # Preserve unpacked-vector group metadata on this level (nested levels are handled by the recursion above).
+        # ``setattr`` (rather than attribute assignment) sidesteps pyright's ``reportAttributeAccessIssue``; ``Struct``
+        # doesn't statically declare this attribute -- it's a per-instance metadata tag.
+        groups = getattr(rhs, "_qd_unpacked_groups", None)
+        if groups is not None:
+            setattr(new_struct, "_qd_unpacked_groups", groups)
+        return new_struct
     if isinstance(rhs, list):
         return [expr_init(e) for e in rhs]
     if isinstance(rhs, tuple):
@@ -324,7 +338,15 @@ def subscript(ast_builder, value, *_indices, skip_reordered=False):
         if isinstance(value, StructField):
             entries = {k: subscript(ast_builder, v, *indices) for k, v in value._items}
             entries["__struct_methods"] = value.struct_methods
-            return _IntermediateStruct(entries)
+            struct = _IntermediateStruct(entries)
+            # Carry ``_qd_unpacked_groups`` from the originating ``StructType`` (attached to the ``StructField`` in
+            # ``StructType.field``) onto the per-index intermediate struct so the AST transformer recognises
+            # ``f[i].r[k]`` as an unpacked-vector group access. Nested StructFields contribute their own tags via the
+            # recursive ``subscript`` call above, so ``outer_field[i].inner.r[k]`` also works.
+            groups = getattr(value, "_qd_unpacked_groups", None)
+            if groups is not None:
+                setattr(struct, "_qd_unpacked_groups", groups)
+            return struct
         return Expr(ast_builder.expr_subscript(_var, indices_expr_group, dbg_info))
     if isinstance(value, AnyArray):
         assert indices_expr_group is not None
@@ -364,6 +386,7 @@ def subscript(ast_builder, value, *_indices, skip_reordered=False):
                 dbg_info,
             )
         )
+    assert indices_expr_group is not None
     return Expr(ast_builder.expr_subscript(value.ptr, indices_expr_group, dbg_info))
 
 
@@ -456,12 +479,17 @@ class PyQuadrants:
 
     def set_default_fp(self, fp):
         assert fp in [f16, f32, f64]
-        self.default_fp = fp
+        # qd.init() deep-copies the default_fp arg (misc.py), yielding a DataType that is == but not identical to
+        # the registered primitive singleton -- its id is then absent from primitive_types.type_ids, which silently
+        # breaks id-based type recognition for anything that resolves a dtype via get_runtime().default_fp (e.g. the
+        # simt tile proxies). Re-bind to the canonical singleton so identity is preserved.
+        self.default_fp = {f16: f16, f32: f32, f64: f64}[fp]
         default_cfg().default_fp = self.default_fp
 
     def set_default_ip(self, ip):
         assert ip in [i32, i64]
-        self.default_ip = ip
+        # See set_default_fp: canonicalize to the registered singleton so id-based type checks keep working.
+        self.default_ip = {i32: i32, i64: i64}[ip]
         self.default_up = u32 if ip == i32 else u64
         default_cfg().default_ip = self.default_ip
         default_cfg().default_up = self.default_up

@@ -2,9 +2,25 @@
 
 ## Good practice reminder
 
-* *testing*: Any new features or modified code should be tested. You have to run the test suite using `python tests/run_tests.py` which sets up the right test environment for `pytest`. CLI arguments are forwarded to `pytest`. Do not use `pytest` directly as it behaves differently.
+* *testing*: Any new features or modified code should be tested. see [unit_testing.md](unit_testing.md)
 * *format/linter*: Before pushing any commits, ensure you set up `pre-commit` and run it using `pre-commit run -a`
 * No need to force push to keep a clean history as the merging is eventually done by squashing commits.
+
+## Running tests
+
+Run the test suite with `python tests/run_tests.py`. CLI arguments are forwarded to pytest. For example, to run only Metal tests matching a keyword:
+
+```
+python tests/run_tests.py --arch metal -k "test_tile16_cholesky"
+```
+
+The target architecture can also be set via the `QD_WANTED_ARCHS` environment variable (comma-separated, e.g. `QD_WANTED_ARCHS=metal,vulkan`).
+
+### Kernel compilation cache
+
+During test runs, compiled kernels are cached to disk so that the same kernel is not recompiled after each `qd.reset()`/`qd.init()` cycle.
+
+A fresh, empty cache directory is created for each test session by pytest's [`tmp_path_factory`](https://docs.pytest.org/en/stable/how-to/tmp_path.html) (typically under `/tmp/pytest-of-<user>/pytest-<N>/qdcache0/`). Old session directories are cleaned up automatically by pytest's retention policy. This cache is separate from the user-facing `~/.cache/quadrants/` cache.
 
 ## Creating your build/dev environment
 
@@ -38,14 +54,14 @@ uv pip install --group dev --group test
 
 `build.py` can be used at least two ways:
 
-* `build.py wheel` to build the wheel currently using `setup.py bdist_wheel`
+* `build.py wheel` to build the wheel (via [scikit-build-core](https://scikit-build-core.readthedocs.io/en/latest/), i.e. `pip wheel`)
 * `build.py --shell` to enter a shell with environment variables set up as with `build.py wheel` in order to let you invoke yourself the commands.
 
-`python setup.py develop` provides incremental builds:
+For incremental development, do an editable install (scikit-build-core "redirect" mode: the compiled core is installed and rebuilt on demand, Python edits are live):
 
 ```
 ./build.py --shell # run a new shell with environment variables
-python setup.py develop
+pip install --no-build-isolation -e . -Ceditable.rebuild=true
 ```
 
 To write the environment variables to a file, use `./build.py -w [filename]`. For example:
@@ -53,8 +69,10 @@ To write the environment variables to a file, use `./build.py -w [filename]`. Fo
 ```
 ./build.py -w env.sh
 source env.sh
-python setup.py develop
+pip install --no-build-isolation -e . -Ceditable.rebuild=true
 ```
+
+`build.py` exports both the legacy `QUADRANTS_CMAKE_ARGS` and the `CMAKE_ARGS` that scikit-build-core actually reads, so sourcing `env.sh` (or using `--shell`) is enough -- no manual `export CMAKE_ARGS="$QUADRANTS_CMAKE_ARGS"` step is needed.
 
 ## Building the package for release purposes
 
@@ -64,18 +82,18 @@ To build the release package:
 ./build.py wheel
 ```
 
-We use `cmake` to build the C++ core. The build directory depends on the host architecture and the python version. For example: `_skbuild/linux-x86_64-3.10/cmake-build`.
+We use `cmake` to build the C++ core. scikit-build-core puts the CMake build tree under `build/{wheel_tag}`, where the wheel tag encodes the Python version and host platform. For example: `build/cp310-cp310-linux_x86_64`.
 
 You can modify the cmake options to your liking in order to enable or disable some features you need or don't need. To discover them, you can use `ccmake`:
 
 ```
-ccmake _skbuild/linux-x86_64-3.10/cmake-build
+ccmake build/cp310-cp310-linux_x86_64
 ```
 
-You could then set the environment variable `QUADRANTS_CMAKE_ARGS` that will be appended to the `cmake` command used to configure the `cmake` build. For instance, to disable the CUDA and AMDGPU backends:
+You could then set the environment variable `CMAKE_ARGS` (scikit-build-core's CMake-args passthrough) to configure the build. `build.py` also accepts the legacy `QUADRANTS_CMAKE_ARGS` and forwards it to `CMAKE_ARGS`. For instance, to disable the CUDA and AMDGPU backends:
 
 ```
-export QUADRANTS_CMAKE_ARGS="-DQD_WITH_CUDA=OFF -DQD_WITH_AMDGPU=OFF"
+export CMAKE_ARGS="-DQD_WITH_CUDA=OFF -DQD_WITH_AMDGPU=OFF"
 ```
 
 To direct `cmake` where to look at for some dependencies, for example `LLVM`, you could either use an environment variable `LLVM_DIR` or specify the cmake option `LLVM_ROOT`:
@@ -85,6 +103,15 @@ To direct `cmake` where to look at for some dependencies, for example `LLVM`, yo
 export LLVM_DIR="/path/to/llvm/"
 # or with a cmake option
 export QUADRANTS_CMAKE_ARGS="$QUADRANTS_CMAKE_ARGS -DLLVM_ROOT=/path/to/llvm"
+```
+
+### Building with the AMD GPU backend (Linux)
+
+The AMD GPU backend is Linux-only (it is force-disabled on macOS and Windows) and is off by default, so enable it explicitly through `CMAKE_ARGS`:
+
+```
+./build.py --shell
+CMAKE_ARGS="-DQD_WITH_AMDGPU=ON -DQD_WITH_CUDA=OFF" pip install --no-build-isolation -e . -v
 ```
 
 ## Advanced usage
@@ -150,6 +177,23 @@ Uses an AI agent to verify that new or modified source code in a PR has correspo
 Uses an AI agent to flag feature-specific code being piled into heavily-tracked core files when it could live in its own feature-specific file instead. The concern is not that the new code is in the "wrong" place semantically — it is usually topically related to the host file — but that the host file is already a hot, central, frequently-edited file, and adding more self-contained feature code to it makes review, merge conflicts, and future churn worse. The fix is almost always to extract the feature-specific block (top-level function, class, large block, or even a cluster of new methods on an existing class) into its own module, with the host file delegating to it via a narrow interface.
 
 The agent reports up to 5 violations, each annotated with the host file's hotness numbers (commits / authors / size). This check is delayed by 30 minutes, to avoid running repeatedly if multiple commits pushed with a short delay between each.
+
+### Doc quality check (`check_doc_quality.yml`)
+
+Uses an AI agent to review documentation changes for an end-user audience (someone writing Quadrants kernels in Python, not a compiler engineer).
+
+
+Let's first define an *advanced / internal section* as a clearly-marked section whose heading contains "Advanced", "Under the hood", "Internals", or "Implementation"; it targets a more advanced reader rather than the typical end user.
+
+
+For each `docs/**/*.md` file added or modified in the PR, the CI agent reads the entire current file (not just the diff) and checks three things:
+- (1) **undefined terms** — a term a typical user is unlikely to know (specialized or internal jargon, project-specific abbreviations) must be defined at its first use in that file, either inline or via a link to a doc that defines it, unless that first use is inside an advanced / internal section;
+- (2) **end-user relevance** — internal / implementation / contributor-only material must be confined to an advanced / internal section;
+- (3) **reading order** — information must be ordered so a first-time reader can follow the file top-to-bottom in one pass, without forward references (a passage that can only be understood by reading something introduced later in the same file).
+
+The following do not count as violations: references to public APIs that the author links to their docs and/or labels as public; brief reader-directed pointers suggesting the reader could contribute upstream or file an issue; the core public API vocabulary a user already knows (e.g. `@qd.kernel`, `@qd.func`, `qd.Template`, fields, ndarrays); and, for the reading-order check, an overview/roadmap near the top, optional "see below" pointers (where the current passage still reads fine on its own), and backward references.
+
+The agent reports up to 10 violations. This check is delayed by 30 minutes, to avoid running repeatedly if multiple commits pushed with a short delay between each.
 
 ### PR change report (`pr_change_report.yml`)
 

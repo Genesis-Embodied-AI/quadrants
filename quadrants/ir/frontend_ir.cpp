@@ -111,6 +111,8 @@ FrontendForStmt::FrontendForStmt(const FrontendForStmt &o)
       mem_access_opt(o.mem_access_opt),
       block_dim(o.block_dim),
       stream_parallel_group_id(o.stream_parallel_group_id),
+      graph_do_while_level_id(o.graph_do_while_level_id),
+      checkpoint_id(o.checkpoint_id),
       loop_name(o.loop_name) {
 }
 
@@ -120,6 +122,8 @@ void FrontendForStmt::init_config(Arch arch, const ForLoopConfig &config) {
   mem_access_opt = config.mem_access_opt;
   block_dim = config.block_dim;
   stream_parallel_group_id = config.stream_parallel_group_id;
+  graph_do_while_level_id = config.graph_do_while_level_id;
+  checkpoint_id = config.checkpoint_id;
   loop_name = config.loop_name;
   if (arch == Arch::cuda || arch == Arch::amdgpu) {
     num_cpu_threads = 1;
@@ -879,6 +883,31 @@ void IndexExpression::flatten(FlattenContext *ctx) {
   stmt->dbg_info = dbg_info;
 }
 
+void VolatileLoadExpression::type_check(const CompileConfig *) {
+  // The result type is whatever an ordinary rvalue load of `src` would produce; we only override how the load
+  // is *emitted*, not what it produces.  Errors here mirror what `flatten_rvalue` would surface for the same
+  // `src` -- if the source isn't an lvalue at all, `flatten` below will fail the lvalue assertion.
+  ret_type = src.get_rvalue_type();
+}
+
+void VolatileLoadExpression::flatten(FlattenContext *ctx) {
+  // Reuse the lvalue-flattening helper to materialise the pointer Stmt for `src` (e.g. an `IndexExpression`
+  // resolves to a `GlobalPtrStmt` / `ExternalPtrStmt`).  Then push a `GlobalLoadStmt` with `is_volatile=true`
+  // -- mirroring `flatten_global_load` but with the volatile bit set.  Local-array sources are rejected: a
+  // function-scope alloca cannot be observed by another thread, so a volatile load there would be meaningless.
+  Stmt *ptr_stmt = flatten_lvalue(src, ctx);
+  if (ptr_stmt->is<AllocaStmt>()) {
+    ErrorEmitter(QuadrantsTypeError(), this,
+                 "qd.volatile_load() requires a global lvalue (field / ndarray subscript); "
+                 "function-scope local arrays are not visible to other threads.");
+  }
+  auto load_stmt = std::make_unique<GlobalLoadStmt>(ptr_stmt, /*is_volatile=*/true, dbg_info);
+  auto pointee_type = load_stmt->src->ret_type.ptr_removed();
+  load_stmt->ret_type = pointee_type->get_compute_type();
+  ctx->push_back(std::move(load_stmt));
+  stmt = ctx->back_stmt();
+}
+
 void RangeAssumptionExpression::type_check(const CompileConfig *) {
   QD_ASSERT_TYPE_CHECKED(input);
   QD_ASSERT_TYPE_CHECKED(base);
@@ -980,7 +1009,7 @@ void AtomicOpExpression::type_check(const CompileConfig *config) {
     // Reject tensor (vector / matrix) destinations explicitly. The other atomic ops fan out to per-component
     // scalar AtomicOpStmts via scalarize / lower_matrix_ptr, but those passes use the 3-arg AtomicOpStmt
     // constructor and would silently drop `expected`, tripping QD_ASSERT(stmt->expected) in codegen. Until the
-    // scalarizers grow a 4-arg path that threads `expected_i` through, refuse tensor CAS at trace time.
+    // scalarizers grow a 4-arg path that threads `expected_i` through, refuse tensor CAS at compile time.
     if (dest_dtype->is<TensorType>()) {
       ErrorEmitter(QuadrantsTypeError(), this,
                    fmt::format("'atomic_cas' on tensor (vector / matrix) destinations is not supported; got "
@@ -1093,7 +1122,7 @@ void SNodeOpExpression::flatten(FlattenContext *ctx) {
   auto ptr = ctx->push_back<GlobalPtrStmt>(snode, indices_stmt, true, is_cell_access, dbg_info);
   if (op_type == SNodeOpType::is_active) {
     if (!(snode->type == SNodeType::pointer || snode->type == SNodeType::hash || snode->type == SNodeType::bitmasked)) {
-      ErrorEmitter(QuadrantsTypeError(), this, "ti.is_active only works on pointer, hash or bitmasked nodes.");
+      ErrorEmitter(QuadrantsTypeError(), this, "qd.is_active only works on pointer, hash or bitmasked nodes.");
     }
     ctx->push_back<SNodeOpStmt>(SNodeOpType::is_active, snode, ptr, nullptr, dbg_info);
   } else if (op_type == SNodeOpType::length) {
@@ -1110,7 +1139,7 @@ void SNodeOpExpression::flatten(FlattenContext *ctx) {
     }
     ctx->push_back<LocalLoadStmt>(alloca, dbg_info);
     if (snode->type != SNodeType::dynamic) {
-      ErrorEmitter(QuadrantsTypeError(), this, "ti.append only works on dynamic nodes.");
+      ErrorEmitter(QuadrantsTypeError(), this, "qd.append only works on dynamic nodes.");
     }
   }
   stmt = ctx->back_stmt();
@@ -1243,6 +1272,12 @@ Stmt *ASTBuilder::get_last_stmt() {
 
 void ASTBuilder::insert(std::unique_ptr<Stmt> &&stmt, int location) {
   QD_ASSERT(!stack_.empty());
+  // Stamp the graph-region active at this source position so the offloader can flush serial work at the level it was
+  // written at. For-loops separately carry these same values via ForLoopConfig; the stamp here is what gives bare
+  // statements (assignments, inlined @qd.func bodies, directives) a correct region too. Statements inside a real
+  // for-loop body are also stamped, but harmlessly: they live inside the for-loop's task body and never reach the
+  // offloader's root-level pending-serial bucket.
+  stmt->region_tag = {current_graph_do_while_level_id_, current_stream_parallel_group_id_, current_checkpoint_id_};
   stack_.back()->insert(std::move(stmt), location);
 }
 
@@ -1290,7 +1325,7 @@ void ASTBuilder::insert_for(const Expr &s, const Expr &e, const std::function<vo
 Expr ASTBuilder::insert_thread_idx_expr() {
   auto loop = stack_.size() ? stack_.back()->parent_stmt() : nullptr;
   QD_ERROR_IF(arch_ != Arch::cuda && !arch_is_cpu(arch_) && arch_ != Arch::amdgpu,
-              "ti.thread_idx() is only available in cuda or cpu or amdgpu context.");
+              "qd.thread_idx() is only available in cuda or cpu or amdgpu context.");
   if (loop != nullptr) {
     auto i = stack_.size() - 1;
     while (!(loop->is<FrontendForStmt>())) {
@@ -1299,7 +1334,7 @@ Expr ASTBuilder::insert_thread_idx_expr() {
         break;
     }
   }
-  QD_ERROR_IF(!(loop && loop->is<FrontendForStmt>()), "ti.thread_idx() is only valid within loops.");
+  QD_ERROR_IF(!(loop && loop->is<FrontendForStmt>()), "qd.thread_idx() is only valid within loops.");
   return Expr::make<InternalFuncCallExpression>(Operations::get(InternalOp::linear_thread_idx), std::vector<Expr>{});
 }
 
@@ -1314,7 +1349,7 @@ Expr ASTBuilder::insert_patch_idx_expr(const DebugInfo &dbg_info) {
     }
   }
   QD_ERROR_IF(!(loop && loop->is<FrontendForStmt>() && loop->as<FrontendForStmt>()->mesh),
-              "ti.mesh_patch_idx() is only valid within mesh-for loops.");
+              "qd.mesh_patch_idx() is only valid within mesh-for loops.");
   return Expr::make<MeshPatchIndexExpression>(dbg_info);
 }
 
@@ -1447,8 +1482,36 @@ void ASTBuilder::create_assert_stmt(const Expr &cond,
   this->insert(std::move(stmt_unique));
 }
 
+void ASTBuilder::warn_if_named_nested_loop() {
+  if (for_loop_dec_.config.loop_name.empty()) {
+    return;
+  }
+  // Walk the open block stack; if any enclosing block belongs to a for-loop, the loop we are about
+  // to emit is nested and its name will not survive offloading. `while` (incl. graph_do_while) and
+  // `if` are FrontendWhileStmt / FrontendIfStmt, not FrontendForStmt, so they are correctly ignored;
+  // `qd.checkpoint` pushes no block at all.
+  bool nested = false;
+  for (int i = (int)stack_.size() - 1; i >= 0; i--) {
+    Stmt *parent = stack_[i]->parent_stmt();
+    if (parent && parent->is<FrontendForStmt>()) {
+      nested = true;
+      break;
+    }
+  }
+  QD_WARN_IF(nested,
+             "qd.loop_config(name=\"{}\") is set on a for-loop nested inside another for-loop; the "
+             "name is ignored. Only top-level loops (direct children of the kernel body, a "
+             "qd.checkpoint, or a qd.graph_do_while) are offloaded as separately named GPU kernels. "
+             "Move the loop to the top level, or unroll the enclosing loop with "
+             "`for ... in qd.static(range(...))` so each inner loop becomes its own named kernel.",
+             for_loop_dec_.config.loop_name);
+}
+
 void ASTBuilder::begin_frontend_range_for(const Expr &i, const Expr &s, const Expr &e, const DebugInfo &dbg_info) {
+  warn_if_named_nested_loop();
   for_loop_dec_.config.stream_parallel_group_id = current_stream_parallel_group_id_;
+  for_loop_dec_.config.graph_do_while_level_id = current_graph_do_while_level_id_;
+  for_loop_dec_.config.checkpoint_id = current_checkpoint_id_;
   auto stmt_unique = std::make_unique<FrontendForStmt>(i, s, e, arch_, for_loop_dec_.config, dbg_info);
   auto stmt = stmt_unique.get();
   this->insert(std::move(stmt_unique));
@@ -1459,10 +1522,13 @@ void ASTBuilder::begin_frontend_range_for(const Expr &i, const Expr &s, const Ex
 void ASTBuilder::begin_frontend_struct_for_on_snode(const ExprGroup &loop_vars,
                                                     SNode *snode,
                                                     const DebugInfo &dbg_info) {
+  warn_if_named_nested_loop();
   QD_WARN_IF(for_loop_dec_.config.strictly_serialized,
-             "ti.loop_config(serialize=True) does not have effect on the struct for. "
+             "qd.loop_config(serialize=True) does not have effect on the struct for. "
              "The execution order is not guaranteed.");
   for_loop_dec_.config.stream_parallel_group_id = current_stream_parallel_group_id_;
+  for_loop_dec_.config.graph_do_while_level_id = current_graph_do_while_level_id_;
+  for_loop_dec_.config.checkpoint_id = current_checkpoint_id_;
   auto stmt_unique = std::make_unique<FrontendForStmt>(loop_vars, snode, arch_, for_loop_dec_.config, dbg_info);
   for_loop_dec_.reset();
   auto stmt = stmt_unique.get();
@@ -1473,10 +1539,13 @@ void ASTBuilder::begin_frontend_struct_for_on_snode(const ExprGroup &loop_vars,
 void ASTBuilder::begin_frontend_struct_for_on_external_tensor(const ExprGroup &loop_vars,
                                                               const Expr &external_tensor,
                                                               const DebugInfo &dbg_info) {
+  warn_if_named_nested_loop();
   QD_WARN_IF(for_loop_dec_.config.strictly_serialized,
-             "ti.loop_config(serialize=True) does not have effect on the struct for. "
+             "qd.loop_config(serialize=True) does not have effect on the struct for. "
              "The execution order is not guaranteed.");
   for_loop_dec_.config.stream_parallel_group_id = current_stream_parallel_group_id_;
+  for_loop_dec_.config.graph_do_while_level_id = current_graph_do_while_level_id_;
+  for_loop_dec_.config.checkpoint_id = current_checkpoint_id_;
   auto stmt_unique =
       std::make_unique<FrontendForStmt>(loop_vars, external_tensor, arch_, for_loop_dec_.config, dbg_info);
   for_loop_dec_.reset();
@@ -1489,10 +1558,13 @@ void ASTBuilder::begin_frontend_mesh_for(const Expr &i,
                                          const mesh::MeshPtr &mesh_ptr,
                                          const mesh::MeshElementType &element_type,
                                          const DebugInfo &dbg_info) {
+  warn_if_named_nested_loop();
   QD_WARN_IF(for_loop_dec_.config.strictly_serialized,
-             "ti.loop_config(serialize=True) does not have effect on the mesh for. "
+             "qd.loop_config(serialize=True) does not have effect on the mesh for. "
              "The execution order is not guaranteed.");
   for_loop_dec_.config.stream_parallel_group_id = current_stream_parallel_group_id_;
+  for_loop_dec_.config.graph_do_while_level_id = current_graph_do_while_level_id_;
+  for_loop_dec_.config.checkpoint_id = current_checkpoint_id_;
   auto stmt_unique =
       std::make_unique<FrontendForStmt>(ExprGroup(i), mesh_ptr, element_type, arch_, for_loop_dec_.config, dbg_info);
   for_loop_dec_.reset();

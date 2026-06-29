@@ -78,15 +78,18 @@ def make_absolute(f, directory):
 
 
 def cmake_configure(source_path="."):
-    import shlex
-
-    from skbuild.cmaker import CMaker
-    from skbuild.constants import CMAKE_BUILD_DIR
-
-    cmaker = CMaker()
-    cmake_args = shlex.split(os.getenv("CI_SETUP_CMAKE_ARGS", ""))
-    cmaker.configure(cmake_args)
-    return CMAKE_BUILD_DIR()
+    # scikit-build-core writes the CMake build tree (incl. compile_commands.json, when CMAKE_EXPORT_COMPILE_COMMANDS=ON)
+    # into build/{wheel_tag}/. The wheel build (`./build.py wheel`, run beforehand by the clang_tidy CI step) has
+    # already configured + built it, so just locate that dir rather than re-configuring via the old scikit-build-classic
+    # CMaker.
+    candidates = sorted(glob.glob("build/*/compile_commands.json"))
+    if not candidates:
+        raise RuntimeError(
+            "no build/*/compile_commands.json found; run `./build.py wheel` with "
+            "CMAKE_EXPORT_COMPILE_COMMANDS=ON first (scikit-build-core builds into "
+            "build/{wheel_tag}/)."
+        )
+    return os.path.dirname(candidates[-1])
 
 
 def get_tidy_invocation(

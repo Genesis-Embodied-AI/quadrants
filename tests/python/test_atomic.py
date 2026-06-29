@@ -644,8 +644,8 @@ def test_atomic_bitwise_int_widths(op, seed, arg, expected, dtype):
     assert int(f[None]) == expected
 
 
-# Pins the doc claim that bitwise atomics on float dtypes raise a type error at trace time (atomics page: "Integer
-# dtypes only -- passing f32 / f64 raises a type error at trace time"). Enforced by the is_integral check in
+# Pins the doc claim that bitwise atomics on float dtypes raise a type error at compile time (atomics page: "Integer
+# dtypes only -- passing f32 / f64 raises a type error at compile time"). Enforced by the is_integral check in
 # AtomicOpExpression::type_check (quadrants/ir/frontend_ir.cpp) for bit_and / bit_or / bit_xor.
 @pytest.mark.parametrize("op", ["and", "or", "xor"])
 @pytest.mark.parametrize("dtype", [qd.f32, qd.f64])
@@ -812,7 +812,7 @@ def test_atomic_exchange_demoted():
 # Pins the documented semantics of qd.atomic_cas: returns the prior value of `dest`, swaps in `desired` only when
 # the prior value equals `expected`. Single-thread sanity covering both the success path (prior == expected) and
 # the failure path (prior != expected) for every integer dtype the codegen path supports today (i32 / u32 /
-# i64 / u64). f32 / f64 CAS is currently rejected at trace time -- a separate negative test pins that.
+# i64 / u64). f32 / f64 CAS is currently rejected at compile time -- a separate negative test pins that.
 @pytest.mark.parametrize("dtype", [qd.i32, qd.u32, qd.i64, qd.u64])
 @test_utils.test(arch=qd.gpu)
 def test_atomic_cas_returns_old_value(dtype):
@@ -943,7 +943,7 @@ def test_atomic_cas_demoted():
         assert y[i] == 100 + i, f"failure-path CAS demoted: expected prior {100 + i}, got {y[i]}"
 
 
-# Pins the doc claim that atomic_cas on float dtypes raises a type error at trace time. f32 / f64 CAS is not
+# Pins the doc claim that atomic_cas on float dtypes raises a type error at compile time. f32 / f64 CAS is not
 # yet wired up (would need the same uint-bitcast trick xchg uses); the type_check carve-out in
 # AtomicOpExpression::type_check rejects it cleanly until the lowering lands.
 @pytest.mark.parametrize("dtype", [qd.f32, qd.f64])
@@ -961,7 +961,7 @@ def test_atomic_cas_on_float_field_raises(dtype):
         kern()
 
 
-# Pins that atomic_cas on a Vector / Matrix destination is rejected at trace time. The other atomic ops fan
+# Pins that atomic_cas on a Vector / Matrix destination is rejected at compile time. The other atomic ops fan
 # out to per-component scalar AtomicOpStmts via scalarize / lower_matrix_ptr, but those passes use the 3-arg
 # AtomicOpStmt constructor that drops `expected`. Until the scalarizers grow a 4-arg path, refusing tensor
 # CAS up front is the correct behaviour. Codex / alanray-tech P1 from PR #690 review.

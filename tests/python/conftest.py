@@ -1,18 +1,25 @@
 import gc
 import os
 import sys
-import time
+import tempfile
 
 import pytest
 
-# rerunfailures use xdist version number to determine if it is compatible
-# but we are using a forked version of xdist(with git hash as it's version),
-# so we need to override it
-import pytest_rerunfailures
-
 import quadrants as qd
 
-pytest_rerunfailures.works_with_current_xdist = lambda: True
+
+@pytest.fixture(scope="session", autouse=True)
+def _offline_cache_dir(tmp_path_factory):
+    """Enable the kernel compilation disk cache for the test session.
+
+    Uses pytest's tmp_path_factory so the cache directory is managed by pytest's retention policy
+    (tmp_path_retention_count / tmp_path_retention_policy) and cleaned up automatically. This avoids recompiling
+    identical kernels after each qd.reset()/qd.init() cycle within a session.
+    """
+    cache_dir = tmp_path_factory.mktemp("qdcache")
+    os.environ["QD_OFFLINE_CACHE"] = "1"
+    os.environ["QD_OFFLINE_CACHE_FILE_PATH"] = str(cache_dir)
+    os.environ.setdefault("QD_OFFLINE_CACHE_CLEANING_POLICY", "never")
 
 
 @pytest.fixture(autouse=True)
@@ -118,43 +125,91 @@ def pytest_generate_tests(metafunc):
         metafunc.parametrize("req_arch,req_options", [(None, None)], ids=["none"])
 
 
+def _exit_marker_dir():
+    """Temp directory shared between xdist controller and workers for intentional-exit markers."""
+    return os.environ.get("_QD_XDIST_EXIT_MARKER_DIR")
+
+
+def pytest_configure(config):
+    """On the xdist controller, create a temp directory for intentional-exit markers.
+
+    Workers inherit the ``_QD_XDIST_EXIT_MARKER_DIR`` env var and use the same directory.
+    """
+    if os.environ.get("PYTEST_XDIST_WORKER"):
+        return
+    if os.environ.get("_QD_XDIST_EXIT_MARKER_DIR"):
+        return
+    d = os.path.join(tempfile.gettempdir(), f"qd_xdist_exits_{os.getpid()}")
+    os.makedirs(d, exist_ok=True)
+    os.environ["_QD_XDIST_EXIT_MARKER_DIR"] = d
+
+
+def pytest_unconfigure(config):
+    """Clean up the marker directory at session end."""
+    if os.environ.get("PYTEST_XDIST_WORKER"):
+        return
+    d = _exit_marker_dir()
+    if d and os.path.isdir(d):
+        import shutil
+
+        shutil.rmtree(d, ignore_errors=True)
+    os.environ.pop("_QD_XDIST_EXIT_MARKER_DIR", None)
+
+
 @pytest.hookimpl(trylast=True)
 def pytest_runtest_logreport(report):
-    """
-    Retire test workers when a test fails, to avoid the failing test
-    leaving a corrupted GPU state for the following tests.
-    """
+    """Kill the xdist worker process after a test failure so it restarts with clean GPU state.
 
-    interactor = getattr(sys, "xdist_interactor", None)
-    if not interactor:
+    Runs trylast so xdist's own hook sends the real test report over the channel first.  Before exiting, we write a
+    marker file so the controller's pytest_handlecrashitem can distinguish this intentional exit from a genuine crash
+    (segfault, OOM, etc.).
+    """
+    if not os.environ.get("PYTEST_XDIST_WORKER"):
         return
 
-    if report.outcome not in ("rerun", "error", "failed"):
+    if report.outcome not in ("error", "failed"):
         return
 
-    layoff = False
+    d = _exit_marker_dir()
+    if d:
+        worker_id = os.environ["PYTEST_XDIST_WORKER"]
+        try:
+            with open(os.path.join(d, worker_id), "w") as f:
+                f.write(report.nodeid)
+        except OSError:
+            pass
+    os._exit(1)
 
-    chain = getattr(getattr(report, "longrepr", None), "chain", None)
-    if chain:
-        for _, loc, _ in chain:
-            msg = getattr(loc, "message", "") if loc else ""
-            if "CUDA_ERROR_OUT_OF_MEMORY" in msg:
-                layoff = True
-                break
 
-    # Don't call interactor.retire() — it uses os._exit(0) which kills
-    # the process before execnet's IO thread can flush the channel buffer.
-    # The test failure report (queued by xdist's own hook, which ran before
-    # this trylast hook) would be lost, hiding all error messages.
-    interactor.sendevent("workerretire", layoff=layoff)
-    time.sleep(0.2)
-    os._exit(0)
+def pytest_handlecrashitem(crashitem, report, sched):
+    """Suppress the synthetic crash report only for intentional ``os._exit(1)`` exits.
+
+    When a worker is killed intentionally (to reset GPU state after a failure), it writes a marker file before exiting.
+    If the marker exists, we mutate the synthetic report so the terminal reporter drops it into the empty-string stats
+    bucket (invisible in the summary).  Genuine crashes (segfaults, OOM, etc.) have no marker, so their reports pass
+    through as failures.
+    """
+    d = _exit_marker_dir()
+    if not d:
+        return
+    node = getattr(report, "node", None)
+    if not node:
+        return
+    worker_id = node.gateway.id
+    marker = os.path.join(d, worker_id)
+    if not os.path.exists(marker):
+        return
+    try:
+        os.unlink(marker)
+    except OSError:
+        pass
+    report.outcome = "passed"
+    report.when = "teardown"
+    report.longrepr = None
+    return True
 
 
 import importlib
-import sys
-
-import pytest
 
 
 @pytest.fixture

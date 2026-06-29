@@ -19,6 +19,7 @@
 #include "quadrants/ir/frontend_ir.h"
 #include "quadrants/program/snode_expr_utils.h"
 #include "quadrants/math/arithmetic.h"
+#include "quadrants/rhi/arch.h"
 #include "quadrants/rhi/common/host_memory_pool.h"
 
 #ifdef QD_WITH_LLVM
@@ -217,7 +218,7 @@ static void remove_rw_accessor_cache(SNode *parent_snode, SNodeRwAccessorsBank *
 void Program::destroy_snode_tree(SNodeTree *snode_tree) {
   QD_ASSERT(arch_uses_llvm(compile_config().arch) || compile_config().arch == Arch::vulkan);
 
-  // When accessing a ti.field at Python scope, SNodeRwAccessorsBank creates a Quadrants Kernel to read/write the field
+  // When accessing a qd.field at Python scope, SNodeRwAccessorsBank creates a Quadrants Kernel to read/write the field
   // in a JIT manner, which caches the compiled JIT Kernel so as to avoid recompilation when accessing the same field.
 
   // This cache uses the place-SNode's address (SNode*) as the key, which becomes unsafe once the SNodeTree gets
@@ -272,6 +273,24 @@ void Program::check_adstack_overflow_and_assert() {
 
 StreamSemaphore Program::flush() {
   return program_impl_->flush();
+}
+
+int Program::subgroup_size() const {
+  // CUDA / AMDGPU / x64 have arch-fixed subgroup widths; ``subgroup_size(Arch)`` returns those constants directly so we
+  // don't need to consult the device caps.  Returns 0 for x64 (no subgroup model on CPU) which is fine for the cache
+  // key path; SIMT calls that try to lower e.g. ``group_size()`` on x64 would fail elsewhere first.
+  if (compile_config_.arch == Arch::cuda) {
+    return kCudaWarpSize;
+  }
+  if (compile_config_.arch == Arch::amdgpu) {
+    return kAmdgpuWaveSize;
+  }
+  // Vulkan / Metal: read the value the device-creation path probed into ``DeviceCapability::spirv_subgroup_size``.
+  // ``get_device_caps`` is a copy, but the call is cold (called from
+  // ``qd.simt.subgroup.{group_size,log2_group_size}()`` at compile time, not per launch).  Fall back to 0 if the cap
+  // hasn't been set yet (e.g. before runtime materialization); callers can re-query after init.
+  auto caps = program_impl_->get_device_caps();
+  return static_cast<int>(caps.get(DeviceCapability::spirv_subgroup_size));
 }
 
 namespace {
@@ -454,7 +473,7 @@ void Program::delete_ndarray(Ndarray *ndarray) {
   // [Note] Ndarray memory deallocation Ndarray's memory allocation is managed by Quadrants and Python can control this
   // via Quadrants indirectly. For example, when an ndarray is GC-ed in Python, it signals Quadrants to free its memory
   // allocation. But Quadrants will make sure **no pending kernels to be executed needs the ndarray** before it actually
-  // frees the memory. When `ti.reset()` is called, all ndarrays allocated in this program should be gone and no longer
+  // frees the memory. When `qd.reset()` is called, all ndarrays allocated in this program should be gone and no longer
   // valid in Python. This isn't the best implementation, ndarrays should be managed by quadrants runtime instead of
   // this giant program and it should be freed when: - Python GC signals quadrants that it's no longer useful - All
   // kernels using it are executed.

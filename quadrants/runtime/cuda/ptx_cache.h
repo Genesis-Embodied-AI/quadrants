@@ -46,7 +46,7 @@ struct PtxCacheAllData {
 
 class PtxCache final {
  public:
-  static constexpr char kMetadataFilename[] = "ptxcache.tcb";
+  static constexpr char kMetadataFilename[] = "ptxcache.qdb";
   static constexpr char kCacheFilenameFormat[] = "{}.ptx";
   static constexpr char kMetadataLockName[] = "ptxcache.lock";
 

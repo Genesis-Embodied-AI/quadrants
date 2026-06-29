@@ -7,6 +7,19 @@ namespace quadrants::lang {
 
 struct RuntimeContext;
 
+// One entry per `graph_do_while` loop in a `graph=True` kernel, indexed by level id (the order the AST transformer
+// assigns: outer levels before the inner levels they contain). For nested loops the runtime rebuilds the loop tree from
+// these entries plus the per-task `graph_do_while_level_id` tags baked into each OffloadedTask. A non-nested (depth-1)
+// kernel has exactly one entry with parent -1.
+struct GraphDoWhileLevel {
+  // Kernel parameter index (C++ arg id, post-template) of this level's condition ndarray.
+  int cond_arg_id{-1};
+  // Enclosing level id, or -1 if this level is at the kernel top level.
+  int parent_id{-1};
+  // Device pointer of the condition flag, resolved by the backend each launch from `cond_arg_id`.
+  void *flag_dev_ptr{nullptr};
+};
+
 struct ArgArrayPtrKey {
   int32_t arg_id;
   int32_t ptr_type;
@@ -46,7 +59,7 @@ class LaunchContextBuilder {
 
   void set_arg_float(int arg_id, float64 d);
   // Bulk processing of multiple scalar float arguments at the same time.
-  // This is mainly useful to mitigate pybind11 function call overhead.
+  // This is mainly useful to mitigate Python/C++ binding function call overhead.
   // In this context, 'args_id' is a vector gathering the position of each
   // of these scalar arguments in the corresponding kernel. As a result, the
   // length 'args_id' and 'vec' must be equal.
@@ -119,12 +132,12 @@ class LaunchContextBuilder {
                             const std::vector<int> &shape,
                             intptr_t devalloc_ptr_grad = 0);
   void set_arg_ndarray(int arg_id, const Ndarray &arr);
-  // Bulk processing of multiple individual Taichi NDarray arguments (without
+  // Bulk processing of multiple individual Quadrants NDarray arguments (without
   // any associated gradient) at the same time.
   // See 'set_arg_float' for details.
   void set_args_ndarray(const std::vector<int> &args_id, const std::vector<Ndarray *> &arrs);
   void set_arg_ndarray_with_grad(int arg_id, const Ndarray &arr, const Ndarray &arr_grad);
-  // Bulk processing of multiple individual Taichi NDarray arguments (along
+  // Bulk processing of multiple individual Quadrants NDarray arguments (along
   // with associated gradient) at the same time.
   // See 'set_arg_float' for details.
   void set_args_ndarray_with_grad(const std::vector<int> &args_id,
@@ -158,8 +171,46 @@ class LaunchContextBuilder {
   const StructType *args_type{nullptr};
   size_t result_buffer_size{0};
   bool use_graph{false};
-  int graph_do_while_arg_id{-1};
-  void *graph_do_while_flag_dev_ptr{nullptr};
+  // Level table for nested `graph_do_while`, indexed by level id (empty if the kernel has no graph_do_while loop).
+  // Populated from Python at launch; flag_dev_ptr filled in by the backend's ndarray-resolution loop. Replaces the old
+  // single-loop scalars (arg id + flag ptr); the single (non-nested) loop is simply the depth-1 case with one level
+  // whose parent_id is -1.
+  std::vector<GraphDoWhileLevel> graph_do_while_levels;
+
+  // True if this kernel has at least one graph_do_while loop.
+  bool has_graph_do_while() const {
+    return !graph_do_while_levels.empty();
+  }
+
+  // Append a graph_do_while level (called from Python at launch, in level-id order). `cond_arg_id` is the resolved C++
+  // arg index of the condition ndarray; `parent_id` is the enclosing level id or -1.
+  void add_graph_do_while_level(int cond_arg_id, int parent_id) {
+    graph_do_while_levels.push_back(GraphDoWhileLevel{cond_arg_id, parent_id, nullptr});
+  }
+
+  // Resolve the flag device pointer for any level whose condition arg matches `arg_id`. Called by each backend's
+  // per-arg ndarray-resolution loop. (A given ndarray could in principle drive more than one level, so we set all
+  // matches rather than break.)
+  void resolve_graph_do_while_flag(int arg_id, void *flag_dev_ptr) {
+    for (auto &level : graph_do_while_levels) {
+      if (level.cond_arg_id == arg_id) {
+        level.flag_dev_ptr = flag_dev_ptr;
+      }
+    }
+  }
+  // Per-checkpoint `yield_on` arg-id table. Index = cp_id (0, 1, 2, ... in declaration order matching the Python
+  // `kernel.checkpoint_yield_on_args` list). Value is the resolved C++ arg-id of the ndarray parameter named in
+  // `qd.checkpoint(yield_on=name)`, or `-1` for checkpoints without a `yield_on=`. Set by `Kernel.__call__` just before
+  // `prog.launch_kernel`.
+  std::vector<int> checkpoint_yield_on_arg_ids;
+  // Parallel table of device pointers resolved by `resolve_ctx_ndarray_ptrs`. Same indexing convention as
+  // `checkpoint_yield_on_arg_ids`; `nullptr` for checkpoints without yield. Read by the GraphManager when wiring up the
+  // yield-check kernel for each checkpoint.
+  std::vector<void *> checkpoint_yield_on_dev_ptrs;
+  // Value to memcpy into the device-side `resume_point` slot before launch. `-1` means "fresh launch -- reset to 0 so
+  // every checkpoint runs"; any other non-negative integer means "resume from this cp_id, skipping cp_ids < value". Set
+  // by `Kernel.resume()`'s Python plumbing; defaults to -1 so non-resume launches behave as they always have.
+  int resume_from_checkpoint{-1};
 
   // Note that I've tried to group `array_runtime_size` and
   // `is_device_allocations` into a small struct. However, it caused some test
