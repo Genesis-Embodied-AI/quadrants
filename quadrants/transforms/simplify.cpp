@@ -570,7 +570,7 @@ void full_simplify(IRNode *root, const CompileConfig &config, const FullSimplify
         modified = true;
       if (should_dump)
         dump_step("10_die", iteration);
-      if (config.opt_level > 0 && whole_kernel_cse(root))
+      if (config.opt_level > 0 && !per_task_cse_enabled() && whole_kernel_cse(root))
         modified = true;
       if (should_dump)
         dump_step("11_whole_kernel_cse", iteration);

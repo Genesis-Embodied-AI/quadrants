@@ -80,6 +80,12 @@ LLVMCompiledKernel KernelCodeGen::compile_kernel_to_module() {
 
         Block blk;
         blk.insert(std::move(offload));
+        // Exp #2: per-offload CSE. When QD_PERTASK_CSE=1 the whole-kernel `full_simplify` fixpoint skips
+        // `whole_kernel_cse`, so run it here on each task's IR instead (parallel across the worker pool).
+        if (irpass::per_task_cse_enabled()) {
+          quadrants::ScopedProfiler _prof_pt_cse("ck_phase: per_task_cse");
+          irpass::whole_kernel_cse(&blk);
+        }
         auto new_data = this->compile_task(i, compile_config_, nullptr, &blk);
         data[i] = std::make_unique<LLVMCompiledTask>(std::move(new_data));
       };

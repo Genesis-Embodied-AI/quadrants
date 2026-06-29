@@ -5,6 +5,8 @@
 #include "quadrants/ir/visitors.h"
 #include "quadrants/system/profiler.h"
 
+#include <cstdlib>
+#include <string>
 #include <typeindex>
 
 namespace quadrants::lang {
@@ -264,6 +266,18 @@ namespace irpass {
 bool whole_kernel_cse(IRNode *root) {
   QD_AUTO_PROF;
   return WholeKernelCSE::run(root);
+}
+
+// Experiment flag (see perso_hugh/doc/quadrants_per_task_cache_migration_2026jun22.md, Part 3 / Exp #2).
+// When QD_PERTASK_CSE=1, `whole_kernel_cse` is skipped inside the whole-kernel `full_simplify` fixpoint and
+// instead run once per offloaded task inside `KernelCodeGen::compile_kernel_to_module`. Lets us A/B the
+// runtime + compile-time effect of per-offload CSE vs whole-kernel CSE from a single binary.
+bool per_task_cse_enabled() {
+  static const bool enabled = []() {
+    const char *e = std::getenv("QD_PERTASK_CSE");
+    return e != nullptr && std::string(e) == "1";
+  }();
+  return enabled;
 }
 }  // namespace irpass
 
