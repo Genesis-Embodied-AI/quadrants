@@ -1313,7 +1313,7 @@ bool size_expr_contains_inner_domain_enumeration(const SizeExpr *e) {
 bool determine_ad_stack_size(IRNode *root, const CompileConfig &config) {
   auto adaptive_allocas = irpass::analysis::gather_statements(root, [&](Stmt *s) {
     auto *ad_stack = s->cast<AdStackAllocaStmt>();
-    return ad_stack != nullptr && ad_stack->max_size == 0;
+    return ad_stack != nullptr && ad_stack->is_adaptive();
   });
   if (adaptive_allocas.empty()) {
     return false;
@@ -1339,7 +1339,7 @@ bool determine_ad_stack_size(IRNode *root, const CompileConfig &config) {
   std::unordered_map<AdStackAllocaStmt *, bool> alloca_cycle_detected;
   for (Stmt *s : adaptive_allocas) {
     auto *alloca = s->as<AdStackAllocaStmt>();
-    if (alloca->max_size != 0) {
+    if (!alloca->is_adaptive()) {
       continue;  // Already resolved by Bellman-Ford in phase 1.
     }
     t_cycle_detected = false;
@@ -1368,7 +1368,7 @@ bool determine_ad_stack_size(IRNode *root, const CompileConfig &config) {
   // uniform representation regardless of which phase resolved the bound.
   for (Stmt *s : adaptive_allocas) {
     auto *alloca = s->as<AdStackAllocaStmt>();
-    if (!alloca->size_expr && alloca->max_size != 0) {
+    if (!alloca->size_expr && !alloca->is_adaptive()) {
       alloca->size_expr = SizeExpr::make_const(static_cast<int64_t>(alloca->max_size));
     }
   }
@@ -1381,7 +1381,7 @@ bool determine_ad_stack_size(IRNode *root, const CompileConfig &config) {
   // `<tmp>/ir_adstack_unresolved/unresolved_alloca_<id>.ll` for offline inspection.
   for (Stmt *s : adaptive_allocas) {
     auto *alloca = s->as<AdStackAllocaStmt>();
-    if (alloca->max_size != 0 || alloca->size_expr) {
+    if (!alloca->is_adaptive() || alloca->size_expr) {
       continue;
     }
     std::string dump_hint;
