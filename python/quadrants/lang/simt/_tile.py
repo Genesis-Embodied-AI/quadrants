@@ -35,6 +35,8 @@ if _TYPE_CHECKING:
         def eye_(self) -> None: ...  # noqa: E704
         def cholesky_(self, eps: Any) -> None: ...  # noqa: E704
         def solve_triangular_(self, B: "_TileProto", lower: bool = True) -> None: ...  # noqa: E704
+        def _get_col(self, k: Any) -> Any: ...  # noqa: E704
+        def _set_col(self, k: Any, val: Any) -> None: ...  # noqa: E704
         def _load(self, arr: Any, row_start: Any, row_end: Any, col_start: Any, col_end: Any) -> None: ...  # noqa: E704
         def _store(
             self, arr: Any, row_start: Any, row_end: Any, col_start: Any, col_end: Any
@@ -344,21 +346,52 @@ def _make_tile_class(N: int, dtype):
                     my_norm_sq += new_val * new_val
 
         @qd.func
+        def _get_col(self, k):
+            """Read register column ``k`` at runtime via a static-unrolled cascade.
+
+            The unpacked vector field rejects runtime indices, so the cascade is emitted explicitly. With ``k`` a
+            runtime int and ``kk`` a python-int from ``qd.static``, the body of each iteration becomes a guarded
+            single-slot read; LLVM later selects on ``k`` to pick the matching slot.  Used by ``_trsm`` so the outer
+            loop can be a runtime ``range(N)`` (LLVM picks the unroll factor) rather than the fully-unrolled
+            ``qd.static(range(N))`` that spikes register pressure.
+            """
+            val = qd.cast(0.0, dtype)
+            for kk in qd.static(range(N)):
+                if k == kk:
+                    val = self.r[kk]
+            return val
+
+        @qd.func
+        def _set_col(self, k, val):
+            """Write register column ``k`` at runtime via a static-unrolled cascade.  See ``_get_col`` for rationale."""
+            for kk in qd.static(range(N)):
+                if k == kk:
+                    self.r[kk] = val
+
+        @qd.func
         def _trsm(self, L):
             """In-place triangular solve: solve self @ L^T = B (original self).
 
             L is a TileNxN holding the lower-triangular Cholesky factor (from cholesky_).  On return, self holds the
             solution X.
-            """
-            for c in qd.static(range(N)):
-                dot = qd.cast(0.0, dtype)
-                for j in qd.static(range(N)):
-                    if c > j:
-                        Lkj = qd.simt.subgroup.shuffle(L.r[j], qd.u32(c))
-                        dot += self.r[j] * Lkj  # type: ignore[reportOperatorIssue]
 
-                diag_c = qd.simt.subgroup.shuffle(L.r[c], qd.u32(c))
-                self.r[c] = (self.r[c] - dot) / diag_c  # type: ignore[reportOperatorIssue]
+            The outer loop uses ``range(N)`` (runtime), not ``qd.static(range(N))``, so LLVM can pick the unroll
+            factor: fully unrolling the N*N body fully explodes the live set and pushes ~37% more registers into
+            the kernel, causing measurable perf loss on the blocked Cholesky benchmark (e.g. ~9% slower on
+            ``misc/demos/cholesky_blocked.py`` for N=92).  The inner ``j`` loop is also ``range(N)`` for the same
+            reason.  Runtime access into the unpacked-vector field goes through ``_get_col`` / ``_set_col`` which
+            emit explicit cascades over ``self.r[kk]`` for static ``kk``.
+            """
+            for c in range(N):
+                dot = qd.cast(0.0, dtype)
+                for j in range(N):
+                    if c > j:
+                        Lkj = qd.simt.subgroup.shuffle(L._get_col(j), qd.u32(c))
+                        dot += self._get_col(j) * Lkj  # type: ignore[reportOperatorIssue]
+
+                diag_c = qd.simt.subgroup.shuffle(L._get_col(c), qd.u32(c))
+                new_val = (self._get_col(c) - dot) / diag_c  # type: ignore[reportOperatorIssue]
+                self._set_col(c, new_val)
 
         def solve_triangular_(self, B: Any, lower: bool = True) -> None:
             """Triangular solve: X @ self^T = B, storing result X in B in-place.
@@ -377,7 +410,12 @@ def _make_tile_class(N: int, dtype):
             arr_row_stop = arr.shape[0]
             if arr_row_stop < row_stop:
                 row_stop = arr_row_stop
-            v = dtype(0.0)
+            # Use qd.cast, not dtype(0.0): the AST transformer only treats a call as a type construction when
+            # id(dtype) is in primitive_types.type_ids, but a dtype resolved from a deep-copied default_fp (e.g.
+            # after qd.init(default_fp=qd.f32)) has a different id and falls through to a raw call, raising
+            # "Quadrants data types cannot be called outside Quadrants kernels".  qd.cast is identity-independent
+            # and folds to the same typed constant.
+            v = qd.cast(0.0, dtype)
             if row_start + tid < row_stop:
                 v = arr[row_start + tid, col]
             return v
@@ -389,7 +427,7 @@ def _make_tile_class(N: int, dtype):
             arr_row_stop = arr.shape[1]
             if arr_row_stop < row_stop:
                 row_stop = arr_row_stop
-            v = dtype(0.0)
+            v = qd.cast(0.0, dtype)  # see _resolve_vec2d for why qd.cast (not dtype(0.0))
             if row_start + tid < row_stop:
                 v = arr[batch, row_start + tid, col]
             return v
