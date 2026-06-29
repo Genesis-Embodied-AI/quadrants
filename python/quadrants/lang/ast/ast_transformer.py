@@ -16,6 +16,7 @@ import numpy as np
 from quadrants._lib import core as _qd_core
 from quadrants.lang import exception, expr, impl, matrix, mesh
 from quadrants.lang import ops as qd_ops
+from quadrants.lang._dataclass_util import create_flat_name
 from quadrants.lang._ndrange import _Ndrange
 from quadrants.lang._unpacked import _UnpackedVectorRef
 from quadrants.lang.ast.ast_transformer_utils import (
@@ -89,6 +90,21 @@ class ASTTransformer(Builder):
         pruning = ctx.global_context.pruning
         if not pruning.enforcing and not ctx.expanding_dataclass_call_parameters and node.id.startswith("__qd_"):
             ctx.global_context.pruning.mark_used(ctx.func.func_id, node.id)
+        # Track chains rooted at non-flattened parameter names: top-level ``@qd.kernel`` args
+        # (``ctx.kernel_args``) and ``@qd.func`` params (``ctx.fn_param_names``). Both appear in the AST as bare
+        # names (``self`` for a data_oriented kernel arg; ``static_rigid_sim_config`` for a ``qd.template()`` func
+        # arg bound to a ``@qd.data_oriented`` instance). ``build_Attribute`` propagates this annotation through
+        # ``state.dofs.x`` chains and ``mark_kernel_arg_chain_used``-s the flat name. The kernel's pruning narrow
+        # walk picks them up directly (kernel case) or after ``record_after_call`` propagates the callee's func-arg
+        # chains back through the call boundary (func case): e.g. ``func(s=self._sub)`` where ``func`` reads ``s.x``
+        # ends up with ``__qd_self__qd__sub__qd_x`` recorded in the kernel's pruning, so the args-hasher hashes that
+        # primitive value into the fastcache key.
+        # Dataclass args go through ``FlattenAttributeNameTransformer`` and reach this branch as already-flat
+        # ``__qd_…`` Names, handled by the block above via ``mark_used``.
+        if not node.id.startswith("__qd_") and (node.id in ctx.kernel_args or node.id in ctx.fn_param_names):
+            node._qd_arg_chain = node.id  # type: ignore[attr-defined]
+        else:
+            node._qd_arg_chain = None  # type: ignore[attr-defined]
         node.violates_pure, node.ptr, node.violates_pure_reason = ctx.get_var_by_name(node.id)
         # Flattened struct fields (``__qd_foo__qd_bar``) injected by ``populate_global_vars_from_dataclass`` are raw
         # ``Ndarray`` instances.  ``build_Attribute`` already promotes these via ``_promote_ndarray_if_declared`` but
@@ -671,14 +687,37 @@ class ASTTransformer(Builder):
     @staticmethod
     def _promote_ndarray_if_declared(ctx: ASTTransformerFuncContext, value: Any) -> Any:
         """If *value* is a bare ``Ndarray`` that was pre-declared as a kernel arg (in ``_predeclare_struct_ndarrays``),
-        return the ``AnyArray`` proxy from the cache. Otherwise return *value* unchanged."""
+        return the ``AnyArray`` proxy from the cache. Otherwise return *value* unchanged.
+
+        Also records the source ndarray id in ``pruning.used_struct_ndarray_ids`` on the non-enforcing first pass, so
+        that the enforcing second-pass ``_predeclare_struct_ndarrays`` can skip ndarrays that the kernel never actually
+        accesses. Both ``Ndarray`` instances and pre-existing ``AnyArray`` proxies (tagged with
+        ``_qd_source_ndarray_id``) are handled — the latter is the case for accesses in inlined ``@qd.func`` bodies
+        whose params were bound to already-promoted proxies by Option A in ``call_transformer``.
+        """
         from quadrants.lang._ndarray import Ndarray  # pylint: disable=C0415
 
-        if not isinstance(value, Ndarray):
+        pruning = ctx.global_context.pruning
+        # Mirror ``build_Name``'s mark_used gate: only mark on the non-enforcing first pass and not during synthetic
+        # per-leaf argument expansion for ``@qd.func`` calls. The callee body's own accesses (which run with
+        # ``expanding_dataclass_call_parameters = False``) are what we want to count.
+        should_mark = not pruning.enforcing and not ctx.expanding_dataclass_call_parameters
+        if isinstance(value, Ndarray):
+            cache = ctx.global_context.ndarray_to_any_array
+            key = id(value)
+            arr = cache.get(key)
+            if arr is not None:
+                if should_mark:
+                    pruning.used_struct_ndarray_ids.add(key)
+                return arr
             return value
-        cache = ctx.global_context.ndarray_to_any_array
-        arr = cache.get(id(value))
-        return arr if arr is not None else value
+        # Pre-promoted ``AnyArray`` flowing through an inlined ``@qd.func`` body. Mark the underlying ndarray as used
+        # so it survives the enforcing-pass pruning.
+        if should_mark:
+            src_id = getattr(value, "_qd_source_ndarray_id", None)
+            if src_id is not None:
+                pruning.used_struct_ndarray_ids.add(src_id)
+        return value
 
     @staticmethod
     def build_Attribute(ctx: ASTTransformerFuncContext, node: ast.Attribute):
@@ -797,6 +836,26 @@ class ASTTransformer(Builder):
                             warnings.warn(message)
                         else:
                             raise exception.QuadrantsCompilationError(message)
+        # Propagate the kernel-arg-rooted chain annotation and record this access in pruning's *separate* chain-paths
+        # set. ``build_Name`` sets ``_qd_arg_chain`` on non-flattened kernel args (e.g. data_oriented ``self``); each
+        # Attribute access in the chain extends it (``self`` → ``__qd_self__qd_x`` → ``__qd_self__qd_x__qd_y``).
+        #
+        # Why not ``mark_used``? On the enforcing pass, ``Kernel.materialize`` uses ``pruning.used_vars_by_func_id`` as
+        # ``struct_locals``, which drives ``FlattenAttributeNameTransformer`` — adding ``__qd_self__qd_x`` there would
+        # make the transformer rewrite ``self.x`` into ``Name('__qd_self__qd_x')``, and ``build_Name`` would then fail
+        # to find such a variable. ``mark_kernel_arg_chain_used`` puts the chain into a *separate* per-func set that's
+        # merged into ``used_vars_by_func_id[KERNEL_FUNC_ID]`` only *after* both compile passes, by
+        # ``Pruning.fold_kernel_arg_chain_paths`` — so the fastcache args-hash narrow walk picks them up without
+        # breaking codegen.
+        parent_chain = getattr(node.value, "_qd_arg_chain", None)
+        if parent_chain is not None:
+            flat = create_flat_name(parent_chain, node.attr)
+            node._qd_arg_chain = flat  # type: ignore[attr-defined]
+            pruning = ctx.global_context.pruning
+            if not pruning.enforcing and not ctx.expanding_dataclass_call_parameters:
+                pruning.mark_kernel_arg_chain_used(ctx.func.func_id, flat)
+        else:
+            node._qd_arg_chain = None  # type: ignore[attr-defined]
         return node.ptr
 
     @staticmethod

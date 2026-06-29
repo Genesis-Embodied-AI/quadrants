@@ -91,7 +91,13 @@ class QuadrantsCallable:
         self._adjoint: "Kernel | None" = None
         self.grad: "Kernel | None" = None
         self.is_pure: bool = False
+        self._attr_name: str | None = None
         update_wrapper(self, fn)
+
+    def __set_name__(self, owner: type, name: str) -> None:
+        # Captured at class-body time. ``data_oriented.make_kernel_indirect`` sets this explicitly on its replacement
+        # callable since setattr-after-class doesn't trigger __set_name__.
+        self._attr_name = name
 
     def __call__(self, *args, **kwargs):
         return self.wrapper.__call__(*args, **kwargs)
@@ -141,7 +147,17 @@ class QuadrantsCallable:
     def __get__(self, instance, owner):
         if instance is None:
             return self
-        return BoundQuadrantsCallable(instance, self)
+        bound = BoundQuadrantsCallable(instance, self)
+        # Non-data descriptor (no __set__): a __dict__ entry on the instance wins over the descriptor on subsequent
+        # attribute lookups. Stash the bound callable there so future ``instance.method`` accesses skip __get__
+        # allocation entirely (~0.6-1.2 us/call). Skip if the class uses __slots__ (no __dict__) or the attribute name
+        # wasn't captured.
+        name = self._attr_name
+        if name is not None:
+            inst_dict = getattr(instance, "__dict__", None)
+            if inst_dict is not None:
+                inst_dict[name] = bound
+        return bound
 
 
 class BoundQuadrantsCallable:
