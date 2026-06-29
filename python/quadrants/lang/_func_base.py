@@ -102,10 +102,20 @@ _is_cpython = sys.implementation.name == "cpython"
 
 _frozen_dc_plans: dict[tuple[int, type, str], tuple[set[str], tuple[tuple[str, str, Any], ...]]] = {}
 
+_frozen_dc_plans_hook_registered = False
+
+
+def _ensure_frozen_dc_plans_reset_hook():
+    global _frozen_dc_plans_hook_registered
+    if not _frozen_dc_plans_hook_registered:
+        impl.on_reset(_frozen_dc_plans.clear)
+        _frozen_dc_plans_hook_registered = True
+
 
 def _get_frozen_dc_plan(
     used_params: set[str], struct_cls: type, basename: str, fields_dict: dict
 ) -> tuple[tuple[str, str, Any], ...]:
+    _ensure_frozen_dc_plans_reset_hook()
     key = (id(used_params), struct_cls, basename)
     entry = _frozen_dc_plans.get(key)
     # Guard against id() reuse: after the original set is garbage-collected, a new set can be allocated at the same
@@ -143,6 +153,17 @@ def _get_frozen_dc_unwrapped(v: Any, fields_dict: dict) -> dict[str, Any]:
         object.__setattr__(v, "_qd_dc_unwrapped", unwrapped)
     except AttributeError:
         pass
+    # Cache whether ALL unwrapped values are Fields (zero launch-context slots).  This is a property of the instance
+    # alone — independent of which kernel or field-subset is active — so a simple boolean suffices and survives
+    # qd.reset() harmlessly (the boolean remains valid as long as the instance is alive).
+    if getattr(v, "_qd_all_field", None) is None:
+        from quadrants.lang.field import Field as _Field  # pylint: disable=C0415
+
+        _all_field = all(isinstance(fv, _Field) for fv in unwrapped.values())
+        try:
+            object.__setattr__(v, "_qd_all_field", _all_field)
+        except (AttributeError, TypeError):
+            pass
     return unwrapped
 
 
@@ -256,7 +277,9 @@ class FuncBase:
                     # v: BufferView (no dtype) — infer dtype from the passed argument
                     annotation = buffer_view_type.BufferViewType()
                 else:
-                    raise QuadrantsSyntaxError(f"Invalid type annotation (argument {i}) of Taichi kernel: {annotation}")
+                    raise QuadrantsSyntaxError(
+                        f"Invalid type annotation (argument {i}) of Quadrants kernel: {annotation}"
+                    )
             self.arg_metas.append(ArgMetadata(annotation, param.name, param.default))
             self.orig_arguments.append(ArgMetadata(annotation, param.name, param.default))
 
@@ -399,6 +422,10 @@ class FuncBase:
             # kernel, and routing the same loop through a `@qd.func` would silently emit a wrong adjoint. Kernels
             # start at the top of the call stack so they always begin at depth 0.
             ctx.loop_depth = global_context.caller_loop_depth
+            # Likewise inherit whether the caller chain was already inside non-static control flow, so a
+            # `requires_top_level=True` func called at this func's top level is still rejected when this func was
+            # itself invoked from a runtime for / if / while. Kernels always begin False.
+            ctx.inherited_non_static_control_flow = global_context.caller_in_non_static_control_flow
         return tree, ctx
 
     def fuse_args(
@@ -554,7 +581,7 @@ class FuncBase:
         Returns the number of underlying kernel args being set for a given Python arg, and whether the launch context
         buffer can be cached (see 'launch_kernel' for details).
 
-        Note that templates don't set kernel args, and a single scalar, an external array (numpy or torch) or a taichi
+        Note that templates don't set kernel args, and a single scalar, an external array (numpy or torch) or a quadrants
         ndarray all set 1 kernel arg. Similarlty, a struct of N ndarrays would set N kernel args.
         """
         if actual_argument_slot >= MAX_ARG_NUM:
@@ -751,7 +778,7 @@ class FuncBase:
 
                     grad = v.grad
                     if (v.device.type != "cpu") and not (v.device.type == "cuda" and quadrants_arch == _arch_cuda):
-                        # For a torch tensor to be passed as as input argument (in and/or out) of a taichi kernel, its
+                        # For a torch tensor to be passed as as input argument (in and/or out) of a quadrants kernel, its
                         # memory must be hosted either on CPU, or on CUDA if and only if Quadrants is using CUDA backend.
                         # We just replace it with a CPU tensor and by the end of kernel execution we'll use the callback
                         # to copy the values back to the original tensor.

@@ -210,6 +210,24 @@ class TypeCheck : public IRVisitor {
 
         cast(stmt->operand, target_dtype);
         stmt->ret_type = target_dtype;
+      } else if (stmt->op_type == UnaryOpType::popcnt || stmt->op_type == UnaryOpType::clz ||
+                 stmt->op_type == UnaryOpType::ffs) {
+        // popcnt / clz / ffs always produce a small non-negative count (≤ 64), so we normalise the result
+        // to i32 across every backend. This matches CUDA libdevice (__nv_popc / __nv_clz / __nv_ffs all
+        // return int) and the AMDGPU SALU instructions (s_bcnt1_i32_b64, s_flbit_i32_b64) which already
+        // return i32 in hardware. Without this override, SPIR-V and x64 would return the operand width
+        // (e.g. u64 for a u64 input) while CUDA / AMDGPU returned i32, giving the same kernel source
+        // different return types per backend. Worse, mid-codegen ret_type mutation on CUDA / AMDGPU
+        // bypasses this pass's promotion logic, so a compound expression like `popcnt(x: i64) + i64(1)`
+        // would emit `Add(i32, i64)` and trip an LLVM type-mismatch assertion at IR construction time.
+        // Setting ret_type here lets type promotion insert the correct cast_value(i32 -> i64) before
+        // codegen runs.
+        DataType target_dtype = PrimitiveType::i32;
+        if (stmt->operand->ret_type->is<TensorType>()) {
+          target_dtype = TypeFactory::get_instance().create_tensor_type(
+              stmt->operand->ret_type->as<TensorType>()->get_shape(), target_dtype);
+        }
+        stmt->ret_type = target_dtype;
       }
     }
   }

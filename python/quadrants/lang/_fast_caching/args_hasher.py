@@ -8,6 +8,7 @@ import numpy as np
 
 from quadrants import _logging, _tensor_wrapper
 from quadrants._tensor_wrapper import _TENSOR_WRAPPER_TYPES
+from quadrants._tensor_wrapper import Tensor as _TensorWrapper
 from quadrants.types.annotations import Template
 
 from .._ndarray import ScalarNdarray
@@ -16,6 +17,8 @@ from ..kernel_arguments import ArgMetadata
 from ..matrix import MatrixField, MatrixNdarray, VectorNdarray
 from ..util import is_data_oriented
 from .hash_utils import hash_iterable_strings
+
+_FIELD_TYPES = (ScalarField, MatrixField)
 
 try:
     import torch
@@ -37,6 +40,30 @@ FIELD_METADATA_CACHE_VALUE = "add_value_to_cache_key"
 _DC_REPR_NONE = object()
 
 
+class FastcacheSkip(enum.Enum):
+    """Why fastcache does not apply to this call."""
+
+    FIELD_VIA_TENSOR = "field_via_tensor"
+    WARN = "warn"
+
+
+# Set when the fastcache skip is something callers should warn about (as opposed to a Field arriving through a
+# qd.Tensor annotation, which is a normal silent path). Reset at the start of each hash_args call.
+_should_warn = False
+
+
+def _mark_warn_if_not_tensor_annotation(arg_meta: ArgMetadata | None) -> None:
+    """Flag that a warning is needed if the Field didn't arrive through a qd.Tensor annotation."""
+    global _should_warn  # pylint: disable=global-statement
+    if arg_meta is not None and arg_meta.annotation is not _TensorWrapper:
+        _should_warn = True
+
+
+def _mark_should_warn() -> None:
+    global _should_warn  # pylint: disable=global-statement
+    _should_warn = True
+
+
 def dataclass_to_repr(raise_on_templated_floats: bool, path: tuple[str, ...], arg: Any) -> str | None:
     # PERF: For frozen dataclasses, the repr never changes. Cache it on the instance to avoid repeated
     # ``dataclasses.fields()`` calls (which are slow due to extra runtime checks — see _template_mapper_hotpath.py
@@ -55,6 +82,8 @@ def dataclass_to_repr(raise_on_templated_floats: bool, path: tuple[str, ...], ar
         child_value = getattr(arg, field.name)
         _repr = stringify_obj_type(raise_on_templated_floats, path + (field.name,), child_value, arg_meta=None)
         if _repr is None:
+            if isinstance(child_value, _FIELD_TYPES) and field.type is not _TensorWrapper:
+                _mark_should_warn()
             if is_frozen:
                 try:
                     object.__setattr__(arg, "_qd_dc_repr", _DC_REPR_NONE)
@@ -127,6 +156,7 @@ def stringify_obj_type(
         # disabled for now, because we need to think about how to handle field offset
         # etc
         # TODO: think about whether there is a way to include fields
+        _mark_warn_if_not_tensor_annotation(arg_meta)
         return None
     if isinstance(obj, MatrixNdarray):
         return f"[ndm-{obj.m}-{obj.n}-{obj.dtype}-{len(obj.shape)}{_layout_tag}]"  # type: ignore[arg-type]
@@ -138,6 +168,7 @@ def stringify_obj_type(
         # disabled for now, because we need to think about how to handle field offset
         # etc
         # TODO: think about whether there is a way to include fields
+        _mark_warn_if_not_tensor_annotation(arg_meta)
         return None
     if dataclasses.is_dataclass(obj):
         return dataclass_to_repr(raise_on_templated_floats, path, obj)
@@ -153,10 +184,14 @@ def stringify_obj_type(
         for k, v in _dict.items():
             _child_repr = stringify_obj_type(raise_on_templated_floats, (*path, k), v, ArgMetadata(Template, ""))
             if _child_repr is None:
-                _logging.warn(
-                    f"""A kernel that has been marked as eligible for fast cache was passed 1 or more parameters that are not, in fact, eligible for fast cache: one of the parameters was a @qd.data_oriented objects, and one of its children was not eligible.
-The data oriented object was of type {type(obj)} and the child {k}={type(v)} was not eligible. For information, the path of the value was {path}."""
-                )
+                if _should_warn:
+                    _logging.warn(
+                        f"A kernel that has been marked as eligible for fast cache was passed 1 or more parameters "
+                        f"that are not, in fact, eligible for fast cache: one of the parameters was a "
+                        f"@qd.data_oriented object, and one of its children was not eligible. The data oriented "
+                        f"object was of type {type(obj)} and the child {k}={type(v)} was not eligible. For "
+                        f"information, the path of the value was {path}."
+                    )
                 return None
             child_repr_l.append(f"{k}: {_child_repr}")
         return ", ".join(child_repr_l)
@@ -175,6 +210,7 @@ The data oriented object was of type {type(obj)} and the child {k}={type(v)} was
         return "np.bool_"
     if isinstance(obj, enum.Enum):
         return f"enum-{obj.name}-{obj.value}"
+    _mark_should_warn()
     # The bit in caps should not be modified without updating corresponding test
     # The rest of free text can be freely modified
     # (will probably formalize this in more general doc / contributor guidelines at some point)
@@ -186,8 +222,10 @@ The data oriented object was of type {type(obj)} and the child {k}={type(v)} was
 
 def hash_args(
     raise_on_templated_floats: bool, args: Sequence[Any], arg_metas: Sequence[ArgMetadata | None]
-) -> str | None:
-    global g_num_calls, g_num_args, g_hashing_time, g_repr_time, g_num_ignored_calls
+) -> str | FastcacheSkip:
+    """Return the args hash string, or a HashFailure explaining why hashing failed."""
+    global g_num_calls, g_num_args, g_hashing_time, g_repr_time, g_num_ignored_calls, _should_warn
+    _should_warn = False
     g_num_calls += 1
     g_num_args += len(args)
     hash_l = []
@@ -201,7 +239,7 @@ def hash_args(
         g_repr_time += time.time() - start
         if not _hash:
             g_num_ignored_calls += 1
-            return None
+            return FastcacheSkip.WARN if _should_warn else FastcacheSkip.FIELD_VIA_TENSOR
         hash_l.append(_hash)
     start = time.time()
     res = hash_iterable_strings(hash_l)

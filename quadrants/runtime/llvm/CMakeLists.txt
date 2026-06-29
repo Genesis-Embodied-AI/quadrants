@@ -4,7 +4,10 @@ add_library(llvm_runtime)
 target_sources(llvm_runtime
   PRIVATE
     llvm_runtime_executor.cpp
-    llvm_adstack_lazy_claim.cpp
+    persistent_rand_state_buffer.cpp
+    adstack_lazy_claim/bound_eval.cpp
+    adstack_lazy_claim/metadata_publish.cpp
+    adstack_lazy_claim/heap_grow.cpp
     llvm_context.cpp
     snode_tree_buffer_manager.cpp
     kernel_launcher.cpp
@@ -33,4 +36,4 @@ if (QD_WITH_AMDGPU)
     target_link_libraries(llvm_runtime PRIVATE ${llvm_amdgpu_libs})
 endif()
 
-target_link_libraries(llvm_runtime PRIVATE ti_device_api)
+target_link_libraries(llvm_runtime PRIVATE qd_device_api)

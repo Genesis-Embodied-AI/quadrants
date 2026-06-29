@@ -82,10 +82,24 @@ jobs:
              - C++ tests: tests/cpp/ (mirrors the source subdirs)
              Test files are typically named test_<feature>.py or test_<feature>.cpp.
 
+          Repo testing policy — Python is the default:
+          - Prefer Python tests under tests/python/. Most C++ behavior is reachable via the Python
+            API and is best tested end-to-end from Python.
+          - Do NOT flag missing C++ tests when adequate Python coverage (existing or added in this
+            PR) already exercises the changed behavior end-to-end.
+          - Only flag a missing C++ test under tests/cpp/ when the behavior is impossible or
+            impractical to exercise from Python. Narrow exceptions:
+            (a) Hardware-capability gating or other negative paths that require mocked device
+                state (e.g. a function that returns empty when a SPIR-V capability is missing) —
+                Python tests on real devices either skip or never enter the branch.
+            (b) Parity with an existing C++ test for an analogous function (e.g. if foo_a has a
+                C++ unit test and the PR adds foo_b of the same shape, mirror the test).
+
           What to flag:
           - New public functions/methods/classes with no test coverage at all
           - New modules/files with no corresponding test file
           - Significant behavior changes (new branches, new error handling) with no test for the new behavior
+          - C++ additions matching one of the (a)–(b) exceptions above with no C++ test
 
           What NOT to flag:
           - Pure refactors that don't change behavior (renames, moves, reformatting)
@@ -94,6 +108,7 @@ jobs:
           - Config files, build files, CI files
           - Changes to test infrastructure itself (conftest.py, test utilities)
           - Bug fixes where the fix is obviously correct and narrow
+          - Missing C++ tests for code already adequately covered by Python end-to-end tests
 
           Be pragmatic. Not every line needs a test. Focus on substantial untested additions.
           Do NOT modify any files.

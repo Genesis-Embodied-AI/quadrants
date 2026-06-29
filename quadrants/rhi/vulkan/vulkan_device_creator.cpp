@@ -209,7 +209,7 @@ VulkanDeviceCreator::VulkanDeviceCreator(const VulkanDeviceCreator::Params &para
     throw std::runtime_error("Error loading vulkan");
   }
 
-  ti_device_ = std::make_unique<VulkanDevice>();
+  qd_device_ = std::make_unique<VulkanDevice>();
   uint32_t vk_api_version;
   bool manual_create;
   if (params_.api_version.has_value()) {
@@ -244,7 +244,7 @@ VulkanDeviceCreator::VulkanDeviceCreator(const VulkanDeviceCreator::Params &para
     params.compute_queue_family_index = queue_family_indices_.compute_family.value();
     params.graphics_queue = graphics_queue_;
     params.graphics_queue_family_index = queue_family_indices_.graphics_family.value();
-    ti_device_->init_vulkan_structs(params);
+    qd_device_->init_vulkan_structs(params);
   }
 
   if (params_.is_for_ui) {
@@ -253,7 +253,7 @@ VulkanDeviceCreator::VulkanDeviceCreator(const VulkanDeviceCreator::Params &para
 }
 
 VulkanDeviceCreator::~VulkanDeviceCreator() {
-  ti_device_.reset();
+  qd_device_.reset();
   if (params_.enable_validation_layer) {
     destroy_debug_utils_messenger_ext(instance_, debug_messenger_, kNoVkAllocCallbacks);
   }
@@ -263,11 +263,11 @@ VulkanDeviceCreator::~VulkanDeviceCreator() {
   // that corrupts SubgroupLocalInvocationId after ~11 cycles.
 }
 
-// Create (or reuse) a VkInstance and populate ti_device_ capability flags.
+// Create (or reuse) a VkInstance and populate qd_device_ capability flags.
 //
 // Phase 1 — Capability discovery.  Enumerates instance extensions and sets
-//   `surface` and `physical_device_features2` on ti_device_->vk_caps().
-//   This runs every cycle because ti_device_ is freshly constructed (all caps
+//   `surface` and `physical_device_features2` on qd_device_->vk_caps().
+//   This runs every cycle because qd_device_ is freshly constructed (all caps
 //   default to false).  The `physical_device_features2` flag gates whether
 //   create_logical_device() will query and enable f16, i8, atomic float,
 //   variable pointers, shader clock, buffer device address, etc.
@@ -285,8 +285,8 @@ VulkanDeviceCreator::~VulkanDeviceCreator() {
 //   VK_ERROR_INCOMPATIBLE_DRIVER), and stores the new instance in the
 //   VulkanLoader singleton for future reuse.
 void VulkanDeviceCreator::create_instance(uint32_t vk_api_version, bool manual_create) {
-  // Discover instance extensions and set capability flags on ti_device_.
-  // This must run every cycle because ti_device_ is freshly created.
+  // Discover instance extensions and set capability flags on qd_device_.
+  // This must run every cycle because qd_device_ is freshly created.
   uint32_t num_instance_extensions = 0;
   vkEnumerateInstanceExtensionProperties(nullptr, &num_instance_extensions, nullptr);
   std::vector<VkExtensionProperties> supported_extensions(num_instance_extensions);
@@ -295,9 +295,9 @@ void VulkanDeviceCreator::create_instance(uint32_t vk_api_version, bool manual_c
   for (auto &ext : supported_extensions) {
     std::string name = ext.extensionName;
     if (name == VK_KHR_SURFACE_EXTENSION_NAME) {
-      ti_device_->vk_caps().surface = true;
+      qd_device_->vk_caps().surface = true;
     } else if (name == VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME) {
-      ti_device_->vk_caps().physical_device_features2 = true;
+      qd_device_->vk_caps().physical_device_features2 = true;
     }
   }
 
@@ -328,7 +328,7 @@ void VulkanDeviceCreator::create_instance(uint32_t vk_api_version, bool manual_c
   VkInstance existing = VulkanLoader::instance().get_instance();
   if (existing != VK_NULL_HANDLE) {
     instance_ = existing;
-    ti_device_->vk_caps().vk_api_version = vk_api_version;
+    qd_device_->vk_caps().vk_api_version = vk_api_version;
     return;
   }
   VkApplicationInfo app_info{};
@@ -402,12 +402,12 @@ void VulkanDeviceCreator::create_instance(uint32_t vk_api_version, bool manual_c
     // https://www.khronos.org/registry/vulkan/specs/1.2-extensions/man/html/VkApplicationInfo.html
     // Vulkan 1.0 implementation will return this when api version is not 1.0
     // Vulkan 1.1+ implementation will work with maximum version set
-    ti_device_->vk_caps().vk_api_version = VK_API_VERSION_1_0;
+    qd_device_->vk_caps().vk_api_version = VK_API_VERSION_1_0;
     app_info.apiVersion = VK_API_VERSION_1_0;
 
     res = vkCreateInstance(&create_info, kNoVkAllocCallbacks, &instance_);
   } else {
-    ti_device_->vk_caps().vk_api_version = vk_api_version;
+    qd_device_->vk_caps().vk_api_version = vk_api_version;
   }
 
   if (res != VK_SUCCESS) {
@@ -525,7 +525,7 @@ void VulkanDeviceCreator::create_logical_device(bool manual_create) {
   // Vulkan but we use the device like it has a lower version (if the user
   // wanted a lower version device).
   uint32_t vk_api_version = physical_device_properties.apiVersion;
-  ti_device_->vk_caps().vk_api_version = vk_api_version;
+  qd_device_->vk_caps().vk_api_version = vk_api_version;
   if (vk_api_version >= VK_API_VERSION_1_3) {
     caps.set(DeviceCapability::spirv_version, 0x10500);
   } else if (vk_api_version >= VK_API_VERSION_1_2) {
@@ -581,7 +581,7 @@ void VulkanDeviceCreator::create_logical_device(bool manual_create) {
       }
     } else if (name == VK_KHR_EXTERNAL_MEMORY_CAPABILITIES_EXTENSION_NAME ||
                name == VK_KHR_EXTERNAL_MEMORY_EXTENSION_NAME) {
-      ti_device_->vk_caps().external_memory = true;
+      qd_device_->vk_caps().external_memory = true;
       enabled_extensions.push_back(ext.extensionName);
     } else if (name == VK_KHR_VARIABLE_POINTERS_EXTENSION_NAME) {
       enabled_extensions.push_back(ext.extensionName);
@@ -615,6 +615,13 @@ void VulkanDeviceCreator::create_logical_device(bool manual_create) {
       enabled_extensions.push_back(ext.extensionName);
     } else if (name == VK_KHR_SHADER_CLOCK_EXTENSION_NAME) {
       enabled_extensions.push_back(ext.extensionName);
+    } else if (name == VK_KHR_SHADER_SUBGROUP_EXTENDED_TYPES_EXTENSION_NAME) {
+      // Promoted to Vulkan 1.2 core. Push the extension here so the pre-1.2 path below
+      // (`CHECK_VERSION(1, 2) || CHECK_EXTENSION(...)`) actually finds it via `CHECK_EXTENSION`; without
+      // this branch, a Vulkan 1.1 device that advertises the KHR extension would silently skip
+      // `shaderSubgroupExtendedTypes` enablement and still trip VUID-RuntimeSpirv-None-06275 on any
+      // 8/16/64-bit `OpGroupNonUniform*` op.
+      enabled_extensions.push_back(ext.extensionName);
     } else if (std::find(params_.additional_device_extensions.begin(), params_.additional_device_extensions.end(),
                          name) != params_.additional_device_extensions.end()) {
       enabled_extensions.push_back(ext.extensionName);
@@ -623,7 +630,7 @@ void VulkanDeviceCreator::create_logical_device(bool manual_create) {
   }
 
   if (has_swapchain) {
-    ti_device_->vk_caps().present = true;
+    qd_device_->vk_caps().present = true;
   }
 
   VkPhysicalDeviceFeatures device_features{};
@@ -645,10 +652,10 @@ void VulkanDeviceCreator::create_logical_device(bool manual_create) {
   }
   if (device_supported_features.wideLines) {
     device_features.wideLines = true;
-    ti_device_->vk_caps().wide_line = true;
+    qd_device_->vk_caps().wide_line = true;
   }
 
-  if (ti_device_->vk_caps().vk_api_version >= VK_API_VERSION_1_1) {
+  if (qd_device_->vk_caps().vk_api_version >= VK_API_VERSION_1_1) {
     VkPhysicalDeviceSubgroupProperties subgroup_properties{};
     subgroup_properties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_PROPERTIES;
     subgroup_properties.pNext = nullptr;
@@ -658,6 +665,11 @@ void VulkanDeviceCreator::create_logical_device(bool manual_create) {
     physical_device_properties.pNext = &subgroup_properties;
 
     vkGetPhysicalDeviceProperties2(physical_device_, &physical_device_properties);
+
+    // Vulkan exposes `subgroupSize` as a per-device property that's uniform across every dispatch we submit (the
+    // `VK_EXT_subgroup_size_control` extension can vary it per-pipeline, but Quadrants doesn't opt in). Stash it in the
+    // device cap so `Program::subgroup_size()` and the fe-ll cache key can see it on the SPIR-V backends.
+    caps.set(DeviceCapability::spirv_subgroup_size, subgroup_properties.subgroupSize);
 
     if (subgroup_properties.supportedOperations & VK_SUBGROUP_FEATURE_BASIC_BIT) {
       caps.set(DeviceCapability::spirv_has_subgroup_basic, true);
@@ -684,6 +696,14 @@ void VulkanDeviceCreator::create_logical_device(bool manual_create) {
   variable_ptr_feature.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VARIABLE_POINTERS_FEATURES_KHR;
   VkPhysicalDeviceShaderAtomicInt64Features shader_atomic_int64_feature{};
   shader_atomic_int64_feature.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_ATOMIC_INT64_FEATURES;
+  // VK_KHR_shader_subgroup_extended_types (promoted to Vulkan 1.2 core). Enables OpGroupNonUniform*
+  // ops on 8/16/64-bit integer and 16-bit float types. Required by the `qd.simt.subgroup.*` and
+  // `qd.simt.block.*` reductions when invoked with `qd.i64` (and 8/16-bit types), otherwise SPIR-V
+  // validation rejects the shader with VUID-RuntimeSpirv-None-06275 and the dispatch returns
+  // uninitialised lanes.
+  VkPhysicalDeviceShaderSubgroupExtendedTypesFeatures shader_subgroup_extended_types_feature{};
+  shader_subgroup_extended_types_feature.sType =
+      VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_SUBGROUP_EXTENDED_TYPES_FEATURES;
   VkPhysicalDeviceShaderAtomicFloatFeaturesEXT shader_atomic_float_feature{};
   shader_atomic_float_feature.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_ATOMIC_FLOAT_FEATURES_EXT;
   VkPhysicalDeviceShaderAtomicFloat2FeaturesEXT shader_atomic_float_2_feature{};
@@ -701,7 +721,7 @@ void VulkanDeviceCreator::create_logical_device(bool manual_create) {
   VkPhysicalDeviceDynamicRenderingFeaturesKHR dynamic_rendering_feature{};
   dynamic_rendering_feature.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES_KHR;
 
-  if (ti_device_->vk_caps().physical_device_features2) {
+  if (qd_device_->vk_caps().physical_device_features2) {
     VkPhysicalDeviceFeatures2KHR features2{};
     features2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
 
@@ -709,7 +729,7 @@ void VulkanDeviceCreator::create_logical_device(bool manual_create) {
   std::find_if(enabled_extensions.begin(), enabled_extensions.end(), \
                [=](const char *o) { return strcmp(ext, o) == 0; }) != enabled_extensions.end()
 
-    uint32_t vk_api_version = ti_device_->vk_caps().vk_api_version;
+    uint32_t vk_api_version = qd_device_->vk_caps().vk_api_version;
 #define CHECK_VERSION(major, minor) vk_api_version >= VK_MAKE_API_VERSION(0, major, minor, 0)
 
     // Variable ptr
@@ -734,6 +754,21 @@ void VulkanDeviceCreator::create_logical_device(bool manual_create) {
       }
       *pNextEnd = &shader_atomic_int64_feature;
       pNextEnd = &shader_atomic_int64_feature.pNext;
+    }
+
+    // Subgroup extended types (promoted to Vulkan 1.2 core). Required for OpGroupNonUniform* ops on
+    // 8/16/64-bit integers and 16-bit floats — the `qd.simt.subgroup.*` and `qd.simt.block.*`
+    // reductions emit these when the lane dtype is `qd.i64` (etc.). The feature has no
+    // DeviceCapability bit because the SPIR-V codegen already gates wide-int dispatch on
+    // `spirv_has_int64` / `spirv_has_int{8,16}`; the device must merely accept the SPIR-V at
+    // pipeline creation time.
+    if (CHECK_VERSION(1, 2) || CHECK_EXTENSION(VK_KHR_SHADER_SUBGROUP_EXTENDED_TYPES_EXTENSION_NAME)) {
+      features2.pNext = &shader_subgroup_extended_types_feature;
+      vkGetPhysicalDeviceFeatures2KHR(physical_device_, &features2);
+      if (shader_subgroup_extended_types_feature.shaderSubgroupExtendedTypes) {
+        *pNextEnd = &shader_subgroup_extended_types_feature;
+        pNextEnd = &shader_subgroup_extended_types_feature.pNext;
+      }
     }
 
     // Atomic float
@@ -881,7 +916,7 @@ void VulkanDeviceCreator::create_logical_device(bool manual_create) {
       vkGetPhysicalDeviceFeatures2KHR(physical_device_, &features2);
 
       if (dynamic_rendering_feature.dynamicRendering) {
-        ti_device_->vk_caps().dynamic_rendering = true;
+        qd_device_->vk_caps().dynamic_rendering = true;
       }
 
       *pNextEnd = &dynamic_rendering_feature;
@@ -925,7 +960,7 @@ void VulkanDeviceCreator::create_logical_device(bool manual_create) {
 
   // Dump capabilities
   caps.dbg_print_all();
-  ti_device_->set_caps(std::move(caps));
+  qd_device_->set_caps(std::move(caps));
 }
 
 }  // namespace vulkan

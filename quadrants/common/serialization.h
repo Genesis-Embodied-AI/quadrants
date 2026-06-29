@@ -230,10 +230,10 @@ inline std::vector<uint8_t> read_data_from_file(const std::string &fn) {
   }
   if (ends_with(fn, ".zip")) {
     std::fclose(f);
-    // Read zip file, e.g. particles.tcb.zip
+    // Read zip file, e.g. particles.qdb.zip
     return zip::read(fn);
   } else {
-    // Read uncompressed file, e.g. particles.tcb
+    // Read uncompressed file, e.g. particles.qdb
     QD_ASSERT(f != nullptr);
     std::size_t length = 0;
     while (true) {
@@ -258,14 +258,14 @@ inline void write_data_to_file(const std::string &fn, uint8_t *data, std::size_t
     QD_ERROR("Cannot open file [{}] for writing. (Does the directory exist?)", fn);
     QD_ASSERT(f != nullptr);
   }
-  if (ends_with(fn, ".tcb.zip")) {
+  if (ends_with(fn, ".qdb.zip")) {
     std::fclose(f);
     zip::write(fn, data, size);
-  } else if (ends_with(fn, ".tcb")) {
+  } else if (ends_with(fn, ".qdb")) {
     fwrite(data, sizeof(uint8_t), size, f);
     std::fclose(f);
   } else {
-    QD_ERROR("File must end with .tcb or .tcb.zip. [Filename = {}]", fn);
+    QD_ERROR("File must end with .qdb or .qdb.zip. [Filename = {}]", fn);
   }
 }
 

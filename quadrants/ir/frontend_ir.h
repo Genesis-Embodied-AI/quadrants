@@ -23,6 +23,15 @@ struct ForLoopConfig {
   MemoryAccessOptions mem_access_opt;
   int block_dim{0};
   bool uniform{false};
+  int stream_parallel_group_id{0};
+  int graph_do_while_level_id{-1};
+  // `cp_id` (see design doc `perso_hugh/doc/qipc/reentrant.md` section 5.1) of the enclosing `qd.checkpoint(...)` block
+  // when this for-loop is emitted, or `-1` when the for-loop is outside any checkpoint. Assigned by the AST builder's
+  // `current_checkpoint_id_` at `begin_frontend_*_for` time. Propagated through `FrontendForStmt` -> `RangeForStmt` /
+  // `StructForStmt` / `MeshForStmt` -> `OffloadedStmt` -> `OffloadedTask` so the GraphManager can group consecutive
+  // tasks by their `checkpoint_id` and wrap each group in an IF conditional node (slice 1c). Pure plumbing here in
+  // slice 1b; the runtime does not yet consume this field, so behaviour is unchanged for non- checkpoint code paths.
+  int checkpoint_id{-1};
   std::string loop_name{""};
 };
 
@@ -198,6 +207,9 @@ class FrontendForStmt : public Stmt {
   bool strictly_serialized;
   MemoryAccessOptions mem_access_opt;
   int block_dim;
+  int stream_parallel_group_id{0};
+  int graph_do_while_level_id{-1};
+  int checkpoint_id{-1};
   std::string loop_name;
 
   FrontendForStmt(const ExprGroup &loop_vars,
@@ -545,7 +557,7 @@ class MatrixFieldExpression : public Expression {
 
 /**
  * Creating a local matrix;
- * lowered from ti.Matrix
+ * lowered from qd.Matrix
  */
 class MatrixExpression : public Expression {
  public:
@@ -607,6 +619,26 @@ class IndexExpression : public Expression {
   bool is_tensor() const;
 };
 
+// `qd.volatile_load(target)` -- frontend wrapper that forces the load of `target` (an lvalue subscript into a
+// global field / ndarray) to lower to a `GlobalLoadStmt` with `is_volatile=true`.  The pointer flatten path is
+// reused unchanged; only the load itself differs from the implicit rvalue conversion `flatten_rvalue` performs
+// when the same expression appears in a regular read context.  Required for spin-wait correctness on every
+// backend (LLVM `load volatile` / SPIR-V `OpLoad` with the `Volatile` `MemoryAccess` mask) -- see #648.
+class VolatileLoadExpression : public Expression {
+ public:
+  Expr src;
+
+  explicit VolatileLoadExpression(const Expr &src, const DebugInfo &dbg_info = DebugInfo())
+      : Expression(dbg_info), src(src) {
+  }
+
+  void type_check(const CompileConfig *config) override;
+
+  void flatten(FlattenContext *ctx) override;
+
+  QD_DEFINE_ACCEPT_FOR_EXPRESSION
+};
+
 class RangeAssumptionExpression : public Expression {
  public:
   Expr input, base;
@@ -666,13 +698,22 @@ class IdExpression : public Expression {
   QD_DEFINE_ACCEPT_FOR_EXPRESSION
 };
 
-// ti.atomic_*() is an expression with side effect.
+// qd.atomic_*() is an expression with side effect.
 class AtomicOpExpression : public Expression {
  public:
   AtomicOpType op_type;
-  Expr dest, val;
+  Expr dest;
+  // Only meaningful when `op_type == AtomicOpType::cas`. Empty Expr otherwise. CAS is the only atomic op
+  // with three operands -- (dest, expected, val) -- and is the only place this slot is populated.
+  // Declared between dest and val so member-init order matches the 4-arg constructor's parameter order.
+  Expr expected;
+  Expr val;
 
   AtomicOpExpression(AtomicOpType op_type, const Expr &dest, const Expr &val) : op_type(op_type), dest(dest), val(val) {
+  }
+
+  AtomicOpExpression(AtomicOpType op_type, const Expr &dest, const Expr &expected, const Expr &val)
+      : op_type(op_type), dest(dest), expected(expected), val(val) {
   }
 
   void type_check(const CompileConfig *config) override;
@@ -887,6 +928,9 @@ class ASTBuilder {
       config.mem_access_opt.clear();
       config.block_dim = 0;
       config.strictly_serialized = false;
+      config.stream_parallel_group_id = 0;
+      config.graph_do_while_level_id = -1;
+      config.checkpoint_id = -1;
       config.loop_name.clear();
     }
   };
@@ -897,6 +941,19 @@ class ASTBuilder {
   Arch arch_;
   ForLoopDecoratorRecorder for_loop_dec_;
   int id_counter_{0};
+  int stream_parallel_group_counter_{0};
+  int current_stream_parallel_group_id_{0};
+  // Innermost active graph_do_while level id (-1 if not inside any). The Python AST transformer manages the stack and
+  // calls set_graph_do_while_level_id() on enter/exit; for-loops created while it is >= 0 are tagged with it (mirrors
+  // current_stream_parallel_group_id_).
+  int current_graph_do_while_level_id_{-1};
+  // Counter handed out by `begin_checkpoint()`. Reset per kernel via fresh ASTBuilder construction. Mirrors
+  // `stream_parallel_group_counter_`.
+  int checkpoint_counter_{0};
+  // -1 means "not currently inside a `qd.checkpoint(...)` block". Set by `begin_checkpoint()`, cleared by
+  // `end_checkpoint()`. Read at each `begin_frontend_*_for` call to tag the emitted for-loop with the enclosing
+  // checkpoint's cp_id (or -1 when outside any checkpoint).
+  int current_checkpoint_id_{-1};
 
  public:
   ASTBuilder(Block *initial, Arch arch, bool is_kernel) : is_kernel_(is_kernel), arch_(arch) {
@@ -989,6 +1046,12 @@ class ASTBuilder {
   void create_scope(std::unique_ptr<Block> &list, LoopType tp = NotLoop);
   void pop_scope();
 
+  // Warn if `qd.loop_config(name=...)` is set on a for-loop that is lexically nested inside another
+  // for-loop. Only top-level loops become separately offloaded (and therefore separately named) GPU
+  // kernels, so a name on a nested loop is silently dropped. `qd.checkpoint` and `qd.graph_do_while`
+  // do NOT count as nesting here (they keep their inner loops top-level / offloaded).
+  void warn_if_named_nested_loop();
+
   void bit_vectorize() {
     for_loop_dec_.config.is_bit_vectorized = true;
   }
@@ -1020,6 +1083,40 @@ class ASTBuilder {
 
   void reset_snode_access_flag() {
     for_loop_dec_.reset();
+  }
+
+  void begin_stream_parallel() {
+    QD_ERROR_IF(current_stream_parallel_group_id_ != 0, "Nested stream_parallel blocks are not supported");
+    current_stream_parallel_group_id_ = ++stream_parallel_group_counter_;
+  }
+
+  void end_stream_parallel() {
+    current_stream_parallel_group_id_ = 0;
+  }
+
+  // Set the innermost active graph_do_while level id. Pass the new level id when entering a graph_do_while loop, and
+  // the parent level id (or -1) when leaving it. The Python AST transformer owns the level stack and the level table.
+  void set_graph_do_while_level_id(int level_id) {
+    current_graph_do_while_level_id_ = level_id;
+  }
+
+  // Open a new `qd.checkpoint(...)` scope. Each call advances `checkpoint_counter_` and returns the freshly assigned
+  // `cp_id`, which the AST transformer can echo back to the Python kernel for cross-checking against
+  // `kernel.checkpoint_yield_on_args[cp_id]`. All for-loops emitted between this call and the matching
+  // `end_checkpoint()` are tagged with this cp_id on their `ForLoopConfig.checkpoint_id` /
+  // `FrontendForStmt::checkpoint_id`. Nested checkpoints are forbidden -- the Python AST transformer raises on
+  // detection, but we re-check here so any future direct C++ caller cannot bypass it.
+  int begin_checkpoint() {
+    QD_ERROR_IF(current_checkpoint_id_ != -1, "Nested qd.checkpoint() blocks are not supported");
+    current_checkpoint_id_ = checkpoint_counter_++;
+    return current_checkpoint_id_;
+  }
+
+  // Close the current checkpoint scope opened by `begin_checkpoint()`. Subsequent for-loops emit with `checkpoint_id =
+  // -1` until the next `begin_checkpoint()`.
+  void end_checkpoint() {
+    QD_ERROR_IF(current_checkpoint_id_ == -1, "end_checkpoint() called without a matching begin_checkpoint()");
+    current_checkpoint_id_ = -1;
   }
 
   Identifier get_next_id(const std::string &name = "") {

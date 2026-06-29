@@ -5,9 +5,12 @@
 // parameterized via the resolver callback in the header.
 #include "quadrants/transforms/static_adstack_analysis.h"
 
+#include <algorithm>
 #include <functional>
+#include <limits>
 #include <unordered_map>
 
+#include "quadrants/ir/analysis.h"
 #include "quadrants/ir/snode.h"
 #include "quadrants/ir/statements.h"
 
@@ -137,7 +140,8 @@ void walk_ir(IRNode *node, Fn &&visit) {
 
 StaticAdStackAnalysisResult analyze_adstack_static_bounds(OffloadedStmt *task_ir,
                                                           const SNodeDescriptorResolver &snode_descriptor_resolver,
-                                                          std::size_t sparse_heap_threshold_bytes) {
+                                                          std::size_t sparse_heap_threshold_bytes,
+                                                          bool task_range_is_original_loop) {
   StaticAdStackAnalysisResult result;
   if (task_ir == nullptr || task_ir->body == nullptr) {
     return result;
@@ -225,6 +229,39 @@ StaticAdStackAnalysisResult analyze_adstack_static_bounds(OffloadedStmt *task_ir
     }
   });
 
+  // Compile-time loop trip count of the analyzed task, used by the runtime to clip the reducer's gate-passing-cell
+  // count down to the actual maximum row claim count: each iteration claims at most one row at the LCA-block, so
+  // `loop_iter` is a sound upper bound on heap rows regardless of how oversized the gating SNode / ndarray is.
+  // Zero when:
+  //   * the task's loop is runtime-bounded (`task_ir->end_stmt != nullptr` or non-const begin / end - the analyzer
+  //     cannot resolve the trip count from IR alone), or
+  //   * `task_range_is_original_loop` is false (the caller signals that the task's `[begin_value, end_value)` is a
+  //     post-chunking subrange, e.g. CPU LLVM after `make_cpu_multithreaded_range_for` rewrote a 256-iteration
+  //     range-for into 16 parallel chunks of 16; the chunked subrange would massively undersize the heap clip
+  //     because the atomic row counter is shared across all chunks of the same task).
+  // In both cases the runtime falls back to the unclipped reducer count.
+  const bool task_static_bound = task_ir->const_begin && task_ir->const_end && task_ir->end_stmt == nullptr;
+  const int64_t task_loop_iter =
+      task_static_bound ? (static_cast<int64_t>(task_ir->end_value) - static_cast<int64_t>(task_ir->begin_value)) : 0;
+  const uint32_t loop_iter_static_for_bound_expr =
+      (task_range_is_original_loop && task_loop_iter > 0 &&
+       static_cast<uint64_t>(task_loop_iter) <= std::numeric_limits<uint32_t>::max())
+          ? static_cast<uint32_t>(task_loop_iter)
+          : 0;
+  // Snapshot the task's pre-chunking loop trip-count `SizeExpr` (populated by `determine_ad_stack_size` in
+  // `compile_to_offloads`, before `make_cpu_multithreaded_range_for` rewrites the loop on CPU). Empty when
+  // the task is not a range-for, the SizeExpr grammar could not bound the trip count, or the trip count is
+  // already a `Const` (in which case `loop_iter_static` carries the same value at zero per-launch cost).
+  // Runtime-bounded shapes like `for j in range(field[i])` are the actual reason this exists; encoding
+  // them here moves the trip-count resolution off the compile-time path and onto the same per-launch
+  // `evaluate_adstack_size_expr` walk the per-thread stack-sizer already runs. The runtime evaluates this
+  // ONLY when `loop_iter_static == 0`, so compile-time-known loops never pay the per-launch eval cost.
+  SerializedSizeExpr loop_iter_size_expr_for_bound_expr;
+  if (task_ir->pre_chunk_loop_trip_count_expr &&
+      task_ir->pre_chunk_loop_trip_count_expr->kind != SizeExpr::Kind::Const) {
+    loop_iter_size_expr_for_bound_expr = task_ir->pre_chunk_loop_trip_count_expr->serialize();
+  }
+
   // Resolve a `GlobalLoadStmt::src` chain to a captured field source. Returns true on a recognized shape (ndarray
   // ext-ptr or SNode root->dense->place(scalar)); on success populates the source-kind-specific fields of `out`.
   auto match_field_source = [&](Stmt *load_src, StaticAdStackBoundExpr &out) -> bool {
@@ -242,6 +279,8 @@ StaticAdStackAnalysisResult analyze_adstack_static_bounds(OffloadedStmt *task_ir
           }
         }
         out.field_source_kind = StaticAdStackBoundExpr::FieldSourceKind::NdArray;
+        out.loop_iter_static = loop_iter_static_for_bound_expr;
+        out.loop_iter_size_expr = loop_iter_size_expr_for_bound_expr;
         out.ndarray_arg_id = base_arg->arg_id;
         // Capture the gating ndarray's ndim so the host launcher can walk shape[0..ndim) at dispatch time and product
         // them into the reducer's flat-element walk bound. Without this the launcher would have to fall back to
@@ -274,25 +313,229 @@ StaticAdStackAnalysisResult analyze_adstack_static_bounds(OffloadedStmt *task_ir
       if (!desc_opt.has_value()) {
         return false;
       }
-      // KNOWN LIMITATION: the SNode arm trusts whatever index expression the codegen passed to `SNodeLookupStmt` and
-      // does not verify that it is a bijection with the kernel's loop iteration space. A pathological pattern like
-      // `for i in range(n): if field[i % K] > eps: <push f32>` (with `K < n`, `field` an SNode-backed `qd.field`)
-      // captures `iter_count = K` while the main pass walks `[0, n)` and claims a heap row for every iteration whose
-      // `i % K` cell passes - aliasing the n - K excess gated iterations onto the K-row heap and corrupting
-      // gradients (silent on LLVM, hard "reducer count diverged" overflow on SPIR-V). The ndarray arm above DOES
-      // validate that each axis is a `LoopIndexStmt` because at analysis time the ndarray's per-axis indices are
-      // still individual statements; the SNode case has no such per-axis information once `LinearizeStmt` is
-      // lowered into raw `add` / `mul` arithmetic, and any narrower walker we tried would also reject legitimate
-      // multi-axis kernels (e.g. `for I, J, K in grid: if grid[I, J, K].mass > eps: ...`, the canonical MPM-grid
-      // shape), where the lowered offset is `add(mul(I, sx), add(mul(J, sy), mul(K, sz)))` - the same affine shape
-      // a malicious manual linearisation can fake. Until the analysis runs at an earlier IR stage where
-      // `LinearizeStmt` is preserved (or a different bijection-witness is identified), this gap is documented
-      // rather than gated. Working assumption: production kernels don't use `field[i % K]` as a gate.
+      // Iteration-count check (statically-bounded loops only): reject when the task's loop iterates more times
+      // than the SNode has cells. The reducer walks `desc_opt->iter_count` cells and counts gate-passing ones,
+      // the main pass claims a heap row per gated iteration, so a mismatch under-allocates the heap and aliases
+      // excess iterations onto a shared row. Structural signature of `for i in range(n): if field[i % K] > eps:
+      // <push f32>` (K < n, field on a K-cell SNode): `loop_iter = n > K = snode_iter_count`. Legitimate
+      // multi-axis kernels of the shape `for ii, jj, kk, ib in qd.ndrange(...): if grid[f, ii, jj, kk, ib] >
+      // eps:` keep `loop_iter <= snode_iter_count` (slice axes like the kernel-arg `f` make the reducer
+      // over-count by the slice factor, which is benign over-allocation).
+      const bool static_bound = task_ir->const_begin && task_ir->const_end && task_ir->end_stmt == nullptr;
+      const int64_t loop_iter =
+          static_bound ? (static_cast<int64_t>(task_ir->end_value) - static_cast<int64_t>(task_ir->begin_value)) : 0;
+      if (static_bound) {
+        if (loop_iter <= 0 || static_cast<uint64_t>(loop_iter) > static_cast<uint64_t>(desc_opt->iter_count)) {
+          return false;
+        }
+      }
+      // Per-axis classification on the gate's `LinearizeStmt::inputs`. After `lower_access` the input_index is
+      // either a `LinearizeStmt` (StructFor path preserves it) or an `add`/`mul` arithmetic tree (ndrange path
+      // expanded form); a recursive collector recovers per-axis components from either shape. For each axis,
+      // walk through `BinaryOpStmt` / `UnaryOpStmt` looking for a `LoopIndexStmt` to classify as iterating; pure
+      // `ConstStmt` / `ArgLoadStmt` axes are slices. Reject when:
+      //   * `n_iterating == 0`: every axis is loop-invariant (`field[42]`, `field[arg]`, `field[other_field[i]]`).
+      //   * `n_iterating == 1 && n_bare_iterating == 0`: single non-bare iterating axis (`field[i / 2]`,
+      //     `field[i % K]`, `field[i + 5]`). Conservatively rejects bijective shifts too; the worst-case heap
+      //     stays correct, just larger.
+      // Multi-axis cases with `n_iterating >= 2` are accepted: the canonical `qd.ndrange(*shape)` decomposes a
+      // single linear loop index into multiple axes via floordiv / mod chains whose joint mapping is bijective.
+      auto *lookup = getch->input_ptr ? getch->input_ptr->cast<SNodeLookupStmt>() : nullptr;
+      if (lookup == nullptr || lookup->input_index == nullptr) {
+        return false;
+      }
+      std::vector<Stmt *> axes;
+      if (auto *lin = lookup->input_index->cast<LinearizeStmt>()) {
+        axes.assign(lin->inputs.begin(), lin->inputs.end());
+      } else {
+        std::function<void(Stmt *)> collect_axes = [&](Stmt *s) {
+          if (auto *bin = s->cast<BinaryOpStmt>()) {
+            if (bin->op_type == BinaryOpType::add) {
+              collect_axes(bin->lhs);
+              collect_axes(bin->rhs);
+              return;
+            }
+            if (bin->op_type == BinaryOpType::mul) {
+              if (bin->rhs && bin->rhs->is<ConstStmt>()) {
+                axes.push_back(bin->lhs);
+                return;
+              }
+              if (bin->lhs && bin->lhs->is<ConstStmt>()) {
+                axes.push_back(bin->rhs);
+                return;
+              }
+            }
+          }
+          axes.push_back(s);
+        };
+        collect_axes(lookup->input_index);
+      }
+      std::function<bool(Stmt *, int)> contains_loop_index = [&](Stmt *s, int depth) -> bool {
+        if (s == nullptr || depth > 8) {
+          return false;
+        }
+        if (s->is<LoopIndexStmt>()) {
+          return true;
+        }
+        if (auto *bin = s->cast<BinaryOpStmt>()) {
+          return contains_loop_index(bin->lhs, depth + 1) || contains_loop_index(bin->rhs, depth + 1);
+        }
+        if (auto *un = s->cast<UnaryOpStmt>()) {
+          return contains_loop_index(un->operand, depth + 1);
+        }
+        // The reverse task replays multi-axis loop indices by spilling them onto per-axis adstacks during the forward
+        // pass and loading via `AdStackLoadTopStmt` in the reverse pass. The push (in the forward `OffloadedStmt`) and
+        // the load (in the reverse `OffloadedStmt`) sit in different tasks, so the per-task `per_stack_pushed_values`
+        // map cannot trace from this load back to the `LoopIndexStmt` source. Treat the load as iterating directly:
+        // autodiff only spills runtime-varying values onto adstacks, and per-axis adstacks - the only ones reaching a
+        // `LinearizeStmt::input` - carry replayed loop indices by construction.
+        if (s->is<AdStackLoadTopStmt>()) {
+          return true;
+        }
+        return false;
+      };
+      // Reject fold-attack shapes like `field[i % 2, i % 2]` where two iterating axes evaluate to the same
+      // value, causing multiple pushes per outer-loop iteration to alias onto the same SNode cell and
+      // undersize the heap. Use `same_value` rather than pointer-identity so an attacker cannot bypass the
+      // check by inserting a no-op like `i % 2 + 0 - 0` that defeats CSE: the value-equivalence walk
+      // collapses arithmetic identities the upstream simplifier missed. The canonical `qd.ndrange(*shape)`
+      // decomposition produces axes with structurally different values (`i // K0`, `(i % K0) // K1`,
+      // `i % K1`) even though every axis is rooted at the same `LoopIndexStmt`, so this admits the
+      // joint-bijective ndrange shape uniformly across LLVM and SPIR-V backends.
+      int n_iterating = 0;
+      int n_bare_iterating = 0;
+      std::vector<Stmt *> distinct_iterating_axes;
+      for (Stmt *axis : axes) {
+        if (contains_loop_index(axis, 0)) {
+          n_iterating++;
+          if (axis->is<LoopIndexStmt>()) {
+            n_bare_iterating++;
+          }
+          bool already_seen = false;
+          for (Stmt *prev : distinct_iterating_axes) {
+            if (prev == axis || irpass::analysis::same_value(prev, axis)) {
+              already_seen = true;
+              break;
+            }
+          }
+          if (!already_seen) {
+            distinct_iterating_axes.push_back(axis);
+          }
+        }
+      }
+      if (n_iterating == 0) {
+        return false;
+      }
+      if (n_iterating == 1 && n_bare_iterating == 0) {
+        return false;
+      }
+      if (static_cast<int>(distinct_iterating_axes.size()) < n_iterating) {
+        return false;
+      }
+      // Joint-axis-space check: when no iterating axis is the task loop's bare `LoopIndexStmt` (which would
+      // make the joint mapping bijective by itself), bound the product of axis value ranges from above and
+      // require it to cover the loop trip count. Without this an oversized SNode lets a fold attack like
+      // `field[i % 8, (i // 8) % 8]` with `loop_iter > 64` slip through: every iterating axis is value-
+      // distinct (so the same_value dedup admits the shape) and `loop_iter <= snode_iter_count` because the
+      // SNode is large, yet the joint mapping wraps and aliases iterations onto a 64-cell subspace,
+      // undersizing the float heap. Each axis range is recovered by walking the lowered arithmetic for
+      // `_ % K`, `_ // K`, and the `sub(_, mul/bit_shl(floordiv(_, K), K))` post-`lower_access` shape; an
+      // unrecognised shape contributes the parent's range conservatively. The check is gated on
+      // `static_bound` because the trip count needs to be a known constant for the comparison to be sound.
+      std::function<int64_t(Stmt *, int)> axis_max_range = [&](Stmt *s, int depth) -> int64_t {
+        if (s == nullptr || depth > 12) {
+          return loop_iter;
+        }
+        if (s->is<LoopIndexStmt>()) {
+          return loop_iter;
+        }
+        if (auto *bin = s->cast<BinaryOpStmt>()) {
+          if (bin->op_type == BinaryOpType::mod) {
+            if (auto *c = bin->rhs ? bin->rhs->cast<ConstStmt>() : nullptr) {
+              const int64_t k = c->val.val_as_int64();
+              if (k > 0) {
+                return std::min<int64_t>(k, axis_max_range(bin->lhs, depth + 1));
+              }
+            }
+          }
+          if (bin->op_type == BinaryOpType::floordiv) {
+            if (auto *c = bin->rhs ? bin->rhs->cast<ConstStmt>() : nullptr) {
+              const int64_t k = c->val.val_as_int64();
+              if (k > 0) {
+                const int64_t parent = axis_max_range(bin->lhs, depth + 1);
+                return (parent + k - 1) / k;
+              }
+            }
+          }
+          if (bin->op_type == BinaryOpType::sub) {
+            // Post-`lower_access` `_ % K` is `sub(L, mul(floordiv(L, K), K))` (or `bit_shl` for power-of-two K).
+            if (auto *factor = bin->rhs ? bin->rhs->cast<BinaryOpStmt>() : nullptr) {
+              int64_t k_factor = -1;
+              Stmt *div_inner = nullptr;
+              if (factor->op_type == BinaryOpType::mul) {
+                if (auto *c = factor->rhs ? factor->rhs->cast<ConstStmt>() : nullptr) {
+                  k_factor = c->val.val_as_int64();
+                  div_inner = factor->lhs;
+                }
+              } else if (factor->op_type == BinaryOpType::bit_shl) {
+                if (auto *c = factor->rhs ? factor->rhs->cast<ConstStmt>() : nullptr) {
+                  const int64_t shift = c->val.val_as_int64();
+                  if (shift >= 0 && shift < 62) {
+                    k_factor = (int64_t)1 << shift;
+                    div_inner = factor->lhs;
+                  }
+                }
+              }
+              if (k_factor > 0 && div_inner != nullptr) {
+                if (auto *div = div_inner->cast<BinaryOpStmt>(); div && div->op_type == BinaryOpType::floordiv) {
+                  if (auto *div_c = div->rhs ? div->rhs->cast<ConstStmt>() : nullptr) {
+                    if (div_c->val.val_as_int64() == k_factor && div->lhs == bin->lhs) {
+                      return std::min<int64_t>(k_factor, axis_max_range(bin->lhs, depth + 1));
+                    }
+                  }
+                }
+              }
+            }
+            return axis_max_range(bin->lhs, depth + 1);
+          }
+        }
+        return loop_iter;
+      };
+      const bool any_task_loop_bare_index = std::any_of(axes.begin(), axes.end(), [&](Stmt *axis) {
+        auto *li = axis->cast<LoopIndexStmt>();
+        return li != nullptr && li->loop == task_ir;
+      });
+      if (static_bound && !any_task_loop_bare_index) {
+        constexpr int64_t kRangeCap = std::numeric_limits<int64_t>::max() / 2;
+        int64_t joint_product = 1;
+        for (Stmt *axis : axes) {
+          if (!contains_loop_index(axis, 0)) {
+            continue;
+          }
+          int64_t r = axis_max_range(axis, 0);
+          if (r <= 0) {
+            r = loop_iter;
+          }
+          if (r > kRangeCap || joint_product > kRangeCap / std::max<int64_t>(r, 1)) {
+            joint_product = kRangeCap;
+            break;
+          }
+          joint_product *= r;
+          if (joint_product >= loop_iter) {
+            break;
+          }
+        }
+        if (joint_product < loop_iter) {
+          return false;
+        }
+      }
       out.field_source_kind = StaticAdStackBoundExpr::FieldSourceKind::SNode;
       out.snode_root_id = desc_opt->root_id;
       out.snode_byte_base_offset = desc_opt->byte_base_offset;
       out.snode_byte_cell_stride = desc_opt->byte_cell_stride;
       out.snode_iter_count = desc_opt->iter_count;
+      out.loop_iter_static = loop_iter_static_for_bound_expr;
+      out.loop_iter_size_expr = loop_iter_size_expr_for_bound_expr;
       return true;
     }
     return false;

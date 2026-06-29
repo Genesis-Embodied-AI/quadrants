@@ -41,6 +41,10 @@ jobs:
       - name: Linux test
         run: |
           bash .github/workflows/scripts_new/linux/4_test.sh
+      - name: Collect CPU coverage
+        if: always()
+        run: |
+          python tests/coverage_report.py --collect-only
       - name: Upload wheel for CUDA job
         if: always()
         uses: actions/upload-artifact@v4
@@ -86,10 +90,13 @@ jobs:
       - name: Install test requirements
         run: |
           pip install --group test
-          pip install -r requirements_test_xdist.txt
-      - name: Run CUDA tests with coverage
+      - name: Run CUDA tests
         run: |
           bash .github/workflows/scripts_new/linux/4_test_cuda.sh
+      - name: Collect CUDA coverage
+        if: always()
+        run: |
+          python tests/coverage_report.py --collect-only
       - name: Upload CUDA coverage data
         if: always()
         uses: actions/upload-artifact@v4
@@ -197,10 +204,10 @@ jobs:
         with:
           script: |
             const fs = require('fs');
-            let body = fs.readFileSync('coverage-comment.md', 'utf8');
+            let body = fs.readFileSync('coverage-comment.md', 'utf8').trim();
             const url = process.env.REPORT_URL;
             if (url) {
-              body += `\n\n[Full annotated report](${url})`;
+              body = `[${body}](${url})`;
             }
             await github.rest.issues.createComment({
               owner: context.repo.owner,

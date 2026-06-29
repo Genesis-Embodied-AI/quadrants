@@ -13,7 +13,6 @@
 #include "quadrants/program/py_print_buffer.h"
 #include "quadrants/python/exception.h"
 #include "quadrants/python/export.h"
-#include "quadrants/python/memory_usage_monitor.h"
 #include "quadrants/system/benchmark.h"
 #include "quadrants/system/hacked_signal_handler.h"
 #include "quadrants/system/profiler.h"
@@ -23,6 +22,7 @@
 
 #include "quadrants/platform/amdgpu/detect_amdgpu.h"
 #if defined(QD_WITH_AMDGPU)
+#include "quadrants/rhi/amdgpu/amdgpu_context.h"
 #include "quadrants/rhi/amdgpu/amdgpu_driver.h"
 #endif
 
@@ -56,9 +56,9 @@ void print_all_units() {
   std::cout << all_units << " units in all." << std::endl;
 }
 
-void export_misc(py::module &m) {
-  py::class_<Config>(m, "Config");  // NOLINT(bugprone-unused-raii)
-  py::register_exception_translator([](std::exception_ptr p) {
+void export_misc(nb::module_ &m) {
+  nb::class_<Config>(m, "Config");  // NOLINT(bugprone-unused-raii)
+  nb::register_exception_translator([](const std::exception_ptr &p, void *) {
     try {
       if (p)
         std::rethrow_exception(p);
@@ -67,11 +67,11 @@ void export_misc(py::module &m) {
     }
   });
 
-  py::class_<Task, std::shared_ptr<Task>>(m, "Task")
+  nb::class_<Task>(m, "Task")
       .def("initialize", &Task::initialize)
       .def("run", static_cast<std::string (Task::*)(const std::vector<std::string> &)>(&Task::run));
 
-  py::class_<Benchmark, std::shared_ptr<Benchmark>>(m, "Benchmark")
+  nb::class_<Benchmark>(m, "Benchmark")
       .def("run", &Benchmark::run)
       .def("test", &Benchmark::test)
       .def("initialize", &Benchmark::initialize);
@@ -102,7 +102,6 @@ void export_misc(py::module &m) {
   });
   m.def("print_profile_info", [&]() { Profiling::get_instance().print_profile_info(); });
   m.def("clear_profile_info", [&]() { Profiling::get_instance().clear_profile_info(); });
-  m.def("start_memory_monitoring", start_memory_monitoring);
   m.def("get_repo_dir", get_repo_dir);
   m.def("get_python_package_dir", get_python_package_dir);
   m.def("set_python_package_dir", set_python_package_dir);
@@ -118,6 +117,20 @@ void export_misc(py::module &m) {
   m.def("toggle_python_print_buffer", [](bool opt) { py_cout.enabled = opt; });
   m.def("with_cuda", is_cuda_api_available);
   m.def("with_amdgpu", is_rocm_api_available);
+  // Return the active AMDGPU mcpu (e.g. ``"gfx1100"``, ``"gfx1011"``, ``"gfx940"``).  Exposed for diagnostics and
+  // for tests that need to assert on the active target architecture (e.g. verifying that the LDS-based
+  // ``permlane64`` software fallback is exercised on gfx10.x where the native instruction is unavailable).  Returns
+  // the empty string when AMDGPU is not built in or the runtime hasn't detected an AMDGPU device yet.
+#if defined(QD_WITH_AMDGPU)
+  m.def("amdgpu_mcpu", []() -> std::string {
+    if (!is_rocm_api_available() || !lang::AMDGPUContext::get_instance().detected()) {
+      return "";
+    }
+    return lang::AMDGPUContext::get_instance().get_mcpu();
+  });
+#else
+  m.def("amdgpu_mcpu", []() -> std::string { return ""; });
+#endif
 #ifdef QD_WITH_METAL
   m.def("with_metal", quadrants::lang::metal::is_metal_api_available);
 #else
@@ -130,7 +143,7 @@ void export_misc(py::module &m) {
   m.def("with_vulkan", []() { return false; });
 #endif
 
-  py::class_<HackedSignalRegister>(m, "HackedSignalRegister").def(py::init<>());
+  nb::class_<HackedSignalRegister>(m, "HackedSignalRegister").def(nb::init<>());
 }
 
 }  // namespace quadrants

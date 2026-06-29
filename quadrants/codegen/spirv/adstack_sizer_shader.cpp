@@ -215,6 +215,11 @@ struct ShaderState {
   Value bytecode_buf;
   Value metadata_buf;
   Value args_buf;
+  // Word index inside `metadata_buf` of the trailing overflow-flag slot. Computed once per dispatch in `main` (`2 + 2 *
+  // n_stacks`); the per-stack walker writes 1 here when it observes a `MaxOverRange` whose iteration count exceeds the
+  // `1<<24` cap. The host launcher's post-readback path raises a `QuadrantsAssertionError` when the slot is non-zero,
+  // so the cap-hit surfaces as a clean error rather than an under-bounded heap.
+  Value overflow_flag_word_var;
 };
 
 // `values_arr` is a private, function-local i64 array of size `kMaxNodes` used to memoise the value of every
@@ -754,17 +759,40 @@ void emit_tree_eval_loop(IRBuilder &ir, const ShaderState &st) {
     {
       // scope[var_id] = begin
       store_scope_at(ir, st, var_id_i32, begin_i64);
-      // Push pending frame: pending[sp] = {...}; sp += 1.
-      // `pending_end_arr` is clamped to `min(end, begin + kMaxOverRangeIterations)` so the advance loop
-      // silently stops after the cap instead of running on-device until the driver's TDR fires. Matches
-      // the LLVM interpreter's `break` at the same `1 << 24` threshold and the host evaluator's hard
-      // QD_ERROR; on a single-thread `1x1x1` dispatch, unbounded iteration is the only one of the three
-      // paths that could hang the kernel rather than surface as a clean error at `qd.sync()`.
+      // Push pending frame: pending[sp] = {...}; sp += 1. `pending_end_arr` is clamped to `begin` when the iteration
+      // count exceeds the cap, so the advance loop walks zero iterations and the dispatch returns within bounded time
+      // even on the worst-case shape; the cap-hit also writes 1 into the trailing overflow-flag slot of `metadata_buf`,
+      // and the host post-readback raises a `QuadrantsAssertionError` when the slot is non-zero. Matches the host
+      // evaluator's `QD_ERROR_IF` in `adstack_size_expr_eval.cpp::evaluate_node` and the LLVM device sizer's
+      // `scope.overflow_observed` path. Recognized `MaxOverRange` shapes are dispatched in parallel by the max-reducer
+      // and substituted to a `Const` before the sizer walks the tree, so this path is reachable only for out-of-grammar
+      // shapes whose iteration count exceeds the cap.
       constexpr int64_t kMaxOverRangeIterations = int64_t{1} << 24;
       Value cap_delta = ir.int_immediate_number(ir.i64_type(), kMaxOverRangeIterations);
       Value cap_end = ir.add(begin_i64, cap_delta);
       Value end_gt_cap = ir.gt(end_i64, cap_end);
-      Value effective_end = ir.select(end_gt_cap, cap_end, end_i64);
+      // Cap-hit collapses the walk: `effective_end = begin` so no iterations run. The overflow flag below is the signal
+      // the host actually consumes; the cached `max_size` value falls through to its `max(_, 1)` floor and the heap is
+      // never used because the host raises before the main kernel launches.
+      Value effective_end = ir.select(end_gt_cap, begin_i64, end_i64);
+
+      // Cap-hit overflow signal. Single-threaded dispatch, so a plain store rather than an atomic suffices. The slot is
+      // initialised to 0 by the host before dispatch; the value sticks at 1 for the remainder of the dispatch once any
+      // `MaxOverRange` walk in this task lands here, and the host post-readback path picks it up.
+      Label cap_then = ir.new_label();
+      Label cap_skip = ir.new_label();
+      Label cap_merge = ir.new_label();
+      ir.make_inst(spv::OpSelectionMerge, cap_merge, spv::SelectionControlMaskNone);
+      ir.make_inst(spv::OpBranchConditional, end_gt_cap, cap_then, cap_skip);
+      ir.start_label(cap_then);
+      {
+        Value overflow_word = ir.load_variable(st.overflow_flag_word_var, ir.u32_type());
+        store_buf_u32(ir, st.metadata_buf, overflow_word, ir.uint_immediate_number(ir.u32_type(), 1u));
+        ir.make_inst(spv::OpBranch, cap_merge);
+      }
+      ir.start_label(cap_skip);
+      ir.make_inst(spv::OpBranch, cap_merge);
+      ir.start_label(cap_merge);
       Value sp_val = ir.load_variable(st.sp_var, ir.i32_type());
       ir.store_variable(array_i32_access_ptr(ir, st.scratch_i32_buf, kI32BasePendingMorIdx, sp_val), current_now);
       Value body_start = ir.add(op_b_i32, ir.int_immediate_number(ir.i32_type(), 1));
@@ -890,6 +918,15 @@ std::vector<uint32_t> build_adstack_sizer_spirv(Arch arch, const DeviceCapabilit
   // Read header: n_stacks, total_nodes.
   Value n_stacks_u32 = load_buf_u32(ir, bytecode_buf, ir.uint_immediate_number(ir.u32_type(), kHeaderOffNStacks));
   Value total_nodes_u32 = load_buf_u32(ir, bytecode_buf, ir.uint_immediate_number(ir.u32_type(), kHeaderOffTotalNodes));
+
+  // Cache the trailing overflow-flag slot's word index. The metadata layout is `[stride_float, stride_int, off0, max0,
+  // off1, max1, ..., overflow_flag]` so the slot lives at index `2 + 2 * n_stacks`. The walker writes 1 here on a
+  // cap-hit (see `kMaxOverRangeIterations` branch in the per-stack tree-eval loop); the host post-readback in
+  // `adstack_sizer_launch.cpp` checks the slot and raises if non-zero.
+  st.overflow_flag_word_var = ir.alloca_variable(ir.u32_type());
+  Value overflow_word_idx = ir.add(ir.uint_immediate_number(ir.u32_type(), 2u),
+                                   ir.mul(n_stacks_u32, ir.uint_immediate_number(ir.u32_type(), 2u)));
+  ir.store_variable(st.overflow_flag_word_var, overflow_word_idx);
 
   // Word-offsets inside the bytecode buffer for the nodes and indices arrays.
   Value header_words_u32 = ir.uint_immediate_number(ir.u32_type(), kHeaderWords);

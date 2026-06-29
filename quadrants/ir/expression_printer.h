@@ -130,6 +130,12 @@ class ExpressionHumanFriendlyPrinter : public ExpressionPrinter {
     emit(']');
   }
 
+  void visit(VolatileLoadExpression *expr) override {
+    emit("volatile_load(");
+    expr->src->accept(this);
+    emit(')');
+  }
+
   void visit(RangeAssumptionExpression *expr) override {
     emit("assume_in_range({");
     expr->base->accept(this);
@@ -158,16 +164,22 @@ class ExpressionHumanFriendlyPrinter : public ExpressionPrinter {
 
   void visit(AtomicOpExpression *expr) override {
     const auto op_type = (std::size_t)expr->op_type;
-    constexpr const char *names_table[] = {"atomic_add",     "atomic_sub",    "atomic_min",     "atomic_max",
-                                           "atomic_bit_and", "atomic_bit_or", "atomic_bit_xor", "atomic_mul"};
-    if (op_type > std::size(names_table)) {
-      // min/max not supported in the LLVM backend yet.
+    // Order MUST match enum AtomicOpType in stmt_op_types.h: add, sub, max, min, bit_and, bit_or, bit_xor, mul,
+    // xchg, cas. (cas takes a third operand `expected` that is printed separately below.)
+    constexpr const char *names_table[] = {"atomic_add",     "atomic_sub",    "atomic_max",     "atomic_min",
+                                           "atomic_bit_and", "atomic_bit_or", "atomic_bit_xor", "atomic_mul",
+                                           "atomic_xchg",    "atomic_cas"};
+    if (op_type >= std::size(names_table)) {
       QD_NOT_IMPLEMENTED;
     }
     emit(names_table[op_type], '(');
     expr->dest->accept(this);
     emit(", ");
     expr->val->accept(this);
+    if (expr->op_type == AtomicOpType::cas) {
+      emit(", expected=");
+      expr->expected->accept(this);
+    }
     emit(")");
   }
 

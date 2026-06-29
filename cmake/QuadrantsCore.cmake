@@ -16,7 +16,7 @@ set(CMAKE_VISIBILITY_INLINES_HIDDEN ON)
 # Suppress warnings from submodules introduced by the above symbol visibility change
 set(CMAKE_POLICY_DEFAULT_CMP0063 NEW)
 set(CMAKE_POLICY_DEFAULT_CMP0077 NEW)
-set(INSTALL_LIB_DIR ${CMAKE_INSTALL_PREFIX}/python/quadrants/_lib)
+set(INSTALL_LIB_DIR ${CMAKE_INSTALL_PREFIX}/${QD_PY_INSTALL_ROOT}/_lib)
 
 if (QD_WITH_AMDGPU AND QD_WITH_CUDA)
     message(WARNING "Compiling CUDA and AMDGPU backends simultaneously")
@@ -66,9 +66,11 @@ file(GLOB QUADRANTS_CORE_SOURCE
     "quadrants/jit/*"
     "quadrants/math/*"
     "quadrants/program/*"
+    "quadrants/program/adstack/*"
     "quadrants/struct/*"
     "quadrants/system/*"
     "quadrants/transforms/*"
+    "quadrants/transforms/auto_diff/*"
     "quadrants/platform/cuda/*" "quadrants/platform/amdgpu/*"
     "quadrants/platform/mac/*" "quadrants/platform/windows/*"
     "quadrants/codegen/*.cpp" "quadrants/codegen/*.h"
@@ -111,7 +113,7 @@ target_include_directories(${CORE_LIBRARY_NAME} PRIVATE external/PicoSHA2)
 target_include_directories(${CORE_LIBRARY_NAME} PRIVATE external/eigen)
 target_include_directories(${CORE_LIBRARY_NAME} PRIVATE external/FP16/include)
 
-target_link_libraries(${CORE_LIBRARY_NAME} PUBLIC ti_device_api)
+target_link_libraries(${CORE_LIBRARY_NAME} PUBLIC qd_device_api)
 
 if(QD_WITH_LLVM)
     if(DEFINED ENV{LLVM_DIR})
@@ -126,6 +128,45 @@ if(QD_WITH_LLVM)
         message(FATAL_ERROR "LLVM version < 10 is not supported")
     endif()
     message(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")
+
+    # The prebuilt Windows LLVM (quadrants-sdk-builds) bakes an absolute path to the DIA SDK
+    # diaguids.lib of the machine it was built on into LLVMDebugInfoPDB's link interface, e.g.
+    #   C:/Program Files/Microsoft Visual Studio/2022/Enterprise/DIA SDK/lib/amd64/diaguids.lib
+    # Newer GitHub runner images (e.g. windows-2025-vs2026, shipping VS 2026 Enterprise under
+    # .../Microsoft Visual Studio/18/Enterprise) no longer have that path, which breaks linking
+    # with LNK1181. Re-point the reference to a diaguids.lib that exists on this machine.
+    if(WIN32 AND TARGET LLVMDebugInfoPDB)
+        get_target_property(_qd_pdb_link LLVMDebugInfoPDB INTERFACE_LINK_LIBRARIES)
+        if(_qd_pdb_link)
+            set(_qd_pdb_link_fixed "")
+            foreach(_qd_item IN LISTS _qd_pdb_link)
+                if(_qd_item MATCHES "[Dd]iaguids\\.lib$" AND NOT EXISTS "${_qd_item}")
+                    set(_qd_dia "")
+                    if(CMAKE_GENERATOR_INSTANCE AND EXISTS "${CMAKE_GENERATOR_INSTANCE}/DIA SDK/lib/amd64/diaguids.lib")
+                        set(_qd_dia "${CMAKE_GENERATOR_INSTANCE}/DIA SDK/lib/amd64/diaguids.lib")
+                    else()
+                        file(GLOB _qd_dia_candidates
+                            "C:/Program Files/Microsoft Visual Studio/*/*/DIA SDK/lib/amd64/diaguids.lib"
+                            "C:/Program Files (x86)/Microsoft Visual Studio/*/*/DIA SDK/lib/amd64/diaguids.lib")
+                        if(_qd_dia_candidates)
+                            list(SORT _qd_dia_candidates)
+                            list(GET _qd_dia_candidates -1 _qd_dia)
+                        endif()
+                    endif()
+                    if(_qd_dia)
+                        message(STATUS "Re-pointing stale DIA SDK lib '${_qd_item}' -> '${_qd_dia}'")
+                        list(APPEND _qd_pdb_link_fixed "${_qd_dia}")
+                    else()
+                        message(WARNING "Stale DIA SDK lib '${_qd_item}' not found and no replacement diaguids.lib located; dropping it")
+                    endif()
+                else()
+                    list(APPEND _qd_pdb_link_fixed "${_qd_item}")
+                endif()
+            endforeach()
+            set_target_properties(LLVMDebugInfoPDB PROPERTIES INTERFACE_LINK_LIBRARIES "${_qd_pdb_link_fixed}")
+        endif()
+    endif()
+
     target_include_directories(${CORE_LIBRARY_NAME} PUBLIC ${LLVM_INCLUDE_DIRS})
 
     message("LLVM include dirs ${LLVM_INCLUDE_DIRS}")
@@ -288,12 +329,14 @@ endforeach ()
 if(QD_WITH_PYTHON)
     message("PYTHON_LIBRARIES: " ${PYTHON_LIBRARIES})
     set(CORE_WITH_PYBIND_LIBRARY_NAME quadrants_python)
-    # NO_EXTRAS is required here to avoid llvm symbol error during build
     file(GLOB QUADRANTS_PYBIND_SOURCE
         "quadrants/python/*.cpp"
         "quadrants/python/*.h"
     )
-    pybind11_add_module(${CORE_WITH_PYBIND_LIBRARY_NAME} NO_EXTRAS ${QUADRANTS_PYBIND_SOURCE})
+    # NOMINSIZE: keep the project optimization level (-O3) for the binding layer instead of nanobind's
+    # default -Os, matching the previous pybind11 NO_EXTRAS build and avoiding per-call overhead in the
+    # hot launch path. NB_STATIC links the nanobind core statically (single extension module).
+    nanobind_add_module(${CORE_WITH_PYBIND_LIBRARY_NAME} NB_STATIC NOMINSIZE ${QUADRANTS_PYBIND_SOURCE})
 
     # Remove symbols from static libs: https://stackoverflow.com/a/14863432/12003165
     if (LINUX)
@@ -355,3 +398,8 @@ if (QD_WITH_AMDGPU)
     install(FILES ${AMDGPU_BC_FILES_ROCM70}
             DESTINATION ${INSTALL_LIB_DIR}/runtime_rocm70)
 endif()
+
+# Ship the assets submodule inside the package (replaces setup.py's copy_assets()).
+# The trailing slash installs the contents of external/assets into <pkg>/assets.
+install(DIRECTORY ${CMAKE_SOURCE_DIR}/external/assets/
+        DESTINATION ${CMAKE_INSTALL_PREFIX}/${QD_PY_INSTALL_ROOT}/assets)

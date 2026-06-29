@@ -2,7 +2,7 @@ import numbers
 import threading
 import weakref
 from types import FunctionType, MethodType
-from typing import TYPE_CHECKING, Any, Iterable, Sequence
+from typing import TYPE_CHECKING, Any, Callable, Iterable, Sequence
 
 import numpy as np
 
@@ -24,6 +24,7 @@ from quadrants.lang.exception import (
     QuadrantsRuntimeError,
     QuadrantsSyntaxError,
     QuadrantsTypeError,
+    handle_exception_from_cpp,
 )
 from quadrants.lang.expr import Expr, make_expr_group
 from quadrants.lang.field import Field, ScalarField
@@ -102,7 +103,21 @@ def expr_init(rhs):
     if isinstance(rhs, BufferView):
         return rhs
     if isinstance(rhs, Struct):
-        return Struct(rhs.to_dict(include_methods=True, include_ndim=True))
+        # Build the rewrap dict from ``__entries`` directly rather than via ``to_dict()``: ``to_dict()`` recursively
+        # flattens nested Structs to plain dicts, which then rebuild without their ``_qd_unpacked_groups`` tag. By
+        # keeping nested Struct instances intact, ``Struct.__init__`` calls ``expr_init`` on each entry, recursing here
+        # and preserving the tag on every nested level.
+        d = dict(rhs._Struct__entries)  # type: ignore[attr-defined]  # name-mangled access
+        if rhs._Struct__methods:  # type: ignore[attr-defined]
+            d["__struct_methods"] = rhs._Struct__methods  # type: ignore[attr-defined]
+        new_struct = Struct(d)
+        # Preserve unpacked-vector group metadata on this level (nested levels are handled by the recursion above).
+        # ``setattr`` (rather than attribute assignment) sidesteps pyright's ``reportAttributeAccessIssue``; ``Struct``
+        # doesn't statically declare this attribute -- it's a per-instance metadata tag.
+        groups = getattr(rhs, "_qd_unpacked_groups", None)
+        if groups is not None:
+            setattr(new_struct, "_qd_unpacked_groups", groups)
+        return new_struct
     if isinstance(rhs, list):
         return [expr_init(e) for e in rhs]
     if isinstance(rhs, tuple):
@@ -323,7 +338,15 @@ def subscript(ast_builder, value, *_indices, skip_reordered=False):
         if isinstance(value, StructField):
             entries = {k: subscript(ast_builder, v, *indices) for k, v in value._items}
             entries["__struct_methods"] = value.struct_methods
-            return _IntermediateStruct(entries)
+            struct = _IntermediateStruct(entries)
+            # Carry ``_qd_unpacked_groups`` from the originating ``StructType`` (attached to the ``StructField`` in
+            # ``StructType.field``) onto the per-index intermediate struct so the AST transformer recognises
+            # ``f[i].r[k]`` as an unpacked-vector group access. Nested StructFields contribute their own tags via the
+            # recursive ``subscript`` call above, so ``outer_field[i].inner.r[k]`` also works.
+            groups = getattr(value, "_qd_unpacked_groups", None)
+            if groups is not None:
+                setattr(struct, "_qd_unpacked_groups", groups)
+            return struct
         return Expr(ast_builder.expr_subscript(_var, indices_expr_group, dbg_info))
     if isinstance(value, AnyArray):
         assert indices_expr_group is not None
@@ -363,6 +386,7 @@ def subscript(ast_builder, value, *_indices, skip_reordered=False):
                 dbg_info,
             )
         )
+    assert indices_expr_group is not None
     return Expr(ast_builder.expr_subscript(value.ptr, indices_expr_group, dbg_info))
 
 
@@ -455,12 +479,17 @@ class PyQuadrants:
 
     def set_default_fp(self, fp):
         assert fp in [f16, f32, f64]
-        self.default_fp = fp
+        # qd.init() deep-copies the default_fp arg (misc.py), yielding a DataType that is == but not identical to
+        # the registered primitive singleton -- its id is then absent from primitive_types.type_ids, which silently
+        # breaks id-based type recognition for anything that resolves a dtype via get_runtime().default_fp (e.g. the
+        # simt tile proxies). Re-bind to the canonical singleton so identity is preserved.
+        self.default_fp = {f16: f16, f32: f32, f64: f64}[fp]
         default_cfg().default_fp = self.default_fp
 
     def set_default_ip(self, ip):
         assert ip in [i32, i64]
-        self.default_ip = ip
+        # See set_default_fp: canonicalize to the registered singleton so id-based type checks keep working.
+        self.default_ip = {i32: i32, i64: i64}[ip]
         self.default_up = u32 if ip == i32 else u64
         default_cfg().default_ip = self.default_ip
         default_cfg().default_up = self.default_up
@@ -576,7 +605,13 @@ class PyQuadrants:
             return
         self.materialize()
         assert self._prog is not None
-        self._prog.synchronize()
+        try:
+            self._prog.synchronize()
+        except Exception as e:
+            wrapped = handle_exception_from_cpp(e)
+            if wrapped is e:
+                raise
+            raise wrapped from None
 
 
 pyquadrants = PyQuadrants()
@@ -584,6 +619,14 @@ pyquadrants = PyQuadrants()
 
 def get_runtime() -> PyQuadrants:
     return pyquadrants
+
+
+_reset_hooks: list[Callable[[], None]] = []
+
+
+def on_reset(hook: Callable[[], None]) -> None:
+    """Register a callback to be invoked on ``reset()``.  Invalidates module-level caches without coupling."""
+    _reset_hooks.append(hook)
 
 
 def reset():
@@ -597,9 +640,9 @@ def reset():
     for k in old_kernels:
         k.reset()
     _qd_core.reset_default_compile_config()
-    from quadrants.lang._func_base import _frozen_dc_plans  # pylint: disable=C0415
 
-    _frozen_dc_plans.clear()
+    for hook in _reset_hooks:
+        hook()
 
 
 @quadrants_scope
@@ -773,10 +816,8 @@ def create_field_member(dtype, name, needs_grad, needs_dual):
         if prog.config().debug:
             # adjoint checkbit
             x_grad_checkbit = Expr(prog.make_id_expr(""))
-            dtype = u8
-            if prog.config().arch == _qd_core.vulkan:
-                dtype = i32
-            x_grad_checkbit.ptr = _qd_core.expr_field(x_grad_checkbit.ptr, cook_dtype(dtype))
+            checkbit_dtype = i32 if prog.config().arch == _qd_core.vulkan else u8
+            x_grad_checkbit.ptr = _qd_core.expr_field(x_grad_checkbit.ptr, cook_dtype(checkbit_dtype))
             x_grad_checkbit.ptr.set_name(name + ".grad_checkbit")
             x_grad_checkbit.ptr.set_grad_type(SNodeGradType.ADJOINT_CHECKBIT)
             x.ptr.set_adjoint_checkbit(x_grad_checkbit.ptr)
@@ -792,7 +833,7 @@ def create_field_member(dtype, name, needs_grad, needs_dual):
     elif needs_grad or needs_dual:
         raise QuadrantsRuntimeError(f"{dtype} is not supported for field with `needs_grad=True` or `needs_dual=True`.")
 
-    return x, x_grad, x_dual
+    return x, x_grad, x_dual, x_grad_checkbit
 
 
 @python_scope
@@ -805,7 +846,7 @@ def _field(
     needs_grad=False,
     needs_dual=False,
 ):
-    x, x_grad, x_dual = create_field_member(dtype, name, needs_grad, needs_dual)
+    x, x_grad, x_dual, x_grad_checkbit = create_field_member(dtype, name, needs_grad, needs_dual)
     x = ScalarField(x)
     if x_grad:
         x_grad = ScalarField(x_grad)
@@ -813,6 +854,9 @@ def _field(
     if x_dual:
         x_dual = ScalarField(x_dual)
         x._set_dual(x_dual)
+    x_grad_checkbit_field = None
+    if x_grad_checkbit and needs_grad:
+        x_grad_checkbit_field = ScalarField(x_grad_checkbit)
 
     if shape is None:
         if offset is not None:
@@ -868,6 +912,15 @@ def _field(
         _create_snode(flat_axis_seq, shape_seq, same_level=True).place(x, offset=phys_offset)
         if needs_grad:
             _create_snode(flat_axis_seq, shape_seq, same_level=True).place(x_grad, offset=phys_offset)
+            if x_grad_checkbit_field is not None:
+                # Place the debug-mode adjoint checkbit in its own dense container, sibling to primal/adjoint denses.
+                # Adding it as a child of the primal's dense (the legacy `make_lazy_place` path) changes that dense's
+                # cell layout from `{primal}` to `{primal, checkbit}`, which silently corrupts kernel codegen for
+                # non-validation reverse-mode kernels - gradients drop to zero in tests like the Genesis rigid-solver
+                # finite-difference vs analytic check.
+                _create_snode(flat_axis_seq, shape_seq, same_level=True).place(
+                    x_grad_checkbit_field, offset=phys_offset
+                )
         if needs_dual:
             _create_snode(flat_axis_seq, shape_seq, same_level=True).place(x_dual, offset=phys_offset)
         if order is not None:

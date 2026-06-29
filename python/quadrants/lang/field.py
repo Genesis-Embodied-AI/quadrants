@@ -9,7 +9,8 @@ from quadrants._lib import core as _qd_core
 from quadrants._lib.core.quadrants_python import DataTypeCxx
 from quadrants._logging import warn
 from quadrants.lang import impl
-from quadrants.lang.exception import QuadrantsSyntaxError
+from quadrants.lang._metal_interop import metal_needs_interop_sync, mps_sync_if_metal
+from quadrants.lang.exception import QuadrantsRuntimeError, QuadrantsSyntaxError
 from quadrants.lang.util import (
     in_python_scope,
     python_scope,
@@ -204,12 +205,15 @@ def _can_zerocopy_field(field: "Field", *, is_scalar: bool = False, is_ndarray: 
 def _try_zerocopy_torch(field: "Field", *, copy, device=None, is_scalar: bool = False, is_ndarray: bool = False):
     """Try to return a zero-copy torch tensor via DLPack.
 
-    Only called when ``copy is False``. Returns the tensor on success. Raises ``ValueError`` when zero-copy is not
-    available. Does NOT call ``torch.mps.synchronize()`` -- the caller is expected to handle MPS sync for the copy=True
-    (kernel-copy) path instead.
+    Returns the tensor on success. When ``copy is False``, raises ``ValueError`` if zero-copy is not available. When
+    ``copy is None``, returns ``None`` if zero-copy is not available (allowing the caller to fall back to a copy). Does
+    NOT call ``torch.mps.synchronize()`` -- the caller is expected to handle MPS sync for the copy=True (kernel-copy)
+    path instead.
     """
     if not _can_zerocopy_field(field, is_scalar=is_scalar, is_ndarray=is_ndarray):
-        raise ValueError(f"Zero-copy not available for arch={impl.current_cfg().arch.name}, dtype={field.dtype}")
+        if copy is False:
+            raise ValueError(f"Zero-copy not available for arch={impl.current_cfg().arch.name}, dtype={field.dtype}")
+        return None
 
     import torch  # pylint: disable=C0415
     import torch.utils.dlpack  # pylint: disable=C0415
@@ -217,8 +221,10 @@ def _try_zerocopy_torch(field: "Field", *, copy, device=None, is_scalar: bool = 
     try:
         tc = torch.utils.dlpack.from_dlpack(field.to_dlpack())
     except RuntimeError as e:
-        raise ValueError(f"Zero-copy not available: {e}") from None
-    if impl.current_cfg().arch == _ARCH_METAL:
+        if copy is False:
+            raise ValueError(f"Zero-copy not available: {e}") from None
+        return None
+    if metal_needs_interop_sync():
         impl.get_runtime().sync()
 
     if device is not None:
@@ -228,25 +234,13 @@ def _try_zerocopy_torch(field: "Field", *, copy, device=None, is_scalar: bool = 
             requested.index is not None and tc.device.index is not None and tc.device.index != requested.index
         )
         if type_mismatch or index_mismatch:
-            raise ValueError(
-                f"copy=False is incompatible with device transfer (data on {tc.device}, requested {device})"
-            )
+            if copy is False:
+                raise ValueError(
+                    f"copy=False is incompatible with device transfer (data on {tc.device}, requested {device})"
+                )
+            return None
 
     return tc
-
-
-def _mps_sync_if_metal():
-    """Call ``torch.mps.synchronize()`` when running on the Metal backend, no-op otherwise.
-
-    Quadrants and PyTorch MPS use separate Metal command queues, so ``qd.sync()`` only guarantees Quadrants writes are
-    complete. A subsequent ``.clone()`` or kernel copy is queued on the MPS stream and may execute *after* the next
-    Quadrants kernel overwrites the source buffer. We must also synchronize MPS after the copy.
-    """
-    # FIXME: DLPack may return old values on Apple Metal if sync is not systematically called manually.
-    if impl.current_cfg().arch == _ARCH_METAL:
-        import torch  # pylint: disable=C0415
-
-        torch.mps.synchronize()
 
 
 class _DLPackV1Adapter:
@@ -422,6 +416,42 @@ class Field:
         """Sets corresponding dual field (forward mode)."""
         self.dual = dual
 
+    def has_grad(self) -> bool:
+        """Whether this field's adjoint (reverse-mode gradient) SNode is allocated.
+
+        ``self.grad`` is non-``None`` for every real-dtype field (the wrapper is allocated up-front so
+        ``qd.root.lazy_grad()`` can populate it later); the actual placed-or-not signal is whether the underlying
+        SNode has been placed via ``needs_grad=True``, ``qd.root.lazy_grad()``, or an explicit
+        ``qd.root.dense(...).place(field.grad)``. Mirrors ``self.snode.ptr.has_adjoint()``.
+        """
+        return self.grad is not None and self.grad._loop_range() is not None
+
+    def has_dual(self) -> bool:
+        """Whether this field's dual (forward-mode gradient) SNode is allocated.
+
+        Same semantics as :meth:`has_grad` for the dual companion. Mirrors ``self.snode.ptr.has_dual()``.
+        """
+        return self.dual is not None and self.dual._loop_range() is not None
+
+    def _require_placed(self) -> None:
+        """Raise ``QuadrantsRuntimeError`` if this field's underlying SNode has never been placed.
+
+        ``create_field_member`` allocates an adjoint / dual ``FieldExpression`` for every real-dtype field so that
+        ``qd.root.lazy_grad()`` / ``qd.root.lazy_dual()`` can place it on demand, but ``_field()`` only calls
+        ``place_child`` when ``needs_grad`` / ``needs_dual`` is set. Reaching the wrapper directly and writing or
+        reading it (e.g. ``field.grad.fill(0.0)``) before the SNode is placed used to crash deep inside ``fill_field``
+        AST compilation with ``AttributeError: 'NoneType' object has no attribute 'data_type'``. Surface the same
+        situation as a clear ``QuadrantsRuntimeError`` so callers see the actual problem instead of a stack frame in
+        kernel template instantiation.
+        """
+        if self._loop_range() is not None:
+            return
+        raise QuadrantsRuntimeError(
+            "Field has no allocation. Allocate via `qd.field(..., needs_grad=True)` / `needs_dual=True`, "
+            "`qd.root.lazy_grad()` / `qd.root.lazy_dual()`, or `qd.root.dense(...).place(field)` "
+            "before calling `fill` / read / write."
+        )
+
     @python_scope
     def fill(self, val: int | float) -> None:
         raise NotImplementedError()
@@ -431,7 +461,8 @@ class Field:
         """Converts `self` to a numpy array.
 
         Args:
-            copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises.
+            copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises,
+                ``None`` uses zero-copy when available and falls back to a copy otherwise.
 
         Returns:
             numpy.ndarray: The result numpy array.
@@ -444,7 +475,8 @@ class Field:
 
         Args:
             device (torch.device, optional): The desired device of returned tensor.
-            copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises.
+            copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises,
+                ``None`` uses zero-copy when available and falls back to a copy otherwise.
 
         Returns:
             torch.tensor: The result torch tensor.
@@ -587,6 +619,7 @@ class ScalarField(Field):
 
     def fill(self, val):
         """Fills this scalar field with a specified value."""
+        self._require_placed()
         if in_python_scope():
             from quadrants._kernels import fill_field  # pylint: disable=C0415
 
@@ -604,14 +637,18 @@ class ScalarField(Field):
 
         Args:
             dtype: Optional target numpy dtype.
-            copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises.
+            copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises,
+                ``None`` uses zero-copy when available and falls back to a copy otherwise.
         """
-        if copy is False:
-            arr = _try_zerocopy_numpy(self, copy=False, is_scalar=True)
+        self._require_placed()
+        if copy is not True:
+            arr = _try_zerocopy_numpy(self, copy=copy, is_scalar=True)
             if arr is not None:
                 if dtype is not None and arr.dtype != dtype:
-                    raise ValueError(f"copy=False is incompatible with dtype conversion ({arr.dtype} -> {dtype})")
-                return arr
+                    if copy is False:
+                        raise ValueError(f"copy=False is incompatible with dtype conversion ({arr.dtype} -> {dtype})")
+                else:
+                    return arr
 
         if self.parent()._snode.ptr.type == _qd_core.SNodeType.dynamic:
             warn(
@@ -634,10 +671,14 @@ class ScalarField(Field):
 
         Args:
             device: Optional torch device for the returned tensor.
-            copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises.
+            copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises,
+                ``None`` uses zero-copy when available and falls back to a copy otherwise.
         """
-        if copy is False:
-            return _try_zerocopy_torch(self, copy=copy, device=device, is_scalar=True)
+        self._require_placed()
+        if copy is not True:
+            result = _try_zerocopy_torch(self, copy=copy, device=device, is_scalar=True)
+            if result is not None:
+                return result
 
         import torch  # pylint: disable=C0415
 
@@ -646,7 +687,7 @@ class ScalarField(Field):
 
         tensor_to_ext_arr(self, arr)
         quadrants.lang.runtime_ops.sync()  # type: ignore  # TODO: can we remove .runtime_ops here?
-        _mps_sync_if_metal()
+        mps_sync_if_metal()
         return arr
 
     @python_scope
@@ -665,6 +706,7 @@ class ScalarField(Field):
     @python_scope
     def from_numpy(self, arr):
         """Copies the data from a `numpy.ndarray` into this field."""
+        self._require_placed()
         if not arr.flags.c_contiguous:
             import numpy as np  # pylint: disable=C0415
 
@@ -673,11 +715,13 @@ class ScalarField(Field):
 
     @python_scope
     def __setitem__(self, key, value):
+        self._require_placed()
         self._initialize_host_accessors()
         self.host_accessors[0].setter(value, *self._pad_key(key))  # type: ignore
 
     @python_scope
     def __getitem__(self, key):
+        self._require_placed()
         self._initialize_host_accessors()
         # Check for potential slicing behaviour
         # for instance: x[0, :]

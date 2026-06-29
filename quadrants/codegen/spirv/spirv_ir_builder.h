@@ -382,6 +382,14 @@ class IRBuilder {
     if (gl_global_invocation_id_.id != 0) {
       ib_.add(gl_global_invocation_id_);
     }
+    if (gl_local_invocation_id_.id != 0) {
+      // Mirror `gl_global_invocation_id_` above. `get_local_invocation_id()` declares the `BuiltIn LocalInvocationId`
+      // Input variable lazily on first use but does NOT push it into `global_values`, so it is missed by both the
+      // pre-1.4 (no global_values iteration) and the post-1.4 path (global_values doesn't contain it). Without this,
+      // SPIR-V validation fails with `VUID-VkShaderModuleCreateInfo-pCode-08737` once any kernel calls
+      // `qd.simt.block.thread_idx()` on Vulkan / Metal.
+      ib_.add(gl_local_invocation_id_);
+    }
     if (gl_num_work_groups_.id != 0) {
       ib_.add(gl_num_work_groups_);
     }
@@ -408,7 +416,6 @@ class IRBuilder {
   Value get_local_invocation_id(uint32_t dim_index);
   Value get_global_invocation_id(uint32_t dim_index);
   Value get_subgroup_invocation_id();
-  Value get_subgroup_size();
 
   // Expressions
   Value add(Value a, Value b);
@@ -463,6 +470,10 @@ class IRBuilder {
   Value alloca_variable(const SType &type);
   Value alloca_workgroup_array(const SType &type);
   Value load_variable(Value pointer, const SType &res_type);
+  // Volatile-load variant: emits `OpLoad` with the `Volatile` `MemoryAccess` mask, preventing the SPIR-V
+  // optimiser (and downstream MSL / GLSL translators via SPIRV-Cross) from forwarding, hoisting, or merging the
+  // load.  Used by `qd.volatile_load` to back spin-wait reads on Vulkan / Metal.
+  Value load_variable_volatile(Value pointer, const SType &res_type);
   void store_variable(Value pointer, Value value);
 
   // Register name to corresponding Value/VariablePointer
@@ -499,6 +510,9 @@ class IRBuilder {
   }
   SType f32_type() const {
     return t_fp32_;
+  }
+  SType v4_u32_type() const {
+    return t_v4_uint_;
   }
 
   SType i16_type() const {
@@ -574,6 +588,7 @@ class IRBuilder {
   SType t_v2_int_;
   SType t_v3_int_;
   SType t_v3_uint_;
+  SType t_v4_uint_;
   SType t_v4_fp32_;
   SType t_v3_fp32_;
   SType t_v2_fp32_;
@@ -582,7 +597,6 @@ class IRBuilder {
   Value gl_num_work_groups_;
   Value gl_work_group_size_;
   Value subgroup_local_invocation_id_;
-  Value subgroup_size_;
 
   // Random function and variables
   bool init_rand_{false};

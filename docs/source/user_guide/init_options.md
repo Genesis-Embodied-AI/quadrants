@@ -62,7 +62,19 @@ Forces every adstack in the program to exactly `N` slots and bypasses the launch
 
 ### `ad_stack_sparse_threshold_bytes`
 
-Cutoff (in bytes) below which the gate-passing-count sizing path described in [Memory footprint](./autodiff.md#memory-footprint) is skipped in favour of the eager `dispatched_threads * stride` heap. Default `100 MiB`. The sparse path saves memory on kernels of the shape `for i in range(...): if field[i] cmp literal: <adstack work>` but pays a per-launch reducer dispatch; below the threshold that overhead outweighs the savings. Set to `0` to always use the sparse path; lower it if the default still skips kernels you want shrunk. No effect when `ad_stack_experimental_enabled=False` or when the kernel has no such gate.
+Cutoff (in bytes) below which the gate-passing-count sizing path described in [Memory footprint](./autodiff.md#memory-footprint) is skipped in favor of the eager `dispatched_threads * stride` heap. Default `100 MiB`. The sparse path saves memory on kernels of the shape `for i in range(...): if field[i] cmp literal: <adstack work>` but pays a per-launch reducer dispatch; below the threshold that overhead outweighs the savings. Set to `0` to always use the sparse path; lower it if the default still skips kernels you want shrunk. No effect when `ad_stack_experimental_enabled=False` or when the kernel has no such gate.
+
+## Apple Metal
+
+### `external_metal_command_queue`
+
+An `MTLCommandQueue*` pointer (as an integer) to use instead of creating a new Metal command queue. Default `0` (create a new queue). When non-zero, Quadrants dispatches all GPU work on the provided queue, which enables GPU-side ordering with other frameworks that share the same queue (most notably PyTorch MPS).
+
+### `external_metal_command_queue_is_torch_queue`
+
+Default `False`. Set to `True` when the `external_metal_command_queue` is PyTorch MPS's command queue. This tells Quadrants that both frameworks share the same Metal queue, so the explicit `qd.sync()` / `torch.mps.synchronize()` calls at `to_torch` / `from_torch` interop points can be skipped. When `False` (or when no external queue is set), the interop syncs are preserved.
+
+See [Shared Metal command queue](./metal_shared_queue.md) for the full setup guide, including how to extract the queue pointer from PyTorch and the synchronization implications.
 
 ## Debugging
 
@@ -74,10 +86,11 @@ Default `False`. Turns on every available correctness check. Use while iterating
 
 Enables:
 - field-bounds check on tensor indexing (out-of-range index raises `RuntimeError`);
-- adstack-overflow check on reverse-mode autodiff (overflow raises `RuntimeError` on the next `qd.sync()`);
 - kernel `assert` statements;
 - integer-overflow guards on arithmetic;
 - IR verification after every compiler pass.
+
+The adstack-overflow check on reverse-mode autodiff runs unconditionally on every backend regardless of `debug`; see [Autodiff -> What can go wrong](autodiff.md) for the contract.
 
 **Cost.** Significant on both compile time (verifier walks the IR after every transform; extra runtime checks expand the emitted code; ~21s extra observed on adstack-heavy kernels) and runtime. For just the field-bounds check in a release build without the rest, use [`check_out_of_bound`](#check_out_of_bound) below.
 
@@ -89,23 +102,22 @@ Default `False`. Enables the field-bounds check on tensor indexing - an out-of-r
 
 Interaction with `debug`:
 
-| Flags | Field bounds | Adstack overflow | Other `debug` checks |
-|-------|--------------|------------------|----------------------|
-| neither | off | off | off |
-| `check_out_of_bound=True` only | on | off | off |
-| `debug=True` | on | on | on |
+| Flags | Field bounds | Other `debug` checks |
+|-------|--------------|----------------------|
+| neither | off | off |
+| `check_out_of_bound=True` only | on | off |
+| `debug=True` | on | on |
 
 - `debug=True` always implies `check_out_of_bound=True` (the field-bounds check fires whenever debug mode is on).
-- The adstack-overflow check on reverse-mode autodiff (a push past the per-stack capacity raises `RuntimeError("[Aa]dstack overflow")` on the next `qd.sync()`) is on its own gate, controlled by `debug` - it is not enabled by `check_out_of_bound` alone.
 
 Per-backend support:
 
-| Backend | Field bounds check | Adstack overflow check |
-|---------|--------------------|------------------------|
-| CPU | with `check_out_of_bound=True` or `debug=True` | with `debug=True` |
-| CUDA | with `check_out_of_bound=True` or `debug=True` | with `debug=True` |
-| AMDGPU | with `check_out_of_bound=True` or `debug=True` | with `debug=True` |
-| Metal | never (no in-kernel assertion mechanism) | with `debug=True` |
-| Vulkan | never (no in-kernel assertion mechanism) | with `debug=True` |
+| Backend | Field bounds check |
+|---------|--------------------|
+| CPU | with `check_out_of_bound=True` or `debug=True` |
+| CUDA | with `check_out_of_bound=True` or `debug=True` |
+| AMDGPU | with `check_out_of_bound=True` or `debug=True` |
+| Metal | never (no in-kernel assertion mechanism) |
+| Vulkan | never (no in-kernel assertion mechanism) |
 
-Metal and Vulkan lack the assertion extension that the field-bounds check relies on; `check_out_of_bound=True` is silently reset to `False` on those backends at `qd.init` time and a warning is logged. The adstack-overflow check is gated independently of the assertion extension, so `debug=True` activates it on every backend including Metal and Vulkan.
+Metal and Vulkan lack the assertion extension that the field-bounds check relies on; `check_out_of_bound=True` is silently reset to `False` on those backends at `qd.init` time and a warning is logged.

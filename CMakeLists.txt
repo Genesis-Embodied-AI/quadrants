@@ -25,6 +25,44 @@ execute_process(
 string(STRIP ${QD_COMMIT_HASH} QD_COMMIT_HASH)
 string(STRIP ${QD_COMMIT_SHORT_HASH} QD_COMMIT_SHORT_HASH)
 
+# When built through scikit-build-core, the version is provided as SKBUILD_PROJECT_VERSION
+# (sourced from setuptools_scm). Extract the leading numeric MAJOR.MINOR.PATCH core into the
+# integer QD_VERSION_* macros consumed by version.h.in / the C++ sources, defaulting any
+# missing component to 0. setuptools_scm versions are not guaranteed to be an exact X.Y.Z:
+# they may have only two components (e.g. a tag-less "0.1" fallback) or carry .devN / +local
+# / rcN suffixes -- none of which are valid integer macro values -- so parse defensively
+# rather than assuming three dotted groups. The classic setup.py build passed these as -D.
+set(QD_VERSION_MAJOR 0)
+set(QD_VERSION_MINOR 0)
+set(QD_VERSION_PATCH 0)
+if (DEFINED SKBUILD_PROJECT_VERSION)
+    string(REGEX MATCH "^[0-9]+(\\.[0-9]+)*" _QD_VERSION_NUM "${SKBUILD_PROJECT_VERSION}")
+    if (_QD_VERSION_NUM)
+        string(REPLACE "." ";" _QD_VERSION_LIST "${_QD_VERSION_NUM}")
+        list(LENGTH _QD_VERSION_LIST _QD_VERSION_LEN)
+        if (_QD_VERSION_LEN GREATER 0)
+            list(GET _QD_VERSION_LIST 0 QD_VERSION_MAJOR)
+        endif()
+        if (_QD_VERSION_LEN GREATER 1)
+            list(GET _QD_VERSION_LIST 1 QD_VERSION_MINOR)
+        endif()
+        if (_QD_VERSION_LEN GREATER 2)
+            list(GET _QD_VERSION_LIST 2 QD_VERSION_PATCH)
+        endif()
+    endif()
+endif()
+
+# Root of the Python package within the install tree. Under scikit-build-core,
+# CMAKE_INSTALL_PREFIX is the wheel platlib and the package is `quadrants`. The classic
+# setup.py/skbuild build installs under `python/quadrants` and packages from there.
+# NOTE: scikit-build *classic* also defines SKBUILD, so gate on a scikit-build-core-only
+# variable (SKBUILD_PROJECT_NAME) to distinguish the two backends.
+if (DEFINED SKBUILD_PROJECT_NAME)
+    set(QD_PY_INSTALL_ROOT "quadrants")
+else()
+    set(QD_PY_INSTALL_ROOT "python/quadrants")
+endif()
+
 message("Quadrants Version ${QD_VERSION_MAJOR}.${QD_VERSION_MINOR}.${QD_VERSION_PATCH}")
 message("       Commit ${QD_COMMIT_HASH}")
 
@@ -107,10 +145,9 @@ endif()
 
 # No support of Python for any case quadrants is integrated
 # in another project as submodule.
-set(PYBIND11_VERSION "2.13.6" CACHE STRING "Pybind11 version to use")
 option(QD_WITH_PYTHON "Build with Python language binding" ON)
 if (QD_WITH_PYTHON)
-    include(cmake/PythonNumpyPybind11.cmake)
+    include(cmake/PythonNanobind.cmake)
 endif()
 
 if (QD_WITH_BACKTRACE)
@@ -193,12 +230,28 @@ configure_file(quadrants/common/commit_hash.h.in ${CMAKE_SOURCE_DIR}/quadrants/c
 
 option(QD_WITH_GRAPHVIZ "generate dependency graphs between targets" OFF)  # wheel-tag: viz
 if (QD_WITH_GRAPHVIZ)
-  set(GRAPHVIZ_GRAPH_NAME "ti_targets")
+  set(GRAPHVIZ_GRAPH_NAME "qd_targets")
   add_custom_target(graphviz ALL
       COMMAND cp ${CMAKE_SOURCE_DIR}/cmake/CMakeGraphVizOptions.cmake .
       COMMAND ${CMAKE_COMMAND} "--graphviz=${GRAPHVIZ_GRAPH_NAME}.dot" .
       COMMAND dot -Tpng ${GRAPHVIZ_GRAPH_NAME}.dot -o ${GRAPHVIZ_GRAPH_NAME}.png
-      COMMAND cp ti_targets.png ${CMAKE_SOURCE_DIR}/build
+      COMMAND cp qd_targets.png ${CMAKE_SOURCE_DIR}/build
       WORKING_DIRECTORY "${CMAKE_BINARY_DIR}"
   )
+endif()
+
+# Under scikit-build-core, generate and install the nanobind type stub (.pyi) + py.typed as an
+# install-time step. This replaces the old pybind11-stubgen + YAML-post-processing hook with
+# nanobind's built-in stub generator, which imports the freshly installed extension (a namespace
+# package of compiled artifacts under CMAKE_INSTALL_PREFIX) and writes the stub next to it.
+if (DEFINED SKBUILD_PROJECT_NAME AND QD_WITH_PYTHON)
+    nanobind_add_stub(
+        quadrants_python_stub
+        INSTALL_TIME
+        MODULE quadrants._lib.core.quadrants_python
+        OUTPUT ${QD_PY_INSTALL_ROOT}/_lib/core/quadrants_python.pyi
+        MARKER_FILE ${QD_PY_INSTALL_ROOT}/_lib/core/py.typed
+        PYTHON_PATH .
+        VERBOSE
+    )
 endif()

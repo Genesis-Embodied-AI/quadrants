@@ -524,7 +524,8 @@ class IRPrinter : public IRVisitor {
   }
 
   void visit(GlobalLoadStmt *stmt) override {
-    print("{}{} = global load {}", stmt->type_hint(), stmt->name(), stmt->src->name());
+    print("{}{} = global load{} {}", stmt->type_hint(), stmt->name(), stmt->is_volatile ? " volatile" : "",
+          stmt->src->name());
     dbg_info_printer_(stmt);
   }
 
@@ -650,9 +651,13 @@ class IRPrinter : public IRVisitor {
           stmt->major_to_types.size() == 0 ? "Unknown" : mesh::element_type_name(*stmt->major_to_types.begin()),
           stmt->mesh->num_patches, stmt->grid_dim, stmt->block_dim, scratch_pad_info(stmt->mem_access_opt));
     }
+    if (stmt->graph_do_while_level_id >= 0) {
+      details += fmt::format(" gdw_level={}", stmt->graph_do_while_level_id);
+    }
     if (stmt->task_type == OffloadedTaskType::listgen) {
-      print("{} = offloaded listgen {}->{}", stmt->name(), stmt->snode->parent->get_node_type_name_hinted(),
-            stmt->snode->get_node_type_name_hinted());
+      print("{} = offloaded listgen {}->{} gdw_level={}", stmt->name(),
+            stmt->snode->parent->get_node_type_name_hinted(), stmt->snode->get_node_type_name_hinted(),
+            stmt->graph_do_while_level_id);
     } else if (stmt->task_type == OffloadedTaskType::gc) {
       print("{} = offloaded garbage collect {}", stmt->name(), stmt->snode->get_node_type_name_hinted());
     } else {

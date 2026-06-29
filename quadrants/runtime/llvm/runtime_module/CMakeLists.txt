@@ -2,7 +2,14 @@
 
 function(COMPILE_LLVM_RUNTIME rtm_arch)
     message(STATUS "Compiling LLVM byte code file for arch ${rtm_arch}")
-    # Keep this for now, as .bc need to be generated.
+    # The runtime source is split across runtime.cpp + adstack_runtime.cpp + the shared header pair, but compiled as
+    # a single translation unit: runtime.cpp `#include`s adstack_runtime.cpp once near its tail. A real two-TU build
+    # via `llvm-link` would collapse structurally identical named struct types (`RootMeta` / `DenseMeta` /
+    # `DynamicMeta`, `BitmaskedMeta` / `PointerMeta`) under a single name, which then breaks the host-side
+    # `QuadrantsLLVMContext::get_runtime_type` lookup by name. The single-TU compile sidesteps the LLVM `IRMover`
+    # type-uniquing path entirely and matches the existing `node_*.h` / `internal_functions.h` / `locked_task.h`
+    # pattern in this directory.
+    #
     # -mno-outline-atomics: runtime.cpp is compiled to bitcode (.bc) that is later JIT-compiled by the ORC JIT linker
     # at runtime. On AArch64, clang's default -moutline-atomics emits calls to helpers like __aarch64_ldadd4_acq_rel
     # (normally provided by libgcc/compiler-rt), but the ORC JIT environment has no access to those libraries and fails
@@ -16,7 +23,7 @@ function(COMPILE_LLVM_RUNTIME rtm_arch)
         WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
     )
     add_dependencies(${CORE_LIBRARY_NAME} "generate_llvm_runtime_${rtm_arch}")
-    install(FILES "${CMAKE_SOURCE_DIR}/quadrants/runtime/llvm/runtime_module/runtime_${arch}.bc" DESTINATION ${CMAKE_INSTALL_PREFIX}/python/quadrants/_lib/runtime)
+    install(FILES "${CMAKE_SOURCE_DIR}/quadrants/runtime/llvm/runtime_module/runtime_${arch}.bc" DESTINATION ${CMAKE_INSTALL_PREFIX}/${QD_PY_INSTALL_ROOT}/_lib/runtime)
 
 endfunction()
 
@@ -27,7 +34,7 @@ function(COMPILE_CUSTOM_CUDA_LIBRARY cuda_path)
         WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
     )
     add_dependencies(${CORE_LIBRARY_NAME} "generate_cuda_library")
-    install(FILES "${CMAKE_SOURCE_DIR}/quadrants/runtime/llvm/runtime_module/cuda_runtime-cuda-nvptx64-nvidia-cuda-sm_60.bc" DESTINATION ${CMAKE_INSTALL_PREFIX}/python/quadrants/_lib/runtime)
+    install(FILES "${CMAKE_SOURCE_DIR}/quadrants/runtime/llvm/runtime_module/cuda_runtime-cuda-nvptx64-nvidia-cuda-sm_60.bc" DESTINATION ${CMAKE_INSTALL_PREFIX}/${QD_PY_INSTALL_ROOT}/_lib/runtime)
 
 endfunction()
 

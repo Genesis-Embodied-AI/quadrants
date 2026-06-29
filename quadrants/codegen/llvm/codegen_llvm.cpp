@@ -7,18 +7,23 @@
 #include "llvm/IR/Module.h"
 #include "llvm/Linker/Linker.h"
 #include "quadrants/analysis/offline_cache_util.h"
+#include "quadrants/ir/analysis.h"
+#include "quadrants/ir/snode.h"
 #include "quadrants/ir/statements.h"
 #include "quadrants/ir/transforms.h"
+#include "quadrants/program/adstack_size_expr_eval.h"
 #include "quadrants/program/extension.h"
 #include "quadrants/runtime/program_impls/llvm/llvm_program.h"
 #include "quadrants/codegen/llvm/struct_llvm.h"
 #include "quadrants/util/file_sequence_writer.h"
 #include "quadrants/codegen/codegen_utils.h"
+#include "quadrants/program/adstack_size_expr_eval.h"
 #include "llvm/Support/SourceMgr.h"
 #include "llvm/AsmParser/Parser.h"
 #include "quadrants/codegen/ir_dump.h"
 #include "quadrants/util/environ_config.h"
 #include "quadrants/runtime/llvm/llvm_context_pass.h"
+#include "quadrants/runtime/llvm/kernel_atomic_syncscope.h"
 
 namespace quadrants::lang {
 
@@ -215,11 +220,26 @@ void TaskCodeGenLLVM::emit_extra_unary(UnaryOpStmt *stmt) {
     llvm_val[stmt] = builder->CreateIntrinsic(llvm::Intrinsic::sqrt, {input_type}, {input});
   }
   else if (op == UnaryOpType::popcnt) {
-    llvm_val[stmt] = builder->CreateIntrinsic(llvm::Intrinsic::ctpop, {input_type}, {input});
+    // stmt->ret_type is already normalised to i32 by type_check.cpp; the explicit truncation here keeps the LLVM
+    // value width in sync with that contract on 64-bit operands.
+    auto pop = builder->CreateIntrinsic(llvm::Intrinsic::ctpop, {input_type}, {input});
+    llvm_val[stmt] = builder->CreateZExtOrTrunc(pop, llvm::Type::getInt32Ty(*llvm_context));
   }
   else if (op == UnaryOpType::clz) {
-    llvm_val[stmt] = builder->CreateIntrinsic(llvm::Intrinsic::ctlz, {input_type},
-                                              {input, llvm::ConstantInt::get(llvm::Type::getInt1Ty(*llvm_context), 0)});
+    auto clz = builder->CreateIntrinsic(llvm::Intrinsic::ctlz, {input_type},
+                                        {input, llvm::ConstantInt::get(llvm::Type::getInt1Ty(*llvm_context), 0)});
+    llvm_val[stmt] = builder->CreateZExtOrTrunc(clz, llvm::Type::getInt32Ty(*llvm_context));
+  }
+  else if (op == UnaryOpType::ffs) {
+    // ffs(x): 1-indexed position of the lowest set bit; 0 when x == 0 (CUDA __ffs convention). llvm.cttz with
+    // is_zero_undef = false returns bitwidth on a zero input, so we explicitly select 0 for that case rather than
+    // letting the +1 produce bitwidth + 1.
+    auto is_zero_undef = llvm::ConstantInt::get(llvm::Type::getInt1Ty(*llvm_context), 0);
+    auto cttz = builder->CreateIntrinsic(llvm::Intrinsic::cttz, {input_type}, {input, is_zero_undef});
+    auto plus_one = builder->CreateAdd(cttz, llvm::ConstantInt::get(input_type, 1));
+    auto is_zero = builder->CreateICmpEQ(input, llvm::ConstantInt::get(input_type, 0));
+    auto sel = builder->CreateSelect(is_zero, llvm::ConstantInt::get(input_type, 0), plus_one);
+    llvm_val[stmt] = builder->CreateZExtOrTrunc(sel, llvm::Type::getInt32Ty(*llvm_context));
   }
   else {
     QD_P(unary_op_type_name(op));
@@ -1157,52 +1177,86 @@ void TaskCodeGenLLVM::visit(LocalStoreStmt *stmt) {
 
 void TaskCodeGenLLVM::visit(AssertStmt *stmt) {
   QD_ASSERT((int)stmt->args.size() <= quadrants_error_message_max_num_arguments);
-  auto argument_buffer_size = llvm::ArrayType::get(llvm::Type::getInt64Ty(*llvm_context), stmt->args.size());
 
-  // TODO: maybe let all asserts in a single offload share a single buffer?
-  auto arguments = create_entry_block_alloca(argument_buffer_size);
+  // Emit the test inline and keep argument marshalling plus the runtime call in a cold block reached only on
+  // failure. An unconditional runtime call at every site puts an ABI call (with its argument buffer and stores) on
+  // the hot path of every checked access; on GPU the resulting register spills are backed by a per-resident-thread
+  // local-memory reservation across the whole device, which multiplies to gigabytes for bounds-checked kernels.
+  //
+  // On CPU, use the context-aware variant that returns non-zero on failure so we can emit an early return and
+  // avoid the subsequent out-of-bounds memory access. On GPU, asm("exit;") kills the thread directly when asserts
+  // are enabled at runtime; otherwise the cold block falls through to the access, as before.
+  bool use_ctx_variant = arch_is_cpu(current_arch());
+  auto *test = builder->CreateIsNotNull(llvm_val[stmt->cond]);
+
+  auto *assert_fail = llvm::BasicBlock::Create(*llvm_context, "assert_fail", func);
+  auto *assert_cont = llvm::BasicBlock::Create(*llvm_context, "assert_cont", func);
+  builder->CreateCondBr(test, assert_cont, assert_fail);
+  builder->SetInsertPoint(assert_fail);
 
   std::vector<llvm::Value *> args;
-  // On CPU, use the context-aware variant that returns non-zero on failure
-  // so we can emit an early return and avoid the subsequent out-of-bounds
-  // memory access.  On GPU, asm("exit;") kills the thread directly.
-  bool use_ctx_variant = arch_is_cpu(current_arch());
   args.emplace_back(use_ctx_variant ? get_context() : get_runtime());
-  args.emplace_back(builder->CreateIsNotNull(llvm_val[stmt->cond]));
-  args.emplace_back(builder->CreateGlobalStringPtr(stmt->text));
 
-  for (int i = 0; i < stmt->args.size(); i++) {
-    auto arg = stmt->args[i];
-    QD_ASSERT(llvm_val[arg]);
+  constexpr int max_args_by_value = 8;
+  llvm::Value *result = nullptr;
+  if ((int)stmt->args.size() <= max_args_by_value) {
+    // Fast path: pass the arguments by value, so that no per-site argument buffer is ever allocated.
+    args.emplace_back(builder->CreateGlobalStringPtr(stmt->text));
+    args.emplace_back(tlctx->get_constant((int)stmt->args.size()));
+    for (int i = 0; i < max_args_by_value; i++) {
+      if (i < (int)stmt->args.size()) {
+        auto arg = stmt->args[i];
+        QD_ASSERT(llvm_val[arg]);
+        auto cast_type = llvm::Type::getIntNTy(*llvm_context, 8 * (std::size_t)data_type_size(arg->ret_type));
+        auto cast_int = builder->CreateBitCast(llvm_val[arg], cast_type);
+        args.emplace_back(builder->CreateZExt(cast_int, llvm::Type::getInt64Ty(*llvm_context)));
+      } else {
+        args.emplace_back(tlctx->get_constant((uint64)0));
+      }
+    }
+    result =
+        call(use_ctx_variant ? "quadrants_assert_format_ctx_args8" : "quadrants_assert_format_args8", std::move(args));
+  } else {
+    auto argument_buffer_size = llvm::ArrayType::get(llvm::Type::getInt64Ty(*llvm_context), stmt->args.size());
+    auto arguments = create_entry_block_alloca(argument_buffer_size);
 
-    // First convert the argument to an integral type with the same number of
-    // bits:
-    auto cast_type = llvm::Type::getIntNTy(*llvm_context, 8 * (std::size_t)data_type_size(arg->ret_type));
-    auto cast_int = builder->CreateBitCast(llvm_val[arg], cast_type);
+    args.emplace_back(test);
+    args.emplace_back(builder->CreateGlobalStringPtr(stmt->text));
 
-    // Then zero-extend the conversion result into int64:
-    auto cast_int64 = builder->CreateZExt(cast_int, llvm::Type::getInt64Ty(*llvm_context));
+    for (int i = 0; i < stmt->args.size(); i++) {
+      auto arg = stmt->args[i];
+      QD_ASSERT(llvm_val[arg]);
 
-    // Finally store the int64 value to the argument buffer:
-    builder->CreateStore(cast_int64, builder->CreateGEP(argument_buffer_size, arguments,
-                                                        {tlctx->get_constant(0), tlctx->get_constant(i)}));
+      // First convert the argument to an integral type with the same number of bits:
+      auto cast_type = llvm::Type::getIntNTy(*llvm_context, 8 * (std::size_t)data_type_size(arg->ret_type));
+      auto cast_int = builder->CreateBitCast(llvm_val[arg], cast_type);
+
+      // Then zero-extend the conversion result into int64:
+      auto cast_int64 = builder->CreateZExt(cast_int, llvm::Type::getInt64Ty(*llvm_context));
+
+      // Finally store the int64 value to the argument buffer:
+      builder->CreateStore(cast_int64, builder->CreateGEP(argument_buffer_size, arguments,
+                                                          {tlctx->get_constant(0), tlctx->get_constant(i)}));
+    }
+
+    args.emplace_back(tlctx->get_constant((int)stmt->args.size()));
+    args.emplace_back(
+        builder->CreateGEP(argument_buffer_size, arguments, {tlctx->get_constant(0), tlctx->get_constant(0)}));
+
+    result = call(use_ctx_variant ? "quadrants_assert_format_ctx" : "quadrants_assert_format", std::move(args));
   }
-
-  args.emplace_back(tlctx->get_constant((int)stmt->args.size()));
-  args.emplace_back(
-      builder->CreateGEP(argument_buffer_size, arguments, {tlctx->get_constant(0), tlctx->get_constant(0)}));
-
-  llvm_val[stmt] = call(use_ctx_variant ? "quadrants_assert_format_ctx" : "quadrants_assert_format", std::move(args));
+  llvm_val[stmt] = result;
 
   if (use_ctx_variant) {
     auto *assert_abort = llvm::BasicBlock::Create(*llvm_context, "assert_abort", func);
-    auto *assert_cont = llvm::BasicBlock::Create(*llvm_context, "assert_cont", func);
-    auto *failed = builder->CreateICmpNE(llvm_val[stmt], tlctx->get_constant(0));
+    auto *failed = builder->CreateICmpNE(result, tlctx->get_constant(0));
     builder->CreateCondBr(failed, assert_abort, assert_cont);
     builder->SetInsertPoint(assert_abort);
     builder->CreateRetVoid();
-    builder->SetInsertPoint(assert_cont);
+  } else {
+    builder->CreateBr(assert_cont);
   }
+  builder->SetInsertPoint(assert_cont);
 }
 
 void TaskCodeGenLLVM::visit(SNodeOpStmt *stmt) {
@@ -1265,6 +1319,16 @@ llvm::Value *TaskCodeGenLLVM::integral_type_atomic(AtomicOpStmt *stmt) {
         llvm_val[stmt->dest], llvm_val[stmt->val], [&](auto v1, auto v2) { return builder->CreateMul(v1, v2); },
         stmt->val->ret_type);
   }
+  // Atomic compare-and-swap: lowers to a single LLVM cmpxchg. The instruction returns a {value, success}
+  // struct; we project field 0 (the loaded prior value), matching CUDA atomicCAS / SPIR-V OpAtomicCompareExchange.
+  // The user recovers success with `(returned == expected)`.
+  if (stmt->op_type == AtomicOpType::cas) {
+    QD_ASSERT(stmt->expected != nullptr);
+    auto cmpxchg = builder->CreateAtomicCmpXchg(llvm_val[stmt->dest], llvm_val[stmt->expected], llvm_val[stmt->val],
+                                                llvm::MaybeAlign(0), llvm::AtomicOrdering::SequentiallyConsistent,
+                                                llvm::AtomicOrdering::SequentiallyConsistent);
+    return builder->CreateExtractValue(cmpxchg, 0);
+  }
   // Atomic operators supported by LLVM
   std::unordered_map<AtomicOpType, llvm::AtomicRMWInst::BinOp> bin_op;
   bin_op[AtomicOpType::add] = llvm::AtomicRMWInst::BinOp::Add;
@@ -1278,9 +1342,11 @@ llvm::Value *TaskCodeGenLLVM::integral_type_atomic(AtomicOpStmt *stmt) {
   bin_op[AtomicOpType::bit_and] = llvm::AtomicRMWInst::BinOp::And;
   bin_op[AtomicOpType::bit_or] = llvm::AtomicRMWInst::BinOp::Or;
   bin_op[AtomicOpType::bit_xor] = llvm::AtomicRMWInst::BinOp::Xor;
+  bin_op[AtomicOpType::xchg] = llvm::AtomicRMWInst::BinOp::Xchg;
   QD_ASSERT(bin_op.find(stmt->op_type) != bin_op.end());
   return builder->CreateAtomicRMW(bin_op.at(stmt->op_type), llvm_val[stmt->dest], llvm_val[stmt->val],
-                                  llvm::MaybeAlign(0), llvm::AtomicOrdering::SequentiallyConsistent);
+                                  llvm::MaybeAlign(0), llvm::AtomicOrdering::SequentiallyConsistent,
+                                  kernel_atomic_syncscope(llvm_context, current_arch()));
 }
 
 llvm::Value *TaskCodeGenLLVM::atomic_op_using_cas(llvm::Value *dest,
@@ -1306,7 +1372,8 @@ llvm::Value *TaskCodeGenLLVM::atomic_op_using_cas(llvm::Value *dest,
     dest = builder->CreateBitCast(dest, typeIntPtr);
     auto atomicCmpXchg = builder->CreateAtomicCmpXchg(
         dest, builder->CreateBitCast(old_val, typeIntTy), builder->CreateBitCast(new_val, typeIntTy),
-        llvm::MaybeAlign(0), AtomicOrdering::SequentiallyConsistent, AtomicOrdering::SequentiallyConsistent);
+        llvm::MaybeAlign(0), AtomicOrdering::SequentiallyConsistent, AtomicOrdering::SequentiallyConsistent,
+        kernel_atomic_syncscope(llvm_context, current_arch()));
     // Check whether CAS was succussful
     auto ok = builder->CreateExtractValue(atomicCmpXchg, 1);
     builder->CreateCondBr(builder->CreateNot(ok), body, after_loop);
@@ -1346,23 +1413,31 @@ llvm::Value *TaskCodeGenLLVM::real_type_atomic(AtomicOpStmt *stmt) {
   switch (op) {
     case AtomicOpType::add:
       return builder->CreateAtomicRMW(llvm::AtomicRMWInst::FAdd, llvm_val[stmt->dest], llvm_val[stmt->val],
-                                      llvm::MaybeAlign(0), llvm::AtomicOrdering::SequentiallyConsistent);
+                                      llvm::MaybeAlign(0), llvm::AtomicOrdering::SequentiallyConsistent,
+                                      kernel_atomic_syncscope(llvm_context, current_arch()));
+    case AtomicOpType::min:
+      return builder->CreateAtomicRMW(llvm::AtomicRMWInst::FMin, llvm_val[stmt->dest], llvm_val[stmt->val],
+                                      llvm::MaybeAlign(0), llvm::AtomicOrdering::SequentiallyConsistent,
+                                      kernel_atomic_syncscope(llvm_context, current_arch()));
+    case AtomicOpType::max:
+      return builder->CreateAtomicRMW(llvm::AtomicRMWInst::FMax, llvm_val[stmt->dest], llvm_val[stmt->val],
+                                      llvm::MaybeAlign(0), llvm::AtomicOrdering::SequentiallyConsistent,
+                                      kernel_atomic_syncscope(llvm_context, current_arch()));
     case AtomicOpType::mul:
       return atomic_op_using_cas(
           llvm_val[stmt->dest], llvm_val[stmt->val], [&](auto v1, auto v2) { return builder->CreateFMul(v1, v2); },
           stmt->val->ret_type);
+    case AtomicOpType::xchg:
+      // LLVM AtomicRMW Xchg accepts FP types directly since LLVM 14, lowering to the natively-atomic swap instruction
+      // (CUDA atomicExch / AMDGPU buffer_atomic_swap / x86 xchg). f16 falls through to the f16 CAS-emulation block
+      // above.
+      return builder->CreateAtomicRMW(llvm::AtomicRMWInst::Xchg, llvm_val[stmt->dest], llvm_val[stmt->val],
+                                      llvm::MaybeAlign(0), llvm::AtomicOrdering::SequentiallyConsistent);
     default:
       break;
   }
 
-  std::unordered_map<PrimitiveTypeID, std::unordered_map<AtomicOpType, std::string>> atomics;
-  atomics[PrimitiveTypeID::f32][AtomicOpType::min] = "atomic_min_f32";
-  atomics[PrimitiveTypeID::f64][AtomicOpType::min] = "atomic_min_f64";
-  atomics[PrimitiveTypeID::f32][AtomicOpType::max] = "atomic_max_f32";
-  atomics[PrimitiveTypeID::f64][AtomicOpType::max] = "atomic_max_f64";
-  QD_ASSERT(atomics.find(prim_type) != atomics.end());
-  QD_ASSERT(atomics.at(prim_type).find(op) != atomics.at(prim_type).end());
-  return call(atomics.at(prim_type).at(op), llvm_val[stmt->dest], llvm_val[stmt->val]);
+  return nullptr;
 }
 
 void TaskCodeGenLLVM::visit(AtomicOpStmt *stmt) {
@@ -1422,11 +1497,21 @@ llvm::Value *TaskCodeGenLLVM::create_intrinsic_load(llvm::Value *ptr, llvm::Type
 void TaskCodeGenLLVM::create_global_load(GlobalLoadStmt *stmt, bool should_cache_as_read_only) {
   auto ptr = llvm_val[stmt->src];
   auto ptr_type = stmt->src->ret_type->as<PointerType>();
+  // `is_volatile` and `should_cache_as_read_only` are mutually contradictory: the read-only path attaches
+  // `!invariant.load` (or, on CUDA, lowers to `__ldg`), both of which give the optimiser license to hoist /
+  // reuse the load.  Volatile loads are reserved for spin-wait patterns where exactly the opposite is required;
+  // the frontend never plumbs both flags, so this is just a defensive guard against a future caller making the
+  // mistake.
+  QD_ASSERT(!(stmt->is_volatile && should_cache_as_read_only));
   if (ptr_type->is_bit_pointer()) {
     auto val_type = ptr_type->get_pointee_type();
     auto get_ch = stmt->src->as<GetChStmt>();
     auto physical_type = tlctx->get_data_type(get_ch->input_snode->physical_type);
     auto [byte_ptr, bit_offset] = load_bit_ptr(ptr);
+    // Volatile loads on quant-bit-packed snodes are not meaningful (the pointed-to physical word is shared by
+    // many quant fields, so a volatile read of the whole word does not give per-field volatile semantics).  No
+    // public Python API exposes the combination today, so reject it eagerly rather than emit silently-wrong code.
+    QD_ASSERT(!stmt->is_volatile);
     auto physical_value = should_cache_as_read_only ? create_intrinsic_load(byte_ptr, physical_type)
                                                     : builder->CreateLoad(physical_type, byte_ptr);
     if (auto qit = val_type->cast<QuantIntType>()) {
@@ -1446,7 +1531,14 @@ void TaskCodeGenLLVM::create_global_load(GlobalLoadStmt *stmt, bool should_cache
     if (should_cache_as_read_only) {
       llvm_val[stmt] = create_intrinsic_load(ptr, tlctx->get_data_type(stmt->ret_type));
     } else {
-      llvm_val[stmt] = builder->CreateLoad(tlctx->get_data_type(stmt->ret_type), ptr);
+      auto *load = builder->CreateLoad(tlctx->get_data_type(stmt->ret_type), ptr);
+      // LLVM's `setVolatile(true)` lowers to `ld.volatile.global` on PTX (for generic / addrspace(1) pointers)
+      // and to `global_load_*` with the optimiser inhibited from hoisting / reusing the load on AMDGPU.  Both
+      // backends treat this as the canonical "always re-read from memory" primitive.
+      if (stmt->is_volatile) {
+        load->setVolatile(true);
+      }
+      llvm_val[stmt] = load;
     }
   }
 }
@@ -1850,8 +1942,16 @@ std::string TaskCodeGenLLVM::init_offloaded_task_function(OffloadedStmt *stmt, s
     desc.iter_count = static_cast<uint32_t>(iter_count);
     return desc;
   };
-  auto adstack_analysis =
-      analyze_adstack_static_bounds(stmt, snode_resolver, compile_config.ad_stack_sparse_threshold_bytes);
+  // CPU LLVM goes through `make_cpu_multithreaded_range_for` in `offload_to_executable`, which rewrites the user
+  // loop's `[begin_value, end_value)` into per-thread chunks before codegen runs. The atomic row counter the
+  // codegen emits is shared across every chunk of the same task, so the total claim count is the original
+  // pre-chunk loop trip count, not the per-chunk subrange. Signal that to the analyzer so it skips filling
+  // `bound_expr.loop_iter_static` on CPU and the runtime falls back to the unclipped reducer count there. CUDA
+  // and AMDGPU dispatch one thread per iteration without chunking, so their per-task `[begin_value, end_value)`
+  // matches the user loop and the analyzer can fill the field.
+  const bool task_range_is_original_loop = !arch_is_cpu(compile_config.arch);
+  auto adstack_analysis = analyze_adstack_static_bounds(
+      stmt, snode_resolver, compile_config.ad_stack_sparse_threshold_bytes, task_range_is_original_loop);
   ad_stack_bootstrap_pushes_ = std::move(adstack_analysis.bootstrap_pushes);
   ad_stack_lca_block_float_ir_ = adstack_analysis.lca_block_float;
   ad_stack_static_bound_expr_ = adstack_analysis.bound_expr;
@@ -1930,6 +2030,26 @@ std::string TaskCodeGenLLVM::init_offloaded_task_function(OffloadedStmt *stmt, s
   func = llvm::Function::Create(task_function_type, llvm::Function::ExternalLinkage, task_kernel_name, module.get());
 
   current_task = std::make_unique<OffloadedTask>(task_kernel_name);
+  // Carry the per-task graph_do_while level tag for all LLVM backends (CPU/CUDA/AMDGPU). Set here, in the shared
+  // task-init path, rather than per-backend (unlike stream_parallel_group_id which is GPU-only), because the
+  // graph_do_while host fallback runs on CPU too.
+  current_task->graph_do_while_level_id = stmt->graph_do_while_level_id;
+  // Pre-register the per-task AdStackSizingInfo so the registry id is assigned BEFORE codegen visits any
+  // `AdStackPushStmt`, letting it bake the immediate. Metadata (`allocated_max_sizes` + `size_exprs`) is filled in at
+  // `finalize_offloaded_task_function` time after the alloca scan completes; the registry call is idempotent on the
+  // same identity_key (raw `&current_task->ad_stack` address, never derefed) so the second call updates the entry in
+  // place. `kernel_name` and `task_id_in_kernel` are also stashed on the ad_stack so the offline-cache reload path
+  // (`AdStackCache::ensure_runtime_registry_ids_for_max_reducer`) can re-derive the identity hash without parsing the
+  // task function name. Skipping registration when `prog == nullptr` (C++-only tests) leaves `registry_id == 0`, which
+  // the codegen-emitted cmpxchg short-circuits.
+  if (prog != nullptr) {
+    current_task->ad_stack.kernel_name = kernel_name;
+    current_task->ad_stack.task_id_in_kernel = task_codegen_id;
+    uint32_t id = prog->adstack_cache().register_adstack_sizing_info(
+        static_cast<const void *>(&current_task->ad_stack), kernel_name, task_codegen_id, /*allocated_max_sizes=*/{},
+        /*size_exprs=*/{});
+    current_task->ad_stack.registry_id = id;
+  }
 
   for (auto &arg : func->args()) {
     kernel_args.push_back(&arg);
@@ -1946,6 +2066,9 @@ std::string TaskCodeGenLLVM::init_offloaded_task_function(OffloadedStmt *stmt, s
   builder->SetInsertPoint(func_body_bb);
   return task_kernel_name;
 }
+
+// Note: `TaskCodeGenLLVM::emit_checkpoint_gate_prologue(int cp_id)` lives in `codegen_llvm_checkpoint.cpp` (same
+// translation-unit-split pattern as `codegen_llvm_quant.cpp`).
 
 void TaskCodeGenLLVM::finalize_offloaded_task_function() {
   if (!returned) {
@@ -1967,6 +2090,78 @@ void TaskCodeGenLLVM::finalize_offloaded_task_function() {
     current_task->ad_stack.allocas = ad_stack_allocas_info_;
     current_task->ad_stack.size_exprs = ad_stack_size_exprs_;
     current_task->ad_stack.bound_expr = ad_stack_static_bound_expr_;
+    // Recognize `MaxOverRange` nodes the runtime can reduce in parallel via the dedicated max-reducer dispatch instead
+    // of letting the per-thread sizer enumerate. Indexing matches `ad_stack_size_exprs_` (same iteration order as the
+    // pre-scan above). Skip on CPU: the host evaluator's `MaxOverRange` loop in `program/adstack/eval.cpp` does the
+    // same serial walk, and dispatching the runtime helper would only add per-launch setup cost (params blob encode,
+    // body bytecode encode, observation bookkeeping, JIT call) with no compute parallelism to amortize. The host
+    // evaluator handles every iteration count up to its own cap (`UINT32_MAX` on CPU; see `eval.cpp`). On CUDA /
+    // AMDGPU the parallel reducer is the whole point of the dispatch and the recognizer stays active.
+    if (!arch_is_cpu(compile_config.arch)) {
+      current_task->ad_stack.max_reducer_specs = recognize_adstack_max_reducer_specs(ad_stack_size_exprs_);
+    }
+    // Snodes the task body mutates. Persisted on `OffloadedTask::snode_writes` so the LLVM
+    // launcher can invalidate the per-task adstack metadata cache when a kernel that runs in
+    // between mutated a SNode an enclosing `size_expr::FieldLoad` reads. Mirrors the SPIR-V
+    // analogue in `spirv_codegen.cpp`. Sorted + deduplicated for stable serialisation.
+    if (current_offload != nullptr) {
+      auto snode_rw = irpass::analysis::gather_snode_read_writes(current_offload);
+      current_task->snode_writes.reserve(snode_rw.second.size());
+      for (auto *s : snode_rw.second) {
+        if (s != nullptr) {
+          current_task->snode_writes.push_back(s->id);
+        }
+      }
+      std::sort(current_task->snode_writes.begin(), current_task->snode_writes.end());
+      current_task->snode_writes.erase(
+          std::unique(current_task->snode_writes.begin(), current_task->snode_writes.end()),
+          current_task->snode_writes.end());
+      // Ndarray args this task writes to. Same role as `snode_writes` but for ndarray data;
+      // covers `size_expr::ExternalTensorRead` invalidation. The first element of each
+      // `arg_id_path` key is the kernel-arg slot, which is what `Program::ndarray_data_gen_`
+      // is keyed by (via the bound DeviceAllocation).
+      auto arr_access = irpass::detect_external_ptr_access_in_task(current_offload);
+      for (const auto &kv : arr_access) {
+        if (kv.first.empty()) {
+          continue;
+        }
+        const uint32_t access_bits = static_cast<uint32_t>(kv.second);
+        if ((access_bits & static_cast<uint32_t>(irpass::ExternalPtrAccess::WRITE)) != 0) {
+          current_task->arr_writes.push_back(kv.first.front());
+        }
+        if ((access_bits & static_cast<uint32_t>(irpass::ExternalPtrAccess::READ)) != 0) {
+          current_task->arr_reads.push_back(kv.first.front());
+        }
+      }
+      std::sort(current_task->arr_writes.begin(), current_task->arr_writes.end());
+      current_task->arr_writes.erase(std::unique(current_task->arr_writes.begin(), current_task->arr_writes.end()),
+                                     current_task->arr_writes.end());
+      std::sort(current_task->arr_reads.begin(), current_task->arr_reads.end());
+      current_task->arr_reads.erase(std::unique(current_task->arr_reads.begin(), current_task->arr_reads.end()),
+                                    current_task->arr_reads.end());
+    }
+    // Register the per-task AdStackSizingInfo with the Program-side identity registry. The id is baked
+    // into the lazy-claim overflow path's `cmpxchg(0, id)` so the host raise site can name the offending
+    // kernel + task in its diagnostic message. Empty alloca list = no adstack pushes in this task; skip
+    // registration to keep the registry compact.
+    if (!current_task->ad_stack.allocas.empty() && prog != nullptr) {
+      std::vector<int> allocated_max_sizes;
+      allocated_max_sizes.reserve(current_task->ad_stack.allocas.size());
+      for (const auto &a : current_task->ad_stack.allocas) {
+        allocated_max_sizes.push_back(static_cast<int>(a.max_size_compile_time));
+      }
+      // Update the entry with the live metadata + per-alloca size_exprs. The size_exprs are copied into the registry so
+      // the diagnose path can walk them without dereferencing the launcher's unstable `OffloadedTask::ad_stack` pointer
+      // (freed by `current_task = nullptr` after by-value `offloaded_tasks.push_back(*current_task)`). Mirror the
+      // identity-pair fields here too in case the task START registration above was skipped (no allocas at the time,
+      // prog null, etc.).
+      current_task->ad_stack.kernel_name = kernel_name;
+      current_task->ad_stack.task_id_in_kernel = task_codegen_id;
+      uint32_t id = prog->adstack_cache().register_adstack_sizing_info(
+          static_cast<const void *>(&current_task->ad_stack), kernel_name, task_codegen_id,
+          std::move(allocated_max_sizes), current_task->ad_stack.size_exprs);
+      current_task->ad_stack.registry_id = id;
+    }
   }
 
   // entry_block should jump to the body after all allocas are inserted
@@ -2400,10 +2595,12 @@ void TaskCodeGenLLVM::emit_ad_stack_row_claim_llvm() {
 
   // Per-task capacity slot for the defense-in-depth bounds check: clamp the claimed row at `capacity - 1` so any
   // overshoot stays in-bounds. For tasks without a captured `bound_expr` the launcher writes UINT32_MAX into this slot
-  // so the clamp is inert. The divergence-overflow signal that the SPIR-V codegen emits via OpAtomicUMax is not yet
-  // wired on the LLVM side - it requires a `__atomic_or_n` against `runtime->adstack_overflow_flag` and a matching
-  // runtime-side getter; in its absence we still get the in-bounds clamp, so the kernel cannot silently corrupt the
-  // heap end. Surfacing the divergence is future work.
+  // so the clamp is inert. On overshoot (`claimed_row > capacity - 1`) the codegen also OR-1's the host-visible
+  // adstack overflow flag (`runtime->adstack_overflow_flag_dev_ptr`, which the host allocated as pinned UVA-mapped
+  // memory in `LlvmRuntimeExecutor::materialize_runtime`) so the host poll surfaces the divergence at the next
+  // Quadrants Python entry. The atomic crosses the host/device boundary cleanly because the slot is in
+  // pinned host memory; required hardware envelope is the same Pascal+ / GFX9+ that the existing pinned-host
+  // H2D-async pattern already requires.
   llvm::Value *capacities_base = call("LLVMRuntime_get_adstack_bound_row_capacities", get_runtime());
   llvm::Value *capacity_slot_ptr = builder->CreateGEP(i32ty, capacities_base, task_id_i64);
   llvm::Value *capacity = builder->CreateLoad(i32ty, capacity_slot_ptr);
@@ -2418,6 +2615,38 @@ void TaskCodeGenLLVM::emit_ad_stack_row_claim_llvm() {
   llvm::Value *cmp = builder->CreateICmpUGT(claimed_row, clamp_upper);
   llvm::Value *clamped_row = builder->CreateSelect(cmp, clamp_upper, claimed_row);
   builder->CreateStore(clamped_row, row_id_var);
+
+  // Overflow signal: on `claimed_row > clamp_upper`, atomically OR 1 into the pinned-host overflow flag and
+  // record the offending task identity in the companion `adstack_overflow_task_id_dev_ptr` slot via a
+  // `cmpxchg(0, registry_id)`. Only the FIRST overflowing thread's id sticks; subsequent threads observe
+  // a non-zero value and their cmpxchg fails harmlessly. The condition is hoisted to a structured if so
+  // the not-overflowing fast path skips both atomics entirely - one function call to fetch the pointers
+  // plus one CreateICmpUGT comparison (the same compare we already emitted for the clamp).
+  auto *current_function = builder->GetInsertBlock()->getParent();
+  auto *overflow_then_block = llvm::BasicBlock::Create(*llvm_context, "adstack_overflow_signal", current_function);
+  auto *overflow_merge_block = llvm::BasicBlock::Create(*llvm_context, "adstack_overflow_merge", current_function);
+  builder->CreateCondBr(cmp, overflow_then_block, overflow_merge_block);
+  builder->SetInsertPoint(overflow_then_block);
+  {
+    auto *i64ty_local = llvm::Type::getInt64Ty(*llvm_context);
+    llvm::Value *flag_ptr = call("LLVMRuntime_get_adstack_overflow_flag_dev_ptr", get_runtime());
+    llvm::Value *one_i64 = llvm::ConstantInt::get(i64ty_local, 1);
+    builder->CreateAtomicRMW(llvm::AtomicRMWInst::Or, flag_ptr, one_i64, llvm::MaybeAlign(),
+                             llvm::AtomicOrdering::Monotonic);
+    // Record the registry id (0 means "not registered"; skip the cmpxchg in that case so the slot stays
+    // zero and the host raise site falls through to the generic dual-cause message). Each offload task
+    // emits its own lazy-claim block, so the immediate is task-local at codegen time.
+    if (current_task != nullptr && current_task->ad_stack.registry_id != 0) {
+      llvm::Value *task_id_ptr = call("LLVMRuntime_get_adstack_overflow_task_id_dev_ptr", get_runtime());
+      llvm::Value *expected_zero = llvm::ConstantInt::get(i64ty_local, 0);
+      llvm::Value *new_id =
+          llvm::ConstantInt::get(i64ty_local, static_cast<uint64_t>(current_task->ad_stack.registry_id));
+      builder->CreateAtomicCmpXchg(task_id_ptr, expected_zero, new_id, llvm::MaybeAlign(),
+                                   llvm::AtomicOrdering::Monotonic, llvm::AtomicOrdering::Monotonic);
+    }
+    builder->CreateBr(overflow_merge_block);
+  }
+  builder->SetInsertPoint(overflow_merge_block);
 }
 
 // Return (creating on first call) the per-stack `alloca i64` that holds the live push count for this stack on the
@@ -2678,7 +2907,11 @@ void TaskCodeGenLLVM::visit(AdStackPushStmt *stmt) {
     llvm::Value *max_size_addr = builder->CreateGEP(i64ty, ad_stack_max_sizes_ptr_llvm_, stack_id_i64);
     llvm::Value *max_size = builder->CreateLoad(i64ty, max_size_addr);
     llvm::Value *stack_base = get_ad_stack_base_llvm(stack);
-    call("stack_push", get_runtime(), stack_base, max_size, tlctx->get_constant(stack->element_size_in_bytes()));
+    auto *i64ty_local = llvm::Type::getInt64Ty(*llvm_context);
+    llvm::Value *registry_id_const = llvm::ConstantInt::get(
+        i64ty_local, current_task != nullptr ? static_cast<uint64_t>(current_task->ad_stack.registry_id) : 0u);
+    call("stack_push", get_runtime(), stack_base, max_size, tlctx->get_constant(stack->element_size_in_bytes()),
+         registry_id_const);
     auto primal_ptr = call("stack_top_primal", stack_base, tlctx->get_constant(stack->element_size_in_bytes()));
     primal_ptr = builder->CreateBitCast(primal_ptr, llvm::PointerType::get(tlctx->get_data_type(stmt->ret_type), 0));
     builder->CreateStore(llvm_val[stmt->v], primal_ptr);

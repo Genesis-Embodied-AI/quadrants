@@ -36,7 +36,7 @@ class TaskCodegen : public IRVisitor {
     DeviceCapabilityConfig *caps;
     std::vector<CompiledSNodeStructs> compiled_structs;
     const KernelContextAttributes *ctx_attribs;
-    std::string ti_kernel_name;
+    std::string qd_kernel_name;
     int task_id_in_kernel;
     const CompileConfig *compile_config{nullptr};
   };
@@ -111,7 +111,7 @@ class TaskCodegen : public IRVisitor {
   void generate_range_for_kernel(OffloadedStmt *stmt);
   void generate_struct_for_kernel(OffloadedStmt *stmt);
   spirv::Value at_buffer(const Stmt *ptr, DataType dt);
-  spirv::Value load_buffer(const Stmt *ptr, DataType dt);
+  spirv::Value load_buffer(const Stmt *ptr, DataType dt, bool is_volatile = false);
   void store_buffer(const Stmt *ptr, spirv::Value val);
   spirv::Value get_buffer_value(BufferInfo buffer, DataType dt);
   spirv::Value make_pointer(size_t offset);
@@ -307,6 +307,24 @@ class TaskCodegen : public IRVisitor {
   // via `load_top`, so the bootstrap value is dead memory and writing it through a possibly-unclaimed `row_id_var`
   // would corrupt arbitrary heap rows). Only the `count_var` increment is kept so push and pop stay balanced.
   std::unordered_set<AdStackPushStmt *> ad_stack_bootstrap_pushes_;
+
+  // Function-scope u32 alloca holding the maximum-overflow-signal-seen-this-thread across every adstack push site
+  // in the task. Each `AdStackPushStmt` visitor updates it with `signal = (count >= max) ? stack_id + 1 : 0` via
+  // OpUMax (register-only, no atomic, no global memory access on the not-overflowing fast path). Right before the
+  // kernel's `OpReturn`, an `if any_overflow_signal_var > 0 then atomic_fetch_max(host_visible_buf[0],
+  // any_overflow_signal_var)` emits the host-visible signal exactly once per task per kernel. The host polls the
+  // buffer (Apple Silicon: shared memory; Vulkan: HOST_VISIBLE | HOST_COHERENT) without any DtoH or sync drain.
+  // Lazy-allocated by the first `AdStackPushStmt` visitor; nullptr when the task has no adstack pushes (no
+  // task-end emit needed). Reset to {} per task in `generate_*_kernel`.
+  spirv::Value any_overflow_signal_var_;
+  // Set to true when the task body contains at least one `AdStackPushStmt` visit. Read by
+  // `emit_adstack_task_end_overflow_check` to decide whether to emit the task-end overflow check and
+  // its AdStackOverflow / AdStackTaskRegistryId buffer accesses. Forward-only tasks never set this and
+  // therefore never request the AdStack-side buffer binds, which keeps the SPIR-V launcher's bind
+  // path from null-binding `AdStackTaskRegistryId` on a Program that has not allocated it
+  // (allocation only fires inside `publish_adstack_metadata_spirv` for kernels with at least one
+  // adstack-bearing task; null-binding would crash Metal's `rw_buffer` device-equality assertion).
+  bool task_has_adstack_push_{false};
   // Function-scope OpVariable<u32> initialized to UINT32_MAX at task entry; overwritten with the atomically claimed row
   // index when codegen visits `ad_stack_lca_block_float_`. `get_ad_stack_heap_thread_base_float()` loads this variable
   // and multiplies against the runtime float stride to produce the per-thread heap base, replacing the prior `invoc_id
@@ -340,6 +358,12 @@ class TaskCodegen : public IRVisitor {
   spirv::Value get_ad_stack_metadata_stride_float();
   spirv::Value get_ad_stack_metadata_stride_int();
   void ensure_ad_stack_metadata_loaded(AdStackSpirv &info);
+  // Lazy-allocate the per-task overflow-signal accumulator at the function entry block. See the member
+  // doc on `any_overflow_signal_var_` for the design rationale.
+  spirv::Value ensure_any_overflow_signal_var();
+  // Emit the task-end overflow check at the current insertion point. Must be called from each
+  // `generate_*_kernel` just before the closing `OpReturn`. No-op when the task has no adstack push sites.
+  void emit_adstack_task_end_overflow_check();
   // Routes to the correct backing-typed pointer (`*f32` for `heap_float`, `*i32` for `heap_int`) based on
   // `info.heap_kind`. See comment on the implementation for the bool<->i32 conversion contract.
   spirv::Value ad_stack_slot_ptr(AdStackSpirv &info, spirv::Value idx, bool primal);

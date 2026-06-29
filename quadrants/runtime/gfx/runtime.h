@@ -1,6 +1,7 @@
 #pragma once
 #include "quadrants/util/lang_util.h"
 
+#include <unordered_map>
 #include <vector>
 #include <chrono>
 
@@ -11,6 +12,7 @@
 #include "quadrants/struct/snode_tree.h"
 #include "quadrants/program/snode_expr_utils.h"
 #include "quadrants/program/program_impl.h"
+#include "quadrants/program/adstack_size_expr_eval.h"
 #include "quadrants/program/kernel_launcher.h"
 
 namespace quadrants::lang {
@@ -34,7 +36,7 @@ class SNodeTreeManager;
 class CompiledQuadrantsKernel {
  public:
   struct Params {
-    const QuadrantsKernelAttributes *ti_kernel_attribs{nullptr};
+    const QuadrantsKernelAttributes *qd_kernel_attribs{nullptr};
     std::vector<std::vector<uint32_t>> spirv_bins;
     std::size_t num_snode_trees{0};
 
@@ -46,9 +48,9 @@ class CompiledQuadrantsKernel {
     PipelineCache *backend_cache{nullptr};
   };
 
-  explicit CompiledQuadrantsKernel(const Params &ti_params);
+  explicit CompiledQuadrantsKernel(const Params &qd_params);
 
-  const QuadrantsKernelAttributes &ti_kernel_attribs() const;
+  const QuadrantsKernelAttributes &qd_kernel_attribs() const;
 
   size_t num_pipelines() const;
 
@@ -62,7 +64,7 @@ class CompiledQuadrantsKernel {
   }
 
  private:
-  QuadrantsKernelAttributes ti_kernel_attribs_;
+  QuadrantsKernelAttributes qd_kernel_attribs_;
   std::vector<TaskAttributes> tasks_attribs_;
 
   [[maybe_unused]] Device *device_;
@@ -113,7 +115,28 @@ class QD_DLL_EXPORT GfxRuntime {
 
   KernelHandle register_quadrants_kernel(RegisterParams params);
 
-  void launch_kernel(KernelHandle handle, LaunchContextBuilder &host_ctx);
+  // Records (a contiguous range of) the kernel's offloaded tasks into the current command list. `task_begin` /
+  // `task_end` select the half-open task range `[task_begin, task_end)`; the default `task_end == -1` means "all
+  // tasks", i.e. the normal whole-kernel launch. The range form is used by the GFX host-side graph_do_while driver to
+  // replay individual loop-body task sub-ranges (see `runtime/gfx/kernel_launcher.cpp`). The caller is responsible for
+  // `synchronize()`ing before reading back any device-side loop condition.
+  void launch_kernel(KernelHandle handle, LaunchContextBuilder &host_ctx, int task_begin = 0, int task_end = -1);
+
+  // Number of offloaded tasks in a registered kernel. Used by the graph_do_while driver to size its per-task level
+  // table.
+  int get_num_tasks(KernelHandle handle) const;
+
+  // Innermost graph_do_while loop level for offloaded task `task_idx` (-1 = top-level / runs once). See
+  // `spirv::TaskAttributes::graph_do_while_level_id`.
+  int get_task_graph_do_while_level_id(KernelHandle handle, int task_idx) const;
+
+  // Slice 4 (Vulkan / Metal): cp_id of the first checkpoint whose `yield_on=` flag was non-zero on the most recent
+  // `launch_kernel` call, or `-1` if no yield was observed / the launched kernel has no yielding checkpoints. Mirrors
+  // the AMDGPU `GraphManager::last_yield_cp_id_on_last_call()` / CUDA-side surface so
+  // `Program::get_graph_last_yield_cp_id_on_last_call` can route through the GFX launcher uniformly.
+  int last_yield_cp_id_on_last_call() const {
+    return last_yield_cp_id_on_last_call_;
+  }
 
   void buffer_copy(DevicePtr dst, DevicePtr src, size_t size);
 
@@ -160,7 +183,8 @@ class QD_DLL_EXPORT GfxRuntime {
       DeviceAllocationGuard *args_buffer,
       const std::unordered_map<int, DeviceAllocation> &ndarray_allocs,
       const std::vector<quadrants::lang::spirv::TaskAttributes> &task_attribs,
-      const std::string &kernel_name);
+      const std::string &kernel_name,
+      const quadrants::lang::MaxReducerResultMap &max_reducer_results = quadrants::lang::MaxReducerResultMap{});
 
   // Static-IR-bound sparse-adstack-heap reducer dispatch. For each task with a captured ndarray-backed `bound_expr`,
   // dispatches the generic reducer compute shader (see `quadrants/codegen/spirv/adstack_bound_reducer_shader.{h,cpp}`)
@@ -174,6 +198,21 @@ class QD_DLL_EXPORT GfxRuntime {
       LaunchContextBuilder &host_ctx,
       DeviceAllocationGuard *args_buffer,
       const std::vector<quadrants::lang::spirv::TaskAttributes> &task_attribs);
+
+  // Max-reducer dispatch. For each captured `StaticAdStackMaxReducerSpec` across every task in `task_attribs`, hits
+  // `AdStackCache::try_max_reducer_cache_hit` first; on miss dispatches `adstack_max_reducer_pipeline_` over `[0,
+  // length)` and atomic-SMaxes the body's per-thread result into the shared output buffer. The returned map is keyed by
+  // `(registry_id, stack_id, mor_node_idx)` packed via the same `AdStackCache` encoding so
+  // `substitute_precomputed_max_over_range` can substitute results into per-stack `SerializedSizeExpr` trees before the
+  // per-thread sizer or device sizer encoder walks them. Empty map on capability-missing devices or kernels with no
+  // captured specs (caller falls through to the existing capped path). Implementation lives in
+  // `runtime/gfx/adstack_max_reducer_launch.cpp`.
+  quadrants::lang::MaxReducerResultMap dispatch_max_reducers(
+      LaunchContextBuilder &host_ctx,
+      DeviceAllocationGuard *args_buffer,
+      const std::unordered_map<int, DeviceAllocation> &ndarray_allocs,
+      const std::vector<quadrants::lang::spirv::TaskAttributes> &task_attribs,
+      const std::string &kernel_name);
 
   void init_nonroot_buffers();
 
@@ -270,6 +309,23 @@ class QD_DLL_EXPORT GfxRuntime {
   // Metal / MoltenVK by the same RHI rule the slot-3 placeholder above guards against.
   std::unique_ptr<DeviceAllocationGuard> adstack_bound_reducer_args_placeholder_buffer_;
 
+  // Max-reducer per-`GfxRuntime` plumbing. Built once on the first launch that contains a task with non-empty
+  // `max_reducer_specs`, reused across every such launch afterwards. Null on backends without
+  // `spirv_has_physical_storage_buffer + spirv_has_int64`; in that case the runtime falls back to the existing capped
+  // path on the per-thread sizer eval (silent truncation at `1<<24` on the device sizer side; user-visible bug surfaces
+  // only with `QD_DEBUG_ADSTACK=1`). The grow-on-demand buffers below hold per-spec params blobs (binding 2), the body
+  // bytecode payload (binding 3), and the per-spec output i64 slots (binding 1). Slot 0 is the kernel arg buffer.
+  std::unique_ptr<Pipeline> adstack_max_reducer_pipeline_{nullptr};
+  std::unique_ptr<DeviceAllocationGuard> adstack_max_reducer_params_buffer_;
+  size_t adstack_max_reducer_params_buffer_size_{0};
+  std::unique_ptr<DeviceAllocationGuard> adstack_max_reducer_bytecode_buffer_;
+  size_t adstack_max_reducer_bytecode_buffer_size_{0};
+  std::unique_ptr<DeviceAllocationGuard> adstack_max_reducer_output_buffer_;
+  size_t adstack_max_reducer_output_buffer_size_{0};
+  // Slot-0 placeholder buffer for kernels with no kernel arg buffer (SNode-only kernels with `args_buffer == null`).
+  // Same RHI rule as the bound-reducer's slot-0 placeholder: descriptor-set layouts require a non-null binding.
+  std::unique_ptr<DeviceAllocationGuard> adstack_max_reducer_args_placeholder_buffer_;
+
   // Per-kernel `BufferType::AdStackBoundRowCapacity` (`uint[num_tasks_in_kernel]`). Populated by the host after the
   // bound-reducer dispatch with each task's exact reducer count (UINT32_MAX for tasks without a captured captured
   // `bound_expr`, so the codegen-emitted defense-in-depth bounds check is inert on those). Bound to the main task on
@@ -278,6 +334,16 @@ class QD_DLL_EXPORT GfxRuntime {
   // amortised-doubling policy as the float / int heaps.
   std::unique_ptr<DeviceAllocationGuard> adstack_bound_row_capacity_buffer_;
   size_t adstack_bound_row_capacity_buffer_size_{0};
+
+  // Per-kernel `BufferType::AdStackTaskRegistryId` (`uint[num_tasks_in_kernel]`). Written by
+  // `publish_adstack_metadata_spirv` immediately after registering each adstack-bearing task with the
+  // Program-side identity registry: slot `ti` holds that task's registry id (0 for tasks without
+  // adstacks). The codegen task-end overflow check reads `slot[task_id_in_kernel_]` and
+  // `OpAtomicCompareExchange`'s it into `AdStackOverflow[1]` on overflow so the host raise site can
+  // name the offending kernel + task. Allocated and grown lazily on demand following the same
+  // pattern as `adstack_bound_row_capacity_buffer_`.
+  std::unique_ptr<DeviceAllocationGuard> adstack_task_registry_id_buffer_;
+  size_t adstack_task_registry_id_buffer_size_{0};
 
   // Owning `ProgramImpl` back-reference; propagated from `Params::program_impl`. See the comment on
   // `Params::program_impl` for the contract.
@@ -299,7 +365,7 @@ class QD_DLL_EXPORT GfxRuntime {
   // the assignment site for the MoltenVK SIGSEGV this guards against.
   size_t pending_launches_since_sync_{0};
 
-  std::vector<std::unique_ptr<CompiledQuadrantsKernel>> ti_kernels_;
+  std::vector<std::unique_ptr<CompiledQuadrantsKernel>> qd_kernels_;
 
   std::unordered_map<DeviceAllocation *, size_t> root_buffers_size_map_;
   std::unordered_map<DeviceAllocationId, ImageLayout> last_image_layouts_;
@@ -309,6 +375,130 @@ class QD_DLL_EXPORT GfxRuntime {
   // ndarray_in_use_ to track this so that we can free memory allocated for
   // ndarray whenever it's safe to do so.
   std::unordered_set<DeviceAllocationId> ndarrays_in_use_;
+
+  // Slice 4: see the public `last_yield_cp_id_on_last_call()` accessor. Reset to -1 at the start of every
+  // `launch_kernel` call that has any `checkpoint_yield_on_arg_ids[cp] >= 0`; updated when the post-checkpoint readback
+  // observes a non-zero `yield_on=` flag.
+  int last_yield_cp_id_on_last_call_{-1};
+
+  // GPU-side checkpoint gating (Vulkan / Metal). Lazily-built generic gate + yield-check pipelines (one per
+  // `GfxRuntime`, shared across every yielding-capable kernel). The gate shader is
+  // `quadrants/codegen/spirv/checkpoint_gate_shader.{h,cpp}`; the yield-check shader is
+  // `quadrants/codegen/spirv/checkpoint_yield_check_shader.{h,cpp}`. Both are vanilla compute shaders (no capability
+  // requirements beyond `OpAtomicCompareExchange`, universal across the Quadrants-supported Vulkan / Metal feature
+  // set). See `runtime/gfx/checkpoint_launch.cpp` for the orchestration that uses them.
+  std::unique_ptr<Pipeline> checkpoint_gate_pipeline_{nullptr};
+  std::unique_ptr<Pipeline> checkpoint_yield_check_pipeline_{nullptr};
+
+  // Per-kernel-handle cached gating state. Indexed by `KernelHandle::get_launch_id()` (same indexing as `qd_kernels_`),
+  // allocated lazily on the first checkpoint-bearing launch of each handle and reused across every subsequent launch of
+  // that handle. Entries for non-checkpoint kernels (or pre-allocation slots for not-yet-launched handles) are left
+  // default-constructed (`per_cp.empty()`); the launcher tests `state.per_cp.empty()` as the fast-path guard.
+  //
+  // Lifecycle: never freed during a `GfxRuntime`'s lifetime - the device allocations live in the
+  // `DeviceAllocationGuard`s here, which match the lifetime of the `GfxRuntime` (the kernel handles themselves never
+  // get reissued, so the per-handle entry stays valid as long as the handle is callable). `qd.reset()` tears the whole
+  // runtime down and reclaims everything.
+  struct CheckpointPerCpState {
+    // cp_id this entry describes. Matches the index into `CheckpointHandleState::per_cp` for every yielding-capable
+    // handle (per-cp entries are dense, indexed 0..max_cp_id).
+    int32_t cp_id{-1};
+    // Per-checkpoint params SSBO. Layout matches `spirv::CheckpointGateParams` followed by the active-dim u32 triples
+    // (one per body kernel in the checkpoint, plus one extra triple for the yield-check shader's grid dim when this
+    // checkpoint has `yield_on=`). Written once at first launch; the gate shader reads from it and the contents never
+    // change across launches.
+    std::unique_ptr<DeviceAllocationGuard> gate_params;
+    // Per-checkpoint out-dims SSBO. Holds N+(yielding?1:0) u32 triples; written by the gate shader each launch with
+    // either the active dim or `(0, 0, 0)`; consumed by each body kernel's (and the yield-check shader's)
+    // `CommandList::dispatch_indirect` at offset `12 * slot_idx`. Allocated with `AllocUsage::Storage |
+    // AllocUsage::Indirect` so the same buffer can be both written as an SSBO and read as an indirect-dispatch source.
+    std::unique_ptr<DeviceAllocationGuard> out_dims;
+    // Per-yielding-checkpoint yield-check params SSBO (4 bytes, holds cp_id). Allocated only when `yield_on=` was
+    // supplied for this checkpoint; null otherwise.
+    std::unique_ptr<DeviceAllocationGuard> yield_check_params;
+    // Body-kernel task indices that belong to this checkpoint, in original task order. The launcher walks these to bind
+    // + dispatch_indirect each body kernel; offset `12 * i` in `out_dims` gives the i-th body kernel's dim3 slot. The
+    // yield-check shader, when present, reads from the trailing slot at offset `12 * body_tasks.size()`.
+    std::vector<int> body_task_indices;
+  };
+
+  struct CheckpointHandleState {
+    // Per-launch control buffer: `[resume_point: i32, yield_signal: i32]`. Allocated with `host_write=true,
+    // host_read=true` so the launcher can `upload_data` the initial `(resume_point, -1)` at launch start and
+    // `readback_data` the final `yield_signal` at launch end without going through a separate staging buffer. Shared
+    // across all per-cp states; the gate and yield-check shaders both read / write it.
+    std::unique_ptr<DeviceAllocationGuard> control;
+    // Dense per-cp entries: `per_cp[i]` describes checkpoint id `i`. Sparse cp_ids (a kernel with checkpoints 0 and 2
+    // but no 1) are not produced by the AST transformer (cp_ids are dense by construction in
+    // `quadrants/python/quadrants/lang/transformer.py`), so the dense layout is correct; `per_cp[i].cp_id == i` always
+    // when the entry is populated.
+    std::vector<CheckpointPerCpState> per_cp;
+  };
+
+  // Per-handle cached gating state. Resized to `qd_kernels_.size()` lazily; entries for handles that have never
+  // launched a checkpoint-bearing kernel have `per_cp.empty()` and skip the GPU- side gating path entirely (no buffers
+  // allocated).
+  std::vector<CheckpointHandleState> checkpoint_handle_states_;
+
+  // First-launch setup for the per-handle gating state. Builds the generic gate + yield-check pipelines (idempotent
+  // across handles) and populates `state.per_cp` based on the kernel's task list. Body-kernel active dims are baked
+  // into `state.per_cp[cp].gate_params` on this call; subsequent launches reuse the same buffers without re-uploading.
+  //
+  // Returns true if the kernel has any cp_id >= 0 tasks (i.e. the launcher should use the GPU- side gating path); false
+  // otherwise (no checkpoints, run the standard direct-dispatch path).
+  bool ensure_checkpoint_state_for_handle(KernelHandle handle,
+                                          const std::vector<quadrants::lang::spirv::TaskAttributes> &task_attribs,
+                                          const std::vector<int> &checkpoint_yield_on_arg_ids,
+                                          const std::vector<int> &per_task_group_x);
+
+  // Record a gate-shader dispatch into `cmdlist` for one checkpoint. Implementation in `checkpoint_launch.cpp`. Called
+  // from `launch_kernel` immediately before the first body task of each checkpoint. Caller must `memory_barrier()`
+  // afterwards before the body tasks dispatch indirect off the gate's out_dims output.
+  void dispatch_checkpoint_gate(CommandList *cmdlist, const CheckpointHandleState &state, int cp_id);
+
+  // Record a yield-check-shader dispatch into `cmdlist` for one yielding checkpoint. Implementation in
+  // `checkpoint_launch.cpp`. Called from `launch_kernel` immediately after the last body task of each yielding
+  // checkpoint. Indirect-dispatched off the trailing out_dims slot so a skipped checkpoint also skips its yield-check.
+  void dispatch_checkpoint_yield_check(CommandList *cmdlist,
+                                       const CheckpointHandleState &state,
+                                       int cp_id,
+                                       DeviceAllocation yield_on_devalloc);
+
+  // Per-launch outputs of `prepare_checkpoint_launch_state`. `slot_in_cp[i]` is the dense slot index into
+  // `state.per_cp[cp].out_dims` for task `i` (12 bytes per slot, gate-written, body- kernel-indirect-read).
+  // `is_first_in_cp[i]` / `is_last_in_cp[i]` mark task-list boundaries used by the per-task dispatch loop to decide
+  // when to inject the gate / yield-check shaders. `yield_on_devallocs[cp]` is the user's resolved `yield_on=` ndarray
+  // DeviceAllocation for cp (or `kDeviceNullAllocation` for non-yielding checkpoints / cps whose ndarray arg wasn't
+  // found in `any_arrays`).
+  struct CheckpointLaunchPlan {
+    std::vector<int> slot_in_cp;
+    std::vector<bool> is_first_in_cp;
+    std::vector<bool> is_last_in_cp;
+    std::vector<DeviceAllocation> yield_on_devallocs;
+  };
+
+  // Per-launch preparation of the checkpoint subsystem on the GPU side. Builds the task-index -> slot map, resolves
+  // `yield_on=` DeviceAllocations, conditionally resets `last_yield_cp_id_on_last_call_`, and uploads the initial
+  // `(resume_point, -1)` words into the control buffer. Caller passes the freshly resolved `any_arrays` and the
+  // pre-launch `host_ctx.checkpoint_yield_on_arg_ids`. Implementation in `checkpoint_launch.cpp`. Returns an empty /
+  // default-constructed plan when the kernel has no checkpoints; runtime.cpp's main loop checks
+  // `kernel_has_checkpoints` before consuming any of the plan's vectors.
+  CheckpointLaunchPlan prepare_checkpoint_launch_state(
+      KernelHandle handle,
+      const LaunchContextBuilder &host_ctx,
+      const std::vector<quadrants::lang::spirv::TaskAttributes> &task_attribs,
+      const std::unordered_map<int, DeviceAllocation> &any_arrays,
+      bool kernel_has_checkpoints);
+
+  // Post-launch readback: flushes the cmdlist, blocks until the GPU drains, reads the 8-byte `(resume_point,
+  // yield_signal)` tuple back from the control buffer, and updates `last_yield_cp_id_on_last_call_` if a yield fired.
+  // Re-opens the cmdlist on return so any downstream work (e.g. the D2H blit of return values) can keep recording.
+  // Implementation in `checkpoint_launch.cpp`. Skips work entirely (still re-opens the cmdlist via the same
+  // `ensure_current_cmdlist()` call the caller would have made) when `kernel_has_checkpoints` is false or no checkpoint
+  // in this kernel has `yield_on=`.
+  void finalize_checkpoint_readback(KernelHandle handle,
+                                    const LaunchContextBuilder &host_ctx,
+                                    bool kernel_has_checkpoints);
 };
 
 GfxRuntime::RegisterParams run_codegen(Kernel *kernel,

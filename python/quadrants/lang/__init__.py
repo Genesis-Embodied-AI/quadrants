@@ -16,6 +16,7 @@ from quadrants.lang.ops import *  # pylint: disable=W0622
 from quadrants.lang.runtime_ops import *
 from quadrants.lang.snode import *
 from quadrants.lang.source_builder import *
+from quadrants.lang.stream import *
 from quadrants.lang.struct import *
 from quadrants.types.enums import DeviceCapability, Format, Layout  # noqa: F401
 
@@ -34,9 +35,11 @@ __all__ = [
         "enums",
         "exception",
         "expr",
+        "graph_status",
         "impl",
         "inspect",
         "kernel_arguments",
+        "kernel_checkpoint",
         "kernel_impl",
         "matrix",
         "mesh",
@@ -47,6 +50,7 @@ __all__ = [
         "shell",
         "snode",
         "source_builder",
+        "stream",
         "struct",
         "util",
     ]

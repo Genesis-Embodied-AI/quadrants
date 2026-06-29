@@ -8,24 +8,29 @@
 namespace quadrants::lang {
 
 class Program;
+class CompiledKernelData;
 
 /** A mapping from an SNode to its read/write access kernels.
  *
- * The main purpose of this class is to decouple the accessor kernels from the
- * SNode class itself. Ideally, SNode should be nothing more than a group of
- * plain data.
+ * The main purpose of this class is to decouple the accessor kernels from the SNode class itself.
+ * Ideally, SNode should be nothing more than a group of plain data.
+ *
+ * `RwKernels` also memoises each SNode's `CompiledKernelData *` so repeated reads/writes bypass the
+ * string-keyed `KernelCompilationManager` lookup.
  */
 class SNodeRwAccessorsBank {
  private:
   struct RwKernels {
     Kernel *reader{nullptr};
     Kernel *writer{nullptr};
+    const CompiledKernelData *reader_compiled{nullptr};
+    const CompiledKernelData *writer_compiled{nullptr};
   };
 
  public:
   class Accessors {
    public:
-    explicit Accessors(const SNode *snode, const RwKernels &kernels, Program *prog);
+    explicit Accessors(const SNode *snode, RwKernels &kernels, Program *prog);
 
     // for float and double
     void write_float(const std::vector<int> &I, float64 val);
@@ -42,6 +47,7 @@ class SNodeRwAccessorsBank {
     Program *prog_;
     Kernel *reader_;
     Kernel *writer_;
+    RwKernels &kernels_;
   };
 
   explicit SNodeRwAccessorsBank(Program *program) : program_(program) {

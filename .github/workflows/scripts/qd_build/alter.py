@@ -1,0 +1,193 @@
+# -*- coding: utf-8 -*-
+
+# -- stdlib --
+import os
+import platform
+import sys
+from pathlib import Path
+
+# -- third party --
+import psutil
+
+# -- own --
+from . import misc
+from .cmake import cmake_args
+from .misc import get_cache_home
+from .tinysh import Command
+
+
+def _editable_install_hint():
+    # Printed (via the shell rc) right above the first prompt of the build shell, so the user sees
+    # the exact editable-install command to run without consulting the docs. setup_python_deps()
+    # seeds pip into the venv (uv venv ships none), so a bare `pip install` resolves to the venv.
+    return (
+        r"printf '\n\033[1;36m:: Quadrants build environment ready. To do an editable install, run:\033[0m\n"
+        r"    \033[1;32mpip install --no-build-isolation -e . -Ceditable.rebuild=true\033[0m\n\n'"
+        "\n"
+    )
+
+
+def _venv_reactivation():
+    # Sourcing the user's shell rc (below) can reset PATH and drop an active virtualenv, leaving
+    # `python`/`pip` pointed at the system (often externally-managed) interpreter. Re-activate the
+    # caller's venv, if any, *after* the rc + env files so it ends up first on PATH. Disable
+    # activate's own prompt mangling so the `[Quadrants Build]` prompt set afterwards stays clean.
+    venv = os.environ.get("VIRTUAL_ENV")
+    if not venv:
+        return ""
+    return "export VIRTUAL_ENV_DISABLE_PROMPT=1\n" f'[ -f "{venv}/bin/activate" ] && source "{venv}/bin/activate"\n'
+
+
+def _write_qd_bashrc():
+    path = get_cache_home() / "qd.bashrc"
+    envs = get_cache_home() / "qd-env.sh"
+    _write_env(envs)
+    with open(path, "w") as f:
+        f.write(
+            "[ -f /etc/bashrc ] && source /etc/bashrc\n"
+            "[ -f ~/.bashrc ] && source ~/.bashrc\n"
+            f"source {envs}\n"
+            f"{_venv_reactivation()}"
+            r'export PS1="\[\e]0;[Quadrants Build Environment]\a\]\[\033[01;31m\][Quadrants Build] \[\033[00m\]$PS1"'
+            "\n"
+            f"{_editable_install_hint()}"
+        )
+
+    return path
+
+
+def _write_qd_zshrc():
+    dotdir = get_cache_home() / "zdotdir"
+    dotdir.mkdir(parents=True, exist_ok=True)
+    path = dotdir / ".zshrc"
+    envs = get_cache_home() / "qd-env.sh"
+    _write_env(envs)
+    with open(path, "w") as f:
+        f.write(
+            "[ -f /etc/zsh/zshrc ] && source /etc/zsh/zshrc\n"
+            "[ -f $HOME/.zshrc ] && source $HOME/.zshrc\n"
+            f"source {envs}\n"
+            f"{_venv_reactivation()}"
+            r"export PROMPT='%{$fg_bold[red]%}[Quadrants Build] %{$reset_color%}'$PROMPT"
+            "\n"
+            f"{_editable_install_hint()}"
+        )
+    return dotdir
+
+
+def _write_qd_pwshrc():
+    path = get_cache_home() / "qd.ps1"
+    with open(path, "w") as f:
+        f.write(
+            "\n".join(
+                [
+                    r"function Prompt {",
+                    r'    return "[Quadrants Build] $($executionContext.SessionState.Path.CurrentLocation)$(">" * ($nestedPromptLevel + 1)) "'
+                    r"}",
+                ]
+            )
+        )
+
+    return path
+
+
+KNOWN_SHELLS = (
+    "bash",
+    "zsh",
+    "sh",
+    "pwsh",
+    "cmd.exe",
+    "pwsh.exe",
+    "powershell.exe",
+)
+
+
+class Shell:
+    def __init__(self, name: str, exe: str):
+        self.name = name
+        self.exe = exe
+
+
+def _find_shell():
+    proc = psutil.Process()
+    while proc:
+        exe = proc.exe()
+        name = exe.split(os.path.sep)[-1]
+        if name in KNOWN_SHELLS:
+            return Shell(name, exe)
+        proc = proc.parent()
+
+    return None
+
+
+def enter_shell():
+    cmake_args.writeback()
+    misc.info("Entering shell...")
+    if platform.system() == "Windows":
+        shell = _find_shell() or Shell("cmd.exe", "cmd.exe")
+        if shell.name in ("pwsh.exe", "powershell.exe"):
+            pwsh = Command(shell.exe)
+            path = _write_qd_pwshrc()
+            pwsh("-ExecutionPolicy", "Bypass", "-NoExit", "-File", str(path))
+        elif shell.name == "cmd.exe":
+            cmd = Command(shell.exe)
+            cmd("/k", "set", "PROMPT=QuadrantsBuild $P$G")
+        else:
+            # Unknown shell, not doing anything fancy
+            os.execl(shell.exe, shell.exe)
+    else:
+        shell = _find_shell() or Shell("bash", "/bin/bash")
+        if shell.name not in ("sh", "bash", "zsh"):
+            import pwd
+
+            path = pwd.getpwuid(os.getuid()).pw_shell.split("/")[-1]
+            name = path.split("/")[-1]
+            shell = Shell(name, path)
+
+        if shell.name == "bash":
+            path = _write_qd_bashrc()
+            os.execl(shell.exe, shell.exe, "--rcfile", str(path))
+        elif shell.name == "zsh":
+            path = _write_qd_zshrc()
+            env = os.environ.copy()
+            env["ZDOTDIR"] = str(path)
+            os.execle(shell.exe, shell.exe, env)
+        else:
+            # Unknown shell, not doing anything fancy
+            os.execl(shell.exe, shell.exe)
+
+
+def _write_env(path):
+    envs = os.environ.get_changed_envs()
+    envstr = ""
+
+    if isinstance(path, Path):
+        path = str(path)
+
+    if path.endswith(".ps1"):
+        envstr = "\n".join([f'$env:{k}="{v}"' for k, v in envs.items()])
+    elif path.endswith(".sh"):
+        envstr = "\n".join([f'export {k}="{v}"' for k, v in envs.items()])
+    elif path.endswith(".json"):
+        import json
+
+        envstr = json.dumps(envs, indent=2)
+    else:
+        raise RuntimeError(f"Unsupported format")
+
+    with open(path, "w") as f:
+        f.write(envstr)
+
+
+def handle_alternate_actions():
+    if misc.options.write_env:
+        cmake_args.writeback()
+        _write_env(misc.options.write_env)
+        misc.info(f"Environment written to {misc.options.write_env}")
+        sys.exit(0)
+    elif misc.options.shell:
+        enter_shell()
+    else:
+        return
+
+    sys.exit(0)

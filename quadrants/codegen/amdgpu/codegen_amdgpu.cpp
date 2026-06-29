@@ -47,6 +47,7 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
   void emit_extra_unary(UnaryOpStmt *stmt) override {
     auto input = llvm_val[stmt->operand];
     auto input_quadrants_type = stmt->operand->ret_type;
+    auto input_type = input->getType();
     auto op = stmt->op_type;
 
 #define UNARY_STD(x)                                                       \
@@ -169,6 +170,53 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
     UNARY_STD(exp)
     UNARY_STD(log)
     UNARY_STD(sqrt)
+    else if (op == UnaryOpType::popcnt) {
+      // stmt->ret_type is already normalised to i32 by type_check.cpp; the explicit Trunc on the 64-bit arm keeps the
+      // LLVM value width in sync with that contract.
+      if (input_quadrants_type->is_primitive(PrimitiveTypeID::i32) ||
+          input_quadrants_type->is_primitive(PrimitiveTypeID::u32)) {
+        llvm_val[stmt] = builder->CreateIntrinsic(llvm::Intrinsic::ctpop, {input_type}, {input});
+      } else if (input_quadrants_type->is_primitive(PrimitiveTypeID::i64) ||
+                 input_quadrants_type->is_primitive(PrimitiveTypeID::u64)) {
+        auto pop64 = builder->CreateIntrinsic(llvm::Intrinsic::ctpop, {input_type}, {input});
+        llvm_val[stmt] = builder->CreateTrunc(pop64, llvm::Type::getInt32Ty(*llvm_context));
+      } else {
+        QD_NOT_IMPLEMENTED
+      }
+    }
+    else if (op == UnaryOpType::clz) {
+      // clz operates on the unsigned bit pattern, so u32 / u64 lower to the same llvm.ctlz call as i32 / i64; LLVM IR
+      // is signless for integers.
+      auto is_zero_undef = llvm::ConstantInt::get(llvm::Type::getInt1Ty(*llvm_context), 0);
+      if (input_quadrants_type->is_primitive(PrimitiveTypeID::i32) ||
+          input_quadrants_type->is_primitive(PrimitiveTypeID::u32)) {
+        llvm_val[stmt] = builder->CreateIntrinsic(llvm::Intrinsic::ctlz, {input_type}, {input, is_zero_undef});
+      } else if (input_quadrants_type->is_primitive(PrimitiveTypeID::i64) ||
+                 input_quadrants_type->is_primitive(PrimitiveTypeID::u64)) {
+        auto clz64 = builder->CreateIntrinsic(llvm::Intrinsic::ctlz, {input_type}, {input, is_zero_undef});
+        llvm_val[stmt] = builder->CreateTrunc(clz64, llvm::Type::getInt32Ty(*llvm_context));
+      } else {
+        QD_NOT_IMPLEMENTED
+      }
+    }
+    else if (op == UnaryOpType::ffs) {
+      // ffs(x): 1-indexed position of the lowest set bit; 0 when x == 0 (CUDA __ffs convention). Lower to llvm.cttz + 1
+      // and a select for the zero case; the AMDGPU LLVM backend further lowers llvm.cttz to native bitfield-extract
+      // instructions. Same width-and-signedness gate as clz.
+      auto is_zero_undef = llvm::ConstantInt::get(llvm::Type::getInt1Ty(*llvm_context), 0);
+      if (input_quadrants_type->is_primitive(PrimitiveTypeID::i32) ||
+          input_quadrants_type->is_primitive(PrimitiveTypeID::u32) ||
+          input_quadrants_type->is_primitive(PrimitiveTypeID::i64) ||
+          input_quadrants_type->is_primitive(PrimitiveTypeID::u64)) {
+        auto cttz = builder->CreateIntrinsic(llvm::Intrinsic::cttz, {input_type}, {input, is_zero_undef});
+        auto plus_one = builder->CreateAdd(cttz, llvm::ConstantInt::get(input_type, 1));
+        auto is_zero = builder->CreateICmpEQ(input, llvm::ConstantInt::get(input_type, 0));
+        auto sel = builder->CreateSelect(is_zero, llvm::ConstantInt::get(input_type, 0), plus_one);
+        llvm_val[stmt] = builder->CreateZExtOrTrunc(sel, llvm::Type::getInt32Ty(*llvm_context));
+      } else {
+        QD_NOT_IMPLEMENTED
+      }
+    }
     else {
       QD_P(unary_op_type_name(op));
       QD_NOT_IMPLEMENTED
@@ -275,6 +323,9 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
     auto ptr = llvm_val[stmt->src];
     auto ptr_type = stmt->src->ret_type->as<PointerType>();
     if (ptr_type->is_bit_pointer()) {
+      // See the matching guard in `TaskCodeGenLLVM::create_global_load`: per-field volatile semantics on a quant
+      // bit-packed snode are not meaningful, and no public API exposes the combination today.
+      QD_ASSERT(!stmt->is_volatile);
       auto val_type = ptr_type->get_pointee_type();
       auto get_ch = stmt->src->as<GetChStmt>();
       auto physical_type = tlctx->get_data_type(get_ch->input_snode->physical_type);
@@ -293,8 +344,14 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
                                              get_ch->output_snode->id_in_bit_struct);
       }
     } else {
-      // Byte pointer case.
-      llvm_val[stmt] = builder->CreateLoad(tlctx->get_data_type(stmt->ret_type), ptr);
+      // Byte pointer case.  `setVolatile(true)` keeps AMDGPU's optimiser from hoisting the load out of a
+      // spin-wait loop or merging it with a prior load of the same address; LLVM lowers it to the standard
+      // `global_load_*` family with the no-merge / no-hoist invariant preserved.
+      auto *load = builder->CreateLoad(tlctx->get_data_type(stmt->ret_type), ptr);
+      if (stmt->is_volatile) {
+        load->setVolatile(true);
+      }
+      llvm_val[stmt] = load;
     }
   }
 
@@ -313,6 +370,14 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
       emit_amdgpu_gc(stmt);
     } else {
       init_offloaded_task_function(stmt);
+      // GPU-side checkpoint gating prologue: HIP 7.2 has no conditional graph nodes and no indirect-dispatch primitive,
+      // so AMDGPU follows the same self-gating pattern as pre-Hopper CUDA -- every cp_id >= 0 body kernel reads
+      // `RuntimeContext::checkpoint_*_ptr` and early-returns when its checkpoint should be skipped. The flat HIP graph
+      // build path in `runtime/amdgpu/graph_manager.cpp` populates the device pointers in `persistent_ctx` once per
+      // launch.
+      if (stmt->checkpoint_id >= 0) {
+        emit_checkpoint_gate_prologue(stmt->checkpoint_id);
+      }
       if (stmt->task_type == Type::serial) {
         stmt->body->accept(this);
       } else if (stmt->task_type == Type::range_for) {
@@ -351,6 +416,8 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
         current_task->grid_dim = num_SMs * query_max_block_per_sm;
       }
       current_task->block_dim = stmt->block_dim;
+      current_task->stream_parallel_group_id = stmt->stream_parallel_group_id;
+      current_task->checkpoint_id = stmt->checkpoint_id;
       QD_ASSERT(current_task->grid_dim != 0);
       QD_ASSERT(current_task->block_dim != 0);
       // Host-side adstack sizing, same scheme as codegen_cuda: tight `grid_dim * block_dim` for
@@ -397,8 +464,47 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
       llvm_val[stmt] = emit_amdgpu_shuffle_down(
           /* value=*/llvm_val[stmt->args[0]],
           /* dt=*/stmt->args[0]->ret_type, offset);
+    } else if (stmt->func_name == "subgroupShuffleUp") {
+      auto offset = builder->CreateZExtOrTrunc(llvm_val[stmt->args[1]], llvm::Type::getInt32Ty(*llvm_context));
+      llvm_val[stmt] = emit_amdgpu_shuffle_up(
+          /* value=*/llvm_val[stmt->args[0]],
+          /* dt=*/stmt->args[0]->ret_type, offset);
+    } else if (stmt->func_name == "subgroupBallotU32") {
+      // We always lower to ``llvm.amdgcn.ballot.i64`` and truncate to i32, on both wave32 and wave64.  In principle
+      // ``llvm.amdgcn.ballot.i32`` exists exactly for this case and is documented as well-defined on wave64 (PR
+      // https://github.com/llvm/llvm-project/pull/71556 in LLVM 18: SETCC at wavefront width, then zext/trunc to the
+      // requested return type, i.e. the low 32 bits = lanes 0..31's predicates on wave64).  In practice the LLVM
+      // versions we've tested (20 and 22.1.0) still fail to select ``ballot.i32`` on gfx942 when the predicate is a
+      // non-constant ``i1`` — isel hits "Cannot select: AMDGPUISD::SETCC ..." for the ``i1 -> i32 != 0`` predicate
+      // shape that ``ballot_first_n`` produces in real kernels.  ``ballot.i64 + trunc to i32`` works around the bug
+      // and produces identical assembly (same single ``v_cmp_*_e64`` + low-half store) since LLVM's CSE folds the
+      // i64 ballot's high half away as soon as the trunc is observed.  See min repro in the PR thread; the workaround
+      // costs nothing and is robust regardless of upstream LLVM fix status.
+      auto ballot64 = call("amdgpu_ballot_u64", llvm_val[stmt->args[0]]);
+      llvm_val[stmt] = builder->CreateTrunc(ballot64, llvm::Type::getInt32Ty(*llvm_context));
+    } else if (stmt->func_name == "subgroupBallotU64") {
+      // ``llvm.amdgcn.ballot.i64`` returns a 64-bit ballot for the full subgroup: on wave64 every lane contributes;
+      // on wave32 only lanes 0..31 contribute and bits 32..63 of the result are zero.  Either way the i64 return is
+      // uniform across wavefront modes, which is what ``ballot`` advertises to the user.  ``ballot.i64``
+      // on either wave32 or wave64 selects cleanly in current LLVM (only the i32 form has the isel bug noted above).
+      llvm_val[stmt] = call("amdgpu_ballot_u64", llvm_val[stmt->args[0]]);
     } else if (stmt->func_name == "subgroupInvocationId") {
       llvm_val[stmt] = call("amdgpu_lane_id");
+    } else if (stmt->func_name == "subgroupBarrier") {
+      // Wave-scope thread reconvergence barrier.  `llvm.amdgcn.wave.barrier` is the LLVM intrinsic AMDGPU exposes for
+      // wave-level sync: on chips where waves are lockstep (GCN) it acts as a compiler reordering barrier; on RDNA it
+      // lowers to a real wave-scope hardware barrier.  Caller contract is uniform CF + all lanes active.
+      builder->CreateIntrinsic(Intrinsic::amdgcn_wave_barrier, ArrayRef<llvm::Value *>{});
+      llvm_val[stmt] = tlctx->get_constant(0);
+    } else if (stmt->func_name == "subgroupMemoryBarrier") {
+      // Subgroup-scope memory fence.  AMDGPU has no first-class wave-scope memory fence intrinsic, so we emit an LLVM
+      // `fence seq_cst` with workgroup syncscope.  The AMDGPU backend lowers this to the appropriate `s_waitcnt` /
+      // cache-flush sequence.  Workgroup scope is over-strict for the subgroup-scope ask but correct (orders memory
+      // across the whole workgroup, of which the subgroup is a subset) and matches what we do on CUDA
+      // (`block_mem_fence`).
+      builder->CreateFence(llvm::AtomicOrdering::SequentiallyConsistent,
+                           llvm_context->getOrInsertSyncScopeID("workgroup"));
+      llvm_val[stmt] = tlctx->get_constant(0);
     } else {
       TaskCodeGenLLVM::visit(stmt);
     }
@@ -470,6 +576,21 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
     if (dt->is_primitive(PrimitiveTypeID::i64) || dt->is_primitive(PrimitiveTypeID::u64))
       return call("amdgpu_shuffle_down_i64", offset, value);
     QD_ERROR("subgroup shuffle_down: unsupported type {} on AMDGPU", data_type_name(dt));
+    return nullptr;
+  }
+
+  // FIXME: Same DPP fast-path opportunity as `emit_amdgpu_shuffle_down` — currently emulates `shuffle_up` via
+  // `ds_bpermute` (~50 cycle latency).
+  llvm::Value *emit_amdgpu_shuffle_up(llvm::Value *value, DataType dt, llvm::Value *offset) {
+    if (dt->is_primitive(PrimitiveTypeID::i32) || dt->is_primitive(PrimitiveTypeID::u32))
+      return call("amdgpu_shuffle_up_i32", offset, value);
+    if (dt->is_primitive(PrimitiveTypeID::f32))
+      return call("amdgpu_shuffle_up_f32", offset, value);
+    if (dt->is_primitive(PrimitiveTypeID::f64))
+      return call("amdgpu_shuffle_up_f64", offset, value);
+    if (dt->is_primitive(PrimitiveTypeID::i64) || dt->is_primitive(PrimitiveTypeID::u64))
+      return call("amdgpu_shuffle_up_i64", offset, value);
+    QD_ERROR("subgroup shuffle_up: unsupported type {} on AMDGPU", data_type_name(dt));
     return nullptr;
   }
 

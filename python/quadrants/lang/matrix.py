@@ -11,6 +11,7 @@ from quadrants._lib import core as qd_python_core
 from quadrants._lib.utils import qd_python_core as _qd_python_core
 from quadrants.lang import expr, impl, runtime_ops
 from quadrants.lang import ops as ops_mod
+from quadrants.lang._metal_interop import mps_sync_if_metal
 from quadrants.lang._ndarray import Ndarray, NdarrayHostAccess
 from quadrants.lang.common_ops import QuadrantsOperations
 from quadrants.lang.exception import (
@@ -23,7 +24,6 @@ from quadrants.lang.field import (
     Field,
     ScalarField,
     SNodeHostAccess,
-    _mps_sync_if_metal,
     _try_zerocopy_numpy,
     _try_zerocopy_torch,
 )
@@ -302,9 +302,9 @@ class Matrix(QuadrantsOperations):
                 self.entries = np.array(arr, None if dt is None else to_numpy_type(dt))
                 self.is_host_access = False
 
-        if self.n * self.m > 32:
+        if self.n * self.m > 144:
             warning(
-                f"Quadrants matrices/vectors with {self.n}x{self.m} > 32 entries are not suggested."
+                f"Quadrants matrices/vectors with {self.n}x{self.m} > 144 entries are not suggested."
                 " Matrices/vectors will be automatically unrolled at compile-time for performance."
                 " So the compilation time could be extremely long if the matrix size is too big."
                 " You may use a field to store a large matrix like this, e.g.:\n"
@@ -634,6 +634,30 @@ class Matrix(QuadrantsOperations):
 
         return matrix_ops.norm_sqr(self)
 
+    def frobenius_inner(self, other):
+        """Returns the Frobenius inner product :math:`\\langle A, B \\rangle = \\sum_{ij} A_{ij} B_{ij}`.
+
+        Both operands must have the same shape. Defined for any tensor shape (vector or matrix); for matrices this
+        is the standard Frobenius inner product, and :meth:`norm_sqr` is the special case ``A.frobenius_inner(A)``.
+
+        Args:
+            other (:class:`~quadrants.Matrix`): The other operand. Must have the same shape as ``self``.
+
+        Returns:
+            DataType: The scalar Frobenius inner product.
+
+        Example::
+
+            >>> A = qd.Matrix([[1.0, 2.0], [3.0, 4.0]])
+            >>> B = qd.Matrix([[5.0, 6.0], [7.0, 8.0]])
+            >>> A.frobenius_inner(B)
+            70.0
+        """
+        # pylint: disable=C0415
+        from quadrants.lang import matrix_ops
+
+        return matrix_ops.frobenius_inner(self, other)
+
     def max(self):
         """Returns the maximum element value."""
         # pylint: disable=C0415
@@ -910,7 +934,7 @@ class Matrix(QuadrantsOperations):
         else:
             for _ in range(n * m):
                 entries.append(impl.create_field_member(dtype, name=name, needs_grad=needs_grad, needs_dual=needs_dual))
-        entries, entries_grad, entries_dual = zip(*entries)
+        entries, entries_grad, entries_dual, entries_grad_checkbit = zip(*entries)
 
         entries = MatrixField(entries, n, m, element_dim)
         if all(entries_grad):
@@ -919,6 +943,9 @@ class Matrix(QuadrantsOperations):
         if all(entries_dual):
             entries_dual = MatrixField(entries_dual, n, m, element_dim)
             entries._set_dual(entries_dual)
+        entries_grad_checkbit_field = None
+        if needs_grad and all(e is not None for e in entries_grad_checkbit):
+            entries_grad_checkbit_field = MatrixField(entries_grad_checkbit, n, m, element_dim)
 
         impl.get_runtime().matrix_fields.append(entries)
 
@@ -972,6 +999,11 @@ class Matrix(QuadrantsOperations):
                         impl._create_snode(flat_axis_seq, shape_seq, same_level=True).place(
                             ScalarField(e), offset=phys_offset
                         )
+                    if entries_grad_checkbit_field is not None:
+                        for e in entries_grad_checkbit_field._get_field_members():
+                            impl._create_snode(flat_axis_seq, shape_seq, same_level=True).place(
+                                ScalarField(e), offset=phys_offset
+                            )
                 if needs_dual:
                     for e in entries_dual._get_field_members():
                         impl._create_snode(flat_axis_seq, shape_seq, same_level=True).place(
@@ -983,6 +1015,10 @@ class Matrix(QuadrantsOperations):
                     impl._create_snode(flat_axis_seq, shape_seq, same_level=True).place(
                         entries_grad, offset=phys_offset
                     )
+                    if entries_grad_checkbit_field is not None:
+                        impl._create_snode(flat_axis_seq, shape_seq, same_level=True).place(
+                            entries_grad_checkbit_field, offset=phys_offset
+                        )
                 if needs_dual:
                     impl._create_snode(flat_axis_seq, shape_seq, same_level=True).place(
                         entries_dual, offset=phys_offset
@@ -1429,21 +1465,24 @@ class MatrixField(Field):
                 keep_dims=False, the resulting numpy array should skip the matrix dims with size 1. For example, a 4x1
                 or 1x4 matrix field with 5x6x7 elements results in an array of shape 5x6x7x4.
             dtype (DataType, optional): The desired data type of returned numpy array.
-            copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises.
+            copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises,
+                ``None`` uses zero-copy when available and falls back to a copy otherwise.
 
         Returns:
             numpy.ndarray: The result NumPy array.
         """
-        if copy is False:
-            arr = _try_zerocopy_numpy(self, copy=False)
+        if copy is not True:
+            arr = _try_zerocopy_numpy(self, copy=copy)
             if arr is not None:
                 as_vector = self.m == 1 and not keep_dims
                 expected = self.shape + ((self.n,) if as_vector else (self.n, self.m))
                 if arr.shape != expected:
                     arr = arr.reshape(expected)
                 if dtype is not None and arr.dtype != dtype:
-                    raise ValueError(f"copy=False is incompatible with dtype conversion ({arr.dtype} -> {dtype})")
-                return arr
+                    if copy is False:
+                        raise ValueError(f"copy=False is incompatible with dtype conversion ({arr.dtype} -> {dtype})")
+                else:
+                    return arr
 
         if dtype is None:
             dtype = to_numpy_type(self.dtype)
@@ -1463,18 +1502,20 @@ class MatrixField(Field):
             device (torch.device, optional): The desired device of returned tensor.
             keep_dims (bool, optional): Whether to keep the dimension after conversion.
                 See :meth:`~quadrants.lang.field.MatrixField.to_numpy` for more detailed explanation.
-            copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises.
+            copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises,
+                ``None`` uses zero-copy when available and falls back to a copy otherwise.
 
         Returns:
             torch.tensor: The result torch tensor.
         """
-        if copy is False:
+        if copy is not True:
             tc = _try_zerocopy_torch(self, copy=copy, device=device)
-            as_vector = self.m == 1 and not keep_dims
-            expected = self.shape + ((self.n,) if as_vector else (self.n, self.m))
-            if tc.shape != expected:
-                tc = tc.reshape(expected)
-            return tc
+            if tc is not None:
+                as_vector = self.m == 1 and not keep_dims
+                expected = self.shape + ((self.n,) if as_vector else (self.n, self.m))
+                if tc.shape != expected:
+                    tc = tc.reshape(expected)
+                return tc
 
         import torch  # pylint: disable=C0415
 
@@ -1486,7 +1527,7 @@ class MatrixField(Field):
 
         matrix_to_ext_arr(self, arr, as_vector)
         runtime_ops.sync()
-        _mps_sync_if_metal()
+        mps_sync_if_metal()
         return arr
 
     @python_scope
@@ -1711,8 +1752,21 @@ class MatrixType(CompoundType):
 
 
 class VectorType(MatrixType):
-    def __init__(self, n, dtype):
+    def __init__(self, n, dtype, unpacked: bool = False):
         super().__init__(n, 1, 1, dtype)
+        # Per-thread storage-layout marker. When set, the type is only valid as a ``@qd.dataclass`` field annotation;
+        # ``__call__`` / ``field()`` / ``ndarray()`` refuse to instantiate, since the unpacked layout has no meaning
+        # outside of the @qd.dataclass field-expansion path. The flag itself is consumed by ``StructType.__init__``;
+        # this class is otherwise unaware of it.
+        self._is_unpacked = bool(unpacked)
+
+    def _reject_if_unpacked(self, what: str):
+        if self._is_unpacked:
+            raise QuadrantsSyntaxError(
+                f"cannot {what} a vector declared with unpacked=True; the unpacked layout is only honored on "
+                "``@qd.dataclass`` field annotations. Either drop ``unpacked=True`` or use the type in an annotation "
+                "like ``r: qd.types.vector(N, dtype, unpacked=True)`` on a class decorated with @qd.dataclass."
+            )
 
     def __call__(self, *args):
         """Return a vector matching the shape and dtype.
@@ -1736,6 +1790,7 @@ class VectorType(MatrixType):
                 >>> v = vec3(1)
 
         """
+        self._reject_if_unpacked("instantiate")
         if len(args) == 0:
             raise QuadrantsSyntaxError("Custom type instances need to be created with an initial value.")
         if len(args) == 1:
@@ -1783,14 +1838,17 @@ class VectorType(MatrixType):
         return make_matrix_with_shape(entries, [self.n], self.dtype)
 
     def field(self, **kwargs):
+        self._reject_if_unpacked("create a field of")
         return Vector.field(self.n, dtype=self.dtype, **kwargs)
 
     def ndarray(self, **kwargs):
+        self._reject_if_unpacked("create an ndarray of")
         return Vector.ndarray(self.n, dtype=self.dtype, **kwargs)
 
     def to_string(self):
         dtype_str = self.dtype.to_string() if self.dtype is not None else ""
-        return f"VectorType[{self.n}, {dtype_str}]"
+        suffix = ", unpacked=True" if self._is_unpacked else ""
+        return f"VectorType[{self.n}, {dtype_str}{suffix}]"
 
 
 class MatrixNdarray(Ndarray):
@@ -1859,7 +1917,8 @@ class MatrixNdarray(Ndarray):
         """Converts this ndarray to a ``numpy.ndarray``.
 
         Args:
-            copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises.
+            copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises,
+                ``None`` uses zero-copy when available and falls back to a copy otherwise.
 
         Example::
 
@@ -1871,12 +1930,14 @@ class MatrixNdarray(Ndarray):
              [[[0. 0.]
                [0. 0.]]]]
         """
-        if copy is False:
-            arr = _try_zerocopy_numpy(self, copy=False, is_ndarray=True)
+        if copy is not True:
+            arr = _try_zerocopy_numpy(self, copy=copy, is_ndarray=True)
             if arr is not None:
                 if dtype is not None and arr.dtype != dtype:
-                    raise ValueError(f"copy=False is incompatible with dtype conversion ({arr.dtype} -> {dtype})")
-                return arr
+                    if copy is False:
+                        raise ValueError(f"copy=False is incompatible with dtype conversion ({arr.dtype} -> {dtype})")
+                else:
+                    return arr
         arr = self._ndarray_matrix_to_numpy(as_vector=0)
         if dtype is not None and arr.dtype != dtype:
             arr = arr.astype(dtype)
@@ -1901,10 +1962,13 @@ class MatrixNdarray(Ndarray):
         Mirrors :meth:`MatrixField.to_torch`.
 
         Args:
-            copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises.
+            copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises,
+                ``None`` uses zero-copy when available and falls back to a copy otherwise.
         """
-        if copy is False:
-            return _try_zerocopy_torch(self, copy=copy, device=device, is_ndarray=True)
+        if copy is not True:
+            result = _try_zerocopy_torch(self, copy=copy, device=device, is_ndarray=True)
+            if result is not None:
+                return result
         return self._ndarray_matrix_to_torch(as_vector=0, device=device)
 
     @python_scope
@@ -2004,7 +2068,8 @@ class VectorNdarray(Ndarray):
         """Converts this vector ndarray to a ``numpy.ndarray``.
 
         Args:
-            copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises.
+            copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises,
+                ``None`` uses zero-copy when available and falls back to a copy otherwise.
 
         Example::
 
@@ -2016,12 +2081,14 @@ class VectorNdarray(Ndarray):
                    [[0., 0., 0.],
                     [0., 0., 0.]]], dtype=float32)
         """
-        if copy is False:
-            arr = _try_zerocopy_numpy(self, copy=False, is_ndarray=True)
+        if copy is not True:
+            arr = _try_zerocopy_numpy(self, copy=copy, is_ndarray=True)
             if arr is not None:
                 if dtype is not None and arr.dtype != dtype:
-                    raise ValueError(f"copy=False is incompatible with dtype conversion ({arr.dtype} -> {dtype})")
-                return arr
+                    if copy is False:
+                        raise ValueError(f"copy=False is incompatible with dtype conversion ({arr.dtype} -> {dtype})")
+                else:
+                    return arr
         arr = self._ndarray_matrix_to_numpy(as_vector=1)
         if dtype is not None and arr.dtype != dtype:
             arr = arr.astype(dtype)
@@ -2049,10 +2116,13 @@ class VectorNdarray(Ndarray):
         Mirrors :meth:`MatrixField.to_torch` on the vector code path.
 
         Args:
-            copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises.
+            copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises,
+                ``None`` uses zero-copy when available and falls back to a copy otherwise.
         """
-        if copy is False:
-            return _try_zerocopy_torch(self, copy=copy, device=device, is_ndarray=True)
+        if copy is not True:
+            result = _try_zerocopy_torch(self, copy=copy, device=device, is_ndarray=True)
+            if result is not None:
+                return result
         return self._ndarray_matrix_to_torch(as_vector=1, device=device)
 
     @python_scope

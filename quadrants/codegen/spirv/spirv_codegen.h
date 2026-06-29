@@ -17,7 +17,7 @@ namespace spirv {
 class KernelCodegen {
  public:
   struct Params {
-    std::string ti_kernel_name;
+    std::string qd_kernel_name;
     const Kernel *kernel{nullptr};
     const IRNode *ir_root{nullptr};
     std::vector<CompiledSNodeStructs> compiled_structs;

@@ -301,10 +301,19 @@ class AtomicOpStmt : public Stmt, public ir_traits::Store, public ir_traits::Loa
  public:
   AtomicOpType op_type;
   Stmt *dest, *val;
+  // Only used when `op_type == AtomicOpType::cas`. For all other atomic ops this is `nullptr` and ignored.
+  // CAS uses three operands (dest, expected, val) and returns the value originally at `dest`; the success
+  // flag is recovered by the user via `(returned == expected)`.
+  Stmt *expected;
   bool is_reduction;
 
   AtomicOpStmt(AtomicOpType op_type, Stmt *dest, Stmt *val, const DebugInfo &dbg_info = DebugInfo())
-      : Stmt(dbg_info), op_type(op_type), dest(dest), val(val), is_reduction(false) {
+      : Stmt(dbg_info), op_type(op_type), dest(dest), val(val), expected(nullptr), is_reduction(false) {
+    QD_STMT_REG_FIELDS;
+  }
+
+  AtomicOpStmt(AtomicOpType op_type, Stmt *dest, Stmt *expected, Stmt *val, const DebugInfo &dbg_info = DebugInfo())
+      : Stmt(dbg_info), op_type(op_type), dest(dest), val(val), expected(expected), is_reduction(false) {
     QD_STMT_REG_FIELDS;
   }
 
@@ -328,7 +337,7 @@ class AtomicOpStmt : public Stmt, public ir_traits::Store, public ir_traits::Loa
     return dest;
   }
 
-  QD_STMT_DEF_FIELDS(ret_type, op_type, dest, val);
+  QD_STMT_DEF_FIELDS(ret_type, op_type, dest, val, expected);
   QD_DEFINE_ACCEPT_AND_CLONE
 };
 
@@ -723,8 +732,20 @@ class LoopUniqueStmt : public Stmt {
 class GlobalLoadStmt : public Stmt, public ir_traits::Load {
  public:
   Stmt *src;
+  // When true, codegen emits a volatile load (LLVM `load volatile`, lowered to PTX `ld.volatile.global` /
+  // unhoistable AMDGPU `global_load_*`; SPIR-V `OpLoad` with the `Volatile` `MemoryAccess` mask).  Loop-invariant
+  // caching, redundant-load elimination, and the CUDA `!invariant.load` metadata are suppressed for volatile
+  // loads so the compiler cannot fold or hoist the access.  Used by `qd.volatile_load(target)` to implement
+  // spin-wait patterns (e.g. decoupled-look-back scans) where another thread / block writes the cell and the
+  // reader must observe the update on every iteration.
+  bool is_volatile;
 
-  explicit GlobalLoadStmt(Stmt *src, const DebugInfo &dbg_info = DebugInfo()) : Stmt(dbg_info), src(src) {
+  explicit GlobalLoadStmt(Stmt *src, const DebugInfo &dbg_info = DebugInfo())
+      : GlobalLoadStmt(src, /*is_volatile=*/false, dbg_info) {
+  }
+
+  GlobalLoadStmt(Stmt *src, bool is_volatile, const DebugInfo &dbg_info = DebugInfo())
+      : Stmt(dbg_info), src(src), is_volatile(is_volatile) {
     QD_STMT_REG_FIELDS;
   }
 
@@ -741,7 +762,7 @@ class GlobalLoadStmt : public Stmt, public ir_traits::Load {
     return src;
   }
 
-  QD_STMT_DEF_FIELDS(ret_type, src);
+  QD_STMT_DEF_FIELDS(ret_type, src, is_volatile);
   QD_DEFINE_ACCEPT_AND_CLONE;
 };
 
@@ -955,6 +976,15 @@ class RangeForStmt : public Stmt {
   int block_dim;
   bool strictly_serialized;
   std::string range_hint;
+  int stream_parallel_group_id{0};
+  // `cp_id` of the enclosing `qd.checkpoint(...)` block (`-1` outside any checkpoint). Propagated from
+  // `FrontendForStmt::checkpoint_id` by `lower_ast.cpp`, then carried into the post-offload
+  // `OffloadedStmt::checkpoint_id` by `offload.cpp`. See ForLoopConfig comment in `frontend_ir.h` for the full
+  // pipeline.
+  int checkpoint_id{-1};
+  // Innermost enclosing `graph_do_while` level id (-1 if none). Propagated to the OffloadedStmt at offload time so the
+  // runtime can reconstruct nested graph_do_while loops. See graph_do_while docs.
+  int graph_do_while_level_id{-1};
   std::string loop_name;
 
   RangeForStmt(Stmt *begin,
@@ -977,7 +1007,16 @@ class RangeForStmt : public Stmt {
 
   std::unique_ptr<Stmt> clone() const override;
 
-  QD_STMT_DEF_FIELDS(begin, end, reversed, is_bit_vectorized, num_cpu_threads, block_dim, strictly_serialized);
+  QD_STMT_DEF_FIELDS(begin,
+                     end,
+                     reversed,
+                     is_bit_vectorized,
+                     num_cpu_threads,
+                     block_dim,
+                     strictly_serialized,
+                     stream_parallel_group_id,
+                     checkpoint_id,
+                     graph_do_while_level_id);
   QD_DEFINE_ACCEPT
 };
 
@@ -996,6 +1035,10 @@ class StructForStmt : public Stmt {
   int num_cpu_threads;
   int block_dim;
   MemoryAccessOptions mem_access_opt;
+  int stream_parallel_group_id{0};
+  // See `RangeForStmt::checkpoint_id` -- same lifecycle, same `-1` sentinel.
+  int checkpoint_id{-1};
+  int graph_do_while_level_id{-1};
   std::string loop_name;
 
   StructForStmt(SNode *snode,
@@ -1010,7 +1053,15 @@ class StructForStmt : public Stmt {
 
   std::unique_ptr<Stmt> clone() const override;
 
-  QD_STMT_DEF_FIELDS(snode, index_offsets, is_bit_vectorized, num_cpu_threads, block_dim, mem_access_opt);
+  QD_STMT_DEF_FIELDS(snode,
+                     index_offsets,
+                     is_bit_vectorized,
+                     num_cpu_threads,
+                     block_dim,
+                     mem_access_opt,
+                     stream_parallel_group_id,
+                     checkpoint_id,
+                     graph_do_while_level_id);
   QD_DEFINE_ACCEPT
 };
 
@@ -1028,6 +1079,7 @@ class MeshForStmt : public Stmt {
   std::unordered_set<mesh::MeshElementType> major_to_types{};
   std::unordered_set<mesh::MeshRelationType> minor_relation_types{};
   MemoryAccessOptions mem_access_opt;
+  int graph_do_while_level_id{-1};
 
   MeshForStmt(mesh::Mesh *mesh,
               mesh::MeshElementType element_type,
@@ -1049,7 +1101,8 @@ class MeshForStmt : public Stmt {
                      major_from_type,
                      major_to_types,
                      minor_relation_types,
-                     mem_access_opt);
+                     mem_access_opt,
+                     graph_do_while_level_id);
   QD_DEFINE_ACCEPT
 };
 
@@ -1352,6 +1405,24 @@ class OffloadedStmt : public Stmt {
   std::size_t tls_size{1};  // avoid allocating dynamic memory with 0 byte
   std::size_t bls_size{0};
   MemoryAccessOptions mem_access_opt;
+  int stream_parallel_group_id{0};
+  // `cp_id` of the enclosing `qd.checkpoint(...)` block for this offloaded task (`-1` outside any checkpoint). Set by
+  // `offload.cpp` from the source `RangeForStmt::checkpoint_id` / `StructForStmt::checkpoint_id`. Read by the CUDA /
+  // AMDGPU LLVM codegen to populate `OffloadedTask::checkpoint_id`, which the GraphManager will consume in slice 1c.
+  int checkpoint_id{-1};
+  // Innermost enclosing `graph_do_while` level id (-1 if none), propagated from the source for-stmt (or, for serial
+  // bound/listgen tasks, from the for-stmt that flushed them). The runtime uses these per-task tags plus the
+  // launch-context level table to rebuild nested graph_do_while loops.
+  int graph_do_while_level_id{-1};
+
+  // Pre-chunking loop trip-count `SizeExpr` captured by `determine_ad_stack_size`. Set on adstack-bearing
+  // range-for tasks before `make_cpu_multithreaded_range_for` rewrites the loop into per-thread chunks, so the
+  // SizeExpr still describes the original user-loop bound (handles both compile-time constants and
+  // runtime-bounded shapes like `for j in range(field[i])` via the same `FieldLoad` / `ExternalTensorRead` /
+  // `MaxOverRange` grammar `compute_bounded_adstack_size` already uses for per-thread stack sizing). Read by
+  // `analyze_adstack_static_bounds` at codegen time, serialised into `StaticAdStackBoundExpr::loop_iter_size_expr`,
+  // and evaluated at launch time as the per-task row-claim upper bound for the float-heap clip.
+  std::shared_ptr<SizeExpr> pre_chunk_loop_trip_count_expr;
 
   OffloadedStmt(TaskType task_type, Arch arch, Kernel *kernel);
 
@@ -1390,7 +1461,10 @@ class OffloadedStmt : public Stmt {
                      reversed,
                      num_cpu_threads,
                      index_offsets,
-                     mem_access_opt);
+                     mem_access_opt,
+                     stream_parallel_group_id,
+                     checkpoint_id,
+                     graph_do_while_level_id);
   QD_DEFINE_ACCEPT
 };
 

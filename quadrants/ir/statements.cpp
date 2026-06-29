@@ -160,7 +160,7 @@ LoopUniqueStmt::LoopUniqueStmt(Stmt *input, const std::vector<SNode *> &covers, 
     if (sn->is_place()) {
       QD_INFO(
           "A place SNode {} appears in the 'covers' parameter "
-          "of 'ti.loop_unique'. It is recommended to use its parent "
+          "of 'qd.loop_unique'. It is recommended to use its parent "
           "(x.parent()) instead.",
           sn->get_node_type_name_hinted());
       this->covers.insert(sn->parent->id);
@@ -222,6 +222,9 @@ std::unique_ptr<Stmt> RangeForStmt::clone() const {
   auto new_stmt = std::make_unique<RangeForStmt>(begin, end, body->clone(), is_bit_vectorized, num_cpu_threads,
                                                  block_dim, strictly_serialized);
   new_stmt->reversed = reversed;
+  new_stmt->stream_parallel_group_id = stream_parallel_group_id;
+  new_stmt->checkpoint_id = checkpoint_id;
+  new_stmt->graph_do_while_level_id = graph_do_while_level_id;
   new_stmt->loop_name = loop_name;
   return new_stmt;
 }
@@ -243,6 +246,9 @@ StructForStmt::StructForStmt(SNode *snode,
 std::unique_ptr<Stmt> StructForStmt::clone() const {
   auto new_stmt = std::make_unique<StructForStmt>(snode, body->clone(), is_bit_vectorized, num_cpu_threads, block_dim);
   new_stmt->mem_access_opt = mem_access_opt;
+  new_stmt->stream_parallel_group_id = stream_parallel_group_id;
+  new_stmt->checkpoint_id = checkpoint_id;
+  new_stmt->graph_do_while_level_id = graph_do_while_level_id;
   new_stmt->loop_name = loop_name;
   return new_stmt;
 }
@@ -269,6 +275,7 @@ std::unique_ptr<Stmt> MeshForStmt::clone() const {
   new_stmt->major_to_types = major_to_types;
   new_stmt->minor_relation_types = minor_relation_types;
   new_stmt->mem_access_opt = mem_access_opt;
+  new_stmt->graph_do_while_level_id = graph_do_while_level_id;
   return new_stmt;
 }
 
@@ -402,7 +409,17 @@ std::unique_ptr<Stmt> OffloadedStmt::clone() const {
   new_stmt->tls_size = tls_size;
   new_stmt->bls_size = bls_size;
   new_stmt->mem_access_opt = mem_access_opt;
+  new_stmt->stream_parallel_group_id = stream_parallel_group_id;
+  new_stmt->checkpoint_id = checkpoint_id;
+  new_stmt->graph_do_while_level_id = graph_do_while_level_id;
   new_stmt->loop_name = loop_name;
+  // Shared-pointer copy: the captured trip-count `SizeExpr` is read-only after `determine_ad_stack_size`
+  // populates it in `compile_to_offloads`, and LLVM codegen clones each offload at `codegen.cpp:68`
+  // before lowering it. Without this copy the cloned task arrives with `pre_chunk_loop_trip_count_expr ==
+  // nullptr`, the per-launch dynamic trip-count clip in `clip_effective_rows_by_loop_trip_count` falls
+  // back to the unclipped reducer count, and runtime-bounded sparse-gated workloads regress to the worst
+  // case heap allocation that the new field exists to avoid.
+  new_stmt->pre_chunk_loop_trip_count_expr = pre_chunk_loop_trip_count_expr;
   return new_stmt;
 }
 

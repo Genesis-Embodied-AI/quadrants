@@ -186,41 +186,24 @@ class _MarkdownRenderer(_Renderer):
 
 
 class _MarkdownSummaryRenderer(_Renderer):
-    """Compact markdown summary (for PR comment, under 65K limit)."""
+    """One-line summary for the PR comment (turned into a link by the workflow)."""
 
     def __init__(self):
-        self._buf = []
-
-    def _print(self, text=""):
-        self._buf.append(text)
+        self._total_hit = self._total_miss = 0
+        self._total_pct = 0.0
 
     def begin(self, total_hit, total_miss, total_pct):
         self._total_hit, self._total_miss, self._total_pct = total_hit, total_miss, total_pct
-        self._files: list[tuple[str, float, list[int]]] = []
-        commit = _get_commit_hash()
-        heading = f"## Coverage Report (`{commit}`)\n" if commit else "## Coverage Report\n"
-        self._print(heading)
 
     def begin_file(self, filename, pct, missing):
-        self._files.append((filename, pct, missing))
+        pass
 
     def finish(self):
-        overall = _get_overall_coverage()
-        self._print("| File | Coverage | Missing |")
-        self._print("|------|----------|---------|")
-        for filename, pct, missing in self._files:
-            icon = "🟢" if pct >= 80 else "🔴"
-            missing_str = _format_ranges(missing) if missing else ""
-            self._print(f"| {icon} `{filename}` | {pct:.0f}% | {missing_str} |")
-        self._print()
-        parts = [f"**Diff coverage: {self._total_pct:.0f}%**"]
-        if overall:
-            parts.append(f"Overall: {overall}")
-        parts.append(f"{self._total_hit + self._total_miss} lines, {self._total_miss} missing")
-        self._print(" · ".join(parts))
+        pass
 
     def output(self):
-        return "\n".join(self._buf)
+        total = self._total_hit + self._total_miss
+        return f"Diff coverage: {self._total_pct:.0f}% · {total} lines, {self._total_miss} missing"
 
 
 _HTML_CSS = """\

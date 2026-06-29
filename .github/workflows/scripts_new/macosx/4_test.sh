@@ -2,11 +2,13 @@
 
 set -ex
 
+export QD_FILE_TIMING=1
+export QD_FILE_TIMING_OUTPUT="${RUNNER_TEMP}/file_timing.md"
+
 pip install --prefer-binary --group test
-pip install -r requirements_test_xdist.txt
 find . -name '*.bc'
 ls -lh build/
-export QD_LIB_DIR="$(python -c 'import quadrants as ti; print(ti.__path__[0])' | tail -n 1)/_lib/runtime"
+export QD_LIB_DIR="$(python -c 'import quadrants as qd; print(qd.__path__[0])' | tail -n 1)/_lib/runtime"
 chmod +x ./build/quadrants_cpp_tests
 ./build/quadrants_cpp_tests
 
@@ -17,3 +19,7 @@ python tests/run_tests.py -v -r 1 --arch metal,vulkan,cpu -m "not needs_torch"
 # TODO: revert to stable torch after 2.9.2 release
 pip install --pre --upgrade torch --index-url https://download.pytorch.org/whl/nightly/cpu
 python tests/run_tests.py -v -r 1 --arch metal,vulkan,cpu -m needs_torch
+
+if [ -f "$QD_FILE_TIMING_OUTPUT" ]; then
+  cat "$QD_FILE_TIMING_OUTPUT" >> "$GITHUB_STEP_SUMMARY"
+fi

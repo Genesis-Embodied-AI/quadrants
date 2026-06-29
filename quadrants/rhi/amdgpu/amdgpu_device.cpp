@@ -1,4 +1,5 @@
 #include "quadrants/rhi/amdgpu/amdgpu_device.h"
+#include "quadrants/rhi/amdgpu/amdgpu_context.h"
 #include "quadrants/rhi/llvm/device_memory_pool.h"
 
 #include "quadrants/jit/jit_module.h"
@@ -93,16 +94,17 @@ uint64_t *AmdgpuDevice::allocate_llvm_runtime_memory_jit(const LlvmRuntimeAllocP
   // the kernel without writing to *result. To detect that here, zero the slot first so a null readback unambiguously
   // means "allocation failed" and we can surface a helpful host-side message instead of letting the downstream
   // hipMemset trip on the stale pointer with a cryptic hipErrorInvalidValue.
+  void *active_stream = AMDGPUContext::get_instance().get_stream();
   uint64 zero = 0;
-  AMDGPUDriver::get_instance().memcpy_host_to_device(params.result_buffer, &zero, sizeof(uint64));
+  AMDGPUDriver::get_instance().memcpy_host_to_device_async(params.result_buffer, &zero, sizeof(uint64), active_stream);
   params.runtime_jit->call<void *, std::size_t, std::size_t>("runtime_memory_allocate_aligned", params.runtime,
                                                              params.size, quadrants_page_size, params.result_buffer);
-  AMDGPUDriver::get_instance().stream_synchronize(nullptr);
+  AMDGPUDriver::get_instance().stream_synchronize(active_stream);
   uint64 *ret{nullptr};
   AMDGPUDriver::get_instance().memcpy_device_to_host(&ret, params.result_buffer, sizeof(uint64));
   QD_ERROR_IF(ret == nullptr,
-              "Out of AMDGPU pre-allocated memory. Consider using ti.init(device_memory_fraction=0.9) or "
-              "ti.init(device_memory_GB=N) to allocate more GPU memory.");
+              "Out of AMDGPU pre-allocated memory. Consider using qd.init(device_memory_fraction=0.9) or "
+              "qd.init(device_memory_GB=N) to allocate more GPU memory.");
   return ret;
 }
 
@@ -123,7 +125,7 @@ void AmdgpuDevice::dealloc_memory(DeviceAllocation handle) {
   }
   QD_ASSERT(!info.is_imported);
   if (info.use_memory_pool) {
-    AMDGPUDriver::get_instance().mem_free_async(info.ptr, nullptr);
+    AMDGPUDriver::get_instance().mem_free(info.ptr);
   } else if (info.use_cached) {
     DeviceMemoryPool::get_instance(Arch::amdgpu, false /*merge_upon_release*/)
         .release(info.size, (uint64_t *)info.ptr, false);
