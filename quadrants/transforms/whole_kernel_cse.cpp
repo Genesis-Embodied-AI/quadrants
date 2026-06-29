@@ -5,7 +5,9 @@
 #include "quadrants/ir/visitors.h"
 #include "quadrants/system/profiler.h"
 
+#include <string>
 #include <typeindex>
+#include <vector>
 
 namespace quadrants::lang {
 
@@ -260,9 +262,73 @@ class WholeKernelCSE : public BasicStmtVisitor {
   }
 };
 
+namespace {
+
+// Collect the top-level offloaded tasks of |root| iff |root| is an already-offloaded kernel body, i.e. a Block
+// whose statements are all OffloadedStmt. Returns empty otherwise (pre-offload monolithic IR, function bodies,
+// a lone OffloadedStmt, non-Block roots). Mirrors cfg_optimization::collect_offloaded_tasks: "an offloaded
+// task" only exists post-offload, so a non-empty result is exactly the "post-offload, scope CSE per task" case.
+std::vector<OffloadedStmt *> collect_offloaded_tasks(IRNode *root) {
+  std::vector<OffloadedStmt *> tasks;
+  auto *block = root->cast<Block>();
+  if (block == nullptr || block->statements.empty()) {
+    return tasks;
+  }
+  for (auto &stmt : block->statements) {
+    if (!stmt->is<OffloadedStmt>()) {
+      return {};  // not a pure offloaded kernel body -> whole-kernel / skip path
+    }
+  }
+  for (auto &stmt : block->statements) {
+    tasks.push_back(stmt->as<OffloadedStmt>());
+  }
+  return tasks;
+}
+
+// Run CSE on a SINGLE offloaded task, scoped to that task alone. The task is temporarily moved into a throwaway
+// wrapper block (same idiom as cfg_optimization::optimize_one_task) so WholeKernelCSE's replace-all-usages walk
+// stays within the task and never reaches sibling tasks, then moved back leaving the IR shape unchanged.
+bool cse_one_task(Block *parent, OffloadedStmt *off) {
+  const int location = parent->locate(off);
+  QD_ASSERT(location != -1);
+  Block wrapper;
+  wrapper.insert(parent->extract(off));
+  const bool modified = WholeKernelCSE::run(&wrapper);
+  parent->insert(wrapper.extract(off), location);
+  return modified;
+}
+
+}  // namespace
+
 namespace irpass {
 bool whole_kernel_cse(IRNode *root) {
   QD_AUTO_PROF;
+  return WholeKernelCSE::run(root);
+}
+
+// CSE with per-offloaded-task scoping, used by the kernel compile pipeline (full_simplify). Offloaded tasks
+// become separate device kernel launches that cannot share SSA values (only via promoted global temporaries),
+// so CSE's value is intra-task. Mirrors cfg_optimization()'s per-task migration:
+//   - post-offload (root is a Block of OffloadedStmt): CSE each task independently, on its much smaller IR;
+//   - pre-offload compile phases (simplify_I/II/pre_autodiff/post_autodiff): DITCH CSE. The whole-kernel CSE on
+//     the monolithic pre-offload IR is the single dominant cold-compile cost and is redundant with the per-task
+//     pass; CSE is an optimization, not a correctness pass, and cross-task CSE has no runtime value across
+//     separate device launches;
+//   - any other caller (function bodies, a lone OffloadedStmt, unit tests): whole-kernel CSE, unchanged.
+bool offload_scoped_cse(IRNode *root, const std::string &phase) {
+  QD_AUTO_PROF;
+  auto tasks = collect_offloaded_tasks(root);
+  if (!tasks.empty()) {
+    auto *block = root->as<Block>();
+    bool modified = false;
+    for (auto *off : tasks) {
+      modified |= cse_one_task(block, off);
+    }
+    return modified;
+  }
+  if (phase == "simplify_I" || phase == "simplify_II" || phase == "pre_autodiff" || phase == "post_autodiff") {
+    return false;
+  }
   return WholeKernelCSE::run(root);
 }
 }  // namespace irpass

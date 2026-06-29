@@ -570,7 +570,10 @@ void full_simplify(IRNode *root, const CompileConfig &config, const FullSimplify
         modified = true;
       if (should_dump)
         dump_step("10_die", iteration);
-      if (config.opt_level > 0 && whole_kernel_cse(root))
+      // CSE is scoped per offloaded task once the kernel is offloaded, and ditched on the monolithic pre-offload
+      // IR (its single dominant cold-compile cost) -- see offload_scoped_cse(), which mirrors the per-task
+      // scoping cfg_optimization() (below) already uses.
+      if (config.opt_level > 0 && offload_scoped_cse(root, args.phase))
         modified = true;
       if (should_dump)
         dump_step("11_whole_kernel_cse", iteration);
