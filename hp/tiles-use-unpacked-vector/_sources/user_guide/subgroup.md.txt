@@ -41,7 +41,7 @@ Renames relative to the previous `qd.simt.subgroup` API:
 - `subgroup.barrier()` → `subgroup.sync()` (matching `block.sync()`).
 - `subgroup.memory_barrier()` → `subgroup.mem_fence()` (matching the planned `block.mem_fence()` and `grid.mem_fence()`).
 - `subgroup.ballot_full_subgroup(predicate)` → `subgroup.ballot(predicate)`.
-- Every `<op>(value, log2_size)` reduction / scan / vote that previously took `log2_size` directly is now `<op>_tiled(value, log2_size)`; the bare `<op>(value)` form is the full-subgroup convenience wrapper. **This is a breaking change** - call sites that hard-coded `log2_size = 5` (the old "full warp" idiom) need to either drop the argument or add the `_tiled` suffix to keep the old behaviour on wave64.
+- Every `<op>(value, log2_size)` reduction / scan / vote that previously took `log2_size` directly is now `<op>_tiled(value, log2_size)`; the bare `<op>(value)` form is the full-subgroup convenience wrapper. **This is a breaking change** - call sites that hard-coded `log2_size = 5` (the old "full warp" idiom) need to either drop the argument or add the `_tiled` suffix to keep the old behavior on wave64.
 
 The `barrier()` / `memory_barrier()` / `ballot_full_subgroup()` names remain as deprecated aliases that emit a `DeprecationWarning` on first use and forward to the new ones; they will be removed in a future release. The rest of this page uses the new names.
 
@@ -82,7 +82,7 @@ CUDA shortcut: `all_true` / `any_true` lower to a single `__all_sync(0xFFFFFFFF,
 
 Every op above has a paired `_tiled` form that takes an extra `log2_size` template parameter and operates on independent `2**log2_size`-aligned tiles within the subgroup - see [Tiled variants](#tiled-variants).
 
-The SPV-only no-arg reductions (`subgroup.reduce_mul` / `reduce_and` / `reduce_or` / `reduce_xor`, plus the original `reduce_add_tiled(value)` with no `log2_size`) have been removed in favour of the portable sized API. For reductions other than the ones listed above, build a sized helper on top of `shuffle_down` / `shuffle` following the same pattern as `reduce_add_tiled` / `reduce_all_add_tiled`.
+The SPV-only no-arg reductions (`subgroup.reduce_mul` / `reduce_and` / `reduce_or` / `reduce_xor`, plus the original `reduce_add_tiled(value)` with no `log2_size`) have been removed in favor of the portable sized API. For reductions other than the ones listed above, build a sized helper on top of `shuffle_down` / `shuffle` following the same pattern as `reduce_add_tiled` / `reduce_all_add_tiled`.
 
 ### Sorting
 
@@ -92,11 +92,11 @@ In-register key/value sort across the subgroup, one `(key, value)` pair per lane
 |----------------------------------------|------|--------|-------------------------|-----------------------------------------------------------------|
 | `subgroup.bitonic_sort_kv(key, value)` | yes  | yes    | yes                     | key & value: i32, u32, f32, f64, i64, u64 (independently typed) |
 
-Returns `(key, value)` - assign with `key, value = subgroup.bitonic_sort_kv(key, value)`.  Sorts ascending on the `(key, value)` lex tuple; ties on `key` break on ascending `value` (not a textbook-stable sort - equal-keyed lanes come back in ascending-`value` order, not in original-lane order).  Tiled variant: `bitonic_sort_kv_tiled(key, value, log2_size)` runs the same sort independently on each `2**log2_size`-aligned tile - see [Tiled variants](#tiled-variants).  See [`bitonic_sort_kv`](#bitonic_sort_kvkey-value) for the short-input pattern (sentinel padding), the textbook-stability caveat, and the float NaN behaviour. See [Bitonic key/value sort example](#bitonic-keyvalue-sort-example) for an example.
+Returns `(key, value)` - assign with `key, value = subgroup.bitonic_sort_kv(key, value)`.  Sorts ascending on the `(key, value)` lex tuple; ties on `key` break on ascending `value` (not a textbook-stable sort - equal-keyed lanes come back in ascending-`value` order, not in original-lane order).  Tiled variant: `bitonic_sort_kv_tiled(key, value, log2_size)` runs the same sort independently on each `2**log2_size`-aligned tile - see [Tiled variants](#tiled-variants).  See [`bitonic_sort_kv`](#bitonic_sort_kvkey-value) for the short-input pattern (sentinel padding), the textbook-stability caveat, and the float NaN behavior. See [Bitonic key/value sort example](#bitonic-keyvalue-sort-example) for an example.
 
 ## Semantics
 
-All of these ops operate within a single subgroup: they do not move data through memory and do not synchronise across subgroups.
+All of these ops operate within a single subgroup: they do not move data through memory and do not synchronize across subgroups.
 
 ### `shuffle(value, index)`
 
@@ -125,7 +125,7 @@ Lane `i` returns the `value` held by lane `i ^ mask`. Convenient for butterfly p
 
 - Same dtype rules as `shuffle`; `mask` is a `u32`.
 - Implemented portably as a `@qd.func` over `shuffle`: every backend that lowers `shuffle` therefore lowers `shuffle_xor` with no additional codegen path. Inlines at compile time into a single `shuffle(value, u32(invocation_id()) ^ mask)`.
-- The XOR partner must be inside the active subgroup; behaviour outside that range is implementation-defined (same caveat as `shuffle`).
+- The XOR partner must be inside the active subgroup; behavior outside that range is implementation-defined (same caveat as `shuffle`).
 
 ### `broadcast(value, index)`
 
@@ -221,7 +221,7 @@ Each base op is a one-line wrapper around its `_tiled` form: `reduce_add(v)` is 
 Returns `1` on lane 0 of every subgroup and `0` on every other lane. Useful for "exactly one lane does X" patterns where you don't care which lane does it - e.g. emitting a single global write per subgroup.
 
 - Implemented portably as a `@qd.func` wrapper: `i32(invocation_id() == 0)`. Inlines at compile time into a single compare + zero-extend on every backend.
-- This narrows the SPIR-V `OpGroupNonUniformElect` semantics, which would otherwise be free to pick any *active* lane. Under the documented uniform-CF + all-lanes-active contract for `qd.simt.subgroup` the distinction is invisible (lane 0 is always active and is a legal choice), and pinning the elected lane down keeps the behaviour identical across backends.
+- This narrows the SPIR-V `OpGroupNonUniformElect` semantics, which would otherwise be free to pick any *active* lane. Under the documented uniform-CF + all-lanes-active contract for `qd.simt.subgroup` the distinction is invisible (lane 0 is always active and is a legal choice), and pinning the elected lane down keeps the behavior identical across backends.
 
 ### `sync()`
 
@@ -231,7 +231,7 @@ Subgroup-scope thread-converging barrier - every lane in the subgroup must reach
   - **SPIR-V**: `OpControlBarrier(Subgroup, Subgroup, 0)`.
   - **CUDA**: `__syncwarp(0xFFFFFFFF)` (`nvvm.bar.warp.sync`). Reconverges lanes that may have diverged under independent thread scheduling on Volta+; under uniform CF on Pascal and earlier this is effectively a no-op but is still legal.
   - **AMDGPU**: `llvm.amdgcn.wave.barrier`. Acts as a compiler reordering barrier on GCN (where waves are lockstep) and as a real wave-scope hardware barrier on RDNA.
-- Caller contract on every backend: call from uniform control flow with all lanes active. Calling from divergent control flow has implementation-defined behaviour (CUDA's `nvvm.bar.warp.sync` will deadlock if the mask does not match the active set; AMDGPU's `wave.barrier` is a no-op on most chips so divergent calls silently pass through).
+- Caller contract on every backend: call from uniform control flow with all lanes active. Calling from divergent control flow has implementation-defined behavior (CUDA's `nvvm.bar.warp.sync` will deadlock if the mask does not match the active set; AMDGPU's `wave.barrier` is a no-op on most chips so divergent calls silently pass through).
 - The legacy name `subgroup.barrier()` is still available as a deprecated alias. It forwards to `sync()` and emits a `DeprecationWarning` on first use; prefer the new name in new code.
 
 ### `mem_fence()`
@@ -242,7 +242,7 @@ Subgroup-scope memory fence - orders memory operations within the subgroup witho
   - **SPIR-V**: `OpMemoryBarrier(Subgroup, AcquireRelease | UniformMemory | WorkgroupMemory)`.
   - **CUDA**: `__threadfence_block()` (`nvvm.membar.cta`) - workgroup-scope, see the `**` footnote in the matrix above.
   - **AMDGPU**: LLVM `fence syncscope("workgroup") seq_cst` - workgroup-scope, same caveat.
-- Caller contract on every backend: call from uniform control flow with all lanes active. Calling from divergent control flow has implementation-defined behaviour (same caveats as `sync()`).
+- Caller contract on every backend: call from uniform control flow with all lanes active. Calling from divergent control flow has implementation-defined behavior (same caveats as `sync()`).
 - The legacy name `subgroup.memory_barrier()` is still available as a deprecated alias. It forwards to `mem_fence()` and emits a `DeprecationWarning` on first use; prefer the new name in new code.
 
 ### `reduce_add(value)`
@@ -279,7 +279,7 @@ Same min / max as `reduce_min` / `reduce_max`, but broadcast to **every lane** i
 Per-lane inclusive scan under `+` / `min` / `max` that resets at every non-zero `head_flag`, across the entire subgroup. Lane `i` returns the scan of `value[head_below..i + 1]`, where `head_below` is the largest lane index `<= i` whose `head_flag` is non-zero. If no such lane exists, lane 0 is treated as an implicit head, so the result is the inclusive scan from lane 0 to lane `i`. Tiled variants: `segmented_reduce_add_tiled(value, head_flag, log2_size)` (and `_min` / `_max`) - see [Tiled variants](#tiled-variants).
 
 - `value` is any type supporting the operator (`+` and `shuffle_up` for `_add`; `qd.min`/`qd.max` and `shuffle_up` for `_min`/`_max`). `head_flag` is any integer scalar; the lowering tests `head_flag != 0`, so non-binary truthy values (e.g. `7`, `42`) work.
-- Implementation: one `subgroup.ballot(head_flag != 0)` to materialise a `u64` of head positions, then a Hillis-Steele inclusive scan bounded by `distance >= offset` where `distance = lane - segment_head`. A compile-time branch in `_segment_head_distance_tiled` picks between two paths:
+- Implementation: one `subgroup.ballot(head_flag != 0)` to materialize a `u64` of head positions, then a Hillis-Steele inclusive scan bounded by `distance >= offset` where `distance = lane - segment_head`. A compile-time branch in `_segment_head_distance_tiled` picks between two paths:
   - **`log2_size <= 5`** - u32-bitmask path. Shifts the relevant 32-lane half of the ballot down to bits 0..31 and runs the bit-mask + `clz` arithmetic in half-local coordinates (`lane_in_half = lane - half_base`). Half-local `distance` equals absolute `lane - segment_head_abs` because both terms are offset by the same `half_base`, so the downstream `shuffle_up`'s `distance >= offset` guard still works in absolute terms. This is the only path on wave32 backends - it compiles to identical IR to the historical wave32-only implementation, so CUDA / Metal / Vulkan callers see no perf regression from the wave64 support.
   - **`log2_size == 6`** - u64-bitmask path. Works in absolute lane coordinates with the full `u64` ballot, an OR-injected virtual head at lane 0 to guarantee a non-zero `lower`, and a `clz(u64)` for the segment head. Costs one extra `u64` shift + `u64 clz` vs the u32 path; only reachable when `group_size() == 64` (i.e. AMDGPU), so the entire branch is dead-code-eliminated at every `log2_size <= 5` call site.
 - No identity element is involved at all - the per-lane `distance >= offset` guard ensures the scan never reaches across a segment boundary, so a partner from another segment is never combined with the local value (i.e. the implementation doesn't need a "what to combine with at the segment head" sentinel the way `exclusive_min` / `exclusive_max` do for lane 0).
@@ -327,7 +327,7 @@ Float NaN handling is implementation-defined: comparisons with NaN return false 
 
 #### Short-input pattern
 
-When sorting fewer than `2**log2_size` real elements, load real data into the low `n` lanes, initialise the high lanes with a sentinel `key` that compares greater than every real key (`+inf` for floats, `INT_MAX` / `UINT_MAX` for ints) and any safe `value`, then ignore the high lanes in the result.
+When sorting fewer than `2**log2_size` real elements, load real data into the low `n` lanes, initialize the high lanes with a sentinel `key` that compares greater than every real key (`+inf` for floats, `INT_MAX` / `UINT_MAX` for ints) and any safe `value`, then ignore the high lanes in the result.
 
 ### `ballot_first_n(predicate, n)`
 
@@ -340,7 +340,7 @@ Returns a `u32` bitmask whose bit `i` is set iff `i < n` AND lane `i`'s `predica
   - **AMDGPU**: `llvm.amdgcn.ballot.i64` followed by `trunc to i32`. Packs lanes 0..31 into the result; on wave64 lanes 32..63's predicates are explicitly discarded by the truncate, matching the `n <= 32` contract. The `i64 + trunc` form is a workaround for an LLVM AMDGPU isel bug - `ballot.i32` is documented as well-defined on wave64 (PR [llvm/llvm-project#71556](https://github.com/llvm/llvm-project/pull/71556)) but in practice still fails `Cannot select` on gfx942 in LLVM 20 / 22 for non-constant predicates. The workaround costs nothing - both forms produce the same single `v_cmp_*_e64` plus a low-half store.
   - **SPIR-V**: `OpGroupNonUniformBallot` returns a `uvec4`; we extract component 0, which by spec contains the ballot bits for lanes 0..31.
 - For `n < 32` we mask the predicate by `lane < n` before issuing the ballot, so bits `[n, 32)` of the result are forced to zero regardless of those lanes' actual predicate values. At `n == 32` the masking is provably a no-op on every backend (lanes `>= 32` are either non-existent on wave32 or already not represented in the `u32` result on wave64), so the masking is elided at compile time and the call lowers to a single ballot intrinsic.
-- Caller contract: uniform CF + all lanes active. Calling from divergent control flow has implementation-defined behaviour (CUDA's `__ballot_sync` will deadlock if the active mask doesn't match `0xFFFFFFFF`).
+- Caller contract: uniform CF + all lanes active. Calling from divergent control flow has implementation-defined behavior (CUDA's `__ballot_sync` will deadlock if the active mask doesn't match `0xFFFFFFFF`).
 - Useful for stream compaction over the first 32 lanes, the wave32 path of `segmented_reduce_*` (which uses the u32-bitmask form internally for `log2_size <= 5`), and any pattern that wants `clz` / `popcount` / `ffs` over a per-lane predicate within a `u32`. For full-subgroup ballots on AMDGPU wave64 use `ballot` (returns a `u64`).
 
 ### `ballot(predicate)`
@@ -373,7 +373,7 @@ Returns `i32(1)` on every lane iff every lane in the subgroup has the same `valu
 
 ### `lanemask_{lt,le,eq,gt,ge}(lane_id)`
 
-Closed-form `u32` lane-mask constants parametrised by a lane id. Bit `i` of the result follows the relation in the suffix:
+Closed-form `u32` lane-mask constants parametrized by a lane id. Bit `i` of the result follows the relation in the suffix:
 
 | Op             | Bit `i` set iff | Closed form                            |
 |----------------|-----------------|----------------------------------------|
@@ -385,7 +385,7 @@ Closed-form `u32` lane-mask constants parametrised by a lane id. Bit `i` of the 
 
 - `lane_id` is any integer scalar. Pass `subgroup.invocation_id()` to get the classic CUDA built-in form (current lane's mask), or any other expression to query an arbitrary lane's mask. The op is pure arithmetic - no shuffle, no ballot - so per-lane-varying `lane_id` works the same as a uniform one.
 - Returns `u32`. Bit 0 corresponds to lane 0, bit 31 to lane 31.
-- Caller contract: `lane_id` must be in `[0, 31]` (matching the `u32` return type, which represents 32 lanes). Passing `lane_id == 32` triggers an undefined-behaviour shift on most backends.
+- Caller contract: `lane_id` must be in `[0, 31]` (matching the `u32` return type, which represents 32 lanes). Passing `lane_id == 32` triggers an undefined-behavior shift on most backends.
 - Implemented portably as a `@qd.func` over `<<`, `-`, `|`, `~`. Inlines at compile time into 1-3 ALU ops on every backend.
 - AMDGPU CDNA wave64 caveat: only the low 32 lanes are representable in this op (the return type is `u32`). If you need a mask covering all 64 wave64 lanes, use `subgroup.ballot` instead - it returns a `u64` and includes lanes 32..63.
 
@@ -437,7 +437,7 @@ def identity(src: qd.types.ndarray(dtype=qd.f32, ndim=1),
 
 `dst[i]` equals `src[i]` on every lane.
 
-### Swap neighbours (xor pattern via explicit lane) example
+### Swap neighbors (xor pattern via explicit lane) example
 
 ```python
 @qd.kernel
@@ -504,7 +504,7 @@ def sum32(src: qd.types.ndarray(dtype=qd.f32, ndim=1),
 
 ### Broadcast the sum to all lanes with `reduce_all_add_tiled` example
 
-When every lane needs the reduction result - e.g. to normalise by the sum - use the butterfly variant. No follow-up broadcast needed:
+When every lane needs the reduction result - e.g. to normalize by the sum - use the butterfly variant. No follow-up broadcast needed:
 
 ```python
 @qd.kernel

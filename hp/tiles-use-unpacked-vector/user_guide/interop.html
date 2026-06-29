@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>Numpy and Torch interop &#8212; Quadrants 1.0.3 documentation</title>
+    <title>Numpy and Torch interop &#8212; Quadrants 1.1.1 documentation</title>
   
   
   
@@ -27,8 +27,8 @@
   </noscript>
   
   <!-- Loaded before other Sphinx assets -->
-  <link href="../_static/styles/theme.css?digest=0790524f97105ba85085" rel="stylesheet" />
-<link href="../_static/styles/pydata-sphinx-theme.css?digest=0790524f97105ba85085" rel="stylesheet" />
+  <link href="../_static/styles/theme.css?digest=a95f357e85573c9b56d5" rel="stylesheet" />
+<link href="../_static/styles/pydata-sphinx-theme.css?digest=a95f357e85573c9b56d5" rel="stylesheet" />
 
     <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=8f2a1f02" />
     <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
@@ -38,12 +38,12 @@
     <link rel="stylesheet" type="text/css" href="../_static/css/custom.css" />
   
   <!-- So that users can add custom icons -->
-  <script defer src="../_static/scripts/fontawesome.js?digest=0790524f97105ba85085"></script>
+  <script defer src="../_static/scripts/fontawesome.js?digest=a95f357e85573c9b56d5"></script>
   <!-- Pre-loaded scripts that we'll load fully later -->
-  <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=0790524f97105ba85085" />
-<link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=0790524f97105ba85085" />
+  <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5" />
+<link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5" />
 
-    <script src="../_static/documentation_options.js?v=baaebd52"></script>
+    <script src="../_static/documentation_options.js?v=58fbf978"></script>
     <script src="../_static/doctools.js?v=9bcbadda"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -63,7 +63,7 @@
     <link rel="prev" title="Parallelization" href="parallelization.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="1.0.3" />
+  <meta name="docsearch:version" content="1.1.1" />
   
     
     <script src="../_static/searchtools.js"></script>
@@ -131,7 +131,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 1.0.3 documentation</p>
+    <p class="title logo__title">Quadrants 1.1.1 documentation</p>
   
 </a></div>
     
@@ -355,6 +355,10 @@
 <li class="toctree-l1"><a class="reference internal" href="quirks.html">Quirks</a></li>
 <li class="toctree-l1"><a class="reference internal" href="troubleshooting.html">Troubleshooting</a></li>
 </ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Advanced</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="optimization_passes.html">Optimization passes</a></li>
+</ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Contributing</span></p>
 <ul class="nav bd-sidenav">
 <li class="toctree-l1"><a class="reference internal" href="contributing.html">Contributing to quadrants</a></li>
@@ -522,7 +526,7 @@
 <div class="pst-scrollable-table-container"><table class="table">
 <thead>
 <tr class="row-odd"><th class="head"><p>Value</p></th>
-<th class="head"><p>Behaviour</p></th>
+<th class="head"><p>Behavior</p></th>
 </tr>
 </thead>
 <tbody>
@@ -538,7 +542,7 @@
 </tbody>
 </table>
 </div>
-<p>The default <code class="docutils literal notranslate"><span class="pre">copy=True</span></code> always returns a buffer that is safe to mutate without affecting the field/ndarray. Use <code class="docutils literal notranslate"><span class="pre">copy=None</span></code> when you want zero-copy as a best-effort optimisation without having to handle exceptions — it gives you a view when possible and a safe copy otherwise.</p>
+<p>The default <code class="docutils literal notranslate"><span class="pre">copy=True</span></code> always returns a buffer that is safe to mutate without affecting the field/ndarray. Use <code class="docutils literal notranslate"><span class="pre">copy=None</span></code> when you want zero-copy as a best-effort optimization without having to handle exceptions — it gives you a view when possible and a safe copy otherwise.</p>
 </section>
 <section id="examples">
 <h3>Examples<a class="headerlink" href="#examples" title="Link to this heading">#</a></h3>
@@ -577,8 +581,8 @@
 </pre></div>
 </div>
 </section>
-<section id="apple-metal-synchronisation">
-<h3>Apple Metal: synchronisation<a class="headerlink" href="#apple-metal-synchronisation" title="Link to this heading">#</a></h3>
+<section id="apple-metal-synchronization">
+<h3>Apple Metal: synchronization<a class="headerlink" href="#apple-metal-synchronization" title="Link to this heading">#</a></h3>
 <p>On Apple Metal, Quadrants and PyTorch MPS use separate Metal command queues. Every <code class="docutils literal notranslate"><span class="pre">to_torch()</span></code> / <code class="docutils literal notranslate"><span class="pre">to_numpy()</span></code> call runs <code class="docutils literal notranslate"><span class="pre">qd.sync()</span></code> internally to flush the Quadrants queue. Additionally, <code class="docutils literal notranslate"><span class="pre">copy=True</span></code> (the default) calls <code class="docutils literal notranslate"><span class="pre">torch.mps.synchronize()</span></code> after the kernel copy. This is necessary because, on Metal, Quadrants and Torch do not share the same compute streams. <code class="docutils literal notranslate"><span class="pre">copy=False</span></code> does <strong>not</strong> call <code class="docutils literal notranslate"><span class="pre">torch.mps.synchronize()</span></code>:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">qd</span><span class="o">.</span><span class="n">init</span><span class="p">(</span><span class="n">arch</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">metal</span><span class="p">)</span>
 <span class="n">f</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">64</span><span class="p">,))</span>
@@ -588,7 +592,7 @@
 <span class="n">copy</span> <span class="o">=</span> <span class="n">f</span><span class="o">.</span><span class="n">to_torch</span><span class="p">(</span><span class="n">copy</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>        <span class="c1"># qd.sync() + torch.mps.synchronize()</span>
 </pre></div>
 </div>
-<p>The reverse direction (PyTorch writes to a zero-copy view, then a Quadrants kernel reads from the same field) is <strong>not</strong> automatically synchronised. Because Quadrants and PyTorch MPS submit work to separate Metal command queues, a kernel launched immediately after a torch write may execute before the torch write has actually committed to memory:</p>
+<p>The reverse direction (PyTorch writes to a zero-copy view, then a Quadrants kernel reads from the same field) is <strong>not</strong> automatically synchronized. Because Quadrants and PyTorch MPS submit work to separate Metal command queues, a kernel launched immediately after a torch write may execute before the torch write has actually committed to memory:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">qd</span><span class="o">.</span><span class="n">init</span><span class="p">(</span><span class="n">arch</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">metal</span><span class="p">)</span>
 <span class="n">f</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">64</span><span class="p">,))</span>
 
@@ -601,11 +605,11 @@
 </pre></div>
 </div>
 <p>This is intentional: forcing a sync on every Quadrants kernel that touches a previously-zerocopied field would be very expensive in workloads that batch many torch ops and many kernels back-to-back. If you mutate fields from torch and then read them from a Quadrants kernel on Metal, call <code class="docutils literal notranslate"><span class="pre">torch.mps.synchronize()</span></code> once between the torch ops and the kernels.</p>
-<p><strong>Shared command queue.</strong> The synchronisation overhead above can be eliminated entirely by passing PyTorch MPS’s <code class="docutils literal notranslate"><span class="pre">MTLCommandQueue</span></code> to Quadrants at init time via <code class="docutils literal notranslate"><span class="pre">external_metal_command_queue</span></code>. Quadrants provides <code class="docutils literal notranslate"><span class="pre">quadrants.interop.get_mps_command_queue()</span></code> to extract the queue pointer at runtime. When both frameworks share the same queue, Metal guarantees command buffer ordering automatically. See <a class="reference internal" href="metal_shared_queue.html"><span class="std std-doc">Shared Metal command queue</span></a> for the setup guide.</p>
+<p><strong>Shared command queue.</strong> The synchronization overhead above can be eliminated entirely by passing PyTorch MPS’s <code class="docutils literal notranslate"><span class="pre">MTLCommandQueue</span></code> to Quadrants at init time via <code class="docutils literal notranslate"><span class="pre">external_metal_command_queue</span></code>. Quadrants provides <code class="docutils literal notranslate"><span class="pre">quadrants.interop.get_mps_command_queue()</span></code> to extract the queue pointer at runtime. When both frameworks share the same queue, Metal guarantees command buffer ordering automatically. See <a class="reference internal" href="metal_shared_queue.html"><span class="std std-doc">Shared Metal command queue</span></a> for the setup guide.</p>
 </section>
 <section id="lifetime-caveats">
 <h3>Lifetime caveats<a class="headerlink" href="#lifetime-caveats" title="Link to this heading">#</a></h3>
-<p>A zero-copy view becomes invalid when the underlying Quadrants storage is freed. This happens on <code class="docutils literal notranslate"><span class="pre">qd.reset()</span></code> and <code class="docutils literal notranslate"><span class="pre">qd.init()</span></code>. Holding a <code class="docutils literal notranslate"><span class="pre">copy=False</span></code> tensor across either is undefined behaviour:</p>
+<p>A zero-copy view becomes invalid when the underlying Quadrants storage is freed. This happens on <code class="docutils literal notranslate"><span class="pre">qd.reset()</span></code> and <code class="docutils literal notranslate"><span class="pre">qd.init()</span></code>. Holding a <code class="docutils literal notranslate"><span class="pre">copy=False</span></code> tensor across either is undefined behavior:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">view</span> <span class="o">=</span> <span class="n">f</span><span class="o">.</span><span class="n">to_torch</span><span class="p">(</span><span class="n">copy</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
 <span class="n">qd</span><span class="o">.</span><span class="n">reset</span><span class="p">()</span>
 <span class="n">view</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>                 <span class="c1"># undefined: view aliases freed memory</span>
@@ -617,7 +621,7 @@
 <h3>Struct fields<a class="headerlink" href="#struct-fields" title="Link to this heading">#</a></h3>
 <p><code class="docutils literal notranslate"><span class="pre">StructField.to_torch()</span></code> and <code class="docutils literal notranslate"><span class="pre">StructField.to_numpy()</span></code> return a dictionary mapping each member name to a tensor / array; the <code class="docutils literal notranslate"><span class="pre">copy</span></code> argument is propagated to each member, so zero-copy availability is decided per member. The relevant axis is the SNode layout chosen at construction:</p>
 <ul class="simple">
-<li><p><strong>AOS</strong> (default <code class="docutils literal notranslate"><span class="pre">Struct.field(...,</span> <span class="pre">layout=Layout.AOS)</span></code>): all members share the struct cell, e.g. <code class="docutils literal notranslate"><span class="pre">Struct.field({&quot;a&quot;:</span> <span class="pre">i32,</span> <span class="pre">&quot;b&quot;:</span> <span class="pre">f32},</span> <span class="pre">shape=(N,))</span></code> stores <code class="docutils literal notranslate"><span class="pre">[a0,</span> <span class="pre">b0,</span> <span class="pre">a1,</span> <span class="pre">b1,</span> <span class="pre">...]</span></code> in memory, with stride <code class="docutils literal notranslate"><span class="pre">sizeof(cell)</span></code> between consecutive <code class="docutils literal notranslate"><span class="pre">a</span></code>’s. Quadrants’ C++ DLPack export does not currently emit cell-stride-aware views for individual members (it computes contiguous strides at the member dtype size, which would interleave neighbouring members’ bytes), so AOS members fall back to a kernel copy and <code class="docutils literal notranslate"><span class="pre">copy=False</span></code> raises on each AOS member.</p></li>
+<li><p><strong>AOS</strong> (default <code class="docutils literal notranslate"><span class="pre">Struct.field(...,</span> <span class="pre">layout=Layout.AOS)</span></code>): all members share the struct cell, e.g. <code class="docutils literal notranslate"><span class="pre">Struct.field({&quot;a&quot;:</span> <span class="pre">i32,</span> <span class="pre">&quot;b&quot;:</span> <span class="pre">f32},</span> <span class="pre">shape=(N,))</span></code> stores <code class="docutils literal notranslate"><span class="pre">[a0,</span> <span class="pre">b0,</span> <span class="pre">a1,</span> <span class="pre">b1,</span> <span class="pre">...]</span></code> in memory, with stride <code class="docutils literal notranslate"><span class="pre">sizeof(cell)</span></code> between consecutive <code class="docutils literal notranslate"><span class="pre">a</span></code>’s. Quadrants’ C++ DLPack export does not currently emit cell-stride-aware views for individual members (it computes contiguous strides at the member dtype size, which would interleave neighboring members’ bytes), so AOS members fall back to a kernel copy and <code class="docutils literal notranslate"><span class="pre">copy=False</span></code> raises on each AOS member.</p></li>
 <li><p><strong>SOA</strong> (<code class="docutils literal notranslate"><span class="pre">Struct.field(...,</span> <span class="pre">layout=Layout.SOA)</span></code>): each member sits in its own dense SNode subtree with contiguous storage, so members are zero-copyable individually under the usual backend / dtype rules. <code class="docutils literal notranslate"><span class="pre">copy=False</span></code> succeeds and returns aliasing views.</p></li>
 </ul>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">S_aos</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">Struct</span><span class="o">.</span><span class="n">field</span><span class="p">({</span><span class="s2">&quot;pos&quot;</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="s2">&quot;vel&quot;</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">},</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">16</span><span class="p">,))</span>   <span class="c1"># AOS (default)</span>
@@ -837,7 +841,7 @@
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#semantics-of-copy">Semantics of <code class="docutils literal notranslate"><span class="pre">copy</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#examples">Examples</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#caching">Caching</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#apple-metal-synchronisation">Apple Metal: synchronisation</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#apple-metal-synchronization">Apple Metal: synchronization</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#lifetime-caveats">Lifetime caveats</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#struct-fields">Struct fields</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#raw-dlpack-export-with-to-dlpack">Raw DLPack export with <code class="docutils literal notranslate"><span class="pre">to_dlpack()</span></code></a></li>
@@ -873,8 +877,8 @@
   </div>
   
   <!-- Scripts loaded after <body> so the DOM is not blocked -->
-  <script defer src="../_static/scripts/bootstrap.js?digest=0790524f97105ba85085"></script>
-<script defer src="../_static/scripts/pydata-sphinx-theme.js?digest=0790524f97105ba85085"></script>
+  <script defer src="../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5"></script>
+<script defer src="../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5"></script>
 
   <footer class="bd-footer">
 <div class="bd-footer__inner bd-page-width">
@@ -908,7 +912,7 @@
         <div class="footer-item">
 <p class="theme-version">
   <!-- # L10n: Setting the PST URL as an argument as this does not need to be localized -->
-  Built with the <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a> 0.18.0.
+  Built with the <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a> 0.19.0.
 </p></div>
       
     </div>

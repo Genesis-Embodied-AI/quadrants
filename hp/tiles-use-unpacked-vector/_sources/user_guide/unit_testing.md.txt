@@ -10,7 +10,7 @@ The test suite is run via the project's launcher, **not** by invoking `pytest` d
 python tests/run_tests.py
 ```
 
-The launcher sets up the test-only env vars (kernel offline cache, watchdog, xdist worker count, etc.) and forwards any unrecognised flags to pytest. Calling `pytest` directly skips that setup and behaves differently.
+The launcher sets up the test-only env vars (kernel offline cache, watchdog, xdist worker count, etc.) and forwards any unrecognized flags to pytest. Calling `pytest` directly skips that setup and behaves differently.
 
 Common one-liners:
 

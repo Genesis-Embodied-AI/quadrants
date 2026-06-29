@@ -7,7 +7,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>quadrants.lang.kernel &#8212; Quadrants 1.0.3 documentation</title>
+    <title>quadrants.lang.kernel &#8212; Quadrants 1.1.1 documentation</title>
   
   
   
@@ -26,8 +26,8 @@
   </noscript>
   
   <!-- Loaded before other Sphinx assets -->
-  <link href="../../../_static/styles/theme.css?digest=0790524f97105ba85085" rel="stylesheet" />
-<link href="../../../_static/styles/pydata-sphinx-theme.css?digest=0790524f97105ba85085" rel="stylesheet" />
+  <link href="../../../_static/styles/theme.css?digest=a95f357e85573c9b56d5" rel="stylesheet" />
+<link href="../../../_static/styles/pydata-sphinx-theme.css?digest=a95f357e85573c9b56d5" rel="stylesheet" />
 
     <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=8f2a1f02" />
     <link rel="stylesheet" type="text/css" href="../../../_static/copybutton.css?v=76b2166b" />
@@ -37,12 +37,12 @@
     <link rel="stylesheet" type="text/css" href="../../../_static/css/custom.css" />
   
   <!-- So that users can add custom icons -->
-  <script defer src="../../../_static/scripts/fontawesome.js?digest=0790524f97105ba85085"></script>
+  <script defer src="../../../_static/scripts/fontawesome.js?digest=a95f357e85573c9b56d5"></script>
   <!-- Pre-loaded scripts that we'll load fully later -->
-  <link rel="preload" as="script" href="../../../_static/scripts/bootstrap.js?digest=0790524f97105ba85085" />
-<link rel="preload" as="script" href="../../../_static/scripts/pydata-sphinx-theme.js?digest=0790524f97105ba85085" />
+  <link rel="preload" as="script" href="../../../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5" />
+<link rel="preload" as="script" href="../../../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5" />
 
-    <script src="../../../_static/documentation_options.js?v=baaebd52"></script>
+    <script src="../../../_static/documentation_options.js?v=58fbf978"></script>
     <script src="../../../_static/doctools.js?v=9bcbadda"></script>
     <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -60,7 +60,7 @@
     <link rel="search" title="Search" href="../../../search.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="1.0.3" />
+  <meta name="docsearch:version" content="1.1.1" />
   
     
     <script src="../../../_static/searchtools.js"></script>
@@ -128,7 +128,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 1.0.3 documentation</p>
+    <p class="title logo__title">Quadrants 1.1.1 documentation</p>
   
 </a></div>
     
@@ -369,6 +369,11 @@
 <span class="p">)</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._tensor_wrapper</span><span class="w"> </span><span class="kn">import</span> <span class="n">_TENSOR_WRAPPER_TYPES</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">_kernel_impl_dataclass</span><span class="p">,</span> <span class="n">impl</span><span class="p">,</span> <span class="n">runtime_ops</span>
+
+<span class="c1"># `qd.checkpoint` pause / resume model helpers. See `kernel_checkpoint.py` for the full extracted surface; `Kernel`</span>
+<span class="c1"># delegates the resume-cookie validation, label translation, per-launch yield_on= arg-id table build, and GraphStatus</span>
+<span class="c1"># construction to those free functions so this hot file doesn&#39;t accrete checkpoint-feature-specific blocks.</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">kernel_checkpoint</span> <span class="k">as</span> <span class="n">_checkpoint_helpers</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._fast_caching</span><span class="w"> </span><span class="kn">import</span> <span class="n">src_hasher</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._template_mapper_hotpath</span><span class="w"> </span><span class="kn">import</span> <span class="n">chain_has_mutable_container</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._wrap_inspect</span><span class="w"> </span><span class="kn">import</span> <span class="n">FunctionSourceInfo</span><span class="p">,</span> <span class="n">get_source_info_and_src</span>
@@ -434,17 +439,17 @@
     <span class="c1"># pointers, the address of these pointers cannot change, and the set of parameters is fixed.</span>
     <span class="c1"># The lifetime of a cache entry is bound to the lifetime of any of its input arguments: the first being garbage</span>
     <span class="c1"># collected will invalidate the entire entry. Moreover, the entire cache registry is bound to the lifetime of the</span>
-    <span class="c1"># taichi prog itself, which means that calling `qd.reset()` will automatically clear the cache. Note that the cache</span>
+    <span class="c1"># quadrants prog itself, which means that calling `qd.reset()` will automatically clear the cache. Note that the cache</span>
     <span class="c1"># stores wear references to pointers, so it does not hold alife any allocated memory.</span>
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-        <span class="c1"># Keep track of taichi runtime to automatically clear cache if destroyed</span>
+        <span class="c1"># Keep track of quadrants runtime to automatically clear cache if destroyed</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_prog_weakref</span><span class="p">:</span> <span class="n">ReferenceType</span><span class="p">[</span><span class="n">Program</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
 
         <span class="c1"># The cache key corresponds to the hash of the (packed) python-side input arguments of the kernel.</span>
         <span class="c1"># * &#39;_launch_ctx_cache&#39; is storing a backup of the launch context BEFORE ever calling the kernel.</span>
         <span class="c1"># * &#39;_launch_ctx_cache_tracker&#39; is used for bounding the lifetime of a cache entry to its corresponding set of</span>
-        <span class="c1">#   input arguments. Internally, this is done by wrapping all Taichi ndarrays as weak reference.</span>
-        <span class="c1"># * &#39;_prog_weakref&#39;is used for bounding the lifetime of the entire cache to the Taichi programm managing all</span>
+        <span class="c1">#   input arguments. Internally, this is done by wrapping all Quadrants ndarrays as weak reference.</span>
+        <span class="c1"># * &#39;_prog_weakref&#39;is used for bounding the lifetime of the entire cache to the Quadrants programm managing all</span>
         <span class="c1">#   the launch context being stored in cache.</span>
         <span class="c1"># See &#39;launch_kernel&#39; for details regarding the intended use of caching.</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_launch_ctx_cache</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="s2">&quot;ArgsHash&quot;</span><span class="p">,</span> <span class="n">KernelLaunchContext</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
@@ -505,7 +510,7 @@
                 <span class="n">prog</span><span class="p">,</span> <span class="n">partial</span><span class="p">(</span><span class="n">LaunchContextBufferCache</span><span class="o">.</span><span class="n">_destroy_callback</span><span class="p">,</span> <span class="n">ReferenceType</span><span class="p">(</span><span class="bp">self</span><span class="p">))</span>
             <span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
-            <span class="c1"># Since we already store a weak reference to taichi program, it is much faster to use it rather than</span>
+            <span class="c1"># Since we already store a weak reference to quadrants program, it is much faster to use it rather than</span>
             <span class="c1"># paying the overhead of calling pybind11 functions (~200ns vs 5ns).</span>
             <span class="n">prog</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_prog_weakref</span><span class="p">()</span>
         <span class="k">assert</span> <span class="n">prog</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
@@ -599,6 +604,13 @@
             <span class="c1"># be available to use in build_Call, later.</span>
             <span class="n">tree</span> <span class="o">=</span> <span class="n">_kernel_impl_dataclass</span><span class="o">.</span><span class="n">unpack_ast_struct_expressions</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">tree</span><span class="p">,</span> <span class="n">struct_locals</span><span class="o">=</span><span class="n">struct_locals</span><span class="p">)</span>
             <span class="n">ctx</span><span class="o">.</span><span class="n">only_parse_function_def</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">only_parse_function_def</span>
+            <span class="c1"># Rebuild the graph_do_while level table from scratch each compilation pass (build_While appends to it as it</span>
+            <span class="c1"># walks the AST). Skip when only_parse_function_def: the body is not walked, so build_While never runs to</span>
+            <span class="c1"># repopulate it -- and on a fast-cache restore the table was already rebuilt from the cached (cond_arg_name,</span>
+            <span class="c1"># parent_id) pairs in _try_load_fastcache.</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">ctx</span><span class="o">.</span><span class="n">only_parse_function_def</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">current_kernel</span><span class="o">.</span><span class="n">graph_do_while_levels</span> <span class="o">=</span> <span class="p">[]</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">current_kernel</span><span class="o">.</span><span class="n">_graph_do_while_level_stack</span> <span class="o">=</span> <span class="p">[]</span>
             <span class="n">transform_tree</span><span class="p">(</span><span class="n">tree</span><span class="p">,</span> <span class="n">ctx</span><span class="p">)</span>
             <span class="k">if</span> <span class="ow">not</span> <span class="n">ctx</span><span class="o">.</span><span class="n">is_real_function</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">ctx</span><span class="o">.</span><span class="n">only_parse_function_def</span><span class="p">:</span>
                 <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">current_kernel</span><span class="o">.</span><span class="n">return_type</span> <span class="ow">and</span> <span class="n">ctx</span><span class="o">.</span><span class="n">returned</span> <span class="o">!=</span> <span class="n">ReturnStatus</span><span class="o">.</span><span class="n">ReturnedValue</span><span class="p">:</span>
@@ -639,6 +651,29 @@
         <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="nb">list</span><span class="p">):</span>
             <span class="k">return</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">_ast_to_dict</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">node</span><span class="p">]</span>
         <span class="k">return</span> <span class="n">node</span>  <span class="c1"># Basic types (str, int, None, etc.)</span></div>
+
+
+
+<span class="nd">@dataclasses</span><span class="o">.</span><span class="n">dataclass</span>
+<div class="viewcode-block" id="GraphDoWhileLevel">
+<a class="viewcode-back" href="../../../autoapi/quadrants/lang/kernel/index.html#quadrants.lang.kernel.GraphDoWhileLevel">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">GraphDoWhileLevel</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;One nested ``qd.graph_do_while`` loop in a ``graph=True`` kernel, indexed by level id (assigned</span>
+<span class="sd">    outer-before-inner by the AST transformer). Mirrors the C++ ``GraphDoWhileLevel``.&quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="GraphDoWhileLevel.cond_arg_name">
+<a class="viewcode-back" href="../../../autoapi/quadrants/lang/kernel/index.html#quadrants.lang.kernel.GraphDoWhileLevel.cond_arg_name">[docs]</a>
+    <span class="n">cond_arg_name</span><span class="p">:</span> <span class="nb">str</span></div>
+
+<div class="viewcode-block" id="GraphDoWhileLevel.parent_id">
+<a class="viewcode-back" href="../../../autoapi/quadrants/lang/kernel/index.html#quadrants.lang.kernel.GraphDoWhileLevel.parent_id">[docs]</a>
+    <span class="n">parent_id</span><span class="p">:</span> <span class="nb">int</span></div>
+
+    <span class="c1"># Resolved C++ arg index of the condition ndarray (filled during launch-arg iteration).</span>
+<div class="viewcode-block" id="GraphDoWhileLevel.cond_cpp_arg_id">
+<a class="viewcode-back" href="../../../autoapi/quadrants/lang/kernel/index.html#quadrants.lang.kernel.GraphDoWhileLevel.cond_cpp_arg_id">[docs]</a>
+    <span class="n">cond_cpp_arg_id</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="o">-</span><span class="mi">1</span></div>
+</div>
 
 
 
@@ -698,9 +733,45 @@
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/kernel/index.html#quadrants.lang.kernel.Kernel.use_graph">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">use_graph</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span></div>
 
+        <span class="c1"># Opt-in flag set by `@qd.kernel(graph=True, checkpoints=True)`. When True, the AST transformer enables</span>
+        <span class="c1"># `qd.checkpoint(...)` recognition AND auto-wraps every top-level for-loop that isn&#39;t already inside a `with</span>
+        <span class="c1"># qd.checkpoint(...)` block in an implicit no-yield checkpoint. When False, any use of `qd.checkpoint(...)` in</span>
+        <span class="c1"># the kernel body is rejected at compile time with a fix-it pointing at `checkpoints=True`.</span>
+<div class="viewcode-block" id="Kernel.use_checkpoints">
+<a class="viewcode-back" href="../../../autoapi/quadrants/lang/kernel/index.html#quadrants.lang.kernel.Kernel.use_checkpoints">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">use_checkpoints</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span></div>
+
+        <span class="c1"># Legacy single-loop arg name, kept for reporting/back-compat; equals the outermost level&#39;s condition arg for</span>
+        <span class="c1"># nested kernels. The authoritative data is `graph_do_while_levels`.</span>
 <div class="viewcode-block" id="Kernel.graph_do_while_arg">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/kernel/index.html#quadrants.lang.kernel.Kernel.graph_do_while_arg">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">graph_do_while_arg</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span></div>
+
+        <span class="c1"># Nested graph_do_while level table, indexed by level id (outer before inner). Rebuilt each compilation pass by</span>
+        <span class="c1"># the AST transformer; serialized to the launch context at launch.</span>
+<div class="viewcode-block" id="Kernel.graph_do_while_levels">
+<a class="viewcode-back" href="../../../autoapi/quadrants/lang/kernel/index.html#quadrants.lang.kernel.Kernel.graph_do_while_levels">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">graph_do_while_levels</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">GraphDoWhileLevel</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span></div>
+
+        <span class="c1"># Transient stack of active level ids, used only while transforming the AST.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_graph_do_while_level_stack</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="c1"># Per-checkpoint metadata, one entry per `with qd.checkpoint(...)` block (explicit AND auto-injected implicit)</span>
+        <span class="c1"># in declaration order. List index is the checkpoint&#39;s internal `cp_id` (0, 1, 2, ... dense, flat across the</span>
+        <span class="c1"># kernel). Each entry is the name of the `yield_on=` kernel parameter, or `None` for implicit checkpoints (which</span>
+        <span class="c1"># never yield). Populated by the AST transformer; empty means the kernel uses no checkpoints.</span>
+<div class="viewcode-block" id="Kernel.checkpoint_yield_on_args">
+<a class="viewcode-back" href="../../../autoapi/quadrants/lang/kernel/index.html#quadrants.lang.kernel.Kernel.checkpoint_yield_on_args">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">checkpoint_yield_on_args</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span></div>
+
+        <span class="c1"># User-facing labels for explicit checkpoints. Same indexing as `checkpoint_yield_on_args`: entry `i` is the int</span>
+        <span class="c1"># (or IntEnum value) the user passed as the first positional arg of `qd.checkpoint(cp_id, yield_on)` for the</span>
+        <span class="c1"># checkpoint whose internal cp_id is `i`. Implicit checkpoints (auto-wrapped) get `None` (they have no</span>
+        <span class="c1"># user-facing label and can never appear in `GraphStatus.checkpoint`). The label is preserved as-is so an</span>
+        <span class="c1"># `IntEnum` round-trips: writing `qd.checkpoint(Stage.SIM, ...)` and then reading `status.checkpoint` returns</span>
+        <span class="c1"># `Stage.SIM` rather than the raw int.</span>
+<div class="viewcode-block" id="Kernel.checkpoint_user_labels_by_cp_id">
+<a class="viewcode-back" href="../../../autoapi/quadrants/lang/kernel/index.html#quadrants.lang.kernel.Kernel.checkpoint_user_labels_by_cp_id">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">checkpoint_user_labels_by_cp_id</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span></div>
 
 <div class="viewcode-block" id="Kernel.quadrants_callable">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/kernel/index.html#quadrants.lang.kernel.Kernel.quadrants_callable">[docs]</a>
@@ -778,10 +849,10 @@
                 <span class="bp">self</span><span class="o">.</span><span class="n">raise_on_templated_floats</span><span class="p">,</span> <span class="n">kernel_source_info</span><span class="p">,</span> <span class="n">args</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">arg_metas</span>
             <span class="p">)</span>
             <span class="n">used_py_dataclass_parameters</span> <span class="o">=</span> <span class="kc">None</span>
-            <span class="n">cached_graph_do_while_arg</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+            <span class="n">cached_graph_do_while_levels</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">int</span><span class="p">]]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
             <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">fast_checksum</span><span class="p">:</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">src_ll_cache_observations</span><span class="o">.</span><span class="n">cache_key_generated</span> <span class="o">=</span> <span class="kc">True</span>
-                <span class="n">used_py_dataclass_parameters</span><span class="p">,</span> <span class="n">frontend_cache_key</span><span class="p">,</span> <span class="n">cached_graph_do_while_arg</span> <span class="o">=</span> <span class="n">src_hasher</span><span class="o">.</span><span class="n">load</span><span class="p">(</span>  <span class="c1"># type: ignore[reportAssignmentType]</span>
+                <span class="n">used_py_dataclass_parameters</span><span class="p">,</span> <span class="n">frontend_cache_key</span><span class="p">,</span> <span class="n">cached_graph_do_while_levels</span> <span class="o">=</span> <span class="n">src_hasher</span><span class="o">.</span><span class="n">load</span><span class="p">(</span>  <span class="c1"># type: ignore[reportAssignmentType]</span>
                     <span class="bp">self</span><span class="o">.</span><span class="n">fast_checksum</span>
                 <span class="p">)</span>
             <span class="k">if</span> <span class="n">used_py_dataclass_parameters</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">frontend_cache_key</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
@@ -797,8 +868,14 @@
                 <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">compiled_kernel_data_by_key</span><span class="p">[</span><span class="n">key</span><span class="p">]:</span>
                     <span class="bp">self</span><span class="o">.</span><span class="n">src_ll_cache_observations</span><span class="o">.</span><span class="n">cache_loaded</span> <span class="o">=</span> <span class="kc">True</span>
                     <span class="bp">self</span><span class="o">.</span><span class="n">used_py_dataclass_parameters_by_key_enforcing</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">used_py_dataclass_parameters</span>
-                    <span class="k">if</span> <span class="n">cached_graph_do_while_arg</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-                        <span class="bp">self</span><span class="o">.</span><span class="n">graph_do_while_arg</span> <span class="o">=</span> <span class="n">cached_graph_do_while_arg</span>
+                    <span class="c1"># Fast-cache restore skips AST transformation, so rebuild the gdw level table (and the legacy</span>
+                    <span class="c1"># outermost-arg alias) from the cached (cond_arg_name, parent_id) pairs.</span>
+                    <span class="k">if</span> <span class="n">cached_graph_do_while_levels</span><span class="p">:</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">graph_do_while_levels</span> <span class="o">=</span> <span class="p">[</span>
+                            <span class="n">GraphDoWhileLevel</span><span class="p">(</span><span class="n">cond_arg_name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span> <span class="n">parent_id</span><span class="o">=</span><span class="n">parent</span><span class="p">)</span>
+                            <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">parent</span> <span class="ow">in</span> <span class="n">cached_graph_do_while_levels</span>
+                        <span class="p">]</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">graph_do_while_arg</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">graph_do_while_levels</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">cond_arg_name</span>
                     <span class="k">return</span> <span class="n">used_py_dataclass_parameters</span>
 
         <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">quadrants_callable</span> <span class="ow">and</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">quadrants_callable</span><span class="o">.</span><span class="n">is_pure</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">runtime</span><span class="o">.</span><span class="n">print_non_pure</span><span class="p">:</span>
@@ -912,7 +989,13 @@
 <div class="viewcode-block" id="Kernel.launch_kernel">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/kernel/index.html#quadrants.lang.kernel.Kernel.launch_kernel">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">launch_kernel</span><span class="p">(</span>
-        <span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">t_kernel</span><span class="p">:</span> <span class="n">KernelCxx</span><span class="p">,</span> <span class="n">compiled_kernel_data</span><span class="p">:</span> <span class="n">CompiledKernelData</span> <span class="o">|</span> <span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="n">qd_stream</span><span class="o">=</span><span class="kc">None</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">key</span><span class="p">,</span>
+        <span class="n">t_kernel</span><span class="p">:</span> <span class="n">KernelCxx</span><span class="p">,</span>
+        <span class="n">compiled_kernel_data</span><span class="p">:</span> <span class="n">CompiledKernelData</span> <span class="o">|</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="o">*</span><span class="n">args</span><span class="p">,</span>
+        <span class="n">qd_stream</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+        <span class="n">_resume_from_checkpoint</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
         <span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">args</span><span class="p">)</span> <span class="o">==</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">arg_metas</span><span class="p">),</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">arg_metas</span><span class="p">)</span><span class="si">}</span><span class="s2"> arguments needed but </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">args</span><span class="p">)</span><span class="si">}</span><span class="s2"> provided&quot;</span>
 
@@ -961,6 +1044,13 @@
             <span class="n">is_launch_ctx_cacheable</span> <span class="o">=</span> <span class="kc">True</span>
             <span class="n">template_num</span> <span class="o">=</span> <span class="mi">0</span>
             <span class="n">i_out</span> <span class="o">=</span> <span class="mi">0</span>
+            <span class="c1"># Hoist the `kernel has any yield_on= checkpoint` predicate out of the per-arg loop so non-checkpoint</span>
+            <span class="c1"># kernels (the overwhelming majority) skip the helper function call entirely on every arg. Gated on</span>
+            <span class="c1"># `use_checkpoints` first so non-checkpoint kernels pay only one attribute lookup, not the list-truthy</span>
+            <span class="c1"># check on every cache-miss build.</span>
+            <span class="n">_kernel_has_yield_on_checkpoint</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">use_checkpoints</span> <span class="ow">and</span> <span class="nb">bool</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">checkpoint_yield_on_args</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">_kernel_has_yield_on_checkpoint</span><span class="p">:</span>
+                <span class="n">_checkpoint_helpers</span><span class="o">.</span><span class="n">init_yield_on_arg_id_table</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
             <span class="k">for</span> <span class="n">i_in</span><span class="p">,</span> <span class="n">val</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">args</span><span class="p">):</span>
                 <span class="n">needed_</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">arg_metas</span><span class="p">[</span><span class="n">i_in</span><span class="p">]</span><span class="o">.</span><span class="n">annotation</span>
                 <span class="k">if</span> <span class="n">needed_</span> <span class="ow">is</span> <span class="n">template</span> <span class="ow">or</span> <span class="nb">type</span><span class="p">(</span><span class="n">needed_</span><span class="p">)</span> <span class="ow">is</span> <span class="n">template</span><span class="p">:</span>
@@ -974,8 +1064,12 @@
                 <span class="c1"># which weakens API/type safety and can route the wrong struct type through launch.</span>
                 <span class="k">if</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">val</span><span class="p">,</span> <span class="s2">&quot;_qd_all_field&quot;</span><span class="p">,</span> <span class="kc">False</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">needed_</span><span class="p">,</span> <span class="n">_FIELDS</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
                     <span class="k">continue</span>
-                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">graph_do_while_arg</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">arg_metas</span><span class="p">[</span><span class="n">i_in</span><span class="p">]</span><span class="o">.</span><span class="n">name</span> <span class="o">==</span> <span class="bp">self</span><span class="o">.</span><span class="n">graph_do_while_arg</span><span class="p">:</span>
-                    <span class="bp">self</span><span class="o">.</span><span class="n">_graph_do_while_cpp_arg_id</span> <span class="o">=</span> <span class="n">i_out</span> <span class="o">-</span> <span class="n">template_num</span>
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">graph_do_while_levels</span><span class="p">:</span>
+                    <span class="k">for</span> <span class="n">_gdw_level</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">graph_do_while_levels</span><span class="p">:</span>
+                        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">arg_metas</span><span class="p">[</span><span class="n">i_in</span><span class="p">]</span><span class="o">.</span><span class="n">name</span> <span class="o">==</span> <span class="n">_gdw_level</span><span class="o">.</span><span class="n">cond_arg_name</span><span class="p">:</span>
+                            <span class="n">_gdw_level</span><span class="o">.</span><span class="n">cond_cpp_arg_id</span> <span class="o">=</span> <span class="n">i_out</span> <span class="o">-</span> <span class="n">template_num</span>
+                <span class="k">if</span> <span class="n">_kernel_has_yield_on_checkpoint</span><span class="p">:</span>
+                    <span class="n">_checkpoint_helpers</span><span class="o">.</span><span class="n">maybe_record_yield_on_arg</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">arg_metas</span><span class="p">[</span><span class="n">i_in</span><span class="p">]</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">i_out</span> <span class="o">-</span> <span class="n">template_num</span><span class="p">)</span>
                 <span class="n">num_args_</span><span class="p">,</span> <span class="n">is_launch_ctx_cacheable_</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_recursive_set_args</span><span class="p">(</span>
                     <span class="bp">self</span><span class="o">.</span><span class="n">used_py_dataclass_parameters_by_key_enforcing</span><span class="p">[</span><span class="n">key</span><span class="p">],</span>
                     <span class="bp">self</span><span class="o">.</span><span class="n">arg_metas</span><span class="p">[</span><span class="n">i_in</span><span class="p">]</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
@@ -1023,7 +1117,7 @@
         <span class="k">try</span><span class="p">:</span>
             <span class="n">prog</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">prog</span>
             <span class="k">if</span> <span class="ow">not</span> <span class="n">compiled_kernel_data</span><span class="p">:</span>
-                <span class="c1"># Store Taichi program config and device cap for efficiency because they are used at multiple places</span>
+                <span class="c1"># Store Quadrants program config and device cap for efficiency because they are used at multiple places</span>
                 <span class="n">prog_config</span> <span class="o">=</span> <span class="n">prog</span><span class="o">.</span><span class="n">config</span><span class="p">()</span>
                 <span class="n">prog_device_cap</span> <span class="o">=</span> <span class="n">prog</span><span class="o">.</span><span class="n">get_device_caps</span><span class="p">()</span>
 
@@ -1037,7 +1131,9 @@
                         <span class="bp">self</span><span class="o">.</span><span class="n">fast_checksum</span><span class="p">,</span>
                         <span class="bp">self</span><span class="o">.</span><span class="n">visited_functions</span><span class="p">,</span>
                         <span class="bp">self</span><span class="o">.</span><span class="n">used_py_dataclass_parameters_by_key_enforcing</span><span class="p">[</span><span class="n">key</span><span class="p">],</span>
-                        <span class="n">graph_do_while_arg</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">graph_do_while_arg</span><span class="p">,</span>  <span class="c1"># type: ignore[reportCallIssue]</span>
+                        <span class="n">graph_do_while_levels</span><span class="o">=</span><span class="p">[</span>  <span class="c1"># type: ignore[reportCallIssue]</span>
+                            <span class="p">(</span><span class="n">level</span><span class="o">.</span><span class="n">cond_arg_name</span><span class="p">,</span> <span class="n">level</span><span class="o">.</span><span class="n">parent_id</span><span class="p">)</span> <span class="k">for</span> <span class="n">level</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">graph_do_while_levels</span>
+                        <span class="p">],</span>
                     <span class="p">)</span>
                     <span class="bp">self</span><span class="o">.</span><span class="n">src_ll_cache_observations</span><span class="o">.</span><span class="n">cache_stored</span> <span class="o">=</span> <span class="kc">True</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">_last_compiled_kernel_data</span> <span class="o">=</span> <span class="n">compiled_kernel_data</span>
@@ -1047,8 +1143,22 @@
                     <span class="s2">&quot;qd_stream is not compatible with graph=True kernels. &quot;</span>
                     <span class="s2">&quot;See docs/source/user_guide/streams.md for details.&quot;</span>
                 <span class="p">)</span>
-            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">graph_do_while_arg</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="nb">hasattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s2">&quot;_graph_do_while_cpp_arg_id&quot;</span><span class="p">):</span>
-                <span class="n">launch_ctx</span><span class="o">.</span><span class="n">graph_do_while_arg_id</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_graph_do_while_cpp_arg_id</span>
+            <span class="k">for</span> <span class="n">_gdw_level</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">graph_do_while_levels</span><span class="p">:</span>
+                <span class="n">launch_ctx</span><span class="o">.</span><span class="n">add_graph_do_while_level</span><span class="p">(</span><span class="n">_gdw_level</span><span class="o">.</span><span class="n">cond_cpp_arg_id</span><span class="p">,</span> <span class="n">_gdw_level</span><span class="o">.</span><span class="n">parent_id</span><span class="p">)</span>
+            <span class="c1"># Single `use_checkpoints` gate around the entire checkpoint-wiring block so non-checkpoint kernels skip</span>
+            <span class="c1"># both per-launch checks (yield-on table forward + resume_point copy) with one attribute lookup. Matches</span>
+            <span class="c1"># the equivalent fast-path gate in `__call__`.</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">use_checkpoints</span><span class="p">:</span>
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">checkpoint_yield_on_args</span><span class="p">:</span>
+                    <span class="n">_checkpoint_helpers</span><span class="o">.</span><span class="n">forward_yield_on_table_to_ctx</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">launch_ctx</span><span class="p">)</span>
+                <span class="c1"># `_resume_from_checkpoint` is `None` for fresh launches (host-side default 0 in</span>
+                <span class="c1"># `LaunchContextBuilder`, which means &quot;run every checkpoint&quot;). When `Kernel.resume` plumbs an int</span>
+                <span class="c1"># through, copy it onto the launch context so the GraphManager&#39;s `launch_cached_graph` memcpys it into</span>
+                <span class="c1"># the device-side `resume_point` slot instead of clearing to 0. Slice 2 implementation;</span>
+                <span class="c1"># pre-CUDA-12.4 / non-CUDA backends ignore the value since they don&#39;t have a resume_point slot today</span>
+                <span class="c1"># (slices 4-6 will add an indirect-dispatch equivalent).</span>
+                <span class="k">if</span> <span class="n">_resume_from_checkpoint</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                    <span class="n">launch_ctx</span><span class="o">.</span><span class="n">resume_from_checkpoint</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">_resume_from_checkpoint</span><span class="p">)</span>
             <span class="n">stream_handle</span> <span class="o">=</span> <span class="n">qd_stream</span><span class="o">.</span><span class="n">handle</span> <span class="k">if</span> <span class="n">qd_stream</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="mi">0</span>
             <span class="k">if</span> <span class="n">stream_handle</span><span class="p">:</span>
                 <span class="n">prog</span><span class="o">.</span><span class="n">set_current_cuda_stream</span><span class="p">(</span><span class="n">stream_handle</span><span class="p">)</span>
@@ -1144,6 +1254,23 @@
     <span class="nd">@_shell_pop_print</span>
     <span class="k">def</span><span class="w"> </span><span class="fm">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">py_args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
         <span class="n">qd_stream</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">&quot;qd_stream&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="c1"># `use_checkpoints` is the kernel-construction-time flag set by `@qd.kernel(graph=True, checkpoints=True)`. The</span>
+        <span class="c1"># `_qd_from_checkpoint` kwarg can only be injected by `QuadrantsCallable.resume()`, which is the user-facing</span>
+        <span class="c1"># entry that requires `use_checkpoints=True`. So for the dominant (non-checkpoint) launch path we can skip the</span>
+        <span class="c1"># entire resume-cookie / GraphStatus surface with a single attribute lookup, keeping per-launch overhead in line</span>
+        <span class="c1"># with `main`. The same single gate also guards the post-launch `maybe_build_graph_status` branch.</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">use_checkpoints</span><span class="p">:</span>
+            <span class="c1"># Pop the resume cookie before anything else touches kwargs -- the AST mapper sees user parameter names</span>
+            <span class="c1"># only, so a stray `from_checkpoint=` would raise &quot;unexpected kwarg&quot;. `_resume_from_checkpoint` is the</span>
+            <span class="c1"># resolved cp_id to copy into the device-side `resume_point` slot before launch; `None` means &quot;fresh start,</span>
+            <span class="c1"># reset to 0&quot;. Plumbed via `Kernel.resume()` only; users do not pass this directly.</span>
+            <span class="n">_resume_from_checkpoint</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">&quot;_qd_from_checkpoint&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+            <span class="c1"># `validate_resume_cookie` only does work when a resume cookie was actually passed; skip the function call</span>
+            <span class="c1"># entirely otherwise so the dominant non-resume call path stays clear of the checkpoint helpers.</span>
+            <span class="k">if</span> <span class="n">_resume_from_checkpoint</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">_checkpoint_helpers</span><span class="o">.</span><span class="n">validate_resume_cookie</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">_resume_from_checkpoint</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">_resume_from_checkpoint</span> <span class="o">=</span> <span class="kc">None</span>
         <span class="k">if</span> <span class="n">qd_stream</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">autodiff_mode</span> <span class="o">!=</span> <span class="n">_NONE</span><span class="p">:</span>
             <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span>
                 <span class="s2">&quot;qd_stream is not compatible with autodiff kernels. Streams cannot be used with &quot;</span>
@@ -1216,10 +1343,52 @@
         <span class="n">kernel_cpp</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">materialized_kernels</span><span class="p">[</span><span class="n">key</span><span class="p">]</span>
         <span class="n">compiled_kernel_data</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">compiled_kernel_data_by_key</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">launch_observations</span><span class="o">.</span><span class="n">found_kernel_in_materialize_cache</span> <span class="o">=</span> <span class="n">compiled_kernel_data</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
-        <span class="n">ret</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">launch_kernel</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="n">kernel_cpp</span><span class="p">,</span> <span class="n">compiled_kernel_data</span><span class="p">,</span> <span class="o">*</span><span class="n">py_args</span><span class="p">,</span> <span class="n">qd_stream</span><span class="o">=</span><span class="n">qd_stream</span><span class="p">)</span>
+        <span class="c1"># Hot-path fast lane: for non-checkpoint kernels (`use_checkpoints=False`), skip every piece of checkpoint</span>
+        <span class="c1"># plumbing -- no label translation, no extra kwarg on `launch_kernel`, no post-launch GraphStatus build. This</span>
+        <span class="c1"># restores per-launch overhead to parity with `main` for the overwhelming majority of kernels (~120k launches/s</span>
+        <span class="c1"># on field-CPU benchmarks; every Python-frame nanosecond here shows up as 1-4% on small envs).</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">use_checkpoints</span><span class="p">:</span>
+            <span class="n">ret</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">launch_kernel</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="n">kernel_cpp</span><span class="p">,</span> <span class="n">compiled_kernel_data</span><span class="p">,</span> <span class="o">*</span><span class="n">py_args</span><span class="p">,</span> <span class="n">qd_stream</span><span class="o">=</span><span class="n">qd_stream</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">compiled_kernel_data</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="k">assert</span> <span class="bp">self</span><span class="o">.</span><span class="n">_last_compiled_kernel_data</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">compiled_kernel_data_by_key</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_last_compiled_kernel_data</span>
+            <span class="k">return</span> <span class="n">ret</span>
+        <span class="c1"># Checkpoint-enabled slow path: translate the user-supplied `from_checkpoint=` label into the dense,</span>
+        <span class="c1"># source-order internal cp_id the runtime uses. Translation happens here (after `ensure_compiled`) because</span>
+        <span class="c1"># `checkpoint_user_labels_by_cp_id` is populated during AST processing inside `ensure_compiled`.</span>
+        <span class="k">if</span> <span class="n">_resume_from_checkpoint</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">_resume_from_checkpoint</span> <span class="o">=</span> <span class="n">_checkpoint_helpers</span><span class="o">.</span><span class="n">translate_user_label_to_internal_cp_id</span><span class="p">(</span>
+                <span class="bp">self</span><span class="p">,</span> <span class="n">_resume_from_checkpoint</span>
+            <span class="p">)</span>
+        <span class="c1"># Only forward `_resume_from_checkpoint` when the caller actually supplied one (i.e. via `Kernel.resume(...)`).</span>
+        <span class="c1"># Otherwise omit the kwarg entirely so subclasses / monkeypatches of `launch_kernel` that pre-date this kwarg</span>
+        <span class="c1"># keep working unmodified. The host-side default in `LaunchContextBuilder` is 0 (&quot;run every checkpoint&quot;), which</span>
+        <span class="c1"># matches the `None` semantics in `launch_kernel`.</span>
+        <span class="k">if</span> <span class="n">_resume_from_checkpoint</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">ret</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">launch_kernel</span><span class="p">(</span>
+                <span class="n">key</span><span class="p">,</span>
+                <span class="n">kernel_cpp</span><span class="p">,</span>
+                <span class="n">compiled_kernel_data</span><span class="p">,</span>
+                <span class="o">*</span><span class="n">py_args</span><span class="p">,</span>
+                <span class="n">qd_stream</span><span class="o">=</span><span class="n">qd_stream</span><span class="p">,</span>
+            <span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">ret</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">launch_kernel</span><span class="p">(</span>
+                <span class="n">key</span><span class="p">,</span>
+                <span class="n">kernel_cpp</span><span class="p">,</span>
+                <span class="n">compiled_kernel_data</span><span class="p">,</span>
+                <span class="o">*</span><span class="n">py_args</span><span class="p">,</span>
+                <span class="n">qd_stream</span><span class="o">=</span><span class="n">qd_stream</span><span class="p">,</span>
+                <span class="n">_resume_from_checkpoint</span><span class="o">=</span><span class="n">_resume_from_checkpoint</span><span class="p">,</span>
+            <span class="p">)</span>
         <span class="k">if</span> <span class="n">compiled_kernel_data</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
             <span class="k">assert</span> <span class="bp">self</span><span class="o">.</span><span class="n">_last_compiled_kernel_data</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">compiled_kernel_data_by_key</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_last_compiled_kernel_data</span>
+        <span class="c1"># Surface a GraphStatus for kernels with `qd.checkpoint(yield_on=...)` so the host can drive the qipc-style</span>
+        <span class="c1"># re-entrant loop. Kernels without yield-capable checkpoints get `ret` (typically `None`) passed through;</span>
+        <span class="c1"># short-circuit the helper call so the hot non-checkpoint path doesn&#39;t even enter the Python frame.</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">checkpoint_yield_on_args</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">_checkpoint_helpers</span><span class="o">.</span><span class="n">maybe_build_graph_status</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ret</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">ret</span></div>
 
 </pre></div>
@@ -1251,8 +1420,8 @@
   </div>
   
   <!-- Scripts loaded after <body> so the DOM is not blocked -->
-  <script defer src="../../../_static/scripts/bootstrap.js?digest=0790524f97105ba85085"></script>
-<script defer src="../../../_static/scripts/pydata-sphinx-theme.js?digest=0790524f97105ba85085"></script>
+  <script defer src="../../../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5"></script>
+<script defer src="../../../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5"></script>
 
   <footer class="bd-footer">
 <div class="bd-footer__inner bd-page-width">
@@ -1286,7 +1455,7 @@
         <div class="footer-item">
 <p class="theme-version">
   <!-- # L10n: Setting the PST URL as an argument as this does not need to be localized -->
-  Built with the <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a> 0.18.0.
+  Built with the <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a> 0.19.0.
 </p></div>
       
     </div>

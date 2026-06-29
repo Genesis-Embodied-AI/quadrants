@@ -7,7 +7,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>quadrants.lang.ast.ast_transformers.call_transformer &#8212; Quadrants 1.0.3 documentation</title>
+    <title>quadrants.lang.ast.ast_transformers.call_transformer &#8212; Quadrants 1.1.1 documentation</title>
   
   
   
@@ -26,8 +26,8 @@
   </noscript>
   
   <!-- Loaded before other Sphinx assets -->
-  <link href="../../../../../_static/styles/theme.css?digest=0790524f97105ba85085" rel="stylesheet" />
-<link href="../../../../../_static/styles/pydata-sphinx-theme.css?digest=0790524f97105ba85085" rel="stylesheet" />
+  <link href="../../../../../_static/styles/theme.css?digest=a95f357e85573c9b56d5" rel="stylesheet" />
+<link href="../../../../../_static/styles/pydata-sphinx-theme.css?digest=a95f357e85573c9b56d5" rel="stylesheet" />
 
     <link rel="stylesheet" type="text/css" href="../../../../../_static/pygments.css?v=8f2a1f02" />
     <link rel="stylesheet" type="text/css" href="../../../../../_static/copybutton.css?v=76b2166b" />
@@ -37,12 +37,12 @@
     <link rel="stylesheet" type="text/css" href="../../../../../_static/css/custom.css" />
   
   <!-- So that users can add custom icons -->
-  <script defer src="../../../../../_static/scripts/fontawesome.js?digest=0790524f97105ba85085"></script>
+  <script defer src="../../../../../_static/scripts/fontawesome.js?digest=a95f357e85573c9b56d5"></script>
   <!-- Pre-loaded scripts that we'll load fully later -->
-  <link rel="preload" as="script" href="../../../../../_static/scripts/bootstrap.js?digest=0790524f97105ba85085" />
-<link rel="preload" as="script" href="../../../../../_static/scripts/pydata-sphinx-theme.js?digest=0790524f97105ba85085" />
+  <link rel="preload" as="script" href="../../../../../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5" />
+<link rel="preload" as="script" href="../../../../../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5" />
 
-    <script src="../../../../../_static/documentation_options.js?v=baaebd52"></script>
+    <script src="../../../../../_static/documentation_options.js?v=58fbf978"></script>
     <script src="../../../../../_static/doctools.js?v=9bcbadda"></script>
     <script src="../../../../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../../../../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -60,7 +60,7 @@
     <link rel="search" title="Search" href="../../../../../search.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="1.0.3" />
+  <meta name="docsearch:version" content="1.1.1" />
   
     
     <script src="../../../../../_static/searchtools.js"></script>
@@ -128,7 +128,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 1.0.3 documentation</p>
+    <p class="title logo__title">Quadrants 1.1.1 documentation</p>
   
 </a></div>
     
@@ -621,6 +621,22 @@
         <span class="n">func_type</span> <span class="o">=</span> <span class="nb">type</span><span class="p">(</span><span class="n">func</span><span class="p">)</span>
 
         <span class="n">is_func_base_wrapper</span> <span class="o">=</span> <span class="n">func_type</span> <span class="ow">in</span> <span class="p">{</span><span class="n">QuadrantsCallable</span><span class="p">,</span> <span class="n">BoundQuadrantsCallable</span><span class="p">}</span>
+
+        <span class="c1"># A ``@qd.func(requires_top_level=True)`` may only be called at the top level of a kernel (or</span>
+        <span class="c1"># directly inside a ``graph_do_while`` body). Nesting it in a runtime for / if / while demotes</span>
+        <span class="c1"># its phase loops out of top-level position, collapsing the per-phase grid-wide barriers and</span>
+        <span class="c1"># corrupting the result, so reject it here at trace time rather than miscompiling silently.</span>
+        <span class="c1"># ``qd.static`` (compile-time) loops do not set ``is_in_non_static_control_flow``. The</span>
+        <span class="c1"># ``_including_caller`` variant also catches the marked func being reached through an unmarked</span>
+        <span class="c1"># intermediate ``@qd.func`` that was itself called from runtime control flow.</span>
+        <span class="k">if</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">func</span><span class="p">,</span> <span class="s2">&quot;_qd_requires_top_level&quot;</span><span class="p">,</span> <span class="kc">False</span><span class="p">)</span> <span class="ow">and</span> <span class="n">ctx</span><span class="o">.</span><span class="n">is_in_non_static_control_flow_including_caller</span><span class="p">():</span>
+            <span class="n">func_name</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">func</span><span class="p">,</span> <span class="s2">&quot;__name__&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;this @qd.func&quot;</span>
+            <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;`</span><span class="si">{</span><span class="n">func_name</span><span class="si">}</span><span class="s2">` is decorated with requires_top_level=True and must be called at the top &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;level of a @qd.kernel (or directly inside a `while qd.graph_do_while(...)` body). It &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;cannot be nested inside a runtime for / if / while: that demotes its phase loops out of &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;top-level position, collapsing the per-phase grid-wide barriers and corrupting the result.&quot;</span>
+            <span class="p">)</span>
         <span class="n">pruning</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">global_context</span><span class="o">.</span><span class="n">pruning</span>
         <span class="n">called_needed</span> <span class="o">=</span> <span class="kc">None</span>
         <span class="k">if</span> <span class="n">pruning</span><span class="o">.</span><span class="n">enforcing</span> <span class="ow">and</span> <span class="n">is_func_base_wrapper</span><span class="p">:</span>
@@ -705,6 +721,11 @@
         <span class="c1"># snapshot is harmless for non-func callables and nests correctly through chained calls.</span>
         <span class="n">prev_caller_loop_depth</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">global_context</span><span class="o">.</span><span class="n">caller_loop_depth</span>
         <span class="n">ctx</span><span class="o">.</span><span class="n">global_context</span><span class="o">.</span><span class="n">caller_loop_depth</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">loop_depth</span>
+        <span class="c1"># Likewise snapshot whether we are (transitively) inside non-static control flow, so a</span>
+        <span class="c1"># `requires_top_level=True` func reached through an unmarked intermediate `@qd.func` still sees the caller&#39;s</span>
+        <span class="c1"># control-flow context. OR with the existing value so it accumulates down a multi-level call chain.</span>
+        <span class="n">prev_caller_in_non_static_control_flow</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">global_context</span><span class="o">.</span><span class="n">caller_in_non_static_control_flow</span>
+        <span class="n">ctx</span><span class="o">.</span><span class="n">global_context</span><span class="o">.</span><span class="n">caller_in_non_static_control_flow</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">is_in_non_static_control_flow_including_caller</span><span class="p">()</span>
         <span class="k">try</span><span class="p">:</span>
             <span class="k">try</span><span class="p">:</span>
                 <span class="n">pruning</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">global_context</span><span class="o">.</span><span class="n">pruning</span>
@@ -733,6 +754,7 @@
                 <span class="k">raise</span> <span class="n">QuadrantsTypeError</span><span class="p">(</span><span class="n">msg</span><span class="p">)</span>
         <span class="k">finally</span><span class="p">:</span>
             <span class="n">ctx</span><span class="o">.</span><span class="n">global_context</span><span class="o">.</span><span class="n">caller_loop_depth</span> <span class="o">=</span> <span class="n">prev_caller_loop_depth</span>
+            <span class="n">ctx</span><span class="o">.</span><span class="n">global_context</span><span class="o">.</span><span class="n">caller_in_non_static_control_flow</span> <span class="o">=</span> <span class="n">prev_caller_in_non_static_control_flow</span>
 
         <span class="k">if</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">func</span><span class="p">,</span> <span class="s2">&quot;_is_quadrants_function&quot;</span><span class="p">,</span> <span class="kc">False</span><span class="p">):</span>
             <span class="n">ctx</span><span class="o">.</span><span class="n">func</span><span class="o">.</span><span class="n">has_print</span> <span class="o">|=</span> <span class="n">func</span><span class="o">.</span><span class="n">wrapper</span><span class="o">.</span><span class="n">has_print</span>
@@ -769,8 +791,8 @@
   </div>
   
   <!-- Scripts loaded after <body> so the DOM is not blocked -->
-  <script defer src="../../../../../_static/scripts/bootstrap.js?digest=0790524f97105ba85085"></script>
-<script defer src="../../../../../_static/scripts/pydata-sphinx-theme.js?digest=0790524f97105ba85085"></script>
+  <script defer src="../../../../../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5"></script>
+<script defer src="../../../../../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5"></script>
 
   <footer class="bd-footer">
 <div class="bd-footer__inner bd-page-width">
@@ -804,7 +826,7 @@
         <div class="footer-item">
 <p class="theme-version">
   <!-- # L10n: Setting the PST URL as an argument as this does not need to be localized -->
-  Built with the <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a> 0.18.0.
+  Built with the <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a> 0.19.0.
 </p></div>
       
     </div>

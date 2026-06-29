@@ -62,7 +62,7 @@ Forces every adstack in the program to exactly `N` slots and bypasses the launch
 
 ### `ad_stack_sparse_threshold_bytes`
 
-Cutoff (in bytes) below which the gate-passing-count sizing path described in [Memory footprint](./autodiff.md#memory-footprint) is skipped in favour of the eager `dispatched_threads * stride` heap. Default `100 MiB`. The sparse path saves memory on kernels of the shape `for i in range(...): if field[i] cmp literal: <adstack work>` but pays a per-launch reducer dispatch; below the threshold that overhead outweighs the savings. Set to `0` to always use the sparse path; lower it if the default still skips kernels you want shrunk. No effect when `ad_stack_experimental_enabled=False` or when the kernel has no such gate.
+Cutoff (in bytes) below which the gate-passing-count sizing path described in [Memory footprint](./autodiff.md#memory-footprint) is skipped in favor of the eager `dispatched_threads * stride` heap. Default `100 MiB`. The sparse path saves memory on kernels of the shape `for i in range(...): if field[i] cmp literal: <adstack work>` but pays a per-launch reducer dispatch; below the threshold that overhead outweighs the savings. Set to `0` to always use the sparse path; lower it if the default still skips kernels you want shrunk. No effect when `ad_stack_experimental_enabled=False` or when the kernel has no such gate.
 
 ## Apple Metal
 
@@ -74,7 +74,7 @@ An `MTLCommandQueue*` pointer (as an integer) to use instead of creating a new M
 
 Default `False`. Set to `True` when the `external_metal_command_queue` is PyTorch MPS's command queue. This tells Quadrants that both frameworks share the same Metal queue, so the explicit `qd.sync()` / `torch.mps.synchronize()` calls at `to_torch` / `from_torch` interop points can be skipped. When `False` (or when no external queue is set), the interop syncs are preserved.
 
-See [Shared Metal command queue](./metal_shared_queue.md) for the full setup guide, including how to extract the queue pointer from PyTorch and the synchronisation implications.
+See [Shared Metal command queue](./metal_shared_queue.md) for the full setup guide, including how to extract the queue pointer from PyTorch and the synchronization implications.
 
 ## Debugging
 
