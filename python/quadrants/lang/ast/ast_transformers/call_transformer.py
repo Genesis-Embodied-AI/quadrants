@@ -378,6 +378,22 @@ class CallTransformer:
         func_type = type(func)
 
         is_func_base_wrapper = func_type in {QuadrantsCallable, BoundQuadrantsCallable}
+
+        # A ``@qd.func(requires_top_level=True)`` may only be called at the top level of a kernel (or
+        # directly inside a ``graph_do_while`` body). Nesting it in a runtime for / if / while demotes
+        # its phase loops out of top-level position, collapsing the per-phase grid-wide barriers and
+        # corrupting the result, so reject it here at trace time rather than miscompiling silently.
+        # ``qd.static`` (compile-time) loops do not set ``is_in_non_static_control_flow``. The
+        # ``_including_caller`` variant also catches the marked func being reached through an unmarked
+        # intermediate ``@qd.func`` that was itself called from runtime control flow.
+        if getattr(func, "_qd_requires_top_level", False) and ctx.is_in_non_static_control_flow_including_caller():
+            func_name = getattr(func, "__name__", None) or "this @qd.func"
+            raise QuadrantsSyntaxError(
+                f"`{func_name}` is decorated with requires_top_level=True and must be called at the top "
+                f"level of a @qd.kernel (or directly inside a `while qd.graph_do_while(...)` body). It "
+                f"cannot be nested inside a runtime for / if / while: that demotes its phase loops out of "
+                f"top-level position, collapsing the per-phase grid-wide barriers and corrupting the result."
+            )
         pruning = ctx.global_context.pruning
         called_needed = None
         callee_arg_names: list[str] | None = None
@@ -472,6 +488,11 @@ class CallTransformer:
         # snapshot is harmless for non-func callables and nests correctly through chained calls.
         prev_caller_loop_depth = ctx.global_context.caller_loop_depth
         ctx.global_context.caller_loop_depth = ctx.loop_depth
+        # Likewise snapshot whether we are (transitively) inside non-static control flow, so a
+        # `requires_top_level=True` func reached through an unmarked intermediate `@qd.func` still sees the caller's
+        # control-flow context. OR with the existing value so it accumulates down a multi-level call chain.
+        prev_caller_in_non_static_control_flow = ctx.global_context.caller_in_non_static_control_flow
+        ctx.global_context.caller_in_non_static_control_flow = ctx.is_in_non_static_control_flow_including_caller()
         try:
             try:
                 pruning = ctx.global_context.pruning
@@ -500,6 +521,7 @@ class CallTransformer:
                 raise QuadrantsTypeError(msg)
         finally:
             ctx.global_context.caller_loop_depth = prev_caller_loop_depth
+            ctx.global_context.caller_in_non_static_control_flow = prev_caller_in_non_static_control_flow
 
         if getattr(func, "_is_quadrants_function", False):
             ctx.func.has_print |= func.wrapper.has_print

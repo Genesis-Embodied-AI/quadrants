@@ -8,7 +8,7 @@ export QD_FILE_TIMING_OUTPUT="${RUNNER_TEMP}/file_timing.md"
 pip install --prefer-binary --group test
 find . -name '*.bc'
 ls -lh build/
-export QD_LIB_DIR="$(python -c 'import quadrants as ti; print(ti.__path__[0])' | tail -n 1)/_lib/runtime"
+export QD_LIB_DIR="$(python -c 'import quadrants as qd; print(qd.__path__[0])' | tail -n 1)/_lib/runtime"
 chmod +x ./build/quadrants_cpp_tests
 ./build/quadrants_cpp_tests
 

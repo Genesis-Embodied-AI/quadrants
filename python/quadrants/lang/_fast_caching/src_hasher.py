@@ -7,7 +7,7 @@ hash can walk *only* paths the kernel reads:
 
   - L1 (this module's ``make_source_config_key`` + ``load_pruning_info`` / ``store_pruning_info``): keyed by
     source+config only (no args). Stores ``PruningInfo`` — the set of kernel-accessed flat names (e.g.
-    ``__qd_state__qd_x``) plus the ``graph_do_while_arg`` (also a kernel-source property).
+    ``__qd_state__qd_x``) plus the ``graph_do_while_levels`` table (also a kernel-source property).
 
   - L2 (``make_full_cache_key`` + ``load_full`` / ``store_full``): keyed by L1 key + the *narrow* args hash computed
     with pruning info from L1. Stores the C++ ``frontend_cache_key`` that names the compiled artifact.
@@ -51,6 +51,11 @@ from .python_side_cache import PythonSideCache
 _L1_MARKER = "l1"
 _L2_MARKER = "l2"
 
+# Bumped whenever the persisted L1CacheValue / CacheValue schema changes. Mixed into both L1 and L2 keys so old
+# entries from a prior schema are not mis-read on a Quadrants version where __version_str__ hasn't moved.
+# v2: graph_do_while single-arg string -> nested (cond_arg_name, parent_id) level table.
+_CACHE_VALUE_SCHEMA_VERSION = "cachevalue-v2-gdw-levels"
+
 
 def make_source_config_key(kernel_source_info: FunctionSourceInfo) -> str:
     """Build the L1 cache key: source + config + version, with no dependence on args.
@@ -71,13 +76,14 @@ def make_source_config_key(kernel_source_info: FunctionSourceInfo) -> str:
             str(kernel_source_info.start_lineno),
             "pruned",
             "kcov" if os.environ.get("QD_KERNEL_COVERAGE") == "1" else "",
+            _CACHE_VALUE_SCHEMA_VERSION,
         )
     )
 
 
 def make_full_cache_key(source_config_key: str, narrow_args_hash: str) -> str:
     """Build the L2 cache key from the L1 key + narrow args hash. See module docstring."""
-    return hash_iterable_strings((_L2_MARKER, source_config_key, narrow_args_hash))
+    return hash_iterable_strings((_L2_MARKER, source_config_key, narrow_args_hash, _CACHE_VALUE_SCHEMA_VERSION))
 
 
 def compute_narrow_args_hash(
@@ -112,8 +118,8 @@ class L1CacheValue(BaseModel):
     Computed during compile (``Pruning.used_vars_by_func_id``); persisted here so subsequent calls can build
     a narrow args hash without having to recompile.
 
-    ``graph_do_while_arg`` is also stored here because it's a property of the kernel source (not of any
-    particular arg value).
+    ``graph_do_while_levels`` is also stored here because it's a property of the kernel source (not of any
+    particular arg value). Each entry is ``(cond_arg_name, parent_id)``, indexed by level id (outer before inner).
 
     ``hashed_function_source_infos`` is the same content-hash list used for L2 validation; an L1 hit is
     rejected if any helper source has changed since the L1 entry was written, even if the kernel source
@@ -122,14 +128,14 @@ class L1CacheValue(BaseModel):
 
     used_py_dataclass_parameters: set[str]
     hashed_function_source_infos: list[HashedFunctionSourceInfo]
-    graph_do_while_arg: str | None = None
+    graph_do_while_levels: list[tuple[str, int]] | None = None
 
 
 def store_pruning_info(
     source_config_key: str,
     function_source_infos: Iterable[FunctionSourceInfo],
     used_py_dataclass_parameters: set[str],
-    graph_do_while_arg: str | None = None,
+    graph_do_while_levels: list[tuple[str, int]] | None = None,
 ) -> None:
     """Persist the L1 entry after a cold compile. See ``L1CacheValue`` for what's stored / why."""
     if not source_config_key:
@@ -139,7 +145,7 @@ def store_pruning_info(
     cache_value = L1CacheValue(
         used_py_dataclass_parameters=used_py_dataclass_parameters,
         hashed_function_source_infos=list(hashed_function_source_infos),
-        graph_do_while_arg=graph_do_while_arg,
+        graph_do_while_levels=graph_do_while_levels,
     )
     cache.store(source_config_key, cache_value.model_dump_json())
 
@@ -150,7 +156,7 @@ def persist_l1_and_set_l2_key(
     kernel_source_info: FunctionSourceInfo | None,
     used_py_dataclass_parameters: set[str] | None,
     visited_functions: Iterable[FunctionSourceInfo],
-    graph_do_while_arg: str | None,
+    graph_do_while_levels: list[tuple[str, int]] | None,
     pruning_paths_from_l1: set[str] | None,
     fast_checksum: str | None,
     raise_on_templated_floats: bool,
@@ -186,7 +192,7 @@ def persist_l1_and_set_l2_key(
             l1_key,
             visited_functions,
             used_py_dataclass_parameters,
-            graph_do_while_arg=graph_do_while_arg,
+            graph_do_while_levels=graph_do_while_levels,
         )
     # If phase 2 didn't run (L1 cold) or returned None (FIELD encountered earlier — but in that case post-compile
     # narrow hashing would also see the FIELD and produce None, which is fine: we want fast_checksum to stay None
@@ -206,8 +212,8 @@ def persist_l1_and_set_l2_key(
 
 def load_pruning_info(
     source_config_key: str,
-) -> tuple[set[str], str | None] | tuple[None, None]:
-    """Look up L1 cache. Returns (pruning_paths, graph_do_while_arg) on hit, (None, None) on miss / invalid.
+) -> tuple[set[str], list[tuple[str, int]] | None] | tuple[None, None]:
+    """Look up L1 cache. Returns (pruning_paths, graph_do_while_levels) on hit, (None, None) on miss / invalid.
 
     Validates ``hashed_function_source_infos`` against the current on-disk source; if any helper has changed
     since the entry was written, the entry is invalid and we treat the lookup as a miss so the caller does a
@@ -224,7 +230,7 @@ def load_pruning_info(
         return None, None
     if not function_hasher.validate_hashed_function_infos(cache_value.hashed_function_source_infos):
         return None, None
-    return cache_value.used_py_dataclass_parameters, cache_value.graph_do_while_arg
+    return cache_value.used_py_dataclass_parameters, cache_value.graph_do_while_levels
 
 
 class CacheValue(BaseModel):
@@ -237,7 +243,9 @@ class CacheValue(BaseModel):
     frontend_cache_key: str
     hashed_function_source_infos: list[HashedFunctionSourceInfo]
     used_py_dataclass_parameters: set[str]
-    graph_do_while_arg: str | None = None
+    # Nested graph_do_while level table as (cond_arg_name, parent_id) pairs, indexed by level id. None / empty for
+    # kernels without graph_do_while.
+    graph_do_while_levels: list[tuple[str, int]] | None = None
 
 
 def store(
@@ -245,7 +253,7 @@ def store(
     fast_cache_key: str,
     function_source_infos: Iterable[FunctionSourceInfo],
     used_py_dataclass_parameters: set[str],
-    graph_do_while_arg: str | None = None,
+    graph_do_while_levels: list[tuple[str, int]] | None = None,
 ) -> None:
     """Persist the L2 entry — the C++ frontend cache key that names the compiled artifact for this call.
 
@@ -261,7 +269,7 @@ def store(
         frontend_cache_key=frontend_cache_key,
         hashed_function_source_infos=list(hashed_function_source_infos),
         used_py_dataclass_parameters=used_py_dataclass_parameters,
-        graph_do_while_arg=graph_do_while_arg,
+        graph_do_while_levels=graph_do_while_levels,
     )
     cache.store(fast_cache_key, cache_value_obj.model_dump_json())
 
@@ -279,8 +287,10 @@ def _try_load(cache_key: str) -> CacheValue | None:
     return cache_value_obj
 
 
-def load(cache_key: str) -> tuple[set[str], str, str | None] | tuple[None, None, None]:
-    """Look up L2 cache. Returns (used_pruning_paths, frontend_cache_key, graph_do_while_arg) on hit.
+def load(
+    cache_key: str,
+) -> tuple[set[str], str, list[tuple[str, int]] | None] | tuple[None, None, None]:
+    """Look up L2 cache. Returns (used_pruning_paths, frontend_cache_key, graph_do_while_levels) on hit.
 
     Validates helper-source hashes against the live source; an L2 entry is invalidated if any helper changed.
     """
@@ -288,7 +298,11 @@ def load(cache_key: str) -> tuple[set[str], str, str | None] | tuple[None, None,
     if cache_value is None:
         return None, None, None
     if function_hasher.validate_hashed_function_infos(cache_value.hashed_function_source_infos):
-        return cache_value.used_py_dataclass_parameters, cache_value.frontend_cache_key, cache_value.graph_do_while_arg
+        return (
+            cache_value.used_py_dataclass_parameters,
+            cache_value.frontend_cache_key,
+            cache_value.graph_do_while_levels,
+        )
     return None, None, None
 
 

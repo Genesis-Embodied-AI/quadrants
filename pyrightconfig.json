@@ -2,7 +2,7 @@
     "reportInvalidTypeForm": "warning",
     "include": ["python", "tests/python/pyright"],
     "stubPath": "./stubs",
-    "extraPaths": ["./stubs"],
+    "extraPaths": ["./stubs", "python"],
     "reportMissingImports": true,
     "reportMissingModuleSource": false
 }

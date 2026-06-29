@@ -16,7 +16,7 @@ set(CMAKE_VISIBILITY_INLINES_HIDDEN ON)
 # Suppress warnings from submodules introduced by the above symbol visibility change
 set(CMAKE_POLICY_DEFAULT_CMP0063 NEW)
 set(CMAKE_POLICY_DEFAULT_CMP0077 NEW)
-set(INSTALL_LIB_DIR ${CMAKE_INSTALL_PREFIX}/python/quadrants/_lib)
+set(INSTALL_LIB_DIR ${CMAKE_INSTALL_PREFIX}/${QD_PY_INSTALL_ROOT}/_lib)
 
 if (QD_WITH_AMDGPU AND QD_WITH_CUDA)
     message(WARNING "Compiling CUDA and AMDGPU backends simultaneously")
@@ -113,7 +113,7 @@ target_include_directories(${CORE_LIBRARY_NAME} PRIVATE external/PicoSHA2)
 target_include_directories(${CORE_LIBRARY_NAME} PRIVATE external/eigen)
 target_include_directories(${CORE_LIBRARY_NAME} PRIVATE external/FP16/include)
 
-target_link_libraries(${CORE_LIBRARY_NAME} PUBLIC ti_device_api)
+target_link_libraries(${CORE_LIBRARY_NAME} PUBLIC qd_device_api)
 
 if(QD_WITH_LLVM)
     if(DEFINED ENV{LLVM_DIR})
@@ -329,12 +329,14 @@ endforeach ()
 if(QD_WITH_PYTHON)
     message("PYTHON_LIBRARIES: " ${PYTHON_LIBRARIES})
     set(CORE_WITH_PYBIND_LIBRARY_NAME quadrants_python)
-    # NO_EXTRAS is required here to avoid llvm symbol error during build
     file(GLOB QUADRANTS_PYBIND_SOURCE
         "quadrants/python/*.cpp"
         "quadrants/python/*.h"
     )
-    pybind11_add_module(${CORE_WITH_PYBIND_LIBRARY_NAME} NO_EXTRAS ${QUADRANTS_PYBIND_SOURCE})
+    # NOMINSIZE: keep the project optimization level (-O3) for the binding layer instead of nanobind's
+    # default -Os, matching the previous pybind11 NO_EXTRAS build and avoiding per-call overhead in the
+    # hot launch path. NB_STATIC links the nanobind core statically (single extension module).
+    nanobind_add_module(${CORE_WITH_PYBIND_LIBRARY_NAME} NB_STATIC NOMINSIZE ${QUADRANTS_PYBIND_SOURCE})
 
     # Remove symbols from static libs: https://stackoverflow.com/a/14863432/12003165
     if (LINUX)
@@ -396,3 +398,8 @@ if (QD_WITH_AMDGPU)
     install(FILES ${AMDGPU_BC_FILES_ROCM70}
             DESTINATION ${INSTALL_LIB_DIR}/runtime_rocm70)
 endif()
+
+# Ship the assets submodule inside the package (replaces setup.py's copy_assets()).
+# The trailing slash installs the contents of external/assets into <pkg>/assets.
+install(DIRECTORY ${CMAKE_SOURCE_DIR}/external/assets/
+        DESTINATION ${CMAKE_INSTALL_PREFIX}/${QD_PY_INSTALL_ROOT}/assets)

@@ -140,10 +140,10 @@ def test_loop_var_life_double_iters():
 
 
 @pytest.mark.parametrize("dtype", [qd.i32, qd.f32, qd.i64, qd.f64])
-@pytest.mark.parametrize("ti_zero,zero", [(qd.zero, 0), (qd.one, 1)])
+@pytest.mark.parametrize("qd_zero,zero", [(qd.zero, 0), (qd.one, 1)])
 @pytest.mark.parametrize("is_mat", [False, True])
 @test_utils.test(arch=qd.cpu)
-def test_meta_zero_one(dtype, ti_zero, zero, is_mat):
+def test_meta_zero_one(dtype, qd_zero, zero, is_mat):
     if is_mat:
         x = qd.Matrix.field(2, 3, dtype, ())
         y = qd.Matrix.field(2, 3, dtype, ())
@@ -153,7 +153,7 @@ def test_meta_zero_one(dtype, ti_zero, zero, is_mat):
 
     @qd.kernel
     def func():
-        y[None] = ti_zero(x[None])
+        y[None] = qd_zero(x[None])
 
     for a in [-1, -2.3, -1, -0.3, 0, 1, 1.9, 2, 3]:
         if qd.types.is_integral(dtype):

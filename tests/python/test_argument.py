@@ -188,7 +188,7 @@ def test_args_with_many_ndarrays():
     cluster_begin = qd.ndarray(qd.i32, shape=20)
 
     @qd.kernel
-    def ti_import_cluster_data(
+    def qd_import_cluster_data(
         center: qd.types.vector(3, qd.f32),
         particle_num: int,
         cluster_num: int,
@@ -211,7 +211,7 @@ def test_args_with_many_ndarrays():
             particle_index[i] = 1.0
 
     center = qd.math.vec3(0, 0, 0)
-    ti_import_cluster_data(
+    qd_import_cluster_data(
         center,
         particle_num,
         cluster_num,

@@ -1,8 +1,0 @@
-# This file is used for post-processing of the pybind11-stubgen generated stubs.
-# The file is a yaml file where:
-# - the key is text that will be matched (pure string match, no wildcards/regular expressions), and
-# - the value is the replacement text.
-#
-# This will be used in the first instance to replace all list[int] with tuple[int, ...]
-# rather than using `stub_replacmeent_funcs.yaml` on every function that takes a vector<int>.
-"list[int]": "tuple[int, ...]"

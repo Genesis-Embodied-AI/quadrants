@@ -270,34 +270,34 @@ constexpr size_t kListGenBufferSize = 32 << 20;
 // Info for launching a compiled Quadrants kernel, which consists of a series of
 // Unified Device API pipelines.
 
-CompiledQuadrantsKernel::CompiledQuadrantsKernel(const Params &ti_params)
-    : ti_kernel_attribs_(*ti_params.ti_kernel_attribs), device_(ti_params.device) {
-  input_buffers_[BufferType::GlobalTmps] = ti_params.global_tmps_buffer;
-  input_buffers_[BufferType::ListGen] = ti_params.listgen_buffer;
+CompiledQuadrantsKernel::CompiledQuadrantsKernel(const Params &qd_params)
+    : qd_kernel_attribs_(*qd_params.qd_kernel_attribs), device_(qd_params.device) {
+  input_buffers_[BufferType::GlobalTmps] = qd_params.global_tmps_buffer;
+  input_buffers_[BufferType::ListGen] = qd_params.listgen_buffer;
 
   // Compiled_structs can be empty if loading a kernel from an AOT module as
   // the SNode are not re-compiled/structured. In this case, we assume a
   // single root buffer size configured from the AOT module.
-  for (int root = 0; root < ti_params.num_snode_trees; ++root) {
+  for (int root = 0; root < qd_params.num_snode_trees; ++root) {
     BufferInfo buffer = {BufferType::Root, root};
-    input_buffers_[buffer] = ti_params.root_buffers[root];
+    input_buffers_[buffer] = qd_params.root_buffers[root];
   }
 
-  const auto arg_sz = ti_kernel_attribs_.ctx_attribs.args_bytes();
-  const auto ret_sz = ti_kernel_attribs_.ctx_attribs.rets_bytes();
+  const auto arg_sz = qd_kernel_attribs_.ctx_attribs.args_bytes();
+  const auto ret_sz = qd_kernel_attribs_.ctx_attribs.rets_bytes();
 
   args_buffer_size_ = arg_sz;
   ret_buffer_size_ = ret_sz;
 
-  const auto &task_attribs = ti_kernel_attribs_.tasks_attribs;
-  const auto &spirv_bins = ti_params.spirv_bins;
+  const auto &task_attribs = qd_kernel_attribs_.tasks_attribs;
+  const auto &spirv_bins = qd_params.spirv_bins;
   QD_ASSERT(task_attribs.size() == spirv_bins.size());
 
   for (int i = 0; i < task_attribs.size(); ++i) {
     PipelineSourceDesc source_desc{PipelineSourceType::spirv_binary, (void *)spirv_bins[i].data(),
                                    spirv_bins[i].size() * sizeof(uint32_t)};
     auto [vp, res] =
-        ti_params.device->create_pipeline_unique(source_desc, task_attribs[i].name, ti_params.backend_cache);
+        qd_params.device->create_pipeline_unique(source_desc, task_attribs[i].name, qd_params.backend_cache);
     QD_ERROR_IF(res != RhiResult::success,
                 "Failed to create pipeline for kernel task '{}' (RhiResult={}). The SPIR-V shader was rejected by the "
                 "backend driver; see the preceding RHI log for the underlying diagnostic. On Metal, a common cause is "
@@ -308,8 +308,8 @@ CompiledQuadrantsKernel::CompiledQuadrantsKernel(const Params &ti_params)
   }
 }
 
-const QuadrantsKernelAttributes &CompiledQuadrantsKernel::ti_kernel_attribs() const {
-  return ti_kernel_attribs_;
+const QuadrantsKernelAttributes &CompiledQuadrantsKernel::qd_kernel_attribs() const {
+  return qd_kernel_attribs_;
 }
 
 size_t CompiledQuadrantsKernel::num_pipelines() const {
@@ -370,8 +370,8 @@ GfxRuntime::~GfxRuntime() {
   }
 
   {
-    decltype(ti_kernels_) tmp;
-    tmp.swap(ti_kernels_);
+    decltype(qd_kernels_) tmp;
+    tmp.swap(qd_kernels_);
   }
   global_tmps_buffer_.reset();
   listgen_buffer_.reset();
@@ -379,7 +379,7 @@ GfxRuntime::~GfxRuntime() {
 
 GfxRuntime::KernelHandle GfxRuntime::register_quadrants_kernel(GfxRuntime::RegisterParams reg_params) {
   CompiledQuadrantsKernel::Params params;
-  params.ti_kernel_attribs = &(reg_params.kernel_attribs);
+  params.qd_kernel_attribs = &(reg_params.kernel_attribs);
   params.num_snode_trees = reg_params.num_snode_trees;
   params.device = device_;
   params.root_buffers = {};
@@ -398,18 +398,18 @@ GfxRuntime::KernelHandle GfxRuntime::register_quadrants_kernel(GfxRuntime::Regis
     params.spirv_bins.push_back(std::move(spirv_src));
   }
   KernelHandle res;
-  res.set_launch_id(ti_kernels_.size());
-  ti_kernels_.push_back(std::make_unique<CompiledQuadrantsKernel>(params));
+  res.set_launch_id(qd_kernels_.size());
+  qd_kernels_.push_back(std::make_unique<CompiledQuadrantsKernel>(params));
   return res;
 }
 
-void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_ctx) {
-  auto *ti_kernel = ti_kernels_[handle.get_launch_id()].get();
+void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_ctx, int task_begin, int task_end) {
+  auto *qd_kernel = qd_kernels_[handle.get_launch_id()].get();
 
 #if defined(__APPLE__)
   if (profiler_) {
     const int apple_max_query_pool_count = 32;
-    int task_count = ti_kernel->ti_kernel_attribs().tasks_attribs.size();
+    int task_count = qd_kernel->qd_kernel_attribs().tasks_attribs.size();
     if (task_count > apple_max_query_pool_count) {
       QD_WARN(
           "Cannot concurrently profile more than 32 tasks in a single "
@@ -425,21 +425,21 @@ void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_c
 
   std::unique_ptr<DeviceAllocationGuard> args_buffer{nullptr}, ret_buffer{nullptr};
 
-  if (ti_kernel->get_args_buffer_size()) {
+  if (qd_kernel->get_args_buffer_size()) {
     // Needs both Uniform (the main kernel binds args as a uniform buffer) and Storage (the adstack sizer
     // pipeline binds the same buffer through a `rw_buffer` / storage_buffer descriptor to resolve ndarray
     // data pointers out of arg slots). Per VUID-VkDescriptorBufferInfo-buffer-02999, a buffer bound through
     // a storage_buffer descriptor must have been allocated with `VK_BUFFER_USAGE_STORAGE_BUFFER_BIT`.
     auto [buf, res] =
-        device_->allocate_memory_unique({ti_kernel->get_args_buffer_size(),
+        device_->allocate_memory_unique({qd_kernel->get_args_buffer_size(),
                                          /*host_write=*/true, /*host_read=*/false,
                                          /*export_sharing=*/false, AllocUsage::Uniform | AllocUsage::Storage});
     QD_ASSERT_INFO(res == RhiResult::success, "Failed to allocate args buffer");
     args_buffer = std::move(buf);
   }
 
-  if (ti_kernel->get_ret_buffer_size()) {
-    auto [buf, res] = device_->allocate_memory_unique({ti_kernel->get_ret_buffer_size(),
+  if (qd_kernel->get_ret_buffer_size()) {
+    auto [buf, res] = device_->allocate_memory_unique({qd_kernel->get_ret_buffer_size(),
                                                        /*host_write=*/false, /*host_read=*/true,
                                                        /*export_sharing=*/false, AllocUsage::Storage});
     QD_ASSERT_INFO(res == RhiResult::success, "Failed to allocate ret buffer");
@@ -447,7 +447,7 @@ void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_c
   }
 
   // Create context blitter
-  auto ctx_blitter = HostDeviceContextBlitter::maybe_make(&ti_kernel->ti_kernel_attribs().ctx_attribs, host_ctx,
+  auto ctx_blitter = HostDeviceContextBlitter::maybe_make(&qd_kernel->qd_kernel_attribs().ctx_attribs, host_ctx,
                                                           device_, args_buffer.get(), ret_buffer.get());
 
   // `any_arrays` contain both external arrays and NDArrays
@@ -462,9 +462,9 @@ void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_c
 
   // Prepare context buffers & arrays
   if (ctx_blitter) {
-    QD_ASSERT(ti_kernel->get_args_buffer_size() || ti_kernel->get_ret_buffer_size());
+    QD_ASSERT(qd_kernel->get_args_buffer_size() || qd_kernel->get_ret_buffer_size());
 
-    const auto &args = ti_kernel->ti_kernel_attribs().ctx_attribs.args();
+    const auto &args = qd_kernel->qd_kernel_attribs().ctx_attribs.args();
     for (auto &kv : args) {
       const auto &indices = kv.first;
       const auto &arg = kv.second;
@@ -501,7 +501,7 @@ void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_c
           }
         } else {
           ext_array_size[arg_id] = host_ctx.array_runtime_sizes[arg_id];
-          auto arr_access = ti_kernel->ti_kernel_attribs().ctx_attribs.arr_access;
+          auto arr_access = qd_kernel->qd_kernel_attribs().ctx_attribs.arr_access;
           auto access_it = std::find_if(arr_access.begin(), arr_access.end(),
                                         [indices](const auto &pair) -> bool { return pair.first == indices; });
           QD_ASSERT(access_it != arr_access.end());
@@ -535,12 +535,19 @@ void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_c
   }
 
   // Record commands
-  const auto &task_attribs = ti_kernel->ti_kernel_attribs().tasks_attribs;
+  const auto &task_attribs = qd_kernel->qd_kernel_attribs().tasks_attribs;
+
+  // Half-open task range to actually dispatch. `task_end == -1` means "all tasks" (the normal whole-kernel launch);
+  // the graph_do_while host driver passes a single-task range to replay one loop-body task at a time.
+  const int dispatch_task_begin = task_begin;
+  const int dispatch_task_end = (task_end < 0) ? int(task_attribs.size()) : task_end;
+  QD_ASSERT(dispatch_task_begin >= 0 && dispatch_task_end <= int(task_attribs.size()) &&
+            dispatch_task_begin <= dispatch_task_end);
 
   // Adstack-cache invalidation bump - see `bump_writes_for_kernel_spirv` in `program/adstack_size_expr_eval.{h,cpp}`.
   if (program_impl_ != nullptr) {
     bump_writes_for_kernel_spirv(program_impl_->program, &host_ctx, task_attribs,
-                                 ti_kernel->ti_kernel_attribs().ctx_attribs.arr_access);
+                                 qd_kernel->qd_kernel_attribs().ctx_attribs.arr_access);
   }
 
   // Max-reducer dispatch. Must precede `publish_adstack_metadata_spirv` so the per-spec substitution lands before the
@@ -554,7 +561,7 @@ void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_c
   quadrants::lang::MaxReducerResultMap max_reducer_results;
   if (any_max_reducer_task) {
     max_reducer_results = dispatch_max_reducers(host_ctx, args_buffer.get(), any_arrays, task_attribs,
-                                                ti_kernel->ti_kernel_attribs().name);
+                                                qd_kernel->qd_kernel_attribs().name);
   }
 
   // Device-side adstack SizeExpr evaluation: every task with adstack allocas has its per-alloca `max_size` /
@@ -563,7 +570,7 @@ void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_c
   // compile-time strides) when no task has adstack allocas, so forward-only kernels pay only the cheap pre-populate
   // pass; the actual sizer dispatch + `wait_idle()` only fires for reverse-mode kernels.
   std::vector<PerTaskAdStackRuntime> per_task_ad_stack = publish_adstack_metadata_spirv(
-      host_ctx, args_buffer.get(), any_arrays, task_attribs, ti_kernel->ti_kernel_attribs().name, max_reducer_results);
+      host_ctx, args_buffer.get(), any_arrays, task_attribs, qd_kernel->qd_kernel_attribs().name, max_reducer_results);
 
   // Static-IR-bound sparse-adstack-heap reducer dispatch. Gated on whether any task in this kernel has a captured
   // `bound_expr` - the codegen routes such tasks through the lazy LCA-block atomic-rmw row claim that reads
@@ -580,12 +587,25 @@ void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_c
     per_task_bound_count = dispatch_adstack_bound_reducers(host_ctx, args_buffer.get(), task_attribs);
   }
 
-  ensure_current_cmdlist();
-
-  for (int i = 0; i < task_attribs.size(); ++i) {
+  // GPU-side per-checkpoint gating setup (Vulkan / Metal). Replaces an earlier per-task host-branch gating loop with
+  // the design `reentrant.md` §6.2 specifies for non-CUDA-12.4 GPU backends: a small "gate" compute shader runs in the
+  // same cmdlist before each checkpoint's body kernels and writes either `(active_gx, 1, 1)` or `(0, 0, 0)` into a
+  // per-kernel dim3 slot; body kernels then dispatch via `CommandList::dispatch_indirect` so a skipped checkpoint
+  // dispatches zero workgroups (no GPU work). After the body, an indirect-gated yield-check shader atomic-CASes the
+  // cp_id into a shared `yield_signal` slot if the user's `yield_on=` ndarray flag is non-zero.
+  //
+  // The host reads `yield_signal` once at the end of the launch (single 8-byte D2H) and surfaces the first-yielder
+  // cp_id through `last_yield_cp_id_on_last_call()`. No per-task host calls, no per- task D2H stalls. See
+  // `runtime/gfx/checkpoint_launch.cpp` for the orchestration logic.
+  //
+  // group_x for each task is hoisted out of the per-task dispatch loop because the gate's params buffer needs to bake
+  // the active dim for every body kernel up-front (first launch only). The value is a function of the kernel's
+  // compile-time `advisory_total_num_threads` and the per-launch ndarray shape lookups; identical to the calculation
+  // inlined in the dispatch loop. Stored as a dense `int[n_tasks]` (the full task list, not the dispatch sub-range) so
+  // the gate params stay complete even when the nested graph_do_while driver dispatches one task at a time.
+  std::vector<int> per_task_group_x(task_attribs.size(), 0);
+  for (int i = 0; i < (int)task_attribs.size(); ++i) {
     const auto &attribs = task_attribs[i];
-    auto vp = ti_kernel->get_pipeline(i);
-
     // Cap `advisory_total_num_threads` to the ACTUAL iteration count when the codegen was able to extract the range end
     // as a product of ndarray-shape lookups (see `RangeForAttributes::end_shape_product`). Without this cap, a grad
     // kernel whose range is runtime-determined (`const_end = false`) inherits `kMaxNumThreadsGridStrideLoop = 131072`
@@ -622,8 +642,42 @@ void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_c
     if (!attribs.ad_stack.allocas.empty() && effective_advisory_threads > kAdStackMaxConcurrentThreads) {
       effective_advisory_threads = kAdStackMaxConcurrentThreads;
     }
-    const int group_x = (effective_advisory_threads + attribs.advisory_num_threads_per_group - 1) /
-                        attribs.advisory_num_threads_per_group;
+    per_task_group_x[i] = (effective_advisory_threads + attribs.advisory_num_threads_per_group - 1) /
+                          attribs.advisory_num_threads_per_group;
+  }
+
+  bool kernel_has_checkpoints =
+      ensure_checkpoint_state_for_handle(handle, task_attribs, host_ctx.checkpoint_yield_on_arg_ids, per_task_group_x);
+
+  CheckpointLaunchPlan checkpoint_plan =
+      prepare_checkpoint_launch_state(handle, host_ctx, task_attribs, any_arrays, kernel_has_checkpoints);
+  const auto &slot_in_cp = checkpoint_plan.slot_in_cp;
+  const auto &is_first_in_cp = checkpoint_plan.is_first_in_cp;
+  const auto &is_last_in_cp = checkpoint_plan.is_last_in_cp;
+  const auto &yield_on_devallocs = checkpoint_plan.yield_on_devallocs;
+
+  ensure_current_cmdlist();
+
+  // Dispatch only the requested task sub-range. A plain launch passes [0, num_tasks); the nested graph_do_while host
+  // driver replays one task at a time via launch_kernel(handle, ctx, i, i + 1).
+  for (int i = dispatch_task_begin; i < dispatch_task_end; ++i) {
+    const auto &attribs = task_attribs[i];
+    // GPU-side gating: cp_id >= 0 tasks dispatch via `dispatch_indirect` against a per-cp out_dims SSBO; the gate
+    // shader (run inline below before this checkpoint's first body task) decides on GPU whether the grid is `(active,
+    // 1, 1)` or `(0, 0, 0)`. No host skip - the loop dispatches every task into the cmdlist; skipped checkpoints
+    // dispatch with zero workgroups and the hardware no-ops the entry. See `runtime/gfx/checkpoint_launch.cpp` for the
+    // mechanism.
+    if (kernel_has_checkpoints && is_first_in_cp[i]) {
+      const auto &state = checkpoint_handle_states_[handle.get_launch_id()];
+      dispatch_checkpoint_gate(current_cmdlist_.get(), state, attribs.checkpoint_id);
+      current_cmdlist_->memory_barrier();
+    }
+    auto vp = qd_kernel->get_pipeline(i);
+
+    // group_x for this task is the value baked into the gate's params buffer at first launch (for cp_id >= 0 tasks) or
+    // used directly as the host-side dispatch dim (for cp_id < 0 tasks). Hoisted into `per_task_group_x` above; see
+    // that block for the full derivation comment.
+    const int group_x = per_task_group_x[i];
     // Adstack metadata (runtime-evaluated stride and per-alloca `(offset, max_size)` u32 table) precomputed
     // before the cmdlist opened - see the `per_task_ad_stack` loop above. Zero-length `metadata` means the
     // task has no adstacks; `stride_float` / `stride_int` are still populated from the compile-time values
@@ -935,7 +989,7 @@ void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_c
       } else if (bind.buffer.type == BufferType::Rets) {
         bindings->rw_buffer(bind.binding, ret_buffer ? *ret_buffer : kDeviceNullAllocation);
       } else {
-        DeviceAllocation *alloc = ti_kernel->get_buffer_bind(bind.buffer);
+        DeviceAllocation *alloc = qd_kernel->get_buffer_bind(bind.buffer);
         bindings->rw_buffer(bind.binding, alloc ? *alloc : kDeviceNullAllocation);
       }
     }
@@ -944,9 +998,9 @@ void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_c
       for (auto &bind : attribs.buffer_binds) {
         if (bind.buffer.type == BufferType::ListGen) {
           // FIXME: properlly support multiple list
-          current_cmdlist_->buffer_fill(ti_kernel->get_buffer_bind(bind.buffer)->get_ptr(0), kBufferSizeEntireSize,
+          current_cmdlist_->buffer_fill(qd_kernel->get_buffer_bind(bind.buffer)->get_ptr(0), kBufferSizeEntireSize,
                                         /*data=*/0);
-          current_cmdlist_->buffer_barrier(*ti_kernel->get_buffer_bind(bind.buffer));
+          current_cmdlist_->buffer_barrier(*qd_kernel->get_buffer_bind(bind.buffer));
         }
       }
     }
@@ -968,7 +1022,21 @@ void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_c
       current_cmdlist_->begin_profiler_scope(attribs.name);
     }
 
-    status = current_cmdlist_->dispatch(group_x);
+    // GPU-side gating: cp_id >= 0 tasks dispatch indirect off the per-cp out_dims SSBO slot the gate shader populated
+    // above; cp_id < 0 tasks (work outside any `qd.checkpoint`) dispatch direct with the host-computed grid. The
+    // indirect read of the per-kernel triple is fenced by the `memory_barrier()` the gate dispatch's caller emits
+    // before this point.
+    if (kernel_has_checkpoints && attribs.checkpoint_id >= 0) {
+      const auto &state = checkpoint_handle_states_[handle.get_launch_id()];
+      const auto &per_cp = state.per_cp[attribs.checkpoint_id];
+      size_t slot_off = static_cast<size_t>(slot_in_cp[i]) * 3u * sizeof(uint32_t);
+      // The out_dims buffer doubles as an indirect-dispatch source, so its prior writer (the gate shader) must be
+      // barriered before the indirect read. The barrier was emitted in `is_first_in_cp` above; for subsequent body
+      // tasks in the same checkpoint the previous task's `memory_barrier()` covers it. No extra barrier needed here.
+      status = current_cmdlist_->dispatch_indirect(per_cp.out_dims->get_ptr(slot_off));
+    } else {
+      status = current_cmdlist_->dispatch(group_x);
+    }
 
     if (profiler_) {
       current_cmdlist_->end_profiler_scope();
@@ -976,13 +1044,29 @@ void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_c
 
     QD_ERROR_IF(status != RhiResult::success, "Dispatch error : RhiResult({})", status);
     current_cmdlist_->memory_barrier();
+
+    // GPU-side yield-check: after the last body task of each yielding checkpoint, issue the yield-check shader indirect
+    // off the trailing out_dims slot. A skipped checkpoint's yield-check is also gated to `(0, 0, 0)` by the same gate
+    // dispatch above, so this runs in the cmdlist unconditionally and the hardware no-ops the skipped case at dispatch
+    // issue.
+    if (kernel_has_checkpoints && attribs.checkpoint_id >= 0 && is_last_in_cp[i]) {
+      int cp = attribs.checkpoint_id;
+      if ((std::size_t)cp < yield_on_devallocs.size() &&
+          yield_on_devallocs[cp].alloc_id != kDeviceNullAllocation.alloc_id) {
+        const auto &state = checkpoint_handle_states_[handle.get_launch_id()];
+        dispatch_checkpoint_yield_check(current_cmdlist_.get(), state, cp, yield_on_devallocs[cp]);
+        current_cmdlist_->memory_barrier();
+      }
+    }
   }
 
+  finalize_checkpoint_readback(handle, host_ctx, kernel_has_checkpoints);
+
   // Keep context buffers used in this dispatch
-  if (ti_kernel->get_args_buffer_size()) {
+  if (qd_kernel->get_args_buffer_size()) {
     ctx_buffers_.push_back(std::move(args_buffer));
   }
-  if (ti_kernel->get_ret_buffer_size()) {
+  if (qd_kernel->get_ret_buffer_size()) {
     ctx_buffers_.push_back(std::move(ret_buffer));
   }
 
@@ -995,6 +1079,16 @@ void GfxRuntime::launch_kernel(KernelHandle handle, LaunchContextBuilder &host_c
   }
 
   submit_current_cmdlist_if_timeout();
+}
+
+int GfxRuntime::get_num_tasks(KernelHandle handle) const {
+  auto *qd_kernel = qd_kernels_[handle.get_launch_id()].get();
+  return int(qd_kernel->qd_kernel_attribs().tasks_attribs.size());
+}
+
+int GfxRuntime::get_task_graph_do_while_level_id(KernelHandle handle, int task_idx) const {
+  auto *qd_kernel = qd_kernels_[handle.get_launch_id()].get();
+  return qd_kernel->qd_kernel_attribs().tasks_attribs[task_idx].graph_do_while_level_id;
 }
 
 void GfxRuntime::buffer_copy(DevicePtr dst, DevicePtr src, size_t size) {
@@ -1226,7 +1320,7 @@ GfxRuntime::RegisterParams run_codegen(Kernel *kernel,
   const auto quadrants_kernel_name(fmt::format("{}_k{:04d}_vk", kernel->name, id));
   QD_TRACE("VK codegen for Quadrants kernel={}", quadrants_kernel_name);
   spirv::KernelCodegen::Params params;
-  params.ti_kernel_name = quadrants_kernel_name;
+  params.qd_kernel_name = quadrants_kernel_name;
   params.kernel = kernel;
   params.ir_root = kernel->ir.get();
   params.compiled_structs = compiled_structs;

@@ -186,6 +186,11 @@ class TaskCodeGenCPU : public TaskCodeGenLLVM {
       }
       current_task->ad_stack.static_num_threads = static_cast<std::size_t>(cpu_threads);
     }
+    // Propagate qd.checkpoint id off the offloaded stmt onto the codegen task so the CPU KernelLauncher can implement
+    // host-branch gating (slice 6). Matches the equivalent lines in `codegen_cuda.cpp` / `codegen_amdgpu.cpp`. Without
+    // this assignment every task ends up with `checkpoint_id == -1` ("no checkpoint") and the launcher's resume / yield
+    // logic can't tell which tasks belong to which `qd.checkpoint(...)` block.
+    current_task->checkpoint_id = stmt->checkpoint_id;
     offloaded_tasks.push_back(*current_task);
     current_task = nullptr;
     current_offload = nullptr;

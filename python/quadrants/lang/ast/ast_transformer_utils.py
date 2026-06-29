@@ -190,6 +190,17 @@ class ASTTransformerGlobalContext:
         # `ctx.loop_depth` here before invoking the func and restores the previous value after, so the new func ctx
         # can seed its `loop_depth` from this field via `_func_base.py`.
         self.caller_loop_depth: int = 0
+        # Caller-side "am I (transitively) inside non-static control flow?" snapshot for the in-flight `@qd.func`
+        # invocation. Each func compile creates a fresh `ASTTransformerFuncContext` whose own
+        # `non_static_control_flow_status` starts False, so a `@qd.func(requires_top_level=True)` reached *through* an
+        # unmarked helper called from a runtime for / if / while would not observe the caller's control-flow context
+        # and would escape the top-level check. `CallTransformer.build_Call` writes
+        # `ctx.is_in_non_static_control_flow() or <inherited>` here before invoking the func (so it accumulates down a
+        # multi-level call chain) and restores the previous value after; the new func ctx seeds
+        # `inherited_non_static_control_flow` from this field via `_func_base.py`. Kept separate from the live
+        # `non_static_control_flow_status` flag on purpose: that flag also gates the "return inside non-static if/for"
+        # diagnostic in `build_Return`, and seeding it True would spuriously reject a top-level `return` in a helper.
+        self.caller_in_non_static_control_flow: bool = False
 
 
 class ASTTransformerFuncContext:
@@ -261,6 +272,11 @@ class ASTTransformerFuncContext:
         self.only_parse_function_def: bool = False
         self.autodiff_mode = autodiff_mode
         self.loop_depth: int = 0
+        # Whether the (transitive) caller chain that reached this func compile was already inside non-static control
+        # flow. Seeded from `global_context.caller_in_non_static_control_flow` in `_func_base.py`; kernels start at the
+        # top of the call stack so they always begin False. Consulted (together with the local
+        # `non_static_control_flow_status`) by the `requires_top_level` guard in `CallTransformer.build_Call`.
+        self.inherited_non_static_control_flow: bool = False
         self.raise_on_templated_floats = raise_on_templated_floats
         self.expanding_dataclass_call_parameters: bool = False
 
@@ -316,6 +332,14 @@ class ASTTransformerFuncContext:
 
     def is_in_non_static_control_flow(self) -> bool:
         return self.non_static_control_flow_status.is_in_non_static_control_flow
+
+    def is_in_non_static_control_flow_including_caller(self) -> bool:
+        # Like `is_in_non_static_control_flow`, but also True when a (transitive) caller reached this func compile from
+        # within non-static control flow. Used by the `requires_top_level` guard so the check is not laundered by an
+        # intermediate unmarked `@qd.func`.
+        return (
+            self.non_static_control_flow_status.is_in_non_static_control_flow or self.inherited_non_static_control_flow
+        )
 
     def is_in_static_scope(self) -> bool:
         return self.static_scope_status.is_in_static_scope
