@@ -1206,8 +1206,8 @@ def _fastcache_intenum_child(args: list[str]) -> None:
     primal = _fastcache_intenum_kernel._primal
     labels = primal.checkpoint_user_labels_by_cp_id
     # The schema-v4 round-trip must rebuild the IntEnum identity, not just the int equality. A regression here would
-    # show up as `labels == [10, 20]` (plain ints) breaking the documented contract that
-    # `qd.checkpoint(Stage.X, ...)` surfaces as `Stage.X` (not the raw int) on `status.checkpoint`.
+    # show up as `labels == [10, 20]` (plain ints) breaking the documented contract that `qd.checkpoint(Stage.X, ...)`
+    # surfaces as `Stage.X` (not the raw int) on `status.checkpoint`.
     assert labels == [
         _FastcacheStage.LOAD,
         _FastcacheStage.REDUCE,

@@ -146,11 +146,11 @@ class CacheValue(BaseModel):
     # `@qd.data_oriented` member conditions (`qd.graph_do_while(self.counter)`) -- name-matching against ``arg_metas``
     # only resolves top-level parameters.
     graph_do_while_levels: list[tuple[str, int, int]] | None = None
-    # AST-build-time-resolved checkpoint metadata, indexed by internal cp_id. Empty for kernels without any
-    # `with qd.checkpoint(...)` block. See `Kernel.checkpoint_yield_on_args` /
-    # `Kernel.checkpoint_yield_on_cpp_arg_ids` / `Kernel.checkpoint_user_labels_by_cp_id` for what each entry means.
-    # Restored alongside the C++-side cached kernel so the launch path can forward `yield_on=` arg-ids and translate
-    # `from_checkpoint=` labels without re-running the AST transformer.
+    # AST-build-time-resolved checkpoint metadata, indexed by internal cp_id. Empty for kernels without any `with
+    # qd.checkpoint(...)` block. See `Kernel.checkpoint_yield_on_args` / `Kernel.checkpoint_yield_on_cpp_arg_ids` /
+    # `Kernel.checkpoint_user_labels_by_cp_id` for what each entry means. Restored alongside the C++-side cached
+    # kernel so the launch path can forward `yield_on=` arg-ids and translate `from_checkpoint=` labels without
+    # re-running the AST transformer.
     checkpoint_yield_on_args: list[str | None] = []
     checkpoint_yield_on_cpp_arg_ids: list[int] = []
     checkpoint_user_labels_by_cp_id: list[int | None] = []
