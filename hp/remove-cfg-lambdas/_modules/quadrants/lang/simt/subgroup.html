@@ -7,7 +7,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>quadrants.lang.simt.subgroup &#8212; Quadrants 0.7.9 documentation</title>
+    <title>quadrants.lang.simt.subgroup &#8212; Quadrants 1.1.1 documentation</title>
   
   
   
@@ -26,8 +26,8 @@
   </noscript>
   
   <!-- Loaded before other Sphinx assets -->
-  <link href="../../../../_static/styles/theme.css?digest=55c26ed414f5f8a31ebb" rel="stylesheet" />
-<link href="../../../../_static/styles/pydata-sphinx-theme.css?digest=55c26ed414f5f8a31ebb" rel="stylesheet" />
+  <link href="../../../../_static/styles/theme.css?digest=a95f357e85573c9b56d5" rel="stylesheet" />
+<link href="../../../../_static/styles/pydata-sphinx-theme.css?digest=a95f357e85573c9b56d5" rel="stylesheet" />
 
     <link rel="stylesheet" type="text/css" href="../../../../_static/pygments.css?v=8f2a1f02" />
     <link rel="stylesheet" type="text/css" href="../../../../_static/copybutton.css?v=76b2166b" />
@@ -37,12 +37,12 @@
     <link rel="stylesheet" type="text/css" href="../../../../_static/css/custom.css" />
   
   <!-- So that users can add custom icons -->
-  <script defer src="../../../../_static/scripts/fontawesome.js?digest=55c26ed414f5f8a31ebb"></script>
+  <script defer src="../../../../_static/scripts/fontawesome.js?digest=a95f357e85573c9b56d5"></script>
   <!-- Pre-loaded scripts that we'll load fully later -->
-  <link rel="preload" as="script" href="../../../../_static/scripts/bootstrap.js?digest=55c26ed414f5f8a31ebb" />
-<link rel="preload" as="script" href="../../../../_static/scripts/pydata-sphinx-theme.js?digest=55c26ed414f5f8a31ebb" />
+  <link rel="preload" as="script" href="../../../../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5" />
+<link rel="preload" as="script" href="../../../../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5" />
 
-    <script src="../../../../_static/documentation_options.js?v=79964ea6"></script>
+    <script src="../../../../_static/documentation_options.js?v=58fbf978"></script>
     <script src="../../../../_static/doctools.js?v=9bcbadda"></script>
     <script src="../../../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../../../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -60,7 +60,7 @@
     <link rel="search" title="Search" href="../../../../search.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="0.7.9" />
+  <meta name="docsearch:version" content="1.1.1" />
   
     
     <script src="../../../../_static/searchtools.js"></script>
@@ -128,7 +128,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 0.7.9 documentation</p>
+    <p class="title logo__title">Quadrants 1.1.1 documentation</p>
   
 </a></div>
     
@@ -176,11 +176,18 @@
       
         <div class="navbar-item">
 
-<button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button pst-js-only" aria-label="Color mode" data-bs-title="Color mode"  data-bs-placement="bottom" data-bs-toggle="tooltip">
-  <i class="theme-switch fa-solid fa-sun                fa-lg" data-mode="light" title="Light"></i>
-  <i class="theme-switch fa-solid fa-moon               fa-lg" data-mode="dark"  title="Dark"></i>
-  <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"  title="System Settings"></i>
-</button></div>
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg fa-fw" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg fa-fw" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg fa-fw" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg fa-fw me-1"></i>System Settings</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg fa-fw me-1"></i>Light</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg fa-fw me-1"></i>Dark</button></li>
+  </ul>
+</div></div>
       
     </div>
     
@@ -251,11 +258,18 @@
         
           <div class="navbar-item">
 
-<button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button pst-js-only" aria-label="Color mode" data-bs-title="Color mode"  data-bs-placement="bottom" data-bs-toggle="tooltip">
-  <i class="theme-switch fa-solid fa-sun                fa-lg" data-mode="light" title="Light"></i>
-  <i class="theme-switch fa-solid fa-moon               fa-lg" data-mode="dark"  title="Dark"></i>
-  <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"  title="System Settings"></i>
-</button></div>
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg fa-fw" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg fa-fw" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg fa-fw" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg fa-fw me-1"></i>System Settings</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg fa-fw me-1"></i>Light</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg fa-fw me-1"></i>Dark</button></li>
+  </ul>
+</div></div>
         
       </div>
     
@@ -790,17 +804,19 @@
 
 
 
-<span class="c1"># Pull in the reduce / scan / segmented-reduce APIs that live in ``quadrants.lang.simt.reductions``.  The import</span>
-<span class="c1"># has to happen *after* the primitives ``reductions`` depends on (``ballot``, ``invocation_id``, ``shuffle``,</span>
-<span class="c1"># ``shuffle_up``, ``shuffle_down``, ``log2_group_size``) are defined, so this back-import sits at the bottom of</span>
-<span class="c1"># the module body.  Side effect: every name in ``reductions.__all__`` becomes accessible as</span>
-<span class="c1"># ``qd.simt.subgroup.X``, preserving the historical public API.</span>
+<span class="c1"># Pull in the reduce / scan / segmented-reduce APIs that live in ``quadrants.lang.simt.reductions`` and the sorting</span>
+<span class="c1"># APIs that live in ``quadrants.lang.simt.sorting``.  Both back-imports have to happen *after* the primitives they</span>
+<span class="c1"># depend on (``ballot``, ``invocation_id``, ``shuffle``, ``shuffle_up``, ``shuffle_down``, ``log2_group_size``) are</span>
+<span class="c1"># defined, so they sit at the bottom of the module body.  Side effect: every name in ``reductions.__all__`` /</span>
+<span class="c1"># ``sorting.__all__`` becomes accessible as ``qd.simt.subgroup.X``, preserving the convention that every</span>
+<span class="c1"># subgroup-scope op lives in a single namespace from the user&#39;s perspective.</span>
 <span class="c1">#</span>
 <span class="c1"># WARNING: reordering definitions above this line -- in particular moving any of ``ballot`` / ``invocation_id`` /</span>
-<span class="c1"># ``shuffle`` / ``shuffle_up`` / ``shuffle_down`` / ``log2_group_size`` below this back-import -- will silently</span>
-<span class="c1"># break the circular import (``reductions`` would see only a partially-populated ``subgroup`` module).  Keep this</span>
-<span class="c1"># line at the bottom of the module body, after every name ``reductions`` consumes.</span>
+<span class="c1"># ``shuffle`` / ``shuffle_up`` / ``shuffle_down`` / ``log2_group_size`` below these back-imports -- will silently</span>
+<span class="c1"># break the circular import (the back-imported modules would see only a partially-populated ``subgroup`` module).</span>
+<span class="c1"># Keep these lines at the bottom of the module body, after every name they consume.</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.simt.reductions</span><span class="w"> </span><span class="kn">import</span> <span class="o">*</span>  <span class="c1"># noqa: E402, F401  pylint: disable=wrong-import-position,wildcard-import</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.simt.sorting</span><span class="w"> </span><span class="kn">import</span> <span class="o">*</span>  <span class="c1"># noqa: E402, F401  pylint: disable=wrong-import-position,wildcard-import</span>
 
 <span class="n">__all__</span> <span class="o">=</span> <span class="p">[</span>
     <span class="s2">&quot;sync&quot;</span><span class="p">,</span>
@@ -876,6 +892,8 @@
     <span class="s2">&quot;exclusive_and&quot;</span><span class="p">,</span>
     <span class="s2">&quot;exclusive_or&quot;</span><span class="p">,</span>
     <span class="s2">&quot;exclusive_xor&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;bitonic_sort_kv_tiled&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;bitonic_sort_kv&quot;</span><span class="p">,</span>
 <span class="p">]</span>
 </pre></div>
 
@@ -906,8 +924,8 @@
   </div>
   
   <!-- Scripts loaded after <body> so the DOM is not blocked -->
-  <script defer src="../../../../_static/scripts/bootstrap.js?digest=55c26ed414f5f8a31ebb"></script>
-<script defer src="../../../../_static/scripts/pydata-sphinx-theme.js?digest=55c26ed414f5f8a31ebb"></script>
+  <script defer src="../../../../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5"></script>
+<script defer src="../../../../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5"></script>
 
   <footer class="bd-footer">
 <div class="bd-footer__inner bd-page-width">
@@ -941,7 +959,7 @@
         <div class="footer-item">
 <p class="theme-version">
   <!-- # L10n: Setting the PST URL as an argument as this does not need to be localized -->
-  Built with the <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a> 0.17.1.
+  Built with the <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a> 0.19.0.
 </p></div>
       
     </div>

@@ -36,3 +36,61 @@ def compute(a: qd.Template) -> None:
     for i in range(10):
         increment(a, i)
 ```
+
+## Restricting a func to the top level (`requires_top_level=True`)
+
+**Experimental.** `requires_top_level` is an experimental feature and its behavior or API may change in a future release.
+
+Some qd.func contain for-loops that are assumed and intended to be top-level for-loops, that each become separate offloaded tasks, and ultimately separate device kernels. If such qd.func's are placed inside other for-loops, the qd.func will no longer generate the structure of offloaded tasks and device kernels assumed, and might either run very slowly, or crash, or give incorrect results.
+
+To enforce that a qd.func can only be used at top-level, a `qd.func` maybe be annotated with `qd.func(requires_top_level=True)`. This will throws `QuadrantsSyntaxError` at compile time if the `qd.func` is not called from top level.
+
+```python
+@qd.func(requires_top_level=True)
+def op(arr: qd.Template, n: qd.i32) -> None:
+    for i in range(n):  # one of several top-level phase loops
+        arr[i] = arr[i] + 1
+```
+
+The check is purely compile-time — it adds no runtime or GPU cost, and a correctly placed call compiles to exactly the same code as an unmarked func.
+
+What counts as **top level** (allowed):
+
+- Directly in the kernel body.
+- Inside a `qd.static(...)` loop — these are unrolled at compile time, so the calls land at top level (see [static](static.md)).
+- Directly inside a `while qd.graph_do_while(...):` body (see [graphs](graph.md)).
+
+What is **rejected**: nesting the call inside a runtime `for`, `if`, or `while`.
+
+```python
+@qd.kernel
+def good(arr: qd.Template, n: qd.i32) -> None:
+    op(arr, n)                  # OK: top level
+
+@qd.kernel
+def also_good(arr: qd.Template, n: qd.i32) -> None:
+    for _ in qd.static(range(2)):
+        op(arr, n)              # OK: qd.static is compile-time
+
+@qd.kernel
+def bad(arr: qd.Template, n: qd.i32, flag: qd.i32) -> None:
+    if flag > 0:
+        op(arr, n)              # QuadrantsSyntaxError raised at compile time
+```
+
+The check applies **transitively**. Because `@qd.func` bodies are inlined into the caller, reaching a `requires_top_level=True` func through an intermediate ordinary `@qd.func` is treated exactly as if the call were written inline at that point. So calling it through a helper that sits at the top level is allowed, while calling it through a helper that is itself nested in a runtime `for` / `if` / `while` is rejected.
+
+```python
+@qd.func
+def helper(arr: qd.Template, n: qd.i32) -> None:
+    op(arr, n)                  # `op` is requires_top_level=True
+
+@qd.kernel
+def good_helper(arr: qd.Template, n: qd.i32) -> None:
+    helper(arr, n)              # OK: helper is at the kernel top level
+
+@qd.kernel
+def bad_helper(arr: qd.Template, n: qd.i32, flag: qd.i32) -> None:
+    if flag > 0:
+        helper(arr, n)          # QuadrantsSyntaxError: op is transitively nested in a runtime if
+```
