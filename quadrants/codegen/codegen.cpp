@@ -14,8 +14,14 @@
 #endif
 #include "quadrants/system/timer.h"
 #include "quadrants/ir/analysis.h"
+#include "quadrants/ir/statements.h"
 #include "quadrants/ir/transforms.h"
 #include "quadrants/analysis/offline_cache_util.h"
+
+#include <cstdlib>
+#include <functional>
+#include <iostream>
+#include <string>
 
 namespace quadrants::lang {
 
@@ -62,7 +68,28 @@ LLVMCompiledKernel KernelCodeGen::compile_kernel_to_module() {
 
   auto &offloads = block->statements;
   std::vector<std::unique_ptr<LLVMCompiledTask>> data(offloads.size());
+  // DIAGNOSTIC (cse-diag): QD_CSE_STATS=1 logs the final per-task IR composition right before LLVM lowering, so
+  // the size + KIND of work each GPU task carries can be compared across QD_CSE_MODE values. This is the per-task
+  // kernel that actually runs every sim step, so redundant statements here == redundant work at runtime.
+  static const bool cse_stats = []() {
+    const char *e = std::getenv("QD_CSE_STATS");
+    return e != nullptr && std::string(e) == "1";
+  }();
   for (int i = 0; i < offloads.size(); i++) {
+    if (cse_stats) {
+      auto *task = offloads[i].get();
+      auto cnt = [&](const std::function<bool(Stmt *)> &pred) {
+        return (int)irpass::analysis::gather_statements(task, pred).size();
+      };
+      std::cerr << "[CSE_STATS] mode=" << irpass::cse_mode() << " task=" << i
+                << " total=" << irpass::analysis::count_statements(task)
+                << " gload=" << cnt([](Stmt *s) { return s->is<GlobalLoadStmt>(); })
+                << " gstore=" << cnt([](Stmt *s) { return s->is<GlobalStoreStmt>(); })
+                << " gptr=" << cnt([](Stmt *s) { return s->is<GlobalPtrStmt>(); })
+                << " binop=" << cnt([](Stmt *s) { return s->is<BinaryOpStmt>(); })
+                << " unop=" << cnt([](Stmt *s) { return s->is<UnaryOpStmt>(); })
+                << " const=" << cnt([](Stmt *s) { return s->is<ConstStmt>(); }) << std::endl;
+    }
     auto compile_func = [&, i] {
       tlctx_.fetch_this_thread_struct_module();
       auto offload = irpass::analysis::clone(offloads[i].get());
