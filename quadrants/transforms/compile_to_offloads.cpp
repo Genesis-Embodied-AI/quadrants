@@ -24,6 +24,27 @@ void compile_to_offloads(IRNode *ir,
                          bool start_from_ast) {
   QD_AUTO_PROF;
 
+  // DIAGNOSTIC (cse-diag): two fix variants for the per-offload-CSE regression, env-selectable so one binary can
+  // A/B both against the whole-CSE baseline.
+  //   QD_V1_NO_PREOFF_CACHE=1     : run the pre-offload full_simplify calls with cache_loop_invariant_global_vars
+  //                                 forced off, i.e. don't hoist/cache loop-invariant global vars before offload
+  //                                 (LICM is the only thing that flag gates inside full_simplify). The per-task
+  //                                 value-caching pass in offload_to_executable still runs with the real config.
+  //   QD_V2_SKIP_PREOFF_SIMPLIFY=1: skip the pre-offload full_simplify calls (simplify_I / simplify_II) entirely;
+  //                                 all simplification happens post-offload, per task.
+  static const bool v1_no_preoff_cache = []() {
+    const char *e = std::getenv("QD_V1_NO_PREOFF_CACHE");
+    return e != nullptr && std::string(e) == "1";
+  }();
+  static const bool v2_skip_preoff_simplify = []() {
+    const char *e = std::getenv("QD_V2_SKIP_PREOFF_SIMPLIFY");
+    return e != nullptr && std::string(e) == "1";
+  }();
+  CompileConfig preoff_config = config;
+  if (v1_no_preoff_cache) {
+    preoff_config.cache_loop_invariant_global_vars = false;
+  }
+
   auto print = make_pass_printer(verbose, config.print_ir_dbg_info, kernel->get_name(), ir);
   print("Initial IR");
 
@@ -92,10 +113,12 @@ void compile_to_offloads(IRNode *ir,
   }
 
   dump_ir("before_simplify_I");
-  irpass::full_simplify(
-      ir, config,
-      {false, /*autodiff_enabled*/ autodiff_mode != AutodiffMode::kNone, kernel->get_name(), verbose, "simplify_I"});
-  irpass::analysis::verify_if_debug(ir, config);
+  if (!v2_skip_preoff_simplify) {
+    irpass::full_simplify(
+        ir, preoff_config,
+        {false, /*autodiff_enabled*/ autodiff_mode != AutodiffMode::kNone, kernel->get_name(), verbose, "simplify_I"});
+    irpass::analysis::verify_if_debug(ir, config);
+  }
   dump_ir("after_simplify_I");
 
   irpass::handle_external_ptr_boundary(ir, config);
@@ -118,10 +141,11 @@ void compile_to_offloads(IRNode *ir,
     // Remove local atomics here so that we don't have to handle their gradients
     irpass::demote_atomics(ir, config);
 
-    irpass::full_simplify(ir, config, {false, /*autodiff_enabled*/ true, kernel->get_name(), verbose, "pre_autodiff"});
+    irpass::full_simplify(ir, preoff_config,
+                          {false, /*autodiff_enabled*/ true, kernel->get_name(), verbose, "pre_autodiff"});
     irpass::auto_diff(ir, config, autodiff_mode, ad_use_stack);
     // TODO: Be carefull with the full_simplify when do high-order autodiff
-    irpass::full_simplify(ir, config,
+    irpass::full_simplify(ir, preoff_config,
                           {false, /*autodiff_enabled*/ false, kernel->get_name(), verbose, "post_autodiff"});
     irpass::analysis::verify_if_debug(ir, config);
   }
@@ -134,8 +158,11 @@ void compile_to_offloads(IRNode *ir,
   irpass::flag_access(ir);
   irpass::analysis::verify_if_debug(ir, config);
 
-  irpass::full_simplify(ir, config, {false, /*autodiff_enabled*/ false, kernel->get_name(), verbose, "simplify_II"});
-  irpass::analysis::verify_if_debug(ir, config);
+  if (!v2_skip_preoff_simplify) {
+    irpass::full_simplify(ir, preoff_config,
+                          {false, /*autodiff_enabled*/ false, kernel->get_name(), verbose, "simplify_II"});
+    irpass::analysis::verify_if_debug(ir, config);
+  }
 
   irpass::offload(ir, config);
   irpass::analysis::verify_if_debug(ir, config);
