@@ -260,10 +260,62 @@ class WholeKernelCSE : public BasicStmtVisitor {
   }
 };
 
+namespace {
+
+// Collect the top-level offloaded tasks of |root| iff |root| is an already-offloaded kernel body (a Block whose
+// statements are all OffloadedStmt). Empty otherwise.
+std::vector<OffloadedStmt *> collect_offloaded_tasks(IRNode *root) {
+  std::vector<OffloadedStmt *> tasks;
+  auto *block = root->cast<Block>();
+  if (block == nullptr || block->statements.empty()) {
+    return tasks;
+  }
+  for (auto &stmt : block->statements) {
+    if (!stmt->is<OffloadedStmt>()) {
+      return {};
+    }
+  }
+  for (auto &stmt : block->statements) {
+    tasks.push_back(stmt->as<OffloadedStmt>());
+  }
+  return tasks;
+}
+
+// Run CSE on a single offloaded task, scoped to that task alone via a throwaway wrapper block.
+bool cse_one_task(Block *parent, OffloadedStmt *off) {
+  const int location = parent->locate(off);
+  QD_ASSERT(location != -1);
+  Block wrapper;
+  wrapper.insert(parent->extract(off));
+  const bool modified = WholeKernelCSE::run(&wrapper);
+  parent->insert(wrapper.extract(off), location);
+  return modified;
+}
+
+}  // namespace
+
 namespace irpass {
 bool whole_kernel_cse(IRNode *root) {
   QD_AUTO_PROF;
   return WholeKernelCSE::run(root);
+}
+
+// Per-offloaded-task CSE, parallelized across the codegen worker pool. The post-offload full_simplify passes
+// (offload_to_executable: before_lower_access / simplify_IV / scalarize) run inside compile_task, which is enqueued
+// per task to the codegen worker pool. At that point each worker's block holds exactly ONE offloaded task, so CSE
+// runs here -> per task, in parallel, inside the simplify fixpoint (full quality). On the pre-split monolith
+// (full_simplify in compile_to_offloads, where the block still holds every task) CSE is skipped: it is deferred to
+// the parallel per-task pass above. Tasks are optimized independently, so doing all CSE in the workers is
+// value-identical to doing it on the monolith -- just parallel. Before offload there are no offloaded tasks, so CSE
+// is deferred likewise.
+bool per_task_cse(IRNode *root) {
+  QD_AUTO_PROF;
+  auto tasks = collect_offloaded_tasks(root);
+  if (tasks.size() != 1) {
+    return false;
+  }
+  auto *block = root->as<Block>();
+  return cse_one_task(block, tasks[0]);
 }
 }  // namespace irpass
 
