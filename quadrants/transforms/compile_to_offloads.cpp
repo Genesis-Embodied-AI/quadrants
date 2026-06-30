@@ -40,6 +40,15 @@ void compile_to_offloads(IRNode *ir,
     const char *e = std::getenv("QD_V2_SKIP_PREOFF_SIMPLIFY");
     return e != nullptr && std::string(e) == "1";
   }();
+  //   QD_V3_SIMPLIFY_AFTER_OFFLOAD=1: run a full_simplify on the offloaded IR IMMEDIATELY after the offload pass,
+  //                                 before the post-offload flag_access, i.e. the very first thing we do to the
+  //                                 freshly-offloaded (per-task) IR. Tests whether an earlier post-offload simplify
+  //                                 (CSE merging the read/write pointers before flag_access splits their activate
+  //                                 flags) avoids the stale-break-flag bug.
+  static const bool v3_simplify_after_offload = []() {
+    const char *e = std::getenv("QD_V3_SIMPLIFY_AFTER_OFFLOAD");
+    return e != nullptr && std::string(e) == "1";
+  }();
   CompileConfig preoff_config = config;
   if (v1_no_preoff_cache) {
     preoff_config.cache_loop_invariant_global_vars = false;
@@ -168,6 +177,13 @@ void compile_to_offloads(IRNode *ir,
   irpass::analysis::verify_if_debug(ir, config);
 
   dump_ir("after_offload");
+
+  if (v3_simplify_after_offload) {
+    irpass::full_simplify(ir, config,
+                          {false, /*autodiff_enabled*/ false, kernel->get_name(), verbose, "post_offload_early"});
+    irpass::analysis::verify_if_debug(ir, config);
+  }
+
   // NOTE: There was an additional CFG pass here, removed in
   // https://github.com/taichi-dev/taichi/pull/8691
   irpass::flag_access(ir);
