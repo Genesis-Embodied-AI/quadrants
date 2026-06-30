@@ -19,6 +19,7 @@
 #include "quadrants/analysis/offline_cache_util.h"
 
 #include <cstdlib>
+#include <fstream>
 #include <functional>
 #include <iostream>
 #include <string>
@@ -122,6 +123,21 @@ LLVMCompiledKernel KernelCodeGen::compile_kernel_to_module() {
                 << " binop=" << cnt([](Stmt *s) { return s->is<BinaryOpStmt>(); })
                 << " unop=" << cnt([](Stmt *s) { return s->is<UnaryOpStmt>(); })
                 << " const=" << cnt([](Stmt *s) { return s->is<ConstStmt>(); }) << std::endl;
+    }
+    // DIAGNOSTIC (cse-diag): QD_DUMP_KERNEL=<substr> dumps the final per-task IR (right before LLVM lowering) to
+    // QD_DUMP_PATH so the whole-vs-migration codegen difference can be diffed structurally. Value-changing diffs
+    // (not pure dedup) localize the bug exposed by skipping pre-offload CSE.
+    static const char *dump_kernel = std::getenv("QD_DUMP_KERNEL");
+    if (dump_kernel != nullptr && kernel->get_name().find(dump_kernel) != std::string::npos) {
+      std::string out;
+      irpass::print(offloads[i].get(), &out, false, false);
+      const char *dp = std::getenv("QD_DUMP_PATH");
+      std::string path = std::string(dp != nullptr ? dp : "/tmp") + "/irdump_" + irpass::cse_mode() + "_" +
+                         kernel->get_name() + "_task" + std::to_string(i) + ".txt";
+      std::ofstream f(path);
+      f << out;
+      std::cerr << "[IRDUMP] mode=" << irpass::cse_mode() << " wrote " << path << " (" << out.size() << " bytes)"
+                << std::endl;
     }
     auto compile_func = [&, i] {
       tlctx_.fetch_this_thread_struct_module();
