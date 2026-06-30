@@ -92,6 +92,40 @@ void compile_to_offloads(IRNode *ir,
   }
 
   dump_ir("before_simplify_I");
+
+  // EXPERIMENT (cse/offload-first): for forward-only kernels, run `offload` BEFORE any optimization pass so that the
+  // very first `full_simplify` runs per-task while every `GlobalPtrStmt` is still `activate=true` (i.e. before the
+  // first `flag_access`). That is the only window in which CSE can fold a loop-break flag's read pointer into its
+  // write pointer (rule: `definitely_same_address && (this->activate == prev->activate || prev->activate)`), which is
+  // what `whole_kernel_cse` does pre-offload on origin/main but a per-offload CSE cannot, because no `OffloadedStmt`s
+  // exist until `offload`. Gated on `autodiff_mode == kNone`: `auto_diff` rewrites the un-offloaded structured kernel
+  // and must keep its current position, so AD kernels fall through to the original order below.
+  if (autodiff_mode == AutodiffMode::kNone) {
+    irpass::handle_external_ptr_boundary(ir, config);
+    if (is_extension_supported(config.arch, Extension::mesh)) {
+      irpass::analysis::gather_meshfor_relation_types(ir);
+    }
+    if (config.check_out_of_bound) {
+      irpass::check_out_of_bound(ir, config, {kernel->get_name()});
+      irpass::analysis::verify_if_debug(ir, config);
+    }
+    irpass::offload(ir, config);
+    irpass::analysis::verify_if_debug(ir, config);
+    dump_ir("after_offload");
+    // First simplify: post-offload, per-task, BEFORE flag_access -> activate flags still all true -> read+write
+    // break-flag pointers are freely mergeable regardless of program order.
+    irpass::full_simplify(ir, config, {false, /*autodiff_enabled*/ false, kernel->get_name(), verbose, "simplify_I"});
+    irpass::analysis::verify_if_debug(ir, config);
+    dump_ir("after_simplify_I");
+    irpass::flag_access(ir);
+    irpass::analysis::verify_if_debug(ir, config);
+    irpass::full_simplify(ir, config,
+                          {false, /*autodiff_enabled*/ false, kernel->get_name(), verbose, "simplify_III"});
+    irpass::analysis::verify_if_debug(ir, config);
+    dump_ir("after_simplify_III");
+    return;
+  }
+
   irpass::full_simplify(
       ir, config,
       {false, /*autodiff_enabled*/ autodiff_mode != AutodiffMode::kNone, kernel->get_name(), verbose, "simplify_I"});
