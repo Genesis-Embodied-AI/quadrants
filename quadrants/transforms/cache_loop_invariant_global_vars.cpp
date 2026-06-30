@@ -1,6 +1,9 @@
 #include "quadrants/transforms/loop_invariant_detector.h"
 #include "quadrants/ir/analysis.h"
 
+#include <cstdlib>
+#include <string>
+
 namespace quadrants::lang {
 
 namespace {
@@ -194,8 +197,42 @@ class CacheLoopInvariantGlobalVars : public LoopInvariantDetector {
     modifier.insert_before(get_loop_stmt(depth), std::move(local_store));
   }
 
+  // DIAGNOSTIC (cse-diag): QD_FIX_CACHE_BY_ADDR=1 keys the per-loop cache by ADDRESS instead of GlobalPtrStmt*
+  // identity. Without pre-offload whole-kernel CSE, a read and a write of the same global (e.g. the solver's
+  // `improved[i_b]` break flag) reach this pass as two DISTINCT same-address GlobalPtrStmts; keying by pointer
+  // identity then allocates two separate locals, so the in-loop read never sees the in-loop writes (stale break
+  // flag -> the loop never terminates early -> the per-offload-CSE runtime regression). Matching an existing entry
+  // by definitely_same_address() makes both share one local, restoring read-after-write within the loop.
+  static bool fix_cache_by_addr() {
+    static const bool v = []() {
+      const char *e = std::getenv("QD_FIX_CACHE_BY_ADDR");
+      return e != nullptr && std::string(e) == "1";
+    }();
+    return v;
+  }
+
+  // The cache entry at |depth| keyed by |dest| (pointer identity), or by any same-address key when the
+  // address-keyed fix is enabled. Returns nullptr if uncached.
+  std::pair<CacheStatus, AllocaStmt *> *find_cache_entry(int depth, Stmt *dest) {
+    auto &m = cached_maps[depth];
+    auto it = m.find(dest);
+    if (it != m.end() && it->second.first != CacheStatus::None) {
+      return &it->second;
+    }
+    if (fix_cache_by_addr()) {
+      for (auto &kv : m) {
+        if (kv.second.first != CacheStatus::None && kv.first != dest &&
+            irpass::analysis::definitely_same_address(kv.first, dest)) {
+          return &kv.second;
+        }
+      }
+    }
+    return nullptr;
+  }
+
   AllocaStmt *cache_global_to_local(Stmt *dest, CacheStatus status, int depth) {
-    if (auto &[cached_status, alloca_stmt] = cached_maps[depth][dest]; cached_status != CacheStatus::None) {
+    if (auto *entry = find_cache_entry(depth, dest)) {
+      auto &[cached_status, alloca_stmt] = *entry;
       // The global variable has already been cached.
       if (cached_status == CacheStatus::Read && status == CacheStatus::Write) {
         add_writeback(alloca_stmt, dest, depth);
