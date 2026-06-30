@@ -260,10 +260,62 @@ class WholeKernelCSE : public BasicStmtVisitor {
   }
 };
 
+namespace {
+
+// Collect the top-level offloaded tasks of |root| iff |root| is an already-offloaded kernel body (a Block whose
+// statements are all OffloadedStmt). Empty otherwise.
+std::vector<OffloadedStmt *> collect_offloaded_tasks(IRNode *root) {
+  std::vector<OffloadedStmt *> tasks;
+  auto *block = root->cast<Block>();
+  if (block == nullptr || block->statements.empty()) {
+    return tasks;
+  }
+  for (auto &stmt : block->statements) {
+    if (!stmt->is<OffloadedStmt>()) {
+      return {};
+    }
+  }
+  for (auto &stmt : block->statements) {
+    tasks.push_back(stmt->as<OffloadedStmt>());
+  }
+  return tasks;
+}
+
+// Run CSE on a single offloaded task, scoped to that task alone via a throwaway wrapper block.
+bool cse_one_task(Block *parent, OffloadedStmt *off) {
+  const int location = parent->locate(off);
+  QD_ASSERT(location != -1);
+  Block wrapper;
+  wrapper.insert(parent->extract(off));
+  const bool modified = WholeKernelCSE::run(&wrapper);
+  parent->insert(wrapper.extract(off), location);
+  return modified;
+}
+
+}  // namespace
+
 namespace irpass {
 bool whole_kernel_cse(IRNode *root) {
   QD_AUTO_PROF;
   return WholeKernelCSE::run(root);
+}
+
+// Per-offloaded-task CSE. Once the kernel has been split into offloaded tasks, run CSE on each task independently
+// instead of across the whole kernel; this keeps each task's compiled artifact self-contained (a prerequisite for
+// per-task codegen caching). Before offload (or for non-offloaded function bodies) there are no offloaded tasks, so
+// CSE is deferred to the per-task pass that runs after offload.
+bool per_task_cse(IRNode *root) {
+  QD_AUTO_PROF;
+  auto tasks = collect_offloaded_tasks(root);
+  if (tasks.empty()) {
+    return false;
+  }
+  auto *block = root->as<Block>();
+  bool modified = false;
+  for (auto *off : tasks) {
+    modified |= cse_one_task(block, off);
+  }
+  return modified;
 }
 }  // namespace irpass
 
