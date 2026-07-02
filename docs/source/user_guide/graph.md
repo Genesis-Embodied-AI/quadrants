@@ -517,7 +517,7 @@ so the GPU sits idle waiting for the next launch and the launch latency is *expo
 regime, cutting launch latency — for example by collapsing many launches into a single graph — can directly increase
 throughput.
 
-### Why graph_do_while helps even without hardware support
+### Why graph_do_while can help slightly even without hardware support
 
 Recall the earlier example **A while loop, conditional on a device-side scalar tensor**. Written as a plain Python loop,
 every iteration pays the full Python-side launch latency: Python re-enters the kernel wrapper, and Python itself reads
