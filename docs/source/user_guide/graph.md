@@ -496,8 +496,7 @@ It helps to split the latency of a single launch into three parts:
 - **C++ side.** Work inside the Quadrants runtime (C++) once control has crossed the boundary. Cheaper than the Python
   side, but non-zero, and paid per offloaded task.
 - **GPU / driver side.** The GPU driver's own cost to place the kernel on a stream, plus the fixed scheduling latency on
-  the GPU itself before the kernel begins running on the hardware. This is the irreducible floor: even a launch issued
-  entirely from C++ pays it.
+  the GPU itself before the kernel begins running on the hardware.
 
 Graphs attack all three. Capturing a sequence of launches into a graph and replaying it collapses many separate launches
 into a single graph launch, so on hardware-accelerated backends you pay the Python and C++ per-task costs once when the
