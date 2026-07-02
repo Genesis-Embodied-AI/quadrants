@@ -493,9 +493,8 @@ It helps to split the latency of a single launch into three parts:
 - **Python side.** Everything that happens in the Python interpreter before control reaches Quadrants' C++ runtime.
   This is the most expensive of the three per call, and it is paid once per *Python* call — so a Python `while`/`for`
   loop that calls a kernel N times pays it N times.
-- **C++ side.** Work inside the Quadrants runtime (C++) once control has crossed the boundary: selecting the compiled
-  kernel, copying the (usually tiny) argument buffer to the device, recording the launch, and invoking the driver API
-  for each offloaded task. Cheaper than the Python side, but non-zero, and paid per offloaded task.
+- **C++ side.** Work inside the Quadrants runtime (C++) once control has crossed the boundary. Cheaper than the Python
+  side, but non-zero, and paid per offloaded task.
 - **GPU / driver side.** The GPU driver's own cost to place the kernel on a stream, plus the fixed scheduling latency on
   the GPU itself before the kernel begins running on the hardware. This is the irreducible floor: even a launch issued
   entirely from C++ pays it.
