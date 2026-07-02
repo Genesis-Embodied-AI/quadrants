@@ -529,9 +529,3 @@ loop (see [Backend support](#backend-support)) — the launch latency can be sli
 Python version, because the fallback loop is driven entirely in the C++ runtime rather than in Python. A single Python call enters the
 runtime, and the runtime then repeats internally: launch the loop body's tasks, read back the condition flag, and decide
 whether to iterate again — all in C++, with no trip back through the Python interpreter between iterations.
-
-In terms of the three-way split above, the fallback still pays the C++ side and GPU/driver side costs each iteration
-(including the GPU→host copy of the condition value and the pipeline stall described in [Caveats](#caveats)), but it
-eliminates the Python side cost per iteration. So `graph_do_while` on unsupported hardware lands between the two
-extremes: slower than the fully-on-device path, but faster than an equivalent pure-Python `while` loop — while letting
-you write the loop once and have it run on every backend.
