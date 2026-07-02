@@ -508,7 +508,7 @@ Because host and GPU run asynchronously, kernel launches overlap with kernel exe
 launch while earlier kernels are still running on the GPU. As long as the host issues launches at least as fast as the
 GPU drains them, the queue never empties, the GPU stays busy, and the launch latency is fully *hidden* behind execution.
 
-This is why reducing launch latency does not always improve overall throughput. When each kernel runs long enough that
+So reducing launch latency does not always improve overall throughput. When each kernel runs long enough that
 its execution time exceeds the launch overhead, the GPU is the bottleneck and shaving launch latency changes nothing —
 the launches were already hidden behind execution.
 
