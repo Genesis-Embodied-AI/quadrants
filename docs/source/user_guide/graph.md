@@ -490,11 +490,9 @@ runtime.
 
 It helps to split the latency of a single launch into three parts:
 
-- **Python side.** Everything that happens in the Python interpreter before control reaches Quadrants' C++ runtime: the
-  call into the `@qd.kernel` wrapper, argument type checking, the cache lookup that maps this call to an
-  already-compiled kernel, packing the arguments into a launch context (argument buffer), and crossing the Python→C++
-  boundary. This is the most expensive of the three per call, and it is paid once per *Python* call — so a Python
-  `while`/`for` loop that calls a kernel N times pays it N times.
+- **Python side.** Everything that happens in the Python interpreter before control reaches Quadrants' C++ runtime.
+  This is the most expensive of the three per call, and it is paid once per *Python* call — so a Python `while`/`for`
+  loop that calls a kernel N times pays it N times.
 - **C++ side.** Work inside the Quadrants runtime (C++) once control has crossed the boundary: selecting the compiled
   kernel, copying the (usually tiny) argument buffer to the device, recording the launch, and invoking the driver API
   for each offloaded task. Cheaper than the Python side, but non-zero, and paid per offloaded task.
