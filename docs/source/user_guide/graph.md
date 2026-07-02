@@ -32,6 +32,8 @@ my_kernel(x, y)  # subsequent calls: replays the cached graph
 
 This works the same way on CUDA and AMDGPU.
 
+Note that graph=True is a pre-requisite for all other options presented in this doc.
+
 ### Restrictions
 
 - **No struct return values.** Kernels that return values (e.g. `-> qd.i32`) cannot use graphs. An error is raised if `graph=True` is set on such a kernel.
@@ -149,11 +151,12 @@ Note that `qd.func`'s are inlined, so you can freely factorize these structures 
 
 ### Restrictions
 
-- The counter ndarray may be swapped between calls: passing a different ndarray (or alternating between several) replays the cached graph without rebuilding it.
+- The counter ndarray may be swapped between calls: passing a different ndarray (or alternating between several) does not trigger a recompile.
 
 ### Caveats
 
-On platforms without native device-side conditional graph nodes — currently CUDA pre-SM 9.0 and **AMDGPU** ([HIP](https://rocm.docs.amd.com/projects/HIP/en/latest/what_is_hip.html) has no conditional / while node API as of [ROCm](https://www.amd.com/en/products/software/rocm.html) 7.2) — the value of the `graph_do_while` parameter will be copied from the GPU to the host each iteration, in order to check whether we should continue iterating. This causes a GPU pipeline stall. For nested loops this host round-trip happens once per iteration of each loop level, and each loop-body task is replayed individually, so deeply nested loops on these backends pay correspondingly more host overhead (they remain correct, just slower than the CUDA SM 9.0+ native path). At the end of each loop iteration:
+On GPU backends without native device-side conditional graph nodes (see [Backend Support](#backend-support) below):
+— the value of the `graph_do_while` parameter will be copied from the GPU to the host each iteration, in order to check whether we should continue iterating. This causes a GPU pipeline stall. For nested loops this host round-trip happens once per iteration of each loop level, and each loop-body task is replayed individually, so deeply nested loops on these backends pay correspondingly more host overhead (they remain correct, just slower than the CUDA SM 9.0+ native path). At the end of each loop iteration:
 - wait for GPU async queue to finish processing
 - copy condition value to hostside
 - evaluate condition value on hostside
@@ -304,8 +307,8 @@ def k1(a: qd.type.NDArray, b: qd.type.NDArray, c: qd.type.NDArray):
 ```
 
 Results:
-- on hardware-accelerated platforms, we only launch a single graph from the host, rather than 3 separate kernels
-- on other platforms, there is no change: we still launch 3 separate kernels: no change: not better, not worse
+- on hardware-accelerated platforms, we only launch a single graph from the host, rather than 3 separate device kernels
+- on other platforms, there is no change: we still launch 3 separate device kernels: no change: not better, not worse
 
 ### A while loop, conditional on a device-side scalar tensor
 
