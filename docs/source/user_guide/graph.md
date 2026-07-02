@@ -465,3 +465,62 @@ In this case, our recommendation is:
 - use graph do while anyway, if you need it on any platform
     - this will ensure your code is compact and maintainable
 - if you need optimum 100% performance on unsupported platforms, then consider PRing onto quadrants an optimized graph implementation for your target platform, or raising an issue
+
+## Advanced
+
+The rest of this guide treats "kernel launch latency" as a cost to be reduced, without pinning down what it actually is.
+This section unpacks it: what launching a GPU kernel involves, where the latency comes from, and why `graph_do_while`
+can still speed things up even on hardware that has no native device-side loop support.
+
+### What a GPU kernel launch is
+
+When you call a `@qd.kernel` from Python, the numerical work does not run inline in the calling thread. Instead
+Quadrants *launches* the work onto the GPU: it hands a compiled kernel plus its arguments to the GPU driver, the driver
+enqueues it onto a stream (an ordered queue of GPU work), and the launch call returns to the host before the GPU has
+finished — usually before it has even started. Host and GPU run asynchronously.
+
+Each top-level `for`-loop in a kernel is a separate offloaded task, and each offloaded task becomes one GPU kernel. So
+the three-loop `k1` in the earlier **qd.kernel** section launches three GPU kernels every time you call it. Every launch
+carries a fixed overhead that is independent of how much data the kernel processes — that per-launch overhead is the
+"kernel launch latency" this guide keeps referring to. When a kernel crunches a lot of data the overhead is negligible;
+when it does little work, or when you relaunch small kernels many times in a loop, launch latency can dominate the total
+runtime.
+
+### Where kernel launch latency comes from
+
+It helps to split the latency of a single launch into three parts:
+
+- **Python side.** Everything that happens in the Python interpreter before control reaches Quadrants' C++ runtime: the
+  call into the `@qd.kernel` wrapper, argument type checking, the cache lookup that maps this call to an
+  already-compiled kernel, packing the arguments into a launch context (argument buffer), and crossing the Python→C++
+  boundary. This is the most expensive of the three per call, and it is paid once per *Python* call — so a Python
+  `while`/`for` loop that calls a kernel N times pays it N times.
+- **C++ side.** Work inside the Quadrants runtime (C++) once control has crossed the boundary: selecting the compiled
+  kernel, copying the (usually tiny) argument buffer to the device, recording the launch, and invoking the driver API
+  for each offloaded task. Cheaper than the Python side, but non-zero, and paid per offloaded task.
+- **GPU / driver side.** The GPU driver's own cost to place the kernel on a stream, plus the fixed scheduling latency on
+  the GPU itself before the kernel begins running on the hardware. This is the irreducible floor: even a launch issued
+  entirely from C++ pays it.
+
+Graphs attack all three. Capturing a sequence of launches into a graph and replaying it collapses many separate launches
+into a single graph launch, so on hardware-accelerated backends you pay the Python and C++ per-task costs once when the
+graph is built, and then only a single graph replay per call.
+
+### Why graph_do_while helps even without hardware support
+
+Recall the earlier example **A while loop, conditional on a device-side scalar tensor**. Written as a plain Python loop,
+every iteration pays the full Python-side launch latency: Python re-enters the kernel wrapper, and Python itself reads
+`cond[()]` and evaluates the `if` before deciding whether to loop again.
+
+On hardware with native device-side conditional graph nodes, `graph_do_while` removes the host from the loop entirely —
+the ideal case. But even on hardware *without* that support — where `graph_do_while` falls back to a host-side do-while
+loop (see [Backend support](#backend-support)) — it is still typically faster than the hand-written Python version,
+because the fallback loop is driven entirely in the C++ runtime rather than in Python. A single Python call enters the
+runtime, and the runtime then repeats internally: launch the loop body's tasks, read back the condition flag, and decide
+whether to iterate again — all in C++, with no trip back through the Python interpreter between iterations.
+
+In terms of the three-way split above, the fallback still pays the C++ side and GPU/driver side costs each iteration
+(including the GPU→host copy of the condition value and the pipeline stall described in [Caveats](#caveats)), but it
+eliminates the Python side cost per iteration. So `graph_do_while` on unsupported hardware lands between the two
+extremes: slower than the fully-on-device path, but faster than an equivalent pure-Python `while` loop — while letting
+you write the loop once and have it run on every backend.
