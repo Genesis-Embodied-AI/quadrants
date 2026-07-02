@@ -704,7 +704,7 @@ my_struct.b[37] 5
     <span class="n">mass</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">f32</span>
 
 <span class="c1"># AOS layout: each element of `particles` is a (pos, vel, mass) cell contiguous in memory.</span>
-<span class="c1"># Only possible because Particle is a StructType — `@qd.data_oriented` and</span>
+<span class="c1"># Only possible because Particle is a `@qd.dataclass`. `@qd.data_oriented` and</span>
 <span class="c1"># `dataclasses.dataclass` containers can&#39;t be the element type of a tensor.</span>
 <span class="n">particles</span> <span class="o">=</span> <span class="n">Particle</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="n">N</span><span class="p">,),</span> <span class="n">layout</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">Layout</span><span class="o">.</span><span class="n">AOS</span><span class="p">)</span>
 </pre></div>
@@ -731,7 +731,7 @@ my_struct.b[37] 5
     <span class="k">return</span> <span class="n">total</span>
 </pre></div>
 </div>
-<p><code class="docutils literal notranslate"><span class="pre">qd.types.struct(name1=type1,</span> <span class="pre">...)</span></code> is the function-form equivalent of <code class="docutils literal notranslate"><span class="pre">&#64;qd.dataclass</span></code>: it builds the same <code class="docutils literal notranslate"><span class="pre">StructType</span></code> without a class body.</p>
+<p><code class="docutils literal notranslate"><span class="pre">qd.types.struct(name1=type1,</span> <span class="pre">...)</span></code> is the function-form equivalent of <code class="docutils literal notranslate"><span class="pre">&#64;qd.dataclass</span></code>: it builds a <code class="docutils literal notranslate"><span class="pre">&#64;qd.dataclass</span></code> without a class body.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">vec3</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">vector</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">)</span>
 <span class="n">Particle</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">struct</span><span class="p">(</span><span class="n">pos</span><span class="o">=</span><span class="n">vec3</span><span class="p">,</span> <span class="n">vel</span><span class="o">=</span><span class="n">vec3</span><span class="p">,</span> <span class="n">mass</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">)</span>
 <span class="n">particles</span> <span class="o">=</span> <span class="n">Particle</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="n">N</span><span class="p">,))</span>

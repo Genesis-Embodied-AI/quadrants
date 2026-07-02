@@ -248,7 +248,7 @@ class Particle:
     mass: qd.f32
 
 # AOS layout: each element of `particles` is a (pos, vel, mass) cell contiguous in memory.
-# Only possible because Particle is a StructType — `@qd.data_oriented` and
+# Only possible because Particle is a `@qd.dataclass`. `@qd.data_oriented` and
 # `dataclasses.dataclass` containers can't be the element type of a tensor.
 particles = Particle.field(shape=(N,), layout=qd.Layout.AOS)
 ```
@@ -278,7 +278,7 @@ def total_ke() -> qd.f32:
     return total
 ```
 
-`qd.types.struct(name1=type1, ...)` is the function-form equivalent of `@qd.dataclass`: it builds the same `StructType` without a class body.
+`qd.types.struct(name1=type1, ...)` is the function-form equivalent of `@qd.dataclass`: it builds a `@qd.dataclass` without a class body.
 
 ```python
 vec3 = qd.types.vector(3, qd.f32)
