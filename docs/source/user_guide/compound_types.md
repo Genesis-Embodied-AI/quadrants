@@ -315,7 +315,7 @@ For `@qd.data_oriented` containers passed via `qd.Template`, reassigning an ndar
 ### Restrictions
 
 - **`@qd.dataclass` cannot contain `qd.ndarray` or `qd.field` members.** See the [`@qd.dataclass`](#qddataclass-qdtypesstruct) section above for the full list of allowed member types. (The function-form factory `qd.types.struct(...)` has the same restrictions.)
-- **A typed-dataclass kernel-arg annotation cannot have a `@qd.data_oriented` member type** — errors clearly at compile time. Typed-dataclass kernel args are flattened from annotations, but `@qd.data_oriented` carries no per-member annotations, so its members can only be walked from the live instance, which only happens on the `qd.Template` path.
+- **A typed-dataclass kernel-arg annotation cannot have a `@qd.data_oriented` member type** — errors clearly at compile time
 - **Declare all ndarray members on a `@qd.data_oriented` class in `__init__`.**
-    - **Deleting an ndarray attribute** that was present on an `@qd.data_oriented` instance's first launch raises `AttributeError` on the next launch on that instance (the cached path still tries to `getattr` the missing attribute).
-    - **Adding a new ndarray attribute after first launch** on a given `@qd.data_oriented` instance will cause incorrect undefined behavior
+    - **Deleting an ndarray attribute** that was present on an `@qd.data_oriented` instance's first launch raises `AttributeError` on the next launch on that instance.
+    - **Adding a new ndarray attribute after first launch** on a given `@qd.data_oriented` instance will cause incorrect undefined behavior.
