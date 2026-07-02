@@ -512,7 +512,7 @@ So reducing launch latency does not always improve overall throughput. When each
 its execution time exceeds the launch overhead, the GPU is the bottleneck and shaving launch latency changes nothing —
 the launches were already hidden behind execution.
 
-It matters when kernels are relatively small. Then the GPU can finish a kernel before the host has issued the next one,
+Kernel launch latency matters when kernels are relatively small. Then the GPU can finish a kernel before the host has issued the next one,
 so the GPU sits idle waiting for the next launch and the launch latency is *exposed* on the critical path. In that
 regime, cutting launch latency — for example by collapsing many launches into a single graph — directly increases
 throughput.
