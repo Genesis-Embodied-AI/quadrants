@@ -500,7 +500,7 @@ It helps to split the latency of a single launch into three parts:
 
 Graphs attack all three. Capturing a sequence of launches into a graph and replaying it collapses many separate launches
 into a single graph launch, so on hardware-accelerated backends you pay the Python and C++ per-task costs once when the
-graph is built, and then only a single graph replay per call.
+graph is built, and then only a single graph launch per call.
 
 ### Why graph_do_while helps even without hardware support
 
