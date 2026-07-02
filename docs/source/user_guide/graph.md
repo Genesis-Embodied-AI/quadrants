@@ -525,8 +525,8 @@ every iteration pays the full Python-side launch latency: Python re-enters the k
 
 On hardware with native device-side conditional graph nodes, `graph_do_while` removes the host from the loop entirely —
 the ideal case. But even on hardware *without* that support — where `graph_do_while` falls back to a host-side do-while
-loop (see [Backend support](#backend-support)) — it is still typically faster than the hand-written Python version,
-because the fallback loop is driven entirely in the C++ runtime rather than in Python. A single Python call enters the
+loop (see [Backend support](#backend-support)) — the launch latency can be slightly reduced compared to the hand-written
+Python version, because the fallback loop is driven entirely in the C++ runtime rather than in Python. A single Python call enters the
 runtime, and the runtime then repeats internally: launch the loop body's tasks, read back the condition flag, and decide
 whether to iterate again — all in C++, with no trip back through the Python interpreter between iterations.
 
