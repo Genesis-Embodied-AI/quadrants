@@ -502,6 +502,21 @@ Graphs attack all three. Capturing a sequence of launches into a graph and repla
 into a single graph launch, so on hardware-accelerated backends you pay the Python and C++ per-task costs once when the
 graph is built, and then only a single graph launch per call.
 
+### Latency hiding
+
+Because host and GPU run asynchronously, kernel launches overlap with kernel execution: the host can be issuing the next
+launch while earlier kernels are still running on the GPU. As long as the host issues launches at least as fast as the
+GPU drains them, the queue never empties, the GPU stays busy, and the launch latency is fully *hidden* behind execution.
+
+This is why reducing launch latency does not always improve overall throughput. When each kernel runs long enough that
+its execution time exceeds the launch overhead, the GPU is the bottleneck and shaving launch latency changes nothing —
+the launches were already hidden behind execution.
+
+It matters when kernels are relatively small. Then the GPU can finish a kernel before the host has issued the next one,
+so the GPU sits idle waiting for the next launch and the launch latency is *exposed* on the critical path. In that
+regime, cutting launch latency — for example by collapsing many launches into a single graph — directly increases
+throughput.
+
 ### Why graph_do_while helps even without hardware support
 
 Recall the earlier example **A while loop, conditional on a device-side scalar tensor**. Written as a plain Python loop,
