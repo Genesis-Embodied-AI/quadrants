@@ -215,14 +215,16 @@ pybind11::capsule field_to_dlpack(Program *program, SNode *snode, int element_nd
         "'to_dlpack'.")
   }
 
-  int field_in_tree_offset = program->get_field_in_tree_offset(tree_id, snode);
+  // A SNode tree packs every field of a program stage, so in-tree byte offsets routinely exceed
+  // 2^31; the offset must stay 64-bit end to end (DLTensor::byte_offset is uint64_t).
+  std::size_t field_in_tree_offset = program->get_field_in_tree_offset(tree_id, snode);
 
   void *raw_ptr = nullptr;
   DLDeviceType device_type = DLDeviceType::kDLCPU;
   std::tie(raw_ptr, device_type) = get_raw_ptr(arch, program, tree_device_ptr);
 
-  int byte_offset = 0;
-  if (field_in_tree_offset >= 0) {
+  uint64_t byte_offset = 0;
+  if (field_in_tree_offset > 0) {
     if (torch_supports_byte_offset()) {
       byte_offset = field_in_tree_offset;
     } else {
