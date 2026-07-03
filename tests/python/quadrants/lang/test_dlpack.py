@@ -340,8 +340,8 @@ def test_dlpack_field_memory_allocation_before_to_dlpack():
 @pytest.mark.run_in_serial
 @pytest.mark.slow
 def test_dlpack_field_offset_past_2gib():
-    # Fields share one SNode tree, so the second field's in-tree byte offset exceeds 2^31; the
-    # DLPack export must carry it without truncation instead of aliasing the tree base.
+    # Fields share one SNode tree, so the second field's in-tree byte offset exceeds 2^31; the DLPack export must carry
+    # it without truncation instead of aliasing the tree base.
     pad = qd.field(dtype=qd.f32, shape=(560_000_000,))
     victim = qd.field(dtype=qd.f32, shape=(1000,))
 

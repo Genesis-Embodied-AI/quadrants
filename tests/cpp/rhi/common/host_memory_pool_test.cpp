@@ -40,8 +40,8 @@ TEST(HostMemoryPool, ChunkTailMatchesAllocationSize) {
 
   HostMemoryPool pool;
 
-  // The first allocation creates a 100KB chunk. The second does not fit in the remaining 40KB, so
-  // it must open a new chunk instead of being placed past the real end of the first one.
+  // The first allocation creates a 100KB chunk. The second does not fit in the remaining 40KB, so it must open a new
+  // chunk instead of being placed past the real end of the first one.
   void *ptr1 = pool.allocate(61440, 16);
   void *ptr2 = pool.allocate(81920, 16);
 

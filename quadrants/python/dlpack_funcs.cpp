@@ -215,8 +215,8 @@ pybind11::capsule field_to_dlpack(Program *program, SNode *snode, int element_nd
         "'to_dlpack'.")
   }
 
-  // A SNode tree packs every field of a program stage, so in-tree byte offsets routinely exceed
-  // 2^31; the offset must stay 64-bit end to end (DLTensor::byte_offset is uint64_t).
+  // A SNode tree packs every field of a program stage, so in-tree byte offsets routinely exceed 2^31; the offset must
+  // stay 64-bit end to end (DLTensor::byte_offset is uint64_t).
   std::size_t field_in_tree_offset = program->get_field_in_tree_offset(tree_id, snode);
 
   void *raw_ptr = nullptr;
