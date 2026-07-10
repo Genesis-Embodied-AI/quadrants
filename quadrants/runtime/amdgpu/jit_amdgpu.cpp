@@ -42,6 +42,22 @@ std::string JITSessionAMDGPU::compile_module_to_hsaco(std::unique_ptr<llvm::Modu
       F.addFnAttr("no-signed-zeros-fp-math", "true");
     }
 
+    // Apply amdgpu-ieee and amdgpu-dx10-clamp to ALL functions, not just
+    // AMDGPU_KERNEL entries. LLVM's inliner refuses to inline a callee into a
+    // caller when they carry mismatching target-specific attributes, so keeping
+    // these on kernels only blocks runtime device functions (e.g.
+    // gpu_parallel_range_for) from being inlined. Without that inlining,
+    // InferAddressSpaces cannot see the full pointer chain from kernel params
+    // to field data and cannot promote flat_load/store/atomic to global_*,
+    // causing a ~4% throughput regression and flat-atomic coherency issues on
+    // MI300X. The hasFnAttribute guard ensures user-supplied fn_attrs still win.
+    if (!F.hasFnAttribute("amdgpu-ieee")) {
+      F.addFnAttr("amdgpu-ieee", "false");
+    }
+    if (!F.hasFnAttribute("amdgpu-dx10-clamp")) {
+      F.addFnAttr("amdgpu-dx10-clamp", "false");
+    }
+
     if (F.getCallingConv() == llvm::CallingConv::AMDGPU_KERNEL) {
       const std::string kernel_name = F.getName().str();
       const bool is_lightweight_cg_subkernel =
@@ -65,12 +81,6 @@ std::string JITSessionAMDGPU::compile_module_to_hsaco(std::unique_ptr<llvm::Modu
       }
       if (!F.hasFnAttribute("uniform-work-group-size")) {
         F.addFnAttr("uniform-work-group-size", "true");
-      }
-      if (!F.hasFnAttribute("amdgpu-ieee")) {
-        F.addFnAttr("amdgpu-ieee", "false");
-      }
-      if (!F.hasFnAttribute("amdgpu-dx10-clamp")) {
-        F.addFnAttr("amdgpu-dx10-clamp", "false");
       }
     }
   }
