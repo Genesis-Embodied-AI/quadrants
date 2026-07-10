@@ -1,5 +1,6 @@
 #pragma once
 
+#include <filesystem>
 #include <optional>
 #include <unordered_set>
 
@@ -186,11 +187,27 @@ class ControlFlowGraph {
   // Erase an empty node.
   void erase(int node_id);
 
-  // Assert structural invariants that every whole-graph driver assumes: `nodes` non-empty,
-  // `start_node` and `final_node` in range, both endpoints actually allocated. Called from each
-  // public driver. Cheap (a handful of comparisons); leave on even in release builds since the
-  // alternative on violation is silent corruption.
+  // Assert structural invariants that every whole-graph driver assumes:
+  //   (1) endpoint invariants -- nodes non-empty, start_node / final_node in range, both
+  //       endpoints actually allocated (O(1));
+  //   (2) edge consistency  -- for every node n and every successor m in n->next, n is in
+  //       m->prev (and symmetrically for predecessors). This catches the dangling / asymmetric
+  //       edges produced when a pre-CFG IR transform leaves the IR in a shape `analysis::build_cfg`
+  //       cannot canonicalise (O(V+E)).
+  // Called from each public driver. Always-on (release builds too); the cost is dominated by the
+  // analyses that follow and the alternative on violation is silent corruption / a segfault deep
+  // in worklist processing. On any violation, dumps the current CFG state to a temp file (see
+  // `dump_invariant_failure_to_temp_path`) and includes the path in the assertion message.
   void assert_structural_invariants() const;
+
+  // Best-effort dump of the current CFG state to a unique file under
+  // <tmp>/cfg_invariant_failures/<reason>_<ns>.txt. Called from `assert_structural_invariants`
+  // when a violation is about to fire, so the dump runs against possibly-corrupt state -- the
+  // dump is deliberately tolerant of nulls, dangling edges, and broken back-pointers (it
+  // prints placeholders and continues, rather than segfaulting). Catches and swallows all
+  // exceptions; the caller is about to abort. Returns the dump path on success, or an empty
+  // path if the dump itself failed.
+  std::filesystem::path dump_invariant_failure_to_temp_path(const std::string &reason) const;
 
  public:
   struct LiveVarAnalysisConfig {

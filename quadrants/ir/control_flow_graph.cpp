@@ -1,5 +1,6 @@
 #include "quadrants/ir/control_flow_graph.h"
 
+#include <chrono>
 #include <queue>
 #include <unordered_set>
 #include <fstream>
@@ -1034,11 +1035,88 @@ void ControlFlowGraph::assert_structural_invariants() const {
   // worklist seeding `nodes[start_node]->reach_gen.insert(...)`, the DP scratch buffer indexed by
   // start_node, the dump-graph loop that skips start_node / final_node by index). If they ever
   // fail, the code following will segfault or silently corrupt -- catch it here instead.
-  QD_ASSERT_INFO(!nodes.empty(), "ControlFlowGraph has no nodes");
-  QD_ASSERT_INFO(start_node >= 0 && start_node < (int)nodes.size(), "start_node out of range");
-  QD_ASSERT_INFO(final_node >= 0 && final_node < (int)nodes.size(), "final_node out of range");
-  QD_ASSERT_INFO(nodes[start_node] != nullptr, "start_node entry is null");
-  QD_ASSERT_INFO(nodes[final_node] != nullptr, "final_node entry is null");
+  //
+  // Collect every violation we can detect cheaply, then dump + assert in one go. The dump goes
+  // to <tmp>/cfg_invariant_failures/structural_<ns>.txt and its path is included in the assert
+  // message so a post-mortem can pull up the actual CFG state that violated.
+
+  std::vector<std::string> errors;
+
+  // (1) Endpoint invariants -- O(1). Cheap; collect all violations before bailing.
+  if (nodes.empty()) {
+    errors.emplace_back("nodes is empty");
+  }
+  if (start_node < 0 || start_node >= (int)nodes.size()) {
+    errors.emplace_back(fmt::format("start_node {} out of range [0, {})", start_node, nodes.size()));
+  }
+  if (final_node < 0 || final_node >= (int)nodes.size()) {
+    errors.emplace_back(fmt::format("final_node {} out of range [0, {})", final_node, nodes.size()));
+  }
+  if (errors.empty()) {
+    if (nodes[start_node] == nullptr) {
+      errors.emplace_back(fmt::format("start_node entry (index {}) is null", start_node));
+    }
+    if (nodes[final_node] == nullptr) {
+      errors.emplace_back(fmt::format("final_node entry (index {}) is null", final_node));
+    }
+  }
+
+  // (2) Edge consistency -- O(V+E). For each forward edge n->next[k] == m, we require the
+  // corresponding back edge m->prev to contain n, and vice versa. This catches the dangling-
+  // pointer / asymmetric-edge corruption that surfaces when a pre-CFG pass (e.g. an unstructured
+  // control-flow normaliser) produces malformed IR -- precisely the failure mode that surfaces
+  // as a segfault deep in worklist propagation rather than at the boundary. Null entries are
+  // tolerated: `erase()` clears entries before `simplify_graph` compacts, so a non-compact
+  // `nodes` vector with embedded nulls is a legal intermediate state. We short-circuit on the
+  // first edge violation: subsequent edges may share corrupted pointers and dereferencing them
+  // could itself segfault.
+  for (std::size_t i = 0; i < nodes.size() && errors.empty(); ++i) {
+    if (!nodes[i]) {
+      continue;
+    }
+    CFGNode *n = nodes[i].get();
+    for (CFGNode *m : n->next) {
+      if (m == nullptr) {
+        errors.emplace_back(fmt::format("node {} has a null entry in `next`", i));
+        break;
+      }
+      if (std::find(m->prev.begin(), m->prev.end(), n) == m->prev.end()) {
+        errors.emplace_back(
+            fmt::format("edge asymmetry: node {} has a successor whose `prev` does not "
+                        "list back to node {}",
+                        i, i));
+        break;
+      }
+    }
+    if (!errors.empty()) {
+      break;
+    }
+    for (CFGNode *m : n->prev) {
+      if (m == nullptr) {
+        errors.emplace_back(fmt::format("node {} has a null entry in `prev`", i));
+        break;
+      }
+      if (std::find(m->next.begin(), m->next.end(), n) == m->next.end()) {
+        errors.emplace_back(
+            fmt::format("edge asymmetry: node {} has a predecessor whose `next` does not "
+                        "list forward to node {}",
+                        i, i));
+        break;
+      }
+    }
+  }
+
+  if (errors.empty()) {
+    return;
+  }
+  const std::filesystem::path dump_path = dump_invariant_failure_to_temp_path("structural");
+  std::string joined;
+  for (const auto &e : errors) {
+    joined += "\n  - ";
+    joined += e;
+  }
+  QD_ASSERT_INFO(false, "CFG structural invariant failure(s):{}\nCFG state dumped to: {}", joined,
+                 dump_path.empty() ? std::string("<dump failed>") : dump_path.string());
 }
 
 void ControlFlowGraph::erase(int node_id) {
@@ -1147,6 +1225,54 @@ void write_cfg_node_statements(std::ostream &out, const CFGNode *node) {
 }
 
 }  // namespace
+
+std::filesystem::path ControlFlowGraph::dump_invariant_failure_to_temp_path(
+    const std::string &reason) const {
+  // Deliberately tolerant of malformed state (null entries, dangling edges, broken back-pointers):
+  // we are *only* called from `assert_structural_invariants` after a violation has been detected,
+  // so the graph state we are dumping is, by construction, not internally consistent. Any single
+  // stmt-write that throws is caught and replaced with a placeholder line so the rest of the dump
+  // still lands. The outer try/catch handles filesystem failures and similar.
+  try {
+    namespace fs = std::filesystem;
+    const fs::path dir = fs::temp_directory_path() / "cfg_invariant_failures";
+    fs::create_directories(dir);
+    const auto ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                        std::chrono::system_clock::now().time_since_epoch())
+                        .count();
+    const fs::path filename = dir / fmt::format("{}_{}.txt", reason, ns);
+    std::ofstream out(filename);
+    if (!out) {
+      return {};
+    }
+    out << "# CFG invariant failure dump\n";
+    out << "# reason: " << reason << "\n";
+    out << fmt::format("# start_node: {}\n", start_node);
+    out << fmt::format("# final_node: {}\n", final_node);
+    out << fmt::format("# nodes.size(): {}\n\n", nodes.size());
+
+    std::unordered_map<CFGNode *, int> to_index;
+    to_index.reserve(nodes.size());
+    for (std::size_t i = 0; i < nodes.size(); ++i) {
+      to_index[nodes[i].get()] = static_cast<int>(i);
+    }
+    for (std::size_t i = 0; i < nodes.size(); ++i) {
+      if (!nodes[i]) {
+        out << "NODE " << i << ": <ERASED>\n\n";
+        continue;
+      }
+      try {
+        write_cfg_node_header(out, static_cast<int>(i), nodes[i].get(), to_index);
+        write_cfg_node_statements(out, nodes[i].get());
+      } catch (...) {
+        out << "NODE " << i << ": <DUMP FAILED -- pointer state likely corrupt>\n\n";
+      }
+    }
+    return filename;
+  } catch (...) {
+    return {};
+  }
+}
 
 void ControlFlowGraph::dump_graph_to_file(const CompileConfig &config,
                                           const std::string &kernel_name,
