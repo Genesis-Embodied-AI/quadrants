@@ -32,13 +32,15 @@ std::string JITSessionAMDGPU::compile_module_to_hsaco(std::unique_ptr<llvm::Modu
   function_pass_manager_addrcast.doFinalization();
 
   for (auto &F : *llvm_module) {
-    // Match CUDA parity: jit_cuda.cpp:332-335 unconditionally applies
-    // unsafe-fp-math to ALL functions via hardcoded kFTZDenorms=1.
-    // Enables FMA contraction, reciprocal for division, and operation
-    // reordering. Applied to all functions (not just kernels) because
-    // internal body functions contain the actual FP compute.
-    F.addFnAttr("unsafe-fp-math", "true");
-    F.addFnAttr("no-signed-zeros-fp-math", "true");
+    // Match CUDA parity: jit_cuda.cpp:332-335 applies unsafe-fp-math when
+    // fast_math is enabled. Applied to all functions (not just kernels) because
+    // device body functions contain the actual FP compute. Gated on
+    // config_.fast_math so that qd.init(fast_math=False) retains IEEE semantics
+    // on AMDGPU the same way it does on CUDA and CPU.
+    if (this->config_.fast_math) {
+      F.addFnAttr("unsafe-fp-math", "true");
+      F.addFnAttr("no-signed-zeros-fp-math", "true");
+    }
 
     if (F.getCallingConv() == llvm::CallingConv::AMDGPU_KERNEL) {
       const std::string kernel_name = F.getName().str();

@@ -336,7 +336,6 @@ class Kernel(FuncBase):
         self.use_checkpoints: bool = False
         # Legacy single-loop arg name, kept for reporting/back-compat; equals the outermost level's condition arg for
         # nested kernels. The authoritative data is `graph_do_while_levels`.
-        self.use_cuda_graph: bool = False
         self.fn_attrs: dict[str, dict[str, str]] | None = None
         self.graph_do_while_arg: str | None = None
         # Nested graph_do_while level table, indexed by level id (outer before inner). Rebuilt each compilation pass by

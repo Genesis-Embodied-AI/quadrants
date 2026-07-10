@@ -81,6 +81,38 @@ All of these are fields of `CompileConfig`, so you set them at `qd.init(...)` (o
 
 For everyday use, leave them at their defaults. The most common deliberate change is `cfg_optimization=False` when iterating on a kernel whose compile time is in your way. Note that, in general, changing these options is relatively fragile since the Quadrants tests run assuming the default values.
 
+## Per-kernel LLVM function attributes (`fn_attrs`)
+
+For fine-grained control over AMDGPU codegen on a per-kernel basis, `@qd.kernel` accepts an optional `fn_attrs` argument. This lets you pass LLVM function attributes directly to the backend JIT without editing the JIT pipeline.
+
+```python
+@qd.kernel(fn_attrs={"amdgpu": {"amdgpu-waves-per-eu": "1,4"}})
+def my_kernel():
+    ...
+
+@qd.kernel(fn_attrs={"amdgpu": {"amdgpu-max-num-workgroups": "128,1,1"}})
+def another_kernel():
+    ...
+```
+
+**How it works:** attributes are applied inside `codegen_llvm.cpp` before the JIT sees the module. The JIT's own defaults (e.g. `amdgpu-waves-per-eu`, `amdgpu-ieee`) are set only when the kernel does *not* already carry the attribute, so `fn_attrs` values always win.
+
+**Supported backends and attribute names** are registered in `quadrants/program/fn_attrs_registry.h`. Passing an unknown backend name or an unregistered attribute name raises `QuadrantsSyntaxError` at decoration time (not at compile time), so mistakes surface early.
+
+Currently registered attributes for the `amdgpu` backend:
+
+| Attribute | Effect |
+|-----------|--------|
+| `amdgpu-waves-per-eu` | Target waves-per-execution-unit range, e.g. `"1,2"` |
+| `amdgpu-flat-work-group-size` | Flat work-group size range, e.g. `"64,256"` |
+| `amdgpu-max-num-workgroups` | Maximum number of workgroups per dispatch, e.g. `"128,1,1"` |
+| `amdgpu-agpr-alloc` | AGPR allocation hint |
+| `amdgpu-sched-strategy` | Instruction scheduling strategy |
+
+**Cache interaction:** changing `fn_attrs` produces a different fastcache key, so kernels with different attribute sets are compiled and cached independently.
+
+**Other backends:** only `amdgpu` is currently registered. Adding a new backend means adding it to `fn_attrs_registry.h` and ensuring the consuming codegen path picks it up.
+
 ## Inspecting what the compiler did
 
 These environment variables dump the IR so you can see the effect of each pass. Files are written to `debug_dump_path` (default `/tmp/ir/`):

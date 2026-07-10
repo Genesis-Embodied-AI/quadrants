@@ -1020,11 +1020,11 @@ void QuadrantsLLVMContext::mark_function_as_cuda_kernel(llvm::Function *func, in
 void QuadrantsLLVMContext::mark_function_as_amdgpu_kernel(llvm::Function *func, int block_dim) {
   func->setCallingConv(llvm::CallingConv::AMDGPU_KERNEL);
   if (block_dim > 0) {
-    // Wavefront size of 64 matches CDNA3. RDNA in wave32 mode would need a
-    // runtime query; revisit if Quadrants ever supports RDNA AMDGPU targets.
-    constexpr int kAmdgpuWavefrontSize = 64;
-    int clamped = std::max(block_dim, kAmdgpuWavefrontSize);
-    std::string size_str = std::to_string(clamped) + "," + std::to_string(clamped);
+    // Record the actual dispatch size as the flat work-group-size range.
+    // Use block_dim as-is: advertising a larger range than what the launcher
+    // dispatches gives the backend false headroom to assume wider warps and
+    // can produce incorrect occupancy or wrong codegen for small block sizes.
+    std::string size_str = std::to_string(block_dim) + "," + std::to_string(block_dim);
     func->addFnAttr("amdgpu-flat-work-group-size", size_str);
   }
 }

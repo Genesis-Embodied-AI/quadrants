@@ -181,6 +181,14 @@ def _kernel_impl(
     cuda_graph: bool = False,
     fn_attrs: dict[str, dict[str, str]] | None = None,
 ) -> QuadrantsCallable:
+    if cuda_graph and not graph:
+        import warnings
+        warnings.warn(
+            "@qd.kernel(cuda_graph=True) is deprecated; use graph=True instead.",
+            DeprecationWarning,
+            stacklevel=3,
+        )
+        graph = True
     if fn_attrs:
         _validate_fn_attrs(fn_attrs, _func.__name__)
     # Can decorators determine if a function is being defined inside a class?
@@ -194,7 +202,6 @@ def _kernel_impl(
     primal.use_graph = graph
     primal.use_checkpoints = checkpoints
     adjoint.use_checkpoints = checkpoints
-    primal.use_cuda_graph = cuda_graph
     primal.fn_attrs = fn_attrs
     adjoint.fn_attrs = fn_attrs
     # Having |primal| contains |grad| makes the tape work.
