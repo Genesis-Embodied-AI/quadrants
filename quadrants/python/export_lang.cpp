@@ -11,6 +11,11 @@
 
 #include <nanobind/eigen/dense.h>
 #include <nanobind/eigen/sparse.h>
+// get_fn_attrs_registry() returns std::unordered_map<std::string,
+// std::unordered_set<std::string>>; export.h only pulls in the std::map caster,
+// so these are required for the return value to convert to a Python dict/set.
+#include <nanobind/stl/unordered_map.h>
+#include <nanobind/stl/unordered_set.h>
 
 #include "quadrants/ir/expression_ops.h"
 #include "quadrants/ir/frontend_ir.h"
