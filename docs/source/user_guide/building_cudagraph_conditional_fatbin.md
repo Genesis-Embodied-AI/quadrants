@@ -37,14 +37,15 @@ per-toolkit results are bundled into one header. This is what keeps each cubin
 loadable on the widest range of drivers: a SASS cubin can only be loaded by a
 driver whose CUDA version is `>=` the toolkit that produced it, so building e.g.
 sm_120 (RTX 5090) with a newer toolkit than necessary would make it reject older
-drivers with `CUDA_ERROR_INVALID_IMAGE`. The arch → toolkit mapping lives in
-`scripts/_fatbin_common.py` (`DEFAULT_TOOLKIT` / `ARCH_MIN_TOOLKIT`):
+drivers with `CUDA_ERROR_INVALID_IMAGE`. The per-arch toolkit requirement lives
+in the `SM_TOOLKIT` mapping in `scripts/_fatbin_common.py`, where each SM maps to
+a version spec — `==X.Y` (exact) or `>=X.Y` (minimum):
 
-- **CUDA 12.8 (matched exactly)** — every architecture except sm_110
+- **`==12.8` (matched exactly)** — every architecture except sm_110
   (Turing / Ampere / Ada, Hopper sm_90, Blackwell sm_100 / sm_120). 12.8 is the
   oldest toolkit that covers all shipping Blackwell parts, and is the
   wide-compatibility anchor, so it is matched exactly rather than "or newer".
-- **CUDA >= 13.0** — sm_110 (Thor) only; earlier toolkits fail with
+- **`>=13.0`** — sm_110 (Thor) only; earlier toolkits fail with
   `Unsupported gpu architecture 'compute_110'`. This is a minimum: the oldest
   available toolkit `>=` 13.0 is used (e.g. 13.1 is fine). There is no
   old-driver constraint pulling it lower, since Thor is new hardware.
@@ -107,11 +108,12 @@ python -m pytest tests/python/test_fatbin_arch_coverage.py -v
 ## Adding a new SM architecture
 
 Add the new SM version number to the `SM_VERSIONS` list in the relevant
-`scripts/build_*_fatbin.py`, then regenerate. If the architecture needs a newer
-toolkit than `DEFAULT_TOOLKIT` (12.8), also add it to `ARCH_MIN_TOOLKIT` in
-`scripts/_fatbin_common.py` mapping the SM number to the minimum toolkit version
-that can emit it (as is done for `110 -> 13.0`), and make sure a toolkit that new
-is installed.
+`scripts/build_*_fatbin.py`, and add an entry for it to `SM_TOOLKIT` in
+`scripts/_fatbin_common.py`: use `"==X.Y"` to pin it to an exact toolkit (the
+oldest one that covers it, as for the `==12.8` archs) or `">=X.Y"` for a minimum
+(as done for `110: ">=13.0"`). Then make sure a matching toolkit is installed and
+regenerate. (Every SM in `SM_VERSIONS` must have an `SM_TOOLKIT` entry, or the
+scripts raise `KeyError`.)
 
 ## Files
 

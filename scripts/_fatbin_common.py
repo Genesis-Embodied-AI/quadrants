@@ -7,12 +7,11 @@ old architectures to require a recent driver. Concretely, bundling sm_110 (Thor,
 (RTX 5090) with one CUDA 13.0 toolkit makes the sm_120 cubin reject 570-series (CUDA 12.8) drivers with
 `CUDA_ERROR_INVALID_IMAGE`.
 
-To avoid that, each architecture is compiled with the *oldest* toolkit that supports it (see `ARCH_MIN_TOOLKIT` and
-`DEFAULT_TOOLKIT`), producing
-one fatbin per toolkit. All the per-toolkit fatbins are emitted into a single generated header as separate byte arrays
-plus a small lookup table; at runtime the loader tries each in turn and keeps the one whose SASS matches the running
-GPU (`GraphManager::load_first_matching_fatbin`). This keeps e.g. the sm_120 image loadable on the widest range of
-drivers while still shipping the sm_110 image that only CUDA 13.0+ can emit.
+To avoid that, each architecture is compiled with the toolkit given by the explicit per-SM `SM_TOOLKIT` mapping,
+producing one fatbin per distinct toolkit. All the per-toolkit fatbins are emitted into a single generated header as
+separate byte arrays plus a small lookup table; at runtime the loader tries each in turn and keeps the one whose SASS
+matches the running GPU (`GraphManager::load_first_matching_fatbin`). This keeps e.g. the sm_120 image loadable on the
+widest range of drivers while still shipping the sm_110 image that only CUDA 13.0+ can emit.
 
 Running the build scripts raises `MissingToolkitError` unless every required toolkit is available.
 """
@@ -27,14 +26,25 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
-# The default toolkit is the wide-compatibility anchor: it is matched *exactly*, and is the oldest toolkit that covers
-# all shipping Blackwell parts (sm_100 / sm_120) as well as Hopper and pre-Hopper. Building those cubins with a newer
-# toolkit than this would needlessly raise their minimum driver version.
-DEFAULT_TOOLKIT = "12.8"
-# Architectures that need a newer toolkit than DEFAULT_TOOLKIT, mapped to the MINIMUM CUDA version that can emit them.
-# Unlike the default anchor, these are satisfied by the oldest *available* toolkit whose release is >= the minimum (a
-# newer toolkit is fine -- there is no old-driver constraint pulling their minimum down). sm_110 (Thor) needs CUDA 13.0.
-ARCH_MIN_TOOLKIT = {110: "13.0"}
+# Explicit CUDA toolkit requirement for every SM architecture we bundle. The value is a version spec:
+#   "==X.Y"  build this arch with EXACTLY CUDA X.Y. A SASS cubin only loads on drivers whose CUDA version is >= the
+#            toolkit that produced it, so the wide-compatibility archs (pre-Hopper, Hopper sm_90, and the shipping
+#            Blackwell parts sm_100 / sm_120) are pinned to the oldest toolkit that covers them -- building them with a
+#            newer toolkit would needlessly raise their minimum driver (this is what made sm_120 reject 570-series
+#            drivers with CUDA_ERROR_INVALID_IMAGE).
+#   ">=X.Y"  build this arch with the oldest *available* toolkit >= CUDA X.Y. Used for brand-new archs that have no
+#            old-driver constraint (their hardware only ever ships with X.Y+ drivers), so any newer toolkit is fine.
+#            sm_110 (Thor) needs CUDA 13.0 -- earlier toolkits reject compute_110 -- but 13.1, 13.2, ... are all OK too.
+SM_TOOLKIT = {
+    75: "==12.8",
+    80: "==12.8",
+    86: "==12.8",
+    89: "==12.8",
+    90: "==12.8",
+    100: "==12.8",
+    110: ">=13.0",
+    120: "==12.8",
+}
 
 
 class MissingToolkitError(RuntimeError):
@@ -45,22 +55,33 @@ def _parse_version(version: str) -> tuple[int, ...]:
     return tuple(int(x) for x in version.split("."))
 
 
+def _parse_spec(spec: str) -> tuple[str, str, tuple[int, ...]]:
+    """Split a toolkit spec like '==12.8' or '>=13.0' into (operator, version_str, version_tuple)."""
+    op, version = spec[:2], spec[2:]
+    if op not in ("==", ">=") or not version:
+        raise ValueError(f"invalid toolkit spec {spec!r}; expected '==X.Y' or '>=X.Y'")
+    return op, version, _parse_version(version)
+
+
 def group_archs_by_toolkit(sm_versions: list[int]) -> list[tuple[str, list[int]]]:
     """Partition `sm_versions` into (toolkit-spec, [sm, ...]) groups, preserving arch order within each group.
 
-    The toolkit-spec is `DEFAULT_TOOLKIT` (matched exactly) or an entry from `ARCH_MIN_TOOLKIT` (a minimum version). The
-    default group is returned first so the loader tries the widest-compatibility fatbin (the one holding the common
-    Blackwell / Hopper parts) before any newer-toolkit fatbin.
+    Each SM's toolkit-spec comes from `SM_TOOLKIT` (a `==X.Y` exact pin or a `>=X.Y` minimum). Groups are ordered by the
+    CUDA version they require (lowest first, exact before minimum on a tie), so the loader tries the widest-compatibility
+    fatbin -- the one holding the common Blackwell / Hopper parts -- first. (Ordering is only cosmetic: each SM maps to
+    exactly one spec, so a given GPU's cubin lives in exactly one blob.)
     """
     groups: dict[str, list[int]] = {}
     for sm in sm_versions:
-        toolkit = ARCH_MIN_TOOLKIT.get(sm, DEFAULT_TOOLKIT)
-        groups.setdefault(toolkit, []).append(sm)
+        if sm not in SM_TOOLKIT:
+            raise KeyError(f"sm_{sm} has no entry in SM_TOOLKIT (scripts/_fatbin_common.py); add its toolkit spec")
+        groups.setdefault(SM_TOOLKIT[sm], []).append(sm)
 
-    def sort_key(toolkit: str) -> tuple:
-        return (toolkit != DEFAULT_TOOLKIT, _parse_version(toolkit))
+    def sort_key(spec: str) -> tuple:
+        op, _version, version_tuple = _parse_spec(spec)
+        return (version_tuple, op != "==")
 
-    return [(toolkit, groups[toolkit]) for toolkit in sorted(groups, key=sort_key)]
+    return [(spec, groups[spec]) for spec in sorted(groups, key=sort_key)]
 
 
 def _nvcc_release(nvcc: str) -> str | None:
@@ -111,13 +132,13 @@ def discover_toolkits() -> dict[str, str]:
 def _resolve_group_toolkit(spec: str, available: dict[str, str]) -> tuple[str, str] | None:
     """Resolve one group's toolkit-spec against discovered toolkits, returning (nvcc_path, actual_release) or None.
 
-    The default spec is matched exactly; any other spec is a minimum and resolves to the oldest available release >= it.
+    A `==X.Y` spec is matched exactly; a `>=X.Y` spec resolves to the oldest available release >= X.Y.
     """
-    if spec == DEFAULT_TOOLKIT:
-        path = available.get(spec)
-        return (path, spec) if path else None
-    minimum = _parse_version(spec)
-    satisfying = sorted((r for r in available if _parse_version(r) >= minimum), key=_parse_version)
+    op, version, version_tuple = _parse_spec(spec)
+    if op == "==":
+        path = available.get(version)
+        return (path, version) if path else None
+    satisfying = sorted((r for r in available if _parse_version(r) >= version_tuple), key=_parse_version)
     return (available[satisfying[0]], satisfying[0]) if satisfying else None
 
 
@@ -143,7 +164,8 @@ def resolve_toolkits(groups: list[tuple[str, list[int]]]) -> dict[str, tuple[str
         lines = ["Missing required CUDA toolkit(s) to build the fatbins:"]
         for spec, sms in missing:
             arch_list = ", ".join(f"sm_{v}" for v in sms)
-            requirement = f"exactly CUDA {spec}" if spec == DEFAULT_TOOLKIT else f"CUDA >= {spec}"
+            op, version, _ = _parse_spec(spec)
+            requirement = f"exactly CUDA {version}" if op == "==" else f"CUDA >= {version}"
             lines.append(f"  - {requirement} (needed for {arch_list})")
         lines.append("")
         lines.append(f"Discovered toolkits: {found_desc}")
