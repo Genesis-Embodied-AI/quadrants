@@ -83,6 +83,27 @@ Regenerate the checkpoint kernels the same way with
 `scripts/build_checkpoint_yield_check_fatbin.py`. After regenerating, commit the
 updated header(s). Quadrants must be rebuilt to pick up the new fatbins.
 
+## Verifying the committed fatbins
+
+`tests/python/test_fatbin_arch_coverage.py` re-derives the per-toolkit arch
+partition from each script's `SM_VERSIONS` and asserts the committed `*_fatbin.h`
+headers contain exactly those architectures, in exactly those blobs (e.g.
+`sm_90 / sm_100 / sm_120` in blob 0 and `sm_110` in blob 1 for the condition
+kernel). It guards against drift between the scripts and the checked-in headers,
+and against accidentally rebuilding everything with a single newer toolkit — which
+would reintroduce the old-driver `CUDA_ERROR_INVALID_IMAGE` problem for sm_120.
+
+The test shells out to `cuobjdump`, so it is skipped unless `cuobjdump` is on
+`PATH`; the toolkit providing it must also be at least as new as the newest one
+used to build the fatbins (CUDA 13.0+, for sm_110), otherwise the affected header
+is skipped rather than failed. Run it after regenerating:
+
+```bash
+# Make a recent CUDA toolkit's cuobjdump visible on PATH, e.g.:
+export PATH=/usr/local/cuda/bin:$PATH
+python -m pytest tests/python/test_fatbin_arch_coverage.py -v
+```
+
 ## Adding a new SM architecture
 
 Add the new SM version number to the `SM_VERSIONS` list in the relevant
@@ -102,6 +123,7 @@ is installed.
 | `quadrants/runtime/cuda/graph_do_while_cond_fatbin.h` | Generated C header (checked into git) |
 | `scripts/build_checkpoint_gate_fatbin.py`, `scripts/build_checkpoint_yield_check_fatbin.py` | Regeneration scripts (checkpoint kernels) |
 | `quadrants/runtime/cuda/checkpoint_gate_fatbin.h`, `quadrants/runtime/cuda/checkpoint_yield_check_fatbin.h` | Generated C headers (checked into git) |
+| `tests/python/test_fatbin_arch_coverage.py` | Regression test: committed headers' arch partition matches `SM_VERSIONS` (needs `cuobjdump`) |
 
 ## How it's used at runtime
 
