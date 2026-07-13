@@ -864,7 +864,7 @@
 </ul>
 <p>The recommendation is to use the graph do while here anyway, if you need it for any platform, in order to ensure the code is compact and maintainable.</p>
 <p>If you do want fixed-size for loops to run optimally on unsupported hardware platforms, please raise an issue, and we can look into this.</p>
-<p>In practice, for our own <a class="reference external" href="https://github.com/Genesis-Embodied-AI/genesis-world">genesis-world</a> kernels, they largely fall under the do while formulation, see the previous section. However, also have some that used to be do while, but have been migrated to an optimized fixed-size, see next section.</p>
+<p>In practice, for real-world use-cases, they largely fall under the do while formulation, see the previous section. However, also have some that used to be do while, but have been migrated to an optimized fixed-size, see next section.</p>
 </section>
 <section id="a-while-loop-conditional-on-a-device-side-scalar-tensor-that-has-been-optimized-into-a-fixed-size-for-loop">
 <h3>A while loop, conditional on a device-side scalar tensor, that has been optimized into a fixed-size for loop<a class="headerlink" href="#a-while-loop-conditional-on-a-device-side-scalar-tensor-that-has-been-optimized-into-a-fixed-size-for-loop" title="Link to this heading">#</a></h3>
@@ -972,8 +972,8 @@
 <p>So reducing launch latency does not always improve overall throughput. When each kernel runs long enough that its execution time exceeds the launch overhead, the GPU is the bottleneck and shaving launch latency changes nothing - the launches were already hidden behind execution.</p>
 <p>Kernel launch latency matters when kernels are relatively small. Then the GPU can finish a kernel before the host has issued the next one, so the GPU sits idle waiting for the next launch and the launch latency is <em>exposed</em> on the critical path. In that regime, cutting launch latency - for example by collapsing many launches into a single graph - can directly increase throughput.</p>
 </section>
-<section id="why-graph-do-while-can-help-slightly-even-without-hardware-support">
-<h3>Why graph_do_while can help slightly even without hardware support<a class="headerlink" href="#why-graph-do-while-can-help-slightly-even-without-hardware-support" title="Link to this heading">#</a></h3>
+<section id="why-using-graph-do-while-is-relevant-even-without-hardware-support">
+<h3>Why using graph_do_while is relevant even without hardware support<a class="headerlink" href="#why-using-graph-do-while-is-relevant-even-without-hardware-support" title="Link to this heading">#</a></h3>
 <p>Recall the earlier example <strong>A while loop, conditional on a device-side scalar tensor</strong>. Written as a plain Python loop, every iteration pays the full Python-side launch latency: Python re-enters the kernel wrapper, and Python itself reads <code class="docutils literal notranslate"><span class="pre">cond[()]</span></code> and evaluates the <code class="docutils literal notranslate"><span class="pre">if</span></code> before deciding whether to loop again.</p>
 <p>On hardware with native device-side conditional graph nodes, <code class="docutils literal notranslate"><span class="pre">graph_do_while</span></code> removes the host from the loop entirely - the ideal case. But even on hardware <em>without</em> that support - where <code class="docutils literal notranslate"><span class="pre">graph_do_while</span></code> falls back to a host-side do-while loop (see <a class="reference internal" href="#backend-support">Backend support</a>) - the launch latency can be slightly reduced compared to the hand-written Python version, because the fallback loop is driven entirely in the C++ runtime rather than in Python. A single Python call enters the runtime, and the runtime then repeats internally: launch the loop body’s tasks, read back the condition flag, and decide whether to iterate again - all in C++, with no trip back through the Python interpreter between iterations.</p>
 </section>
@@ -1060,7 +1060,7 @@
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#what-a-gpu-kernel-launch-is">What a GPU kernel launch is</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#where-kernel-launch-latency-comes-from">Where kernel launch latency comes from</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#latency-hiding">Latency hiding</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#why-graph-do-while-can-help-slightly-even-without-hardware-support">Why graph_do_while can help slightly even without hardware support</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#why-using-graph-do-while-is-relevant-even-without-hardware-support">Why using graph_do_while is relevant even without hardware support</a></li>
 </ul>
 </li>
 </ul>
