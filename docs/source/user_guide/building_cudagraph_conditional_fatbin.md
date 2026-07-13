@@ -87,9 +87,10 @@ updated header(s). Quadrants must be rebuilt to pick up the new fatbins.
 
 Add the new SM version number to the `SM_VERSIONS` list in the relevant
 `scripts/build_*_fatbin.py`, then regenerate. If the architecture needs a newer
-toolkit than `DEFAULT_TOOLKIT` (12.8), also add it to `ARCH_TOOLKIT` in
-`scripts/_fatbin_common.py` mapping the SM number to that toolkit version (as is
-done for `110 -> 13.0`), and make sure that toolkit is installed.
+toolkit than `DEFAULT_TOOLKIT` (12.8), also add it to `ARCH_MIN_TOOLKIT` in
+`scripts/_fatbin_common.py` mapping the SM number to the minimum toolkit version
+that can emit it (as is done for `110 -> 13.0`), and make sure a toolkit that new
+is installed.
 
 ## Files
 
