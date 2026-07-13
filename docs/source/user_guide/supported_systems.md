@@ -38,7 +38,7 @@ Which backends are available on each supported platform. `qd.cpu` and `qd.vulkan
 
 Notes:
 - `qd.cuda` requires an NVIDIA driver + CUDA runtime on the host; quadrants links against the CUDA runtime discovered at import time. NVIDIA ships CUDA for Linux ARM64 and Windows ARM64, but quadrants does not support them yet.
-- `qd.amdgpu` currently wires up the Linux x64 ROCm path only. AMD's HIP SDK also ships on Windows and on some Linux ARM64 targets, but quadrants does not support them yet. AMDGPU codegen always runs in wave64 mode, so [`qd.simt.subgroup`](./subgroup.md) primitives operate over 64 lanes regardless of whether the GPU is CDNA (Instinct, wave64-default) or RDNA (Radeon, wave32-default — quadrants overrides it to wave64).
+- `qd.amdgpu` currently wires up the Linux x64 ROCm path only. AMD's HIP SDK also ships on Windows and on some Linux ARM64 targets, but quadrants does not support them yet. On AMD GPUs, a subgroup is always 64 threads wide, so [`qd.simt.subgroup`](./subgroup.md) primitives operate over 64 lanes on both CDNA (Instinct) and RDNA (Radeon) hardware.
 - `qd.metal` is only available on Apple hardware and is the recommended GPU backend there.
 - `qd.vulkan` on macOS ships a bundled MoltenVK dylib inside the wheel, so no separate MoltenVK install is required.
 
