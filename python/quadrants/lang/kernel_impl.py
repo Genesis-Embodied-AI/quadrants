@@ -178,17 +178,8 @@ def _kernel_impl(
     verbose: bool = False,
     graph: bool = False,
     checkpoints: bool = False,
-    cuda_graph: bool = False,
     fn_attrs: dict[str, dict[str, str]] | None = None,
 ) -> QuadrantsCallable:
-    if cuda_graph and not graph:
-        import warnings
-        warnings.warn(
-            "@qd.kernel(cuda_graph=True) is deprecated; use graph=True instead.",
-            DeprecationWarning,
-            stacklevel=3,
-        )
-        graph = True
     if fn_attrs:
         _validate_fn_attrs(fn_attrs, _func.__name__)
     # Can decorators determine if a function is being defined inside a class?
@@ -251,7 +242,6 @@ def kernel(
     pure: bool = False,
     graph: bool = False,
     checkpoints: bool = False,
-    cuda_graph: bool = False,
     fn_attrs: dict[str, dict[str, str]] | None = None,
 ) -> Callable[[Any], Any]: ...
 
@@ -269,7 +259,6 @@ def kernel(
     pure: bool = False,
     graph: bool = False,
     checkpoints: bool = False,
-    cuda_graph: bool = False,
     fn_attrs: dict[str, dict[str, str]] | None = None,
 ) -> Any: ...
 
@@ -281,7 +270,6 @@ def kernel(
     fastcache: bool = False,
     graph: bool = False,
     checkpoints: bool = False,
-    cuda_graph: bool = False,
     fn_attrs: dict[str, dict[str, str]] | None = None,
 ):
     """
@@ -332,7 +320,6 @@ def kernel(
             level_of_class_stackframe=level,
             graph=graph,
             checkpoints=checkpoints,
-            cuda_graph=cuda_graph,
             fn_attrs=fn_attrs,
         )
         wrapped.is_pure = pure is not None and pure or fastcache
