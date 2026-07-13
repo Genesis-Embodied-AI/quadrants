@@ -303,6 +303,7 @@ This table summarizes which member types are allowed inside which container type
 The outermost annotation you put on the kernel parameter should match the parameter type as follows:
 
 | Kernel parameter compound type | Annotation |
+|--------------------------------|------------------------------|
 | `@dataclasses.dataclass`       | `MyDataclass` (dataclass type) |
 | `@qd.data_oriented`            | `qd.Template` |
 
