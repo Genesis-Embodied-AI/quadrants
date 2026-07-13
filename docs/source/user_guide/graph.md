@@ -156,7 +156,7 @@ Note that `qd.func`'s are inlined, so you can freely factorize these structures 
 ### Caveats
 
 On GPU backends without native device-side conditional graph nodes (see [Backend Support](#backend-support) below):
-The value of the `graph_do_while` parameter will be copied from the GPU to the host each iteration, in order to check whether we should continue iterating. This causes a GPU pipeline stall. For nested loops this host round-trip happens once per iteration of each loop level, and each loop-body task is replayed individually, so deeply nested loops on these backends pay correspondingly more host overhead (they remain correct, just slower than the CUDA SM 9.0+ native path). At the end of each loop iteration:
+- the value of the `graph_do_while` parameter will be copied from the GPU to the host each iteration, in order to check whether we should continue iterating. This causes a GPU pipeline stall. For nested loops this host round-trip happens once per iteration of each loop level, and each loop-body task is replayed individually, so deeply nested loops on these backends pay correspondingly more host overhead (they remain correct, just slower than the CUDA SM 9.0+ native path). At the end of each loop iteration:
 - wait for GPU async queue to finish processing
 - copy condition value to hostside
 - evaluate condition value on hostside
