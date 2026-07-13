@@ -284,7 +284,7 @@ The hardware support for each feature (graph and graph do while) was documented 
 Before migrating to graph, we have for example:
 ```
 @qd.kernel
-def k1(a: qd.type.NDArray, b: qd.type.NDArray, c: qd.type.NDArray):
+def k1(a: qd.types.NDArray, b: qd.types.NDArray, c: qd.types.NDArray):
     for i in range(a.shape[0]):
         fn_a(a, i)
     for i in range(b.shape[0]):
@@ -297,7 +297,7 @@ We have three top-level for loops, which we call 'offloaded tasks'. Each offload
 We can migrate this qd.kernel to graph by adding `graph=True`:
 ```
 @qd.kernel(graph=True)
-def k1(a: qd.type.NDArray, b: qd.type.NDArray, c: qd.type.NDArray):
+def k1(a: qd.types.NDArray, b: qd.types.NDArray, c: qd.types.NDArray):
     for i in range(a.shape[0]):
         fn_a(a, i)
     for i in range(b.shape[0]):
@@ -315,7 +315,7 @@ Results:
 Before migrating to graph we have for example:
 ```
 @qd.kernel
-def k1(a: qd.type.NDArray, cond: qd.type.NDArray):
+def k1(a: qd.types.NDArray, cond: qd.types.NDArray):
     fn_1(a, cond)
     fn_2(a, cond)
     fn_3(a, cond)
@@ -341,7 +341,7 @@ After migrating to graph with graph do while we have:
 
 ```
 @qd.kernel(graph=True)
-def k1(a: qd.type.NDArray, cond: qd.type.NDArray):
+def k1(a: qd.types.NDArray, cond: qd.types.NDArray):
     while qd.graph_do_while(condition=cond):
         fn_1(a, cond)
         fn_2(a, cond)
@@ -359,7 +359,7 @@ Now:
 Before migrating to graph we have for example:
 ```
 @qd.kernel
-def k1(a: qd.type.NDArray):
+def k1(a: qd.types.NDArray):
     fn_1(a)  # assume these each launch a single offloaded task (gpu kernel)
     fn_2(a)
     fn_3(a)
@@ -377,7 +377,7 @@ In this case, we have `num_its` launches of the three gpu kernels in k1
 After migrating to graph we have something like:
 ```
 @qd.kernel(graph=True)
-def k1(a: qd.type.NDArray, count: qd.type.NDArray):
+def k1(a: qd.types.NDArray, count: qd.types.NDArray):
     while qd.graph_do_while(count):
         fn_1(a)
         fn_2(a)
@@ -436,7 +436,7 @@ When we migrate this to graph do while, we get:
 
 ```
 @qd.kernel(graph=True)
-def k1(a: qd.type.NDArray, cond: qd.type.NDArray):
+def k1(a: qd.types.NDArray, cond: qd.types.NDArray):
     while qd.graph_do_while(condition=cond):
         for j in range(a.shape[0]):  # off-loaded task (gpu kernel)
             ....  # no need for cond check
