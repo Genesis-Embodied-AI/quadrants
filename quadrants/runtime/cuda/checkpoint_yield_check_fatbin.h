@@ -1669,9 +1669,4 @@ static const unsigned char *const kCheckpointYieldCheckKernelFatbins[] = {
     kCheckpointYieldCheckKernelFatbin_1,
 };
 
-static const std::size_t kCheckpointYieldCheckKernelFatbinSizes[] = {
-    sizeof(kCheckpointYieldCheckKernelFatbin_0),
-    sizeof(kCheckpointYieldCheckKernelFatbin_1),
-};
-
 static const std::size_t kCheckpointYieldCheckKernelFatbinCount = 2;

@@ -234,11 +234,6 @@ def _write_header(
         lines.append(f"    {base_name}_{i},")
     lines.append("};")
     lines.append("")
-    lines.append(f"static const std::size_t {base_name}Sizes[] = {{")
-    for i in range(len(blobs)):
-        lines.append(f"    sizeof({base_name}_{i}),")
-    lines.append("};")
-    lines.append("")
     lines.append(f"static const std::size_t {base_name}Count = {len(blobs)};")
     lines.append("")
     out_path.write_text("\n".join(lines), newline="\n")
