@@ -1,0 +1,784 @@
+
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="../../../../../" >
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>quadrants.lang.ast.ast_transformers.checkpoint_transformer &#8212; Quadrants 1.1.1 documentation</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "";
+  </script>
+  <!--
+    this give us a css class that will be invisible only if js is disabled
+  -->
+  <noscript>
+    <style>
+      .pst-js-only { display: none !important; }
+
+    </style>
+  </noscript>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="../../../../../_static/styles/theme.css?digest=a95f357e85573c9b56d5" rel="stylesheet" />
+<link href="../../../../../_static/styles/pydata-sphinx-theme.css?digest=a95f357e85573c9b56d5" rel="stylesheet" />
+
+    <link rel="stylesheet" type="text/css" href="../../../../../_static/pygments.css?v=8f2a1f02" />
+    <link rel="stylesheet" type="text/css" href="../../../../../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../../../../../_static/togglebutton.css?v=9c3e77be" />
+    <link rel="stylesheet" type="text/css" href="../../../../../_static/graphviz.css?v=4ae1632d" />
+    <link rel="stylesheet" type="text/css" href="../../../../../_static/sphinx-design.min.css?v=95c83b7e" />
+    <link rel="stylesheet" type="text/css" href="../../../../../_static/css/custom.css" />
+  
+  <!-- So that users can add custom icons -->
+  <script defer src="../../../../../_static/scripts/fontawesome.js?digest=a95f357e85573c9b56d5"></script>
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="../../../../../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5" />
+<link rel="preload" as="script" href="../../../../../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5" />
+
+    <script src="../../../../../_static/documentation_options.js?v=58fbf978"></script>
+    <script src="../../../../../_static/doctools.js?v=9bcbadda"></script>
+    <script src="../../../../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../../../../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../../../../../_static/copybutton.js?v=f281be69"></script>
+    <script>let toggleHintShow = 'Click to show';</script>
+    <script>let toggleHintHide = 'Click to hide';</script>
+    <script>let toggleOpenOnPrint = 'true';</script>
+    <script src="../../../../../_static/togglebutton.js?v=b8b12719"></script>
+    <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
+    <script src="../../../../../_static/design-tabs.js?v=f930bc37"></script>
+    <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
+    <script>DOCUMENTATION_OPTIONS.pagename = '_modules/quadrants/lang/ast/ast_transformers/checkpoint_transformer';</script>
+    <script>DOCUMENTATION_OPTIONS.search_as_you_type = false;</script>
+    <link rel="index" title="Index" href="../../../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../../../search.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="docsearch:language" content="en"/>
+  <meta name="docsearch:version" content="1.1.1" />
+  
+    
+    <script src="../../../../../_static/searchtools.js"></script>
+    <script src="../../../../../_static/language_data.js"></script>
+    <script src="../../../../../searchindex.js"></script>
+  
+  </head>
+  <body data-default-mode="">
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+  
+  
+  
+  
+  <dialog id="pst-search-dialog">
+    
+<form class="bd-search d-flex align-items-center"
+      action="../../../../../search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         placeholder="Search the docs ..."
+         aria-label="Search the docs ..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form>
+  </dialog>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header id="pst-header" class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+<div class="bd-header__inner bd-page-width">
+  <button class="pst-navbar-icon sidebar-toggle primary-toggle" aria-label="Site navigation">
+    <span class="fa-solid fa-bars"></span>
+  </button>
+  
+  
+  <div class="col-lg-3 navbar-header-items__start">
+    
+      <div class="navbar-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="../../../../../index.html">
+  
+  
+  
+  
+  
+  
+    <p class="title logo__title">Quadrants 1.1.1 documentation</p>
+  
+</a></div>
+    
+  </div>
+  
+  <div class="col-lg-9 navbar-header-items">
+    
+    <div class="me-auto navbar-header-items__center">
+      
+        <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../../../user_guide/index.html">
+    User guide
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../../../autoapi/index.html">
+    API Reference
+  </a>
+</li>
+
+  </ul>
+</nav></div>
+      
+    </div>
+    
+    
+    <div class="navbar-header-items__end">
+      
+        <div class="navbar-item navbar-persistent--container">
+          
+
+<button class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+        </div>
+      
+      
+        <div class="navbar-item">
+
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg fa-fw" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg fa-fw" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg fa-fw" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg fa-fw me-1"></i>System Settings</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg fa-fw me-1"></i>Light</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg fa-fw me-1"></i>Dark</button></li>
+  </ul>
+</div></div>
+      
+    </div>
+    
+  </div>
+  
+  
+    <div class="navbar-persistent--mobile">
+
+<button class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+    </div>
+  
+
+  
+</div>
+
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+        
+      
+      <dialog id="pst-primary-sidebar-modal"></dialog>
+      <div id="pst-primary-sidebar" class="bd-sidebar-primary bd-sidebar hide-on-wide">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+      <div class="sidebar-header-items__center">
+        
+          
+          
+            <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../../../user_guide/index.html">
+    User guide
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../../../autoapi/index.html">
+    API Reference
+  </a>
+</li>
+
+  </ul>
+</nav></div>
+          
+        
+      </div>
+    
+    
+    
+      <div class="sidebar-header-items__end">
+        
+          <div class="navbar-item">
+
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg fa-fw" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg fa-fw" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg fa-fw" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg fa-fw me-1"></i>System Settings</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg fa-fw me-1"></i>Light</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg fa-fw me-1"></i>Dark</button></li>
+  </ul>
+</div></div>
+        
+      </div>
+    
+  </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+      <div class="sidebar-primary-item">
+<div id="ethical-ad-placement"
+      class="flat"
+      data-ea-publisher="readthedocs"
+      data-ea-type="readthedocs-sidebar"
+      data-ea-manual="true">
+</div></div>
+  </div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item">
+
+<nav aria-label="Breadcrumb" class="d-print-none">
+  <ul class="bd-breadcrumbs">
+    
+    <li class="breadcrumb-item breadcrumb-home">
+      <a href="../../../../../index.html" class="nav-link" aria-label="Home">
+        <i class="fa-solid fa-home"></i>
+      </a>
+    </li>
+    
+    <li class="breadcrumb-item"><a href="../../../../index.html" class="nav-link">Module code</a></li>
+    
+    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">quadrants.lang.ast.ast_transformers.checkpoint_transformer</span></li>
+  </ul>
+</nav>
+</div>
+      
+    </div>
+  
+  
+</div>
+</div>
+              
+              
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <h1>Source code for quadrants.lang.ast.ast_transformers.checkpoint_transformer</h1><div class="highlight"><pre>
+<span></span><span class="c1"># type: ignore</span>
+<span class="sd">&quot;&quot;&quot;AST recognition, validation, and auto-wrap lowering for ``qd.checkpoint(...)`` ``with`` blocks.</span>
+
+<span class="sd">Lives alongside ``call_transformer.py`` / ``function_def_transformer.py`` so that ``ast_transformer.py`` doesn&#39;t have to</span>
+<span class="sd">grow per-feature. ``ASTTransformer.build_With`` and ``ASTTransformer._is_checkpoint_call`` forward calls into the static</span>
+<span class="sd">methods here. ``FunctionDefTransformer.build_FunctionDef`` calls ``auto_wrap_for_loops`` on the kernel body when the</span>
+<span class="sd">kernel was decorated with ``@qd.kernel(graph=True, checkpoints=True)``, so that every top-level for-loop not already</span>
+<span class="sd">inside a ``with qd.checkpoint(...)`` becomes its own implicit no-yield checkpoint.</span>
+
+<span class="sd">See ``docs/source/user_guide/graph.md`` for the user-facing surface and ``perso_hugh/doc/qipc/reentrant.md`` for the</span>
+<span class="sd">design.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">ast</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">dataclasses</span><span class="w"> </span><span class="kn">import</span> <span class="n">dataclass</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.ast.ast_transformer_utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">ASTTransformerFuncContext</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.exception</span><span class="w"> </span><span class="kn">import</span> <span class="n">QuadrantsSyntaxError</span>
+
+<span class="c1"># Sentinel name used by `_kernel_coverage.py` (`FIELD_VAR_NAME`) for the probe-tracking field. The checkpoint validator</span>
+<span class="c1"># hard-codes the literal so coverage probes can be exempted from the bare-statement check without taking a runtime dep</span>
+<span class="c1"># on the optional `_kernel_coverage` module (it is only imported when `QD_KERNEL_COVERAGE=1`). The two must stay in</span>
+<span class="c1"># sync; if `FIELD_VAR_NAME` ever changes, update this constant and the corresponding test.</span>
+<span class="n">_KERNEL_COVERAGE_FIELD_NAME</span> <span class="o">=</span> <span class="s2">&quot;_qd_cov&quot;</span>
+
+<span class="c1"># Attribute name attached to synthetic `qd.checkpoint()` AST Call nodes generated by `auto_wrap_for_loops` for the</span>
+<span class="c1"># implicit-no-yield wrap of top-level for-loops in a `checkpoints=True` kernel. Distinguishes auto-wrap calls from</span>
+<span class="c1"># user-written `qd.checkpoint(cp_id, yield_on)` calls so the validator can apply different rules (implicit calls take no</span>
+<span class="c1"># args; explicit calls require both `cp_id` and `yield_on`).</span>
+<span class="n">_IMPLICIT_MARKER_ATTR</span> <span class="o">=</span> <span class="s2">&quot;_qd_implicit&quot;</span>
+
+
+<span class="nd">@dataclass</span>
+<div class="viewcode-block" id="CheckpointCallInfo">
+<a class="viewcode-back" href="../../../../../autoapi/quadrants/lang/ast/ast_transformers/checkpoint_transformer/index.html#quadrants.lang.ast.ast_transformers.checkpoint_transformer.CheckpointCallInfo">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">CheckpointCallInfo</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Resolved metadata for a `qd.checkpoint(...)` call recognised in the AST.</span>
+
+<span class="sd">    - ``cp_id``: the user-supplied label (an ``int`` or ``IntEnum`` value), or ``None`` for an auto-wrap implicit</span>
+<span class="sd">      checkpoint.</span>
+<span class="sd">    - ``yield_on``: name of the kernel parameter passed as ``yield_on=`` (an ``ast.Name`` is required), or ``None`` for</span>
+<span class="sd">      an implicit checkpoint.</span>
+<span class="sd">    - ``is_implicit``: ``True`` iff this Call was synthesised by ``auto_wrap_for_loops``.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="CheckpointCallInfo.cp_id">
+<a class="viewcode-back" href="../../../../../autoapi/quadrants/lang/ast/ast_transformers/checkpoint_transformer/index.html#quadrants.lang.ast.ast_transformers.checkpoint_transformer.CheckpointCallInfo.cp_id">[docs]</a>
+    <span class="n">cp_id</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span></div>
+
+<div class="viewcode-block" id="CheckpointCallInfo.yield_on">
+<a class="viewcode-back" href="../../../../../autoapi/quadrants/lang/ast/ast_transformers/checkpoint_transformer/index.html#quadrants.lang.ast.ast_transformers.checkpoint_transformer.CheckpointCallInfo.yield_on">[docs]</a>
+    <span class="n">yield_on</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span></div>
+
+<div class="viewcode-block" id="CheckpointCallInfo.is_implicit">
+<a class="viewcode-back" href="../../../../../autoapi/quadrants/lang/ast/ast_transformers/checkpoint_transformer/index.html#quadrants.lang.ast.ast_transformers.checkpoint_transformer.CheckpointCallInfo.is_implicit">[docs]</a>
+    <span class="n">is_implicit</span><span class="p">:</span> <span class="nb">bool</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="CheckpointTransformer">
+<a class="viewcode-back" href="../../../../../autoapi/quadrants/lang/ast/ast_transformers/checkpoint_transformer/index.html#quadrants.lang.ast.ast_transformers.checkpoint_transformer.CheckpointTransformer">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">CheckpointTransformer</span><span class="p">:</span>
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_is_coverage_probe_assign</span><span class="p">(</span><span class="n">stmt</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">stmt</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return True iff *stmt* is the synthesized ``_qd_cov[&lt;probe_id&gt;] = 1`` assignment inserted by</span>
+<span class="sd">        ``_kernel_coverage.py`` when ``QD_KERNEL_COVERAGE=1``. Keeping these out of the bare-statement rejection in</span>
+<span class="sd">        ``build_checkpoint_with`` lets coverage CI exercise every checkpoint kernel without the user having to wrap the</span>
+<span class="sd">        synthetic probes themselves.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">stmt</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Assign</span><span class="p">)</span> <span class="ow">or</span> <span class="nb">len</span><span class="p">(</span><span class="n">stmt</span><span class="o">.</span><span class="n">targets</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">False</span>
+        <span class="n">tgt</span> <span class="o">=</span> <span class="n">stmt</span><span class="o">.</span><span class="n">targets</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">tgt</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Subscript</span><span class="p">):</span>
+            <span class="k">return</span> <span class="kc">False</span>
+        <span class="k">return</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">tgt</span><span class="o">.</span><span class="n">value</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Name</span><span class="p">)</span> <span class="ow">and</span> <span class="n">tgt</span><span class="o">.</span><span class="n">value</span><span class="o">.</span><span class="n">id</span> <span class="o">==</span> <span class="n">_KERNEL_COVERAGE_FIELD_NAME</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_looks_like_checkpoint_call</span><span class="p">(</span><span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">expr</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Cheap structural check: is *node* `qd.checkpoint(...)` or bare `checkpoint(...)`? Doesn&#39;t validate args or</span>
+<span class="sd">        resolve names; used by ``auto_wrap_for_loops`` to skip already-wrapped `with` blocks without paying for the full</span>
+<span class="sd">        argument-resolution pass (which needs ``global_vars`` and a real Kernel object).&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Call</span><span class="p">):</span>
+            <span class="k">return</span> <span class="kc">False</span>
+        <span class="n">func</span> <span class="o">=</span> <span class="n">node</span><span class="o">.</span><span class="n">func</span>
+        <span class="k">return</span> <span class="p">(</span><span class="nb">isinstance</span><span class="p">(</span><span class="n">func</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Attribute</span><span class="p">)</span> <span class="ow">and</span> <span class="n">func</span><span class="o">.</span><span class="n">attr</span> <span class="o">==</span> <span class="s2">&quot;checkpoint&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="p">(</span>
+            <span class="nb">isinstance</span><span class="p">(</span><span class="n">func</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Name</span><span class="p">)</span> <span class="ow">and</span> <span class="n">func</span><span class="o">.</span><span class="n">id</span> <span class="o">==</span> <span class="s2">&quot;checkpoint&quot;</span>
+        <span class="p">)</span>
+
+    <span class="nd">@staticmethod</span>
+<div class="viewcode-block" id="CheckpointTransformer.is_explicit_checkpoint_with">
+<a class="viewcode-back" href="../../../../../autoapi/quadrants/lang/ast/ast_transformers/checkpoint_transformer/index.html#quadrants.lang.ast.ast_transformers.checkpoint_transformer.CheckpointTransformer.is_explicit_checkpoint_with">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">is_explicit_checkpoint_with</span><span class="p">(</span><span class="n">stmt</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">stmt</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return True iff *stmt* is a single-item `with qd.checkpoint(...):` block (explicit or implicit). Used by</span>
+<span class="sd">        ``auto_wrap_for_loops`` to leave already-wrapped for-loops alone.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">stmt</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">With</span><span class="p">)</span> <span class="ow">or</span> <span class="nb">len</span><span class="p">(</span><span class="n">stmt</span><span class="o">.</span><span class="n">items</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">False</span>
+        <span class="k">return</span> <span class="n">CheckpointTransformer</span><span class="o">.</span><span class="n">_looks_like_checkpoint_call</span><span class="p">(</span><span class="n">stmt</span><span class="o">.</span><span class="n">items</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">context_expr</span><span class="p">)</span></div>
+
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_resolve_cp_id</span><span class="p">(</span><span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">expr</span><span class="p">,</span> <span class="n">global_vars</span><span class="p">:</span> <span class="nb">dict</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Resolve the first positional arg of `qd.checkpoint(cp_id, ...)` to a Python int (or IntEnum instance).</span>
+
+<span class="sd">        Accepts (a) `ast.Constant` int literals (``qd.checkpoint(0, ...)``), (b) `ast.Attribute` references to `IntEnum`</span>
+<span class="sd">        values resolved against the kernel&#39;s `global_vars` (``qd.checkpoint(Stage.SIM, ...)`` where ``Stage`` is an</span>
+<span class="sd">        `IntEnum` defined at module scope), and (c) `ast.Name` references to module-level int constants</span>
+<span class="sd">        (``qd.checkpoint(CP_LOAD, ...)`` where ``CP_LOAD`` is an int defined at module scope). For (b) and (c) we return</span>
+<span class="sd">        the resolved value AS-IS (without re-wrapping through `int(...)`) so an IntEnum member identity is preserved</span>
+<span class="sd">        end-to-end -- the user writes `qd.checkpoint(Stage.SIM, ...)`, then reads `status.checkpoint` and gets back</span>
+<span class="sd">        `Stage.SIM`, not the raw int. Rejects everything else with a clear error so the user gets a compile-time</span>
+<span class="sd">        diagnostic rather than a confusing template-mapper failure later.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="c1"># Plain `qd.checkpoint(0, ...)` literal.</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Constant</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">value</span><span class="p">,</span> <span class="nb">int</span><span class="p">)</span> <span class="ow">and</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">value</span><span class="p">,</span> <span class="nb">bool</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">node</span><span class="o">.</span><span class="n">value</span>
+        <span class="c1"># `qd.checkpoint(Stage.SIM, ...)` -- look up `Stage` in the kernel&#39;s module globals, then `.SIM` on it.</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Attribute</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">value</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Name</span><span class="p">):</span>
+            <span class="n">container_name</span> <span class="o">=</span> <span class="n">node</span><span class="o">.</span><span class="n">value</span><span class="o">.</span><span class="n">id</span>
+            <span class="k">if</span> <span class="n">container_name</span> <span class="ow">in</span> <span class="n">global_vars</span><span class="p">:</span>
+                <span class="n">container</span> <span class="o">=</span> <span class="n">global_vars</span><span class="p">[</span><span class="n">container_name</span><span class="p">]</span>
+                <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">container</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">attr</span><span class="p">):</span>
+                    <span class="n">val</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">container</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">attr</span><span class="p">)</span>
+                    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">val</span><span class="p">,</span> <span class="nb">int</span><span class="p">)</span> <span class="ow">and</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">val</span><span class="p">,</span> <span class="nb">bool</span><span class="p">):</span>
+                        <span class="k">return</span> <span class="n">val</span>
+        <span class="c1"># `qd.checkpoint(CP_LOAD, ...)` -- bare name referencing a module-level int constant.</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Name</span><span class="p">)</span> <span class="ow">and</span> <span class="n">node</span><span class="o">.</span><span class="n">id</span> <span class="ow">in</span> <span class="n">global_vars</span><span class="p">:</span>
+            <span class="n">val</span> <span class="o">=</span> <span class="n">global_vars</span><span class="p">[</span><span class="n">node</span><span class="o">.</span><span class="n">id</span><span class="p">]</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">val</span><span class="p">,</span> <span class="nb">int</span><span class="p">)</span> <span class="ow">and</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">val</span><span class="p">,</span> <span class="nb">bool</span><span class="p">):</span>
+                <span class="k">return</span> <span class="n">val</span>
+        <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span>
+            <span class="s2">&quot;qd.checkpoint() first argument must be an int literal or an IntEnum value (e.g. `Stage.SIM`). Got an &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;unresolvable expression at line </span><span class="si">{</span><span class="nb">getattr</span><span class="p">(</span><span class="n">node</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;lineno&#39;</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;?&#39;</span><span class="p">)</span><span class="si">}</span><span class="s2">; the cp_id must be statically &quot;</span>
+            <span class="s2">&quot;determinable at AST-walk time so the framework can build the label -&gt; internal cp_id map and the &quot;</span>
+            <span class="s2">&quot;host-side resume API can refer to checkpoints by name.&quot;</span>
+        <span class="p">)</span>
+
+    <span class="nd">@staticmethod</span>
+<div class="viewcode-block" id="CheckpointTransformer.is_checkpoint_call">
+<a class="viewcode-back" href="../../../../../autoapi/quadrants/lang/ast/ast_transformers/checkpoint_transformer/index.html#quadrants.lang.ast.ast_transformers.checkpoint_transformer.CheckpointTransformer.is_checkpoint_call">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">is_checkpoint_call</span><span class="p">(</span><span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">expr</span><span class="p">,</span> <span class="n">global_vars</span><span class="p">:</span> <span class="nb">dict</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">CheckpointCallInfo</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;If *node* is a `qd.checkpoint(...)` call return a `CheckpointCallInfo`; otherwise return `None`.</span>
+
+<span class="sd">        Validates the call shape and raises `QuadrantsSyntaxError` for misuse so the user gets a clear message at the</span>
+<span class="sd">        `with` site rather than a vague &quot;not stream_parallel&quot; error later. Implicit calls (the synthetic</span>
+<span class="sd">        `qd.checkpoint()` no-arg calls produced by `auto_wrap_for_loops`) are recognised via the `_qd_implicit`</span>
+<span class="sd">        attribute and bypass user-call argument validation entirely.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">CheckpointTransformer</span><span class="o">.</span><span class="n">_looks_like_checkpoint_call</span><span class="p">(</span><span class="n">node</span><span class="p">):</span>
+            <span class="k">return</span> <span class="kc">None</span>
+        <span class="c1"># Auto-wrap-synthesised implicit checkpoint: no user-facing args, no validation.</span>
+        <span class="k">if</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">_IMPLICIT_MARKER_ATTR</span><span class="p">,</span> <span class="kc">False</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">CheckpointCallInfo</span><span class="p">(</span><span class="n">cp_id</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">yield_on</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">is_implicit</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        <span class="c1"># User-written `qd.checkpoint(cp_id, yield_on)` -- both args are required.</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">args</span><span class="p">)</span> <span class="o">+</span> <span class="nb">len</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">keywords</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">&quot;qd.checkpoint() takes two arguments: `qd.checkpoint(cp_id, yield_on=flag)`.&quot;</span><span class="p">)</span>
+        <span class="c1"># Collect cp_id (positional 0 or kw `cp_id=`) and yield_on (positional 1 or kw `yield_on=`).</span>
+        <span class="n">cp_id_arg</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">expr</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="n">yield_on_arg</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">expr</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">arg</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">args</span><span class="p">):</span>
+            <span class="k">if</span> <span class="n">i</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="n">cp_id_arg</span> <span class="o">=</span> <span class="n">arg</span>
+            <span class="k">elif</span> <span class="n">i</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+                <span class="n">yield_on_arg</span> <span class="o">=</span> <span class="n">arg</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;qd.checkpoint() takes at most 2 positional arguments (cp_id, yield_on); got </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">args</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
+                <span class="p">)</span>
+        <span class="k">for</span> <span class="n">kw</span> <span class="ow">in</span> <span class="n">node</span><span class="o">.</span><span class="n">keywords</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">kw</span><span class="o">.</span><span class="n">arg</span> <span class="o">==</span> <span class="s2">&quot;cp_id&quot;</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">cp_id_arg</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                    <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">&quot;qd.checkpoint() got `cp_id` both positionally and as a keyword&quot;</span><span class="p">)</span>
+                <span class="n">cp_id_arg</span> <span class="o">=</span> <span class="n">kw</span><span class="o">.</span><span class="n">value</span>
+            <span class="k">elif</span> <span class="n">kw</span><span class="o">.</span><span class="n">arg</span> <span class="o">==</span> <span class="s2">&quot;yield_on&quot;</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">yield_on_arg</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                    <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">&quot;qd.checkpoint() got `yield_on` both positionally and as a keyword&quot;</span><span class="p">)</span>
+                <span class="n">yield_on_arg</span> <span class="o">=</span> <span class="n">kw</span><span class="o">.</span><span class="n">value</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;qd.checkpoint() got unexpected keyword argument </span><span class="si">{</span><span class="n">kw</span><span class="o">.</span><span class="n">arg</span><span class="si">!r}</span><span class="s2">; only &#39;cp_id&#39; and &#39;yield_on&#39; are &quot;</span>
+                    <span class="s2">&quot;supported&quot;</span>
+                <span class="p">)</span>
+        <span class="k">if</span> <span class="n">cp_id_arg</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span>
+                <span class="s2">&quot;qd.checkpoint() is missing required argument `cp_id` (e.g. `qd.checkpoint(0, yield_on=flag)` or &quot;</span>
+                <span class="s2">&quot;`qd.checkpoint(Stage.SIM, yield_on=flag)`)&quot;</span>
+            <span class="p">)</span>
+        <span class="k">if</span> <span class="n">yield_on_arg</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span>
+                <span class="s2">&quot;qd.checkpoint() is missing required argument `yield_on` (e.g. &quot;</span>
+                <span class="s2">&quot;`qd.checkpoint(0, yield_on=overflow_flag)`)&quot;</span>
+            <span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">yield_on_arg</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Name</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span>
+                <span class="s2">&quot;qd.checkpoint(yield_on=...) must be the bare name of a kernel parameter (e.g. &quot;</span>
+                <span class="s2">&quot;`yield_on=overflow_flag`); expressions are not supported&quot;</span>
+            <span class="p">)</span>
+        <span class="n">cp_id_value</span> <span class="o">=</span> <span class="n">CheckpointTransformer</span><span class="o">.</span><span class="n">_resolve_cp_id</span><span class="p">(</span><span class="n">cp_id_arg</span><span class="p">,</span> <span class="n">global_vars</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">CheckpointCallInfo</span><span class="p">(</span><span class="n">cp_id</span><span class="o">=</span><span class="n">cp_id_value</span><span class="p">,</span> <span class="n">yield_on</span><span class="o">=</span><span class="n">yield_on_arg</span><span class="o">.</span><span class="n">id</span><span class="p">,</span> <span class="n">is_implicit</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></div>
+
+
+    <span class="nd">@staticmethod</span>
+<div class="viewcode-block" id="CheckpointTransformer.build_checkpoint_with">
+<a class="viewcode-back" href="../../../../../autoapi/quadrants/lang/ast/ast_transformers/checkpoint_transformer/index.html#quadrants.lang.ast.ast_transformers.checkpoint_transformer.CheckpointTransformer.build_checkpoint_with">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">build_checkpoint_with</span><span class="p">(</span>
+        <span class="n">ctx</span><span class="p">:</span> <span class="n">ASTTransformerFuncContext</span><span class="p">,</span>
+        <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">With</span><span class="p">,</span>
+        <span class="n">info</span><span class="p">:</span> <span class="n">CheckpointCallInfo</span><span class="p">,</span>
+        <span class="n">build_stmts</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Handles a `with qd.checkpoint(...):` block (explicit or auto-wrapped implicit).</span>
+
+<span class="sd">        Validates the use-site (kernel must be `graph=True, checkpoints=True`, no nesting; for explicit calls, the</span>
+<span class="sd">        `yield_on` arg must be a kernel parameter and the `cp_id` must be unique across the kernel) and appends an entry</span>
+<span class="sd">        to `kernel.checkpoint_yield_on_args` + `kernel.checkpoint_user_labels_by_cp_id`. Walks the body transparently --</span>
+<span class="sd">        for-loops inside the `with` become normal top-level for-loops in the kernel&#39;s frontend IR. The internal `cp_id`</span>
+<span class="sd">        is assigned by declaration order (the C++ `ASTBuilder.begin_checkpoint()` counter, mirrored as the list index in</span>
+<span class="sd">        `checkpoint_yield_on_args`).</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">ctx</span><span class="o">.</span><span class="n">is_kernel</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">&quot;qd.checkpoint() can only be used inside @qd.kernel, not @qd.func&quot;</span><span class="p">)</span>
+        <span class="n">kernel</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">global_context</span><span class="o">.</span><span class="n">current_kernel</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">kernel</span><span class="o">.</span><span class="n">use_graph</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span>
+                <span class="s2">&quot;qd.checkpoint() requires @qd.kernel(graph=True); the resume model only applies to graph kernels&quot;</span>
+            <span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">kernel</span><span class="o">.</span><span class="n">use_checkpoints</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;qd.checkpoint() found in kernel </span><span class="si">{</span><span class="n">kernel</span><span class="o">.</span><span class="n">func</span><span class="o">.</span><span class="vm">__name__</span><span class="si">!r}</span><span class="s2">, but this kernel was not decorated with &quot;</span>
+                <span class="s2">&quot;`checkpoints=True`. Add `checkpoints=True` to the decorator -- e.g. &quot;</span>
+                <span class="s2">&quot;`@qd.kernel(graph=True, checkpoints=True)` -- to opt into the pause / resume model.&quot;</span>
+            <span class="p">)</span>
+        <span class="k">if</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="s2">&quot;_in_checkpoint&quot;</span><span class="p">,</span> <span class="kc">False</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span>
+                <span class="s2">&quot;qd.checkpoint() cannot be nested inside another qd.checkpoint(); checkpoints in the &quot;</span>
+                <span class="s2">&quot;same kernel must be flat siblings (a checkpoint inside qd.graph_do_while is fine)&quot;</span>
+            <span class="p">)</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">info</span><span class="o">.</span><span class="n">is_implicit</span><span class="p">:</span>
+            <span class="c1"># Validate `yield_on=` names a real kernel parameter.</span>
+            <span class="n">arg_names</span> <span class="o">=</span> <span class="p">[</span><span class="n">m</span><span class="o">.</span><span class="n">name</span> <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="n">kernel</span><span class="o">.</span><span class="n">arg_metas</span><span class="p">]</span>
+            <span class="k">if</span> <span class="n">info</span><span class="o">.</span><span class="n">yield_on</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">arg_names</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;qd.checkpoint(yield_on=</span><span class="si">{</span><span class="n">info</span><span class="o">.</span><span class="n">yield_on</span><span class="si">!r}</span><span class="s2">) does not match any parameter of kernel &quot;</span>
+                    <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">kernel</span><span class="o">.</span><span class="n">func</span><span class="o">.</span><span class="vm">__name__</span><span class="si">!r}</span><span class="s2">. Available parameters: </span><span class="si">{</span><span class="n">arg_names</span><span class="si">}</span><span class="s2">&quot;</span>
+                <span class="p">)</span>
+            <span class="c1"># Reject duplicate user-supplied cp_id labels.</span>
+            <span class="n">existing</span> <span class="o">=</span> <span class="p">[</span><span class="n">lbl</span> <span class="k">for</span> <span class="n">lbl</span> <span class="ow">in</span> <span class="n">kernel</span><span class="o">.</span><span class="n">checkpoint_user_labels_by_cp_id</span> <span class="k">if</span> <span class="n">lbl</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">]</span>
+            <span class="k">if</span> <span class="n">info</span><span class="o">.</span><span class="n">cp_id</span> <span class="ow">in</span> <span class="n">existing</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;qd.checkpoint(cp_id=</span><span class="si">{</span><span class="n">info</span><span class="o">.</span><span class="n">cp_id</span><span class="si">!r}</span><span class="s2">, ...) declares a cp_id that is already used by another &quot;</span>
+                    <span class="sa">f</span><span class="s2">&quot;checkpoint in kernel </span><span class="si">{</span><span class="n">kernel</span><span class="o">.</span><span class="n">func</span><span class="o">.</span><span class="vm">__name__</span><span class="si">!r}</span><span class="s2">. Each `cp_id` label must be unique so the host &quot;</span>
+                    <span class="s2">&quot;loop can map `status.checkpoint` and `kernel.resume(from_checkpoint=...)` unambiguously.&quot;</span>
+                <span class="p">)</span>
+
+        <span class="c1"># Reject bare top-level statements (Assign / AugAssign / AnnAssign / non-docstring Expr) at the top of the</span>
+        <span class="c1"># checkpoint body and ask the user to wrap them in their own for-loop. The offloader&#39;s pending-serial bucket</span>
+        <span class="c1"># loses the surrounding `checkpoint_id` and emits such statements as `serial` tasks with `cp_id == -1`, so they</span>
+        <span class="c1"># would run unconditionally even when the checkpoint is skipped -- a silent correctness bug. Rather than</span>
+        <span class="c1"># auto-wrapping them transparently (which hides the fact that each bare stmt becomes its own kernel / graph node</span>
+        <span class="c1"># and surprises users when they look at the lowered IR or `prog.get_num_offloaded_tasks_on_last_call()`), we</span>
+        <span class="c1"># surface a clear compile-time error and have the user write `for _ in range(1): &lt;stmt&gt;` themselves. Implicit</span>
+        <span class="c1"># (auto-wrapped) checkpoints can never trip this -- they wrap exactly one ast.For. Coverage probes (synthesized</span>
+        <span class="c1"># `_qd_cov[i] = 1` assignments under `QD_KERNEL_COVERAGE=1`) are explicitly exempt; the cp_id propagation in</span>
+        <span class="c1"># `quadrants/transforms/offload.cpp` (`assemble_serial_statements`) makes them inherit the surrounding</span>
+        <span class="c1"># checkpoint&#39;s cp_id so the launcher&#39;s &quot;last task in checkpoint&quot; detection stays correct.</span>
+        <span class="k">for</span> <span class="n">stmt</span> <span class="ow">in</span> <span class="n">node</span><span class="o">.</span><span class="n">body</span><span class="p">:</span>
+            <span class="n">is_bare</span> <span class="o">=</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">stmt</span><span class="p">,</span> <span class="p">(</span><span class="n">ast</span><span class="o">.</span><span class="n">Assign</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">AugAssign</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">AnnAssign</span><span class="p">))</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">is_bare</span> <span class="ow">and</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">stmt</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Expr</span><span class="p">):</span>
+                <span class="c1"># Any `Expr(Constant)` is a no-op (Python&#39;s docstring pattern, e.g. a leading triple-quoted string). We</span>
+                <span class="c1"># accept it anywhere in the body rather than only at position 0 because the kernel-coverage AST</span>
+                <span class="c1"># transformer (see `_kernel_coverage.py`) prepends a `_qd_cov[...] = 1` probe under</span>
+                <span class="c1"># `QD_KERNEL_COVERAGE=1`, which would otherwise push the docstring to position 1 and have us flag it as</span>
+                <span class="c1"># a bare top-level statement.</span>
+                <span class="n">is_constant_expr</span> <span class="o">=</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">stmt</span><span class="o">.</span><span class="n">value</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Constant</span><span class="p">)</span>
+                <span class="n">is_bare</span> <span class="o">=</span> <span class="ow">not</span> <span class="n">is_constant_expr</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">is_bare</span><span class="p">:</span>
+                <span class="k">continue</span>
+            <span class="k">if</span> <span class="n">CheckpointTransformer</span><span class="o">.</span><span class="n">_is_coverage_probe_assign</span><span class="p">(</span><span class="n">stmt</span><span class="p">):</span>
+                <span class="k">continue</span>
+            <span class="n">stmt_kind</span> <span class="o">=</span> <span class="nb">type</span><span class="p">(</span><span class="n">stmt</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span>
+            <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;qd.checkpoint() body cannot contain a bare top-level </span><span class="si">{</span><span class="n">stmt_kind</span><span class="si">}</span><span class="s2"> statement &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;(line </span><span class="si">{</span><span class="nb">getattr</span><span class="p">(</span><span class="n">stmt</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;lineno&#39;</span><span class="p">,</span><span class="w"> </span><span class="s1">&#39;?&#39;</span><span class="p">)</span><span class="si">}</span><span class="s2">): every top-level statement in a checkpoint must be inside a &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;for-loop (or other control-flow construct), so the compiler can lower it as its own offloaded task &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;with the correct cp_id. Wrap the statement in `for _ in range(1):` to keep the original intent:</span><span class="se">\n</span><span class="s2">&quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;    with qd.checkpoint(cp_id, yield_on=flag):</span><span class="se">\n</span><span class="s2">&quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;        for _ in range(1):</span><span class="se">\n</span><span class="s2">&quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;            &lt;your statement here&gt;</span><span class="se">\n</span><span class="s2">&quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;        for i in range(arr.shape[0]):</span><span class="se">\n</span><span class="s2">&quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;            ...</span><span class="se">\n</span><span class="s2">&quot;</span>
+            <span class="p">)</span>
+
+        <span class="n">kernel</span><span class="o">.</span><span class="n">checkpoint_yield_on_args</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">info</span><span class="o">.</span><span class="n">yield_on</span><span class="p">)</span>
+        <span class="n">kernel</span><span class="o">.</span><span class="n">checkpoint_user_labels_by_cp_id</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">info</span><span class="o">.</span><span class="n">cp_id</span><span class="p">)</span>
+        <span class="c1"># Hand control to the C++ ASTBuilder so that every for-loop emitted by `build_stmts` below is tagged with this</span>
+        <span class="c1"># checkpoint&#39;s internal `cp_id` on its `ForLoopConfig.checkpoint_id`. The C++ counter is the source of truth for</span>
+        <span class="c1"># the dense internal cp_id; we cross-check it against the Python list index so that a future refactor that</span>
+        <span class="c1"># misaligns the two surfaces fires immediately.</span>
+        <span class="n">cpp_cp_id</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">ast_builder</span><span class="o">.</span><span class="n">begin_checkpoint</span><span class="p">()</span>
+        <span class="n">py_cp_id</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">kernel</span><span class="o">.</span><span class="n">checkpoint_yield_on_args</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span>
+        <span class="k">assert</span> <span class="n">cpp_cp_id</span> <span class="o">==</span> <span class="n">py_cp_id</span><span class="p">,</span> <span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;C++ ASTBuilder.begin_checkpoint() returned cp_id=</span><span class="si">{</span><span class="n">cpp_cp_id</span><span class="si">}</span><span class="s2"> but Python &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;kernel.checkpoint_yield_on_args index expected </span><span class="si">{</span><span class="n">py_cp_id</span><span class="si">}</span><span class="s2">; these counters &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;must stay in lockstep so the GraphManager can index yield_on by cp_id&quot;</span>
+        <span class="p">)</span>
+        <span class="n">ctx</span><span class="o">.</span><span class="n">_in_checkpoint</span> <span class="o">=</span> <span class="kc">True</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">build_stmts</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">body</span><span class="p">)</span>
+        <span class="k">finally</span><span class="p">:</span>
+            <span class="n">ctx</span><span class="o">.</span><span class="n">_in_checkpoint</span> <span class="o">=</span> <span class="kc">False</span>
+            <span class="n">ctx</span><span class="o">.</span><span class="n">ast_builder</span><span class="o">.</span><span class="n">end_checkpoint</span><span class="p">()</span>
+        <span class="k">return</span> <span class="kc">None</span></div>
+
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_make_implicit_checkpoint_with</span><span class="p">(</span><span class="n">for_stmt</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">For</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ast</span><span class="o">.</span><span class="n">With</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Construct a synthetic ``with qd.checkpoint(): &lt;for_stmt&gt;`` AST node carrying the `_qd_implicit` marker.</span>
+
+<span class="sd">        The `qd` name resolves via the kernel&#39;s module globals at AST-walk time; in practice every kernel that imports</span>
+<span class="sd">        `quadrants as qd` (the canonical pattern) has it available. If the user imported as `import quadrants as t`,</span>
+<span class="sd">        `with qd.checkpoint(...)` would already fail to resolve, so we don&#39;t worry about that case here.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">call</span> <span class="o">=</span> <span class="n">ast</span><span class="o">.</span><span class="n">Call</span><span class="p">(</span>
+            <span class="n">func</span><span class="o">=</span><span class="n">ast</span><span class="o">.</span><span class="n">Attribute</span><span class="p">(</span><span class="n">value</span><span class="o">=</span><span class="n">ast</span><span class="o">.</span><span class="n">Name</span><span class="p">(</span><span class="nb">id</span><span class="o">=</span><span class="s2">&quot;qd&quot;</span><span class="p">,</span> <span class="n">ctx</span><span class="o">=</span><span class="n">ast</span><span class="o">.</span><span class="n">Load</span><span class="p">()),</span> <span class="n">attr</span><span class="o">=</span><span class="s2">&quot;checkpoint&quot;</span><span class="p">,</span> <span class="n">ctx</span><span class="o">=</span><span class="n">ast</span><span class="o">.</span><span class="n">Load</span><span class="p">()),</span>
+            <span class="n">args</span><span class="o">=</span><span class="p">[],</span>
+            <span class="n">keywords</span><span class="o">=</span><span class="p">[],</span>
+        <span class="p">)</span>
+        <span class="nb">setattr</span><span class="p">(</span><span class="n">call</span><span class="p">,</span> <span class="n">_IMPLICIT_MARKER_ATTR</span><span class="p">,</span> <span class="kc">True</span><span class="p">)</span>
+        <span class="n">with_stmt</span> <span class="o">=</span> <span class="n">ast</span><span class="o">.</span><span class="n">With</span><span class="p">(</span>
+            <span class="n">items</span><span class="o">=</span><span class="p">[</span><span class="n">ast</span><span class="o">.</span><span class="n">withitem</span><span class="p">(</span><span class="n">context_expr</span><span class="o">=</span><span class="n">call</span><span class="p">,</span> <span class="n">optional_vars</span><span class="o">=</span><span class="kc">None</span><span class="p">)],</span>
+            <span class="n">body</span><span class="o">=</span><span class="p">[</span><span class="n">for_stmt</span><span class="p">],</span>
+            <span class="n">type_comment</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="n">ast</span><span class="o">.</span><span class="n">copy_location</span><span class="p">(</span><span class="n">with_stmt</span><span class="p">,</span> <span class="n">for_stmt</span><span class="p">)</span>
+        <span class="n">ast</span><span class="o">.</span><span class="n">copy_location</span><span class="p">(</span><span class="n">call</span><span class="p">,</span> <span class="n">for_stmt</span><span class="p">)</span>
+        <span class="n">ast</span><span class="o">.</span><span class="n">copy_location</span><span class="p">(</span><span class="n">call</span><span class="o">.</span><span class="n">func</span><span class="p">,</span> <span class="n">for_stmt</span><span class="p">)</span>
+        <span class="n">ast</span><span class="o">.</span><span class="n">copy_location</span><span class="p">(</span><span class="n">call</span><span class="o">.</span><span class="n">func</span><span class="o">.</span><span class="n">value</span><span class="p">,</span> <span class="n">for_stmt</span><span class="p">)</span>
+        <span class="c1"># ast.With requires a complete locations table for downstream passes; fix up missing fields.</span>
+        <span class="n">ast</span><span class="o">.</span><span class="n">fix_missing_locations</span><span class="p">(</span><span class="n">with_stmt</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">with_stmt</span>
+
+    <span class="nd">@staticmethod</span>
+<div class="viewcode-block" id="CheckpointTransformer.auto_wrap_for_loops">
+<a class="viewcode-back" href="../../../../../autoapi/quadrants/lang/ast/ast_transformers/checkpoint_transformer/index.html#quadrants.lang.ast.ast_transformers.checkpoint_transformer.CheckpointTransformer.auto_wrap_for_loops">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">auto_wrap_for_loops</span><span class="p">(</span><span class="n">stmts</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">ast</span><span class="o">.</span><span class="n">stmt</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">ast</span><span class="o">.</span><span class="n">stmt</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Auto-wrap pass for `@qd.kernel(graph=True, checkpoints=True)` kernels.</span>
+
+<span class="sd">        Walks *stmts* and returns a new list where every `ast.For` not already inside a `with qd.checkpoint(...)` block</span>
+<span class="sd">        is wrapped in a synthetic implicit checkpoint. Recurses into `while qd.graph_do_while(...)` bodies so for-loops</span>
+<span class="sd">        nested in the WHILE body get the same treatment. Other compound statements (`ast.If`, `ast.With`,</span>
+<span class="sd">        non-graph_do_while `ast.While`, `ast.Try`) are passed through unchanged -- they&#39;re not the common pattern in</span>
+<span class="sd">        Quadrants kernel bodies and recursing into them risks wrapping nested for-loops that the user intended to be</span>
+<span class="sd">        sub-tasks of a larger control-flow block. Bare top-level statements (assignments, expressions, coverage probes)</span>
+<span class="sd">        are also passed through unchanged so they remain in the kernel prologue with `cp_id=-1` and run on every launch.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">new_stmts</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">ast</span><span class="o">.</span><span class="n">stmt</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">stmt</span> <span class="ow">in</span> <span class="n">stmts</span><span class="p">:</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">stmt</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">For</span><span class="p">):</span>
+                <span class="n">new_stmts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">CheckpointTransformer</span><span class="o">.</span><span class="n">_make_implicit_checkpoint_with</span><span class="p">(</span><span class="n">stmt</span><span class="p">))</span>
+            <span class="k">elif</span> <span class="n">CheckpointTransformer</span><span class="o">.</span><span class="n">is_explicit_checkpoint_with</span><span class="p">(</span><span class="n">stmt</span><span class="p">):</span>
+                <span class="c1"># User has already wrapped this for-loop (or block of for-loops) -- leave alone.</span>
+                <span class="n">new_stmts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">stmt</span><span class="p">)</span>
+            <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">stmt</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">While</span><span class="p">):</span>
+                <span class="c1"># `while qd.graph_do_while(...):` -- recurse into the loop body. (Plain `while &lt;cond&gt;:` is not a</span>
+                <span class="c1"># supported Quadrants kernel construct; the `build_While` transformer will reject it later, so we don&#39;t</span>
+                <span class="c1"># special-case it here.)</span>
+                <span class="n">stmt</span><span class="o">.</span><span class="n">body</span> <span class="o">=</span> <span class="n">CheckpointTransformer</span><span class="o">.</span><span class="n">auto_wrap_for_loops</span><span class="p">(</span><span class="n">stmt</span><span class="o">.</span><span class="n">body</span><span class="p">)</span>
+                <span class="n">new_stmts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">stmt</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">new_stmts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">stmt</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">new_stmts</span></div>
+</div>
+
+</pre></div>
+
+                </article>
+              
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+          </footer>
+        
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script defer src="../../../../../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5"></script>
+<script defer src="../../../../../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5"></script>
+
+  <footer class="bd-footer">
+<div class="bd-footer__inner bd-page-width">
+  
+    <div class="footer-items__start">
+      
+        <div class="footer-item">
+
+  <p class="copyright">
+    
+      © Copyright 2025 Genesis AI Inc.
+      <br/>
+    
+  </p>
+</div>
+      
+        <div class="footer-item">
+
+  <p class="sphinx-version">
+    Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 8.1.3.
+    <br/>
+  </p>
+</div>
+      
+    </div>
+  
+  
+  
+    <div class="footer-items__end">
+      
+        <div class="footer-item">
+<p class="theme-version">
+  <!-- # L10n: Setting the PST URL as an argument as this does not need to be localized -->
+  Built with the <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a> 0.19.0.
+</p></div>
+      
+    </div>
+  
+</div>
+
+  </footer>
+  </body>
+</html>
