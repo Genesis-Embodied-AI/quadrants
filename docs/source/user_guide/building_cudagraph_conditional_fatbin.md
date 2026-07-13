@@ -41,8 +41,8 @@ drivers with `CUDA_ERROR_INVALID_IMAGE`. The per-arch toolkit requirement lives
 in the `SM_TOOLKIT` mapping in `scripts/_fatbin_common.py`, where each SM maps to
 a version spec — `==X.Y` (exact) or `>=X.Y` (minimum):
 
-- **`==12.8` (matched exactly)** — every architecture except sm_110
-  (Turing / Ampere / Ada, Hopper sm_90, Blackwell sm_100 / sm_120). 12.8 is the
+- **`==12.8` (matched exactly)** — every architecture except sm_110 (pre-Hopper
+  sm_60 / sm_70 / sm_80, Hopper sm_90, Blackwell sm_100 / sm_120). 12.8 is the
   oldest toolkit that covers all shipping Blackwell parts, and is the
   wide-compatibility anchor, so it is matched exactly rather than "or newer".
 - **`>=13.0`** — sm_110 (Thor) only; earlier toolkits fail with

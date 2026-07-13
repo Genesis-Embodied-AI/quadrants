@@ -36,10 +36,9 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 #            old-driver constraint (their hardware only ever ships with X.Y+ drivers), so any newer toolkit is fine.
 #            sm_110 (Thor) needs CUDA 13.0 -- earlier toolkits reject compute_110 -- but 13.1, 13.2, ... are all OK too.
 SM_TOOLKIT = {
-    75: "==12.8",
+    60: "==12.8",
+    70: "==12.8",
     80: "==12.8",
-    86: "==12.8",
-    89: "==12.8",
     90: "==12.8",
     100: "==12.8",
     110: ">=13.0",

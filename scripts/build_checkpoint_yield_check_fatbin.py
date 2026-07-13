@@ -25,12 +25,16 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 SRC = REPO_ROOT / "quadrants" / "runtime" / "cuda" / "checkpoint_yield_check.cu"
 OUT_HEADER = REPO_ROOT / "quadrants" / "runtime" / "cuda" / "checkpoint_yield_check_fatbin.h"
 
-# Targets cover both pre-Hopper (Turing / Ampere / Ada Lovelace) and Hopper+ (Blackwell / Thor). The yield-check kernel
+# Targets cover both pre-Hopper (Pascal through Ada Lovelace) and Hopper+ (Blackwell / Thor). The yield-check kernel
 # itself only uses `atomicCAS` and direct pointer writes (no device runtime calls), so it builds fine on every SM target
 # here. Pre-Hopper coverage is required because the qd.checkpoint pre-Hopper CUDA path (codegen prologue + flat graph)
 # still wires the yield-check kernel as a regular kernel node, just inline after each yielding checkpoint's last body
-# kernel instead of inside an IF conditional body. Hopper+ coverage is unchanged from before.
-SM_VERSIONS = [75, 80, 86, 89, 90, 100, 110, 120]
+# kernel instead of inside an IF conditional body.
+#
+# One SASS target per compute-capability major suffices: a cubin built for sm_X0 loads on every device of the same major
+# (X.z, z >= 0) via CUDA minor-version compatibility. So sm_70 also covers Turing 7.5, sm_80 covers Ampere 8.6 / 8.7 and
+# Ada 8.9, etc. Starting at sm_60 matches the advertised >= sm_60 CUDA floor (see docs supported_systems.md).
+SM_VERSIONS = [60, 70, 80, 90, 100, 110, 120]
 
 
 def main() -> None:
