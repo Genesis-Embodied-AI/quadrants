@@ -79,7 +79,7 @@ solve(x, counter)
 
 The argument to `qd.graph_do_while()` must be the name of a scalar `qd.i32` ndarray parameter. The loop body repeats while this value is non-zero.
 
-- On [CUDA SM 9.0+](https://developer.nvidia.com/cuda/gpus), this uses CUDA conditional while nodes - the entire iteration runs on the GPU with no host involvement.
+- On [CUDA SM 9.0+](https://developer.nvidia.com/cuda/gpus), this uses [CUDA conditional while nodes](https://developer.nvidia.com/blog/dynamic-control-flow-in-cuda-graphs-with-conditional-nodes/) - the entire iteration runs on the GPU with no host involvement.
 - On older CUDA GPUs, AMDGPU, and non-GPU backends, it falls back to a host-side do-while loop (see the [backend support table](#backend-support)).
 
 ### Patterns
