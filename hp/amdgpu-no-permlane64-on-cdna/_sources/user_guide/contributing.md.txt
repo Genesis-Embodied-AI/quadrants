@@ -1,4 +1,4 @@
-# Contributing to quadrants
+# Advanced: Contributing to quadrants
 
 ## Good practice reminder
 
@@ -49,15 +49,15 @@ uv pip install --group dev --group test
 
 `build.py` is a python script to automatically set up the build environment for you before invoking the build commands:
 
-* `LLVM libraries`: downloads an archive for `LLVM` libraries, decompresses it and sets `LLVM_DIR`.
+* `LLVM libraries`: downloads an archive for [LLVM](https://llvm.org/) libraries (a library for building compilers), decompresses it and sets `LLVM_DIR`.
 * `clang`: depending on the platform, download `clang` or just check if available with the right version.
 
 `build.py` can be used at least two ways:
 
-* `build.py wheel` to build the wheel (via scikit-build-core, i.e. `pip wheel`)
+* `build.py wheel` to build the wheel (via [scikit-build-core](https://scikit-build-core.readthedocs.io/en/latest/), i.e. `pip wheel`)
 * `build.py --shell` to enter a shell with environment variables set up as with `build.py wheel` in order to let you invoke yourself the commands.
 
-For incremental development, do an editable install (scikit-build-core "redirect" mode: the compiled core is installed and rebuilt on demand, Python edits are live):
+For incremental development, do an editable install ([scikit-build-core](https://scikit-build-core.readthedocs.io/en/latest/) "redirect" mode: the compiled core is installed and rebuilt on demand, Python edits are live):
 
 ```
 ./build.py --shell # run a new shell with environment variables
@@ -72,7 +72,7 @@ source env.sh
 pip install --no-build-isolation -e . -Ceditable.rebuild=true
 ```
 
-`build.py` exports both the legacy `QUADRANTS_CMAKE_ARGS` and the `CMAKE_ARGS` that scikit-build-core actually reads, so sourcing `env.sh` (or using `--shell`) is enough -- no manual `export CMAKE_ARGS="$QUADRANTS_CMAKE_ARGS"` step is needed.
+`build.py` reads and exports `CMAKE_ARGS` (scikit-build-core's CMake-args passthrough), so sourcing `env.sh` (or using `--shell`) is enough to make the configured options available to the build.
 
 ## Building the package for release purposes
 
@@ -84,13 +84,13 @@ To build the release package:
 
 We use `cmake` to build the C++ core. scikit-build-core puts the CMake build tree under `build/{wheel_tag}`, where the wheel tag encodes the Python version and host platform. For example: `build/cp310-cp310-linux_x86_64`.
 
-You can modify the cmake options to your liking in order to enable or disable some features you need or don't need. To discover them, you can use `ccmake`:
+You can modify the cmake options to your liking in order to enable or disable some features you need or don't need. To discover them, you can use [ccmake](https://cmake.org/cmake/help/latest/manual/ccmake.1.html):
 
 ```
 ccmake build/cp310-cp310-linux_x86_64
 ```
 
-You could then set the environment variable `CMAKE_ARGS` (scikit-build-core's CMake-args passthrough) to configure the build. `build.py` also accepts the legacy `QUADRANTS_CMAKE_ARGS` and forwards it to `CMAKE_ARGS`. For instance, to disable the CUDA and AMDGPU backends:
+You could then set the environment variable `CMAKE_ARGS` (scikit-build-core's CMake-args passthrough) to configure the build. `build.py` reads it, layers on the toolchain options it manages, and exports it back. For instance, to disable the CUDA and AMDGPU backends:
 
 ```
 export CMAKE_ARGS="-DQD_WITH_CUDA=OFF -DQD_WITH_AMDGPU=OFF"
@@ -102,24 +102,17 @@ To direct `cmake` where to look at for some dependencies, for example `LLVM`, yo
 # using an env var
 export LLVM_DIR="/path/to/llvm/"
 # or with a cmake option
-export QUADRANTS_CMAKE_ARGS="$QUADRANTS_CMAKE_ARGS -DLLVM_ROOT=/path/to/llvm"
+export CMAKE_ARGS="$CMAKE_ARGS -DLLVM_ROOT=/path/to/llvm"
 ```
 
-## Advanced usage
+### Building with the AMD GPU backend (Linux)
 
-### CI Convention about compilers/LLVM
+The AMD GPU backend is Linux-only (it is force-disabled on macOS and Windows) and is off by default, so enable it explicitly through `CMAKE_ARGS`:
 
-Quadrants comprises at least three important parts:
-
-1. `quadrants` host runtime: Made with a mix of Python and C++. The C++ core is compiled using the OS default C/C++ compiler.
-2. `quadrants` device runtime (bitcode): C++ code compiled using `clang++` from the distribution/OS. Using `clang++` is required as it has to support the same targets as `LLVM`.
-3. `LLVM` libraries used by host runtime: statically or dynamically linked, used to lower the kernel's final IR to machine code on the host. The CI uses an LLVM version compiled from source.
-
-### Building LLVM for debugging it
-
-Sometimes, it could be useful to have a `LLVM` version that allows to print intermediate passes or with debug symbols to find out where and why LLVM fails (for example, when Instruction Selection fails). To do so you would have to build LLVM by yourself. If so, you should take some inspiration from our [CI pipeline to build LLVM](https://github.com/Genesis-Embodied-AI/quadrants-sdk-builds/blob/main/.github/workflows/llvm-ci.yml) to tweak a little bit to your liking (and not enable/disable options that would create discrepancies).
-
-You can then use `LLVM_DIR` to point to the `LLVM` build directory.
+```
+./build.py --shell
+CMAKE_ARGS="-DQD_WITH_AMDGPU=ON -DQD_WITH_CUDA=OFF" pip install --no-build-isolation -e . -v
+```
 
 ## CI checks
 
@@ -169,6 +162,23 @@ Uses an AI agent to flag feature-specific code being piled into heavily-tracked 
 
 The agent reports up to 5 violations, each annotated with the host file's hotness numbers (commits / authors / size). This check is delayed by 30 minutes, to avoid running repeatedly if multiple commits pushed with a short delay between each.
 
+### Doc quality check (`check_doc_quality.yml`)
+
+Uses an AI agent to review documentation changes for an end-user audience (someone writing Quadrants kernels in Python, not a compiler engineer).
+
+
+Let's first define an *advanced / internal section* as a clearly-marked section whose heading contains "Advanced", "Under the hood", "Internals", or "Implementation"; it targets a more advanced reader rather than the typical end user.
+
+
+For each `docs/**/*.md` file added or modified in the PR, the CI agent reads the entire current file (not just the diff) and checks three things:
+- (1) **undefined terms** — a term a typical user is unlikely to know (specialized or internal jargon, project-specific abbreviations) must be defined at its first use in that file, either inline or via a link to a doc that defines it, unless that first use is inside an advanced / internal section;
+- (2) **end-user relevance** — internal / implementation / contributor-only material must be confined to an advanced / internal section;
+- (3) **reading order** — information must be ordered so a first-time reader can follow the file top-to-bottom in one pass, without forward references (a passage that can only be understood by reading something introduced later in the same file).
+
+The following do not count as violations: references to public APIs that the author links to their docs and/or labels as public; brief reader-directed pointers suggesting the reader could contribute upstream or file an issue; the core public API vocabulary a user already knows (e.g. `@qd.kernel`, `@qd.func`, `qd.Template`, fields, ndarrays); and, for the reading-order check, an overview/roadmap near the top, optional "see below" pointers (where the current passage still reads fine on its own), and backward references.
+
+The agent reports up to 10 violations. This check is delayed by 30 minutes, to avoid running repeatedly if multiple commits pushed with a short delay between each.
+
 ### PR change report (`pr_change_report.yml`)
 
 Posts a fresh PR comment on every push. The comment is a single line: the totals (file count, code lines added, code lines removed) formatted as a markdown link to a GitHub Check whose page contains the full per-file / per-function breakdown. "Code lines" exclude blank lines, comment-only lines, and (in Python) lines whose only token content is a string literal (i.e. docstrings and continuation lines of multi-line strings). C/C++ `/* … */` block comments are stripped before counting.
@@ -201,3 +211,19 @@ quadrants/program/legacy_stream.cpp 42 -42
 The `0` in the LoC column for the two new files reflects that both files did not exist before this PR (their pre-PR code-line count is 0). The `42 -42` row for `legacy_stream.cpp` is a fully-deleted file: 42 code lines existed before this PR and all 42 were removed.
 
 This check is delayed by 30 minutes, to avoid running repeatedly if multiple commits pushed with a short delay between each.
+
+## Advanced
+
+### CI Convention about compilers/LLVM
+
+Quadrants comprises at least three important parts:
+
+1. `quadrants` host runtime: Made with a mix of Python and C++. The C++ core is compiled using the OS default C/C++ compiler.
+2. `quadrants` device runtime (bitcode): C++ code compiled using `clang++` from the distribution/OS. Using `clang++` is required as it has to support the same targets as `LLVM`.
+3. `LLVM` libraries used by host runtime: statically or dynamically linked, used to lower the kernel's final IR to machine code on the host. The CI uses an LLVM version compiled from source.
+
+### Building LLVM for debugging it
+
+Sometimes, it could be useful to have a `LLVM` version that allows to print intermediate passes or with debug symbols to find out where and why LLVM fails (for example, when Instruction Selection fails). To do so you would have to build LLVM by yourself. If so, you should take some inspiration from our [CI pipeline to build LLVM](https://github.com/Genesis-Embodied-AI/quadrants-sdk-builds/blob/main/.github/workflows/llvm-ci.yml) to tweak a little bit to your liking (and not enable/disable options that would create discrepancies).
+
+You can then use `LLVM_DIR` to point to the `LLVM` build directory.

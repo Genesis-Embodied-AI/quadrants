@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>Contributing to quadrants &#8212; Quadrants 1.0.3 documentation</title>
+    <title>Advanced: Contributing to quadrants &#8212; Quadrants 1.1.1 documentation</title>
   
   
   
@@ -43,7 +43,7 @@
   <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5" />
 <link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5" />
 
-    <script src="../_static/documentation_options.js?v=baaebd52"></script>
+    <script src="../_static/documentation_options.js?v=58fbf978"></script>
     <script src="../_static/doctools.js?v=9bcbadda"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -63,7 +63,7 @@
     <link rel="prev" title="Optimization passes" href="optimization_passes.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="1.0.3" />
+  <meta name="docsearch:version" content="1.1.1" />
   
     
     <script src="../_static/searchtools.js"></script>
@@ -131,7 +131,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 1.0.3 documentation</p>
+    <p class="title logo__title">Quadrants 1.1.1 documentation</p>
   
 </a></div>
     
@@ -361,7 +361,7 @@
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Contributing</span></p>
 <ul class="current nav bd-sidenav">
-<li class="toctree-l1 current active"><a class="current reference internal" href="#">Contributing to quadrants</a></li>
+<li class="toctree-l1 current active"><a class="current reference internal" href="#">Advanced: Contributing to quadrants</a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Internal</span></p>
 <ul class="nav bd-sidenav">
@@ -409,7 +409,7 @@
     
     <li class="breadcrumb-item"><a href="index.html" class="nav-link">User guide</a></li>
     
-    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">Contributing to quadrants</span></li>
+    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">Advanced: Contributing to quadrants</span></li>
   </ul>
 </nav>
 </div>
@@ -426,8 +426,8 @@
 <div id="searchbox"></div>
                 <article class="bd-article">
                   
-  <section class="tex2jax_ignore mathjax_ignore" id="contributing-to-quadrants">
-<h1>Contributing to quadrants<a class="headerlink" href="#contributing-to-quadrants" title="Link to this heading">#</a></h1>
+  <section class="tex2jax_ignore mathjax_ignore" id="advanced-contributing-to-quadrants">
+<h1>Advanced: Contributing to quadrants<a class="headerlink" href="#advanced-contributing-to-quadrants" title="Link to this heading">#</a></h1>
 <section id="good-practice-reminder">
 <h2>Good practice reminder<a class="headerlink" href="#good-practice-reminder" title="Link to this heading">#</a></h2>
 <ul class="simple">
@@ -472,15 +472,15 @@
 <h2><code class="docutils literal notranslate"><span class="pre">build.py</span></code><a class="headerlink" href="#build-py" title="Link to this heading">#</a></h2>
 <p><code class="docutils literal notranslate"><span class="pre">build.py</span></code> is a python script to automatically set up the build environment for you before invoking the build commands:</p>
 <ul class="simple">
-<li><p><code class="docutils literal notranslate"><span class="pre">LLVM</span> <span class="pre">libraries</span></code>: downloads an archive for <code class="docutils literal notranslate"><span class="pre">LLVM</span></code> libraries, decompresses it and sets <code class="docutils literal notranslate"><span class="pre">LLVM_DIR</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">LLVM</span> <span class="pre">libraries</span></code>: downloads an archive for <a class="reference external" href="https://llvm.org/">LLVM</a> libraries (a library for building compilers), decompresses it and sets <code class="docutils literal notranslate"><span class="pre">LLVM_DIR</span></code>.</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">clang</span></code>: depending on the platform, download <code class="docutils literal notranslate"><span class="pre">clang</span></code> or just check if available with the right version.</p></li>
 </ul>
 <p><code class="docutils literal notranslate"><span class="pre">build.py</span></code> can be used at least two ways:</p>
 <ul class="simple">
-<li><p><code class="docutils literal notranslate"><span class="pre">build.py</span> <span class="pre">wheel</span></code> to build the wheel (via scikit-build-core, i.e. <code class="docutils literal notranslate"><span class="pre">pip</span> <span class="pre">wheel</span></code>)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">build.py</span> <span class="pre">wheel</span></code> to build the wheel (via <a class="reference external" href="https://scikit-build-core.readthedocs.io/en/latest/">scikit-build-core</a>, i.e. <code class="docutils literal notranslate"><span class="pre">pip</span> <span class="pre">wheel</span></code>)</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">build.py</span> <span class="pre">--shell</span></code> to enter a shell with environment variables set up as with <code class="docutils literal notranslate"><span class="pre">build.py</span> <span class="pre">wheel</span></code> in order to let you invoke yourself the commands.</p></li>
 </ul>
-<p>For incremental development, do an editable install (scikit-build-core “redirect” mode: the compiled core is installed and rebuilt on demand, Python edits are live):</p>
+<p>For incremental development, do an editable install (<a class="reference external" href="https://scikit-build-core.readthedocs.io/en/latest/">scikit-build-core</a> “redirect” mode: the compiled core is installed and rebuilt on demand, Python edits are live):</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">./</span><span class="n">build</span><span class="o">.</span><span class="n">py</span> <span class="o">--</span><span class="n">shell</span> <span class="c1"># run a new shell with environment variables</span>
 <span class="n">pip</span> <span class="n">install</span> <span class="o">--</span><span class="n">no</span><span class="o">-</span><span class="n">build</span><span class="o">-</span><span class="n">isolation</span> <span class="o">-</span><span class="n">e</span> <span class="o">.</span> <span class="o">-</span><span class="n">Ceditable</span><span class="o">.</span><span class="n">rebuild</span><span class="o">=</span><span class="n">true</span>
 </pre></div>
@@ -491,7 +491,7 @@
 <span class="n">pip</span> <span class="n">install</span> <span class="o">--</span><span class="n">no</span><span class="o">-</span><span class="n">build</span><span class="o">-</span><span class="n">isolation</span> <span class="o">-</span><span class="n">e</span> <span class="o">.</span> <span class="o">-</span><span class="n">Ceditable</span><span class="o">.</span><span class="n">rebuild</span><span class="o">=</span><span class="n">true</span>
 </pre></div>
 </div>
-<p><code class="docutils literal notranslate"><span class="pre">build.py</span></code> exports both the legacy <code class="docutils literal notranslate"><span class="pre">QUADRANTS_CMAKE_ARGS</span></code> and the <code class="docutils literal notranslate"><span class="pre">CMAKE_ARGS</span></code> that scikit-build-core actually reads, so sourcing <code class="docutils literal notranslate"><span class="pre">env.sh</span></code> (or using <code class="docutils literal notranslate"><span class="pre">--shell</span></code>) is enough – no manual <code class="docutils literal notranslate"><span class="pre">export</span> <span class="pre">CMAKE_ARGS=&quot;$QUADRANTS_CMAKE_ARGS&quot;</span></code> step is needed.</p>
+<p><code class="docutils literal notranslate"><span class="pre">build.py</span></code> reads and exports <code class="docutils literal notranslate"><span class="pre">CMAKE_ARGS</span></code> (scikit-build-core’s CMake-args passthrough), so sourcing <code class="docutils literal notranslate"><span class="pre">env.sh</span></code> (or using <code class="docutils literal notranslate"><span class="pre">--shell</span></code>) is enough to make the configured options available to the build.</p>
 </section>
 <section id="building-the-package-for-release-purposes">
 <h2>Building the package for release purposes<a class="headerlink" href="#building-the-package-for-release-purposes" title="Link to this heading">#</a></h2>
@@ -500,11 +500,11 @@
 </pre></div>
 </div>
 <p>We use <code class="docutils literal notranslate"><span class="pre">cmake</span></code> to build the C++ core. scikit-build-core puts the CMake build tree under <code class="docutils literal notranslate"><span class="pre">build/{wheel_tag}</span></code>, where the wheel tag encodes the Python version and host platform. For example: <code class="docutils literal notranslate"><span class="pre">build/cp310-cp310-linux_x86_64</span></code>.</p>
-<p>You can modify the cmake options to your liking in order to enable or disable some features you need or don’t need. To discover them, you can use <code class="docutils literal notranslate"><span class="pre">ccmake</span></code>:</p>
+<p>You can modify the cmake options to your liking in order to enable or disable some features you need or don’t need. To discover them, you can use <a class="reference external" href="https://cmake.org/cmake/help/latest/manual/ccmake.1.html">ccmake</a>:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">ccmake</span> <span class="n">build</span><span class="o">/</span><span class="n">cp310</span><span class="o">-</span><span class="n">cp310</span><span class="o">-</span><span class="n">linux_x86_64</span>
 </pre></div>
 </div>
-<p>You could then set the environment variable <code class="docutils literal notranslate"><span class="pre">CMAKE_ARGS</span></code> (scikit-build-core’s CMake-args passthrough) to configure the build. <code class="docutils literal notranslate"><span class="pre">build.py</span></code> also accepts the legacy <code class="docutils literal notranslate"><span class="pre">QUADRANTS_CMAKE_ARGS</span></code> and forwards it to <code class="docutils literal notranslate"><span class="pre">CMAKE_ARGS</span></code>. For instance, to disable the CUDA and AMDGPU backends:</p>
+<p>You could then set the environment variable <code class="docutils literal notranslate"><span class="pre">CMAKE_ARGS</span></code> (scikit-build-core’s CMake-args passthrough) to configure the build. <code class="docutils literal notranslate"><span class="pre">build.py</span></code> reads it, layers on the toolchain options it manages, and exports it back. For instance, to disable the CUDA and AMDGPU backends:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">export</span> <span class="n">CMAKE_ARGS</span><span class="o">=</span><span class="s2">&quot;-DQD_WITH_CUDA=OFF -DQD_WITH_AMDGPU=OFF&quot;</span>
 </pre></div>
 </div>
@@ -512,25 +512,16 @@
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="c1"># using an env var</span>
 <span class="n">export</span> <span class="n">LLVM_DIR</span><span class="o">=</span><span class="s2">&quot;/path/to/llvm/&quot;</span>
 <span class="c1"># or with a cmake option</span>
-<span class="n">export</span> <span class="n">QUADRANTS_CMAKE_ARGS</span><span class="o">=</span><span class="s2">&quot;$QUADRANTS_CMAKE_ARGS -DLLVM_ROOT=/path/to/llvm&quot;</span>
+<span class="n">export</span> <span class="n">CMAKE_ARGS</span><span class="o">=</span><span class="s2">&quot;$CMAKE_ARGS -DLLVM_ROOT=/path/to/llvm&quot;</span>
 </pre></div>
 </div>
-</section>
-<section id="advanced-usage">
-<h2>Advanced usage<a class="headerlink" href="#advanced-usage" title="Link to this heading">#</a></h2>
-<section id="ci-convention-about-compilers-llvm">
-<h3>CI Convention about compilers/LLVM<a class="headerlink" href="#ci-convention-about-compilers-llvm" title="Link to this heading">#</a></h3>
-<p>Quadrants comprises at least three important parts:</p>
-<ol class="arabic simple">
-<li><p><code class="docutils literal notranslate"><span class="pre">quadrants</span></code> host runtime: Made with a mix of Python and C++. The C++ core is compiled using the OS default C/C++ compiler.</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">quadrants</span></code> device runtime (bitcode): C++ code compiled using <code class="docutils literal notranslate"><span class="pre">clang++</span></code> from the distribution/OS. Using <code class="docutils literal notranslate"><span class="pre">clang++</span></code> is required as it has to support the same targets as <code class="docutils literal notranslate"><span class="pre">LLVM</span></code>.</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">LLVM</span></code> libraries used by host runtime: statically or dynamically linked, used to lower the kernel’s final IR to machine code on the host. The CI uses an LLVM version compiled from source.</p></li>
-</ol>
-</section>
-<section id="building-llvm-for-debugging-it">
-<h3>Building LLVM for debugging it<a class="headerlink" href="#building-llvm-for-debugging-it" title="Link to this heading">#</a></h3>
-<p>Sometimes, it could be useful to have a <code class="docutils literal notranslate"><span class="pre">LLVM</span></code> version that allows to print intermediate passes or with debug symbols to find out where and why LLVM fails (for example, when Instruction Selection fails). To do so you would have to build LLVM by yourself. If so, you should take some inspiration from our <a class="reference external" href="https://github.com/Genesis-Embodied-AI/quadrants-sdk-builds/blob/main/.github/workflows/llvm-ci.yml">CI pipeline to build LLVM</a> to tweak a little bit to your liking (and not enable/disable options that would create discrepancies).</p>
-<p>You can then use <code class="docutils literal notranslate"><span class="pre">LLVM_DIR</span></code> to point to the <code class="docutils literal notranslate"><span class="pre">LLVM</span></code> build directory.</p>
+<section id="building-with-the-amd-gpu-backend-linux">
+<h3>Building with the AMD GPU backend (Linux)<a class="headerlink" href="#building-with-the-amd-gpu-backend-linux" title="Link to this heading">#</a></h3>
+<p>The AMD GPU backend is Linux-only (it is force-disabled on macOS and Windows) and is off by default, so enable it explicitly through <code class="docutils literal notranslate"><span class="pre">CMAKE_ARGS</span></code>:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">./</span><span class="n">build</span><span class="o">.</span><span class="n">py</span> <span class="o">--</span><span class="n">shell</span>
+<span class="n">CMAKE_ARGS</span><span class="o">=</span><span class="s2">&quot;-DQD_WITH_AMDGPU=ON -DQD_WITH_CUDA=OFF&quot;</span> <span class="n">pip</span> <span class="n">install</span> <span class="o">--</span><span class="n">no</span><span class="o">-</span><span class="n">build</span><span class="o">-</span><span class="n">isolation</span> <span class="o">-</span><span class="n">e</span> <span class="o">.</span> <span class="o">-</span><span class="n">v</span>
+</pre></div>
+</div>
 </section>
 </section>
 <section id="ci-checks">
@@ -581,6 +572,19 @@
 <p>Uses an AI agent to flag feature-specific code being piled into heavily-tracked core files when it could live in its own feature-specific file instead. The concern is not that the new code is in the “wrong” place semantically — it is usually topically related to the host file — but that the host file is already a hot, central, frequently-edited file, and adding more self-contained feature code to it makes review, merge conflicts, and future churn worse. The fix is almost always to extract the feature-specific block (top-level function, class, large block, or even a cluster of new methods on an existing class) into its own module, with the host file delegating to it via a narrow interface.</p>
 <p>The agent reports up to 5 violations, each annotated with the host file’s hotness numbers (commits / authors / size). This check is delayed by 30 minutes, to avoid running repeatedly if multiple commits pushed with a short delay between each.</p>
 </section>
+<section id="doc-quality-check-check-doc-quality-yml">
+<h3>Doc quality check (<code class="docutils literal notranslate"><span class="pre">check_doc_quality.yml</span></code>)<a class="headerlink" href="#doc-quality-check-check-doc-quality-yml" title="Link to this heading">#</a></h3>
+<p>Uses an AI agent to review documentation changes for an end-user audience (someone writing Quadrants kernels in Python, not a compiler engineer).</p>
+<p>Let’s first define an <em>advanced / internal section</em> as a clearly-marked section whose heading contains “Advanced”, “Under the hood”, “Internals”, or “Implementation”; it targets a more advanced reader rather than the typical end user.</p>
+<p>For each <code class="docutils literal notranslate"><span class="pre">docs/**/*.md</span></code> file added or modified in the PR, the CI agent reads the entire current file (not just the diff) and checks three things:</p>
+<ul class="simple">
+<li><p>(1) <strong>undefined terms</strong> — a term a typical user is unlikely to know (specialized or internal jargon, project-specific abbreviations) must be defined at its first use in that file, either inline or via a link to a doc that defines it, unless that first use is inside an advanced / internal section;</p></li>
+<li><p>(2) <strong>end-user relevance</strong> — internal / implementation / contributor-only material must be confined to an advanced / internal section;</p></li>
+<li><p>(3) <strong>reading order</strong> — information must be ordered so a first-time reader can follow the file top-to-bottom in one pass, without forward references (a passage that can only be understood by reading something introduced later in the same file).</p></li>
+</ul>
+<p>The following do not count as violations: references to public APIs that the author links to their docs and/or labels as public; brief reader-directed pointers suggesting the reader could contribute upstream or file an issue; the core public API vocabulary a user already knows (e.g. <code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel</span></code>, <code class="docutils literal notranslate"><span class="pre">&#64;qd.func</span></code>, <code class="docutils literal notranslate"><span class="pre">qd.Template</span></code>, fields, ndarrays); and, for the reading-order check, an overview/roadmap near the top, optional “see below” pointers (where the current passage still reads fine on its own), and backward references.</p>
+<p>The agent reports up to 10 violations. This check is delayed by 30 minutes, to avoid running repeatedly if multiple commits pushed with a short delay between each.</p>
+</section>
 <section id="pr-change-report-pr-change-report-yml">
 <h3>PR change report (<code class="docutils literal notranslate"><span class="pre">pr_change_report.yml</span></code>)<a class="headerlink" href="#pr-change-report-pr-change-report-yml" title="Link to this heading">#</a></h3>
 <p>Posts a fresh PR comment on every push. The comment is a single line: the totals (file count, code lines added, code lines removed) formatted as a markdown link to a GitHub Check whose page contains the full per-file / per-function breakdown. “Code lines” exclude blank lines, comment-only lines, and (in Python) lines whose only token content is a string literal (i.e. docstrings and continuation lines of multi-line strings). C/C++ <code class="docutils literal notranslate"><span class="pre">/*</span> <span class="pre">…</span> <span class="pre">*/</span></code> block comments are stripped before counting.</p>
@@ -608,6 +612,23 @@
 </div>
 <p>The <code class="docutils literal notranslate"><span class="pre">0</span></code> in the LoC column for the two new files reflects that both files did not exist before this PR (their pre-PR code-line count is 0). The <code class="docutils literal notranslate"><span class="pre">42</span> <span class="pre">-42</span></code> row for <code class="docutils literal notranslate"><span class="pre">legacy_stream.cpp</span></code> is a fully-deleted file: 42 code lines existed before this PR and all 42 were removed.</p>
 <p>This check is delayed by 30 minutes, to avoid running repeatedly if multiple commits pushed with a short delay between each.</p>
+</section>
+</section>
+<section id="advanced">
+<h2>Advanced<a class="headerlink" href="#advanced" title="Link to this heading">#</a></h2>
+<section id="ci-convention-about-compilers-llvm">
+<h3>CI Convention about compilers/LLVM<a class="headerlink" href="#ci-convention-about-compilers-llvm" title="Link to this heading">#</a></h3>
+<p>Quadrants comprises at least three important parts:</p>
+<ol class="arabic simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">quadrants</span></code> host runtime: Made with a mix of Python and C++. The C++ core is compiled using the OS default C/C++ compiler.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">quadrants</span></code> device runtime (bitcode): C++ code compiled using <code class="docutils literal notranslate"><span class="pre">clang++</span></code> from the distribution/OS. Using <code class="docutils literal notranslate"><span class="pre">clang++</span></code> is required as it has to support the same targets as <code class="docutils literal notranslate"><span class="pre">LLVM</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">LLVM</span></code> libraries used by host runtime: statically or dynamically linked, used to lower the kernel’s final IR to machine code on the host. The CI uses an LLVM version compiled from source.</p></li>
+</ol>
+</section>
+<section id="building-llvm-for-debugging-it">
+<h3>Building LLVM for debugging it<a class="headerlink" href="#building-llvm-for-debugging-it" title="Link to this heading">#</a></h3>
+<p>Sometimes, it could be useful to have a <code class="docutils literal notranslate"><span class="pre">LLVM</span></code> version that allows to print intermediate passes or with debug symbols to find out where and why LLVM fails (for example, when Instruction Selection fails). To do so you would have to build LLVM by yourself. If so, you should take some inspiration from our <a class="reference external" href="https://github.com/Genesis-Embodied-AI/quadrants-sdk-builds/blob/main/.github/workflows/llvm-ci.yml">CI pipeline to build LLVM</a> to tweak a little bit to your liking (and not enable/disable options that would create discrepancies).</p>
+<p>You can then use <code class="docutils literal notranslate"><span class="pre">LLVM_DIR</span></code> to point to the <code class="docutils literal notranslate"><span class="pre">LLVM</span></code> build directory.</p>
 </section>
 </section>
 </section>
@@ -666,10 +687,8 @@
 </li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#creating-your-build-dev-environment">Creating your build/dev environment</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#build-py"><code class="docutils literal notranslate"><span class="pre">build.py</span></code></a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#building-the-package-for-release-purposes">Building the package for release purposes</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#advanced-usage">Advanced usage</a><ul class="nav section-nav flex-column">
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#ci-convention-about-compilers-llvm">CI Convention about compilers/LLVM</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#building-llvm-for-debugging-it">Building LLVM for debugging it</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#building-the-package-for-release-purposes">Building the package for release purposes</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#building-with-the-amd-gpu-backend-linux">Building with the AMD GPU backend (Linux)</a></li>
 </ul>
 </li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#ci-checks">CI checks</a><ul class="nav section-nav flex-column">
@@ -679,7 +698,13 @@
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#deleted-comments-check-check-deleted-comments-yml">Deleted comments check (<code class="docutils literal notranslate"><span class="pre">check_deleted_comments.yml</span></code>)</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#test-coverage-check-check-test-coverage-yml">Test coverage check (<code class="docutils literal notranslate"><span class="pre">check_test_coverage.yml</span></code>)</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#feature-factorization-check-check-feature-factorization-yml">Feature factorization check (<code class="docutils literal notranslate"><span class="pre">check_feature_factorization.yml</span></code>)</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#doc-quality-check-check-doc-quality-yml">Doc quality check (<code class="docutils literal notranslate"><span class="pre">check_doc_quality.yml</span></code>)</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#pr-change-report-pr-change-report-yml">PR change report (<code class="docutils literal notranslate"><span class="pre">pr_change_report.yml</span></code>)</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#advanced">Advanced</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#ci-convention-about-compilers-llvm">CI Convention about compilers/LLVM</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#building-llvm-for-debugging-it">Building LLVM for debugging it</a></li>
 </ul>
 </li>
 </ul>

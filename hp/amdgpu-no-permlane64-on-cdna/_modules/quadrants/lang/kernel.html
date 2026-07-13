@@ -7,7 +7,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>quadrants.lang.kernel &#8212; Quadrants 1.0.3 documentation</title>
+    <title>quadrants.lang.kernel &#8212; Quadrants 1.1.1 documentation</title>
   
   
   
@@ -42,7 +42,7 @@
   <link rel="preload" as="script" href="../../../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5" />
 <link rel="preload" as="script" href="../../../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5" />
 
-    <script src="../../../_static/documentation_options.js?v=baaebd52"></script>
+    <script src="../../../_static/documentation_options.js?v=58fbf978"></script>
     <script src="../../../_static/doctools.js?v=9bcbadda"></script>
     <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -60,7 +60,7 @@
     <link rel="search" title="Search" href="../../../search.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="1.0.3" />
+  <meta name="docsearch:version" content="1.1.1" />
   
     
     <script src="../../../_static/searchtools.js"></script>
@@ -128,7 +128,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 1.0.3 documentation</p>
+    <p class="title logo__title">Quadrants 1.1.1 documentation</p>
   
 </a></div>
     
@@ -439,17 +439,17 @@
     <span class="c1"># pointers, the address of these pointers cannot change, and the set of parameters is fixed.</span>
     <span class="c1"># The lifetime of a cache entry is bound to the lifetime of any of its input arguments: the first being garbage</span>
     <span class="c1"># collected will invalidate the entire entry. Moreover, the entire cache registry is bound to the lifetime of the</span>
-    <span class="c1"># taichi prog itself, which means that calling `qd.reset()` will automatically clear the cache. Note that the cache</span>
+    <span class="c1"># quadrants prog itself, which means that calling `qd.reset()` will automatically clear the cache. Note that the cache</span>
     <span class="c1"># stores wear references to pointers, so it does not hold alife any allocated memory.</span>
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-        <span class="c1"># Keep track of taichi runtime to automatically clear cache if destroyed</span>
+        <span class="c1"># Keep track of quadrants runtime to automatically clear cache if destroyed</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_prog_weakref</span><span class="p">:</span> <span class="n">ReferenceType</span><span class="p">[</span><span class="n">Program</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
 
         <span class="c1"># The cache key corresponds to the hash of the (packed) python-side input arguments of the kernel.</span>
         <span class="c1"># * &#39;_launch_ctx_cache&#39; is storing a backup of the launch context BEFORE ever calling the kernel.</span>
         <span class="c1"># * &#39;_launch_ctx_cache_tracker&#39; is used for bounding the lifetime of a cache entry to its corresponding set of</span>
-        <span class="c1">#   input arguments. Internally, this is done by wrapping all Taichi ndarrays as weak reference.</span>
-        <span class="c1"># * &#39;_prog_weakref&#39;is used for bounding the lifetime of the entire cache to the Taichi programm managing all</span>
+        <span class="c1">#   input arguments. Internally, this is done by wrapping all Quadrants ndarrays as weak reference.</span>
+        <span class="c1"># * &#39;_prog_weakref&#39;is used for bounding the lifetime of the entire cache to the Quadrants programm managing all</span>
         <span class="c1">#   the launch context being stored in cache.</span>
         <span class="c1"># See &#39;launch_kernel&#39; for details regarding the intended use of caching.</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_launch_ctx_cache</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="s2">&quot;ArgsHash&quot;</span><span class="p">,</span> <span class="n">KernelLaunchContext</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
@@ -510,7 +510,7 @@
                 <span class="n">prog</span><span class="p">,</span> <span class="n">partial</span><span class="p">(</span><span class="n">LaunchContextBufferCache</span><span class="o">.</span><span class="n">_destroy_callback</span><span class="p">,</span> <span class="n">ReferenceType</span><span class="p">(</span><span class="bp">self</span><span class="p">))</span>
             <span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
-            <span class="c1"># Since we already store a weak reference to taichi program, it is much faster to use it rather than</span>
+            <span class="c1"># Since we already store a weak reference to quadrants program, it is much faster to use it rather than</span>
             <span class="c1"># paying the overhead of calling pybind11 functions (~200ns vs 5ns).</span>
             <span class="n">prog</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_prog_weakref</span><span class="p">()</span>
         <span class="k">assert</span> <span class="n">prog</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
@@ -1117,7 +1117,7 @@
         <span class="k">try</span><span class="p">:</span>
             <span class="n">prog</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">prog</span>
             <span class="k">if</span> <span class="ow">not</span> <span class="n">compiled_kernel_data</span><span class="p">:</span>
-                <span class="c1"># Store Taichi program config and device cap for efficiency because they are used at multiple places</span>
+                <span class="c1"># Store Quadrants program config and device cap for efficiency because they are used at multiple places</span>
                 <span class="n">prog_config</span> <span class="o">=</span> <span class="n">prog</span><span class="o">.</span><span class="n">config</span><span class="p">()</span>
                 <span class="n">prog_device_cap</span> <span class="o">=</span> <span class="n">prog</span><span class="o">.</span><span class="n">get_device_caps</span><span class="p">()</span>
 

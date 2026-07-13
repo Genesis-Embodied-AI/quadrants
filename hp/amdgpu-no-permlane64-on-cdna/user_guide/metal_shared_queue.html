@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>Shared Metal command queue (PyTorch MPS) &#8212; Quadrants 1.0.3 documentation</title>
+    <title>Shared Metal command queue (PyTorch MPS) &#8212; Quadrants 1.1.1 documentation</title>
   
   
   
@@ -43,7 +43,7 @@
   <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5" />
 <link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5" />
 
-    <script src="../_static/documentation_options.js?v=baaebd52"></script>
+    <script src="../_static/documentation_options.js?v=58fbf978"></script>
     <script src="../_static/doctools.js?v=9bcbadda"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -63,7 +63,7 @@
     <link rel="prev" title="Numpy and Torch interop" href="interop.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="1.0.3" />
+  <meta name="docsearch:version" content="1.1.1" />
   
     
     <script src="../_static/searchtools.js"></script>
@@ -131,7 +131,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 1.0.3 documentation</p>
+    <p class="title logo__title">Quadrants 1.1.1 documentation</p>
   
 </a></div>
     
@@ -361,7 +361,7 @@
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Contributing</span></p>
 <ul class="nav bd-sidenav">
-<li class="toctree-l1"><a class="reference internal" href="contributing.html">Contributing to quadrants</a></li>
+<li class="toctree-l1"><a class="reference internal" href="contributing.html">Advanced: Contributing to quadrants</a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Internal</span></p>
 <ul class="nav bd-sidenav">
@@ -428,7 +428,7 @@
                   
   <section class="tex2jax_ignore mathjax_ignore" id="shared-metal-command-queue-pytorch-mps">
 <h1>Shared Metal command queue (PyTorch MPS)<a class="headerlink" href="#shared-metal-command-queue-pytorch-mps" title="Link to this heading">#</a></h1>
-<p>On Apple Silicon, Quadrants and PyTorch MPS both dispatch GPU work via Metal. By default each framework creates its own <code class="docutils literal notranslate"><span class="pre">MTLCommandQueue</span></code>, which means there is no GPU-level ordering between them. Every zero-copy interop point therefore requires explicit CPU-side synchronisation (<code class="docutils literal notranslate"><span class="pre">qd.sync()</span></code> and <code class="docutils literal notranslate"><span class="pre">torch.mps.synchronize()</span></code>) to guarantee data visibility.</p>
+<p>On Apple Silicon, Quadrants and PyTorch MPS both dispatch GPU work via Metal. By default each framework creates its own <code class="docutils literal notranslate"><span class="pre">MTLCommandQueue</span></code>, which means there is no GPU-level ordering between them. Every zero-copy interop point therefore requires explicit CPU-side synchronization (<code class="docutils literal notranslate"><span class="pre">qd.sync()</span></code> and <code class="docutils literal notranslate"><span class="pre">torch.mps.synchronize()</span></code>) to guarantee data visibility.</p>
 <p>The <code class="docutils literal notranslate"><span class="pre">external_metal_command_queue</span></code> option lets you pass PyTorch’s command queue to Quadrants so that both frameworks share a single queue. Metal processes command buffers in commit order within a queue, so GPU-side ordering is automatic and the per-interop sync overhead is eliminated.</p>
 <section id="quick-start">
 <h2>Quick start<a class="headerlink" href="#quick-start" title="Link to this heading">#</a></h2>
@@ -448,7 +448,7 @@
 <li><p><code class="docutils literal notranslate"><span class="pre">external_metal_command_queue</span></code> — the raw <code class="docutils literal notranslate"><span class="pre">MTLCommandQueue*</span></code> pointer. Quadrants dispatches all GPU work on this queue instead of creating its own.</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">external_metal_command_queue_is_torch_queue</span></code> — set to <code class="docutils literal notranslate"><span class="pre">True</span></code> when the queue comes from PyTorch MPS. This tells Quadrants that PyTorch shares the same queue, so the explicit interop syncs can be safely skipped. Defaults to <code class="docutils literal notranslate"><span class="pre">False</span></code>, which preserves the sync calls even when an external queue is provided (useful when the external queue belongs to a non-PyTorch framework).</p></li>
 </ul>
-<p>Once initialised with both flags:</p>
+<p>Once initialized with both flags:</p>
 <ul class="simple">
 <li><p><code class="docutils literal notranslate"><span class="pre">to_torch(copy=False)</span></code> no longer calls <code class="docutils literal notranslate"><span class="pre">qd.sync()</span></code> internally.</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">to_torch(copy=True)</span></code> no longer calls <code class="docutils literal notranslate"><span class="pre">torch.mps.synchronize()</span></code> after the copy.</p></li>
@@ -464,15 +464,15 @@
 <span class="n">queue_ptr</span> <span class="o">=</span> <span class="n">get_mps_command_queue</span><span class="p">()</span>  <span class="c1"># returns int (raw pointer), or 0 on failure</span>
 </pre></div>
 </div>
-<p>The function initialises PyTorch MPS if needed, then returns the <code class="docutils literal notranslate"><span class="pre">MTLCommandQueue*</span></code> as a Python <code class="docutils literal notranslate"><span class="pre">int</span></code>. It returns <code class="docutils literal notranslate"><span class="pre">0</span></code> if extraction fails (e.g. non-macOS platform, PyTorch not installed, MPS not available, or unsupported PyTorch build). The underlying C++ symbol (<code class="docutils literal notranslate"><span class="pre">_ZN2at3mps19getDefaultMPSStreamEv</span></code>) has been stable since PyTorch 1.13.</p>
+<p>The function initializes PyTorch MPS if needed, then returns the <code class="docutils literal notranslate"><span class="pre">MTLCommandQueue*</span></code> as a Python <code class="docutils literal notranslate"><span class="pre">int</span></code>. It returns <code class="docutils literal notranslate"><span class="pre">0</span></code> if extraction fails (e.g. non-macOS platform, PyTorch not installed, MPS not available, or unsupported PyTorch build). The underlying C++ symbol (<code class="docutils literal notranslate"><span class="pre">_ZN2at3mps19getDefaultMPSStreamEv</span></code>) has been stable since PyTorch 1.13.</p>
 </section>
 <section id="init-ordering">
 <h2>Init ordering<a class="headerlink" href="#init-ordering" title="Link to this heading">#</a></h2>
-<p><code class="docutils literal notranslate"><span class="pre">get_mps_command_queue()</span></code> handles PyTorch MPS initialisation internally, so you can call it before <code class="docutils literal notranslate"><span class="pre">qd.init()</span></code> without any manual setup:</p>
+<p><code class="docutils literal notranslate"><span class="pre">get_mps_command_queue()</span></code> handles PyTorch MPS initialization internally, so you can call it before <code class="docutils literal notranslate"><span class="pre">qd.init()</span></code> without any manual setup:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">quadrants</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">qd</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.interop</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_mps_command_queue</span>
 
-<span class="n">queue_ptr</span> <span class="o">=</span> <span class="n">get_mps_command_queue</span><span class="p">()</span>  <span class="c1"># initialises MPS if needed</span>
+<span class="n">queue_ptr</span> <span class="o">=</span> <span class="n">get_mps_command_queue</span><span class="p">()</span>  <span class="c1"># initializes MPS if needed</span>
 <span class="n">qd</span><span class="o">.</span><span class="n">init</span><span class="p">(</span>
     <span class="n">arch</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">metal</span><span class="p">,</span>
     <span class="n">external_metal_command_queue</span><span class="o">=</span><span class="n">queue_ptr</span><span class="p">,</span>
