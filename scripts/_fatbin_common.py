@@ -170,7 +170,9 @@ def resolve_toolkits(groups: list[tuple[str, list[int]]]) -> dict[str, tuple[str
         lines.append("")
         lines.append(f"Discovered toolkits: {found_desc}")
         lines.append("")
-        lines.append("Each architecture is built with the oldest suitable toolkit, so all of the above must be present.")
+        lines.append(
+            "Each architecture is built with the oldest suitable toolkit, so all of the above must be present."
+        )
         lines.append("Make toolkits discoverable via any of:")
         lines.append("  - QUADRANTS_NVCC_CANDIDATES=/path/to/nvcc:/path/to/cuda-root  (os.pathsep-separated)")
         lines.append("  - /usr/local/cuda-X.Y/bin/nvcc                                (conventional install location)")

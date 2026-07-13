@@ -81,8 +81,10 @@ table) to `quadrants/runtime/cuda/graph_do_while_cond_fatbin.h`.
 
 Regenerate the checkpoint kernels the same way with
 `scripts/build_checkpoint_gate_fatbin.py` and
-`scripts/build_checkpoint_yield_check_fatbin.py`. After regenerating, commit the
-updated header(s). Quadrants must be rebuilt to pick up the new fatbins.
+`scripts/build_checkpoint_yield_check_fatbin.py`. The generator emits a compact
+byte-array layout; run `pre-commit run -a` (clang-format) on the regenerated
+headers so they match the committed formatting before committing them. Quadrants
+must be rebuilt to pick up the new fatbins.
 
 ## Verifying the committed fatbins
 

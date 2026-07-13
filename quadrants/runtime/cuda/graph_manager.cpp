@@ -220,7 +220,8 @@ void GraphManager::resolve_ctx_ndarray_ptrs(LaunchContextBuilder &ctx,
 
 // Load the first bundled fatbin whose SASS matches the running GPU. The per-toolkit fatbin tables come from the
 // generated `*_fatbin.h` files; see the declaration in graph_manager.h for why there is more than one.
-uint32_t GraphManager::load_first_matching_fatbin(const unsigned char *const *fatbins, std::size_t count,
+uint32_t GraphManager::load_first_matching_fatbin(const unsigned char *const *fatbins,
+                                                  std::size_t count,
                                                   void **module_out) {
   auto &driver = CUDADriver::get_instance();
   uint32_t ret = static_cast<uint32_t>(-1);
