@@ -761,8 +761,8 @@ Ptr LLVMRuntime::allocate_from_reserved_memory(PreallocatedMemoryChunk &memory_c
     // whole kernel execution immediately.
     __assertfail(
         "Out of CUDA pre-allocated memory.\n"
-        "Consider using ti.init(device_memory_fraction=0.9) or "
-        "ti.init(device_memory_GB=4) to allocate more"
+        "Consider using qd.init(device_memory_fraction=0.9) or "
+        "qd.init(device_memory_GB=4) to allocate more"
         " GPU memory",
         "Quadrants JIT", 0, "allocate_from_reserved_memory", 1);
 #endif

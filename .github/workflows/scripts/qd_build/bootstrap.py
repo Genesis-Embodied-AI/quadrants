@@ -30,9 +30,9 @@ def get_cache_home() -> Path:
     Get the cache home directory. All intermediate files should be stored here.
     """
     if platform.system() == "Windows":
-        return Path(os.environ["LOCALAPPDATA"]) / "ti-build-cache"
+        return Path(os.environ["LOCALAPPDATA"]) / "qd-build-cache"
     else:
-        return Path.home() / ".cache" / "ti-build-cache"
+        return Path.home() / ".cache" / "qd-build-cache"
 
 
 def run(*args, env=None):

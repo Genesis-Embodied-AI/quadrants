@@ -437,7 +437,7 @@ class KernelContextAttributes {
 };
 
 /**
- * Groups all the device kernels generated from a single ti.kernel.
+ * Groups all the device kernels generated from a single qd.kernel.
  */
 struct QuadrantsKernelAttributes {
   // Quadrants kernel name

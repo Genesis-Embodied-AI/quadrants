@@ -59,7 +59,7 @@ class LaunchContextBuilder {
 
   void set_arg_float(int arg_id, float64 d);
   // Bulk processing of multiple scalar float arguments at the same time.
-  // This is mainly useful to mitigate pybind11 function call overhead.
+  // This is mainly useful to mitigate Python/C++ binding function call overhead.
   // In this context, 'args_id' is a vector gathering the position of each
   // of these scalar arguments in the corresponding kernel. As a result, the
   // length 'args_id' and 'vec' must be equal.
@@ -132,12 +132,12 @@ class LaunchContextBuilder {
                             const std::vector<int> &shape,
                             intptr_t devalloc_ptr_grad = 0);
   void set_arg_ndarray(int arg_id, const Ndarray &arr);
-  // Bulk processing of multiple individual Taichi NDarray arguments (without
+  // Bulk processing of multiple individual Quadrants NDarray arguments (without
   // any associated gradient) at the same time.
   // See 'set_arg_float' for details.
   void set_args_ndarray(const std::vector<int> &args_id, const std::vector<Ndarray *> &arrs);
   void set_arg_ndarray_with_grad(int arg_id, const Ndarray &arr, const Ndarray &arr_grad);
-  // Bulk processing of multiple individual Taichi NDarray arguments (along
+  // Bulk processing of multiple individual Quadrants NDarray arguments (along
   // with associated gradient) at the same time.
   // See 'set_arg_float' for details.
   void set_args_ndarray_with_grad(const std::vector<int> &args_id,

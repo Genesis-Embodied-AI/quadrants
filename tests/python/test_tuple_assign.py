@@ -9,7 +9,7 @@ from tests import test_utils
 @test_utils.test()
 def test_fibonacci():
     @qd.kernel
-    def ti_fibonacci(n: qd.i32) -> qd.i32:
+    def qd_fibonacci(n: qd.i32) -> qd.i32:
         a, b = 0, 1
         # This is to make the inner for loop serial on purpose...
         for _ in range(1):
@@ -24,7 +24,7 @@ def test_fibonacci():
         return b
 
     for n in range(5):
-        assert ti_fibonacci(n) == py_fibonacci(n)
+        assert qd_fibonacci(n) == py_fibonacci(n)
 
 
 @test_utils.test(arch=get_host_arch_list())

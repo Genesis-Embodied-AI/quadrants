@@ -21,15 +21,15 @@ class MakeBlockLocalTest : public ::testing::Test {
   void initialize(int pointer_size, int block_size) {
     // The SNode tree of this test looks like the following
     //
-    // |root_snode_|  // ti.root
+    // |root_snode_|  // qd.root
     // \
     //  |
-    //  +- |pointer_snode_|  // .pointer(ti.ij, |pointer_size|)
+    //  +- |pointer_snode_|  // .pointer(qd.ij, |pointer_size|)
     //     \
     //      |
-    //      +- |bls_snode_|  // .dense(ti.ij, |block_size|s)
+    //      +- |bls_snode_|  // .dense(qd.ij, |block_size|s)
     //      |
-    //      +- |struct_for_snode_|  // .dynamic(ti.k, ...)
+    //      +- |struct_for_snode_|  // .dynamic(qd.k, ...)
     //
     // The |struct_for_snode_| is the one being iterated over in the struct-for
     // offloaded task |for_stmt_|, meaning that the loop index is based on this
@@ -92,8 +92,8 @@ TEST_F(MakeBlockLocalTest, Basic) {
   // * [block_size * i, block_size * j]
   // * [block_size * i - 1, block_size * j - 3]
   //
-  // So the block size at ti.i or ti.j is 4, respectively.
-  // The BLS pad size at ti.i = (4 + 0 - (-1)) = 5, ti.j = (4 + 0 - (-3)) = 7.
+  // So the block size at qd.i or qd.j is 4, respectively.
+  // The BLS pad size at qd.i = (4 + 0 - (-1)) = 5, qd.j = (4 + 0 - (-3)) = 7.
   auto *loop_idx0_ = builder_.get_loop_index(for_stmt_.get(), /*index=*/0);
   auto *loop_idx1_ = builder_.get_loop_index(for_stmt_.get(), /*index=*/1);
 
