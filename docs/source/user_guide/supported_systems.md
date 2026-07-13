@@ -17,12 +17,12 @@ We test the following systems in our CI servers:
 
 ### GPUs
 
-- CUDA GPUs, Pascal or later (>=sm_60), including Hopper (sm_90), Blackwell (sm_100, sm_120), and Thor (sm_110)
+- CUDA GPUs, `sm_60` (Pascal) through `sm_120` (Blackwell / Thor) — i.e. `>=sm_60` and `<=sm_120`
 - Metal GPUs
 - AMD GPUs
 - Vulkan-compatible GPUs (e.g. Intel Arc)
 
-If you have an NVIDIA GPU whose architecture is newer than those listed above, please [open an issue on the Quadrants repo](https://github.com/Genesis-Embodied-AI/quadrants/issues).
+If you have a newer NVIDIA GPU (above `sm_120`), please [open an issue on the Quadrants repo](https://github.com/Genesis-Embodied-AI/quadrants/issues).
 
 ### Backend / OS matrix
 
