@@ -4,11 +4,11 @@ Subgroup operations let threads within the same subgroup (warp on NVIDIA, wave o
 
 Subgroup ops live under `qd.simt.subgroup` and are written so the same Python source compiles to the right vendor primitive on each backend. Calling a backend that has not implemented an op fails when the kernel is compiled, not silently at runtime.
 
-This page is a high-level tour: what each op does, how the pieces fit together, and what to expect performance-wise. The complete per-op reference - exact signatures, dtype support, backend lowering, and caller contracts - is generated from the docstrings in the API reference: {py:mod}`quadrants.lang.simt.subgroup` (data movement, identification / control, voting, and lane masks), {py:mod}`quadrants.lang.simt.reductions` (reductions and scans), and {py:mod}`quadrants.lang.simt.sorting` (sorting).
+This page is a high-level tour: what each op does, how the pieces fit together, and what to expect performance-wise. The complete per-op reference - exact signatures, dtype support, per-backend behavior, and caller contracts - is generated from the docstrings in the API reference: {py:mod}`quadrants.lang.simt.subgroup` (data movement, identification / control, voting, and lane masks), {py:mod}`quadrants.lang.simt.reductions` (reductions and scans), and {py:mod}`quadrants.lang.simt.sorting` (sorting).
 
 ## What's available
 
-Every op is listed below, grouped by category, with the backends that currently lower it.
+Every op is listed below, grouped by category, with the backends that currently support it.
 
 ### Data movement
 
@@ -21,7 +21,7 @@ Every op is listed below, grouped by category, with the backends that currently 
 | `subgroup.broadcast(value, index)`          | yes  | yes    | yes                     | i32, u32, f32, f64, i64, u64 |
 | `subgroup.broadcast_first(value)`           | yes  | yes    | yes                     | i32, u32, f32, f64, i64, u64 |
 
-\* On AMDGPU, `shuffle_down` / `shuffle_up` go through `ds_bpermute` rather than a single-cycle cross-lane move - see [Performance notes](#performance-notes) for cycle counts.
+\* On AMDGPU, `shuffle_down` / `shuffle_up` use a slower cross-lane path rather than a single-cycle register move - see [Performance notes](#performance-notes) for cycle counts.
 
 `shuffle_xor` and `broadcast_first` are portable wrappers over `shuffle` / `broadcast` (`shuffle_xor(value, mask)` ≡ `shuffle(value, lane ^ mask)`; `broadcast_first(value)` ≡ `broadcast(value, qd.u32(0))`). They inline at compile time and run wherever the underlying op runs.
 
@@ -42,7 +42,7 @@ Default scope: every op in this module operates over the **full active subgroup*
 
 Caller contract for every op on this page: call from **uniform control flow with all lanes active** - the whole subgroup must execute the call together. Calling from divergent control flow is implementation-defined on most backends.
 
-\*\* `mem_fence()` lowers to a workgroup-scope fence on CUDA and AMDGPU. Both are over-strict for the subgroup-scope ask but correct: a workgroup-scope fence orders memory as observed by the whole workgroup, of which the subgroup is a strict subset.
+\*\* `mem_fence()` compiles to a workgroup-scope fence on CUDA and AMDGPU. Both are over-strict for the subgroup-scope ask but correct: a workgroup-scope fence orders memory as observed by the whole workgroup, of which the subgroup is a strict subset.
 
 Renames relative to the previous `qd.simt.subgroup` API:
 
@@ -82,7 +82,7 @@ The `barrier()` / `memory_barrier()` / `ballot_full_subgroup()` names remain as 
 | `subgroup.inclusive_{add,mul,min,max,and,or,xor}(v)` | yes  | yes\*  | yes                     | integer + float (`_and` / `_or` / `_xor`: integer only) |
 | `subgroup.exclusive_{add,mul,min,max,and,or,xor}(v)` | yes  | yes\*  | yes                     | integer + float (`_and` / `_or` / `_xor`: integer only) |
 
-\* On AMDGPU these go through `ds_bpermute` (~tens of cycles per step) - see [Performance notes](#performance-notes).
+\* On AMDGPU these use a slower cross-lane path (~tens of cycles per step) - see [Performance notes](#performance-notes).
 
 Every op above has a paired `_tiled` form that takes an extra `log2_size` template parameter and operates on independent `2**log2_size`-aligned tiles within the subgroup - see [Tiled variants](#tiled-variants). For reductions other than the ones listed above, build a sized helper on top of `shuffle_down` / `shuffle` following the same pattern as `reduce_add_tiled` / `reduce_all_add_tiled`.
 
@@ -259,7 +259,7 @@ def sum32(src: qd.types.ndarray(dtype=qd.f32, ndim=1),
 
 ### Broadcast the sum to all lanes with `reduce_all_add_tiled` example
 
-When every lane needs the reduction result - e.g. to normalize by the sum - use the butterfly variant. No follow-up broadcast needed:
+When every lane needs the reduction result - e.g. to normalize by the sum - use `reduce_all_add_tiled`, which leaves the sum in every lane. No follow-up broadcast needed:
 
 ```python
 @qd.kernel
@@ -320,10 +320,10 @@ After the call, lane `k` (within each group of 32) holds `a[group_start] + a[gro
 
 ## Performance notes
 
-- Shuffles are register-to-register on CUDA (`__shfl_sync`, `__shfl_down_sync`, `__shfl_up_sync`) and on SPIR-V where the GPU has hardware support - typically a handful of cycles, no memory traffic.
-- On AMDGPU, `shuffle` / `shuffle_down` / `shuffle_up` go through `ds_bpermute` (roughly tens of cycles), so they cost more than the register-to-register shuffles on CUDA. On wave64 AMD GPUs, shuffles that cross the 32-lane half-boundary can cost a few extra cycles on some GPU architectures, but the underlying reads issue in parallel so latency stays close to a single shuffle.
+- Shuffles are register-to-register on CUDA, and on SPIR-V where the GPU has hardware support - typically a handful of cycles, no memory traffic.
+- On AMDGPU, `shuffle` / `shuffle_down` / `shuffle_up` use a slower cross-lane path (roughly tens of cycles), so they cost more than the register-to-register shuffles on CUDA. On wave64 AMD GPUs, shuffles that cross the 32-lane half-boundary can cost a few extra cycles on some GPU architectures, but the underlying reads issue in parallel so latency stays close to a single shuffle.
 - `shuffle_xor` and `broadcast_first` are wrappers over `shuffle` / `broadcast` and inline at compile time, so on every backend they cost exactly the same as the underlying op.
-- Both `ballot_first_n` and `ballot` lower to a single hardware instruction on every backend. At `n == 32`, `ballot_first_n` skips the predicate-masking step entirely; at `n < 32` it adds one multiply on the predicate.
+- Both `ballot_first_n` and `ballot` compile to a single hardware instruction on every backend. At `n == 32`, `ballot_first_n` skips the predicate-masking step entirely; at `n < 32` it adds one multiply on the predicate.
 - `reduce_add` and `reduce_all_add` each issue exactly `log2_group_size()` shuffles and `log2_group_size()` adds per call (5 on wave32, 6 on AMDGPU wave64). No barriers, no shared memory, no launch overhead (they inline). The same holds for the `_tiled` form at any `log2_size`.
 - Prefer `reduce_all_add` over `reduce_add` + broadcast when you need the result in every lane - same cost, one fewer shuffle.
 - 64-bit dtypes (`i64`, `u64`, `f64`) are emulated as two 32-bit shuffles on AMDGPU. Prefer 32-bit values when you have a choice.
