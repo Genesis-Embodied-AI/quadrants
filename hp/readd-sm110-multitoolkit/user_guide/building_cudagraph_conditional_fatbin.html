@@ -468,8 +468,8 @@ drivers with <code class="docutils literal notranslate"><span class="pre">CUDA_E
 in the <code class="docutils literal notranslate"><span class="pre">SM_TOOLKIT</span></code> mapping in <code class="docutils literal notranslate"><span class="pre">scripts/_fatbin_common.py</span></code>, where each SM maps to
 a version spec — <code class="docutils literal notranslate"><span class="pre">==X.Y</span></code> (exact) or <code class="docutils literal notranslate"><span class="pre">&gt;=X.Y</span></code> (minimum):</p>
 <ul class="simple">
-<li><p><strong><code class="docutils literal notranslate"><span class="pre">==12.8</span></code> (matched exactly)</strong> — every architecture except sm_110
-(Turing / Ampere / Ada, Hopper sm_90, Blackwell sm_100 / sm_120). 12.8 is the
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">==12.8</span></code> (matched exactly)</strong> — every architecture except sm_110 (pre-Hopper
+sm_60 / sm_70 / sm_80, Hopper sm_90, Blackwell sm_100 / sm_120). 12.8 is the
 oldest toolkit that covers all shipping Blackwell parts, and is the
 wide-compatibility anchor, so it is matched exactly rather than “or newer”.</p></li>
 <li><p><strong><code class="docutils literal notranslate"><span class="pre">&gt;=13.0</span></code></strong> — sm_110 (Thor) only; earlier toolkits fail with
@@ -511,13 +511,18 @@ must be rebuilt to pick up the new fatbins.</p>
 </section>
 <section id="verifying-the-committed-fatbins">
 <h2>Verifying the committed fatbins<a class="headerlink" href="#verifying-the-committed-fatbins" title="Link to this heading">#</a></h2>
-<p><code class="docutils literal notranslate"><span class="pre">tests/python/test_fatbin_arch_coverage.py</span></code> re-derives the per-toolkit arch
-partition from each script’s <code class="docutils literal notranslate"><span class="pre">SM_VERSIONS</span></code> and asserts the committed <code class="docutils literal notranslate"><span class="pre">*_fatbin.h</span></code>
-headers contain exactly those architectures, in exactly those blobs (e.g.
-<code class="docutils literal notranslate"><span class="pre">sm_90</span> <span class="pre">/</span> <span class="pre">sm_100</span> <span class="pre">/</span> <span class="pre">sm_120</span></code> in blob 0 and <code class="docutils literal notranslate"><span class="pre">sm_110</span></code> in blob 1 for the condition
-kernel). It guards against drift between the scripts and the checked-in headers,
-and against accidentally rebuilding everything with a single newer toolkit — which
-would reintroduce the old-driver <code class="docutils literal notranslate"><span class="pre">CUDA_ERROR_INVALID_IMAGE</span></code> problem for sm_120.</p>
+<p><code class="docutils literal notranslate"><span class="pre">tests/python/test_fatbin_arch_coverage.py</span></code> holds an explicit, hand-maintained
+<code class="docutils literal notranslate"><span class="pre">EXPECTED_LAYOUT</span></code> for each committed <code class="docutils literal notranslate"><span class="pre">*_fatbin.h</span></code> — the architectures and the CUDA
+toolkit expected in every blob (e.g. <code class="docutils literal notranslate"><span class="pre">sm_90</span> <span class="pre">/</span> <span class="pre">sm_100</span> <span class="pre">/</span> <span class="pre">sm_120</span></code> built with CUDA 12.8
+in blob 0 and <code class="docutils literal notranslate"><span class="pre">sm_110</span></code> built with CUDA 13.0+ in blob 1 for the condition kernel).
+It deliberately does <em>not</em> re-derive this from <code class="docutils literal notranslate"><span class="pre">scripts/_fatbin_common.py</span></code>, so a
+regression in the <code class="docutils literal notranslate"><span class="pre">SM_TOOLKIT</span></code> mapping is caught rather than silently baked into a
+new header. For every embedded cubin it checks both the SASS arch and the build
+toolkit that <code class="docutils literal notranslate"><span class="pre">cuobjdump</span></code> reports, so it directly asserts the load-bearing fact
+behind #2942: the sm_120 (RTX 5090) cubin is built with the wide-compatibility CUDA
+12.8, not a newer toolkit that would reintroduce <code class="docutils literal notranslate"><span class="pre">CUDA_ERROR_INVALID_IMAGE</span></code> on
+570-series drivers. It also drift-guards each <code class="docutils literal notranslate"><span class="pre">SM_VERSIONS</span></code> list against the arch
+set actually baked into the checked-in header.</p>
 <p>The test shells out to <code class="docutils literal notranslate"><span class="pre">cuobjdump</span></code>, so it is skipped unless <code class="docutils literal notranslate"><span class="pre">cuobjdump</span></code> is on
 <code class="docutils literal notranslate"><span class="pre">PATH</span></code>; the toolkit providing it must also be at least as new as the newest one
 used to build the fatbins (CUDA 13.0+, for sm_110), otherwise the affected header
@@ -566,7 +571,7 @@ scripts raise <code class="docutils literal notranslate"><span class="pre">KeyEr
 <td><p>Generated C headers (checked into git)</p></td>
 </tr>
 <tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">tests/python/test_fatbin_arch_coverage.py</span></code></p></td>
-<td><p>Regression test: committed headers’ arch partition matches <code class="docutils literal notranslate"><span class="pre">SM_VERSIONS</span></code> (needs <code class="docutils literal notranslate"><span class="pre">cuobjdump</span></code>)</p></td>
+<td><p>Regression test: committed headers match an explicit per-blob arch + toolkit layout (needs <code class="docutils literal notranslate"><span class="pre">cuobjdump</span></code>)</p></td>
 </tr>
 </tbody>
 </table>
