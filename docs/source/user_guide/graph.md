@@ -494,7 +494,7 @@ So reducing launch latency does not always improve overall throughput. When each
 
 Kernel launch latency matters when kernels are relatively small. Then the GPU can finish a kernel before the host has issued the next one, so the GPU sits idle waiting for the next launch and the launch latency is *exposed* on the critical path. In that regime, cutting launch latency - for example by collapsing many launches into a single graph - can directly increase throughput.
 
-### Why graph_do_while can help slightly even without hardware support
+### Why using graph_do_while is relevant even without hardware support
 
 Recall the earlier example **A while loop, conditional on a device-side scalar tensor**. Written as a plain Python loop, every iteration pays the full Python-side launch latency: Python re-enters the kernel wrapper, and Python itself reads `cond[()]` and evaluates the `if` before deciding whether to loop again.
 
