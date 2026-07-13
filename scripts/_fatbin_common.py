@@ -134,13 +134,20 @@ def discover_toolkits() -> dict[str, str]:
 def _resolve_group_toolkit(spec: str, available: dict[str, str]) -> tuple[str, str] | None:
     """Resolve one group's toolkit-spec against discovered toolkits, returning (nvcc_path, actual_release) or None.
 
-    A `==X.Y` spec is matched exactly; a `>=X.Y` spec resolves to the oldest available release >= X.Y.
+    A `==X.Y` spec is matched exactly; a `>=X.Y` spec resolves to the oldest available release >= X.Y *within the same
+    CUDA major X*. The major bound matters: a SASS cubin's minimum driver is the toolkit's major family floor, so
+    letting `>=13.0` resolve to a CUDA 14 toolkit would silently raise the arch's driver floor above the documented one.
+    A newer major is therefore treated as "not found" (raising MissingToolkitError) rather than silently used.
     """
     op, version, version_tuple = _parse_spec(spec)
     if op == "==":
         path = available.get(version)
         return (path, version) if path else None
-    satisfying = sorted((r for r in available if _parse_version(r) >= version_tuple), key=_parse_version)
+    major = version_tuple[0]
+    satisfying = sorted(
+        (r for r in available if _parse_version(r) >= version_tuple and _parse_version(r)[0] == major),
+        key=_parse_version,
+    )
     return (available[satisfying[0]], satisfying[0]) if satisfying else None
 
 
@@ -166,8 +173,8 @@ def resolve_toolkits(groups: list[tuple[str, list[int]]]) -> dict[str, tuple[str
         lines = ["Missing required CUDA toolkit(s) to build the fatbins:"]
         for spec, sms in missing:
             arch_list = ", ".join(f"sm_{v}" for v in sms)
-            op, version, _ = _parse_spec(spec)
-            requirement = f"exactly CUDA {version}" if op == "==" else f"CUDA >= {version}"
+            op, version, version_tuple = _parse_spec(spec)
+            requirement = f"exactly CUDA {version}" if op == "==" else f"CUDA {version_tuple[0]}.x (>= {version})"
             lines.append(f"  - {requirement} (needed for {arch_list})")
         lines.append("")
         lines.append(f"Discovered toolkits: {found_desc}")

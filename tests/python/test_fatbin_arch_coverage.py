@@ -67,9 +67,15 @@ def _ver(dotted):
 
 
 def _toolkit_matches(actual, expected):
-    """`expected` is either an exact "MAJOR.MINOR" or a "MAJOR.MINOR+" lower bound."""
+    """`expected` is an exact "MAJOR.MINOR", or a "MAJOR.MINOR+" lower bound *within the same CUDA major*.
+
+    The `+` is major-bounded on purpose: a SASS cubin's minimum driver is its toolkit's major family floor, so a newer
+    minor within the same major is fine but a newer *major* would silently raise the floor. "13.0+" therefore accepts
+    13.1 but rejects 14.0, matching the `>=13.0` resolver bound in scripts/_fatbin_common.py.
+    """
     if expected.endswith("+"):
-        return _ver(actual) >= _ver(expected[:-1])
+        floor = _ver(expected[:-1])
+        return floor <= _ver(actual) and _ver(actual)[0] == floor[0]
     return actual == expected
 
 
