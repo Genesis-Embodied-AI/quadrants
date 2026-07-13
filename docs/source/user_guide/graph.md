@@ -397,7 +397,7 @@ The recommendation is to use the graph do while here anyway, if you need it for 
 
 If you do want fixed-size for loops to run optimally on unsupported hardware platforms, please raise an issue, and we can look into this.
 
-In practice, for our own [genesis-world](https://github.com/Genesis-Embodied-AI/genesis-world) kernels, they largely fall under the do while formulation, see the previous section. However, also have some that used to be do while, but have been migrated to an optimized fixed-size, see next section.
+In practice, for real-world use-cases, they largely fall under the do while formulation, see the previous section. However, also have some that used to be do while, but have been migrated to an optimized fixed-size, see next section.
 
 ### A while loop, conditional on a device-side scalar tensor, that has been optimized into a fixed-size for loop
 
