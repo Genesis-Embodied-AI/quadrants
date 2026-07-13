@@ -88,13 +88,18 @@ must be rebuilt to pick up the new fatbins.
 
 ## Verifying the committed fatbins
 
-`tests/python/test_fatbin_arch_coverage.py` re-derives the per-toolkit arch
-partition from each script's `SM_VERSIONS` and asserts the committed `*_fatbin.h`
-headers contain exactly those architectures, in exactly those blobs (e.g.
-`sm_90 / sm_100 / sm_120` in blob 0 and `sm_110` in blob 1 for the condition
-kernel). It guards against drift between the scripts and the checked-in headers,
-and against accidentally rebuilding everything with a single newer toolkit — which
-would reintroduce the old-driver `CUDA_ERROR_INVALID_IMAGE` problem for sm_120.
+`tests/python/test_fatbin_arch_coverage.py` holds an explicit, hand-maintained
+`EXPECTED_LAYOUT` for each committed `*_fatbin.h` — the architectures and the CUDA
+toolkit expected in every blob (e.g. `sm_90 / sm_100 / sm_120` built with CUDA 12.8
+in blob 0 and `sm_110` built with CUDA 13.0+ in blob 1 for the condition kernel).
+It deliberately does *not* re-derive this from `scripts/_fatbin_common.py`, so a
+regression in the `SM_TOOLKIT` mapping is caught rather than silently baked into a
+new header. For every embedded cubin it checks both the SASS arch and the build
+toolkit that `cuobjdump` reports, so it directly asserts the load-bearing fact
+behind #2942: the sm_120 (RTX 5090) cubin is built with the wide-compatibility CUDA
+12.8, not a newer toolkit that would reintroduce `CUDA_ERROR_INVALID_IMAGE` on
+570-series drivers. It also drift-guards each `SM_VERSIONS` list against the arch
+set actually baked into the checked-in header.
 
 The test shells out to `cuobjdump`, so it is skipped unless `cuobjdump` is on
 `PATH`; the toolkit providing it must also be at least as new as the newest one
@@ -127,7 +132,7 @@ scripts raise `KeyError`.)
 | `quadrants/runtime/cuda/graph_do_while_cond_fatbin.h` | Generated C header (checked into git) |
 | `scripts/build_checkpoint_gate_fatbin.py`, `scripts/build_checkpoint_yield_check_fatbin.py` | Regeneration scripts (checkpoint kernels) |
 | `quadrants/runtime/cuda/checkpoint_gate_fatbin.h`, `quadrants/runtime/cuda/checkpoint_yield_check_fatbin.h` | Generated C headers (checked into git) |
-| `tests/python/test_fatbin_arch_coverage.py` | Regression test: committed headers' arch partition matches `SM_VERSIONS` (needs `cuobjdump`) |
+| `tests/python/test_fatbin_arch_coverage.py` | Regression test: committed headers match an explicit per-blob arch + toolkit layout (needs `cuobjdump`) |
 
 ## How it's used at runtime
 
