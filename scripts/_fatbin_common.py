@@ -27,14 +27,17 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 # Explicit CUDA toolkit requirement for every SM architecture we bundle. The value is a version spec:
-#   "==X.Y"  build this arch with EXACTLY CUDA X.Y. A SASS cubin only loads on drivers whose CUDA version is >= the
-#            toolkit that produced it, so the wide-compatibility archs (pre-Hopper, Hopper sm_90, and the shipping
-#            Blackwell parts sm_100 / sm_120) are pinned to the oldest toolkit that covers them -- building them with a
-#            newer toolkit would needlessly raise their minimum driver (this is what made sm_120 reject 570-series
-#            drivers with CUDA_ERROR_INVALID_IMAGE).
-#   ">=X.Y"  build this arch with the oldest *available* toolkit >= CUDA X.Y. Used for brand-new archs that have no
-#            old-driver constraint (their hardware only ever ships with X.Y+ drivers), so any newer toolkit is fine.
-#            sm_110 (Thor) needs CUDA 13.0 -- earlier toolkits reject compute_110 -- but 13.1, 13.2, ... are all OK too.
+#   "==X.Y"  build this arch with EXACTLY CUDA X.Y. A SASS-only (no-PTX) cubin's minimum driver is set by the CUDA
+#            *major* family of the toolkit that built it (12.x -> r525, 13.x -> r580); the minor is irrelevant, since
+#            minor-version compatibility lets any minor load on that family's floor driver. So the exact pin exists to
+#            keep an arch on the intended major -- the wide-compatibility archs (pre-Hopper, Hopper sm_90, Blackwell
+#            sm_100 / sm_120) use ==12.8 because 12.8 is the oldest toolkit that emits Blackwell SASS and the 12.x
+#            major keeps them loadable on 570-series (CUDA 12.8) drivers. Building sm_120 with 13.x is what pushed the
+#            floor to r580 and made it reject 570 drivers with CUDA_ERROR_INVALID_IMAGE.
+#   ">=X.Y"  build this arch with the oldest *available* toolkit >= CUDA X.Y. For brand-new archs the minor doesn't
+#            affect the floor, so any minor within the required major is fine. sm_110 (Thor) needs the 13.x major
+#            (< 13.0 rejects compute_110); the committed blob is built with 13.1 but, being SASS-only, loads on any
+#            CUDA 13.0+ (>= r580) driver exactly as a 13.0 build would -- so 13.0 is genuinely the minimum driver.
 SM_TOOLKIT = {
     60: "==12.8",
     70: "==12.8",
