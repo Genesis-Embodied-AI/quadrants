@@ -709,7 +709,6 @@ my_struct.b[37] 5
 <span class="n">particles</span> <span class="o">=</span> <span class="n">Particle</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="n">N</span><span class="p">,),</span> <span class="n">layout</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">Layout</span><span class="o">.</span><span class="n">AOS</span><span class="p">)</span>
 </pre></div>
 </div>
-<p>For larger statically-indexed groups that might spill into local memory, and that you want to allow partial spilling for, see the <a class="reference internal" href="matrix_vector.html#storage-layout-packed-vs-unpacked-vectors"><span class="std std-ref">packed vs unpacked vectors</span></a> section of the matrix and vector page.</p>
 <p>Methods can be added to a <code class="docutils literal notranslate"><span class="pre">&#64;qd.dataclass</span></code> and may be decorated with <code class="docutils literal notranslate"><span class="pre">&#64;qd.func</span></code> so they can be called from kernels via <code class="docutils literal notranslate"><span class="pre">instance.method(...)</span></code> syntax (the call is inlined at compile time, like any other <code class="docutils literal notranslate"><span class="pre">&#64;qd.func</span></code>).</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">dataclass</span>
 <span class="k">class</span><span class="w"> </span><span class="nc">Particle</span><span class="p">:</span>
@@ -787,9 +786,22 @@ my_struct.b[37] 5
 <section id="outer-kernel-arg-annotation">
 <h3>Outer kernel-arg annotation<a class="headerlink" href="#outer-kernel-arg-annotation" title="Link to this heading">#</a></h3>
 <p>The outermost annotation you put on the kernel parameter should match the parameter type as follows:</p>
-<p>| Kernel parameter compound type | Annotation |
-| <code class="docutils literal notranslate"><span class="pre">&#64;dataclasses.dataclass</span></code>       | <code class="docutils literal notranslate"><span class="pre">MyDataclass</span></code> (dataclass type) |
-| <code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code>            | <code class="docutils literal notranslate"><span class="pre">qd.Template</span></code> |</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>Kernel parameter compound type</p></th>
+<th class="head"><p>Annotation</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">&#64;dataclasses.dataclass</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">MyDataclass</span></code> (dataclass type)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">qd.Template</span></code></p></td>
+</tr>
+</tbody>
+</table>
+</div>
 </section>
 <section id="reassigning-ndarray-members">
 <h3>Reassigning ndarray members<a class="headerlink" href="#reassigning-ndarray-members" title="Link to this heading">#</a></h3>
