@@ -237,8 +237,8 @@ A consequence of a qd.dataclass containing all members within itself, rather tha
 
 A `@qd.dataclass` can be turned into a tensor of structs (e.g. `MyStruct.field(shape=(N,))`) with two possible memory layouts:
 
-- **Struct-of-arrays (SoA)** (`qd.Layout.SOA`): extrudes each member of the struct into its own tensor of length `N`.
-- **Array-of-structs (AoS)** (`qd.Layout.AOS`): the storage is an array of `N` struct cells laid out contiguously in memory. AoS is only available with `qd.field` backing.
+— **Struct-of-arrays (SoA)** (`qd.Layout.SOA`): extrudes each member of the struct into its own tensor of length `N`.
+— **Array-of-structs (AoS)** (`qd.Layout.AOS`): the storage is an array of `N` struct cells laid out contiguously in memory. AoS is only available with `qd.field` backing.
 
 ```python
 @qd.dataclass
@@ -320,7 +320,7 @@ For `@qd.data_oriented` containers passed via `qd.Template`, reassigning an ndar
 
 ### Restrictions
 
-- **`@qd.dataclass` cannot contain `qd.ndarray` or `qd.field` members.** See the [`@qd.dataclass`](#qddataclass-qdtypesstruct) section above for the full list of allowed member types. (The function-form factory `qd.types.struct(...)` has the same restrictions.)
+— **`@qd.dataclass` cannot contain `qd.ndarray` or `qd.field` members.** See the [`@qd.dataclass`](#qddataclass-qdtypesstruct) section above for the full list of allowed member types. (The function-form factory `qd.types.struct(...)` has the same restrictions.)
 - **A typed-dataclass kernel-arg annotation cannot have a `@qd.data_oriented` member type** — errors clearly at compile time. Typed-dataclass kernel args are flattened from annotations, but `@qd.data_oriented` carries no per-member annotations, so its members can only be walked from the live instance, which only happens on the `qd.Template` path.
 - **Declare all ndarray members on a `@qd.data_oriented` class in `__init__`.** The template-mapper caches the set of ndarray-attribute paths reachable from each instance on its first kernel launch — *per instance*, not per class — so two instances of the same class can legitimately carry different ndarray attribute sets (e.g. an optional `*_adjoint_cache` member that's only allocated when `requires_grad=True`). But:
   - **Deleting an ndarray attribute** that was present on an instance's first launch raises `AttributeError` on the next launch on that instance (the cached path still tries to `getattr` the missing attribute).
