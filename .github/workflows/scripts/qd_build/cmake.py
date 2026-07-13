@@ -30,6 +30,8 @@ class CMakeArgsManager:
         self.option_definitions = {
             "CMAKE_EXPORT_COMPILE_COMMANDS": ("Generate compile_commands.json", False, ""),
         }
+        # CMAKE_ARGS entries we don't parse into definitions, kept verbatim for writeback().
+        self.passthrough = ""
 
         self.finalized = False
 
@@ -42,6 +44,12 @@ class CMakeArgsManager:
 
     def parse_initial_args(self) -> None:
         args = os.environ.get(self.environ_name, "")
+        # DEF_RE only understands `-D<ALLCAPS>[:BOOL]=<value>` entries (the options we manage and
+        # render below). Everything else in CMAKE_ARGS -- CMake generators (`-GNinja`), typed cache
+        # entries (`-DCMAKE_BUILD_TYPE:STRING=Debug`), lowercase-named or space-containing defines --
+        # must be preserved verbatim, else writeback() would silently drop it before scikit-build-core
+        # sees CMAKE_ARGS. Stash the unparsed remainder (matched entries blanked out) and re-emit it.
+        self.passthrough = " ".join(DEF_RE.sub(" ", args).split())
         for name, value in DEF_RE.findall(args):
             self.set(name, value)
 
@@ -129,13 +137,17 @@ class CMakeArgsManager:
     def writeback(self) -> None:
         rendered = self.render()
         self.print_summary(rendered)
-        value = " ".join([v for _, v, _ in rendered])
+        # Rendered options first, then the verbatim passthrough captured in parse_initial_args. The
+        # two sets are disjoint (parsed entries are blanked out of passthrough), so there is no
+        # duplicate-cache-var ambiguity for CMake to resolve.
+        parts = [v for _, v, _ in rendered]
+        if self.passthrough:
+            parts.append(self.passthrough)
+        value = " ".join(parts)
+        # CMAKE_ARGS is scikit-build-core's standard CMake-args passthrough, and it is also what we parse on input, so
+        # writing it back makes the environment exported by `build.py wheel`, `-w`, and `--shell` directly usable by the
+        # build with no further bridging.
         os.environ[self.environ_name] = value
-        # scikit-build-core reads CMake args from CMAKE_ARGS, not the legacy QUADRANTS_CMAKE_ARGS.
-        # Mirror the rendered args there so the environment exported by `build.py wheel`, `-w`, and
-        # `--shell` is directly usable -- no manual `export CMAKE_ARGS="$QUADRANTS_CMAKE_ARGS"` step.
-        if self.environ_name == "QUADRANTS_CMAKE_ARGS":
-            os.environ["CMAKE_ARGS"] = value
         self.finalized = True
 
     def __setitem__(self, name: str, value: Union[str, bool]) -> None:
@@ -145,10 +157,10 @@ class CMakeArgsManager:
         return self.definitions[name]
 
 
-cmake_args = CMakeArgsManager("QUADRANTS_CMAKE_ARGS")
+cmake_args = CMakeArgsManager("CMAKE_ARGS")
 
 
-@banner("Parsing QUADRANTS_CMAKE_ARGS")
+@banner("Parsing CMAKE_ARGS")
 def _init_cmake_args():
     cmake_args.collect_options("CMakeLists.txt", *glob.glob("cmake/*.cmake"))
     cmake_args.parse_initial_args()
