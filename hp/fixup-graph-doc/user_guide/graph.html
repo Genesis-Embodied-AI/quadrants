@@ -497,7 +497,7 @@
 </div>
 <p>The argument to <code class="docutils literal notranslate"><span class="pre">qd.graph_do_while()</span></code> must be the name of a scalar <code class="docutils literal notranslate"><span class="pre">qd.i32</span></code> ndarray parameter. The loop body repeats while this value is non-zero.</p>
 <ul class="simple">
-<li><p>On <a class="reference external" href="https://developer.nvidia.com/cuda/gpus">CUDA SM 9.0+</a>, this uses CUDA conditional while nodes - the entire iteration runs on the GPU with no host involvement.</p></li>
+<li><p>On <a class="reference external" href="https://developer.nvidia.com/cuda/gpus">CUDA SM 9.0+</a>, this uses <a class="reference external" href="https://developer.nvidia.com/blog/dynamic-control-flow-in-cuda-graphs-with-conditional-nodes/">CUDA conditional while nodes</a> - the entire iteration runs on the GPU with no host involvement.</p></li>
 <li><p>On older CUDA GPUs, AMDGPU, and non-GPU backends, it falls back to a host-side do-while loop (see the <a class="reference internal" href="#backend-support">backend support table</a>).</p></li>
 </ul>
 <section id="patterns">
