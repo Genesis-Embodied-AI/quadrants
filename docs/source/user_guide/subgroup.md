@@ -2,7 +2,7 @@
 
 Subgroup operations let threads within the same subgroup (warp on NVIDIA, wave on AMD, subgroup on Vulkan / Metal) cooperate directly - exchanging register values, voting on predicates, scanning, and electing a leader - without going through shared memory or block barriers. They are the building block for fast in-warp data exchange and are used internally by `Tile16x16` and `Tile32x32` (see [tile](tile.md)).
 
-Subgroup ops live under `qd.simt.subgroup` and are written so the same Python source compiles to the right vendor primitive on each backend. Calling a backend that has not implemented an op fails at trace or codegen time.
+Subgroup ops live under `qd.simt.subgroup` and are written so the same Python source compiles to the right vendor primitive on each backend. Calling a backend that has not implemented an op fails when the kernel is compiled, not silently at runtime.
 
 This page is a high-level tour: what each op does, how the pieces fit together, and what to expect performance-wise. The complete per-op reference - exact signatures, dtype support, backend lowering, and caller contracts - is generated from the docstrings in the API reference: {py:mod}`quadrants.lang.simt.subgroup` (data movement, identification / control, voting, and lane masks), {py:mod}`quadrants.lang.simt.reductions` (reductions and scans), and {py:mod}`quadrants.lang.simt.sorting` (sorting).
 
@@ -86,7 +86,7 @@ The `barrier()` / `memory_barrier()` / `ballot_full_subgroup()` names remain as 
 
 Every op above has a paired `_tiled` form that takes an extra `log2_size` template parameter and operates on independent `2**log2_size`-aligned tiles within the subgroup - see [Tiled variants](#tiled-variants). For reductions other than the ones listed above, build a sized helper on top of `shuffle_down` / `shuffle` following the same pattern as `reduce_add_tiled` / `reduce_all_add_tiled`.
 
-Float NaN handling for `min` / `max` reductions is implementation-defined (PTX and AMDGPU suppress NaN, some SPIR-V drivers propagate it). Avoid NaN inputs if you need a portable result.
+Float NaN handling for `min` / `max` reductions is implementation-defined (CUDA and AMDGPU suppress NaN; some SPIR-V drivers propagate it). Avoid NaN inputs if you need a portable result.
 
 ### Sorting
 
@@ -321,7 +321,7 @@ After the call, lane `k` (within each group of 32) holds `a[group_start] + a[gro
 ## Performance notes
 
 - Shuffles are register-to-register on CUDA (`__shfl_sync`, `__shfl_down_sync`, `__shfl_up_sync`) and on SPIR-V where the GPU has hardware support - typically a handful of cycles, no memory traffic.
-- On AMDGPU, `shuffle` / `shuffle_down` / `shuffle_up` go through `ds_permute` / `ds_bpermute` (LDS-routed, roughly tens of cycles). Wave64 shuffles that cross the 32-lane half-boundary cost a little more on RDNA (an extra `permlane64` swap plus a select) than on CDNA (a single wave-wide `ds_bpermute`); the extra reads issue in parallel, so latency stays close to a single `ds_bpermute`.
+- On AMDGPU, `shuffle` / `shuffle_down` / `shuffle_up` go through `ds_bpermute` (roughly tens of cycles), so they cost more than the register-to-register shuffles on CUDA. On wave64 AMD GPUs, shuffles that cross the 32-lane half-boundary can cost a few extra cycles on some GPU architectures, but the underlying reads issue in parallel so latency stays close to a single shuffle.
 - `shuffle_xor` and `broadcast_first` are wrappers over `shuffle` / `broadcast` and inline at compile time, so on every backend they cost exactly the same as the underlying op.
 - Both `ballot_first_n` and `ballot` lower to a single hardware instruction on every backend. At `n == 32`, `ballot_first_n` skips the predicate-masking step entirely; at `n < 32` it adds one multiply on the predicate.
 - `reduce_add` and `reduce_all_add` each issue exactly `log2_group_size()` shuffles and `log2_group_size()` adds per call (5 on wave32, 6 on AMDGPU wave64). No barriers, no shared memory, no launch overhead (they inline). The same holds for the `_tiled` form at any `log2_size`.
