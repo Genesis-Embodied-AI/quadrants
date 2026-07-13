@@ -468,64 +468,34 @@ In this case, our recommendation is:
 
 ## Advanced
 
-The rest of this guide treats "kernel launch latency" as a cost to be reduced, without pinning down what it actually is.
-This section unpacks it: what launching a GPU kernel involves, where the latency comes from, and why `graph_do_while`
-can still speed things up even on hardware that has no native device-side loop support.
+The rest of this guide treats "kernel launch latency" as a cost to be reduced, without pinning down what it actually is. This section unpacks it: what launching a GPU kernel involves, where the latency comes from, and why `graph_do_while` can still speed things up even on hardware that has no native device-side loop support.
 
 ### What a GPU kernel launch is
 
-When you call a `@qd.kernel` from Python, the numerical work does not run inline in the calling thread. Instead
-Quadrants *launches* the work onto the GPU: it hands a compiled kernel plus its arguments to the GPU driver, the driver
-enqueues it onto a stream (an ordered queue of GPU work), and the launch call returns to the host before the GPU has
-finished — usually before it has even started. Host and GPU run asynchronously.
+When you call a `@qd.kernel` from Python, the numerical work does not run inline in the calling thread. Instead Quadrants *launches* the work onto the GPU: it hands a compiled kernel plus its arguments to the GPU driver, the driver enqueues it onto a stream (an ordered queue of GPU work), and the launch call returns to the host before the GPU has finished — usually before it has even started. Host and GPU run asynchronously.
 
-Each top-level `for`-loop in a kernel is a separate offloaded task, and each offloaded task becomes one GPU kernel. So
-the three-loop `k1` in the earlier **qd.kernel** section launches three GPU kernels every time you call it. Every launch
-carries a fixed overhead that is independent of how much data the kernel processes — that per-launch overhead is the
-"kernel launch latency" this guide keeps referring to. When a kernel crunches a lot of data the overhead is negligible;
-when it does little work, or when you relaunch small kernels many times in a loop, launch latency can dominate the total
-runtime.
+Each top-level `for`-loop in a kernel is a separate offloaded task, and each offloaded task becomes one GPU kernel. So the three-loop `k1` in the earlier **qd.kernel** section launches three GPU kernels every time you call it. Every launch carries a fixed overhead that is independent of how much data the kernel processes — that per-launch overhead is the "kernel launch latency" this guide keeps referring to. When a kernel crunches a lot of data the overhead is negligible; when it does little work, or when you relaunch small kernels many times in a loop, launch latency can dominate the total runtime.
 
 ### Where kernel launch latency comes from
 
 It helps to split the latency of a single launch into three parts:
 
-- **Python side.** Everything that happens in the Python interpreter before control reaches Quadrants' C++ runtime.
-  This is the most expensive of the three per call, and it is paid once per *Python* call — so a Python `while`/`for`
-  loop that calls a kernel N times pays it N times.
-- **C++ side.** Work inside the Quadrants runtime (C++) once control has crossed the boundary. Cheaper than the Python
-  side, but non-zero, and paid per offloaded task.
-- **GPU / driver side.** The GPU driver's own cost to place the kernel on a stream, plus the fixed scheduling latency on
-  the GPU itself before the kernel begins running on the hardware.
+- **Python side.** Everything that happens in the Python interpreter before control reaches Quadrants' C++ runtime. This is the most expensive of the three per call, and it is paid once per *Python* call — so a Python `while`/`for` loop that calls a kernel N times pays it N times.
+- **C++ side.** Work inside the Quadrants runtime (C++) once control has crossed the boundary. Cheaper than the Python side, but non-zero, and paid per offloaded task.
+- **GPU / driver side.** The GPU driver's own cost to place the kernel on a stream, plus the fixed scheduling latency on the GPU itself before the kernel begins running on the hardware.
 
-Graphs attack all three. Capturing a sequence of launches into a graph and replaying it collapses many separate launches
-into a single graph launch, so on hardware-accelerated backends you pay the Python and C++ per-task costs once when the
-graph is built, and then only a single graph launch per call.
+Graphs attack all three. Capturing a sequence of launches into a graph and replaying it collapses many separate launches into a single graph launch, so on hardware-accelerated backends you pay the Python and C++ per-task costs once when the graph is built, and then only a single graph launch per call.
 
 ### Latency hiding
 
-Because host and GPU run asynchronously, kernel launches overlap with kernel execution: the host can be issuing the next
-launch while earlier kernels are still running on the GPU. As long as the host issues launches at least as fast as the
-GPU drains them, the queue never empties, the GPU stays busy, and the launch latency is fully *hidden* behind execution.
+Because host and GPU run asynchronously, kernel launches overlap with kernel execution: the host can be issuing the next launch while earlier kernels are still running on the GPU. As long as the host issues launches at least as fast as the GPU drains them, the queue never empties, the GPU stays busy, and the launch latency is fully *hidden* behind execution.
 
-So reducing launch latency does not always improve overall throughput. When each kernel runs long enough that
-its execution time exceeds the launch overhead, the GPU is the bottleneck and shaving launch latency changes nothing —
-the launches were already hidden behind execution.
+So reducing launch latency does not always improve overall throughput. When each kernel runs long enough that its execution time exceeds the launch overhead, the GPU is the bottleneck and shaving launch latency changes nothing — the launches were already hidden behind execution.
 
-Kernel launch latency matters when kernels are relatively small. Then the GPU can finish a kernel before the host has issued the next one,
-so the GPU sits idle waiting for the next launch and the launch latency is *exposed* on the critical path. In that
-regime, cutting launch latency — for example by collapsing many launches into a single graph — can directly increase
-throughput.
+Kernel launch latency matters when kernels are relatively small. Then the GPU can finish a kernel before the host has issued the next one, so the GPU sits idle waiting for the next launch and the launch latency is *exposed* on the critical path. In that regime, cutting launch latency — for example by collapsing many launches into a single graph — can directly increase throughput.
 
 ### Why graph_do_while can help slightly even without hardware support
 
-Recall the earlier example **A while loop, conditional on a device-side scalar tensor**. Written as a plain Python loop,
-every iteration pays the full Python-side launch latency: Python re-enters the kernel wrapper, and Python itself reads
-`cond[()]` and evaluates the `if` before deciding whether to loop again.
+Recall the earlier example **A while loop, conditional on a device-side scalar tensor**. Written as a plain Python loop, every iteration pays the full Python-side launch latency: Python re-enters the kernel wrapper, and Python itself reads `cond[()]` and evaluates the `if` before deciding whether to loop again.
 
-On hardware with native device-side conditional graph nodes, `graph_do_while` removes the host from the loop entirely —
-the ideal case. But even on hardware *without* that support — where `graph_do_while` falls back to a host-side do-while
-loop (see [Backend support](#backend-support)) — the launch latency can be slightly reduced compared to the hand-written
-Python version, because the fallback loop is driven entirely in the C++ runtime rather than in Python. A single Python call enters the
-runtime, and the runtime then repeats internally: launch the loop body's tasks, read back the condition flag, and decide
-whether to iterate again — all in C++, with no trip back through the Python interpreter between iterations.
+On hardware with native device-side conditional graph nodes, `graph_do_while` removes the host from the loop entirely — the ideal case. But even on hardware *without* that support — where `graph_do_while` falls back to a host-side do-while loop (see [Backend support](#backend-support)) — the launch latency can be slightly reduced compared to the hand-written Python version, because the fallback loop is driven entirely in the C++ runtime rather than in Python. A single Python call enters the runtime, and the runtime then repeats internally: launch the loop body's tasks, read back the condition flag, and decide whether to iterate again — all in C++, with no trip back through the Python interpreter between iterations.
