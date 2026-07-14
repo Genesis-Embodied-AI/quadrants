@@ -148,6 +148,12 @@ Uses an AI agent to check that lines in changed files follow wrapping convention
 
 The check runs only on lines changed in the PR and reports up to 3 violations. This check is delayed by 30 minutes, to avoid running repeatedly if multiple commits pushed with a short delay between each.
 
+### Non-ASCII character check (`check_non_ascii.yml`)
+
+Fails the PR if any newly added line in a changed code or documentation file contains a non-ASCII character (any character with a code point above U+007F). Only added lines are inspected, so pre-existing non-ASCII content does not block unrelated PRs. The check covers common source and doc file types (`.md`, `.rst`, `.txt`, `.py`, `.pyi`, `.c`, `.cc`, `.cpp`, `.cxx`, `.h`, `.hpp`, `.hxx`, `.cu`, `.cuh`).
+
+The log prints a summary of every violation as `<file>:<line>:<column>:` followed by the offending character's code point, `repr`, and Unicode name. Replace flagged characters with their ASCII equivalents (e.g. straight quotes instead of curly quotes, `-` instead of an em dash, a normal space instead of a non-breaking space). You can run it locally with `git diff origin/main...HEAD | python python/tools/check_non_ascii.py`.
+
 ### Deleted comments check (`check_deleted_comments.yml`)
 
 Uses an AI agent to check that comments and docstrings have not been unnecessarily deleted. Reports up to 10 violations. This check is delayed by 30 minutes, to avoid running repeatedly if multiple commits pushed with a short delay between each.
@@ -181,9 +187,9 @@ The agent reports up to 10 violations. This check is delayed by 30 minutes, to a
 
 ### PR change report (`pr_change_report.yml`)
 
-Posts a fresh PR comment on every push. The comment is a single line: the totals (file count, code lines added, code lines removed) formatted as a markdown link to a GitHub Check whose page contains the full per-file / per-function breakdown. "Code lines" exclude blank lines, comment-only lines, and (in Python) lines whose only token content is a string literal (i.e. docstrings and continuation lines of multi-line strings). C/C++ `/* … */` block comments are stripped before counting.
+Posts a fresh PR comment on every push. The comment is a single line: the totals (file count, code lines added, code lines removed) formatted as a markdown link to the workflow run summary page, which contains the full per-file / per-function breakdown. "Code lines" exclude blank lines, comment-only lines, and (in Python) lines whose only token content is a string literal (i.e. docstrings and continuation lines of multi-line strings). C/C++ `/* ... */` block comments are stripped before counting.
 
-The number columns on the Check page (without a `+` or `-` sign) are code-line counts in the BASE (pre-PR) version: file size before this PR (0 for newly-added files), function body size before this PR (0 for new functions; original body size for deleted functions). `+<n>` / `-<n>` are code lines added / removed by this PR.
+The number columns in the report (without a `+` or `-` sign) are code-line counts in the BASE (pre-PR) version: file size before this PR (0 for newly-added files), function body size before this PR (0 for new functions; original body size for deleted functions). `+<n>` / `-<n>` are code lines added / removed by this PR.
 
 Files are sorted by added lines descending. Within each file, functions are split into a `New:` group (added by this PR), an `Existing:` group (modified by this PR), and a `Deleted:` group (removed by this PR), and within each group sorted by added lines descending, then removed lines descending. Files that are deleted in their entirety appear as a single per-file row (so the totals stay accurate) but skip the per-function breakdown. Sample shape:
 

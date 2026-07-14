@@ -334,3 +334,25 @@ def test_dlpack_field_memory_allocation_before_to_dlpack():
     assert (
         second_time_tc == second_time.to_torch(device=second_time_tc.device)
     ).all(), f"{second_time_tc} != {second_time.to_torch(device=second_time_tc.device)}"
+
+
+@test_utils.test(arch=[qd.cpu])
+@pytest.mark.run_in_serial
+@pytest.mark.slow
+def test_dlpack_field_offset_past_2gib():
+    # Fields share one SNode tree, so the second field's in-tree byte offset exceeds 2^31; the DLPack export must carry
+    # it without truncation instead of aliasing the tree base.
+    pad = qd.field(dtype=qd.f32, shape=(560_000_000,))
+    victim = qd.field(dtype=qd.f32, shape=(1000,))
+
+    @qd.kernel
+    def fill():
+        for i in pad:
+            pad[i] = 1.0
+        for i in victim:
+            victim[i] = qd.cast(i, qd.f32)
+
+    fill()
+    qd.sync()
+    victim_tc = torch.utils.dlpack.from_dlpack(victim.to_dlpack())
+    np.testing.assert_array_equal(victim_tc.cpu().numpy(), np.arange(1000, dtype=np.float32))
