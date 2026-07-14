@@ -1,0 +1,1280 @@
+
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="../../../../" >
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>quadrants.lang.simt.block &#8212; Quadrants 1.1.2 documentation</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "";
+  </script>
+  <!--
+    this give us a css class that will be invisible only if js is disabled
+  -->
+  <noscript>
+    <style>
+      .pst-js-only { display: none !important; }
+
+    </style>
+  </noscript>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="../../../../_static/styles/theme.css?digest=a95f357e85573c9b56d5" rel="stylesheet" />
+<link href="../../../../_static/styles/pydata-sphinx-theme.css?digest=a95f357e85573c9b56d5" rel="stylesheet" />
+
+    <link rel="stylesheet" type="text/css" href="../../../../_static/pygments.css?v=8f2a1f02" />
+    <link rel="stylesheet" type="text/css" href="../../../../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../../../../_static/togglebutton.css?v=9c3e77be" />
+    <link rel="stylesheet" type="text/css" href="../../../../_static/graphviz.css?v=4ae1632d" />
+    <link rel="stylesheet" type="text/css" href="../../../../_static/sphinx-design.min.css?v=95c83b7e" />
+    <link rel="stylesheet" type="text/css" href="../../../../_static/css/custom.css" />
+  
+  <!-- So that users can add custom icons -->
+  <script defer src="../../../../_static/scripts/fontawesome.js?digest=a95f357e85573c9b56d5"></script>
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="../../../../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5" />
+<link rel="preload" as="script" href="../../../../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5" />
+
+    <script src="../../../../_static/documentation_options.js?v=6f037312"></script>
+    <script src="../../../../_static/doctools.js?v=9bcbadda"></script>
+    <script src="../../../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../../../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../../../../_static/copybutton.js?v=f281be69"></script>
+    <script>let toggleHintShow = 'Click to show';</script>
+    <script>let toggleHintHide = 'Click to hide';</script>
+    <script>let toggleOpenOnPrint = 'true';</script>
+    <script src="../../../../_static/togglebutton.js?v=b8b12719"></script>
+    <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
+    <script src="../../../../_static/design-tabs.js?v=f930bc37"></script>
+    <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
+    <script>DOCUMENTATION_OPTIONS.pagename = '_modules/quadrants/lang/simt/block';</script>
+    <script>DOCUMENTATION_OPTIONS.search_as_you_type = false;</script>
+    <link rel="index" title="Index" href="../../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../../search.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="docsearch:language" content="en"/>
+  <meta name="docsearch:version" content="1.1.2" />
+  
+    
+    <script src="../../../../_static/searchtools.js"></script>
+    <script src="../../../../_static/language_data.js"></script>
+    <script src="../../../../searchindex.js"></script>
+  
+  </head>
+  <body data-default-mode="">
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+  
+  
+  
+  
+  <dialog id="pst-search-dialog">
+    
+<form class="bd-search d-flex align-items-center"
+      action="../../../../search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         placeholder="Search the docs ..."
+         aria-label="Search the docs ..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form>
+  </dialog>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header id="pst-header" class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+<div class="bd-header__inner bd-page-width">
+  <button class="pst-navbar-icon sidebar-toggle primary-toggle" aria-label="Site navigation">
+    <span class="fa-solid fa-bars"></span>
+  </button>
+  
+  
+  <div class="col-lg-3 navbar-header-items__start">
+    
+      <div class="navbar-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="../../../../index.html">
+  
+  
+  
+  
+  
+  
+    <p class="title logo__title">Quadrants 1.1.2 documentation</p>
+  
+</a></div>
+    
+  </div>
+  
+  <div class="col-lg-9 navbar-header-items">
+    
+    <div class="me-auto navbar-header-items__center">
+      
+        <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../../user_guide/index.html">
+    User guide
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../../autoapi/index.html">
+    API Reference
+  </a>
+</li>
+
+  </ul>
+</nav></div>
+      
+    </div>
+    
+    
+    <div class="navbar-header-items__end">
+      
+        <div class="navbar-item navbar-persistent--container">
+          
+
+<button class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+        </div>
+      
+      
+        <div class="navbar-item">
+
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg fa-fw" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg fa-fw" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg fa-fw" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg fa-fw me-1"></i>System Settings</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg fa-fw me-1"></i>Light</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg fa-fw me-1"></i>Dark</button></li>
+  </ul>
+</div></div>
+      
+    </div>
+    
+  </div>
+  
+  
+    <div class="navbar-persistent--mobile">
+
+<button class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+    </div>
+  
+
+  
+</div>
+
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+        
+      
+      <dialog id="pst-primary-sidebar-modal"></dialog>
+      <div id="pst-primary-sidebar" class="bd-sidebar-primary bd-sidebar hide-on-wide">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+      <div class="sidebar-header-items__center">
+        
+          
+          
+            <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../../user_guide/index.html">
+    User guide
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../../autoapi/index.html">
+    API Reference
+  </a>
+</li>
+
+  </ul>
+</nav></div>
+          
+        
+      </div>
+    
+    
+    
+      <div class="sidebar-header-items__end">
+        
+          <div class="navbar-item">
+
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg fa-fw" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg fa-fw" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg fa-fw" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg fa-fw me-1"></i>System Settings</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg fa-fw me-1"></i>Light</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg fa-fw me-1"></i>Dark</button></li>
+  </ul>
+</div></div>
+        
+      </div>
+    
+  </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+      <div class="sidebar-primary-item">
+<div id="ethical-ad-placement"
+      class="flat"
+      data-ea-publisher="readthedocs"
+      data-ea-type="readthedocs-sidebar"
+      data-ea-manual="true">
+</div></div>
+  </div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item">
+
+<nav aria-label="Breadcrumb" class="d-print-none">
+  <ul class="bd-breadcrumbs">
+    
+    <li class="breadcrumb-item breadcrumb-home">
+      <a href="../../../../index.html" class="nav-link" aria-label="Home">
+        <i class="fa-solid fa-home"></i>
+      </a>
+    </li>
+    
+    <li class="breadcrumb-item"><a href="../../../index.html" class="nav-link">Module code</a></li>
+    
+    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">quadrants.lang.simt.block</span></li>
+  </ul>
+</nav>
+</div>
+      
+    </div>
+  
+  
+</div>
+</div>
+              
+              
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <h1>Source code for quadrants.lang.simt.block</h1><div class="highlight"><pre>
+<span></span><span class="c1"># type: ignore</span>
+<span class="c1"># pyright: reportInvalidTypeForm=false, reportOperatorIssue=false, reportArgumentType=false</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">warnings</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._lib</span><span class="w"> </span><span class="kn">import</span> <span class="n">core</span> <span class="k">as</span> <span class="n">_qd_core</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">impl</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">ops</span> <span class="k">as</span> <span class="n">_ops</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.expr</span><span class="w"> </span><span class="kn">import</span> <span class="n">make_expr_group</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.kernel_impl</span><span class="w"> </span><span class="kn">import</span> <span class="n">func</span> <span class="k">as</span> <span class="n">_func</span>
+
+<span class="c1"># Import order matters: ``subgroup`` must come before ``reductions``.  ``reductions.py`` does ``from</span>
+<span class="c1"># quadrants.lang.simt.subgroup import (ballot, invocation_id, ...)`` at its top, and ``subgroup.py`` does ``from</span>
+<span class="c1"># quadrants.lang.simt.reductions import *`` at its bottom.  If ``reductions`` is imported here first, it triggers a</span>
+<span class="c1"># circular load that leaves ``subgroup``&#39;s wildcard re-export running while ``reductions.__all__`` isn&#39;t yet defined,</span>
+<span class="c1"># so ``subgroup.reduce_add_tiled`` etc. silently end up missing.  Importing ``subgroup`` first (which then drives</span>
+<span class="c1"># ``reductions`` to completion via the wildcard) keeps the fully-loaded layout downstream callers expect.  ``isort:</span>
+<span class="c1"># skip_file`` would disable sorting for the whole file; the local ``noqa`` comments below scope the override to just</span>
+<span class="c1"># these two lines.</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.simt</span><span class="w"> </span><span class="kn">import</span> <span class="n">subgroup</span> <span class="k">as</span> <span class="n">_subgroup</span>  <span class="c1"># noqa: I001  isort: skip</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.simt</span><span class="w"> </span><span class="kn">import</span> <span class="n">reductions</span> <span class="k">as</span> <span class="n">_reductions</span>  <span class="c1"># noqa: I001</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.simt.reductions</span><span class="w"> </span><span class="kn">import</span> <span class="n">_bin_add</span><span class="p">,</span> <span class="n">_bin_max</span><span class="p">,</span> <span class="n">_bin_min</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.util</span><span class="w"> </span><span class="kn">import</span> <span class="n">quadrants_scope</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.types.annotations</span><span class="w"> </span><span class="kn">import</span> <span class="n">template</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.types.primitive_types</span><span class="w"> </span><span class="kn">import</span> <span class="n">i32</span> <span class="k">as</span> <span class="n">_i32</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.types.primitive_types</span><span class="w"> </span><span class="kn">import</span> <span class="n">i64</span> <span class="k">as</span> <span class="n">_i64</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.types.primitive_types</span><span class="w"> </span><span class="kn">import</span> <span class="n">u32</span> <span class="k">as</span> <span class="n">_u32</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.types.primitive_types</span><span class="w"> </span><span class="kn">import</span> <span class="n">u64</span> <span class="k">as</span> <span class="n">_u64</span>
+
+
+<div class="viewcode-block" id="arch_uses_spv">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/block/index.html#quadrants.lang.simt.block.arch_uses_spv">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">arch_uses_spv</span><span class="p">(</span><span class="n">arch</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">arch</span> <span class="o">==</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">vulkan</span> <span class="ow">or</span> <span class="n">arch</span> <span class="o">==</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">metal</span></div>
+
+
+
+<div class="viewcode-block" id="sync">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/block/index.html#quadrants.lang.simt.block.sync">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">sync</span><span class="p">():</span>
+    <span class="n">arch</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">prog</span><span class="o">.</span><span class="n">config</span><span class="p">()</span><span class="o">.</span><span class="n">arch</span>
+    <span class="k">if</span> <span class="n">arch</span> <span class="o">==</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">cuda</span> <span class="ow">or</span> <span class="n">arch</span> <span class="o">==</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">amdgpu</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">call_internal</span><span class="p">(</span><span class="s2">&quot;block_barrier&quot;</span><span class="p">,</span> <span class="n">with_runtime_context</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">arch_uses_spv</span><span class="p">(</span><span class="n">arch</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">call_internal</span><span class="p">(</span><span class="s2">&quot;workgroupBarrier&quot;</span><span class="p">,</span> <span class="n">with_runtime_context</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;qd.block.sync is not supported for arch </span><span class="si">{</span><span class="n">arch</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="sync_all_nonzero">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/block/index.html#quadrants.lang.simt.block.sync_all_nonzero">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">sync_all_nonzero</span><span class="p">(</span><span class="n">predicate</span><span class="p">):</span>
+    <span class="n">arch</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">prog</span><span class="o">.</span><span class="n">config</span><span class="p">()</span><span class="o">.</span><span class="n">arch</span>
+    <span class="k">if</span> <span class="n">arch</span> <span class="o">==</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">cuda</span><span class="p">:</span>
+        <span class="c1"># Hardware-fused barrier+reduction on NVPTX (`barrier.cta.red.and.aligned.all.sync`).</span>
+        <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">call_internal</span><span class="p">(</span><span class="s2">&quot;block_barrier_and_i32&quot;</span><span class="p">,</span> <span class="n">predicate</span><span class="p">,</span> <span class="n">with_runtime_context</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">arch</span> <span class="o">==</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">amdgpu</span> <span class="ow">or</span> <span class="n">arch_uses_spv</span><span class="p">(</span><span class="n">arch</span><span class="p">):</span>
+        <span class="c1"># AMDGPU and SPIR-V (Vulkan / Metal) emulate via shared memory + 2 barriers + an atomic; see</span>
+        <span class="c1"># `_block_reduce_*_emulated` below for the pattern.</span>
+        <span class="k">return</span> <span class="n">_block_reduce_all_nonzero_emulated</span><span class="p">(</span><span class="n">predicate</span><span class="p">)</span>
+    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;qd.block.sync_all_nonzero is not supported for arch </span><span class="si">{</span><span class="n">arch</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="sync_any_nonzero">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/block/index.html#quadrants.lang.simt.block.sync_any_nonzero">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">sync_any_nonzero</span><span class="p">(</span><span class="n">predicate</span><span class="p">):</span>
+    <span class="n">arch</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">prog</span><span class="o">.</span><span class="n">config</span><span class="p">()</span><span class="o">.</span><span class="n">arch</span>
+    <span class="k">if</span> <span class="n">arch</span> <span class="o">==</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">cuda</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">call_internal</span><span class="p">(</span><span class="s2">&quot;block_barrier_or_i32&quot;</span><span class="p">,</span> <span class="n">predicate</span><span class="p">,</span> <span class="n">with_runtime_context</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">arch</span> <span class="o">==</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">amdgpu</span> <span class="ow">or</span> <span class="n">arch_uses_spv</span><span class="p">(</span><span class="n">arch</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">_block_reduce_any_nonzero_emulated</span><span class="p">(</span><span class="n">predicate</span><span class="p">)</span>
+    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;qd.block.sync_any_nonzero is not supported for arch </span><span class="si">{</span><span class="n">arch</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="sync_count_nonzero">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/block/index.html#quadrants.lang.simt.block.sync_count_nonzero">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">sync_count_nonzero</span><span class="p">(</span><span class="n">predicate</span><span class="p">):</span>
+    <span class="n">arch</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">prog</span><span class="o">.</span><span class="n">config</span><span class="p">()</span><span class="o">.</span><span class="n">arch</span>
+    <span class="k">if</span> <span class="n">arch</span> <span class="o">==</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">cuda</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">call_internal</span><span class="p">(</span><span class="s2">&quot;block_barrier_count_i32&quot;</span><span class="p">,</span> <span class="n">predicate</span><span class="p">,</span> <span class="n">with_runtime_context</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">arch</span> <span class="o">==</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">amdgpu</span> <span class="ow">or</span> <span class="n">arch_uses_spv</span><span class="p">(</span><span class="n">arch</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">_block_reduce_count_nonzero_emulated</span><span class="p">(</span><span class="n">predicate</span><span class="p">)</span>
+    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;qd.block.sync_count_nonzero is not supported for arch </span><span class="si">{</span><span class="n">arch</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="mem_fence">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/block/index.html#quadrants.lang.simt.block.mem_fence">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">mem_fence</span><span class="p">():</span>
+    <span class="n">arch</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">prog</span><span class="o">.</span><span class="n">config</span><span class="p">()</span><span class="o">.</span><span class="n">arch</span>
+    <span class="k">if</span> <span class="n">arch</span> <span class="o">==</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">cuda</span> <span class="ow">or</span> <span class="n">arch</span> <span class="o">==</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">amdgpu</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">call_internal</span><span class="p">(</span><span class="s2">&quot;block_mem_fence&quot;</span><span class="p">,</span> <span class="n">with_runtime_context</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">arch_uses_spv</span><span class="p">(</span><span class="n">arch</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">call_internal</span><span class="p">(</span><span class="s2">&quot;workgroupMemoryBarrier&quot;</span><span class="p">,</span> <span class="n">with_runtime_context</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;qd.block.mem_fence is not supported for arch </span><span class="si">{</span><span class="n">arch</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="mem_sync">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/block/index.html#quadrants.lang.simt.block.mem_sync">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">mem_sync</span><span class="p">():</span>
+    <span class="n">warnings</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span>
+        <span class="s2">&quot;qd.simt.block.mem_sync() is deprecated; use qd.simt.block.mem_fence() instead.&quot;</span><span class="p">,</span>
+        <span class="ne">DeprecationWarning</span><span class="p">,</span>
+        <span class="n">stacklevel</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="k">return</span> <span class="n">mem_fence</span><span class="p">()</span></div>
+
+
+
+<div class="viewcode-block" id="thread_idx">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/block/index.html#quadrants.lang.simt.block.thread_idx">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">thread_idx</span><span class="p">():</span>
+    <span class="n">arch</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">prog</span><span class="o">.</span><span class="n">config</span><span class="p">()</span><span class="o">.</span><span class="n">arch</span>
+    <span class="k">if</span> <span class="n">arch</span> <span class="o">==</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">cuda</span> <span class="ow">or</span> <span class="n">arch</span> <span class="o">==</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">amdgpu</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">call_internal</span><span class="p">(</span><span class="s2">&quot;block_thread_idx&quot;</span><span class="p">,</span> <span class="n">with_runtime_context</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">arch_uses_spv</span><span class="p">(</span><span class="n">arch</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">call_internal</span><span class="p">(</span><span class="s2">&quot;localInvocationId&quot;</span><span class="p">,</span> <span class="n">with_runtime_context</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;qd.block.thread_idx is not supported for arch </span><span class="si">{</span><span class="n">arch</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="global_thread_idx">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/block/index.html#quadrants.lang.simt.block.global_thread_idx">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">global_thread_idx</span><span class="p">():</span>
+    <span class="n">arch</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">prog</span><span class="o">.</span><span class="n">config</span><span class="p">()</span><span class="o">.</span><span class="n">arch</span>
+    <span class="k">if</span> <span class="n">arch</span> <span class="o">==</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">cuda</span> <span class="ow">or</span> <span class="n">arch</span> <span class="o">==</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">amdgpu</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">compiling_callable</span><span class="o">.</span><span class="n">ast_builder</span><span class="p">()</span><span class="o">.</span><span class="n">insert_thread_idx_expr</span><span class="p">()</span>
+    <span class="k">if</span> <span class="n">arch_uses_spv</span><span class="p">(</span><span class="n">arch</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">call_internal</span><span class="p">(</span><span class="s2">&quot;globalInvocationId&quot;</span><span class="p">,</span> <span class="n">with_runtime_context</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;qd.block.global_thread_idx is not supported for arch </span><span class="si">{</span><span class="n">arch</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="SharedArray">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/block/index.html#quadrants.lang.simt.block.SharedArray">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">SharedArray</span><span class="p">:</span>
+    <span class="n">_is_quadrants_class</span> <span class="o">=</span> <span class="kc">True</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">shape</span><span class="p">,</span> <span class="n">dtype</span><span class="p">):</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">shape</span><span class="p">,</span> <span class="nb">int</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">shape</span> <span class="o">=</span> <span class="p">(</span><span class="n">shape</span><span class="p">,)</span>
+        <span class="k">elif</span> <span class="p">(</span><span class="nb">isinstance</span><span class="p">(</span><span class="n">shape</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">)</span> <span class="ow">or</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">shape</span><span class="p">,</span> <span class="nb">list</span><span class="p">))</span> <span class="ow">and</span> <span class="nb">all</span><span class="p">(</span><span class="nb">isinstance</span><span class="p">(</span><span class="n">s</span><span class="p">,</span> <span class="nb">int</span><span class="p">)</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">shape</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">shape</span> <span class="o">=</span> <span class="n">shape</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;qd.simt.block.shared_array shape must be an integer or a tuple of integers, but got </span><span class="si">{</span><span class="n">shape</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="p">)</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">dtype</span><span class="p">,</span> <span class="n">impl</span><span class="o">.</span><span class="n">MatrixType</span><span class="p">):</span>
+            <span class="n">dtype</span> <span class="o">=</span> <span class="n">dtype</span><span class="o">.</span><span class="n">tensor_type</span>
+<div class="viewcode-block" id="SharedArray.dtype">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/block/index.html#quadrants.lang.simt.block.SharedArray.dtype">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">dtype</span> <span class="o">=</span> <span class="n">dtype</span></div>
+
+<div class="viewcode-block" id="SharedArray.shared_array_proxy">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/block/index.html#quadrants.lang.simt.block.SharedArray.shared_array_proxy">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">shared_array_proxy</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">expr_init_shared_array</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">shape</span><span class="p">,</span> <span class="n">dtype</span><span class="p">)</span></div>
+
+
+    <span class="nd">@quadrants_scope</span>
+<div class="viewcode-block" id="SharedArray.subscript">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/block/index.html#quadrants.lang.simt.block.SharedArray.subscript">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">subscript</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">indices</span><span class="p">):</span>
+        <span class="n">ast_builder</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">compiling_callable</span><span class="o">.</span><span class="n">ast_builder</span><span class="p">()</span>
+        <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">Expr</span><span class="p">(</span>
+            <span class="n">ast_builder</span><span class="o">.</span><span class="n">expr_subscript</span><span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">shared_array_proxy</span><span class="p">,</span>
+                <span class="n">make_expr_group</span><span class="p">(</span><span class="o">*</span><span class="n">indices</span><span class="p">),</span>
+                <span class="n">_qd_core</span><span class="o">.</span><span class="n">DebugInfo</span><span class="p">(</span><span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">get_current_src_info</span><span class="p">()),</span>
+            <span class="p">)</span>
+        <span class="p">)</span></div>
+</div>
+
+
+
+<span class="c1"># --- Block reductions ------------------------------------------------------------------</span>
+<span class="c1">#</span>
+<span class="c1"># Two-stage block reduce: each subgroup reduces its lanes via `shuffle_down`, lane 0 of every subgroup publishes the</span>
+<span class="c1"># subgroup aggregate to shared memory, a `block.sync()` retires the publish, and thread 0 sequentially folds the</span>
+<span class="c1"># subgroup aggregates with `op`.  Cost: `log2(subgroup_size)` shuffles + 1 shared-mem write/read per subgroup + 1</span>
+<span class="c1"># `block.sync` + (NUM_SUBGROUPS - 1) ops on thread 0.  The subgroup size is read from `subgroup.group_size()` (a</span>
+<span class="c1"># compile-time Python int) at the top of every block op, so callers never plumb it in.</span>
+<span class="c1">#</span>
+<span class="c1"># The per-subgroup step delegates to `reductions._reduce_tiled`, the generic-op private helper (alongside</span>
+<span class="c1"># `reductions._inclusive_scan_tiled` / `_exclusive_scan_tiled`) that mirrors `subgroup.reduce_add_tiled` / `_min_tiled`</span>
+<span class="c1"># / `_max_tiled` but takes a caller-supplied template operator -- so the same block skeleton covers add / min / max /</span>
+<span class="c1"># mul / bitwise / custom monoids.</span>
+
+
+<span class="nd">@_func</span>
+<div class="viewcode-block" id="reduce">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/block/index.html#quadrants.lang.simt.block.reduce">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">reduce</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">op</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">dtype</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Block-scope reduction under a generic associative ``op``.  Result is valid in **thread 0 only**; other threads</span>
+<span class="sd">    retain partial values.  Use `reduce_all` if you need the result on every thread.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        value: per-thread input.</span>
+<span class="sd">        block_dim: threads per block (template).  Must be a positive multiple of ``subgroup.group_size()`` (32 on CUDA</span>
+<span class="sd">            / Metal / Vulkan-on-NVIDIA, 64 on AMDGPU).</span>
+<span class="sd">        op: ``@qd.func`` taking two values and returning the same type as ``value``; callers can plug in custom</span>
+<span class="sd">            associative monoids (bitwise ops, multiplicative, matrix-multiply, etc.) without re-implementing the</span>
+<span class="sd">            per-subgroup + shared-mem skeleton.  See `reduce_add` for the standard sum specialization.</span>
+<span class="sd">        dtype: scalar dtype for the inter-subgroup shared-memory staging slot (must match ``value``&#39;s type).</span>
+
+<span class="sd">    The calling thread&#39;s block-local index is read internally via `block.thread_idx()`; the subgroup size is read from</span>
+<span class="sd">    `subgroup.group_size()` at compile time.  When the block is exactly one subgroup the shared-memory path is</span>
+<span class="sd">    short-circuited at compile time and the call costs only the per-subgroup tree.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">SUBGROUP_SIZE</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="n">_subgroup</span><span class="o">.</span><span class="n">group_size</span><span class="p">())</span>
+    <span class="n">log2_subgroup</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="n">_subgroup</span><span class="o">.</span><span class="n">log2_group_size</span><span class="p">())</span>
+    <span class="n">impl</span><span class="o">.</span><span class="n">static_assert</span><span class="p">(</span>
+        <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="n">block_dim</span> <span class="o">%</span> <span class="n">SUBGROUP_SIZE</span> <span class="o">==</span> <span class="mi">0</span> <span class="ow">and</span> <span class="n">block_dim</span> <span class="o">&gt;=</span> <span class="n">SUBGROUP_SIZE</span><span class="p">),</span>
+        <span class="s2">&quot;block.reduce: block_dim must be a positive multiple of subgroup size&quot;</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">NUM_SUBGROUPS</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="n">block_dim</span> <span class="o">//</span> <span class="n">SUBGROUP_SIZE</span><span class="p">)</span>
+
+    <span class="n">subgroup_agg</span> <span class="o">=</span> <span class="n">_reductions</span><span class="o">.</span><span class="n">_reduce_tiled</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">op</span><span class="p">,</span> <span class="n">log2_subgroup</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="n">NUM_SUBGROUPS</span> <span class="o">==</span> <span class="mi">1</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">subgroup_agg</span>
+
+    <span class="n">tid</span> <span class="o">=</span> <span class="n">thread_idx</span><span class="p">()</span>
+    <span class="n">subgroup_id</span> <span class="o">=</span> <span class="n">tid</span> <span class="o">//</span> <span class="n">SUBGROUP_SIZE</span>
+    <span class="n">lane_id</span> <span class="o">=</span> <span class="n">tid</span> <span class="o">&amp;</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="n">SUBGROUP_SIZE</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span>
+
+    <span class="n">shared</span> <span class="o">=</span> <span class="n">SharedArray</span><span class="p">(</span><span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">((</span><span class="n">NUM_SUBGROUPS</span><span class="p">,)),</span> <span class="n">dtype</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">lane_id</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="n">shared</span><span class="p">[</span><span class="n">subgroup_id</span><span class="p">]</span> <span class="o">=</span> <span class="n">subgroup_agg</span>
+    <span class="n">sync</span><span class="p">()</span>
+
+    <span class="n">result</span> <span class="o">=</span> <span class="n">subgroup_agg</span>
+    <span class="k">if</span> <span class="n">tid</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="n">result</span> <span class="o">=</span> <span class="n">shared</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="k">for</span> <span class="n">w</span> <span class="ow">in</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">NUM_SUBGROUPS</span><span class="p">)):</span>
+            <span class="n">result</span> <span class="o">=</span> <span class="n">op</span><span class="p">(</span><span class="n">result</span><span class="p">,</span> <span class="n">shared</span><span class="p">[</span><span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="n">w</span><span class="p">)])</span>
+    <span class="k">return</span> <span class="n">result</span></div>
+
+
+
+<span class="nd">@_func</span>
+<div class="viewcode-block" id="reduce_all">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/block/index.html#quadrants.lang.simt.block.reduce_all">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">reduce_all</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">op</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">dtype</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Block-scope reduction under a generic associative ``op``, broadcast to every thread.  Costs one extra</span>
+<span class="sd">    ``block.sync()`` plus a one-slot shared-memory broadcast vs. `reduce`.  See `reduce` for the operator contract.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">result</span> <span class="o">=</span> <span class="n">reduce</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">,</span> <span class="n">op</span><span class="p">,</span> <span class="n">dtype</span><span class="p">)</span>
+    <span class="n">bcast</span> <span class="o">=</span> <span class="n">SharedArray</span><span class="p">((</span><span class="mi">1</span><span class="p">,),</span> <span class="n">dtype</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">thread_idx</span><span class="p">()</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="n">bcast</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="n">result</span>
+    <span class="n">sync</span><span class="p">()</span>
+    <span class="k">return</span> <span class="n">bcast</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span></div>
+
+
+
+<span class="nd">@_func</span>
+<div class="viewcode-block" id="reduce_add">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/block/index.html#quadrants.lang.simt.block.reduce_add">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">reduce_add</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">dtype</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Block-scope sum reduction.  Result valid in **thread 0 only**.  See `reduce` for the argument contract.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">reduce</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">,</span> <span class="n">_bin_add</span><span class="p">,</span> <span class="n">dtype</span><span class="p">)</span></div>
+
+
+
+<span class="nd">@_func</span>
+<div class="viewcode-block" id="reduce_min">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/block/index.html#quadrants.lang.simt.block.reduce_min">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">reduce_min</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">dtype</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Block-scope min reduction.  Result valid in **thread 0 only**.  See `reduce` for the argument contract.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">reduce</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">,</span> <span class="n">_bin_min</span><span class="p">,</span> <span class="n">dtype</span><span class="p">)</span></div>
+
+
+
+<span class="nd">@_func</span>
+<div class="viewcode-block" id="reduce_max">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/block/index.html#quadrants.lang.simt.block.reduce_max">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">reduce_max</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">dtype</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Block-scope max reduction.  Result valid in **thread 0 only**.  See `reduce` for the argument contract.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">reduce</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">,</span> <span class="n">_bin_max</span><span class="p">,</span> <span class="n">dtype</span><span class="p">)</span></div>
+
+
+
+<span class="nd">@_func</span>
+<div class="viewcode-block" id="reduce_all_add">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/block/index.html#quadrants.lang.simt.block.reduce_all_add">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">reduce_all_add</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">dtype</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Block-scope sum reduction with the result broadcast to every thread.  See `reduce_add` for the cheaper</span>
+<span class="sd">    thread-0-only variant and `reduce` for the argument contract.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">reduce_all</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">,</span> <span class="n">_bin_add</span><span class="p">,</span> <span class="n">dtype</span><span class="p">)</span></div>
+
+
+
+<span class="nd">@_func</span>
+<div class="viewcode-block" id="reduce_all_min">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/block/index.html#quadrants.lang.simt.block.reduce_all_min">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">reduce_all_min</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">dtype</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Block-scope min reduction broadcast to every thread.  See `reduce_all_add`.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">reduce_all</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">,</span> <span class="n">_bin_min</span><span class="p">,</span> <span class="n">dtype</span><span class="p">)</span></div>
+
+
+
+<span class="nd">@_func</span>
+<div class="viewcode-block" id="reduce_all_max">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/block/index.html#quadrants.lang.simt.block.reduce_all_max">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">reduce_all_max</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">dtype</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Block-scope max reduction broadcast to every thread.  See `reduce_all_add`.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">reduce_all</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">,</span> <span class="n">_bin_max</span><span class="p">,</span> <span class="n">dtype</span><span class="p">)</span></div>
+
+
+
+<span class="c1"># --- Block scans -----------------------------------------------------------------------</span>
+<span class="c1">#</span>
+<span class="c1"># Two-stage block scan.  Each subgroup does a Hillis-Steele scan via `reductions.{_inclusive_scan_tiled,</span>
+<span class="c1"># _exclusive_scan_tiled}`, the last lane of every subgroup publishes the subgroup aggregate to shared memory, then</span>
+<span class="c1"># every thread sequentially folds the subgroup prefixes and applies its own subgroup&#39;s prefix to its scan value.</span>
+<span class="c1"># All threads receive a valid result; cost: one subgroup scan + 1 shared-mem write/read per subgroup + 1</span>
+<span class="c1"># `block.sync()` + (NUM_SUBGROUPS - 1) ops on every thread (the cross-subgroup prefix is computed redundantly to</span>
+<span class="c1"># avoid a second barrier).</span>
+<span class="c1">#</span>
+<span class="c1"># Inclusive: subgroup aggregate at the last lane is just the inclusive value, written directly.  Exclusive: subgroup</span>
+<span class="c1"># aggregate = `op(exclusive[last_lane], value[last_lane])`, since the exclusive scan does not include the last lane&#39;s</span>
+<span class="c1"># input - we recover the inclusive total with one extra `op` on the publish path.</span>
+
+
+<span class="nd">@_func</span>
+<div class="viewcode-block" id="inclusive_scan">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/block/index.html#quadrants.lang.simt.block.inclusive_scan">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">inclusive_scan</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">op</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">dtype</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Block-scope inclusive scan under a generic associative ``op``.  Every thread receives a valid result.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        value: per-thread input.</span>
+<span class="sd">        block_dim: threads per block (template).  Must be a positive multiple of ``subgroup.group_size()`` (32 on CUDA</span>
+<span class="sd">            / Metal / Vulkan-on-NVIDIA, 64 on AMDGPU).</span>
+<span class="sd">        op: ``@qd.func`` taking two values and returning the same type as ``value``; callers can plug in custom</span>
+<span class="sd">            associative monoids without re-implementing the per-subgroup + shared-mem skeleton.  See `inclusive_add`</span>
+<span class="sd">            for the standard sum specialization.</span>
+<span class="sd">        dtype: scalar dtype for the inter-subgroup shared-memory staging slot; must match ``value``&#39;s type.</span>
+
+<span class="sd">    The calling thread&#39;s block-local index is read internally via `block.thread_idx()`; the subgroup size is read from</span>
+<span class="sd">    `subgroup.group_size()` at compile time.  When the block is exactly one subgroup the cross-subgroup shared-memory</span>
+<span class="sd">    path is short-circuited at compile time and the call costs only the per-subgroup Hillis-Steele tree.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">SUBGROUP_SIZE</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="n">_subgroup</span><span class="o">.</span><span class="n">group_size</span><span class="p">())</span>
+    <span class="n">log2_subgroup</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="n">_subgroup</span><span class="o">.</span><span class="n">log2_group_size</span><span class="p">())</span>
+    <span class="n">impl</span><span class="o">.</span><span class="n">static_assert</span><span class="p">(</span>
+        <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="n">block_dim</span> <span class="o">%</span> <span class="n">SUBGROUP_SIZE</span> <span class="o">==</span> <span class="mi">0</span> <span class="ow">and</span> <span class="n">block_dim</span> <span class="o">&gt;=</span> <span class="n">SUBGROUP_SIZE</span><span class="p">),</span>
+        <span class="s2">&quot;block.inclusive_scan: block_dim must be a positive multiple of subgroup size&quot;</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">NUM_SUBGROUPS</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="n">block_dim</span> <span class="o">//</span> <span class="n">SUBGROUP_SIZE</span><span class="p">)</span>
+
+    <span class="n">inclusive</span> <span class="o">=</span> <span class="n">_reductions</span><span class="o">.</span><span class="n">_inclusive_scan_tiled</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">op</span><span class="p">,</span> <span class="n">log2_subgroup</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="n">NUM_SUBGROUPS</span> <span class="o">==</span> <span class="mi">1</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">inclusive</span>
+
+    <span class="n">tid</span> <span class="o">=</span> <span class="n">thread_idx</span><span class="p">()</span>
+    <span class="n">subgroup_id</span> <span class="o">=</span> <span class="n">tid</span> <span class="o">//</span> <span class="n">SUBGROUP_SIZE</span>
+    <span class="n">lane_id</span> <span class="o">=</span> <span class="n">tid</span> <span class="o">&amp;</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="n">SUBGROUP_SIZE</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span>
+
+    <span class="n">shared</span> <span class="o">=</span> <span class="n">SharedArray</span><span class="p">(</span><span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">((</span><span class="n">NUM_SUBGROUPS</span><span class="p">,)),</span> <span class="n">dtype</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">lane_id</span> <span class="o">==</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="n">SUBGROUP_SIZE</span> <span class="o">-</span> <span class="mi">1</span><span class="p">):</span>
+        <span class="n">shared</span><span class="p">[</span><span class="n">subgroup_id</span><span class="p">]</span> <span class="o">=</span> <span class="n">inclusive</span>
+    <span class="n">sync</span><span class="p">()</span>
+
+    <span class="c1"># Sequential exclusive prefix scan over subgroup aggregates; each thread captures its own subgroup&#39;s prefix.</span>
+    <span class="c1"># Subgroup 0&#39;s prefix is unused (its inclusive value is already the prefix sum from the start of the block), so</span>
+    <span class="c1"># we never read `subgroup_prefix` on subgroup 0; the placeholder there exists only to give the variable a</span>
+    <span class="c1"># definite type.</span>
+    <span class="n">block_aggregate</span> <span class="o">=</span> <span class="n">shared</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+    <span class="n">subgroup_prefix</span> <span class="o">=</span> <span class="n">block_aggregate</span>
+    <span class="k">for</span> <span class="n">w</span> <span class="ow">in</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">NUM_SUBGROUPS</span><span class="p">)):</span>
+        <span class="k">if</span> <span class="n">subgroup_id</span> <span class="o">==</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="n">w</span><span class="p">):</span>
+            <span class="n">subgroup_prefix</span> <span class="o">=</span> <span class="n">block_aggregate</span>
+        <span class="n">addend</span> <span class="o">=</span> <span class="n">shared</span><span class="p">[</span><span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="n">w</span><span class="p">)]</span>
+        <span class="n">block_aggregate</span> <span class="o">=</span> <span class="n">op</span><span class="p">(</span><span class="n">block_aggregate</span><span class="p">,</span> <span class="n">addend</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">subgroup_id</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="n">inclusive</span> <span class="o">=</span> <span class="n">op</span><span class="p">(</span><span class="n">subgroup_prefix</span><span class="p">,</span> <span class="n">inclusive</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">inclusive</span></div>
+
+
+
+<span class="nd">@_func</span>
+<div class="viewcode-block" id="exclusive_scan">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/block/index.html#quadrants.lang.simt.block.exclusive_scan">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">exclusive_scan</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">op</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">identity</span><span class="p">,</span> <span class="n">dtype</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Block-scope exclusive scan under a generic associative ``op`` with explicit ``identity``.  Every thread receives</span>
+<span class="sd">    a valid result; thread 0 holds ``identity`` and thread ``i &gt; 0`` holds ``op(v[0], ..., v[i-1])``.</span>
+
+<span class="sd">    See `inclusive_scan` for the per-arg contract; in addition this op takes an explicit ``identity`` because exclusive</span>
+<span class="sd">    scan needs a definite value for thread 0 (and for the sentinel paths in `exclusive_min` / `exclusive_max`).  See</span>
+<span class="sd">    `exclusive_add` for the additive specialization which derives a zero identity automatically.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">SUBGROUP_SIZE</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="n">_subgroup</span><span class="o">.</span><span class="n">group_size</span><span class="p">())</span>
+    <span class="n">log2_subgroup</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="n">_subgroup</span><span class="o">.</span><span class="n">log2_group_size</span><span class="p">())</span>
+    <span class="n">impl</span><span class="o">.</span><span class="n">static_assert</span><span class="p">(</span>
+        <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="n">block_dim</span> <span class="o">%</span> <span class="n">SUBGROUP_SIZE</span> <span class="o">==</span> <span class="mi">0</span> <span class="ow">and</span> <span class="n">block_dim</span> <span class="o">&gt;=</span> <span class="n">SUBGROUP_SIZE</span><span class="p">),</span>
+        <span class="s2">&quot;block.exclusive_scan: block_dim must be a positive multiple of subgroup size&quot;</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">NUM_SUBGROUPS</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="n">block_dim</span> <span class="o">//</span> <span class="n">SUBGROUP_SIZE</span><span class="p">)</span>
+
+    <span class="n">exclusive</span> <span class="o">=</span> <span class="n">_reductions</span><span class="o">.</span><span class="n">_exclusive_scan_tiled</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">op</span><span class="p">,</span> <span class="n">identity</span><span class="p">,</span> <span class="n">log2_subgroup</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="n">NUM_SUBGROUPS</span> <span class="o">==</span> <span class="mi">1</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">exclusive</span>
+
+    <span class="n">tid</span> <span class="o">=</span> <span class="n">thread_idx</span><span class="p">()</span>
+    <span class="n">subgroup_id</span> <span class="o">=</span> <span class="n">tid</span> <span class="o">//</span> <span class="n">SUBGROUP_SIZE</span>
+    <span class="n">lane_id</span> <span class="o">=</span> <span class="n">tid</span> <span class="o">&amp;</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="n">SUBGROUP_SIZE</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span>
+
+    <span class="n">shared</span> <span class="o">=</span> <span class="n">SharedArray</span><span class="p">(</span><span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">((</span><span class="n">NUM_SUBGROUPS</span><span class="p">,)),</span> <span class="n">dtype</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">lane_id</span> <span class="o">==</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="n">SUBGROUP_SIZE</span> <span class="o">-</span> <span class="mi">1</span><span class="p">):</span>
+        <span class="c1"># Subgroup aggregate = inclusive at last lane = exclusive[last] + value[last] under `op`.</span>
+        <span class="n">shared</span><span class="p">[</span><span class="n">subgroup_id</span><span class="p">]</span> <span class="o">=</span> <span class="n">op</span><span class="p">(</span><span class="n">exclusive</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span>
+    <span class="n">sync</span><span class="p">()</span>
+
+    <span class="n">block_aggregate</span> <span class="o">=</span> <span class="n">shared</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+    <span class="n">subgroup_prefix</span> <span class="o">=</span> <span class="p">(</span>
+        <span class="n">identity</span>  <span class="c1"># subgroup 0&#39;s prefix is the identity; subsequent subgroups overwrite this in their own iteration</span>
+    <span class="p">)</span>
+    <span class="k">for</span> <span class="n">w</span> <span class="ow">in</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">NUM_SUBGROUPS</span><span class="p">)):</span>
+        <span class="k">if</span> <span class="n">subgroup_id</span> <span class="o">==</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="n">w</span><span class="p">):</span>
+            <span class="n">subgroup_prefix</span> <span class="o">=</span> <span class="n">block_aggregate</span>
+        <span class="n">addend</span> <span class="o">=</span> <span class="n">shared</span><span class="p">[</span><span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="n">w</span><span class="p">)]</span>
+        <span class="n">block_aggregate</span> <span class="o">=</span> <span class="n">op</span><span class="p">(</span><span class="n">block_aggregate</span><span class="p">,</span> <span class="n">addend</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">subgroup_id</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="n">exclusive</span> <span class="o">=</span> <span class="n">op</span><span class="p">(</span><span class="n">subgroup_prefix</span><span class="p">,</span> <span class="n">exclusive</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">exclusive</span></div>
+
+
+
+<span class="nd">@_func</span>
+<div class="viewcode-block" id="inclusive_add">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/block/index.html#quadrants.lang.simt.block.inclusive_add">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">inclusive_add</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">dtype</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Block-scope inclusive prefix sum.  After the call, thread ``i`` holds ``v[0] + v[1] + ... + v[i]``.  See</span>
+<span class="sd">    `inclusive_scan` for the argument contract.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">inclusive_scan</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">,</span> <span class="n">_bin_add</span><span class="p">,</span> <span class="n">dtype</span><span class="p">)</span></div>
+
+
+
+<span class="nd">@_func</span>
+<div class="viewcode-block" id="inclusive_min">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/block/index.html#quadrants.lang.simt.block.inclusive_min">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">inclusive_min</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">dtype</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Block-scope inclusive prefix min.  See `inclusive_scan` for the argument contract.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">inclusive_scan</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">,</span> <span class="n">_bin_min</span><span class="p">,</span> <span class="n">dtype</span><span class="p">)</span></div>
+
+
+
+<span class="nd">@_func</span>
+<div class="viewcode-block" id="inclusive_max">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/block/index.html#quadrants.lang.simt.block.inclusive_max">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">inclusive_max</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">dtype</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Block-scope inclusive prefix max.  See `inclusive_scan` for the argument contract.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">inclusive_scan</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">,</span> <span class="n">_bin_max</span><span class="p">,</span> <span class="n">dtype</span><span class="p">)</span></div>
+
+
+
+<span class="nd">@_func</span>
+<div class="viewcode-block" id="exclusive_add">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/block/index.html#quadrants.lang.simt.block.exclusive_add">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">exclusive_add</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">dtype</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Block-scope exclusive prefix sum.  After the call, thread ``i &gt; 0`` holds ``v[0] + v[1] + ... + v[i-1]`` and</span>
+<span class="sd">    thread 0 holds the additive identity (zero, in ``value``&#39;s dtype, derived as ``value - value``).  See</span>
+<span class="sd">    `exclusive_scan` for the argument contract.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">exclusive_scan</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">,</span> <span class="n">_bin_add</span><span class="p">,</span> <span class="n">value</span> <span class="o">-</span> <span class="n">value</span><span class="p">,</span> <span class="n">dtype</span><span class="p">)</span></div>
+
+
+
+<span class="c1"># Plain Python wrappers (not ``@func``): the identity for an exclusive min / max scan is uniquely determined by</span>
+<span class="c1"># ``value``&#39;s dtype, so we introspect it at compile time and emit a typed-constant identity Expr rather than asking</span>
+<span class="c1"># callers to provide one.  Mirrors the subgroup convention (``subgroup.exclusive_min`` and friends).  The identity</span>
+<span class="c1"># helpers (``_typed_min_identity`` / ``_typed_max_identity``) are reused from ``reductions.py`` so the per-dtype</span>
+<span class="c1"># sentinel choices stay consistent across the two scopes.</span>
+<div class="viewcode-block" id="exclusive_min">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/block/index.html#quadrants.lang.simt.block.exclusive_min">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">exclusive_min</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">dtype</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Block-scope exclusive prefix min.  After the call, thread ``i &gt; 0`` holds ``min(v[0], ..., v[i-1])`` and</span>
+<span class="sd">    thread 0 holds the dtype-derived identity: ``+inf`` for real dtypes, ``np.iinfo(dtype).max`` for integer dtypes</span>
+<span class="sd">    (``UINT_MAX`` for unsigned, ``INT_MAX`` for signed).  See `exclusive_scan` for the underlying contract.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">exclusive_scan</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">,</span> <span class="n">_bin_min</span><span class="p">,</span> <span class="n">_reductions</span><span class="o">.</span><span class="n">_typed_min_identity</span><span class="p">(</span><span class="n">value</span><span class="p">),</span> <span class="n">dtype</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="exclusive_max">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/block/index.html#quadrants.lang.simt.block.exclusive_max">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">exclusive_max</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span> <span class="n">dtype</span><span class="p">:</span> <span class="n">template</span><span class="p">()):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Block-scope exclusive prefix max.  After the call, thread ``i &gt; 0`` holds ``max(v[0], ..., v[i-1])`` and</span>
+<span class="sd">    thread 0 holds the dtype-derived identity: ``-inf`` for real dtypes, ``np.iinfo(dtype).min`` for signed integer</span>
+<span class="sd">    dtypes, ``0`` for unsigned and bool.  See `exclusive_scan` for the underlying contract.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">exclusive_scan</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">,</span> <span class="n">_bin_max</span><span class="p">,</span> <span class="n">_reductions</span><span class="o">.</span><span class="n">_typed_max_identity</span><span class="p">(</span><span class="n">value</span><span class="p">),</span> <span class="n">dtype</span><span class="p">)</span></div>
+
+
+
+<span class="c1"># --- Block radix rank ------------------------------------------------------------------</span>
+<span class="c1">#</span>
+<span class="c1"># Block-level radix ranking via the atomic-OR match-and-count strategy.  Each thread holds a single ``u32`` key; the</span>
+<span class="c1"># function returns the key&#39;s stable rank within the block under the digit `(key &gt;&gt; bit_start) &amp; ((1 &lt;&lt; num_bits) - 1)`,</span>
+<span class="c1"># and writes the per-digit count and exclusive-prefix arrays to caller-supplied shared-memory outparams.</span>
+<span class="c1">#</span>
+<span class="c1"># The algorithm runs in six steps:</span>
+<span class="c1">#</span>
+<span class="c1"># 1. ComputeHistogramsSubgroup: each subgroup builds a private digit histogram in shared memory via ``atomic_add``.</span>
+<span class="c1"># 2. ComputeOffsetsSubgroupUpsweep: every thread sums per-subgroup histograms column-wise to produce a block-wide</span>
+<span class="c1">#    bin count for digit ``= tid``, while rewriting the subgroup histogram entries into per-subgroup running</span>
+<span class="c1">#    exclusive prefixes.</span>
+<span class="c1"># 3. ExclusiveSum on the per-thread bin counts - uses the block exclusive scan defined above.</span>
+<span class="c1"># 4. ComputeOffsetsSubgroupDownsweep: add the block-wide exclusive prefix into every subgroup&#39;s offset entry.</span>
+<span class="c1"># 5. ComputeRanksItem (atomic-OR match): per-subgroup match via ``atomic_or`` on a per-digit lane-mask, then leader</span>
+<span class="c1">#    (highest set lane) does a single ``atomic_add`` on the subgroup offset and broadcasts via ``subgroup.shuffle``;</span>
+<span class="c1">#    each thread&#39;s rank is ``subgroup_offset + popc(bin_mask &amp; lanemask_le) - 1``.</span>
+<span class="c1"># 6. Write bin count + exclusive prefix to the outparam shared arrays.</span>
+<span class="c1">#</span>
+<span class="c1"># Shared-memory layout (all i32, total ``2 * BLOCK_SUBGROUPS * RADIX_DIGITS`` ints, 4096 ints = 16 KiB at the default</span>
+<span class="c1"># 8-subgroup / 256-digit configuration):</span>
+<span class="c1">#</span>
+<span class="c1">#     subgroup_offsets / subgroup_histograms : [0, BLOCK_SUBGROUPS * RADIX_DIGITS)        (union backing)</span>
+<span class="c1">#     match_masks                    : [BLOCK_SUBGROUPS * RADIX_DIGITS, 2 * ...)</span>
+<span class="c1">#</span>
+<span class="c1"># Subgroup-scope barriers use ``subgroup.sync()`` (lowers to ``__syncwarp`` on CUDA,</span>
+<span class="c1"># ``OpControlBarrier(ScopeSubgroup, ...)`` on SPIR-V, ``s_barrier`` on AMDGPU).  ``LaneMaskLe()`` (the PTX intrinsic</span>
+<span class="c1"># that gives a lane its less-than-or-equal lane mask) is replaced by ``subgroup.lanemask_le(lane)`` from the portable</span>
+<span class="c1"># subgroup primitives.</span>
+
+
+<span class="nd">@_func</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">_subgroup_sync_fence</span><span class="p">():</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Subgroup-scope barrier + memory fence - CUDA ``__syncwarp`` semantics across every backend.</span>
+
+<span class="sd">    Why both ops: on CUDA, `subgroup.sync()` already lowers to `__syncwarp` which folds in a memory fence, so the</span>
+<span class="sd">    extra `subgroup.mem_fence()` is redundant (a `__threadfence_block`).  On SPIR-V, however, the codegen emits</span>
+<span class="sd">    `subgroupBarrier` as `OpControlBarrier(ScopeSubgroup, ScopeSubgroup, 0)` - i.e. with **no** memory semantics -</span>
+<span class="sd">    so a bare `subgroup.sync()` does *not* publish prior shared-memory writes to other lanes.  The radix rank algorithm</span>
+<span class="sd">    relies on the `__syncwarp` invariant that, after the barrier, every lane sees every other lane&#39;s prior</span>
+<span class="sd">    `atomic_or` / `atomic_add` to shared memory; pairing the barrier with `subgroup.mem_fence()` (which emits a real</span>
+<span class="sd">    `OpMemoryBarrier(ScopeSubgroup, AcquireRelease | UniformMemory | WorkgroupMemory)`) restores that invariant.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">_subgroup</span><span class="o">.</span><span class="n">sync</span><span class="p">()</span>
+    <span class="n">_subgroup</span><span class="o">.</span><span class="n">mem_fence</span><span class="p">()</span>
+
+
+<span class="nd">@_func</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">_radix_rank_match_atomic_or_wave32</span><span class="p">(</span>
+    <span class="n">key</span><span class="p">,</span>
+    <span class="n">block_dim</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span>
+    <span class="n">radix_bits</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span>
+    <span class="n">bit_start</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span>
+    <span class="n">num_bits</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span>
+    <span class="n">bins</span><span class="p">,</span>
+    <span class="n">excl_prefix</span><span class="p">,</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Wave32 implementation of `radix_rank_match_atomic_or`. See the public wrapper for the contract.</span>
+
+<span class="sd">    Match-mask region is ``i32``; atomic_or, ballot, clz, popcnt all operate on 32 bits.  This path is taken on CUDA,</span>
+<span class="sd">    Vulkan-on-NVIDIA, and Metal - none of which require ``i64`` threadgroup atomics.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">SUBGROUP_THREADS</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="n">_subgroup</span><span class="o">.</span><span class="n">group_size</span><span class="p">())</span>
+    <span class="n">RADIX_DIGITS</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="mi">1</span> <span class="o">&lt;&lt;</span> <span class="n">radix_bits</span><span class="p">)</span>
+    <span class="n">BLOCK_SUBGROUPS</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="n">block_dim</span> <span class="o">//</span> <span class="n">SUBGROUP_THREADS</span><span class="p">)</span>
+    <span class="n">NUM_BITS_MASK</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">((</span><span class="mi">1</span> <span class="o">&lt;&lt;</span> <span class="n">num_bits</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span>
+    <span class="n">BINS_PER_LANE</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="n">RADIX_DIGITS</span> <span class="o">//</span> <span class="n">SUBGROUP_THREADS</span><span class="p">)</span>
+
+    <span class="c1"># ``smem_offsets`` (i32) backs the per-subgroup histograms (step 1), in-place column-sum upsweep (step 2), folded</span>
+    <span class="c1"># prefixes (step 4), and the leader&#39;s atomic_add slot (step 5).  ``smem_match`` (i32) backs the per-digit ballot</span>
+    <span class="c1"># mask in step 5.  These were previously unioned into a single ``i32`` SharedArray; splitting them keeps the</span>
+    <span class="c1"># offsets path independent of the match-mask width so the wave64 sibling can pick ``i64`` for its match region.</span>
+    <span class="n">smem_offsets</span> <span class="o">=</span> <span class="n">SharedArray</span><span class="p">(</span><span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">((</span><span class="n">BLOCK_SUBGROUPS</span> <span class="o">*</span> <span class="n">RADIX_DIGITS</span><span class="p">,)),</span> <span class="n">_i32</span><span class="p">)</span>
+    <span class="n">smem_match</span> <span class="o">=</span> <span class="n">SharedArray</span><span class="p">(</span><span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">((</span><span class="n">BLOCK_SUBGROUPS</span> <span class="o">*</span> <span class="n">RADIX_DIGITS</span><span class="p">,)),</span> <span class="n">_i32</span><span class="p">)</span>
+
+    <span class="n">tid</span> <span class="o">=</span> <span class="n">thread_idx</span><span class="p">()</span>
+    <span class="n">subgroup_idx</span> <span class="o">=</span> <span class="n">tid</span> <span class="o">//</span> <span class="n">SUBGROUP_THREADS</span>
+    <span class="n">lane</span> <span class="o">=</span> <span class="n">_ops</span><span class="o">.</span><span class="n">cast</span><span class="p">(</span><span class="n">_subgroup</span><span class="o">.</span><span class="n">invocation_id</span><span class="p">(),</span> <span class="n">_i32</span><span class="p">)</span>
+
+    <span class="c1"># Step 1: zero per-subgroup histograms and match_masks.</span>
+    <span class="k">for</span> <span class="n">b</span> <span class="ow">in</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="n">BINS_PER_LANE</span><span class="p">)):</span>
+        <span class="n">bin_idx</span> <span class="o">=</span> <span class="n">lane</span> <span class="o">+</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="n">b</span> <span class="o">*</span> <span class="n">SUBGROUP_THREADS</span><span class="p">)</span>
+        <span class="n">smem_offsets</span><span class="p">[</span><span class="n">subgroup_idx</span> <span class="o">*</span> <span class="n">RADIX_DIGITS</span> <span class="o">+</span> <span class="n">bin_idx</span><span class="p">]</span> <span class="o">=</span> <span class="n">_i32</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+        <span class="n">smem_match</span><span class="p">[</span><span class="n">subgroup_idx</span> <span class="o">*</span> <span class="n">RADIX_DIGITS</span> <span class="o">+</span> <span class="n">bin_idx</span><span class="p">]</span> <span class="o">=</span> <span class="n">_i32</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+    <span class="n">_subgroup_sync_fence</span><span class="p">()</span>
+
+    <span class="c1"># Each thread atomic-adds 1 to its subgroup&#39;s bin for ``digit``.</span>
+    <span class="n">digit</span> <span class="o">=</span> <span class="n">_ops</span><span class="o">.</span><span class="n">cast</span><span class="p">(</span><span class="n">_ops</span><span class="o">.</span><span class="n">bit_and</span><span class="p">(</span><span class="n">_ops</span><span class="o">.</span><span class="n">bit_shr</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="n">_u32</span><span class="p">(</span><span class="n">bit_start</span><span class="p">)),</span> <span class="n">_u32</span><span class="p">(</span><span class="n">NUM_BITS_MASK</span><span class="p">)),</span> <span class="n">_i32</span><span class="p">)</span>
+    <span class="n">_ops</span><span class="o">.</span><span class="n">atomic_add</span><span class="p">(</span><span class="n">smem_offsets</span><span class="p">[</span><span class="n">subgroup_idx</span> <span class="o">*</span> <span class="n">RADIX_DIGITS</span> <span class="o">+</span> <span class="n">digit</span><span class="p">],</span> <span class="n">_i32</span><span class="p">(</span><span class="mi">1</span><span class="p">))</span>
+
+    <span class="n">sync</span><span class="p">()</span>  <span class="c1"># Publish per-subgroup histograms before column-sum.</span>
+
+    <span class="c1"># Step 2: per-thread column sum across subgroups for digit == tid.  Each thread collects the running exclusive</span>
+    <span class="c1"># prefix into ``bin_count`` while overwriting the subgroup histogram entries with their per-subgroup exclusive</span>
+    <span class="c1"># prefix.  After the loop, ``bin_count`` is the block-wide total for digit == tid.</span>
+    <span class="n">bin_count</span> <span class="o">=</span> <span class="n">_i32</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">j_subgroup</span> <span class="ow">in</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="n">BLOCK_SUBGROUPS</span><span class="p">)):</span>
+        <span class="n">subgroup_count</span> <span class="o">=</span> <span class="n">smem_offsets</span><span class="p">[</span><span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="n">j_subgroup</span> <span class="o">*</span> <span class="n">RADIX_DIGITS</span><span class="p">)</span> <span class="o">+</span> <span class="n">tid</span><span class="p">]</span>
+        <span class="n">smem_offsets</span><span class="p">[</span><span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="n">j_subgroup</span> <span class="o">*</span> <span class="n">RADIX_DIGITS</span><span class="p">)</span> <span class="o">+</span> <span class="n">tid</span><span class="p">]</span> <span class="o">=</span> <span class="n">bin_count</span>
+        <span class="n">bin_count</span> <span class="o">=</span> <span class="n">bin_count</span> <span class="o">+</span> <span class="n">subgroup_count</span>
+
+    <span class="c1"># Step 3: block-wide exclusive sum on the per-thread bin counts.</span>
+    <span class="n">exclusive_digit_prefix</span> <span class="o">=</span> <span class="n">exclusive_add</span><span class="p">(</span><span class="n">bin_count</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">,</span> <span class="n">_i32</span><span class="p">)</span>
+
+    <span class="c1"># Step 4: ComputeOffsetsSubgroupDownsweep - fold the block-wide exclusive prefix into every subgroup&#39;s offset.</span>
+    <span class="k">for</span> <span class="n">j_subgroup</span> <span class="ow">in</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="n">BLOCK_SUBGROUPS</span><span class="p">)):</span>
+        <span class="n">smem_offsets</span><span class="p">[</span><span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="n">j_subgroup</span> <span class="o">*</span> <span class="n">RADIX_DIGITS</span><span class="p">)</span> <span class="o">+</span> <span class="n">tid</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="n">smem_offsets</span><span class="p">[</span><span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="n">j_subgroup</span> <span class="o">*</span> <span class="n">RADIX_DIGITS</span><span class="p">)</span> <span class="o">+</span> <span class="n">tid</span><span class="p">]</span> <span class="o">+</span> <span class="n">exclusive_digit_prefix</span>
+        <span class="p">)</span>
+
+    <span class="n">sync</span><span class="p">()</span>  <span class="c1"># Publish subgroup offsets before the per-key match phase.</span>
+
+    <span class="c1"># Step 5: per-key atomic-OR match.  ``items_per_thread == 1``, so this runs once per thread.</span>
+    <span class="n">lane_mask</span> <span class="o">=</span> <span class="n">_i32</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span> <span class="o">&lt;&lt;</span> <span class="n">lane</span>
+    <span class="n">lane_mask_le_v</span> <span class="o">=</span> <span class="n">_subgroup</span><span class="o">.</span><span class="n">lanemask_le</span><span class="p">(</span><span class="n">_subgroup</span><span class="o">.</span><span class="n">invocation_id</span><span class="p">())</span>
+
+    <span class="n">match_idx</span> <span class="o">=</span> <span class="n">subgroup_idx</span> <span class="o">*</span> <span class="n">RADIX_DIGITS</span> <span class="o">+</span> <span class="n">digit</span>
+
+    <span class="c1"># Every thread ORs its lane_mask into the per-digit match mask of its subgroup.  Threads with the same digit collide</span>
+    <span class="c1"># on the same shared-memory cell and produce a bitmask of &quot;lanes in this subgroup that share this digit&quot;.</span>
+    <span class="n">_ops</span><span class="o">.</span><span class="n">atomic_or</span><span class="p">(</span><span class="n">smem_match</span><span class="p">[</span><span class="n">match_idx</span><span class="p">],</span> <span class="n">lane_mask</span><span class="p">)</span>
+    <span class="n">_subgroup_sync_fence</span><span class="p">()</span>
+
+    <span class="c1"># Read the bin_mask back and find the leader (highest matching lane) + intra-subgroup rank.  ``clz`` here MUST</span>
+    <span class="c1"># run on the u32 (FindUMsb on SPIR-V): casting to i32 first triggers SPIR-V&#39;s FindSMsb, which for negative i32</span>
+    <span class="c1"># (top bit set) returns the most-significant 0-bit instead of MSB-of-1, giving a leader that&#39;s one less than</span>
+    <span class="c1"># the actual highest matching lane.  Concretely, with lane 31 holding the only key for its digit,</span>
+    <span class="c1"># bin_mask = 0x80000000; FindSMsb on -2147483648 returns 30 (highest 0-bit), so 31 - 30 = 1 elects lane 1</span>
+    <span class="c1"># instead of lane 31, and lane 31&#39;s shuffle reads from lane 1 (= 0) - observed as last-lane ranks off by one on</span>
+    <span class="c1"># Vulkan / Metal.  Now that the subgroup layer dispatches FindUMsb for unsigned ``clz``, passing the u32 directly</span>
+    <span class="c1"># emits the right intrinsic on every backend.</span>
+    <span class="n">bin_mask</span> <span class="o">=</span> <span class="n">_ops</span><span class="o">.</span><span class="n">cast</span><span class="p">(</span><span class="n">smem_match</span><span class="p">[</span><span class="n">match_idx</span><span class="p">],</span> <span class="n">_u32</span><span class="p">)</span>
+    <span class="n">leader</span> <span class="o">=</span> <span class="n">_i32</span><span class="p">(</span><span class="mi">31</span><span class="p">)</span> <span class="o">-</span> <span class="n">_ops</span><span class="o">.</span><span class="n">cast</span><span class="p">(</span><span class="n">_ops</span><span class="o">.</span><span class="n">clz</span><span class="p">(</span><span class="n">bin_mask</span><span class="p">),</span> <span class="n">_i32</span><span class="p">)</span>
+    <span class="n">popc</span> <span class="o">=</span> <span class="n">_ops</span><span class="o">.</span><span class="n">popcnt</span><span class="p">(</span><span class="n">_ops</span><span class="o">.</span><span class="n">bit_and</span><span class="p">(</span><span class="n">bin_mask</span><span class="p">,</span> <span class="n">lane_mask_le_v</span><span class="p">))</span>
+
+    <span class="c1"># Leader claims `popc` slots from this subgroup&#39;s slice of the subgroup_offsets entry.</span>
+    <span class="n">subgroup_offset</span> <span class="o">=</span> <span class="n">_i32</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">lane</span> <span class="o">==</span> <span class="n">leader</span><span class="p">:</span>
+        <span class="n">subgroup_offset</span> <span class="o">=</span> <span class="n">_ops</span><span class="o">.</span><span class="n">atomic_add</span><span class="p">(</span><span class="n">smem_offsets</span><span class="p">[</span><span class="n">subgroup_idx</span> <span class="o">*</span> <span class="n">RADIX_DIGITS</span> <span class="o">+</span> <span class="n">digit</span><span class="p">],</span> <span class="n">_ops</span><span class="o">.</span><span class="n">cast</span><span class="p">(</span><span class="n">popc</span><span class="p">,</span> <span class="n">_i32</span><span class="p">))</span>
+
+    <span class="c1"># Leader broadcasts its claimed offset to every lane in the subgroup.</span>
+    <span class="n">subgroup_offset</span> <span class="o">=</span> <span class="n">_subgroup</span><span class="o">.</span><span class="n">shuffle</span><span class="p">(</span><span class="n">subgroup_offset</span><span class="p">,</span> <span class="n">_ops</span><span class="o">.</span><span class="n">cast</span><span class="p">(</span><span class="n">leader</span><span class="p">,</span> <span class="n">_u32</span><span class="p">))</span>
+
+    <span class="c1"># Leader resets the match mask so subsequent passes (or items_per_thread &gt; 1) start clean.</span>
+    <span class="k">if</span> <span class="n">lane</span> <span class="o">==</span> <span class="n">leader</span><span class="p">:</span>
+        <span class="n">smem_match</span><span class="p">[</span><span class="n">match_idx</span><span class="p">]</span> <span class="o">=</span> <span class="n">_i32</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+    <span class="n">_subgroup_sync_fence</span><span class="p">()</span>
+
+    <span class="n">rank</span> <span class="o">=</span> <span class="n">subgroup_offset</span> <span class="o">+</span> <span class="n">_ops</span><span class="o">.</span><span class="n">cast</span><span class="p">(</span><span class="n">popc</span><span class="p">,</span> <span class="n">_i32</span><span class="p">)</span> <span class="o">-</span> <span class="n">_i32</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+
+    <span class="c1"># Step 6: publish bins + exclusive_digit_prefix to the caller-supplied outparams.  ``block_dim == RADIX_DIGITS`` so</span>
+    <span class="c1"># every thread writes exactly one digit.  Followed by a ``block.sync()`` so the caller can read these arrays</span>
+    <span class="c1"># without having to add their own retiring barrier.</span>
+    <span class="n">bins</span><span class="p">[</span><span class="n">tid</span><span class="p">]</span> <span class="o">=</span> <span class="n">bin_count</span>
+    <span class="n">excl_prefix</span><span class="p">[</span><span class="n">tid</span><span class="p">]</span> <span class="o">=</span> <span class="n">exclusive_digit_prefix</span>
+    <span class="n">sync</span><span class="p">()</span>
+
+    <span class="k">return</span> <span class="n">rank</span>
+
+
+<span class="nd">@_func</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">_radix_rank_match_atomic_or_wave64</span><span class="p">(</span>
+    <span class="n">key</span><span class="p">,</span>
+    <span class="n">block_dim</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span>
+    <span class="n">radix_bits</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span>
+    <span class="n">bit_start</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span>
+    <span class="n">num_bits</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span>
+    <span class="n">bins</span><span class="p">,</span>
+    <span class="n">excl_prefix</span><span class="p">,</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Wave64 implementation of `radix_rank_match_atomic_or`. See the public wrapper for the contract.</span>
+
+<span class="sd">    Match-mask region is ``i64``; atomic_or on shared ``i64`` is native on AMDGPU LDS.  Subgroup ``lanemask_le`` is</span>
+<span class="sd">    u32-only by contract (see ``subgroup.py``: &quot;lane_id in [0, 31]&quot;), so the 64-lane form is synthesized inline as</span>
+<span class="sd">    ``one_at_lane | (one_at_lane - 1)`` - avoids the UB of shifting by 64 when lane == 63.</span>
+
+<span class="sd">    Structural twin of the wave32 path; duplicated rather than parameterised because Quadrants&#39; AST transformer</span>
+<span class="sd">    doesn&#39;t carry locals across ``if impl.static`` branches and the smem_match dtype + match-phase widths are the only</span>
+<span class="sd">    things that differ.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">SUBGROUP_THREADS</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="n">_subgroup</span><span class="o">.</span><span class="n">group_size</span><span class="p">())</span>
+    <span class="n">RADIX_DIGITS</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="mi">1</span> <span class="o">&lt;&lt;</span> <span class="n">radix_bits</span><span class="p">)</span>
+    <span class="n">BLOCK_SUBGROUPS</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="n">block_dim</span> <span class="o">//</span> <span class="n">SUBGROUP_THREADS</span><span class="p">)</span>
+    <span class="n">NUM_BITS_MASK</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">((</span><span class="mi">1</span> <span class="o">&lt;&lt;</span> <span class="n">num_bits</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span>
+    <span class="n">BINS_PER_LANE</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="n">RADIX_DIGITS</span> <span class="o">//</span> <span class="n">SUBGROUP_THREADS</span><span class="p">)</span>
+
+    <span class="n">smem_offsets</span> <span class="o">=</span> <span class="n">SharedArray</span><span class="p">(</span><span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">((</span><span class="n">BLOCK_SUBGROUPS</span> <span class="o">*</span> <span class="n">RADIX_DIGITS</span><span class="p">,)),</span> <span class="n">_i32</span><span class="p">)</span>
+    <span class="n">smem_match</span> <span class="o">=</span> <span class="n">SharedArray</span><span class="p">(</span><span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">((</span><span class="n">BLOCK_SUBGROUPS</span> <span class="o">*</span> <span class="n">RADIX_DIGITS</span><span class="p">,)),</span> <span class="n">_i64</span><span class="p">)</span>
+
+    <span class="n">tid</span> <span class="o">=</span> <span class="n">thread_idx</span><span class="p">()</span>
+    <span class="n">subgroup_idx</span> <span class="o">=</span> <span class="n">tid</span> <span class="o">//</span> <span class="n">SUBGROUP_THREADS</span>
+    <span class="n">lane</span> <span class="o">=</span> <span class="n">_ops</span><span class="o">.</span><span class="n">cast</span><span class="p">(</span><span class="n">_subgroup</span><span class="o">.</span><span class="n">invocation_id</span><span class="p">(),</span> <span class="n">_i32</span><span class="p">)</span>
+
+    <span class="c1"># Step 1: zero per-subgroup histograms and match_masks.</span>
+    <span class="k">for</span> <span class="n">b</span> <span class="ow">in</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="n">BINS_PER_LANE</span><span class="p">)):</span>
+        <span class="n">bin_idx</span> <span class="o">=</span> <span class="n">lane</span> <span class="o">+</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="n">b</span> <span class="o">*</span> <span class="n">SUBGROUP_THREADS</span><span class="p">)</span>
+        <span class="n">smem_offsets</span><span class="p">[</span><span class="n">subgroup_idx</span> <span class="o">*</span> <span class="n">RADIX_DIGITS</span> <span class="o">+</span> <span class="n">bin_idx</span><span class="p">]</span> <span class="o">=</span> <span class="n">_i32</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+        <span class="n">smem_match</span><span class="p">[</span><span class="n">subgroup_idx</span> <span class="o">*</span> <span class="n">RADIX_DIGITS</span> <span class="o">+</span> <span class="n">bin_idx</span><span class="p">]</span> <span class="o">=</span> <span class="n">_i64</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+    <span class="n">_subgroup_sync_fence</span><span class="p">()</span>
+
+    <span class="n">digit</span> <span class="o">=</span> <span class="n">_ops</span><span class="o">.</span><span class="n">cast</span><span class="p">(</span><span class="n">_ops</span><span class="o">.</span><span class="n">bit_and</span><span class="p">(</span><span class="n">_ops</span><span class="o">.</span><span class="n">bit_shr</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="n">_u32</span><span class="p">(</span><span class="n">bit_start</span><span class="p">)),</span> <span class="n">_u32</span><span class="p">(</span><span class="n">NUM_BITS_MASK</span><span class="p">)),</span> <span class="n">_i32</span><span class="p">)</span>
+    <span class="n">_ops</span><span class="o">.</span><span class="n">atomic_add</span><span class="p">(</span><span class="n">smem_offsets</span><span class="p">[</span><span class="n">subgroup_idx</span> <span class="o">*</span> <span class="n">RADIX_DIGITS</span> <span class="o">+</span> <span class="n">digit</span><span class="p">],</span> <span class="n">_i32</span><span class="p">(</span><span class="mi">1</span><span class="p">))</span>
+
+    <span class="n">sync</span><span class="p">()</span>
+
+    <span class="n">bin_count</span> <span class="o">=</span> <span class="n">_i32</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">j_subgroup</span> <span class="ow">in</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="n">BLOCK_SUBGROUPS</span><span class="p">)):</span>
+        <span class="n">subgroup_count</span> <span class="o">=</span> <span class="n">smem_offsets</span><span class="p">[</span><span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="n">j_subgroup</span> <span class="o">*</span> <span class="n">RADIX_DIGITS</span><span class="p">)</span> <span class="o">+</span> <span class="n">tid</span><span class="p">]</span>
+        <span class="n">smem_offsets</span><span class="p">[</span><span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="n">j_subgroup</span> <span class="o">*</span> <span class="n">RADIX_DIGITS</span><span class="p">)</span> <span class="o">+</span> <span class="n">tid</span><span class="p">]</span> <span class="o">=</span> <span class="n">bin_count</span>
+        <span class="n">bin_count</span> <span class="o">=</span> <span class="n">bin_count</span> <span class="o">+</span> <span class="n">subgroup_count</span>
+
+    <span class="n">exclusive_digit_prefix</span> <span class="o">=</span> <span class="n">exclusive_add</span><span class="p">(</span><span class="n">bin_count</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">,</span> <span class="n">_i32</span><span class="p">)</span>
+
+    <span class="k">for</span> <span class="n">j_subgroup</span> <span class="ow">in</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="n">BLOCK_SUBGROUPS</span><span class="p">)):</span>
+        <span class="n">smem_offsets</span><span class="p">[</span><span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="n">j_subgroup</span> <span class="o">*</span> <span class="n">RADIX_DIGITS</span><span class="p">)</span> <span class="o">+</span> <span class="n">tid</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="n">smem_offsets</span><span class="p">[</span><span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="n">j_subgroup</span> <span class="o">*</span> <span class="n">RADIX_DIGITS</span><span class="p">)</span> <span class="o">+</span> <span class="n">tid</span><span class="p">]</span> <span class="o">+</span> <span class="n">exclusive_digit_prefix</span>
+        <span class="p">)</span>
+
+    <span class="n">sync</span><span class="p">()</span>
+
+    <span class="c1"># Step 5 - wave64 specifics: u64 ballot mask via inline ``one_at_lane | (one_at_lane - 1)`` (avoids UB on</span>
+    <span class="c1"># lane=63), atomic_or on the i64 match cell, clz / popcnt on u64.  Leader formula is ``63 - clz(u64)``.</span>
+    <span class="n">lane_u64</span> <span class="o">=</span> <span class="n">_ops</span><span class="o">.</span><span class="n">cast</span><span class="p">(</span><span class="n">lane</span><span class="p">,</span> <span class="n">_u64</span><span class="p">)</span>
+    <span class="n">lane_mask</span> <span class="o">=</span> <span class="n">_u64</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span> <span class="o">&lt;&lt;</span> <span class="n">lane_u64</span>
+    <span class="n">lane_mask_le_v</span> <span class="o">=</span> <span class="n">lane_mask</span> <span class="o">|</span> <span class="p">(</span><span class="n">lane_mask</span> <span class="o">-</span> <span class="n">_u64</span><span class="p">(</span><span class="mi">1</span><span class="p">))</span>
+
+    <span class="n">match_idx</span> <span class="o">=</span> <span class="n">subgroup_idx</span> <span class="o">*</span> <span class="n">RADIX_DIGITS</span> <span class="o">+</span> <span class="n">digit</span>
+
+    <span class="n">_ops</span><span class="o">.</span><span class="n">atomic_or</span><span class="p">(</span><span class="n">smem_match</span><span class="p">[</span><span class="n">match_idx</span><span class="p">],</span> <span class="n">_ops</span><span class="o">.</span><span class="n">cast</span><span class="p">(</span><span class="n">lane_mask</span><span class="p">,</span> <span class="n">_i64</span><span class="p">))</span>
+    <span class="n">_subgroup_sync_fence</span><span class="p">()</span>
+
+    <span class="c1"># u64 clz via FindUMsb-equivalent on every backend; the wave32 path&#39;s caveat about FindSMsb vs FindUMsb on i64</span>
+    <span class="c1"># would apply on SPIR-V wave64 devices if those existed (today wave64 = AMDGPU only).</span>
+    <span class="n">bin_mask</span> <span class="o">=</span> <span class="n">_ops</span><span class="o">.</span><span class="n">cast</span><span class="p">(</span><span class="n">smem_match</span><span class="p">[</span><span class="n">match_idx</span><span class="p">],</span> <span class="n">_u64</span><span class="p">)</span>
+    <span class="n">leader</span> <span class="o">=</span> <span class="n">_i32</span><span class="p">(</span><span class="mi">63</span><span class="p">)</span> <span class="o">-</span> <span class="n">_ops</span><span class="o">.</span><span class="n">cast</span><span class="p">(</span><span class="n">_ops</span><span class="o">.</span><span class="n">clz</span><span class="p">(</span><span class="n">bin_mask</span><span class="p">),</span> <span class="n">_i32</span><span class="p">)</span>
+    <span class="n">popc</span> <span class="o">=</span> <span class="n">_ops</span><span class="o">.</span><span class="n">popcnt</span><span class="p">(</span><span class="n">_ops</span><span class="o">.</span><span class="n">bit_and</span><span class="p">(</span><span class="n">bin_mask</span><span class="p">,</span> <span class="n">lane_mask_le_v</span><span class="p">))</span>
+
+    <span class="n">subgroup_offset</span> <span class="o">=</span> <span class="n">_i32</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">lane</span> <span class="o">==</span> <span class="n">leader</span><span class="p">:</span>
+        <span class="n">subgroup_offset</span> <span class="o">=</span> <span class="n">_ops</span><span class="o">.</span><span class="n">atomic_add</span><span class="p">(</span><span class="n">smem_offsets</span><span class="p">[</span><span class="n">subgroup_idx</span> <span class="o">*</span> <span class="n">RADIX_DIGITS</span> <span class="o">+</span> <span class="n">digit</span><span class="p">],</span> <span class="n">_ops</span><span class="o">.</span><span class="n">cast</span><span class="p">(</span><span class="n">popc</span><span class="p">,</span> <span class="n">_i32</span><span class="p">))</span>
+
+    <span class="n">subgroup_offset</span> <span class="o">=</span> <span class="n">_subgroup</span><span class="o">.</span><span class="n">shuffle</span><span class="p">(</span><span class="n">subgroup_offset</span><span class="p">,</span> <span class="n">_ops</span><span class="o">.</span><span class="n">cast</span><span class="p">(</span><span class="n">leader</span><span class="p">,</span> <span class="n">_u32</span><span class="p">))</span>
+
+    <span class="k">if</span> <span class="n">lane</span> <span class="o">==</span> <span class="n">leader</span><span class="p">:</span>
+        <span class="n">smem_match</span><span class="p">[</span><span class="n">match_idx</span><span class="p">]</span> <span class="o">=</span> <span class="n">_i64</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+    <span class="n">_subgroup_sync_fence</span><span class="p">()</span>
+
+    <span class="n">rank</span> <span class="o">=</span> <span class="n">subgroup_offset</span> <span class="o">+</span> <span class="n">_ops</span><span class="o">.</span><span class="n">cast</span><span class="p">(</span><span class="n">popc</span><span class="p">,</span> <span class="n">_i32</span><span class="p">)</span> <span class="o">-</span> <span class="n">_i32</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+
+    <span class="n">bins</span><span class="p">[</span><span class="n">tid</span><span class="p">]</span> <span class="o">=</span> <span class="n">bin_count</span>
+    <span class="n">excl_prefix</span><span class="p">[</span><span class="n">tid</span><span class="p">]</span> <span class="o">=</span> <span class="n">exclusive_digit_prefix</span>
+    <span class="n">sync</span><span class="p">()</span>
+
+    <span class="k">return</span> <span class="n">rank</span>
+
+
+<span class="nd">@_func</span>
+<div class="viewcode-block" id="radix_rank_match_atomic_or">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/block/index.html#quadrants.lang.simt.block.radix_rank_match_atomic_or">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">radix_rank_match_atomic_or</span><span class="p">(</span>
+    <span class="n">key</span><span class="p">,</span>
+    <span class="n">block_dim</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span>
+    <span class="n">radix_bits</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span>
+    <span class="n">bit_start</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span>
+    <span class="n">num_bits</span><span class="p">:</span> <span class="n">template</span><span class="p">(),</span>
+    <span class="n">bins</span><span class="p">,</span>
+    <span class="n">excl_prefix</span><span class="p">,</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Block-level radix rank via the atomic-OR match-and-count strategy.</span>
+
+<span class="sd">    Returns the calling thread&#39;s stable rank within the block under digit</span>
+<span class="sd">    ``(key &gt;&gt; bit_start) &amp; ((1 &lt;&lt; num_bits) - 1)``.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        key: ``u32`` key, one per thread.</span>
+<span class="sd">        block_dim: threads per block (template).  Must equal ``RADIX_DIGITS = 1 &lt;&lt; radix_bits``: each digit gets</span>
+<span class="sd">            exactly one thread for the per-thread bin/excl_prefix output.</span>
+<span class="sd">        radix_bits: number of bits in the digit (template).  Typical onesweep value is 8, giving 256 digits.</span>
+<span class="sd">        bit_start: starting bit of the digit (template).  Used as ``key &gt;&gt; bit_start``.</span>
+<span class="sd">        num_bits: actual digit width in bits (template), with ``num_bits &lt;= radix_bits``.  Bits</span>
+<span class="sd">            ``[bit_start, bit_start + num_bits)`` of ``key`` are extracted.</span>
+<span class="sd">        bins: ``block.SharedArray((1 &lt;&lt; radix_bits,), qd.i32)`` outparam.  After the call, ``bins[d]`` holds the count</span>
+<span class="sd">            of keys whose digit equals ``d``.  Caller is responsible for allocating this array exactly once per kernel.</span>
+<span class="sd">        excl_prefix: ``block.SharedArray((1 &lt;&lt; radix_bits,), qd.i32)`` outparam.  After the call, ``excl_prefix[d]``</span>
+<span class="sd">            holds the exclusive prefix sum of ``bins`` up to digit ``d``.  Caller allocates as for ``bins``.</span>
+
+<span class="sd">    The calling thread&#39;s block-local index is read internally via `block.thread_idx()`; the subgroup size is read from</span>
+<span class="sd">    `subgroup.group_size()` at compile time.  Supports both wave32 (CUDA, Vulkan-on-NVIDIA, Metal) and wave64</span>
+<span class="sd">    (AMDGPU - Quadrants pins every AMDGPU target to ``+wavefrontsize64``).  Dispatches to one of two private</span>
+<span class="sd">    implementations at compile time based on subgroup size; the match-mask shared-memory region&#39;s dtype is the only</span>
+<span class="sd">    semantic difference (``i32`` on wave32, ``i64`` on wave64), but Quadrants&#39; AST transformer doesn&#39;t carry locals</span>
+<span class="sd">    across ``if impl.static`` branches so the two paths are written as separate ``@func`` bodies.  Atomic ``or`` on</span>
+<span class="sd">    ``i64`` shared memory is native on AMDGPU&#39;s LDS; wave32 backends never see the ``i64`` path so portability does</span>
+<span class="sd">    not depend on SPIR-V / Metal supporting 64-bit threadgroup atomics.</span>
+
+<span class="sd">    Pre/post: caller must guarantee uniform control flow on entry; the function inserts the necessary ``block.sync()``</span>
+<span class="sd">    and ``subgroup.sync()`` retires.  After the call, ``bins`` and ``excl_prefix`` are visible to every thread without</span>
+<span class="sd">    a further ``block.sync()`` (we sync internally before exit).</span>
+
+<span class="sd">    Cost: ``~items_per_thread`` atomic_or + atomic_add per pass on shared memory + 2 ``block.sync()`` + 1 block</span>
+<span class="sd">    exclusive scan + ``BLOCK_SUBGROUPS`` ops per thread for the column-sum upsweep.  Shared-memory footprint at the</span>
+<span class="sd">    default ``radix_bits=8``: 4 KiB ``i32`` for subgroup offsets + 4 KiB ``i32`` (wave32) or 8 KiB ``i64`` (wave64)</span>
+<span class="sd">    for the match-mask region - so 8 KiB total on wave32, 12 KiB on wave64.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">SUBGROUP_THREADS</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="n">_subgroup</span><span class="o">.</span><span class="n">group_size</span><span class="p">())</span>
+    <span class="n">impl</span><span class="o">.</span><span class="n">static_assert</span><span class="p">(</span>
+        <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="n">SUBGROUP_THREADS</span> <span class="o">==</span> <span class="mi">32</span> <span class="ow">or</span> <span class="n">SUBGROUP_THREADS</span> <span class="o">==</span> <span class="mi">64</span><span class="p">),</span>
+        <span class="s2">&quot;block.radix_rank_match_atomic_or: subgroup size must be 32 or 64&quot;</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">RADIX_DIGITS</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="mi">1</span> <span class="o">&lt;&lt;</span> <span class="n">radix_bits</span><span class="p">)</span>
+    <span class="n">impl</span><span class="o">.</span><span class="n">static_assert</span><span class="p">(</span>
+        <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="n">block_dim</span> <span class="o">==</span> <span class="n">RADIX_DIGITS</span><span class="p">),</span>
+        <span class="s2">&quot;block.radix_rank_match_atomic_or: block_dim must equal RADIX_DIGITS (1 &lt;&lt; radix_bits)&quot;</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="k">if</span> <span class="n">impl</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="n">SUBGROUP_THREADS</span> <span class="o">==</span> <span class="mi">32</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">_radix_rank_match_atomic_or_wave32</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">,</span> <span class="n">radix_bits</span><span class="p">,</span> <span class="n">bit_start</span><span class="p">,</span> <span class="n">num_bits</span><span class="p">,</span> <span class="n">bins</span><span class="p">,</span> <span class="n">excl_prefix</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">_radix_rank_match_atomic_or_wave64</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="n">block_dim</span><span class="p">,</span> <span class="n">radix_bits</span><span class="p">,</span> <span class="n">bit_start</span><span class="p">,</span> <span class="n">num_bits</span><span class="p">,</span> <span class="n">bins</span><span class="p">,</span> <span class="n">excl_prefix</span><span class="p">)</span></div>
+
+
+
+<span class="c1"># Shared-memory emulation of CUDA&#39;s hardware-fused barrier-with-reduction ops, used on backends that lack a direct</span>
+<span class="c1"># equivalent (AMDGPU has no NVPTX `barrier.cta.red.*` analog; SPIR-V&#39;s `OpGroupNonUniform*` only operate at subgroup</span>
+<span class="c1"># scope reliably across Vulkan + Metal).</span>
+<span class="c1">#</span>
+<span class="c1"># Pattern: lane 0 zeroes a 1-element shared `i32` -&gt; block.sync() -&gt; every thread atomically folds its predicate into</span>
+<span class="c1"># the slot -&gt; block.sync() -&gt; every thread reads the broadcasted result. Costs 2 barriers + 1 atomic (vs. CUDA&#39;s</span>
+<span class="c1"># hardware fast path of 1 barrier+reduction). Slower than the CUDA path but functionally equivalent and portable. Each</span>
+<span class="c1"># call-site allocates a fresh `SharedArray` so multiple calls in the same kernel do not alias each other.</span>
+<span class="c1">#</span>
+<span class="c1"># IMPORTANT: every thread must participate in the `atomic_add` call unconditionally (guarding with</span>
+<span class="c1"># `if predicate: atomic_add(...)` is NOT safe). On Metal, `workgroupBarrier` does not propagate atomic writes from</span>
+<span class="c1"># divergent branches to threads that did not enter the branch -- non-participating SIMD groups never see the updated</span>
+<span class="c1"># slot. By having every thread call `atomic_add(counter, select(...))` the control flow stays uniform, the barrier</span>
+<span class="c1"># synchronises correctly, and all threads read the final count.</span>
+<span class="c1">#</span>
+<span class="c1"># We also use `atomic_add` rather than `atomic_or` because Metal / MoltenVK silently no-ops `OpAtomicOr` on threadgroup</span>
+<span class="c1"># memory in some configurations.</span>
+<span class="nd">@_func</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">_block_reduce_count_nonzero_emulated</span><span class="p">(</span><span class="n">predicate</span><span class="p">:</span> <span class="n">_i32</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">_i32</span><span class="p">:</span>
+    <span class="n">counter</span> <span class="o">=</span> <span class="n">SharedArray</span><span class="p">((</span><span class="mi">1</span><span class="p">,),</span> <span class="n">_i32</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">thread_idx</span><span class="p">()</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="n">counter</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="n">sync</span><span class="p">()</span>
+    <span class="n">_ops</span><span class="o">.</span><span class="n">atomic_add</span><span class="p">(</span><span class="n">counter</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">_ops</span><span class="o">.</span><span class="n">select</span><span class="p">(</span><span class="n">predicate</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">))</span>
+    <span class="n">sync</span><span class="p">()</span>
+    <span class="k">return</span> <span class="n">counter</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+
+
+<span class="nd">@_func</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">_block_reduce_any_nonzero_emulated</span><span class="p">(</span><span class="n">predicate</span><span class="p">:</span> <span class="n">_i32</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">_i32</span><span class="p">:</span>
+    <span class="n">counter</span> <span class="o">=</span> <span class="n">SharedArray</span><span class="p">((</span><span class="mi">1</span><span class="p">,),</span> <span class="n">_i32</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">thread_idx</span><span class="p">()</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="n">counter</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="n">sync</span><span class="p">()</span>
+    <span class="n">_ops</span><span class="o">.</span><span class="n">atomic_add</span><span class="p">(</span><span class="n">counter</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">_ops</span><span class="o">.</span><span class="n">select</span><span class="p">(</span><span class="n">predicate</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">))</span>
+    <span class="n">sync</span><span class="p">()</span>
+    <span class="k">return</span> <span class="n">_ops</span><span class="o">.</span><span class="n">min</span><span class="p">(</span><span class="n">counter</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="mi">1</span><span class="p">)</span>
+
+
+<span class="nd">@_func</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">_block_reduce_all_nonzero_emulated</span><span class="p">(</span><span class="n">predicate</span><span class="p">:</span> <span class="n">_i32</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">_i32</span><span class="p">:</span>
+    <span class="n">counter</span> <span class="o">=</span> <span class="n">SharedArray</span><span class="p">((</span><span class="mi">1</span><span class="p">,),</span> <span class="n">_i32</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">thread_idx</span><span class="p">()</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="n">counter</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="n">sync</span><span class="p">()</span>
+    <span class="n">_ops</span><span class="o">.</span><span class="n">atomic_add</span><span class="p">(</span><span class="n">counter</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">_ops</span><span class="o">.</span><span class="n">select</span><span class="p">(</span><span class="n">predicate</span> <span class="o">==</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">))</span>
+    <span class="n">sync</span><span class="p">()</span>
+    <span class="k">return</span> <span class="mi">1</span> <span class="o">-</span> <span class="n">_ops</span><span class="o">.</span><span class="n">min</span><span class="p">(</span><span class="n">counter</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="mi">1</span><span class="p">)</span>
+</pre></div>
+
+                </article>
+              
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+          </footer>
+        
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script defer src="../../../../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5"></script>
+<script defer src="../../../../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5"></script>
+
+  <footer class="bd-footer">
+<div class="bd-footer__inner bd-page-width">
+  
+    <div class="footer-items__start">
+      
+        <div class="footer-item">
+
+  <p class="copyright">
+    
+      © Copyright 2025 Genesis AI Inc.
+      <br/>
+    
+  </p>
+</div>
+      
+        <div class="footer-item">
+
+  <p class="sphinx-version">
+    Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 8.1.3.
+    <br/>
+  </p>
+</div>
+      
+    </div>
+  
+  
+  
+    <div class="footer-items__end">
+      
+        <div class="footer-item">
+<p class="theme-version">
+  <!-- # L10n: Setting the PST URL as an argument as this does not need to be localized -->
+  Built with the <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a> 0.19.0.
+</p></div>
+      
+    </div>
+  
+</div>
+
+  </footer>
+  </body>
+</html>
