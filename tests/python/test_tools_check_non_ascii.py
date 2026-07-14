@@ -118,6 +118,69 @@ def test_no_newline_marker_is_ignored():
     assert violations[0].line == 1
 
 
+def test_added_line_starting_with_pluses_is_scanned_not_treated_as_header():
+    # An added source line whose content starts with "++ " (e.g. C++ prefix decrement of a deref)
+    # is emitted by git as "+++ ...". It must be scanned as an added line, not parsed as a "+++"
+    # file header (which would skip it and let its non-ASCII slip through). Regression for
+    # PR #778 review comment r3571557923.
+    diff = _diff(
+        "diff --git a/foo.cpp b/foo.cpp",
+        "--- a/foo.cpp",
+        "+++ b/foo.cpp",
+        "@@ -1,1 +1,2 @@",
+        " int main() {",
+        "+++ *p; // caf\u00e9",
+    )
+    violations = find_violations(diff)
+    assert len(violations) == 1
+    v = violations[0]
+    # Context " int main() {" is new line 1, so the added line is line 2. Content after the diff's
+    # leading "+" is "++ *p; // caf" + U+00E9 (e-acute), which sits at 0-based index 13 -> col 14.
+    assert (v.path, v.line, v.col, v.char) == ("foo.cpp", 2, 14, "\u00e9")
+
+
+def test_pluses_content_does_not_corrupt_following_file_path():
+    # If the "+++ ..." added line were mistaken for a header it would also clobber the tracked path
+    # (and drop the violation), corrupting attribution for the next file. Verify both files report.
+    diff = _diff(
+        "diff --git a/a.cpp b/a.cpp",
+        "--- a/a.cpp",
+        "+++ b/a.cpp",
+        "@@ -0,0 +1,1 @@",
+        "+++ added \u00e9",
+        "diff --git a/b.cpp b/b.cpp",
+        "--- a/b.cpp",
+        "+++ b/b.cpp",
+        "@@ -0,0 +1,1 @@",
+        "+plain \u2014 here",
+    )
+    violations = find_violations(diff)
+    assert [(v.path, v.line, v.char) for v in violations] == [
+        ("a.cpp", 1, "\u00e9"),
+        ("b.cpp", 1, "\u2014"),
+    ]
+
+
+def test_removed_line_starting_with_dashes_is_not_a_header():
+    # A removed source line starting with "-- " is emitted as "--- ...". It must not be parsed as a
+    # "--- " file header, and it must not advance the new-file line counter.
+    diff = _diff(
+        "diff --git a/foo.py b/foo.py",
+        "--- a/foo.py",
+        "+++ b/foo.py",
+        "@@ -1,2 +1,2 @@",
+        " keep",
+        "--- dashes removed",
+        "+kept \u2014 added",
+    )
+    violations = find_violations(diff)
+    assert len(violations) == 1
+    v = violations[0]
+    # " keep" is new line 1; the removed line does not advance the new counter, so the added line
+    # is new line 2. Content after "+" is "kept " + U+2014 (em dash) + " added": index 5 -> col 6.
+    assert (v.path, v.line, v.col, v.char) == ("foo.py", 2, 6, "\u2014")
+
+
 def test_describe_format():
     v = check_non_ascii.Violation(path="foo.py", line=3, col=7, char="\u2014")
     text = v.describe()
