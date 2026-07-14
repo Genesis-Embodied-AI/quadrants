@@ -147,7 +147,7 @@ On the first run you'll see `cache_stored=True` but `cache_loaded=False`. On the
 
 ### Compound-type cache keying
 
-As part of generating the fastcache cache key, fastcache hashes each kernel parmameter. Compound types are hashed recursively. The headline rules:
+As part of generating the fastcache cache key, fastcache hashes each kernel parameter. Compound types are hashed recursively. The headline rules:
 
 **`@qd.data_oriented`:** children:
 
