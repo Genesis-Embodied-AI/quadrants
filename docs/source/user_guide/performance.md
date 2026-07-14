@@ -26,7 +26,7 @@ Kernel launch latency matters when kernels are relatively small. Then the GPU ca
 
 ## Reducing launch latency
 
-[Graphs](graph.md) are the main tool for reducing launch latency: they capture a sequence of launches into a single graph launch, so on backends with hardware graph support you pay the Python and C++ per-task costs once when the graph is built, rather than on every call.
+[Graphs](graph.md) are the main tool for reducing launch latency. On backends with hardware graph support, the kernel's whole sequence of GPU tasks is issued as a single graph launch rather than one launch per task, collapsing the per-task C++ and GPU/driver launch overhead. The per-call Python overhead is still paid on every call; to cut that too, move the loop itself into the graph with `graph_do_while` so that many iterations become a single call.
 
 ## Other performance tools
 
