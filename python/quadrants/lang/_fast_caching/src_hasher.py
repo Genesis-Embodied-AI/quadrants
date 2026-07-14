@@ -6,15 +6,15 @@ The fastcache now exposes pruning information (already produced during compile) 
 hash can walk *only* paths the kernel reads:
 
   - L1 (this module's ``make_source_config_key`` + ``load_pruning_info`` / ``store_pruning_info``): keyed by
-    source+config only (no args). Stores ``PruningInfo`` — the set of kernel-accessed flat names (e.g.
+    source+config only (no args). Stores ``PruningInfo`` - the set of kernel-accessed flat names (e.g.
     ``__qd_state__qd_x``) plus the ``graph_do_while_levels`` table (also a kernel-source property).
 
   - L2 (``make_full_cache_key`` + ``load_full`` / ``store_full``): keyed by L1 key + the *narrow* args hash computed
     with pruning info from L1. Stores the C++ ``frontend_cache_key`` that names the compiled artifact.
 
-Lookup flow on a warm call: L1 lookup → narrow args hash (paths from L1) → L2 lookup → load artifact.
+Lookup flow on a warm call: L1 lookup -> narrow args hash (paths from L1) -> L2 lookup -> load artifact.
 
-Cold compile flow: L1 miss → cold compile (pass 0 + pass 1) → store L1 → compute narrow args hash → store L2.
+Cold compile flow: L1 miss -> cold compile (pass 0 + pass 1) -> store L1 -> compute narrow args hash -> store L2.
 
 Safety implication
 ------------------
@@ -95,7 +95,7 @@ def compute_narrow_args_hash(
 ) -> str | None:
     """Compute the args hash narrowed by ``pruning_paths`` (or wide if ``pruning_paths is None``).
 
-    Returns ``None`` if a recognised-but-unsupported tensor-like type forces fastcache off — the caller emits
+    Returns ``None`` if a recognised-but-unsupported tensor-like type forces fastcache off - the caller emits
     the appropriate user-visible diagnostic via the ``FastcacheSkip.WARN`` branch.
     """
     args_hash = args_hasher.hash_args(raise_on_templated_floats, args, arg_metas, pruning_paths=pruning_paths)
@@ -112,9 +112,9 @@ def compute_narrow_args_hash(
 
 
 class L1CacheValue(BaseModel):
-    """Persisted L1 entry — pruning info that's source-and-config-deterministic (not args-dependent).
+    """Persisted L1 entry - pruning info that's source-and-config-deterministic (not args-dependent).
 
-    Pruning info is the set of *flat names* (``__qd_<arg>__qd_<child>__qd_…``) that the kernel actually reads.
+    Pruning info is the set of *flat names* (``__qd_<arg>__qd_<child>__qd_...``) that the kernel actually reads.
     Computed during compile (``Pruning.used_vars_by_func_id``); persisted here so subsequent calls can build
     a narrow args hash without having to recompile.
 
@@ -194,7 +194,7 @@ def persist_l1_and_set_l2_key(
             used_py_dataclass_parameters,
             graph_do_while_levels=graph_do_while_levels,
         )
-    # If phase 2 didn't run (L1 cold) or returned None (FIELD encountered earlier — but in that case post-compile
+    # If phase 2 didn't run (L1 cold) or returned None (FIELD encountered earlier - but in that case post-compile
     # narrow hashing would also see the FIELD and produce None, which is fine: we want fast_checksum to stay None
     # so no L2 entry is stored), compute the narrow args hash now.
     if fast_checksum is None:
@@ -234,7 +234,7 @@ def load_pruning_info(
 
 
 class CacheValue(BaseModel):
-    """Persisted L2 entry — frontend cache key for the compiled artifact + source-validation metadata.
+    """Persisted L2 entry - frontend cache key for the compiled artifact + source-validation metadata.
 
     The full pruning info is duplicated here for backward-compat with existing on-disk caches; it's the same
     set that L1 also stores. The L1 set is the source of truth for narrowing the args hash on warm calls.
@@ -255,7 +255,7 @@ def store(
     used_py_dataclass_parameters: set[str],
     graph_do_while_levels: list[tuple[str, int]] | None = None,
 ) -> None:
-    """Persist the L2 entry — the C++ frontend cache key that names the compiled artifact for this call.
+    """Persist the L2 entry - the C++ frontend cache key that names the compiled artifact for this call.
 
     ``fast_cache_key`` is the L2 key from ``make_full_cache_key``. The L1 entry has typically been stored
     earlier by ``store_pruning_info`` during the same materialize.

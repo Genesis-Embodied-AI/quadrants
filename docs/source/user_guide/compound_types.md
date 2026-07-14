@@ -169,7 +169,7 @@ sim.step()
 
 ### stable_members
 
-**Recommended for any `@qd.data_oriented` class whose ndarray members are allocated once (typically in `__init__`) and not subsequently rebound — the common case.** Decorate with `stable_members=True`:
+**Recommended for any `@qd.data_oriented` class whose ndarray members are allocated once (typically in `__init__`) and not subsequently rebound - the common case.** Decorate with `stable_members=True`:
 
 ```python
 @qd.data_oriented(stable_members=True)
@@ -186,11 +186,11 @@ Microbenchmark on an RTX PRO 6000 Blackwell with a container holding 30 `qd.ndar
 
 | | Per-launch Python overhead |
 |---|---|
-| `stable_members=False` (default) | 18.5 µs/call |
-| `stable_members=True` | 13.5 µs/call |
-| | **−5 µs/call (−28%)** |
+| `stable_members=False` (default) | 18.5 us/call |
+| `stable_members=True` | 13.5 us/call |
+| | **-5 us/call (-28%)** |
 
-**Trade-off:** with `stable_members=True`, reassigning an ndarray member on an instance is undefined behavior — the previously compiled kernel will be reused even if the new ndarray has a different `dtype`, `ndim`, or layout, silently bit-reinterpreting the new array's storage. Set it only on classes whose ndarray members are allocated once (typically in `__init__`) and never rebound. See [Reassigning ndarray members](#reassigning-ndarray-members) below for the supported alternative.
+**Trade-off:** with `stable_members=True`, reassigning an ndarray member on an instance is undefined behavior - the previously compiled kernel will be reused even if the new ndarray has a different `dtype`, `ndim`, or layout, silently bit-reinterpreting the new array's storage. Set it only on classes whose ndarray members are allocated once (typically in `__init__`) and never rebound. See [Reassigning ndarray members](#reassigning-ndarray-members) below for the supported alternative.
 
 ### Primitive members
 

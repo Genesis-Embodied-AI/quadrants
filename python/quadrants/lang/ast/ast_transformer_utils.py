@@ -263,7 +263,7 @@ class ASTTransformerFuncContext:
         # ``static_rigid_sim_config.para_level`` where ``static_rigid_sim_config`` is a ``qd.template()`` arg bound to
         # a ``@qd.data_oriented`` instance). Without this, chains rooted at func params would not be recorded in
         # pruning, and the args-hasher would skip over kernel-read primitive members of nested data_oriented
-        # containers — leading to stale fastcache hits when those members change between calls.
+        # containers - leading to stale fastcache hits when those members change between calls.
         # ``kernel_args`` only tracks top-level ``@qd.kernel`` args; ``_transform_func_arg`` for a ``@qd.func`` does
         # not append to it (see function_def_transformer.py). This separate set avoids piggy-backing on
         # ``kernel_args`` so the existing "kernel arg is immutable" diagnostic in ``build_assign_annotated`` doesn't

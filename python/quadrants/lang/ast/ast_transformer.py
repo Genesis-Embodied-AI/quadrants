@@ -100,7 +100,7 @@ class ASTTransformer(Builder):
         # ends up with ``__qd_self__qd__sub__qd_x`` recorded in the kernel's pruning, so the args-hasher hashes that
         # primitive value into the fastcache key.
         # Dataclass args go through ``FlattenAttributeNameTransformer`` and reach this branch as already-flat
-        # ``__qd_…`` Names, handled by the block above via ``mark_used``.
+        # ``__qd_...`` Names, handled by the block above via ``mark_used``.
         if not node.id.startswith("__qd_") and (node.id in ctx.kernel_args or node.id in ctx.fn_param_names):
             node._qd_arg_chain = node.id  # type: ignore[attr-defined]
         else:
@@ -692,7 +692,7 @@ class ASTTransformer(Builder):
         Also records the source ndarray id in ``pruning.used_struct_ndarray_ids`` on the non-enforcing first pass, so
         that the enforcing second-pass ``_predeclare_struct_ndarrays`` can skip ndarrays that the kernel never actually
         accesses. Both ``Ndarray`` instances and pre-existing ``AnyArray`` proxies (tagged with
-        ``_qd_source_ndarray_id``) are handled — the latter is the case for accesses in inlined ``@qd.func`` bodies
+        ``_qd_source_ndarray_id``) are handled - the latter is the case for accesses in inlined ``@qd.func`` bodies
         whose params were bound to already-promoted proxies by Option A in ``call_transformer``.
         """
         from quadrants.lang._ndarray import Ndarray  # pylint: disable=C0415
@@ -838,14 +838,14 @@ class ASTTransformer(Builder):
                             raise exception.QuadrantsCompilationError(message)
         # Propagate the kernel-arg-rooted chain annotation and record this access in pruning's *separate* chain-paths
         # set. ``build_Name`` sets ``_qd_arg_chain`` on non-flattened kernel args (e.g. data_oriented ``self``); each
-        # Attribute access in the chain extends it (``self`` → ``__qd_self__qd_x`` → ``__qd_self__qd_x__qd_y``).
+        # Attribute access in the chain extends it (``self`` -> ``__qd_self__qd_x`` -> ``__qd_self__qd_x__qd_y``).
         #
         # Why not ``mark_used``? On the enforcing pass, ``Kernel.materialize`` uses ``pruning.used_vars_by_func_id`` as
-        # ``struct_locals``, which drives ``FlattenAttributeNameTransformer`` — adding ``__qd_self__qd_x`` there would
+        # ``struct_locals``, which drives ``FlattenAttributeNameTransformer`` - adding ``__qd_self__qd_x`` there would
         # make the transformer rewrite ``self.x`` into ``Name('__qd_self__qd_x')``, and ``build_Name`` would then fail
         # to find such a variable. ``mark_kernel_arg_chain_used`` puts the chain into a *separate* per-func set that's
         # merged into ``used_vars_by_func_id[KERNEL_FUNC_ID]`` only *after* both compile passes, by
-        # ``Pruning.fold_kernel_arg_chain_paths`` — so the fastcache args-hash narrow walk picks them up without
+        # ``Pruning.fold_kernel_arg_chain_paths`` - so the fastcache args-hash narrow walk picks them up without
         # breaking codegen.
         parent_chain = getattr(node.value, "_qd_arg_chain", None)
         if parent_chain is not None:

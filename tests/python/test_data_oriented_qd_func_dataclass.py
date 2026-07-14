@@ -27,7 +27,7 @@ from tests import test_utils
 
 @test_utils.test(arch=qd.cpu)
 def test_baseline_typed_dataclass_kernel_arg_calls_qd_func():
-    """Baseline: typed-dataclass kernel arg + qd.func taking same dataclass type — works."""
+    """Baseline: typed-dataclass kernel arg + qd.func taking same dataclass type - works."""
     N = 4
 
     @dataclasses.dataclass
@@ -145,7 +145,7 @@ def test_data_oriented_stable_members_method_calls_qd_func_with_dataclass_member
 
 @test_utils.test(arch=qd.cpu)
 def test_data_oriented_method_calls_qd_func_with_two_dataclass_members():
-    """Two dataclass members, qd.func takes both — Genesis-shaped scenario."""
+    """Two dataclass members, qd.func takes both - Genesis-shaped scenario."""
     N = 4
 
     @dataclasses.dataclass

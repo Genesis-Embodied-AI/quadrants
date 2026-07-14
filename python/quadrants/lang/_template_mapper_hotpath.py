@@ -79,14 +79,14 @@ _primitive_types = {int, float, bool}
 # Per-instance cache of ndarray attribute paths, stashed on the instance via ``object.__setattr__`` (compatible with
 # frozen dataclasses). Used by both ``TemplateMapper.lookup``'s args_hash walk and the ``_extract_arg`` data_oriented
 # descriptor walk. Per-instance caching is necessary because @qd.data_oriented classes can have *different attribute
-# structures across instances of the same class* — Genesis ``DataManager``, for instance, only allocates
+# structures across instances of the same class* - Genesis ``DataManager``, for instance, only allocates
 # ``*_adjoint_cache`` members when ``requires_grad=True``. A class-level cache populated from the first-ever instance
 # would either crash on missing attributes (forward direction, "first instance has, second misses") or silently miss
 # new ones (inverse direction), both of which produce wrong-shape kernel reuse.
 #
 # Steady-state cost: one ``__dict__`` lookup per arg per call (~30ns), same order as the previous class-level
 # ``dict.get``. The walk itself (``_build_struct_nd_paths``) is paid once per instance lifetime at first kernel
-# launch with that instance — typically O(10) instances per Genesis scene, so ~10us total at scene build.
+# launch with that instance - typically O(10) instances per Genesis scene, so ~10us total at scene build.
 #
 # ``_struct_nd_paths_cache`` (below) is a fallback for ``__slots__`` classes that have no ``__dict__`` and so can't
 # accept the ``object.__setattr__`` stash. Such classes inherit the legacy per-class-cache behaviour (and its
@@ -142,12 +142,12 @@ def _struct_nd_paths_for(arg: Any) -> list[tuple]:
     a ``__dict__`` fall back to per-class caching (see ``_struct_nd_paths_cache``) and retain the legacy limitation.
 
     Limitation: the path list is recorded once per instance. If a new ndarray attribute is attached to an instance
-    *after* its first kernel call (uncommon — Genesis containers declare all ndarrays in ``__init__``), it won't be
+    *after* its first kernel call (uncommon - Genesis containers declare all ndarrays in ``__init__``), it won't be
     tracked until the cache is invalidated. Workaround: ``del arg.__dict__['_qd_nd_paths']`` (or restart the
     process).
     """
-    # Fast path: instance already walked. ``__dict__["…"]`` skips descriptor / ``__getattr__`` machinery (some
-    # third-party metaclasses, e.g. Pydantic, recurse infinitely on probe-style ``getattr`` for unknown names —
+    # Fast path: instance already walked. ``__dict__["..."]`` skips descriptor / ``__getattr__`` machinery (some
+    # third-party metaclasses, e.g. Pydantic, recurse infinitely on probe-style ``getattr`` for unknown names -
     # see ``is_data_oriented`` for the same defensiveness).
     try:
         return arg.__dict__["_qd_nd_paths"]
@@ -164,7 +164,7 @@ def _struct_nd_paths_for(arg: Any) -> list[tuple]:
     try:
         object.__setattr__(arg, "_qd_nd_paths", paths)
     except AttributeError:
-        # ``__slots__`` class without a ``_qd_nd_paths`` slot — degrade to per-class caching. Loses correctness
+        # ``__slots__`` class without a ``_qd_nd_paths`` slot - degrade to per-class caching. Loses correctness
         # under polymorphic-instance attribute structure, but Genesis data_oriented containers don't use slots.
         _struct_nd_paths_cache[cls] = paths
     return paths
@@ -202,7 +202,7 @@ def _collect_struct_nd_descriptors(arg: Any, out: list) -> None:
     # The path cache is per-instance (see ``_struct_nd_paths_for``) so polymorphic-instance attribute structure is
     # handled correctly. Within a single instance's lifetime, a cached path's leaf may still cease to be an
     # ``Ndarray`` (e.g. ``qd.Tensor``'s underlying impl swapped between an ``Ndarray`` and a ``MatrixField``); when
-    # that happens we silently skip the descriptor — ``v.element_type`` / ``v.shape`` / ``v._qd_layout`` are
+    # that happens we silently skip the descriptor - ``v.element_type`` / ``v.shape`` / ``v._qd_layout`` are
     # Ndarray-only accessors. The per-instance ``weakref(arg)`` part of the spec key still ensures correct cache
     # discrimination across instances.
     for chain in _struct_nd_paths_for(arg):

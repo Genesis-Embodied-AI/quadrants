@@ -44,10 +44,10 @@ _DC_REPR_NONE = object()
 
 # Sentinel returned by ``stringify_obj_type`` whenever fastcache cannot safely hash a value:
 #   - Recognised-but-unsupported tensor-like type (``ScalarField`` / ``MatrixField``).
-#   - Unrecognised type at a kernel-read path (no qualname fallback — see rules in fastcache.md).
+#   - Unrecognised type at a kernel-read path (no qualname fallback - see rules in fastcache.md).
 #
 # Containers (``dataclass_to_repr``, ``data_oriented`` branch, top-level ``hash_args`` loop) must propagate it upward
-# — fastcache is disabled for the whole call and the caller writes the appropriate diagnostic.
+# - fastcache is disabled for the whole call and the caller writes the appropriate diagnostic.
 class _FailFastcache:
     """Singleton sentinel; identity-compared."""
 
@@ -103,11 +103,11 @@ def _fail_unknown_type(obj: object, path: tuple[str, ...]) -> _FailFastcache:
 
     Two rules at work here (see ``docs/source/user_guide/fastcache.md`` "Pruning-driven argument hashing"):
 
-      1. The fastcache key may *only* contain contributions from kernel-pruned paths — never a
+      1. The fastcache key may *only* contain contributions from kernel-pruned paths - never a
          ``type(v).__qualname__`` fallback for an unrecognised type, because that hash captures type identity
          only and would silently mask a value-affecting change (e.g. a new tensor-like type whose dtype matters).
 
-      2. We may not silently *discard* something at a kernel-read path on the basis that it's unrecognised —
+      2. We may not silently *discard* something at a kernel-read path on the basis that it's unrecognised -
          that would let unrecognised but codegen-affecting values escape the cache key and serve stale results.
 
     The only way to honour both rules is to fail the call's fastcache loudly, with a one-shot warning per type
@@ -134,10 +134,10 @@ def _child_flat(parent_flat: str | None, child_name: str) -> str | None:
     For a deeper child ``state.dofs.x``: ``__qd_state__qd_dofs__qd_x`` (built incrementally).
 
     ``parent_flat`` is the *kernel-side* representation of this container's root:
-      - top-level arg of a kernel: ``arg_meta.name`` (e.g. ``"state"``, ``"self"``) — no ``__qd_`` prefix.
-      - any nested level: the already-computed ``__qd_…`` flat name.
+      - top-level arg of a kernel: ``arg_meta.name`` (e.g. ``"state"``, ``"self"``) - no ``__qd_`` prefix.
+      - any nested level: the already-computed ``__qd_...`` flat name.
 
-    Returns ``None`` when ``parent_flat`` itself is ``None``, indicating "no path info available" — the caller
+    Returns ``None`` when ``parent_flat`` itself is ``None``, indicating "no path info available" - the caller
     must walk the child unconditionally (i.e. ignore ``pruning_paths`` for this branch).
     """
     if parent_flat is None:
@@ -148,8 +148,8 @@ def _child_flat(parent_flat: str | None, child_name: str) -> str | None:
 def _is_path_used(pruning_paths: set[str] | None, child_flat: str | None) -> bool:
     """Return True if a child at ``child_flat`` should be hashed.
 
-    - ``pruning_paths is None``: pre-pruning-info compile — hash everything.
-    - ``child_flat is None``: caller could not compute a flat-name path (no parent_flat available) — hash
+    - ``pruning_paths is None``: pre-pruning-info compile - hash everything.
+    - ``child_flat is None``: caller could not compute a flat-name path (no parent_flat available) - hash
       everything as well, so we never accidentally drop a child we couldn't classify.
     - both non-None: only hash children whose flat name is in the set. Pruning's prefix-expansion step in
       ``Kernel.materialize`` guarantees that if any descendant of ``__qd_a__qd_b`` is used, ``__qd_a__qd_b``
@@ -182,7 +182,7 @@ def dataclass_to_repr(
     # cached ``_DC_REPR_NONE`` sentinel distinguishes "computed but not fast-cacheable" from "not yet computed".
     #
     # The cache is keyed by ``(is_frozen, pruning_paths is None)`` because a frozen dataclass's pruned repr depends on
-    # the pruning_paths set — we use separate cache slots for pruned vs unpruned to avoid serving the wrong narrowing.
+    # the pruning_paths set - we use separate cache slots for pruned vs unpruned to avoid serving the wrong narrowing.
     cache_attr = "_qd_dc_repr" if pruning_paths is None else "_qd_dc_repr_narrow"
     is_frozen = type(arg).__hash__ is not None
     if is_frozen:
@@ -247,7 +247,7 @@ def stringify_obj_type(
 
     Return contract:
       - ``str``: hashable; the returned string contributes to the cache key.
-      - ``_FAIL_FASTCACHE``: fastcache cannot safely hash this value — caller must propagate upward and
+      - ``_FAIL_FASTCACHE``: fastcache cannot safely hash this value - caller must propagate upward and
         disable fastcache for the whole call. Triggered by:
           * Recognised-but-unsupported tensor-like type (``ScalarField`` / ``MatrixField``).
           * Unrecognised type at this kernel-read path (see ``_fail_unknown_type``).
@@ -256,10 +256,10 @@ def stringify_obj_type(
 
       1. The cache key may *only* include contributions from paths that pruning has marked kernel-accessed
          (``pruning_paths``). Container walkers (dataclass + data_oriented) check ``_is_path_used`` per child and
-         skip non-pruned subtrees — kernel-unread paths are *guaranteed* not to affect codegen so this is safe by
+         skip non-pruned subtrees - kernel-unread paths are *guaranteed* not to affect codegen so this is safe by
          construction.
 
-      2. At paths the kernel *does* read, unrecognised types must not be silently dropped or hashed by type-name —
+      2. At paths the kernel *does* read, unrecognised types must not be silently dropped or hashed by type-name -
          fastcache fails the call (loudly, with a one-shot warning) so the gap can be closed.
 
     Parameters:
@@ -278,11 +278,11 @@ def stringify_obj_type(
     # strips wrappers off positional / keyword args before the fastcache hasher sees them, but the dataclass /
     # data-oriented walkers below do raw ``getattr`` to fetch struct fields, so a wrapper stored as a struct field
     # arrives here un-stripped. Without this branch the hasher would hash the wrapper as an unknown type instead of
-    # unwrapping to the recognised impl. See ``perso_hugh/doc/quadrants-tensor.md`` §8.14.
+    # unwrapping to the recognised impl. See ``perso_hugh/doc/quadrants-tensor.md`` section 8.14.
     #
     # PERF-CRITICAL: the ``_any_tensor_constructed`` guard makes this check zero-cost when no ``qd.Tensor`` has been
     # created. ``type(obj) in _TENSOR_WRAPPER_TYPES`` is used instead of ``isinstance`` because it is a pointer
-    # comparison (~10 ns) vs an MRO walk (~100–200 ns). Do not replace with isinstance or remove the guard.
+    # comparison (~10 ns) vs an MRO walk (~100-200 ns). Do not replace with isinstance or remove the guard.
     if (
         _tensor_wrapper._any_tensor_constructed and type(obj) in _TENSOR_WRAPPER_TYPES
     ):  # pyright: ignore[reportOptionalMemberAccess]
@@ -294,7 +294,7 @@ def stringify_obj_type(
     # artifact (the slot includes a grad pointer iff needs_grad=True). Two ndarrays with identical dtype + ndim
     # but differing needs_grad MUST hash distinctly, otherwise the L2 narrow args_hash collides and the cached
     # artifact's slot is mis-matched at launch (the launch picks the _QD_ARRAY vs _QD_ARRAY_WITH_GRAD bucket
-    # off ``v.grad is not None``, against a slot whose grad-presence was fixed at compile time) — yielding
+    # off ``v.grad is not None``, against a slot whose grad-presence was fixed at compile time) - yielding
     # silent miscomputation or runtime OOB depending on slot offset alignment.
     if isinstance(obj, ScalarNdarray):
         _grad_tag = "-g" if obj.grad is not None else ""
@@ -326,7 +326,7 @@ def stringify_obj_type(
             raise_on_templated_floats, path, obj, pruning_paths=pruning_paths, parent_flat=parent_flat
         )
     if is_data_oriented(obj):
-        # Walk the data_oriented container's members, narrowed by pruning info — the kernel-compile path records
+        # Walk the data_oriented container's members, narrowed by pruning info - the kernel-compile path records
         # every kernel-accessed attribute chain (ndarrays via ``_promote_ndarray_if_declared`` +
         # ``Pruning.fold_struct_nd_paths``; primitives, opaque members, nested structs via
         # ``ASTTransformer.build_Attribute``'s ``_qd_arg_chain`` propagation calling ``pruning.mark_used``). Members
@@ -375,7 +375,7 @@ def stringify_obj_type(
         return "np.bool_"
     if isinstance(obj, enum.Enum):
         return f"enum-{obj.name}-{obj.value}"
-    # Unrecognised type at a kernel-read path — fail fastcache loudly. See ``_fail_unknown_type``.
+    # Unrecognised type at a kernel-read path - fail fastcache loudly. See ``_fail_unknown_type``.
     return _fail_unknown_type(obj, path)
 
 

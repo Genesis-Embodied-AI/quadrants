@@ -16,7 +16,7 @@ from ._template_mapper_hotpath import (
 )
 
 # Per-class disposition for the args_hash ndarray-id walk in ``TemplateMapper.lookup``: one of ``_SKIP`` (this class
-# never contributes — non-data_oriented, or ``@qd.data_oriented(stable_members=True)``) or ``_PER_INSTANCE`` (delegate
+# never contributes - non-data_oriented, or ``@qd.data_oriented(stable_members=True)``) or ``_PER_INSTANCE`` (delegate
 # to ``_struct_nd_paths_for`` for a per-instance walk). The disposition depends only on type (data_oriented?
 # stable_members?), so caching by class is correct. The *actual* path list is per-instance because @qd.data_oriented
 # classes can have polymorphic attribute structure across instances (Genesis ``DataManager`` is the motivating case).
@@ -106,14 +106,14 @@ class TemplateMapper:
         # hash for the (small) set of arg positions that need it.
         #
         # The kernel's ``template_slot_locations`` already gives us the subset of arg positions annotated as
-        # ``qd.template()`` — the only positions where a data_oriented container could appear (typed-dataclass args
+        # ``qd.template()`` - the only positions where a data_oriented container could appear (typed-dataclass args
         # carry a specific dataclass type by construction and a data_oriented class is never a dataclass). So we only
         # iterate ``template_slot_locations`` instead of all args (Genesis main kernel_step_1: 4 template positions
         # of 16 args; Genesis branch step_1/step_2: 4 of 4).
         #
         # For each candidate, ``_arg_disposition`` caches the per-class decision (skip vs walk-per-instance) and the
         # actual paths come from ``_struct_nd_paths_for`` (per-instance, stashed on ``arg._qd_nd_paths``). Per-instance
-        # path caching is load-bearing for correctness — @qd.data_oriented classes can have polymorphic attribute
+        # path caching is load-bearing for correctness - @qd.data_oriented classes can have polymorphic attribute
         # structure across instances (Genesis ``DataManager`` only allocates adjoint-cache members when
         # ``requires_grad=True``); a per-class cache populated from one instance can't safely be reused for another.
         nd_ids: list = []

@@ -160,7 +160,7 @@ class FunctionDefTransformer:
                     # ``@qd.data_oriented`` field type inside a typed-dataclass kernel arg. The two patterns are
                     # semantically incompatible at this layer: dataclass kernel-arg recursion uses annotations to
                     # flatten leaf fields into per-leaf kernel args at compile time, but data_oriented containers
-                    # don't carry per-attribute type annotations — they need a value-driven walk
+                    # don't carry per-attribute type annotations - they need a value-driven walk
                     # (``_predeclare_struct_ndarrays``), which only fires for ``qd.template()`` / ``qd.Tensor``
                     # annotations. Rather than silently miscompile, raise a clear error pointing users to the
                     # recommended pattern.
@@ -255,7 +255,7 @@ class FunctionDefTransformer:
         # On a fastcache hit (enforcing without a pass-0 run), the `id(nd)` set is empty, but the *flat-name* set on
         # ``used_vars_by_func_id[KERNEL_FUNC_ID]`` was loaded from cache and already contains every kernel-accessed
         # leaf path (folded in by ``Pruning.fold_struct_nd_paths`` during the compile that produced the cache entry).
-        # Use that to prune the walk so we register the exact same ndarray set as the originating compile produced —
+        # Use that to prune the walk so we register the exact same ndarray set as the originating compile produced -
         # without this, every reachable ndarray gets registered, the kernel's arg slots get rebound to the wrong
         # ndarrays at launch, and physics silently breaks.
         prune_from_flat_names = pruning.enforcing and not getattr(pruning, "pass_0_ran", False)
@@ -264,7 +264,7 @@ class FunctionDefTransformer:
         )
 
         # Cycle-safe walker: Genesis object graphs have cross-references (e.g. solver <-> scene <-> sim) so we must
-        # avoid re-entering the same node. ``seen`` is shared across the whole arg's traversal — ``id(obj)`` is
+        # avoid re-entering the same node. ``seen`` is shared across the whole arg's traversal - ``id(obj)`` is
         # stable for the duration of this compile and we never need to revisit a node since the ndarray-set rooted at
         # it doesn't depend on the path we took to reach it.
         def _walk_obj(obj, arg_idx, path, seen):
