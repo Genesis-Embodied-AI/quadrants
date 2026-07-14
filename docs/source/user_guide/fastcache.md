@@ -86,7 +86,7 @@ Sub-functions called by the kernel are also checked - they must not capture exte
 
 Other named constants (non-enum, non-module) captured from scope will raise a `QuadrantsCompilationError`, except for `UPPERCASE` names which emit a warning instead.
 
-Wrapping a captured global in `qd.static(...)` does **not** exempt it from this check. `qd.static` only controls compile-time evaluation; it does not put the value into the cache key, so a `qd.static`-wrapped global is still flagged — though during the current transition period this emits a warning rather than raising. To use such a constant in a fastcache kernel, pass it as a parameter (template primitive, `@qd.data_oriented` member, or dataclass field) or make it one of the allowed captures above.
+Wrapping a captured global in `qd.static(...)` does **not** exempt it from this check. `qd.static` only controls compile-time evaluation; it does not put the value into the cache key, so a `qd.static`-wrapped global is still flagged - though during the current transition period this emits a warning rather than raising. To use such a constant in a fastcache kernel, pass it as a parameter (template primitive, `@qd.data_oriented` member, or dataclass field) or make it one of the allowed captures above.
 
 ### 2. Supported parameter types
 
