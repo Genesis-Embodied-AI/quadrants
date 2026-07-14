@@ -429,7 +429,7 @@
                   
   <section class="tex2jax_ignore mathjax_ignore" id="performance">
 <h1>Performance<a class="headerlink" href="#performance" title="Link to this heading">#</a></h1>
-<p>This page covers the execution model that the other performance guides build on: what happens when you launch a GPU kernel, where the time goes, and when reducing that time actually speeds up your program. The other pages in this section - graphs, streams, fastcache, and performance dispatch - are specific tools for reducing that cost.</p>
+<p>This page covers the execution model that the other performance guides build on: what happens when you launch a GPU kernel, where the time goes, and when reducing that time actually speeds up your program. The other pages in this section - graphs, streams, fastcache, and performance dispatch - are performance tools built on this execution model.</p>
 <section id="what-a-gpu-kernel-launch-is">
 <h2>What a GPU kernel launch is<a class="headerlink" href="#what-a-gpu-kernel-launch-is" title="Link to this heading">#</a></h2>
 <p>When you call a <code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel</span></code> from Python, the numerical work does not run inline in the calling thread. Instead Quadrants <em>launches</em> the work onto the GPU: it hands a compiled kernel plus its arguments to the GPU driver, the driver enqueues it onto a stream (an ordered queue of GPU work), and the launch call returns to the host before the GPU has finished - usually before it has even started. Host and GPU run asynchronously.</p>
@@ -452,11 +452,14 @@
 </section>
 <section id="reducing-launch-latency">
 <h2>Reducing launch latency<a class="headerlink" href="#reducing-launch-latency" title="Link to this heading">#</a></h2>
-<p>Quadrants provides several tools that attack launch latency in different ways:</p>
+<p><a class="reference internal" href="graph.html"><span class="std std-doc">Graphs</span></a> are the main tool for reducing launch latency. On backends with hardware graph support, the kernel’s whole sequence of GPU tasks is issued as a single graph launch rather than one launch per task, collapsing the per-task C++ and GPU/driver launch overhead. The per-call Python overhead is still paid on every call; to cut that too, move the loop itself into the graph with <code class="docutils literal notranslate"><span class="pre">graph_do_while</span></code> so that many iterations become a single call.</p>
+</section>
+<section id="other-performance-tools">
+<h2>Other performance tools<a class="headerlink" href="#other-performance-tools" title="Link to this heading">#</a></h2>
+<p>The rest of this section covers tools that improve performance in other ways, not by reducing launch latency:</p>
 <ul class="simple">
-<li><p><a class="reference internal" href="graph.html"><span class="std std-doc">Graphs</span></a> capture a sequence of launches into a graph and replay it as a single launch, so on backends with hardware graph support you pay the Python and C++ per-task costs once when the graph is built, rather than on every call. This is the most direct way to cut launch latency.</p></li>
-<li><p><a class="reference internal" href="streams.html"><span class="std std-doc">Streams</span></a> let independent top-level for-loops run concurrently instead of serializing on the default stream, so the GPU can stay busy across otherwise-independent launches.</p></li>
-<li><p><a class="reference internal" href="fastcache.html"><span class="std std-doc">Fastcache</span></a> reduces the time to load cached kernels when a new Python process starts, cutting first-call latency.</p></li>
+<li><p><a class="reference internal" href="streams.html"><span class="std std-doc">Streams</span></a> let independent top-level for-loops run concurrently instead of serializing on the default stream.</p></li>
+<li><p><a class="reference internal" href="fastcache.html"><span class="std std-doc">Fastcache</span></a> reduces the time to load cached kernels when a new Python process starts.</p></li>
 <li><p><a class="reference internal" href="perf_dispatch.html"><span class="std std-doc">Performance dispatch</span></a> benchmarks multiple implementations of an operation at runtime and picks the fastest.</p></li>
 </ul>
 </section>
@@ -513,6 +516,7 @@
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#where-kernel-launch-latency-comes-from">Where kernel launch latency comes from</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#latency-hiding">Latency hiding</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#reducing-launch-latency">Reducing launch latency</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#other-performance-tools">Other performance tools</a></li>
 </ul>
   </nav></div>
 
