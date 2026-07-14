@@ -1,6 +1,6 @@
 # Performance
 
-This page covers the execution model that the other performance guides build on: what happens when you launch a GPU kernel, where the time goes, and when reducing that time actually speeds up your program. The other pages in this section - graphs, streams, fastcache, and performance dispatch - are specific tools for reducing that cost.
+This page covers the execution model that the other performance guides build on: what happens when you launch a GPU kernel, where the time goes, and when reducing that time actually speeds up your program. The other pages in this section - graphs, streams, fastcache, and performance dispatch - are performance tools built on this execution model.
 
 ## What a GPU kernel launch is
 
