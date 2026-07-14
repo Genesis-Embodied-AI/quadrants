@@ -24,9 +24,10 @@ import sys
 import unicodedata
 from dataclasses import dataclass
 
-# Matches a unified-diff hunk header, capturing the starting line number in the new file, e.g.
-# "@@ -12,7 +34,9 @@ optional section heading" -> captures "34".
-_HUNK_RE = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@")
+# Matches a unified-diff hunk header. Captures the old-side line count (group 1, absent -> 1), the
+# new-file start line (group 2), and the new-side line count (group 3, absent -> 1), e.g.
+# "@@ -12,7 +34,9 @@ optional section heading" -> ("7", "34", "9").
+_HUNK_RE = re.compile(r"^@@ -\d+(?:,(\d+))? \+(\d+)(?:,(\d+))? @@")
 
 
 @dataclass
@@ -58,30 +59,38 @@ def _strip_diff_prefix(target: str) -> str | None:
 
 
 def find_violations(diff_text: str) -> list[Violation]:
-    """Parse a unified diff and return non-ASCII violations on added lines, in file order."""
+    """Parse a unified diff and return non-ASCII violations on added lines, in file order.
+
+    ``+++ `` / ``--- `` are recognized as file headers ONLY outside a hunk body. Inside a hunk, an
+    added line whose content starts with ``++ `` is emitted by git as ``+++ ...`` (and a removed
+    line starting with ``-- `` as ``--- ...``); treating those as file headers would skip the line
+    (letting its non-ASCII characters through) and corrupt the tracked path and line numbers. Hunk
+    boundaries are tracked via the line counts declared in the ``@@`` header, so content lines are
+    always classified by their diff marker rather than mistaken for headers.
+    """
     violations: list[Violation] = []
     path: str | None = None
     new_lineno = 0
+    # Old-file / new-file lines still expected in the current hunk body. Both <= 0 means we are
+    # between hunks, i.e. in file-header territory.
+    remaining_old = 0
+    remaining_new = 0
 
     for raw in diff_text.splitlines():
-        if raw.startswith("+++ "):
-            path = _strip_diff_prefix(raw[4:])
-            continue
-        if raw.startswith("--- "):
-            continue
-
-        hunk = _HUNK_RE.match(raw)
-        if hunk:
-            new_lineno = int(hunk.group(1))
-            continue
-
-        if not raw:
-            # A truly empty diff line represents an added/context blank line; treat as context so
-            # line numbering stays aligned. (git emits " " for context blanks, but be defensive.)
-            new_lineno += 1
+        if remaining_old <= 0 and remaining_new <= 0:
+            hunk = _HUNK_RE.match(raw)
+            if hunk:
+                remaining_old = int(hunk.group(1)) if hunk.group(1) else 1
+                new_lineno = int(hunk.group(2))
+                remaining_new = int(hunk.group(3)) if hunk.group(3) else 1
+                continue
+            if raw.startswith("+++ "):
+                path = _strip_diff_prefix(raw[4:])
+            # Any other line here (diff --git, index, "--- " header, mode lines, ...) is ignored.
             continue
 
-        marker = raw[0]
+        # Inside a hunk body: classify strictly by the leading diff marker.
+        marker = raw[0] if raw else " "
         if marker == "+":
             content = raw[1:]
             if path is not None:
@@ -89,10 +98,18 @@ def find_violations(diff_text: str) -> list[Violation]:
                     if ord(ch) > 127:
                         violations.append(Violation(path, new_lineno, idx + 1, ch))
             new_lineno += 1
-        elif marker == " ":
+            remaining_new -= 1
+        elif marker == "-":
+            # Removed lines exist only in the old file, so they are not scanned.
+            remaining_old -= 1
+        elif marker == "\\":
+            # "\ No newline at end of file" carries no line of its own; do not count it.
+            pass
+        else:
+            # Context line (marker " ", or a defensively-handled empty line): on both sides.
             new_lineno += 1
-        # "-" lines exist only in the old file, and "\ No newline at end of file" markers carry no
-        # line of their own, so neither advances the new-file line counter.
+            remaining_old -= 1
+            remaining_new -= 1
 
     return violations
 
