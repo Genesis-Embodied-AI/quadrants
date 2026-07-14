@@ -739,9 +739,15 @@
             <span class="n">called_needed</span> <span class="o">=</span> <span class="n">pruning</span><span class="o">.</span><span class="n">used_vars_by_func_id</span><span class="p">[</span><span class="n">called_func_id_</span><span class="p">]</span>
         <span class="k">if</span> <span class="n">is_func_base_wrapper</span><span class="p">:</span>
             <span class="c1"># callee param names (used by the attribute-instance positional-expansion path so it can match the</span>
-            <span class="c1"># callee&#39;s already-pruned flat names).</span>
+            <span class="c1"># callee&#39;s already-pruned flat names). Drop the implicit ``self`` for bound method calls so positional</span>
+            <span class="c1"># call-site indexing aligns with the callee&#39;s non-self parameter list - matches the ``self_offset``</span>
+            <span class="c1"># handling in ``Pruning.record_after_call``. Without this a call like ``self.write(self.state)`` would</span>
+            <span class="c1"># index ``callee_arg_names[0]`` as ``&quot;self&quot;`` and construct ``__qd_self__qd_x`` flat names that miss the</span>
+            <span class="c1"># callee&#39;s correctly-computed ``__qd_state__qd_x`` pruning set, silently dropping needed fields.</span>
             <span class="k">try</span><span class="p">:</span>
                 <span class="n">callee_arg_names</span> <span class="o">=</span> <span class="p">[</span><span class="n">m</span><span class="o">.</span><span class="n">name</span> <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="n">func</span><span class="o">.</span><span class="n">wrapper</span><span class="o">.</span><span class="n">arg_metas</span><span class="p">]</span>  <span class="c1"># type: ignore[attr-defined]</span>
+                <span class="k">if</span> <span class="nb">type</span><span class="p">(</span><span class="n">func</span><span class="p">)</span> <span class="ow">is</span> <span class="n">BoundQuadrantsCallable</span><span class="p">:</span>
+                    <span class="n">callee_arg_names</span> <span class="o">=</span> <span class="n">callee_arg_names</span><span class="p">[</span><span class="mi">1</span><span class="p">:]</span>
             <span class="k">except</span> <span class="ne">AttributeError</span><span class="p">:</span>
                 <span class="n">callee_arg_names</span> <span class="o">=</span> <span class="kc">None</span>
 
