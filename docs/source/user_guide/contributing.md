@@ -148,6 +148,12 @@ Uses an AI agent to check that lines in changed files follow wrapping convention
 
 The check runs only on lines changed in the PR and reports up to 3 violations. This check is delayed by 30 minutes, to avoid running repeatedly if multiple commits pushed with a short delay between each.
 
+### Non-ASCII character check (`check_non_ascii.yml`)
+
+Fails the PR if any newly added line in a changed code or documentation file contains a non-ASCII character (any character with a code point above U+007F). Only added lines are inspected, so pre-existing non-ASCII content does not block unrelated PRs. The check covers common source and doc file types (`.md`, `.rst`, `.txt`, `.py`, `.pyi`, `.c`, `.cc`, `.cpp`, `.cxx`, `.h`, `.hpp`, `.hxx`, `.cu`, `.cuh`).
+
+The log prints a summary of every violation as `<file>:<line>:<column>:` followed by the offending character's code point, `repr`, and Unicode name. Replace flagged characters with their ASCII equivalents (e.g. straight quotes instead of curly quotes, `-` instead of an em dash, a normal space instead of a non-breaking space). You can run it locally with `git diff origin/main...HEAD | python python/tools/check_non_ascii.py`.
+
 ### Deleted comments check (`check_deleted_comments.yml`)
 
 Uses an AI agent to check that comments and docstrings have not been unnecessarily deleted. Reports up to 10 violations. This check is delayed by 30 minutes, to avoid running repeatedly if multiple commits pushed with a short delay between each.
