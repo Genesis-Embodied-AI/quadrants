@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>Advanced: Contributing to quadrants &#8212; Quadrants 1.1.1 documentation</title>
+    <title>Advanced: Contributing to quadrants &#8212; Quadrants 1.1.2 documentation</title>
   
   
   
@@ -43,7 +43,7 @@
   <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5" />
 <link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5" />
 
-    <script src="../_static/documentation_options.js?v=58fbf978"></script>
+    <script src="../_static/documentation_options.js?v=6f037312"></script>
     <script src="../_static/doctools.js?v=9bcbadda"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -63,7 +63,7 @@
     <link rel="prev" title="Optimization passes" href="optimization_passes.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="1.1.1" />
+  <meta name="docsearch:version" content="1.1.2" />
   
     
     <script src="../_static/searchtools.js"></script>
@@ -131,7 +131,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 1.1.1 documentation</p>
+    <p class="title logo__title">Quadrants 1.1.2 documentation</p>
   
 </a></div>
     
@@ -559,6 +559,11 @@
 </ul>
 <p>The check runs only on lines changed in the PR and reports up to 3 violations. This check is delayed by 30 minutes, to avoid running repeatedly if multiple commits pushed with a short delay between each.</p>
 </section>
+<section id="non-ascii-character-check-check-non-ascii-yml">
+<h3>Non-ASCII character check (<code class="docutils literal notranslate"><span class="pre">check_non_ascii.yml</span></code>)<a class="headerlink" href="#non-ascii-character-check-check-non-ascii-yml" title="Link to this heading">#</a></h3>
+<p>Fails the PR if any newly added line in a changed code or documentation file contains a non-ASCII character (any character with a code point above U+007F). Only added lines are inspected, so pre-existing non-ASCII content does not block unrelated PRs. The check covers common source and doc file types (<code class="docutils literal notranslate"><span class="pre">.md</span></code>, <code class="docutils literal notranslate"><span class="pre">.rst</span></code>, <code class="docutils literal notranslate"><span class="pre">.txt</span></code>, <code class="docutils literal notranslate"><span class="pre">.py</span></code>, <code class="docutils literal notranslate"><span class="pre">.pyi</span></code>, <code class="docutils literal notranslate"><span class="pre">.c</span></code>, <code class="docutils literal notranslate"><span class="pre">.cc</span></code>, <code class="docutils literal notranslate"><span class="pre">.cpp</span></code>, <code class="docutils literal notranslate"><span class="pre">.cxx</span></code>, <code class="docutils literal notranslate"><span class="pre">.h</span></code>, <code class="docutils literal notranslate"><span class="pre">.hpp</span></code>, <code class="docutils literal notranslate"><span class="pre">.hxx</span></code>, <code class="docutils literal notranslate"><span class="pre">.cu</span></code>, <code class="docutils literal notranslate"><span class="pre">.cuh</span></code>).</p>
+<p>The log prints a summary of every violation as <code class="docutils literal notranslate"><span class="pre">&lt;file&gt;:&lt;line&gt;:&lt;column&gt;:</span></code> followed by the offending character’s code point, <code class="docutils literal notranslate"><span class="pre">repr</span></code>, and Unicode name. Replace flagged characters with their ASCII equivalents (e.g. straight quotes instead of curly quotes, <code class="docutils literal notranslate"><span class="pre">-</span></code> instead of an em dash, a normal space instead of a non-breaking space). You can run it locally with <code class="docutils literal notranslate"><span class="pre">git</span> <span class="pre">diff</span> <span class="pre">origin/main...HEAD</span> <span class="pre">|</span> <span class="pre">python</span> <span class="pre">python/tools/check_non_ascii.py</span></code>.</p>
+</section>
 <section id="deleted-comments-check-check-deleted-comments-yml">
 <h3>Deleted comments check (<code class="docutils literal notranslate"><span class="pre">check_deleted_comments.yml</span></code>)<a class="headerlink" href="#deleted-comments-check-check-deleted-comments-yml" title="Link to this heading">#</a></h3>
 <p>Uses an AI agent to check that comments and docstrings have not been unnecessarily deleted. Reports up to 10 violations. This check is delayed by 30 minutes, to avoid running repeatedly if multiple commits pushed with a short delay between each.</p>
@@ -695,6 +700,7 @@
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#pre-commit-linters-linters-yml">Pre-commit / linters (<code class="docutils literal notranslate"><span class="pre">linters.yml</span></code>)</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#other-ci-jobs">Other CI jobs</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#line-wrapping-check-check-wrapping-yml">Line wrapping check (<code class="docutils literal notranslate"><span class="pre">check_wrapping.yml</span></code>)</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#non-ascii-character-check-check-non-ascii-yml">Non-ASCII character check (<code class="docutils literal notranslate"><span class="pre">check_non_ascii.yml</span></code>)</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#deleted-comments-check-check-deleted-comments-yml">Deleted comments check (<code class="docutils literal notranslate"><span class="pre">check_deleted_comments.yml</span></code>)</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#test-coverage-check-check-test-coverage-yml">Test coverage check (<code class="docutils literal notranslate"><span class="pre">check_test_coverage.yml</span></code>)</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#feature-factorization-check-check-feature-factorization-yml">Feature factorization check (<code class="docutils literal notranslate"><span class="pre">check_feature_factorization.yml</span></code>)</a></li>
