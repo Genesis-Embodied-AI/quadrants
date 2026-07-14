@@ -36,7 +36,7 @@ Note that graph=True is a pre-requisite for all other options presented in this 
 
 ### Restrictions
 
-- **No struct return values.** Kernels that return values (e.g. `-> qd.i32`) cannot use graphs. An error is raised if `graph=True` is set on such a kernel.
+- **No return values.** Kernels that return a value (e.g. `-> qd.i32`) cannot use graphs. An error is raised if `graph=True` is set on such a kernel.
 - **Primal kernels only.** The `graph=True` flag is applied to the primal (forward) kernel only, not its adjoint (backward). [Autodiff](autodiff.md) kernels use the normal launch path.
 - **Device-resident ndarrays.** Graph mode bakes device pointers into the cached graph, so all ndarray arguments must be on the GPU. Passing a host-resident ndarray raises an error.
 
