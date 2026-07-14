@@ -87,7 +87,7 @@ solve(x, counter)
 # x is now incremented 10 times; counter is 0
 ```
 
-The argument to `qd.graph_do_while()` must be the name of a scalar `qd.i32` ndarray parameter. The loop body repeats while this value is non-zero.
+The argument to `qd.graph_do_while()` must reference a scalar `qd.i32` ndarray that the kernel can access — a bare kernel parameter (`qd.graph_do_while(counter)`), a `@qd.data_oriented` member ndarray (`qd.graph_do_while(self.counter)`), or a `@dataclasses.dataclass` parameter member (`qd.graph_do_while(params.counter)`). The loop body repeats while this value is non-zero.
 
 - On CUDA SM 9.0+ (Hopper), this uses CUDA conditional while nodes — the entire iteration runs on the GPU with no host involvement.
 - On older CUDA GPUs, AMDGPU, and non-GPU backends, it falls back to a host-side do-while loop (see the [backend support table](#backend-support)).
@@ -256,7 +256,7 @@ while status.yielded:
 
 - Must be used inside `@qd.kernel(graph=True, checkpoints=True)`. Without the flag, `qd.checkpoint(...)` raises `QuadrantsSyntaxError` at compile time with a fix-it pointing at `checkpoints=True`.
 - `cp_id` must be an int literal or an `IntEnum` value, and must be unique across the kernel.
-- `yield_on=` must be a kernel parameter that is a 0-d `qd.types.ndarray(qd.i32, ndim=0)`; expressions are not supported.
+- `yield_on=` must reference a 0-d `qd.types.ndarray(qd.i32, ndim=0)` — a bare kernel parameter (`yield_on=flag`), a `@qd.data_oriented` member ndarray (`yield_on=self.flag`), or a `@dataclasses.dataclass` parameter member (`yield_on=params.flag`). Arbitrary expressions are not supported.
 - Checkpoints cannot be nested inside other checkpoints. Checkpoints inside a `qd.graph_do_while` body are fine.
 - The body of a `with qd.checkpoint(...)` block cannot contain bare top-level statements (assignments, augmented assignments, or bare call/expression statements). Every top-level statement must be inside a `for`-loop (or other control-flow construct). A docstring as the first statement is allowed. Bare statements raise `QuadrantsSyntaxError` at compile time with a fix-it pointing at the explicit one-iteration `for`-wrap:
 

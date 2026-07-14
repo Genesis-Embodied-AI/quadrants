@@ -1352,18 +1352,66 @@ class ASTTransformer(Builder):
                 return ASTTransformer.build_struct_for(ctx, node, is_grouped=False)
 
     @staticmethod
-    def _is_graph_do_while_call(node: ast.expr) -> str | None:
-        """If *node* is ``qd.graph_do_while(var)`` return the arg name, else None."""
+    def _is_graph_do_while_call(node: ast.expr) -> ast.expr | None:
+        """If *node* is ``qd.graph_do_while(arg)`` return the arg AST node, else None.
+
+        ``arg`` may be an ``ast.Name`` (a bare kernel parameter, e.g. ``counter``) or an ``ast.Attribute`` chain
+        (a ``@qd.data_oriented`` member ndarray such as ``self.counter`` or a ``@dataclasses.dataclass`` parameter
+        member such as ``params.counter``). The actual resolution to a kernel ndarray argument happens in
+        ``build_While`` via ``_resolve_ndarray_kernel_arg_id``.
+        """
         if not isinstance(node, ast.Call):
             return None
         func = node.func
-        if isinstance(func, ast.Attribute) and func.attr == "graph_do_while":
-            if len(node.args) == 1 and isinstance(node.args[0], ast.Name):
-                return node.args[0].id
-        if isinstance(func, ast.Name) and func.id == "graph_do_while":
-            if len(node.args) == 1 and isinstance(node.args[0], ast.Name):
-                return node.args[0].id
+        is_gdw = (isinstance(func, ast.Attribute) and func.attr == "graph_do_while") or (
+            isinstance(func, ast.Name) and func.id == "graph_do_while"
+        )
+        if not is_gdw:
+            return None
+        if len(node.args) == 1 and isinstance(node.args[0], (ast.Name, ast.Attribute)):
+            return node.args[0]
         return None
+
+    @staticmethod
+    def _resolve_ndarray_kernel_arg_id(
+        ctx: ASTTransformerFuncContext,
+        kernel,
+        node: ast.expr,
+        usage: str,
+    ) -> tuple[str, int]:
+        """Resolve an ndarray-referencing expression to ``(label, flat_cpp_arg_id)`` at AST-build time.
+
+        Shared between ``qd.checkpoint(yield_on=...)`` and ``qd.graph_do_while(...)`` to turn the control-flag
+        argument into the flat C++ arg-id the runtime matches against. ``node`` is an ``ast.Name`` (a bare kernel
+        parameter, e.g. ``flag``) or an ``ast.Attribute`` chain (e.g. ``self.flag`` for a ``@qd.data_oriented``
+        owner, or ``params.flag`` where ``params`` is a ``@dataclasses.dataclass`` kernel parameter). We build the
+        expression through the normal AST machinery and read the arg-id off the resulting external-tensor
+        expression -- this unifies the bare-param and member-ndarray cases, since both flatten to a real ndarray
+        kernel argument carrying its arg-id on the ``ExternalTensorExpression``.
+
+        ``usage`` is the call form (e.g. ``"qd.checkpoint(yield_on=...)"``) used in the error message. Raises
+        ``QuadrantsSyntaxError`` if the expression does not resolve to an ndarray kernel argument.
+        """
+        from quadrants.lang.any_array import AnyArray  # pylint: disable=C0415
+
+        label = ast.unparse(node)
+        bad = QuadrantsSyntaxError(
+            f"{usage} got {label!r} which does not resolve to an ndarray kernel parameter of "
+            f"{kernel.func.__name__!r}. The argument must reference an ndarray kernel parameter (e.g. "
+            f"`flag`) or a @qd.data_oriented member ndarray (e.g. `self.flag`); other expressions are not "
+            f"supported."
+        )
+        try:
+            built = build_stmt(ctx, node)
+        except Exception as e:  # noqa: BLE001 - any resolution failure is a user-facing misuse
+            raise bad from e
+        resolved_expr = built.ptr if isinstance(built, AnyArray) else built
+        if not (hasattr(resolved_expr, "is_external_tensor_expr") and resolved_expr.is_external_tensor_expr()):
+            raise bad
+        arg_id = _qd_core.get_external_tensor_arg_id(resolved_expr)
+        if not arg_id:
+            raise bad
+        return label, int(arg_id[0])
 
     @staticmethod
     def _is_checkpoint_call(node: ast.expr, global_vars: dict):
@@ -1377,18 +1425,11 @@ class ASTTransformer(Builder):
         if node.orelse:
             raise QuadrantsSyntaxError("'else' clause for 'while' not supported in Quadrants kernels")
 
-        graph_do_while_arg = ASTTransformer._is_graph_do_while_call(node.test)
-        if graph_do_while_arg is not None:
+        graph_do_while_node = ASTTransformer._is_graph_do_while_call(node.test)
+        if graph_do_while_node is not None:
             from quadrants.lang.kernel import GraphDoWhileLevel  # pylint: disable=C0415
 
             kernel = ctx.global_context.current_kernel
-            arg_names = [m.name for m in kernel.arg_metas]
-            if graph_do_while_arg not in arg_names:
-                raise QuadrantsSyntaxError(
-                    f"qd.graph_do_while({graph_do_while_arg!r}) does not match any "
-                    f"parameter of kernel {kernel.func.__name__!r}. "
-                    f"Available parameters: {arg_names}"
-                )
             if not kernel.use_graph:
                 raise QuadrantsSyntaxError("qd.graph_do_while() requires @qd.kernel(graph=True)")
             # graph_do_while emits no loop IR; its body's for-loops must be top-level (offloaded) tasks. So it may only
@@ -1399,15 +1440,22 @@ class ASTTransformer(Builder):
                     "qd.graph_do_while() must be at the kernel top level or directly nested inside "
                     "another qd.graph_do_while(); it cannot appear inside a for-loop."
                 )
+            # Resolve the condition ndarray (bare parameter or @qd.data_oriented member) to its flat C++ arg-id at
+            # AST-build time -- the same id the runtime needs -- so the launch path forwards it directly with no
+            # per-launch name matching. ``cond_arg_name`` keeps the readable label (e.g. "counter" or "self.counter")
+            # for introspection and for the legacy ``graph_do_while_arg`` alias surfaced on Kernel.
+            cond_label, cond_cpp_arg_id = ASTTransformer._resolve_ndarray_kernel_arg_id(
+                ctx, kernel, graph_do_while_node, "qd.graph_do_while(...)"
+            )
             # Register this loop as a new nesting level (the body restriction is validated up-front in
             # FunctionDefTransformer). Outer loops get lower ids than the inner loops they contain.
             parent_id = kernel._graph_do_while_level_stack[-1] if kernel._graph_do_while_level_stack else -1
             level_id = len(kernel.graph_do_while_levels)
             kernel.graph_do_while_levels.append(
-                GraphDoWhileLevel(cond_arg_name=graph_do_while_arg, parent_id=parent_id)
+                GraphDoWhileLevel(cond_arg_name=cond_label, parent_id=parent_id, cond_cpp_arg_id=cond_cpp_arg_id)
             )
             if level_id == 0:
-                kernel.graph_do_while_arg = graph_do_while_arg
+                kernel.graph_do_while_arg = cond_label
             kernel._graph_do_while_level_stack.append(level_id)
             ctx.ast_builder.set_graph_do_while_level_id(level_id)
             try:
