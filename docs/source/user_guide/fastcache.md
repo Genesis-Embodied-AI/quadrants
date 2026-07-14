@@ -149,7 +149,7 @@ On the first run you'll see `cache_stored=True` but `cache_loaded=False`. On the
 
 As part of generating the fastcache cache key, fastcache hashes each kernel parameter. Compound types are hashed recursively. The headline rules:
 
-**`@qd.data_oriented`:** children:
+**`@qd.data_oriented`:** each attribute in `vars(obj)` is hashed. For each child:
 
 - `qd.ndarray` member — `(dtype, ndim, layout)` is included in the cache key. Element values are not.
 - Primitive (`int` / `float` / `bool` / `enum.Enum`) member — value is baked into the kernel (same semantics as a `qd.Template` primitive). Two instances of the same class with different primitive member values get different cache entries.
