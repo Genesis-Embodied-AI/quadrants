@@ -2138,6 +2138,12 @@
             <span class="p">)</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">ctx</span><span class="o">.</span><span class="n">is_kernel</span><span class="p">:</span>
             <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">&quot;qd.stream_parallel() can only be used inside @qd.kernel, not @qd.func&quot;</span><span class="p">)</span>
+        <span class="n">kernel</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">global_context</span><span class="o">.</span><span class="n">current_kernel</span>
+        <span class="k">if</span> <span class="n">kernel</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">kernel</span><span class="o">.</span><span class="n">use_graph</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span>
+                <span class="s2">&quot;qd.stream_parallel() is not compatible with graph=True kernels. Streams and graphs cannot be &quot;</span>
+                <span class="s2">&quot;combined; remove graph=True or the qd.stream_parallel() block.&quot;</span>
+            <span class="p">)</span>
         <span class="n">ctx</span><span class="o">.</span><span class="n">ast_builder</span><span class="o">.</span><span class="n">begin_stream_parallel</span><span class="p">()</span>
         <span class="n">build_stmts</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">body</span><span class="p">)</span>
         <span class="n">ctx</span><span class="o">.</span><span class="n">ast_builder</span><span class="o">.</span><span class="n">end_stream_parallel</span><span class="p">()</span>
