@@ -181,9 +181,9 @@ The agent reports up to 10 violations. This check is delayed by 30 minutes, to a
 
 ### PR change report (`pr_change_report.yml`)
 
-Posts a fresh PR comment on every push. The comment is a single line: the totals (file count, code lines added, code lines removed) formatted as a markdown link to a GitHub Check whose page contains the full per-file / per-function breakdown. "Code lines" exclude blank lines, comment-only lines, and (in Python) lines whose only token content is a string literal (i.e. docstrings and continuation lines of multi-line strings). C/C++ `/* … */` block comments are stripped before counting.
+Posts a fresh PR comment on every push. The comment is a single line: the totals (file count, code lines added, code lines removed) formatted as a markdown link to the workflow run summary page, which contains the full per-file / per-function breakdown. "Code lines" exclude blank lines, comment-only lines, and (in Python) lines whose only token content is a string literal (i.e. docstrings and continuation lines of multi-line strings). C/C++ `/* ... */` block comments are stripped before counting.
 
-The number columns on the Check page (without a `+` or `-` sign) are code-line counts in the BASE (pre-PR) version: file size before this PR (0 for newly-added files), function body size before this PR (0 for new functions; original body size for deleted functions). `+<n>` / `-<n>` are code lines added / removed by this PR.
+The number columns in the report (without a `+` or `-` sign) are code-line counts in the BASE (pre-PR) version: file size before this PR (0 for newly-added files), function body size before this PR (0 for new functions; original body size for deleted functions). `+<n>` / `-<n>` are code lines added / removed by this PR.
 
 Files are sorted by added lines descending. Within each file, functions are split into a `New:` group (added by this PR), an `Existing:` group (modified by this PR), and a `Deleted:` group (removed by this PR), and within each group sorted by added lines descending, then removed lines descending. Files that are deleted in their entirety appear as a single per-file row (so the totals stay accurate) but skip the per-function breakdown. Sample shape:
 
