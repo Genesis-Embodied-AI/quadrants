@@ -177,20 +177,22 @@ def dataclass_to_repr(
     child's flat name is sufficient.
     """
     # PERF: For frozen dataclasses the repr never changes. Cache it on the instance to avoid repeated
-    # ``dataclasses.fields()`` calls (which are slow due to extra runtime checks — see _template_mapper_hotpath.py
+    # ``dataclasses.fields()`` calls (which are slow due to extra runtime checks - see _template_mapper_hotpath.py
     # module docstring). The cache is stored as ``_qd_dc_repr`` via ``object.__setattr__`` to bypass frozen guards. A
     # cached ``_DC_REPR_NONE`` sentinel distinguishes "computed but not fast-cacheable" from "not yet computed".
     #
-    # The cache is keyed by ``(is_frozen, pruning_paths is None)`` because a frozen dataclass's pruned repr depends on
-    # the pruning_paths set - we use separate cache slots for pruned vs unpruned to avoid serving the wrong narrowing.
-    cache_attr = "_qd_dc_repr" if pruning_paths is None else "_qd_dc_repr_narrow"
+    # The cache only applies to *unpruned* walks (``pruning_paths is None``): a pruned walk's success repr AND its
+    # failure verdict both depend on which fields were visited, so caching either across pruned walks would be
+    # unsound (a later kernel's narrower pruning set could skip the offending field and be entitled to fastcache,
+    # but would inherit the earlier kernel's cached ``_DC_REPR_NONE``). Pruned walks re-walk on every call - which
+    # is fine, since the ``dataclasses.fields()`` cost is dwarfed by the pruning-narrowed field iteration itself.
     is_frozen = type(arg).__hash__ is not None
-    if is_frozen:
-        cached = getattr(arg, cache_attr, None)
+    cache_unpruned = is_frozen and pruning_paths is None
+    if cache_unpruned:
+        cached = getattr(arg, "_qd_dc_repr", None)
         if cached is _DC_REPR_NONE:
             return _FAIL_FASTCACHE
-        if cached is not None and pruning_paths is None:
-            # Narrow cache may be stale if pruning_paths set changed; only reuse the unpruned cache.
+        if cached is not None:
             return cached
     repr_l = []
     for field in dataclasses.fields(arg):
@@ -209,9 +211,9 @@ def dataclass_to_repr(
         if _repr is _FAIL_FASTCACHE:
             if isinstance(child_value, _FIELD_TYPES) and field.type is not _TensorWrapper:
                 _mark_should_warn()
-            if is_frozen:
+            if cache_unpruned:
                 try:
-                    object.__setattr__(arg, cache_attr, _DC_REPR_NONE)
+                    object.__setattr__(arg, "_qd_dc_repr", _DC_REPR_NONE)
                 except AttributeError:
                     pass
             return _FAIL_FASTCACHE
@@ -220,9 +222,9 @@ def dataclass_to_repr(
             full_repr += f" = {child_value}"
         repr_l.append(full_repr)
     result = "[" + ",".join(repr_l) + "]"
-    if is_frozen and pruning_paths is None:
+    if cache_unpruned:
         try:
-            object.__setattr__(arg, cache_attr, result)
+            object.__setattr__(arg, "_qd_dc_repr", result)
         except AttributeError:
             pass
     return result

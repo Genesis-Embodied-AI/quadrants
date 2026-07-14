@@ -383,3 +383,42 @@ def test_args_hasher_named_tuple() -> None:
     geom = Geom(pos=qd.field(dtype=qd.types.vector(3, qd.f32), shape=(1,)))
     set_pos(geom, np.ones((1, 3), dtype=np.float32))
     assert np.all(geom.pos.to_numpy() == np.ones((1, 3), dtype=np.float32))
+
+
+@test_utils.test()
+def test_args_hasher_frozen_dataclass_failure_does_not_poison_narrower_walk() -> None:
+    """Codex r3582132723: a frozen dataclass's cached fastcache failure must not be reused across walks with
+    different pruning sets.
+
+    Two @qd.kernels share the same frozen dataclass instance. Kernel A reads the unsupported ``qd.field`` member
+    and correctly fails fastcache. Kernel B has a narrower pruning set that excludes the unsupported member and
+    reads only the supported ``qd.ndarray``; it must still be fast-cacheable, i.e. the on-instance failure
+    sentinel from A's walk must not be reused for B's walk (whose narrower path set doesn't reach the offending
+    field).
+    """
+    args_hasher.reset_unknown_type_warn_state()
+
+    @dataclasses.dataclass(frozen=True)
+    class State:
+        x: qd.types.NDArray[qd.i32, 1]  # actually holds a qd.field below (unsupported at read path)
+        y: qd.types.NDArray[qd.i32, 1]  # cacheable ndarray
+
+    state = State(x=qd.field(qd.i32, shape=(4,)), y=qd.ndarray(qd.i32, (4,)))
+    arg_meta = ArgMetadata(name="state", annotation=State)
+
+    # Kernel A: pruning set includes both fields; walking hits the qd.field and fails.
+    paths_a = {"__qd_state__qd_x", "__qd_state__qd_y"}
+    h_a = args_hasher.hash_args(False, [state], [arg_meta], pruning_paths=paths_a)
+    assert isinstance(h_a, FastcacheSkip), f"kernel A should fail fastcache; got {h_a!r}"
+
+    # Kernel B: narrower pruning set excludes the failing field. Same instance - must NOT inherit A's failure.
+    paths_b = {"__qd_state__qd_y"}
+    h_b = args_hasher.hash_args(False, [state], [arg_meta], pruning_paths=paths_b)
+    assert not isinstance(h_b, FastcacheSkip), (
+        f"kernel B should be fast-cacheable (its pruning set skips the unsupported field); got {h_b!r}"
+    )
+    assert isinstance(h_b, str) and len(h_b) > 0
+
+    # And unpruned walks are unaffected: no ``pruning_paths`` -> walk everything -> fail (same as A).
+    h_none = args_hasher.hash_args(False, [state], [arg_meta])
+    assert isinstance(h_none, FastcacheSkip), f"unpruned walk should fail fastcache; got {h_none!r}"
