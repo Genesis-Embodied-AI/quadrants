@@ -495,7 +495,7 @@
                     <span class="c1"># ``@qd.data_oriented`` field type inside a typed-dataclass kernel arg. The two patterns are</span>
                     <span class="c1"># semantically incompatible at this layer: dataclass kernel-arg recursion uses annotations to</span>
                     <span class="c1"># flatten leaf fields into per-leaf kernel args at compile time, but data_oriented containers</span>
-                    <span class="c1"># don&#39;t carry per-attribute type annotations — they need a value-driven walk</span>
+                    <span class="c1"># don&#39;t carry per-attribute type annotations - they need a value-driven walk</span>
                     <span class="c1"># (``_predeclare_struct_ndarrays``), which only fires for ``qd.template()`` / ``qd.Tensor``</span>
                     <span class="c1"># annotations. Rather than silently miscompile, raise a clear error pointing users to the</span>
                     <span class="c1"># recommended pattern.</span>
@@ -590,7 +590,7 @@
         <span class="c1"># On a fastcache hit (enforcing without a pass-0 run), the `id(nd)` set is empty, but the *flat-name* set on</span>
         <span class="c1"># ``used_vars_by_func_id[KERNEL_FUNC_ID]`` was loaded from cache and already contains every kernel-accessed</span>
         <span class="c1"># leaf path (folded in by ``Pruning.fold_struct_nd_paths`` during the compile that produced the cache entry).</span>
-        <span class="c1"># Use that to prune the walk so we register the exact same ndarray set as the originating compile produced —</span>
+        <span class="c1"># Use that to prune the walk so we register the exact same ndarray set as the originating compile produced -</span>
         <span class="c1"># without this, every reachable ndarray gets registered, the kernel&#39;s arg slots get rebound to the wrong</span>
         <span class="c1"># ndarrays at launch, and physics silently breaks.</span>
         <span class="n">prune_from_flat_names</span> <span class="o">=</span> <span class="n">pruning</span><span class="o">.</span><span class="n">enforcing</span> <span class="ow">and</span> <span class="ow">not</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">pruning</span><span class="p">,</span> <span class="s2">&quot;pass_0_ran&quot;</span><span class="p">,</span> <span class="kc">False</span><span class="p">)</span>
@@ -599,7 +599,7 @@
         <span class="p">)</span>
 
         <span class="c1"># Cycle-safe walker: Genesis object graphs have cross-references (e.g. solver &lt;-&gt; scene &lt;-&gt; sim) so we must</span>
-        <span class="c1"># avoid re-entering the same node. ``seen`` is shared across the whole arg&#39;s traversal — ``id(obj)`` is</span>
+        <span class="c1"># avoid re-entering the same node. ``seen`` is shared across the whole arg&#39;s traversal - ``id(obj)`` is</span>
         <span class="c1"># stable for the duration of this compile and we never need to revisit a node since the ndarray-set rooted at</span>
         <span class="c1"># it doesn&#39;t depend on the path we took to reach it.</span>
         <span class="k">def</span><span class="w"> </span><span class="nf">_walk_obj</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="n">arg_idx</span><span class="p">,</span> <span class="n">path</span><span class="p">,</span> <span class="n">seen</span><span class="p">):</span>

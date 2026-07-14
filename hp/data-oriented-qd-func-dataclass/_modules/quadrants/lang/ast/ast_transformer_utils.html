@@ -805,7 +805,7 @@
         <span class="c1"># ``static_rigid_sim_config.para_level`` where ``static_rigid_sim_config`` is a ``qd.template()`` arg bound to</span>
         <span class="c1"># a ``@qd.data_oriented`` instance). Without this, chains rooted at func params would not be recorded in</span>
         <span class="c1"># pruning, and the args-hasher would skip over kernel-read primitive members of nested data_oriented</span>
-        <span class="c1"># containers — leading to stale fastcache hits when those members change between calls.</span>
+        <span class="c1"># containers - leading to stale fastcache hits when those members change between calls.</span>
         <span class="c1"># ``kernel_args`` only tracks top-level ``@qd.kernel`` args; ``_transform_func_arg`` for a ``@qd.func`` does</span>
         <span class="c1"># not append to it (see function_def_transformer.py). This separate set avoids piggy-backing on</span>
         <span class="c1"># ``kernel_args`` so the existing &quot;kernel arg is immutable&quot; diagnostic in ``build_assign_annotated`` doesn&#39;t</span>

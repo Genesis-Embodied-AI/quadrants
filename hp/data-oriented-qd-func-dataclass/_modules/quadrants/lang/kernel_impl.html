@@ -692,15 +692,15 @@
 
 <span class="sd">    Args:</span>
 <span class="sd">        cls (Class): the class to be decorated.</span>
-<span class="sd">        stable_members (bool): launch-context perf hint — if ``True``, declares that the class&#39;s ndarray-typed members</span>
+<span class="sd">        stable_members (bool): launch-context perf hint - if ``True``, declares that the class&#39;s ndarray-typed members</span>
 <span class="sd">            are allocated once and never reassigned between kernel calls. Quadrants will skip the per-call ndarray-</span>
 <span class="sd">            reference walk that ``Kernel.launch_kernel`` uses to detect ndarray reassignment on mutable containers</span>
 <span class="sd">            (~1-2 us/call savings on Genesis-style containers with dozens of ndarray attrs). Reassigning a member on</span>
-<span class="sd">            a ``stable_members`` class is undefined behaviour — the previously-compiled kernel will be reused even if</span>
+<span class="sd">            a ``stable_members`` class is undefined behaviour - the previously-compiled kernel will be reused even if</span>
 <span class="sd">            the new ndarray has different dtype/ndim/layout. May also be set as a class-level attribute</span>
 <span class="sd">            ``_qd_stable_members = True`` (equivalent).</span>
 
-<span class="sd">            Note: this flag is *purely* a launch-time perf hint. It no longer affects fastcache argument hashing — the</span>
+<span class="sd">            Note: this flag is *purely* a launch-time perf hint. It no longer affects fastcache argument hashing - the</span>
 <span class="sd">            fastcache key is derived from pruning info (the set of flat names the kernel actually reads), and</span>
 <span class="sd">            unrecognised types at kernel-read paths fail fastcache loudly with a one-shot ``[UNKNOWN_TYPE]`` +</span>
 <span class="sd">            ``[INVALID_FUNC]`` diagnostic (no qualname fallback). See ``docs/source/user_guide/fastcache.md``.</span>

@@ -361,7 +361,7 @@
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Contributing</span></p>
 <ul class="nav bd-sidenav">
-<li class="toctree-l1"><a class="reference internal" href="contributing.html">Contributing to quadrants</a></li>
+<li class="toctree-l1"><a class="reference internal" href="contributing.html">Advanced: Contributing to quadrants</a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Internal</span></p>
 <ul class="nav bd-sidenav">
@@ -431,7 +431,7 @@
 <section id="what-it-is">
 <h2>What it is<a class="headerlink" href="#what-it-is" title="Link to this heading">#</a></h2>
 <p>Fastcache reduces the time it takes to load cached kernels when a new Python process starts.</p>
-<p>The standard <a class="reference internal" href="init_options.html#offline-cache"><span class="std std-ref">offline cache</span></a> already persists compiled kernels to disk. However, loading a cached kernel still requires parsing the kernel’s Python AST and transforming it into IR. For applications with many kernels this front-end overhead alone can take several seconds.</p>
+<p>The standard <a class="reference internal" href="init_options.html#offline-cache"><span class="std std-ref">offline cache</span></a> already persists compiled kernels to disk. However, loading a cached kernel still requires some initial front-end parsing steps, which take non-negligible time. For applications with many kernels this front-end overhead alone can take several seconds.</p>
 <p>Fastcache bypasses that front-end work. It computes a cheap cache key from the kernel source text, argument types, and compiler config, and uses it to load the compiled artifact directly.</p>
 <p>On a Genesis simulator benchmark (<code class="docutils literal notranslate"><span class="pre">single_franka_envs.py</span></code>, Ubuntu 24.04, NVIDIA 5090):</p>
 <div class="pst-scrollable-table-container"><table class="table">
@@ -455,7 +455,7 @@
 <h2>How to use it<a class="headerlink" href="#how-to-use-it" title="Link to this heading">#</a></h2>
 <section id="enabling-fastcache-on-a-kernel">
 <h3>Enabling fastcache on a kernel<a class="headerlink" href="#enabling-fastcache-on-a-kernel" title="Link to this heading">#</a></h3>
-<p>Fastcache requires the kernel to be <em>pure</em>: all data it operates on must be passed as explicit parameters, with nothing captured from the enclosing Python scope (see <a class="reference internal" href="#constraints">Constraints</a> below). Because not all kernels satisfy this, fastcache is opt-in — you assert purity by adding <code class="docutils literal notranslate"><span class="pre">fastcache=True</span></code> to the <code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel</span></code> decorator:</p>
+<p>Fastcache requires the kernel to be <em>pure</em>: all data it operates on must be passed as explicit parameters, with nothing captured from the enclosing Python scope (see <a class="reference internal" href="#constraints">Constraints</a> below). Because not all kernels satisfy this, fastcache is opt-in - you assert purity by adding <code class="docutils literal notranslate"><span class="pre">fastcache=True</span></code> to the <code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel</span></code> decorator:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">quadrants</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">qd</span>
 
 <span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span><span class="p">(</span><span class="n">fastcache</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
@@ -503,7 +503,7 @@
 <p>A kernel is eligible for fastcache only if all of the following hold:</p>
 <section id="all-data-flows-through-parameters">
 <h3>1. All data flows through parameters<a class="headerlink" href="#all-data-flows-through-parameters" title="Link to this heading">#</a></h3>
-<p>The kernel must receive every piece of data it operates on as an explicit parameter. It must <strong>not</strong> capture variables from the enclosing Python scope (closures over ndarrays, mutable globals, or any other external state). This is the core “purity” constraint — the compiled kernel’s behavior must be fully determined by its arguments.</p>
+<p>The kernel must receive every piece of data it operates on as an explicit parameter. It must <strong>not</strong> capture variables from the enclosing Python scope (closures over ndarrays, mutable globals, or any other external state). This is the core “purity” constraint - the compiled kernel’s behavior must be fully determined by its arguments.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">a</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="p">(</span><span class="mi">10</span><span class="p">,))</span>
 
 <span class="c1"># Not eligible: captures `a` from enclosing scope</span>
@@ -519,7 +519,7 @@
         <span class="n">a</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="mf">0.0</span>
 </pre></div>
 </div>
-<p>Sub-functions called by the kernel are also checked — they must not capture external state either.</p>
+<p>Sub-functions called by the kernel are also checked - they must not capture external state either.</p>
 <p><strong>Exemptions:</strong> The following may be accessed from the enclosing scope without violating purity:</p>
 <div class="pst-scrollable-table-container"><table class="table">
 <thead>
@@ -565,13 +565,13 @@
 <td><p>Yes</p></td>
 <td><p>dtype, ndim</p></td>
 </tr>
-<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">dataclasses.dataclass</span></code></p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="compound_types.html#dataclasses-dataclass"><span class="std std-ref"><code class="docutils literal notranslate"><span class="pre">dataclasses.dataclass</span></code></span></a></p></td>
 <td><p>Yes</p></td>
-<td><p>member types recursively (narrowed to members the kernel reads or writes); member values if annotated with <code class="docutils literal notranslate"><span class="pre">FIELD_METADATA_CACHE_VALUE</span></code> (see <a class="reference internal" href="#compound-type-cache-keying">Advanced — compound-type cache keying</a>)</p></td>
+<td><p>member types recursively; member values if annotated with <code class="docutils literal notranslate"><span class="pre">FIELD_METADATA_CACHE_VALUE</span></code> (see <a class="reference internal" href="#compound-type-cache-keying">Advanced - compound-type cache keying</a>)</p></td>
 </tr>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code> objects</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="compound_types.html#qd-data-oriented"><span class="std std-ref"><code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code></span></a> objects</p></td>
 <td><p>Yes</p></td>
-<td><p>member types recursively (narrowed to members the kernel reads or writes); primitive member types and values baked into kernel (see <a class="reference internal" href="#compound-type-cache-keying">Advanced — compound-type cache keying</a>)</p></td>
+<td><p>member types recursively; primitive member types and values baked into kernel (see <a class="reference internal" href="#compound-type-cache-keying">Advanced - compound-type cache keying</a>)</p></td>
 </tr>
 <tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">qd.Template</span></code> primitives (int, float, bool)</p></td>
 <td><p>Yes</p></td>
@@ -585,19 +585,14 @@
 <td><p>Yes</p></td>
 <td><p>name and value</p></td>
 </tr>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">qd.field</span></code> / <code class="docutils literal notranslate"><span class="pre">ScalarField</span></code> / <code class="docutils literal notranslate"><span class="pre">MatrixField</span></code> at a kernel-read path</p></td>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">qd.field</span></code> / <a class="reference internal" href="matrix_vector.html#vector-and-matrix-fields"><span class="std std-ref"><code class="docutils literal notranslate"><span class="pre">ScalarField</span></code></span></a> / <a class="reference internal" href="matrix_vector.html#vector-and-matrix-fields"><span class="std std-ref"><code class="docutils literal notranslate"><span class="pre">MatrixField</span></code></span></a></p></td>
 <td><p><strong>No</strong></p></td>
-<td><p>—</p></td>
-</tr>
-<tr class="row-odd"><td><p>Anything else at a kernel-read path</p></td>
-<td><p><strong>No</strong></p></td>
-<td><p>—</p></td>
+<td><p>-</p></td>
 </tr>
 </tbody>
 </table>
 </div>
-<p>If any kernel-used parameter is of an unsupported type, fastcache is disabled for that call and the kernel falls back to normal compilation. For <code class="docutils literal notranslate"><span class="pre">qd.field</span></code> / <code class="docutils literal notranslate"><span class="pre">ScalarField</span></code> / <code class="docutils literal notranslate"><span class="pre">MatrixField</span></code> arriving through a <code class="docutils literal notranslate"><span class="pre">qd.Tensor</span></code>-annotated parameter, this is silent — no warning is emitted. For other unsupported types, a warning is logged at the <code class="docutils literal notranslate"><span class="pre">warn</span></code> level identifying the offending parameter.</p>
-<p>Kernel-unused members of any type — including unrecognised ones — do <strong>not</strong> disable fastcache. Fastcache skips them entirely, so opaque metadata (UUIDs, Pydantic configs, parent back-pointers) attached to a <code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code> or <code class="docutils literal notranslate"><span class="pre">dataclasses.dataclass</span></code> instance is harmless as long as the kernel doesn’t read it.</p>
+<p>If any parameter is of an unsupported type, fastcache is disabled for that call and the kernel falls back to normal compilation. For <code class="docutils literal notranslate"><span class="pre">qd.field</span></code> / <a class="reference internal" href="matrix_vector.html#vector-and-matrix-fields"><span class="std std-ref"><code class="docutils literal notranslate"><span class="pre">ScalarField</span></code></span></a> / <a class="reference internal" href="matrix_vector.html#vector-and-matrix-fields"><span class="std std-ref"><code class="docutils literal notranslate"><span class="pre">MatrixField</span></code></span></a> arriving through a <a class="reference internal" href="tensor.html"><span class="std std-doc">qd.Tensor</span></a>-annotated parameter, this is silent - no warning is emitted. For other unsupported types, a warning is logged at the <code class="docutils literal notranslate"><span class="pre">warn</span></code> level identifying the offending parameter.</p>
 </section>
 <section id="source-code-must-be-available">
 <h3>3. Source code must be available<a class="headerlink" href="#source-code-must-be-available" title="Link to this heading">#</a></h3>
@@ -614,7 +609,7 @@
 <li><p>The <strong>compiler configuration</strong> (e.g. <code class="docutils literal notranslate"><span class="pre">arch</span></code>, <code class="docutils literal notranslate"><span class="pre">debug</span></code>, <code class="docutils literal notranslate"><span class="pre">opt_level</span></code>, <code class="docutils literal notranslate"><span class="pre">fast_math</span></code>).</p></li>
 <li><p><strong>Template parameter values</strong> (since they are baked into the compiled kernel).</p></li>
 </ul>
-<p>When any of these change, the resulting key is different, so a new compilation occurs and a new entry is stored. Previous entries remain on disk — multiple cached versions coexist. You do not need to manually clear the cache when making code changes — the hash mismatch causes a transparent recompilation.</p>
+<p>When any of these change, the resulting key is different, so a new compilation occurs and a new entry is stored. Previous entries remain on disk - multiple cached versions coexist. You do not need to manually clear the cache when making code changes - the hash mismatch causes a transparent recompilation.</p>
 <section id="two-strict-invariants">
 <h3>Two strict invariants<a class="headerlink" href="#two-strict-invariants" title="Link to this heading">#</a></h3>
 <ol class="arabic simple">
@@ -646,13 +641,16 @@
 </section>
 <section id="compound-type-cache-keying">
 <h3>Compound-type cache keying<a class="headerlink" href="#compound-type-cache-keying" title="Link to this heading">#</a></h3>
-<p>For <code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code> and <code class="docutils literal notranslate"><span class="pre">dataclasses.dataclass</span></code> kernel parameters, fastcache walks members recursively. Any members that are not themselves read or written by the kernel, nor contain members read or written by the kernel, are skipped during the walk (per the <a class="reference internal" href="#two-strict-invariants">strict invariants</a> above). Member-by-member behavior:</p>
-<ul>
-<li><p><strong><code class="docutils literal notranslate"><span class="pre">qd.ndarray</span></code> member</strong> — <code class="docutils literal notranslate"><span class="pre">(dtype,</span> <span class="pre">ndim,</span> <span class="pre">layout)</span></code> is included in the cache key. Element values are not.</p></li>
-<li><p><strong>Primitive (<code class="docutils literal notranslate"><span class="pre">int</span></code> / <code class="docutils literal notranslate"><span class="pre">float</span></code> / <code class="docutils literal notranslate"><span class="pre">bool</span></code> / <code class="docutils literal notranslate"><span class="pre">enum.Enum</span></code>) member.</strong> The handling depends on the enclosing container:</p>
-<ul>
-<li><p>In a <code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code> instance — value is baked into the kernel, same as a <code class="docutils literal notranslate"><span class="pre">qd.Template</span></code> primitive. Two instances of the same class with different primitive member values get different cache entries.</p></li>
-<li><p>In a <code class="docutils literal notranslate"><span class="pre">dataclasses.dataclass</span></code> instance — only the type is included by default. To include the value too, annotate the field with <code class="docutils literal notranslate"><span class="pre">FIELD_METADATA_CACHE_VALUE</span></code>:</p>
+<p>As part of generating the fastcache cache key, fastcache hashes each kernel parameter. Compound types are hashed recursively. The headline rules:</p>
+<p><strong><code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code>:</strong> each attribute in <code class="docutils literal notranslate"><span class="pre">vars(obj)</span></code> is hashed. For each child:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">qd.ndarray</span></code> member - <code class="docutils literal notranslate"><span class="pre">(dtype,</span> <span class="pre">ndim,</span> <span class="pre">layout)</span></code> is included in the cache key. Element values are not.</p></li>
+<li><p>Primitive (<code class="docutils literal notranslate"><span class="pre">int</span></code> / <code class="docutils literal notranslate"><span class="pre">float</span></code> / <code class="docutils literal notranslate"><span class="pre">bool</span></code> / <code class="docutils literal notranslate"><span class="pre">enum.Enum</span></code>) member - value is baked into the kernel (same semantics as a <code class="docutils literal notranslate"><span class="pre">qd.Template</span></code> primitive). Two instances of the same class with different primitive member values get different cache entries.</p></li>
+<li><p>Nested <code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code> member - recurses.</p></li>
+<li><p>Nested <code class="docutils literal notranslate"><span class="pre">dataclasses.dataclass</span></code> member - recurses (with the dataclass rules below).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">qd.field</span></code> member - fastcache is disabled for the entire kernel call. The kernel still runs via normal compilation; a warn-level log line is emitted.</p></li>
+</ul>
+<p><strong><code class="docutils literal notranslate"><span class="pre">dataclasses.dataclass</span></code>:</strong> each declared member is hashed. For each member, only the <em>type</em> is included in the cache key by default - <strong>not</strong> the value. To include a member’s value, annotate it:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">dataclasses</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._fast_caching</span><span class="w"> </span><span class="kn">import</span> <span class="n">FIELD_METADATA_CACHE_VALUE</span>
 
@@ -662,13 +660,8 @@
     <span class="n">dt</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">dataclasses</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">metadata</span><span class="o">=</span><span class="p">{</span><span class="n">FIELD_METADATA_CACHE_VALUE</span><span class="p">:</span> <span class="kc">True</span><span class="p">})</span>
 </pre></div>
 </div>
-<p>Annotate any member whose <em>value</em> (not just type) affects the compiled kernel. Primarily this means any variable used inside <a class="reference internal" href="static.html"><span class="std std-doc"><code class="docutils literal notranslate"><span class="pre">qd.static</span></code></span></a>.</p>
-</li>
-</ul>
-</li>
-<li><p><strong>Nested <code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code> or <code class="docutils literal notranslate"><span class="pre">dataclasses.dataclass</span></code> member</strong> — recurses with the same rules (so an <code class="docutils literal notranslate"><span class="pre">int</span></code> inside a nested <code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code> is still baked into the kernel; an <code class="docutils literal notranslate"><span class="pre">int</span></code> inside a nested <code class="docutils literal notranslate"><span class="pre">dataclasses.dataclass</span></code> still needs <code class="docutils literal notranslate"><span class="pre">FIELD_METADATA_CACHE_VALUE</span></code> to bake its value).</p></li>
-<li><p><strong><code class="docutils literal notranslate"><span class="pre">qd.field</span></code> member</strong> — fastcache is disabled for the entire kernel call. The kernel still runs via normal compilation; a warn-level log line is emitted.</p></li>
-</ul>
+<p>This is necessary whenever a member’s <em>value</em> is baked into a compiled kernel, in some way, rather than just its type. Typically this is by using <a class="reference internal" href="static.html"><span class="std std-doc">&#64;qd.static</span></a>, within the kernel.</p>
+<p>Note the asymmetry: <code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code> primitive member values are baked into the kernel automatically (same semantics as <code class="docutils literal notranslate"><span class="pre">qd.Template</span></code>); <code class="docutils literal notranslate"><span class="pre">dataclasses.dataclass</span></code> members contribute only their <em>type</em> to the cache key unless you opt in per-member.</p>
 </section>
 </section>
 </section>

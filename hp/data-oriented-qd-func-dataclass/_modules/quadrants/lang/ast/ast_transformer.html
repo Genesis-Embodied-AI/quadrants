@@ -446,7 +446,7 @@
         <span class="c1"># ends up with ``__qd_self__qd__sub__qd_x`` recorded in the kernel&#39;s pruning, so the args-hasher hashes that</span>
         <span class="c1"># primitive value into the fastcache key.</span>
         <span class="c1"># Dataclass args go through ``FlattenAttributeNameTransformer`` and reach this branch as already-flat</span>
-        <span class="c1"># ``__qd_…`` Names, handled by the block above via ``mark_used``.</span>
+        <span class="c1"># ``__qd_...`` Names, handled by the block above via ``mark_used``.</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">node</span><span class="o">.</span><span class="n">id</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;__qd_&quot;</span><span class="p">)</span> <span class="ow">and</span> <span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">id</span> <span class="ow">in</span> <span class="n">ctx</span><span class="o">.</span><span class="n">kernel_args</span> <span class="ow">or</span> <span class="n">node</span><span class="o">.</span><span class="n">id</span> <span class="ow">in</span> <span class="n">ctx</span><span class="o">.</span><span class="n">fn_param_names</span><span class="p">):</span>
             <span class="n">node</span><span class="o">.</span><span class="n">_qd_arg_chain</span> <span class="o">=</span> <span class="n">node</span><span class="o">.</span><span class="n">id</span>  <span class="c1"># type: ignore[attr-defined]</span>
         <span class="k">else</span><span class="p">:</span>
@@ -1129,7 +1129,7 @@
 <span class="sd">        Also records the source ndarray id in ``pruning.used_struct_ndarray_ids`` on the non-enforcing first pass, so</span>
 <span class="sd">        that the enforcing second-pass ``_predeclare_struct_ndarrays`` can skip ndarrays that the kernel never actually</span>
 <span class="sd">        accesses. Both ``Ndarray`` instances and pre-existing ``AnyArray`` proxies (tagged with</span>
-<span class="sd">        ``_qd_source_ndarray_id``) are handled — the latter is the case for accesses in inlined ``@qd.func`` bodies</span>
+<span class="sd">        ``_qd_source_ndarray_id``) are handled - the latter is the case for accesses in inlined ``@qd.func`` bodies</span>
 <span class="sd">        whose params were bound to already-promoted proxies by Option A in ``call_transformer``.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._ndarray</span><span class="w"> </span><span class="kn">import</span> <span class="n">Ndarray</span>  <span class="c1"># pylint: disable=C0415</span>
@@ -1277,14 +1277,14 @@
                             <span class="k">raise</span> <span class="n">exception</span><span class="o">.</span><span class="n">QuadrantsCompilationError</span><span class="p">(</span><span class="n">message</span><span class="p">)</span>
         <span class="c1"># Propagate the kernel-arg-rooted chain annotation and record this access in pruning&#39;s *separate* chain-paths</span>
         <span class="c1"># set. ``build_Name`` sets ``_qd_arg_chain`` on non-flattened kernel args (e.g. data_oriented ``self``); each</span>
-        <span class="c1"># Attribute access in the chain extends it (``self`` → ``__qd_self__qd_x`` → ``__qd_self__qd_x__qd_y``).</span>
+        <span class="c1"># Attribute access in the chain extends it (``self`` -&gt; ``__qd_self__qd_x`` -&gt; ``__qd_self__qd_x__qd_y``).</span>
         <span class="c1">#</span>
         <span class="c1"># Why not ``mark_used``? On the enforcing pass, ``Kernel.materialize`` uses ``pruning.used_vars_by_func_id`` as</span>
-        <span class="c1"># ``struct_locals``, which drives ``FlattenAttributeNameTransformer`` — adding ``__qd_self__qd_x`` there would</span>
+        <span class="c1"># ``struct_locals``, which drives ``FlattenAttributeNameTransformer`` - adding ``__qd_self__qd_x`` there would</span>
         <span class="c1"># make the transformer rewrite ``self.x`` into ``Name(&#39;__qd_self__qd_x&#39;)``, and ``build_Name`` would then fail</span>
         <span class="c1"># to find such a variable. ``mark_kernel_arg_chain_used`` puts the chain into a *separate* per-func set that&#39;s</span>
         <span class="c1"># merged into ``used_vars_by_func_id[KERNEL_FUNC_ID]`` only *after* both compile passes, by</span>
-        <span class="c1"># ``Pruning.fold_kernel_arg_chain_paths`` — so the fastcache args-hash narrow walk picks them up without</span>
+        <span class="c1"># ``Pruning.fold_kernel_arg_chain_paths`` - so the fastcache args-hash narrow walk picks them up without</span>
         <span class="c1"># breaking codegen.</span>
         <span class="n">parent_chain</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">value</span><span class="p">,</span> <span class="s2">&quot;_qd_arg_chain&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">parent_chain</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>

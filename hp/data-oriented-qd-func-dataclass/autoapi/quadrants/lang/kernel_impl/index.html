@@ -519,14 +519,14 @@ Quadrants kernels can be defined inside a class.</p>
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>cls</strong> (<em>Class</em>) – the class to be decorated.</p></li>
-<li><p><strong>stable_members</strong> (<em>bool</em>) – <p>launch-context perf hint — if <code class="docutils literal notranslate"><span class="pre">True</span></code>, declares that the class’s ndarray-typed members
+<li><p><strong>stable_members</strong> (<em>bool</em>) – <p>launch-context perf hint - if <code class="docutils literal notranslate"><span class="pre">True</span></code>, declares that the class’s ndarray-typed members
 are allocated once and never reassigned between kernel calls. Quadrants will skip the per-call ndarray-
 reference walk that <code class="docutils literal notranslate"><span class="pre">Kernel.launch_kernel</span></code> uses to detect ndarray reassignment on mutable containers
 (~1-2 us/call savings on Genesis-style containers with dozens of ndarray attrs). Reassigning a member on
-a <code class="docutils literal notranslate"><span class="pre">stable_members</span></code> class is undefined behaviour — the previously-compiled kernel will be reused even if
+a <code class="docutils literal notranslate"><span class="pre">stable_members</span></code> class is undefined behaviour - the previously-compiled kernel will be reused even if
 the new ndarray has different dtype/ndim/layout. May also be set as a class-level attribute
 <code class="docutils literal notranslate"><span class="pre">_qd_stable_members</span> <span class="pre">=</span> <span class="pre">True</span></code> (equivalent).</p>
-<p>Note: this flag is <em>purely</em> a launch-time perf hint. It no longer affects fastcache argument hashing — the
+<p>Note: this flag is <em>purely</em> a launch-time perf hint. It no longer affects fastcache argument hashing - the
 fastcache key is derived from pruning info (the set of flat names the kernel actually reads), and
 unrecognised types at kernel-read paths fail fastcache loudly with a one-shot <code class="docutils literal notranslate"><span class="pre">[UNKNOWN_TYPE]</span></code> +
 <code class="docutils literal notranslate"><span class="pre">[INVALID_FUNC]</span></code> diagnostic (no qualname fallback). See <code class="docutils literal notranslate"><span class="pre">docs/source/user_guide/fastcache.md</span></code>.</p>
