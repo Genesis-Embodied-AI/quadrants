@@ -414,9 +414,9 @@ def test_args_hasher_frozen_dataclass_failure_does_not_poison_narrower_walk() ->
     # Kernel B: narrower pruning set excludes the failing field. Same instance - must NOT inherit A's failure.
     paths_b = {"__qd_state__qd_y"}
     h_b = args_hasher.hash_args(False, [state], [arg_meta], pruning_paths=paths_b)
-    assert not isinstance(h_b, FastcacheSkip), (
-        f"kernel B should be fast-cacheable (its pruning set skips the unsupported field); got {h_b!r}"
-    )
+    assert not isinstance(
+        h_b, FastcacheSkip
+    ), f"kernel B should be fast-cacheable (its pruning set skips the unsupported field); got {h_b!r}"
     assert isinstance(h_b, str) and len(h_b) > 0
 
     # And unpruned walks are unaffected: no ``pruning_paths`` -> walk everything -> fail (same as A).
