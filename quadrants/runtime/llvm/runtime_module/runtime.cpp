@@ -1096,7 +1096,6 @@ i32 amdgpu_cross_half_shuffle_i32(i32 target_lane, i32 value) {
   // cross-SIMD case via the ``swapped`` payload. On CDNA the wave is one SIMD64 so both reads return the same value
   // and the select is a no-op; we don't try to optimize that out because the dead read is cheap (LLVM CSE may fold
   // it anyway).
-  i32 self_lane = amdgpu_lane_id();
   i32 swapped = amdgpu_permlane64(value);
   i32 byte = (target_lane & 31) * 4;
   // ``llvm.amdgcn.ds.bpermute`` is the real hardware ``ds_bpermute_b32`` -- but if LLVM's uniformity analysis decides
@@ -1122,9 +1121,16 @@ i32 amdgpu_cross_half_shuffle_i32(i32 target_lane, i32 value) {
 #if defined(ARCH_amdgpu) && (defined(__x86_64__) || defined(__i386__) || defined(__amdgcn__))
   __asm__ volatile("" : "+v"(byte));
 #endif
+  // ``byte`` masks the lane index to 5 bits, so ``from_self_half`` always reads the low SIMD32
+  // (lanes 0..31) and ``from_other_half`` (via the ``permlane64`` swap) always reads the high SIMD32
+  // (lanes 32..63) -- regardless of which half the executing lane sits in. The correct payload is
+  // therefore selected purely by which half the *target* lane lives in (``target_lane & 32``); it must
+  // not depend on the executing lane. The previous ``(target_lane ^ self_lane) & 32`` was wrong for
+  // top-half lanes: for a same-half target it wrongly picked the other-half read, so e.g.
+  // ``shuffle_up`` on lanes 32..63 returned lane ``target_lane - 32`` instead of ``target_lane``.
   i32 from_self_half = amdgpu_ds_bpermute(byte, value);
   i32 from_other_half = amdgpu_ds_bpermute(byte, swapped);
-  return ((target_lane ^ self_lane) & 32) ? from_other_half : from_self_half;
+  return (target_lane & 32) ? from_other_half : from_self_half;
 }
 
 i32 amdgpu_shuffle_i32(i32 index, i32 value) {
