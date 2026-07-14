@@ -1,0 +1,858 @@
+
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="../" >
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Matrix and Vector &#8212; Quadrants 1.1.2 documentation</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "";
+  </script>
+  <!--
+    this give us a css class that will be invisible only if js is disabled
+  -->
+  <noscript>
+    <style>
+      .pst-js-only { display: none !important; }
+
+    </style>
+  </noscript>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="../_static/styles/theme.css?digest=a95f357e85573c9b56d5" rel="stylesheet" />
+<link href="../_static/styles/pydata-sphinx-theme.css?digest=a95f357e85573c9b56d5" rel="stylesheet" />
+
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=8f2a1f02" />
+    <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../_static/togglebutton.css?v=9c3e77be" />
+    <link rel="stylesheet" type="text/css" href="../_static/graphviz.css?v=4ae1632d" />
+    <link rel="stylesheet" type="text/css" href="../_static/sphinx-design.min.css?v=95c83b7e" />
+    <link rel="stylesheet" type="text/css" href="../_static/css/custom.css" />
+  
+  <!-- So that users can add custom icons -->
+  <script defer src="../_static/scripts/fontawesome.js?digest=a95f357e85573c9b56d5"></script>
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5" />
+<link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5" />
+
+    <script src="../_static/documentation_options.js?v=6f037312"></script>
+    <script src="../_static/doctools.js?v=9bcbadda"></script>
+    <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../_static/copybutton.js?v=f281be69"></script>
+    <script>let toggleHintShow = 'Click to show';</script>
+    <script>let toggleHintHide = 'Click to hide';</script>
+    <script>let toggleOpenOnPrint = 'true';</script>
+    <script src="../_static/togglebutton.js?v=b8b12719"></script>
+    <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
+    <script src="../_static/design-tabs.js?v=f930bc37"></script>
+    <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'user_guide/matrix_vector';</script>
+    <script>DOCUMENTATION_OPTIONS.search_as_you_type = false;</script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Per-thread matrix and vector operations" href="matrix_vector_per_thread.html" />
+    <link rel="prev" title="Scalar tensors" href="scalar_tensors.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="docsearch:language" content="en"/>
+  <meta name="docsearch:version" content="1.1.2" />
+  
+    
+    <script src="../_static/searchtools.js"></script>
+    <script src="../_static/language_data.js"></script>
+    <script src="../searchindex.js"></script>
+  
+  </head>
+  <body data-default-mode="">
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+  
+  
+  
+  
+  <dialog id="pst-search-dialog">
+    
+<form class="bd-search d-flex align-items-center"
+      action="../search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         placeholder="Search the docs ..."
+         aria-label="Search the docs ..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form>
+  </dialog>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header id="pst-header" class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+<div class="bd-header__inner bd-page-width">
+  <button class="pst-navbar-icon sidebar-toggle primary-toggle" aria-label="Site navigation">
+    <span class="fa-solid fa-bars"></span>
+  </button>
+  
+  
+  <div class="col-lg-3 navbar-header-items__start">
+    
+      <div class="navbar-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="../index.html">
+  
+  
+  
+  
+  
+  
+    <p class="title logo__title">Quadrants 1.1.2 documentation</p>
+  
+</a></div>
+    
+  </div>
+  
+  <div class="col-lg-9 navbar-header-items">
+    
+    <div class="me-auto navbar-header-items__center">
+      
+        <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item current active">
+  <a class="nav-link nav-internal" href="index.html">
+    User guide
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../autoapi/index.html">
+    API Reference
+  </a>
+</li>
+
+  </ul>
+</nav></div>
+      
+    </div>
+    
+    
+    <div class="navbar-header-items__end">
+      
+        <div class="navbar-item navbar-persistent--container">
+          
+
+<button class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+        </div>
+      
+      
+        <div class="navbar-item">
+
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg fa-fw" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg fa-fw" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg fa-fw" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg fa-fw me-1"></i>System Settings</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg fa-fw me-1"></i>Light</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg fa-fw me-1"></i>Dark</button></li>
+  </ul>
+</div></div>
+      
+    </div>
+    
+  </div>
+  
+  
+    <div class="navbar-persistent--mobile">
+
+<button class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+    </div>
+  
+
+  
+    <button class="pst-navbar-icon sidebar-toggle secondary-toggle" aria-label="On this page">
+      <span class="fa-solid fa-outdent"></span>
+    </button>
+  
+</div>
+
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+      <dialog id="pst-primary-sidebar-modal"></dialog>
+      <div id="pst-primary-sidebar" class="bd-sidebar-primary bd-sidebar">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+      <div class="sidebar-header-items__center">
+        
+          
+          
+            <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item current active">
+  <a class="nav-link nav-internal" href="index.html">
+    User guide
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../autoapi/index.html">
+    API Reference
+  </a>
+</li>
+
+  </ul>
+</nav></div>
+          
+        
+      </div>
+    
+    
+    
+      <div class="sidebar-header-items__end">
+        
+          <div class="navbar-item">
+
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg fa-fw" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg fa-fw" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg fa-fw" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg fa-fw me-1"></i>System Settings</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg fa-fw me-1"></i>Light</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg fa-fw me-1"></i>Dark</button></li>
+  </ul>
+</div></div>
+        
+      </div>
+    
+  </div>
+  
+    <div class="sidebar-primary-items__start sidebar-primary__section">
+        <div class="sidebar-primary-item pst-sidebar-collapse"><button id="pst-collapse-sidebar-button" aria-expanded="true" aria-controls="pst-primary-sidebar"><svg class="pst-icon svg-inline--fa" role="img" aria-hidden="true" focusable="false" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
+    <path fill="currentColor" d="M3 15.5C2.36232 15.5 1.74874 15.2564 1.28478 14.8189C0.820828 14.3815 0.541576 13.7832 0.504167 13.1467L0.5 13L0.5 3C0.499965 2.36232 0.743605 1.74874 1.18107 1.28478C1.61854 0.820828 2.21676 0.541576 2.85333 0.504167L3 0.5L13 0.5C13.6377 0.499965 14.2513 0.743605 14.7152 1.18107C15.1792 1.61854 15.4584 2.21676 15.4958 2.85333L15.5 3L15.5 13C15.5 13.6377 15.2564 14.2513 14.8189 14.7152C14.3815 15.1792 13.7832 15.4584 13.1467 15.4958L13 15.5L3 15.5ZM3 13.8333L10.5 13.8333L10.5 2.16667L3 2.16667C2.79589 2.16669 2.59889 2.24163 2.44636 2.37726C2.29383 2.5129 2.19638 2.69979 2.1725 2.9025L2.16667 3L2.16667 13C2.16669 13.2041 2.24163 13.4011 2.37726 13.5536C2.5129 13.7062 2.69979 13.8036 2.9025 13.8275L3 13.8333ZM6.65583 10.325L6.5775 10.2558L4.91083 8.58917C4.76735 8.44567 4.68116 8.25476 4.66843 8.05223C4.65569 7.84971 4.71729 7.6495 4.84167 7.48917L4.91083 7.41083L6.5775 5.74417C6.72747 5.59471 6.9287 5.50794 7.14032 5.50148C7.35194 5.49502 7.55809 5.56935 7.7169 5.70937C7.8757 5.8494 7.97525 6.04463 7.99533 6.25539C8.01541 6.46616 7.95451 6.67667 7.825 6.84417L7.75583 6.9225L6.67917 8L7.75583 9.0775C7.89931 9.22099 7.98551 9.41191 7.99824 9.61443C8.01097 9.81695 7.94938 10.0172 7.825 10.1775L7.75583 10.2558C7.61234 10.3993 7.42142 10.4855 7.2189 10.4982C7.01638 10.511 6.81617 10.4494 6.65583 10.325Z"/>
+  </svg>
+  <span class="pst-collapse-sidebar-label">Collapse Sidebar</span>
+  <span class="pst-expand-sidebar-label">Expand Sidebar</span>
+</button></div>
+        <div class="sidebar-primary-item">
+
+<nav class="bd-docs-nav bd-links"
+     aria-label="Section Navigation">
+  <p class="bd-links__title" role="heading" aria-level="1">Section Navigation</p>
+  <div class="bd-toc-item navbar-nav"><p aria-level="2" class="caption" role="heading"><span class="caption-text">Getting started</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="getting_started.html">Getting started</a></li>
+<li class="toctree-l1"><a class="reference internal" href="supported_systems.html">Supported systems</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Core concepts</span></p>
+<ul class="current nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="tensor_types.html">Tensor types</a></li>
+<li class="toctree-l1"><a class="reference internal" href="scalar_tensors.html">Scalar tensors</a></li>
+<li class="toctree-l1 current active"><a class="current reference internal" href="#">Matrix and Vector</a></li>
+
+<li class="toctree-l1"><a class="reference internal" href="matrix_vector_per_thread.html">Per-thread matrix and vector operations</a></li>
+<li class="toctree-l1"><a class="reference internal" href="linalg_per_thread.html">Per-thread linear algebra</a></li>
+<li class="toctree-l1"><a class="reference internal" href="tensor.html">Tensors</a></li>
+<li class="toctree-l1"><a class="reference internal" href="compound_types.html">Compound types</a></li>
+<li class="toctree-l1"><a class="reference internal" href="buffer_view.html">BufferView</a></li>
+<li class="toctree-l1"><a class="reference internal" href="static.html">qd.static</a></li>
+<li class="toctree-l1"><a class="reference internal" href="sub_functions.html">Sub-functions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="parallelization.html">Parallelization</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Integration</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="interop.html">Numpy and Torch interop</a></li>
+<li class="toctree-l1"><a class="reference internal" href="metal_shared_queue.html">Shared Metal command queue (PyTorch MPS)</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Autodiff</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="autodiff.html">Automatic differentiation</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">SIMT primitives</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="atomics.html">Atomics</a></li>
+<li class="toctree-l1"><a class="reference internal" href="block.html">Block primitives</a></li>
+<li class="toctree-l1"><a class="reference internal" href="grid.html">Grid primitives</a></li>
+<li class="toctree-l1"><a class="reference internal" href="math.html">Math</a></li>
+<li class="toctree-l1"><a class="reference internal" href="subgroup.html">Subgroup primitives</a></li>
+<li class="toctree-l1"><a class="reference internal" href="tile.html">Register-resident tiles: <code class="docutils literal notranslate"><span class="pre">Tile16x16</span></code> and <code class="docutils literal notranslate"><span class="pre">Tile32x32</span></code></a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Algorithms</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="algorithms.html">Algorithms</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Performance</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="fastcache.html">Fastcache</a></li>
+<li class="toctree-l1"><a class="reference internal" href="graph.html">Graph</a></li>
+<li class="toctree-l1"><a class="reference internal" href="streams.html">Streams</a></li>
+<li class="toctree-l1"><a class="reference internal" href="perf_dispatch.html">Performance Dispatch</a></li>
+<li class="toctree-l1"><a class="reference internal" href="init_options.html">qd.init options</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Testing</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="unit_testing.html">Unit testing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="kernel_coverage.html">Kernel code coverage</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Reference</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="unsupported_python.html">Python features in kernel scope</a></li>
+<li class="toctree-l1"><a class="reference internal" href="python_backend.html">Python backend</a></li>
+<li class="toctree-l1"><a class="reference internal" href="debug.html">Debug mode</a></li>
+<li class="toctree-l1"><a class="reference internal" href="quirks.html">Quirks</a></li>
+<li class="toctree-l1"><a class="reference internal" href="troubleshooting.html">Troubleshooting</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Advanced</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="optimization_passes.html">Optimization passes</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Contributing</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="contributing.html">Advanced: Contributing to quadrants</a></li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Internal</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="building_cudagraph_conditional_fatbin.html">Building the CUDA graph conditional fatbin</a></li>
+</ul>
+</div>
+</nav></div>
+    </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+      <div class="sidebar-primary-item">
+<div id="ethical-ad-placement"
+      class="flat"
+      data-ea-publisher="readthedocs"
+      data-ea-type="readthedocs-sidebar"
+      data-ea-manual="true">
+</div></div>
+  </div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item">
+
+<nav aria-label="Breadcrumb" class="d-print-none">
+  <ul class="bd-breadcrumbs">
+    
+    <li class="breadcrumb-item breadcrumb-home">
+      <a href="../index.html" class="nav-link" aria-label="Home">
+        <i class="fa-solid fa-home"></i>
+      </a>
+    </li>
+    
+    <li class="breadcrumb-item"><a href="index.html" class="nav-link">User guide</a></li>
+    
+    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">Matrix and Vector</span></li>
+  </ul>
+</nav>
+</div>
+      
+    </div>
+  
+  
+</div>
+</div>
+              
+              
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <section class="tex2jax_ignore mathjax_ignore" id="matrix-and-vector">
+<h1>Matrix and Vector<a class="headerlink" href="#matrix-and-vector" title="Link to this heading">#</a></h1>
+<p>Quadrants provides <code class="docutils literal notranslate"><span class="pre">qd.Matrix</span></code> and <code class="docutils literal notranslate"><span class="pre">qd.Vector</span></code> types for small, fixed-size linear algebra inside kernels. These are stored in GPU registers and are unrolled at compile time, so they are fast — but should be kept small for best performance (more than 144 elements total — i.e. larger than 12×12 — will trigger a warning).</p>
+<p><code class="docutils literal notranslate"><span class="pre">qd.Vector</span></code> is a special case of <code class="docutils literal notranslate"><span class="pre">qd.Matrix</span></code> with one column.</p>
+<section id="creating-vectors-and-matrices-in-kernels">
+<h2>Creating vectors and matrices in kernels<a class="headerlink" href="#creating-vectors-and-matrices-in-kernels" title="Link to this heading">#</a></h2>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">compute</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="n">v</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">Vector</span><span class="p">([</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">])</span>
+    <span class="n">m</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">Matrix</span><span class="p">([[</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">],</span> <span class="p">[</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">]])</span>
+
+    <span class="c1"># Access elements</span>
+    <span class="n">x</span> <span class="o">=</span> <span class="n">v</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>          <span class="c1"># 1.0</span>
+    <span class="n">val</span> <span class="o">=</span> <span class="n">m</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">]</span>     <span class="c1"># 0.0</span>
+</pre></div>
+</div>
+</section>
+<section id="vector-and-matrix-fields">
+<h2>Vector and matrix fields<a class="headerlink" href="#vector-and-matrix-fields" title="Link to this heading">#</a></h2>
+<p>To store many vectors or matrices, use vector/matrix fields:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">quadrants</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">qd</span>
+
+<span class="n">qd</span><span class="o">.</span><span class="n">init</span><span class="p">(</span><span class="n">arch</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">gpu</span><span class="p">)</span>
+
+<span class="c1"># first define the type</span>
+<span class="n">vec3f</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">vector</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">)</span>
+
+<span class="c1"># A field of 100 3D vectors</span>
+<span class="n">positions</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">vec3f</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">100</span><span class="p">,))</span>
+
+<span class="c1"># or for ndarray</span>
+<span class="n">positions</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">vec3f</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">100</span><span class="p">,))</span>
+
+<span class="c1"># first define the type</span>
+<span class="n">mat3f</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">matrix</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">)</span>
+
+<span class="c1"># A field of 100 3x3 matrices</span>
+<span class="n">rotations</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">mat3f</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">100</span><span class="p">,))</span>
+
+<span class="c1"># or for ndarray</span>
+<span class="n">rotations</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">mat3f</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">100</span><span class="p">,))</span>
+
+<span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">initialize</span><span class="p">(</span><span class="n">pos</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">Template</span><span class="p">,</span> <span class="n">rot</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">Template</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">100</span><span class="p">):</span>
+        <span class="n">pos</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">Vector</span><span class="p">([</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">])</span>
+        <span class="n">rot</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">Matrix</span><span class="o">.</span><span class="n">diag</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">)</span>  <span class="c1"># identity matrix</span>
+
+<span class="n">initialize</span><span class="p">(</span><span class="n">positions</span><span class="p">,</span> <span class="n">rotations</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="vector-and-matrix-ndarrays">
+<h2>Vector and matrix ndarrays<a class="headerlink" href="#vector-and-matrix-ndarrays" title="Link to this heading">#</a></h2>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># An ndarray of 50 3D vectors</span>
+<span class="n">vel</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">Vector</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">50</span><span class="p">,))</span>
+
+<span class="c1"># An ndarray of 50 4x4 matrices</span>
+<span class="n">transforms</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">Matrix</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="mi">4</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">50</span><span class="p">,))</span>
+</pre></div>
+</div>
+</section>
+<section id="type-annotations">
+<h2>Type annotations<a class="headerlink" href="#type-annotations" title="Link to this heading">#</a></h2>
+<p>For kernel and <code class="docutils literal notranslate"><span class="pre">&#64;qd.func</span></code> parameters, use <code class="docutils literal notranslate"><span class="pre">qd.types.vector</span></code> and <code class="docutils literal notranslate"><span class="pre">qd.types.matrix</span></code>:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">vec3f</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">vector</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">)</span>
+<span class="n">mat3f</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">matrix</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">)</span>
+
+<span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">transform</span><span class="p">(</span>
+    <span class="n">positions</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">NDArray</span><span class="p">[</span><span class="n">vec3f</span><span class="p">,</span> <span class="mi">1</span><span class="p">],</span>
+    <span class="n">matrices</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">NDArray</span><span class="p">[</span><span class="n">mat3f</span><span class="p">,</span> <span class="mi">1</span><span class="p">],</span>
+    <span class="n">out</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">NDArray</span><span class="p">[</span><span class="n">vec3f</span><span class="p">,</span> <span class="mi">1</span><span class="p">],</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">100</span><span class="p">):</span>
+        <span class="n">out</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">matrices</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">@</span> <span class="n">positions</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+</pre></div>
+</div>
+</section>
+<section id="operations">
+<h2>Operations<a class="headerlink" href="#operations" title="Link to this heading">#</a></h2>
+<p>Element-wise arithmetic, dot / cross / outer products, norms, transpose / determinant / trace / inverse, Frobenius inner product, and matrix-vector / matrix-matrix multiply all live on a separate page since they all run <strong>per thread, in registers, with no cross-thread cooperation</strong>. See <a class="reference internal" href="matrix_vector_per_thread.html"><span class="std std-doc">matrix_vector_per_thread</span></a>.</p>
+<p>For per-thread <em>numerical</em> algorithms (SVD, symmetric eigendecomposition, polar decomposition, linear solve) see <a class="reference internal" href="linalg_per_thread.html"><span class="std std-doc">linalg_per_thread</span></a>.</p>
+<p>For cross-thread / sparse linear algebra (CG, sparse direct solvers) see <code class="docutils literal notranslate"><span class="pre">qd.linalg.*</span></code> (separate, not yet covered in user guide).</p>
+</section>
+<section id="size-limit">
+<h2>Size limit<a class="headerlink" href="#size-limit" title="Link to this heading">#</a></h2>
+<p>Matrices and vectors are unrolled into scalar registers at compile time. Using more than 144 elements (i.e. larger than 12×12) will trigger a warning and may cause very long compile times. For larger matrices, use a field instead:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">large</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">64</span><span class="p">,</span> <span class="mi">64</span><span class="p">))</span>
+</pre></div>
+</div>
+<p>The 144-element threshold is set by the largest size officially supported by the per-thread linalg APIs (<code class="docutils literal notranslate"><span class="pre">Matrix.inverse</span></code> up to 12×12; <code class="docutils literal notranslate"><span class="pre">qd.sym_eig</span></code> and <code class="docutils literal notranslate"><span class="pre">qd.make_spd</span></code> cap lower, at 6×6) — those internal constructions stay below the warning threshold.</p>
+</section>
+<section id="storage-layout-packed-vs-unpacked-vectors">
+<h2>Storage layout: packed vs unpacked vectors<a class="headerlink" href="#storage-layout-packed-vs-unpacked-vectors" title="Link to this heading">#</a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">qd.types.vector(N,</span> <span class="pre">dtype)</span></code> accepts an optional <code class="docutils literal notranslate"><span class="pre">unpacked:</span> <span class="pre">bool</span> <span class="pre">=</span> <span class="pre">False</span></code> kwarg that controls how the vector is laid out in per-thread memory when used as a <code class="docutils literal notranslate"><span class="pre">&#64;qd.dataclass</span></code> field. The kwarg does not affect the <em>value type</em> — the field still holds a vector — it only affects the storage layout.</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">unpacked=False</span></code> (default): the field is stored as a single group of <code class="docutils literal notranslate"><span class="pre">N</span></code> scalars. The compiler keeps the whole vector in registers, or, if there is insufficient register storage, spills the whole vector to “local” memory (which despite the name lives in off-chip DRAM and is slow). It is all-or-nothing per vector.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">unpacked=True</span></code>: the field is stored as <code class="docutils literal notranslate"><span class="pre">N</span></code> independent scalar slots. The compiler can decide per slot whether to keep it in a register or spill it. Under register pressure this can be the difference between “most of the vector still lives in registers” and “the entire vector is in DRAM”.</p></li>
+</ul>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">dataclass</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">Tile</span><span class="p">:</span>
+    <span class="n">r</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">vector</span><span class="p">(</span><span class="mi">32</span><span class="p">,</span> <span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">unpacked</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>The flag is consumed at class-definition time. <code class="docutils literal notranslate"><span class="pre">&#64;qd.dataclass</span></code> expands the field into <code class="docutils literal notranslate"><span class="pre">N</span></code> synthetic scalar members <code class="docutils literal notranslate"><span class="pre">_r0.._r{N-1}</span></code>, and each <code class="docutils literal notranslate"><span class="pre">obj.r[i]</span></code> (for python-int / <code class="docutils literal notranslate"><span class="pre">qd.static</span></code>-resolved <code class="docutils literal notranslate"><span class="pre">i</span></code>) is lowered to a direct reference to the i-th synthetic member. The generated LLVM IR / PTX is byte-identical to declaring <code class="docutils literal notranslate"><span class="pre">N</span></code> named scalar fields by hand (<code class="docutils literal notranslate"><span class="pre">r0:</span> <span class="pre">qd.f32</span></code>, <code class="docutils literal notranslate"><span class="pre">r1:</span> <span class="pre">qd.f32</span></code>, …), but the source keeps the indexed read/write syntax.</p>
+<section id="what-works-on-each-layout">
+<h3>What works on each layout<a class="headerlink" href="#what-works-on-each-layout" title="Link to this heading">#</a></h3>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>operation / property</p></th>
+<th class="head"><p>packed</p></th>
+<th class="head"><p>unpacked</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">obj.r[i]</span></code> with python-int / <code class="docutils literal notranslate"><span class="pre">qd.static</span></code>-resolved <code class="docutils literal notranslate"><span class="pre">i</span></code></p></td>
+<td><p>yes</p></td>
+<td><p>yes</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">obj.r[k]</span></code> with runtime <code class="docutils literal notranslate"><span class="pre">k</span></code></p></td>
+<td><p>yes</p></td>
+<td><p>no</p></td>
+</tr>
+<tr class="row-even"><td><p>vector arithmetic / reductions on <code class="docutils literal notranslate"><span class="pre">obj.r</span></code> (<code class="docutils literal notranslate"><span class="pre">obj.r</span> <span class="pre">+</span> <span class="pre">other</span></code>, <code class="docutils literal notranslate"><span class="pre">obj.r</span> <span class="pre">*</span> <span class="pre">2</span></code>, <code class="docutils literal notranslate"><span class="pre">obj.r.norm()</span></code>, <code class="docutils literal notranslate"><span class="pre">obj.r.dot(...)</span></code>, …)</p></td>
+<td><p>yes</p></td>
+<td><p>no</p></td>
+</tr>
+<tr class="row-odd"><td><p>swizzle on <code class="docutils literal notranslate"><span class="pre">obj.r</span></code> (<code class="docutils literal notranslate"><span class="pre">obj.r.xy</span></code>, …)</p></td>
+<td><p>yes</p></td>
+<td><p>no</p></td>
+</tr>
+<tr class="row-even"><td><p>pass <code class="docutils literal notranslate"><span class="pre">obj.r</span></code> across a <code class="docutils literal notranslate"><span class="pre">&#64;qd.func</span></code> boundary</p></td>
+<td><p>yes</p></td>
+<td><p>no</p></td>
+</tr>
+<tr class="row-odd"><td><p>copy <code class="docutils literal notranslate"><span class="pre">obj.r</span></code> into shared memory as a unit</p></td>
+<td><p>yes</p></td>
+<td><p>no</p></td>
+</tr>
+<tr class="row-even"><td><p>use the type as a kernel-arg / <code class="docutils literal notranslate"><span class="pre">&#64;qd.func</span></code> parameter type</p></td>
+<td><p>yes</p></td>
+<td><p>raises <code class="docutils literal notranslate"><span class="pre">QuadrantsSyntaxError</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>instantiate as a kernel-local value (<code class="docutils literal notranslate"><span class="pre">T(...)</span></code>), <code class="docutils literal notranslate"><span class="pre">T.field(...)</span></code>, <code class="docutils literal notranslate"><span class="pre">T.ndarray(...)</span></code></p></td>
+<td><p>yes</p></td>
+<td><p>raises <code class="docutils literal notranslate"><span class="pre">QuadrantsSyntaxError</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><strong>compile-time speed</strong></p></td>
+<td><p>faster (one storage slot per field)</p></td>
+<td><p>slower (<code class="docutils literal notranslate"><span class="pre">N</span></code> synthetic members per field, more IR to process)</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>runtime speed</strong></p></td>
+<td><p>whole vector lives in registers, or spills to local memory as a unit if the register budget is exceeded</p></td>
+<td><p>same as packed when there’s no register pressure; faster than packed under pressure (only the slots that don’t fit spill)</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="when-to-choose-unpacked-true-vs-unpacked-false">
+<h3>When to choose <code class="docutils literal notranslate"><span class="pre">unpacked=True</span></code> vs <code class="docutils literal notranslate"><span class="pre">unpacked=False</span></code><a class="headerlink" href="#when-to-choose-unpacked-true-vs-unpacked-false" title="Link to this heading">#</a></h3>
+<p>Generally, the trade-off is compile time vs runtime, assuming you don’t need any of the plethora of functionalities that packed offers you (see the table above). The target use-case that unpacked was built for was holding a tile of size 16x16 or 32x32, in a warp of threads, where each thread in the warp holds a single row of 16 or 32 values. In this case, the size of each row is pre-determined (either 16 or 32, templated), which meets one pre-requisite of using unpacked. We want all values to ideally be stored in registers. However, when we start holding multiple 32x32 tiles in a warp, we found that we were spilling entire 32-length vectors into local memory, causing very noticeable slowdowns. Migrating to use hand-coded scalars, instead of vectors, was faster, but painful to write, and very slow to compile. Using unpacked vectors is as fast as hand-coded scalars, but faster to compile.</p>
+<p>In such a scenario, we prefer to use for loops, to avoid having to unroll for-loops by hand. But we can use static for loops, satisfying the condition of only ever indexing with python int or qd.static resolved values. i.e. something like:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">qd</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="mi">32</span><span class="p">)):</span>
+        <span class="c1"># Do something with tile.r[i], where tile is the qd.dataclass, and tile.r is the unpacked vector.</span>
+</pre></div>
+</div>
+<p>We can then see the runtime/compile time trade-off because:</p>
+<ul class="simple">
+<li><p>static unrolled loops increase compile time</p></li>
+<li><p>using unpacked vectors increases compile time, compared to packed vectors</p></li>
+</ul>
+<p>However:</p>
+<ul class="simple">
+<li><p>static unrolled loops, and unpacked vectors run much faster at runtime</p></li>
+<li><p>the compile time of unpacked vectors is still much faster than hand coded scalars</p></li>
+</ul>
+<p>The issue with hand coded scalars is that you either have to literally hand-code everything, or you end up writing convenience functions like:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">get_r</span><span class="p">(</span><span class="n">i</span><span class="p">):</span>
+    <span class="k">if</span> <span class="n">i</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">tile</span><span class="o">.</span><span class="n">r0</span>
+    <span class="k">if</span> <span class="n">i</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">tile</span><span class="o">.</span><span class="n">r1</span>
+    <span class="o">...</span>
+</pre></div>
+</div>
+<p>Such functions cause heavy IR bloat, and slow down runtime considerably, and/or slow down compile time too, depending on exact implementation choices made.</p>
+<p>Using unpacked vector gives:</p>
+<ul class="simple">
+<li><p>compact code =&gt; easy to maintain</p></li>
+<li><p>fast runtime code</p></li>
+<li><p>fast compile time (relative to certain hand-coded approaches).</p></li>
+</ul>
+</section>
+<section id="constraints">
+<h3>Constraints<a class="headerlink" href="#constraints" title="Link to this heading">#</a></h3>
+<ul class="simple">
+<li><p><strong>Only valid as a <code class="docutils literal notranslate"><span class="pre">&#64;qd.dataclass</span></code> field annotation.</strong> The <code class="docutils literal notranslate"><span class="pre">unpacked=True</span></code> flag is consumed by <code class="docutils literal notranslate"><span class="pre">&#64;qd.dataclass</span></code>. Attempting to instantiate the type as a value (<code class="docutils literal notranslate"><span class="pre">T(...)</span></code>, <code class="docutils literal notranslate"><span class="pre">T.field(...)</span></code>, <code class="docutils literal notranslate"><span class="pre">T.ndarray(...)</span></code>), use it as a kernel-arg / <code class="docutils literal notranslate"><span class="pre">&#64;qd.func</span></code> parameter type, or apply it on a <code class="docutils literal notranslate"><span class="pre">&#64;dataclasses.dataclass</span></code> raises <code class="docutils literal notranslate"><span class="pre">QuadrantsSyntaxError</span></code>. If you need a value type, drop <code class="docutils literal notranslate"><span class="pre">unpacked=True</span></code>.</p></li>
+<li><p><strong>Indexed access only.</strong> The supported pattern is <code class="docutils literal notranslate"><span class="pre">obj.r[i]</span></code> for python-int / <code class="docutils literal notranslate"><span class="pre">qd.static</span></code>-resolved <code class="docutils literal notranslate"><span class="pre">i</span></code>. Operations that treat <code class="docutils literal notranslate"><span class="pre">obj.r</span></code> itself as a vector value — vector arithmetic, reductions, swizzle, runtime indexing, passing the field across a <code class="docutils literal notranslate"><span class="pre">&#64;qd.func</span></code> boundary, copying into shared memory as a unit — are not supported on an unpacked field today, even though the value type is a vector. If you need any of those, use plain <code class="docutils literal notranslate"><span class="pre">qd.types.vector(N,</span> <span class="pre">dtype)</span></code>.</p></li>
+<li><p><strong>Synthetic field-name collisions are rejected.</strong> The expansion uses the convention <code class="docutils literal notranslate"><span class="pre">_{group_name}{i}</span></code> (e.g. <code class="docutils literal notranslate"><span class="pre">_r0</span></code>, <code class="docutils literal notranslate"><span class="pre">_r1</span></code>, …, <code class="docutils literal notranslate"><span class="pre">_r31</span></code>). Declaring your own field with one of those names raises <code class="docutils literal notranslate"><span class="pre">QuadrantsSyntaxError</span></code> at class-decoration time.</p></li>
+</ul>
+</section>
+<section id="mixing-with-other-fields">
+<h3>Mixing with other fields<a class="headerlink" href="#mixing-with-other-fields" title="Link to this heading">#</a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">unpacked=True</span></code> fields compose with anything else allowed on <code class="docutils literal notranslate"><span class="pre">&#64;qd.dataclass</span></code>: scalars, plain vectors, matrices, other unpacked vectors, nested dataclasses.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">dataclass</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">TwoTiles</span><span class="p">:</span>
+    <span class="n">a</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">vector</span><span class="p">(</span><span class="mi">32</span><span class="p">,</span> <span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">unpacked</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="n">b</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">vector</span><span class="p">(</span><span class="mi">32</span><span class="p">,</span> <span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">unpacked</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="n">scale</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">f32</span>
+</pre></div>
+</div>
+<p>The generated struct in this example has 65 scalar members (<code class="docutils literal notranslate"><span class="pre">_a0..._a31</span></code>, <code class="docutils literal notranslate"><span class="pre">_b0..._b31</span></code>, <code class="docutils literal notranslate"><span class="pre">scale</span></code>).</p>
+</section>
+</section>
+</section>
+<section class="tex2jax_ignore mathjax_ignore" id="advanced">
+<h1>Advanced<a class="headerlink" href="#advanced" title="Link to this heading">#</a></h1>
+<section id="how-the-packed-vs-unpacked-layout-differs-at-the-llvm-level">
+<h2>How the packed vs unpacked layout differs at the LLVM level<a class="headerlink" href="#how-the-packed-vs-unpacked-layout-differs-at-the-llvm-level" title="Link to this heading">#</a></h2>
+<p>A plain <code class="docutils literal notranslate"><span class="pre">qd.types.vector(N,</span> <span class="pre">dtype)</span></code> field on a <code class="docutils literal notranslate"><span class="pre">&#64;qd.dataclass</span></code> lowers to a single stack-allocated group of <code class="docutils literal notranslate"><span class="pre">N</span></code> packed scalars. LLVM’s optimizer attempts to decompose that group into <code class="docutils literal notranslate"><span class="pre">N</span></code> per-slot register-resident values, but the decomposition is conservative: under high register pressure (e.g. two concurrent 32×32 tiles in a Cholesky + triangular solve) the optimizer bails out and the whole vector spills to local memory as a unit.</p>
+<p><code class="docutils literal notranslate"><span class="pre">qd.types.vector(N,</span> <span class="pre">dtype,</span> <span class="pre">unpacked=True)</span></code> expands to <code class="docutils literal notranslate"><span class="pre">N</span></code> independent scalar stack slots, one per element, so the optimizer can promote each slot to a register independently and the register allocator can spill only the slots it has to. That is exactly what the hand-rolled <code class="docutils literal notranslate"><span class="pre">r0..r{N-1}</span></code> form produces; the generated LLVM IR / PTX matches it byte-for-byte.</p>
+</section>
+<section id="how-to-check-for-spills">
+<h2>How to check for spills<a class="headerlink" href="#how-to-check-for-spills" title="Link to this heading">#</a></h2>
+<p>Quadrants compiles LLVM -&gt; PTX directly via the LLVM NVPTX target — it does not invoke <code class="docutils literal notranslate"><span class="pre">nvcc</span></code> / <code class="docutils literal notranslate"><span class="pre">ptxas</span></code> at compile time, so the familiar <code class="docutils literal notranslate"><span class="pre">ptxas</span> <span class="pre">--verbose</span></code> “X bytes spill stores” output is not produced inline. To get that diagnostic you dump the PTX from Quadrants and run <code class="docutils literal notranslate"><span class="pre">ptxas</span> <span class="pre">-v</span></code> on it yourself. Three workflows, in order of usefulness:</p>
+<section id="dump-ptx-run-ptxas-v-offline">
+<h3>1. Dump PTX, run <code class="docutils literal notranslate"><span class="pre">ptxas</span> <span class="pre">-v</span></code> offline<a class="headerlink" href="#dump-ptx-run-ptxas-v-offline" title="Link to this heading">#</a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">qd</span><span class="o">.</span><span class="n">init</span><span class="p">(</span>
+    <span class="n">arch</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">cuda</span><span class="p">,</span>
+    <span class="n">print_kernel_asm</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>    <span class="c1"># dump PTX to CWD as quadrants_kernel_nvptx_NNNN.ptx</span>
+    <span class="n">offline_cache</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>      <span class="c1"># bypass the kernel cache so the dump fires every time</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+<p>Run your kernel once. For each <code class="docutils literal notranslate"><span class="pre">quadrants_kernel_nvptx_NNNN.ptx</span></code> file in the working directory:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>ptxas<span class="w"> </span>--verbose<span class="w"> </span>-arch<span class="o">=</span>sm_86<span class="w"> </span>quadrants_kernel_nvptx_0007.ptx<span class="w"> </span>-o<span class="w"> </span>/dev/null<span class="w"> </span><span class="m">2</span>&gt;<span class="p">&amp;</span><span class="m">1</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-E<span class="w"> </span><span class="s2">&quot;spill|stack&quot;</span>
+</pre></div>
+</div>
+<p>Sample output:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">ptxas</span> <span class="n">info</span>    <span class="p">:</span> <span class="n">Used</span> <span class="mi">64</span> <span class="n">registers</span><span class="p">,</span> <span class="mi">0</span> <span class="nb">bytes</span> <span class="n">spill</span> <span class="n">stores</span><span class="p">,</span> <span class="mi">0</span> <span class="nb">bytes</span> <span class="n">spill</span> <span class="n">loads</span>
+<span class="n">ptxas</span> <span class="n">info</span>    <span class="p">:</span> <span class="n">Used</span> <span class="mi">96</span> <span class="n">registers</span><span class="p">,</span> <span class="mi">384</span> <span class="nb">bytes</span> <span class="n">stack</span> <span class="n">frame</span><span class="p">,</span> <span class="mi">256</span> <span class="nb">bytes</span> <span class="n">spill</span> <span class="n">stores</span><span class="p">,</span> <span class="mi">128</span> <span class="nb">bytes</span> <span class="n">spill</span> <span class="n">loads</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">spill</span> <span class="pre">stores</span></code> + <code class="docutils literal notranslate"><span class="pre">spill</span> <span class="pre">loads</span></code> &gt; 0 means the register allocator gave up on something. <code class="docutils literal notranslate"><span class="pre">stack</span> <span class="pre">frame</span></code> &gt; 0 indicates local memory in use (which is usually, but not always, spills — <code class="docutils literal notranslate"><span class="pre">qd.simt.shared_array</span></code> and explicitly addressed locals also count).</p>
+<p>Adjust <code class="docutils literal notranslate"><span class="pre">-arch=sm_XX</span></code> to match your GPU (<code class="docutils literal notranslate"><span class="pre">sm_86</span></code> = Ampere consumer / RTX 30, <code class="docutils literal notranslate"><span class="pre">sm_89</span></code> = Ada / RTX 40, <code class="docutils literal notranslate"><span class="pre">sm_90</span></code> = Hopper).</p>
+</section>
+<section id="inspect-the-ptx-directly-for-local-memory-loads-stores">
+<h3>2. Inspect the PTX directly for local-memory loads / stores<a class="headerlink" href="#inspect-the-ptx-directly-for-local-memory-loads-stores" title="Link to this heading">#</a></h3>
+<p>NVIDIA’s PTX assembly uses the mnemonics <code class="docutils literal notranslate"><span class="pre">ld.local</span></code> and <code class="docutils literal notranslate"><span class="pre">st.local</span></code> for loads and stores against per-thread local memory (off-chip DRAM). Any kernel that spills must contain these mnemonics. Grep the dumped PTX for them:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>grep<span class="w"> </span>-nE<span class="w"> </span><span class="s2">&quot;ld\.local|st\.local&quot;</span><span class="w"> </span>quadrants_kernel_nvptx_0007.ptx<span class="w"> </span><span class="p">|</span><span class="w"> </span>head<span class="w"> </span>-20
+</pre></div>
+</div>
+<p>Matches that aren’t from deliberate <code class="docutils literal notranslate"><span class="pre">qd.simt.shared_array</span></code> accesses (those use the shared-memory mnemonics <code class="docutils literal notranslate"><span class="pre">ld.shared</span></code> / <code class="docutils literal notranslate"><span class="pre">st.shared</span></code>, not the <code class="docutils literal notranslate"><span class="pre">.local</span></code> ones) are spill traffic.</p>
+</section>
+<section id="runtime-spill-counters-via-nsight-compute-most-authoritative">
+<h3>3. Runtime spill counters via Nsight Compute (most authoritative)<a class="headerlink" href="#runtime-spill-counters-via-nsight-compute-most-authoritative" title="Link to this heading">#</a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>ncu<span class="w"> </span>--set<span class="w"> </span>full<span class="w"> </span>--section<span class="w"> </span>MemoryWorkloadAnalysis<span class="w"> </span>./your_program
+</pre></div>
+</div>
+<p>Look at the “Memory Workload Analysis -&gt; Local Memory” section. This reports <em>actually executed</em> local-memory loads / stores, which catches issues <code class="docutils literal notranslate"><span class="pre">ptxas</span></code> doesn’t (e.g. driver-stage JIT spills on a different GPU, hot-path-only spills that static analysis misses).</p>
+</section>
+<section id="also-useful-post-optimization-llvm-ir">
+<h3>Also useful: post-optimization LLVM IR<a class="headerlink" href="#also-useful-post-optimization-llvm-ir" title="Link to this heading">#</a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">qd</span><span class="o">.</span><span class="n">init</span><span class="p">(</span><span class="n">arch</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">cuda</span><span class="p">,</span> <span class="n">print_kernel_llvm_ir_optimized</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Dumps <code class="docutils literal notranslate"><span class="pre">quadrants_kernel_cuda_llvm_ir_optimized_NNNN.ll</span></code>. In LLVM IR, every per-function stack allocation appears as an <code class="docutils literal notranslate"><span class="pre">alloca</span></code> instruction. The optimizer tries to promote each <code class="docutils literal notranslate"><span class="pre">alloca</span></code> into a register-resident value; any <code class="docutils literal notranslate"><span class="pre">alloca</span></code> that survives the optimizer into the post-optimization dump is a stack slot it couldn’t promote, and it will become PTX local memory. Grep for them:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>grep<span class="w"> </span>-nE<span class="w"> </span><span class="s2">&quot;alloca&quot;</span><span class="w"> </span>quadrants_kernel_cuda_llvm_ir_optimized_0007.ll<span class="w"> </span><span class="p">|</span><span class="w"> </span>head
+</pre></div>
+</div>
+</section>
+<section id="gotcha-the-offline-cache">
+<h3>Gotcha: the offline cache<a class="headerlink" href="#gotcha-the-offline-cache" title="Link to this heading">#</a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">print_kernel_asm</span></code> and <code class="docutils literal notranslate"><span class="pre">print_kernel_llvm_ir*</span></code> only fire on the first compile per kernel-key. If your kernel is already in the offline cache, the dump won’t be regenerated. Either:</p>
+<ul class="simple">
+<li><p>pass <code class="docutils literal notranslate"><span class="pre">offline_cache=False</span></code> to <code class="docutils literal notranslate"><span class="pre">qd.init</span></code> (cleanest), or</p></li>
+<li><p>delete the cache (path is printed at <code class="docutils literal notranslate"><span class="pre">qd.init</span></code> time; typically under <code class="docutils literal notranslate"><span class="pre">~/.cache/quadrants/</span></code>).</p></li>
+</ul>
+</section>
+</section>
+</section>
+
+
+                </article>
+              
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+    <a class="left-prev"
+       href="scalar_tensors.html"
+       title="previous page">
+      <i class="fa-solid fa-angle-left"></i>
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">previous</p>
+        <p class="prev-next-title">Scalar tensors</p>
+      </div>
+    </a>
+    <a class="right-next"
+       href="matrix_vector_per_thread.html"
+       title="next page">
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">next</p>
+        <p class="prev-next-title">Per-thread matrix and vector operations</p>
+      </div>
+      <i class="fa-solid fa-angle-right"></i>
+    </a>
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+                <dialog id="pst-secondary-sidebar-modal"></dialog>
+                <div id="pst-secondary-sidebar" class="bd-sidebar-secondary bd-toc"><div class="sidebar-secondary-items sidebar-secondary__inner">
+
+
+  <div class="sidebar-secondary-item">
+<div
+    id="pst-page-navigation-heading-2"
+    class="page-toc tocsection onthispage">
+    <i class="fa-solid fa-list"></i> On this page
+  </div>
+  <nav id="pst-page-toc-nav" class="page-toc" aria-labelledby="pst-page-navigation-heading-2">
+    <ul class="pst-show_toc_level nav section-nav flex-column">
+<li class="toc-h1 nav-item toc-entry"><a class="reference internal nav-link" href="#">Matrix and Vector</a><ul class="pst-show_toc_level nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#creating-vectors-and-matrices-in-kernels">Creating vectors and matrices in kernels</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#vector-and-matrix-fields">Vector and matrix fields</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#vector-and-matrix-ndarrays">Vector and matrix ndarrays</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#type-annotations">Type annotations</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#operations">Operations</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#size-limit">Size limit</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#storage-layout-packed-vs-unpacked-vectors">Storage layout: packed vs unpacked vectors</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#what-works-on-each-layout">What works on each layout</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#when-to-choose-unpacked-true-vs-unpacked-false">When to choose <code class="docutils literal notranslate"><span class="pre">unpacked=True</span></code> vs <code class="docutils literal notranslate"><span class="pre">unpacked=False</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#constraints">Constraints</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#mixing-with-other-fields">Mixing with other fields</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toc-h1 nav-item toc-entry"><a class="reference internal nav-link" href="#advanced">Advanced</a><ul class="pst-show_toc_level nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#how-the-packed-vs-unpacked-layout-differs-at-the-llvm-level">How the packed vs unpacked layout differs at the LLVM level</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#how-to-check-for-spills">How to check for spills</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#dump-ptx-run-ptxas-v-offline">1. Dump PTX, run <code class="docutils literal notranslate"><span class="pre">ptxas</span> <span class="pre">-v</span></code> offline</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#inspect-the-ptx-directly-for-local-memory-loads-stores">2. Inspect the PTX directly for local-memory loads / stores</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#runtime-spill-counters-via-nsight-compute-most-authoritative">3. Runtime spill counters via Nsight Compute (most authoritative)</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#also-useful-post-optimization-llvm-ir">Also useful: post-optimization LLVM IR</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#gotcha-the-offline-cache">Gotcha: the offline cache</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+  </nav></div>
+
+  <div class="sidebar-secondary-item">
+
+  <div class="tocsection sourcelink">
+    <a href="../_sources/user_guide/matrix_vector.md.txt">
+      <i class="fa-solid fa-file-lines"></i> Show Source
+    </a>
+  </div>
+</div>
+
+</div></div>
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+          </footer>
+        
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script defer src="../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5"></script>
+<script defer src="../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5"></script>
+
+  <footer class="bd-footer">
+<div class="bd-footer__inner bd-page-width">
+  
+    <div class="footer-items__start">
+      
+        <div class="footer-item">
+
+  <p class="copyright">
+    
+      © Copyright 2025 Genesis AI Inc.
+      <br/>
+    
+  </p>
+</div>
+      
+        <div class="footer-item">
+
+  <p class="sphinx-version">
+    Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 8.1.3.
+    <br/>
+  </p>
+</div>
+      
+    </div>
+  
+  
+  
+    <div class="footer-items__end">
+      
+        <div class="footer-item">
+<p class="theme-version">
+  <!-- # L10n: Setting the PST URL as an argument as this does not need to be localized -->
+  Built with the <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a> 0.19.0.
+</p></div>
+      
+    </div>
+  
+</div>
+
+  </footer>
+  </body>
+</html>
