@@ -458,7 +458,7 @@
 <section id="restrictions">
 <h3>Restrictions<a class="headerlink" href="#restrictions" title="Link to this heading">#</a></h3>
 <ul class="simple">
-<li><p><strong>No struct return values.</strong> Kernels that return values (e.g. <code class="docutils literal notranslate"><span class="pre">-&gt;</span> <span class="pre">qd.i32</span></code>) cannot use graphs. An error is raised if <code class="docutils literal notranslate"><span class="pre">graph=True</span></code> is set on such a kernel.</p></li>
+<li><p><strong>No return values.</strong> Kernels that return a value (e.g. <code class="docutils literal notranslate"><span class="pre">-&gt;</span> <span class="pre">qd.i32</span></code>) cannot use graphs. An error is raised if <code class="docutils literal notranslate"><span class="pre">graph=True</span></code> is set on such a kernel.</p></li>
 <li><p><strong>Primal kernels only.</strong> The <code class="docutils literal notranslate"><span class="pre">graph=True</span></code> flag is applied to the primal (forward) kernel only, not its adjoint (backward). <a class="reference internal" href="autodiff.html"><span class="std std-doc">Autodiff</span></a> kernels use the normal launch path.</p></li>
 <li><p><strong>Device-resident ndarrays.</strong> Graph mode bakes device pointers into the cached graph, so all ndarray arguments must be on the GPU. Passing a host-resident ndarray raises an error.</p></li>
 <li><p><a class="reference internal" href="streams.html"><span class="std std-doc">streams</span></a> are <strong>incompatible</strong> with graph.</p></li>
