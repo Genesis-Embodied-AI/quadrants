@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>Graph &#8212; Quadrants 1.1.1 documentation</title>
+    <title>Graph &#8212; Quadrants 1.1.2 documentation</title>
   
   
   
@@ -43,7 +43,7 @@
   <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5" />
 <link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5" />
 
-    <script src="../_static/documentation_options.js?v=58fbf978"></script>
+    <script src="../_static/documentation_options.js?v=6f037312"></script>
     <script src="../_static/doctools.js?v=9bcbadda"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -63,7 +63,7 @@
     <link rel="prev" title="Fastcache" href="fastcache.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="1.1.1" />
+  <meta name="docsearch:version" content="1.1.2" />
   
     
     <script src="../_static/searchtools.js"></script>
@@ -131,7 +131,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 1.1.1 documentation</p>
+    <p class="title logo__title">Quadrants 1.1.2 documentation</p>
   
 </a></div>
     
@@ -336,6 +336,7 @@
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Performance</span></p>
 <ul class="current nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="performance.html">Performance</a></li>
 <li class="toctree-l1"><a class="reference internal" href="fastcache.html">Fastcache</a></li>
 <li class="toctree-l1 current active"><a class="current reference internal" href="#">Graph</a></li>
 <li class="toctree-l1"><a class="reference internal" href="streams.html">Streams</a></li>
@@ -950,28 +951,7 @@
 </section>
 <section id="advanced">
 <h2>Advanced<a class="headerlink" href="#advanced" title="Link to this heading">#</a></h2>
-<p>The rest of this guide treats “kernel launch latency” as a cost to be reduced, without pinning down what it actually is. This section unpacks it: what launching a GPU kernel involves, where the latency comes from, and why <code class="docutils literal notranslate"><span class="pre">graph_do_while</span></code> can still speed things up even on hardware that has no native device-side loop support.</p>
-<section id="what-a-gpu-kernel-launch-is">
-<h3>What a GPU kernel launch is<a class="headerlink" href="#what-a-gpu-kernel-launch-is" title="Link to this heading">#</a></h3>
-<p>When you call a <code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel</span></code> from Python, the numerical work does not run inline in the calling thread. Instead Quadrants <em>launches</em> the work onto the GPU: it hands a compiled kernel plus its arguments to the GPU driver, the driver enqueues it onto a stream (an ordered queue of GPU work), and the launch call returns to the host before the GPU has finished - usually before it has even started. Host and GPU run asynchronously.</p>
-<p>Each top-level <code class="docutils literal notranslate"><span class="pre">for</span></code>-loop in a kernel is a separate offloaded task, and each offloaded task becomes one GPU kernel. So the three-loop <code class="docutils literal notranslate"><span class="pre">k1</span></code> in the earlier <strong>qd.kernel</strong> section launches three GPU kernels every time you call it. Every launch carries a fixed overhead that is independent of how much data the kernel processes - that per-launch overhead is the “kernel launch latency” this guide keeps referring to. When a kernel crunches a lot of data the overhead is negligible; when it does little work, or when you relaunch small kernels many times in a loop, launch latency can dominate the total runtime.</p>
-</section>
-<section id="where-kernel-launch-latency-comes-from">
-<h3>Where kernel launch latency comes from<a class="headerlink" href="#where-kernel-launch-latency-comes-from" title="Link to this heading">#</a></h3>
-<p>It helps to split the latency of a single launch into three parts:</p>
-<ul class="simple">
-<li><p><strong>Python side.</strong> Everything that happens in the Python interpreter before control reaches Quadrants’ C++ runtime. This is the most expensive of the three per call, and it is paid once per <em>Python</em> call - so a Python <code class="docutils literal notranslate"><span class="pre">while</span></code>/<code class="docutils literal notranslate"><span class="pre">for</span></code> loop that calls a kernel N times pays it N times.</p></li>
-<li><p><strong>C++ side.</strong> Work inside the Quadrants runtime (C++) once control has crossed the boundary. Cheaper than the Python side, but non-zero, and paid per offloaded task.</p></li>
-<li><p><strong>GPU / driver side.</strong> The GPU driver’s own cost to place the kernel on a stream, plus the fixed scheduling latency on the GPU itself before the kernel begins running on the hardware.</p></li>
-</ul>
-<p>Graphs attack all three. Capturing a sequence of launches into a graph and replaying it collapses many separate launches into a single graph launch, so on hardware-accelerated backends you pay the Python and C++ per-task costs once when the graph is built, and then only a single graph launch per call.</p>
-</section>
-<section id="latency-hiding">
-<h3>Latency hiding<a class="headerlink" href="#latency-hiding" title="Link to this heading">#</a></h3>
-<p>Because host and GPU run asynchronously, kernel launches overlap with kernel execution: the host can be issuing the next launch while earlier kernels are still running on the GPU. As long as the host issues launches at least as fast as the GPU drains them, the queue never empties, the GPU stays busy, and the launch latency is fully <em>hidden</em> behind execution.</p>
-<p>So reducing launch latency does not always improve overall throughput. When each kernel runs long enough that its execution time exceeds the launch overhead, the GPU is the bottleneck and shaving launch latency changes nothing - the launches were already hidden behind execution.</p>
-<p>Kernel launch latency matters when kernels are relatively small. Then the GPU can finish a kernel before the host has issued the next one, so the GPU sits idle waiting for the next launch and the launch latency is <em>exposed</em> on the critical path. In that regime, cutting launch latency - for example by collapsing many launches into a single graph - can directly increase throughput.</p>
-</section>
+<p>For background on what a GPU kernel launch is, where kernel launch latency comes from, and when reducing it actually helps throughput, see <a class="reference internal" href="performance.html"><span class="std std-doc">Performance</span></a>. This section covers one graph-specific subtlety on top of that background.</p>
 <section id="why-using-graph-do-while-is-relevant-even-without-hardware-support">
 <h3>Why using graph_do_while is relevant even without hardware support<a class="headerlink" href="#why-using-graph-do-while-is-relevant-even-without-hardware-support" title="Link to this heading">#</a></h3>
 <p>Recall the earlier example <strong>A while loop, conditional on a device-side scalar tensor</strong>. Written as a plain Python loop, every iteration pays the full Python-side launch latency: Python re-enters the kernel wrapper, and Python itself reads <code class="docutils literal notranslate"><span class="pre">cond[()]</span></code> and evaluates the <code class="docutils literal notranslate"><span class="pre">if</span></code> before deciding whether to loop again.</p>
@@ -1057,9 +1037,6 @@
 </ul>
 </li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#advanced">Advanced</a><ul class="nav section-nav flex-column">
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#what-a-gpu-kernel-launch-is">What a GPU kernel launch is</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#where-kernel-launch-latency-comes-from">Where kernel launch latency comes from</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#latency-hiding">Latency hiding</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#why-using-graph-do-while-is-relevant-even-without-hardware-support">Why using graph_do_while is relevant even without hardware support</a></li>
 </ul>
 </li>
