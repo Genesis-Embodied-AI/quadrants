@@ -26,9 +26,12 @@ Kernel launch latency matters when kernels are relatively small. Then the GPU ca
 
 ## Reducing launch latency
 
-Quadrants provides several tools that attack launch latency in different ways:
+[Graphs](graph.md) are the main tool for reducing launch latency: they capture a sequence of launches into a single graph launch, so on backends with hardware graph support you pay the Python and C++ per-task costs once when the graph is built, rather than on every call.
 
-- [Graphs](graph.md) capture a sequence of launches into a graph and replay it as a single launch, so on backends with hardware graph support you pay the Python and C++ per-task costs once when the graph is built, rather than on every call. This is the most direct way to cut launch latency.
-- [Streams](streams.md) let independent top-level for-loops run concurrently instead of serializing on the default stream, so the GPU can stay busy across otherwise-independent launches.
-- [Fastcache](fastcache.md) reduces the time to load cached kernels when a new Python process starts, cutting first-call latency.
+## Other performance tools
+
+The rest of this section covers tools that improve performance in other ways, not by reducing launch latency:
+
+- [Streams](streams.md) let independent top-level for-loops run concurrently instead of serializing on the default stream.
+- [Fastcache](fastcache.md) reduces the time to load cached kernels when a new Python process starts.
 - [Performance dispatch](perf_dispatch.md) benchmarks multiple implementations of an operation at runtime and picks the fastest.
