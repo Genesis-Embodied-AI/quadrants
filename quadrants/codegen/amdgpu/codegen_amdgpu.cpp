@@ -80,7 +80,7 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
     else if (op == UnaryOpType::sgn) {
       if (input_quadrants_type->is_primitive(PrimitiveTypeID::i32)) {
         auto ashr = builder->CreateAShr(input, 31);
-        auto sub = builder->CreateSub(0, input);
+        auto sub = builder->CreateSub(tlctx->get_constant(0), input);
         auto lshr = builder->CreateLShr(sub, 31);
         llvm_val[stmt] = builder->CreateOr(ashr, lshr);
       } else if (input_quadrants_type->is_primitive(PrimitiveTypeID::f32)) {
