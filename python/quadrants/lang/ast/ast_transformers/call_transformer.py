@@ -402,9 +402,15 @@ class CallTransformer:
             called_needed = pruning.used_vars_by_func_id[called_func_id_]
         if is_func_base_wrapper:
             # callee param names (used by the attribute-instance positional-expansion path so it can match the
-            # callee's already-pruned flat names).
+            # callee's already-pruned flat names). Drop the implicit ``self`` for bound method calls so positional
+            # call-site indexing aligns with the callee's non-self parameter list - matches the ``self_offset``
+            # handling in ``Pruning.record_after_call``. Without this a call like ``self.write(self.state)`` would
+            # index ``callee_arg_names[0]`` as ``"self"`` and construct ``__qd_self__qd_x`` flat names that miss the
+            # callee's correctly-computed ``__qd_state__qd_x`` pruning set, silently dropping needed fields.
             try:
                 callee_arg_names = [m.name for m in func.wrapper.arg_metas]  # type: ignore[attr-defined]
+                if type(func) is BoundQuadrantsCallable:
+                    callee_arg_names = callee_arg_names[1:]
             except AttributeError:
                 callee_arg_names = None
 

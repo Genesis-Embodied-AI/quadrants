@@ -318,3 +318,80 @@ def test_data_oriented_method_qd_func_chain_with_nested_dataclass_member():
     solver = Solver()
     solver.run()
     np.testing.assert_array_equal(solver.outer.inner.x.to_numpy(), np.arange(N) * 29)
+
+
+# ----- bound @qd.func method called positionally with self.dataclass_member -----
+#
+# Regression for the bug flagged in PR #705 codex review r3582132718: the positional dataclass-instance branch of
+# `CallTransformer._expand_Call_dataclass_args` indexed the callee's `arg_metas` (which includes the implicit `self`
+# at index 0 for a bound `@qd.func`) with the raw call-site `arg_idx`. That constructed flat names like
+# `__qd_self__qd_x` for pruning lookup instead of `__qd_state__qd_x`, silently dropping needed fields on the call.
+
+
+@test_utils.test(arch=qd.cpu)
+def test_data_oriented_bound_qd_func_method_called_positionally_with_dataclass_member():
+    """data_oriented kernel calls a bound @qd.func method of the same class, passing self.state positionally.
+
+    Bound `@qd.func` methods carry an implicit self in `arg_metas`; positional call-site indexing must skip it.
+    """
+    N = 4
+
+    @dataclasses.dataclass
+    class State:
+        x: qd.types.NDArray[qd.i32, 1]
+        y: qd.types.NDArray[qd.i32, 1]
+
+    @qd.data_oriented
+    class Solver:
+        def __init__(self):
+            self.state = State(
+                x=qd.ndarray(qd.i32, shape=(N,)),
+                y=qd.ndarray(qd.i32, shape=(N,)),
+            )
+
+        @qd.func
+        def write_x(self, state: State, i: qd.i32, v: qd.i32):
+            state.x[i] = v
+
+        @qd.kernel
+        def run(self):
+            for i in range(N):
+                self.write_x(self.state, i, i * 31)
+
+    solver = Solver()
+    solver.run()
+    np.testing.assert_array_equal(solver.state.x.to_numpy(), np.arange(N) * 31)
+
+
+@test_utils.test(arch=qd.cpu)
+def test_data_oriented_bound_qd_func_method_called_positionally_with_two_dataclass_members():
+    """Bound @qd.func method taking two dataclass args positionally, both passed as `self.<attr>`."""
+    N = 4
+
+    @dataclasses.dataclass
+    class State:
+        x: qd.types.NDArray[qd.i32, 1]
+
+    @dataclasses.dataclass
+    class Config:
+        scale: qd.types.NDArray[qd.i32, 1]
+
+    @qd.data_oriented
+    class Solver:
+        def __init__(self):
+            self.state = State(x=qd.ndarray(qd.i32, shape=(N,)))
+            self.config = Config(scale=qd.ndarray(qd.i32, shape=(N,)))
+
+        @qd.func
+        def write_scaled(self, state: State, config: Config, i: qd.i32, v: qd.i32):
+            state.x[i] = v * config.scale[i]
+
+        @qd.kernel
+        def run(self):
+            for i in range(N):
+                self.config.scale[i] = 2
+                self.write_scaled(self.state, self.config, i, i * 3)
+
+    solver = Solver()
+    solver.run()
+    np.testing.assert_array_equal(solver.state.x.to_numpy(), np.arange(N) * 3 * 2)
