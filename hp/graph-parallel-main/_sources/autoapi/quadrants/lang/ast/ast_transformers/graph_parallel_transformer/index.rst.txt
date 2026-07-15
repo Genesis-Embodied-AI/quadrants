@@ -70,7 +70,8 @@ Module Contents
 
       Handles a ``with qd.graph_parallel():`` section of a ``qd.graph_parallel_context()`` region.
 
-      Reuses the stream-parallel tagging: begin_stream_parallel() assigns this ``qd.graph_parallel`` section a fresh
+      Validates that the section body is straight-line task work (no nested graph-structuring constructs), then reuses
+      the stream-parallel tagging: begin_stream_parallel() assigns this ``qd.graph_parallel`` section a fresh
       ``stream_parallel_group_id`` that every for-loop in the body inherits, so the offloaded tasks carry the
       ``qd.graph_parallel`` section id all the way to the graph builder.
 
