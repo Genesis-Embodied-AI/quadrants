@@ -432,7 +432,7 @@
 <p>Each top-level for-loop will be parallelized, within a kernel. Under the hood, each top-level for-loop will be launched as a separate GPU kernel.</p>
 <p>A top-level for-loop can be encapsulated in one or more of the following, and still be parallelized:</p>
 <ul class="simple">
-<li><p><code class="docutils literal notranslate"><span class="pre">if</span></code> statements where the conditional is <code class="docutils literal notranslate"><span class="pre">qd.static</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">if</span></code> statements where the conditional is <a class="reference internal" href="static.html"><span class="std std-doc"><code class="docutils literal notranslate"><span class="pre">qd.static</span></code></span></a></p></li>
 <li><p>inline functions (<code class="docutils literal notranslate"><span class="pre">&#64;qd.func</span></code>)</p></li>
 </ul>
 <p>Note that adding a non-static <code class="docutils literal notranslate"><span class="pre">if</span></code> over the top of a for-loop will lead to the for-loop NOT being parallelized.</p>
@@ -508,6 +508,7 @@
 <li><p>field args incur less launch latency than ndarray args</p></li>
 <li><p>global fields incur no parameter-related launch latency</p></li>
 </ul>
+<p>For the underlying execution model - what a launch actually involves, where the latency comes from, and when reducing it helps - see <a class="reference internal" href="performance.html"><span class="std std-doc">Performance</span></a>.</p>
 </section>
 <section id="global-memory">
 <h2>Global memory<a class="headerlink" href="#global-memory" title="Link to this heading">#</a></h2>
