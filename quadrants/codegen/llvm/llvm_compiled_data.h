@@ -214,4 +214,31 @@ struct LLVMCompiledKernel {
   QD_IO_DEF(tasks);
 };
 
+// The exclusive end of the maximal run of stream-parallel tasks starting at `start` that belong to the SAME
+// qd.graph_parallel_context() fork/join group as `tasks[start]`: same graph_do_while level, same checkpoint bucket,
+// same graph_parallel_region_id, all with `stream_parallel_group_id != 0`. `limit` bounds the scan (a level's task
+// range end, or `tasks.size()`).
+//
+// This is the SINGLE definition of a fork/join "run" boundary. It is shared by `GraphManager::build_level` (the CUDA
+// graph path) and the CUDA/AMDGPU streaming launchers (`launch_offloaded_tasks`) so the region / level / checkpoint
+// boundary cannot drift between those code paths -- the class of bug that let two back-to-back regions merge on the
+// streaming path (their joins dropped) while the graph path kept them apart. graph_do_while and
+// qd.graph_parallel_context emit no IR of their own, so these four tags are the only record of the grouping; a task
+// belongs to a run only if all four match the run's first task. Precondition: `start < limit` and
+// `tasks[start].stream_parallel_group_id != 0`.
+inline std::size_t next_stream_parallel_run(const std::vector<OffloadedTask> &tasks,
+                                            std::size_t start,
+                                            std::size_t limit) {
+  const int level = tasks[start].graph_do_while_level_id;
+  const int region = tasks[start].graph_parallel_region_id;
+  const int checkpoint = tasks[start].checkpoint_id;
+  std::size_t run_end = start;
+  while (run_end < limit && tasks[run_end].stream_parallel_group_id != 0 &&
+         tasks[run_end].graph_do_while_level_id == level && tasks[run_end].graph_parallel_region_id == region &&
+         tasks[run_end].checkpoint_id == checkpoint) {
+    ++run_end;
+  }
+  return run_end;
+}
+
 }  // namespace quadrants::lang

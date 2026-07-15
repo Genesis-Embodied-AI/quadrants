@@ -188,18 +188,13 @@ void KernelLauncher::launch_offloaded_tasks(LaunchContextBuilder &ctx,
       i++;
     } else {
       size_t group_start = i;
-      // Bound the fork/join batch to a single qd.graph_parallel_context() region. Two regions written back-to-back
-      // carry distinct graph_parallel_region_id and emit no serial task between them to break this run, so without the
-      // region-id check the second region's sections would fork alongside -- and race -- the first's, dropping the
-      // inter-region join (region B could read region A's writes early). Mirrors the region boundary in
-      // GraphManager::build_level; this streaming path is the pre-SM 9.0 fallback and every graph_do_while iteration
-      // that streams. (Within one launch_offloaded_tasks call the do_while level is constant and section tasks are
-      // checkpoint_id < 0, so region id is the only boundary needed here.)
-      const int region_id = offloaded_tasks[i].graph_parallel_region_id;
-      while (i < offloaded_tasks.size() && offloaded_tasks[i].stream_parallel_group_id != 0 &&
-             offloaded_tasks[i].graph_parallel_region_id == region_id) {
-        i++;
-      }
+      // Bound the fork/join batch to a single qd.graph_parallel_context() region/level/checkpoint via the shared
+      // boundary helper (next_stream_parallel_run in llvm_compiled_data.h), the same definition
+      // GraphManager::build_level uses. Two regions written back-to-back carry distinct graph_parallel_region_id and
+      // emit no serial task between them to break the run, so without this the second region's sections would fork
+      // alongside -- and race -- the first's, dropping the inter-region join (region B could read region A's writes
+      // early). This streaming path is the pre-SM 9.0 fallback and every graph_do_while iteration that streams.
+      i = next_stream_parallel_run(offloaded_tasks, i, offloaded_tasks.size());
 
       // Run all per-task adstack setup on active_stream before recording the fence event, so that
       // publish_adstack_metadata's async H2D copies are covered by the event that pool streams wait on.

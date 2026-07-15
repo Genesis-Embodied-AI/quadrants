@@ -432,12 +432,11 @@ void GraphManager::build_level(int parent_id,
     // its own fork/join with its own join node. Without this guard the second region's sections would fork from the
     // same entry as the first's and could run concurrently with -- and race -- the first region's work. ---
     if (tasks[cursor].stream_parallel_group_id != 0 && tasks[cursor].checkpoint_id < 0) {
-      const int region_id = tasks[cursor].graph_parallel_region_id;
-      int run_end = cursor;
-      while (run_end < end && tasks[run_end].graph_do_while_level_id == parent_id && tasks[run_end].checkpoint_id < 0 &&
-             tasks[run_end].stream_parallel_group_id != 0 && tasks[run_end].graph_parallel_region_id == region_id) {
-        run_end++;
-      }
+      // Bound the run to a single region/level/checkpoint via the shared boundary helper (see
+      // next_stream_parallel_run in llvm_compiled_data.h), the same definition the CUDA/AMDGPU streaming launchers use.
+      // tasks[cursor] is a parent_id-level, non-checkpoint task here (the task_level and checkpoint_id filters above),
+      // so the helper's level / checkpoint match reduce to the old `== parent_id` / `checkpoint_id < 0` conditions.
+      const int run_end = (int)next_stream_parallel_run(tasks, (std::size_t)cursor, (std::size_t)end);
       // Bucket the run's tasks by qd.graph_parallel section id, preserving first-seen (declaration) order.
       std::vector<int> group_ids;
       std::vector<std::vector<int>> parallel_sections;
