@@ -110,7 +110,7 @@ class _DeferredProxyMixin:
         self._misuse("subscripted")
 
     def __repr__(self) -> str:
-        return f"<{self._proxy_description} — not a value; use with tile[:] = ... or qd.outer(...)>"
+        return f"<{self._proxy_description} - not a value; use with tile[:] = ... or qd.outer(...)>"
 
 
 class _TileSliceProxy(_DeferredProxyMixin):
@@ -144,9 +144,9 @@ class _TileSliceProxy(_DeferredProxyMixin):
 class _VecSliceProxy(_DeferredProxyMixin):
     """Deferred column-vector load from a 2D/3D array.
 
-    Created by ``arr[row_start:row_stop, col]`` or ``arr[batch_idx, row_start:row_stop, col]``.
-    Each subgroup thread loads one element; out-of-range threads get 0.
-    Only valid as an argument to ``qd.outer()`` in tile augmented assignment.
+    Created by ``arr[row_start:row_stop, col]`` or ``arr[batch_idx, row_start:row_stop, col]``.  Each subgroup thread
+    loads one element; out-of-range threads get 0.  Only valid as an argument to ``qd.outer()`` in tile augmented
+    assignment.
     """
 
     _qd_is_deferred = True
@@ -163,8 +163,8 @@ class _VecSliceProxy(_DeferredProxyMixin):
 class _TileRefProxy:
     """Proxy returned by tile[:] for the LHS of a load assignment.
 
-    Enables ``tile[:] = arr[r:r+N, c:n]``.  The ``[:]`` is required to distinguish in-place tile loads from
-    variable rebinding.
+    Enables ``tile[:] = arr[r:r+N, c:n]``.  The ``[:]`` is required to distinguish in-place tile loads from variable
+    rebinding.
     """
 
     _qd_is_deferred = True
@@ -207,8 +207,8 @@ def _make_tile_class(N: int, dtype):
     name = f"Tile{N}x{N}"
 
     class _Tile:
-        """An NxN tile distributed one row per subgroup thread, with each row held in N scalar registers via an
-        unpacked vector field.  ``TileNxN()`` creates a zero tile."""
+        """An NxN tile distributed one row per subgroup thread, with each row held in N scalar registers via an unpacked
+        vector field.  ``TileNxN()`` creates a zero tile."""
 
         r: qd.types.vector(N, dtype, unpacked=True)
 
@@ -216,8 +216,8 @@ def _make_tile_class(N: int, dtype):
         def _load(self, arr: qd.template(), row_start, row_stop, col_start, col_stop):
             """Load from a 2D array within [row_start, row_stop) x [col_start, col_stop).
 
-            Each thread loads arr[row_start + tid, col_start:col_stop].  Threads where row_start + tid >= row_stop
-            skip the load (tile row unchanged).
+            Each thread loads arr[row_start + tid, col_start:col_stop].  Threads where row_start + tid >= row_stop skip
+            the load (tile row unchanged).
             """
             arr_row_stop = arr.shape[0]
             if arr_row_stop < row_stop:
@@ -235,8 +235,8 @@ def _make_tile_class(N: int, dtype):
         def _load3d(self, arr: qd.template(), batch, row_start, row_stop, col_start, col_stop):
             """Load from a 3D array within [row_start, row_stop) x [col_start, col_stop).
 
-            Each thread loads arr[batch, row_start+tid, col_start:col_stop].  Threads where row_start + tid >=
-            row_stop skip the load (tile row unchanged).
+            Each thread loads arr[batch, row_start+tid, col_start:col_stop].  Threads where row_start + tid >= row_stop
+            skip the load (tile row unchanged).
             """
             arr_row_stop = arr.shape[1]
             if arr_row_stop < row_stop:
@@ -254,8 +254,8 @@ def _make_tile_class(N: int, dtype):
         def _store(self, arr: qd.template(), row_start, row_stop, col_start, col_stop):
             """Store to a 2D array within [row_start, row_stop) x [col_start, col_stop).
 
-            Each thread stores to arr[row_start + tid, col_start:col_stop].  Threads where row_start + tid >=
-            row_stop skip the store.
+            Each thread stores to arr[row_start + tid, col_start:col_stop].  Threads where row_start + tid >= row_stop
+            skip the store.
             """
             arr_row_stop = arr.shape[0]
             if arr_row_stop < row_stop:
@@ -290,8 +290,8 @@ def _make_tile_class(N: int, dtype):
 
         @qd.func
         def eye_(self):
-            """Set this tile to the NxN identity matrix.  Each thread sets its diagonal element to 1.0 and all
-            others to 0.0."""
+            """Set this tile to the NxN identity matrix.  Each thread sets its diagonal element to 1.0 and all others
+            to 0.0."""
             tid = qd.simt.subgroup.invocation_id()
             for j in qd.static(range(N)):
                 self.r[j] = 1.0 if tid == j else 0.0
@@ -307,15 +307,14 @@ def _make_tile_class(N: int, dtype):
         def cholesky_(self, eps):
             """In-place NxN Cholesky factorization via subgroup shuffles.
 
-            On return, the lower triangle holds L such that A = L @ L^T.  Diagonal clamped to
-            sqrt(max(value, eps)) for numerical stability.
+            On return, the lower triangle holds L such that A = L @ L^T.  Diagonal clamped to sqrt(max(value, eps)) for
+            numerical stability.
             """
             # ``k`` and ``j`` are wrapped in qd.static so the ``if k > j`` predicate folds at compile time and the
             # ``self.r[k]`` / ``self.r[j]`` accesses resolve to a single unpacked-register slot per use (no runtime
             # cascade).  The per-lane row-norm used for the diagonal update is carried in ``my_norm_sq``, so each
             # diagonal step is O(1) rather than O(k).  The off-diagonal ``dot`` is split into two interleaved partial
-            # sums (``dot0`` / ``dot1``) so the back-to-back FMA dependency chain is cut in half, exposing more
-            # instruction-level parallelism.
+            # sums (``dot0`` / ``dot1``) so the back-to-back FMA dependency chain is cut in half, exposing more ILP.
             tid = qd.i32(qd.simt.subgroup.invocation_id())
             my_norm_sq = qd.cast(0.0, dtype)
             for k in qd.static(range(N)):
@@ -349,7 +348,7 @@ def _make_tile_class(N: int, dtype):
         def _get_col(self, k):
             """Read register column ``k`` at runtime via a static-unrolled cascade.
 
-            The unpacked vector field rejects runtime indices, so the cascade is emitted explicitly. With ``k`` a
+            The unpacked vector field rejects runtime indices, so the cascade is emitted explicitly.  With ``k`` a
             runtime int and ``kk`` a python-int from ``qd.static``, the body of each iteration becomes a guarded
             single-slot read; LLVM later selects on ``k`` to pick the matching slot.  Used by ``_trsm`` so the outer
             loop can be a runtime ``range(N)`` (LLVM picks the unroll factor) rather than the fully-unrolled
@@ -376,11 +375,11 @@ def _make_tile_class(N: int, dtype):
             solution X.
 
             The outer loop uses ``range(N)`` (runtime), not ``qd.static(range(N))``, so LLVM can pick the unroll
-            factor: fully unrolling the N*N body fully explodes the live set and pushes ~37% more registers into
-            the kernel, causing measurable perf loss on the blocked Cholesky benchmark (e.g. ~9% slower on
+            factor: fully unrolling the N*N body fully explodes the live set and pushes ~37% more registers into the
+            kernel, causing measurable perf loss on the blocked Cholesky benchmark (e.g. ~9% slower on
             ``misc/demos/cholesky_blocked.py`` for N=92).  The inner ``j`` loop is also ``range(N)`` for the same
-            reason.  Runtime access into the unpacked-vector field goes through ``_get_col`` / ``_set_col`` which
-            emit explicit cascades over ``self.r[kk]`` for static ``kk``.
+            reason.  Runtime access into the unpacked-vector field goes through ``_get_col`` / ``_set_col`` which emit
+            explicit cascades over ``self.r[kk]`` for static ``kk``.
             """
             for c in range(N):
                 dot = qd.cast(0.0, dtype)
@@ -396,8 +395,8 @@ def _make_tile_class(N: int, dtype):
         def solve_triangular_(self, B: Any, lower: bool = True) -> None:
             """Triangular solve: X @ self^T = B, storing result X in B in-place.
 
-            self must be lower-triangular and non-singular (all diagonal elements non-zero).  Passing a singular
-            matrix causes division by zero, producing inf/NaN without warning.  Only lower=True is supported.
+            self must be lower-triangular and non-singular (all diagonal elements non-zero).  Passing a singular matrix
+            causes division by zero, producing inf/NaN without warning.  Only lower=True is supported.
             """
             if not lower:
                 raise TypeError(f"{name}.solve_triangular_: only lower=True is supported")
@@ -410,11 +409,11 @@ def _make_tile_class(N: int, dtype):
             arr_row_stop = arr.shape[0]
             if arr_row_stop < row_stop:
                 row_stop = arr_row_stop
-            # Use qd.cast, not dtype(0.0): the AST transformer only treats a call as a type construction when
-            # id(dtype) is in primitive_types.type_ids, but a dtype resolved from a deep-copied default_fp (e.g.
-            # after qd.init(default_fp=qd.f32)) has a different id and falls through to a raw call, raising
-            # "Quadrants data types cannot be called outside Quadrants kernels".  qd.cast is identity-independent
-            # and folds to the same typed constant.
+            # Use qd.cast, not dtype(0.0): the AST transformer only treats a call as a type construction when id(dtype)
+            # is in primitive_types.type_ids, but a dtype resolved from a deep-copied default_fp (e.g. after
+            # qd.init(default_fp=qd.f32)) has a different id and falls through to a raw call, raising "Quadrants data
+            # types cannot be called outside Quadrants kernels".  qd.cast is identity-independent and folds to the same
+            # typed constant.
             v = qd.cast(0.0, dtype)
             if row_start + tid < row_stop:
                 v = arr[row_start + tid, col]
@@ -462,8 +461,8 @@ def _make_tile_class(N: int, dtype):
     _Tile.__name__ = f"_{name}"
     _Tile.__qualname__ = f"_make_tile_class.<locals>._{name}"
 
-    # StructType.__call__ already defaults missing args to 0, so Tile() produces a zero-initialized tile
-    # without needing default values in the class definition (which @qd.dataclass doesn't support).
+    # StructType.__call__ already defaults missing args to 0, so Tile() produces a zero-initialized tile without needing
+    # default values in the class definition (which @qd.dataclass doesn't support).
     result = qd.dataclass(_Tile)
     result.SIZE = N  # type: ignore[reportAttributeAccessIssue]
     result.zeros = result  # type: ignore[reportAttributeAccessIssue]

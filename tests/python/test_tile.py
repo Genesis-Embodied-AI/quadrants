@@ -1547,9 +1547,9 @@ def test_vec_proxy_non_identity_dtype(TILE, make_tile, tdim, m_size):
     assert nonid_dtype == qd.f32
     assert id(nonid_dtype) not in primitive_types.type_ids  # precondition the old dtype(0.0) tripped on
 
-    # The tile-class cache is process-global and keyed by (N, dtype) value, so a previously cached identity-dtype
-    # class would mask the regression.  Drop the entry so the class is rebuilt capturing this non-identity dtype,
-    # and restore the cache afterwards so we don't leak a deepcopy-keyed entry into other tests.
+    # The tile-class cache is process-global and keyed by (N, dtype) value, so a previously cached identity-dtype class
+    # would mask the regression.  Drop the entry so the class is rebuilt capturing this non-identity dtype, and restore
+    # the cache afterwards so we don't leak a deepcopy-keyed entry into other tests.
     cache = _tile._tile_cache
     cache_key = (tdim, nonid_dtype)
     cache.pop(cache_key, None)
