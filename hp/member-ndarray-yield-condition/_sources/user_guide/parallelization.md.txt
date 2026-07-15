@@ -3,7 +3,7 @@
 Each top-level for-loop will be parallelized, within a kernel. Under the hood, each top-level for-loop will be launched as a separate GPU kernel.
 
 A top-level for-loop can be encapsulated in one or more of the following, and still be parallelized:
-- `if` statements where the conditional is `qd.static`
+- `if` statements where the conditional is [`qd.static`](static.md)
 - inline functions (`@qd.func`)
 
 Note that adding a non-static `if` over the top of a for-loop will lead to the for-loop NOT being parallelized.
@@ -87,6 +87,8 @@ If kernel launch latency is a bottleneck, then you can look into:
 Reducing the number and complexity kernel parameters reduces the kernel launch latency. In addition:
 - field args incur less launch latency than ndarray args
 - global fields incur no parameter-related launch latency
+
+For the underlying execution model - what a launch actually involves, where the latency comes from, and when reducing it helps - see [Performance](performance.md).
 
 ## Global memory
 

@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>Compound types &#8212; Quadrants 1.1.1 documentation</title>
+    <title>Compound types &#8212; Quadrants 1.1.3 documentation</title>
   
   
   
@@ -43,7 +43,7 @@
   <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5" />
 <link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5" />
 
-    <script src="../_static/documentation_options.js?v=58fbf978"></script>
+    <script src="../_static/documentation_options.js?v=cb7bf70b"></script>
     <script src="../_static/doctools.js?v=9bcbadda"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -63,7 +63,7 @@
     <link rel="prev" title="Tensors" href="tensor.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="1.1.1" />
+  <meta name="docsearch:version" content="1.1.3" />
   
     
     <script src="../_static/searchtools.js"></script>
@@ -131,7 +131,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 1.1.1 documentation</p>
+    <p class="title logo__title">Quadrants 1.1.3 documentation</p>
   
 </a></div>
     
@@ -336,6 +336,7 @@
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Performance</span></p>
 <ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="performance.html">Performance</a></li>
 <li class="toctree-l1"><a class="reference internal" href="fastcache.html">Fastcache</a></li>
 <li class="toctree-l1"><a class="reference internal" href="graph.html">Graph</a></li>
 <li class="toctree-l1"><a class="reference internal" href="streams.html">Streams</a></li>
@@ -361,11 +362,11 @@
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Contributing</span></p>
 <ul class="nav bd-sidenav">
-<li class="toctree-l1"><a class="reference internal" href="contributing.html">Contributing to quadrants</a></li>
+<li class="toctree-l1"><a class="reference internal" href="contributing.html">Advanced: Contributing to quadrants</a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Internal</span></p>
 <ul class="nav bd-sidenav">
-<li class="toctree-l1"><a class="reference internal" href="building_cudagraph_conditional_fatbin.html">Building the CUDA graph conditional fatbin</a></li>
+<li class="toctree-l1"><a class="reference internal" href="building_cudagraph_conditional_fatbin.html">Advanced: Building the CUDA graph conditional fatbin</a></li>
 </ul>
 </div>
 </nav></div>
@@ -484,7 +485,6 @@
 </tbody>
 </table>
 </div>
-<p>Note on the “Members can be tensors” row for <code class="docutils literal notranslate"><span class="pre">&#64;qd.dataclass</span></code>: a <code class="docutils literal notranslate"><span class="pre">&#64;qd.dataclass</span></code>’s members must be primitives, fixed vectors, or fixed matrices — not <code class="docutils literal notranslate"><span class="pre">qd.field</span></code> / <code class="docutils literal notranslate"><span class="pre">qd.ndarray</span></code>. However, <em>allocating</em> a <code class="docutils literal notranslate"><span class="pre">&#64;qd.dataclass</span></code> as a tensor of structs in SoA layout (<code class="docutils literal notranslate"><span class="pre">MyStruct.field(shape=(N,),</span> <span class="pre">layout=qd.Layout.SOA)</span></code>) extrudes each member into its own length-<code class="docutils literal notranslate"><span class="pre">N</span></code> tensor — so the resulting <em>collection</em> effectively behaves like a struct of parallel tensors, even though the <code class="docutils literal notranslate"><span class="pre">&#64;qd.dataclass</span></code> type itself doesn’t have tensor-typed members. See the <a class="reference internal" href="#qddataclass-qdtypesstruct"><span class="xref myst"><code class="docutils literal notranslate"><span class="pre">&#64;qd.dataclass</span></code> section</span></a> below.</p>
 <blockquote>
 <div><p>⚠️ <strong>Deprecation: <code class="docutils literal notranslate"><span class="pre">&#64;dataclasses.dataclass</span></code> instance passed via <code class="docutils literal notranslate"><span class="pre">qd.Template</span></code>.</strong>
 Passing a <code class="docutils literal notranslate"><span class="pre">&#64;dataclasses.dataclass</span></code> instance into a <code class="docutils literal notranslate"><span class="pre">qd.Template</span></code>-annotated kernel parameter is not supported and emits a <code class="docutils literal notranslate"><span class="pre">DeprecationWarning</span></code> at compile time. In a future release it will become an error.</p>
@@ -632,7 +632,7 @@ my_struct.b[37] 5
 <p><code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code> objects can also be passed as <code class="docutils literal notranslate"><span class="pre">qd.Template</span></code> parameters to kernels defined outside the class, and they support nesting (one <code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code> struct containing another).</p>
 <section id="primitive-members">
 <h3>Primitive members<a class="headerlink" href="#primitive-members" title="Link to this heading">#</a></h3>
-<p>Primitive members on <code class="docutils literal notranslate"><span class="pre">self</span></code> (e.g. <code class="docutils literal notranslate"><span class="pre">int</span></code>, <code class="docutils literal notranslate"><span class="pre">float</span></code>, <code class="docutils literal notranslate"><span class="pre">bool</span></code>, <code class="docutils literal notranslate"><span class="pre">enum.Enum</span></code>) are supported, but they are treated as <strong>template values</strong>: each distinct primitive value across instances triggers a new kernel compilation, with the value baked into the kernel IR.</p>
+<p>Primitive members on <code class="docutils literal notranslate"><span class="pre">self</span></code> (e.g. <code class="docutils literal notranslate"><span class="pre">int</span></code>, <code class="docutils literal notranslate"><span class="pre">float</span></code>, <code class="docutils literal notranslate"><span class="pre">bool</span></code>, <code class="docutils literal notranslate"><span class="pre">enum.Enum</span></code>) are supported, but they are treated as <strong>template values</strong>: each distinct primitive value across instances triggers a new kernel compilation, with the value baked into the compiled kernel.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">data_oriented</span>
 <span class="k">class</span><span class="w"> </span><span class="nc">Simulation</span><span class="p">:</span>
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">n</span><span class="p">):</span>
@@ -651,7 +651,7 @@ my_struct.b[37] 5
 </section>
 <section id="tensor-members">
 <h3>Tensor members<a class="headerlink" href="#tensor-members" title="Link to this heading">#</a></h3>
-<p><code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code> classes may hold tensor members of any backend: <code class="docutils literal notranslate"><span class="pre">qd.field</span></code>, <code class="docutils literal notranslate"><span class="pre">qd.ndarray</span></code>, or <code class="docutils literal notranslate"><span class="pre">qd.Tensor</span></code>.</p>
+<p><code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code> classes may hold tensor members of any backend: <code class="docutils literal notranslate"><span class="pre">qd.field</span></code>, <code class="docutils literal notranslate"><span class="pre">qd.ndarray</span></code>, or <a class="reference internal" href="tensor.html"><span class="std std-doc">qd.Tensor</span></a>.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">data_oriented</span>
 <span class="k">class</span><span class="w"> </span><span class="nc">State</span><span class="p">:</span>
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">n</span><span class="p">):</span>
@@ -697,6 +697,7 @@ my_struct.b[37] 5
 <li><p><strong>Struct-of-arrays (SoA)</strong> (<code class="docutils literal notranslate"><span class="pre">qd.Layout.SOA</span></code>): extrudes each member of the struct into its own tensor of length <code class="docutils literal notranslate"><span class="pre">N</span></code>.</p></li>
 <li><p><strong>Array-of-structs (AoS)</strong> (<code class="docutils literal notranslate"><span class="pre">qd.Layout.AOS</span></code>): the storage is an array of <code class="docutils literal notranslate"><span class="pre">N</span></code> struct cells laid out contiguously in memory. AoS is only available with <code class="docutils literal notranslate"><span class="pre">qd.field</span></code> backing.</p></li>
 </ul>
+<p>Note that although a <code class="docutils literal notranslate"><span class="pre">&#64;qd.dataclass</span></code>’s members can’t themselves be tensors, allocating one in SoA layout (<code class="docutils literal notranslate"><span class="pre">MyStruct.field(shape=(N,),</span> <span class="pre">layout=qd.Layout.SOA)</span></code>) extrudes each member into its own length-<code class="docutils literal notranslate"><span class="pre">N</span></code> tensor — so the resulting <em>collection</em> effectively behaves like a struct of parallel tensors, even though the <code class="docutils literal notranslate"><span class="pre">&#64;qd.dataclass</span></code> type itself doesn’t have tensor-typed members.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">dataclass</span>
 <span class="k">class</span><span class="w"> </span><span class="nc">Particle</span><span class="p">:</span>
     <span class="n">pos</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">vector</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">)</span>
@@ -704,12 +705,11 @@ my_struct.b[37] 5
     <span class="n">mass</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">f32</span>
 
 <span class="c1"># AOS layout: each element of `particles` is a (pos, vel, mass) cell contiguous in memory.</span>
-<span class="c1"># Only possible because Particle is a StructType — `@qd.data_oriented` and</span>
+<span class="c1"># Only possible because Particle is a `@qd.dataclass`. `@qd.data_oriented` and</span>
 <span class="c1"># `dataclasses.dataclass` containers can&#39;t be the element type of a tensor.</span>
 <span class="n">particles</span> <span class="o">=</span> <span class="n">Particle</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="n">N</span><span class="p">,),</span> <span class="n">layout</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">Layout</span><span class="o">.</span><span class="n">AOS</span><span class="p">)</span>
 </pre></div>
 </div>
-<p>For larger statically-indexed groups that might spill into local memory, and that you want to allow partial spilling for, see the <a class="reference internal" href="matrix_vector.html#storage-layout-packed-vs-unpacked-vectors"><span class="std std-ref">packed vs unpacked vectors</span></a> section of the matrix and vector page.</p>
 <p>Methods can be added to a <code class="docutils literal notranslate"><span class="pre">&#64;qd.dataclass</span></code> and may be decorated with <code class="docutils literal notranslate"><span class="pre">&#64;qd.func</span></code> so they can be called from kernels via <code class="docutils literal notranslate"><span class="pre">instance.method(...)</span></code> syntax (the call is inlined at compile time, like any other <code class="docutils literal notranslate"><span class="pre">&#64;qd.func</span></code>).</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">dataclass</span>
 <span class="k">class</span><span class="w"> </span><span class="nc">Particle</span><span class="p">:</span>
@@ -731,7 +731,7 @@ my_struct.b[37] 5
     <span class="k">return</span> <span class="n">total</span>
 </pre></div>
 </div>
-<p><code class="docutils literal notranslate"><span class="pre">qd.types.struct(name1=type1,</span> <span class="pre">...)</span></code> is the function-form equivalent of <code class="docutils literal notranslate"><span class="pre">&#64;qd.dataclass</span></code>: it builds the same <code class="docutils literal notranslate"><span class="pre">StructType</span></code> without a class body.</p>
+<p><code class="docutils literal notranslate"><span class="pre">qd.types.struct(name1=type1,</span> <span class="pre">...)</span></code> is the function-form equivalent of <code class="docutils literal notranslate"><span class="pre">&#64;qd.dataclass</span></code>: it builds a <code class="docutils literal notranslate"><span class="pre">&#64;qd.dataclass</span></code> without a class body.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">vec3</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">vector</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">)</span>
 <span class="n">Particle</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">struct</span><span class="p">(</span><span class="n">pos</span><span class="o">=</span><span class="n">vec3</span><span class="p">,</span> <span class="n">vel</span><span class="o">=</span><span class="n">vec3</span><span class="p">,</span> <span class="n">mass</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">)</span>
 <span class="n">particles</span> <span class="o">=</span> <span class="n">Particle</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="n">N</span><span class="p">,))</span>
@@ -744,7 +744,7 @@ my_struct.b[37] 5
 </section>
 <section id="nesting-compatibility">
 <h2>Nesting compatibility<a class="headerlink" href="#nesting-compatibility" title="Link to this heading">#</a></h2>
-<p>This table summarizes which member types are allowed inside which container type. “yes” means the member is walked correctly when the container is passed to a kernel; “no” means the member is ignored or the combination raises an error.</p>
+<p>This table summarizes which member types are allowed inside which container type. “yes” means the member is handled correctly when the container is passed to a kernel; “no” means the member is ignored or the combination raises an error.</p>
 <div class="pst-scrollable-table-container"><table class="table">
 <thead>
 <tr class="row-odd"><th class="head"><p>Container ↓     /     Member →</p></th>
@@ -786,34 +786,23 @@ my_struct.b[37] 5
 </div>
 <section id="outer-kernel-arg-annotation">
 <h3>Outer kernel-arg annotation<a class="headerlink" href="#outer-kernel-arg-annotation" title="Link to this heading">#</a></h3>
-<p>The outermost annotation you put on the kernel parameter determines how the container is walked:</p>
+<p>The outermost annotation you put on the kernel parameter should match the parameter type as follows:</p>
 <div class="pst-scrollable-table-container"><table class="table">
 <thead>
-<tr class="row-odd"><th class="head"><p>Annotation</p></th>
-<th class="head"><p>Kernel-arg walker</p></th>
-<th class="head"><p>Notes</p></th>
+<tr class="row-odd"><th class="head"><p>Kernel parameter compound type</p></th>
+<th class="head"><p>Annotation</p></th>
 </tr>
 </thead>
 <tbody>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">qd.types.NDArray[...]</span></code></p></td>
-<td><p>ndarray slot</p></td>
-<td><p>leaf-level only</p></td>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">&#64;dataclasses.dataclass</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">MyDataclass</span></code> (dataclass type)</p></td>
 </tr>
-<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">MyDataclass</span></code> (dataclass type)</p></td>
-<td><p>per-member flatten using annotations</p></td>
-<td><p>recommended for <code class="docutils literal notranslate"><span class="pre">&#64;dataclasses.dataclass</span></code>; needs every member to have a quadrants-typed annotation</p></td>
-</tr>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">qd.Template</span></code></p></td>
-<td><p>value-driven walk of <code class="docutils literal notranslate"><span class="pre">vars(self)</span></code></p></td>
-<td><p>for <code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code> containers (and primitives). <strong>Not</strong> supported for <code class="docutils literal notranslate"><span class="pre">&#64;dataclasses.dataclass</span></code> — see the <a class="reference internal" href="#overview">deprecation notice in Overview</a>.</p></td>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">qd.Template</span></code></p></td>
 </tr>
 </tbody>
 </table>
 </div>
-<p>Practical consequence:</p>
-<ul class="simple">
-<li><p><strong><code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code> containers</strong> must be passed via <code class="docutils literal notranslate"><span class="pre">qd.Template</span></code> (or be the <code class="docutils literal notranslate"><span class="pre">self</span></code> of a <code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel</span></code> method on a <code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code> class). Using a typed-dataclass annotation on the outermost arg errors.</p></li>
-</ul>
 </section>
 <section id="reassigning-ndarray-members">
 <h3>Reassigning ndarray members<a class="headerlink" href="#reassigning-ndarray-members" title="Link to this heading">#</a></h3>
@@ -823,11 +812,11 @@ my_struct.b[37] 5
 <h3>Restrictions<a class="headerlink" href="#restrictions" title="Link to this heading">#</a></h3>
 <ul class="simple">
 <li><p><strong><code class="docutils literal notranslate"><span class="pre">&#64;qd.dataclass</span></code> cannot contain <code class="docutils literal notranslate"><span class="pre">qd.ndarray</span></code> or <code class="docutils literal notranslate"><span class="pre">qd.field</span></code> members.</strong> See the <a class="reference internal" href="#qddataclass-qdtypesstruct"><span class="xref myst"><code class="docutils literal notranslate"><span class="pre">&#64;qd.dataclass</span></code></span></a> section above for the full list of allowed member types. (The function-form factory <code class="docutils literal notranslate"><span class="pre">qd.types.struct(...)</span></code> has the same restrictions.)</p></li>
-<li><p><strong>A typed-dataclass kernel-arg annotation cannot have a <code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code> member type</strong> — errors clearly at compile time. Typed-dataclass kernel args are flattened from annotations, but <code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code> carries no per-member annotations, so its members can only be walked from the live instance, which only happens on the <code class="docutils literal notranslate"><span class="pre">qd.Template</span></code> path.</p></li>
-<li><p><strong>Declare all ndarray members on a <code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code> class in <code class="docutils literal notranslate"><span class="pre">__init__</span></code>.</strong> The template-mapper caches the set of ndarray-attribute paths reachable from each instance on its first kernel launch — <em>per instance</em>, not per class — so two instances of the same class can legitimately carry different ndarray attribute sets (e.g. an optional <code class="docutils literal notranslate"><span class="pre">*_adjoint_cache</span></code> member that’s only allocated when <code class="docutils literal notranslate"><span class="pre">requires_grad=True</span></code>). But:</p>
+<li><p><strong>A typed-dataclass kernel-arg annotation cannot have a <code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code> member type</strong> — errors clearly at compile time</p></li>
+<li><p><strong>Declare all ndarray members on a <code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code> class in <code class="docutils literal notranslate"><span class="pre">__init__</span></code>.</strong></p>
 <ul>
-<li><p><strong>Deleting an ndarray attribute</strong> that was present on an instance’s first launch raises <code class="docutils literal notranslate"><span class="pre">AttributeError</span></code> on the next launch on that instance (the cached path still tries to <code class="docutils literal notranslate"><span class="pre">getattr</span></code> the missing attribute).</p></li>
-<li><p><strong>Adding a new ndarray attribute after first launch</strong> on a given instance won’t be tracked by the args-hash invalidator on that instance — reassigning the new attribute to a tensor of a different <code class="docutils literal notranslate"><span class="pre">dtype</span></code> / <code class="docutils literal notranslate"><span class="pre">ndim</span></code> after that point will silently reuse the originally compiled kernel.</p></li>
+<li><p><strong>Deleting an ndarray attribute</strong> that was present on an <code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code> instance’s first launch raises <code class="docutils literal notranslate"><span class="pre">AttributeError</span></code> on the next launch on that instance.</p></li>
+<li><p><strong>Adding a new ndarray attribute after first launch</strong> on a given <code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code> instance will cause incorrect undefined behavior.</p></li>
 </ul>
 </li>
 </ul>
