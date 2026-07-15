@@ -180,7 +180,16 @@ void KernelLauncher::launch_offloaded_tasks(LaunchContextBuilder &ctx,
       ++i;
     } else {
       size_t group_start = i;
-      while (i < offloaded_tasks.size() && offloaded_tasks[i].stream_parallel_group_id != 0) {
+      // Bound the fork/join batch to a single qd.graph_parallel_context() region. Two regions written back-to-back
+      // carry distinct graph_parallel_region_id and emit no serial task between them to break this run, so without the
+      // region-id check the second region's sections would fork alongside -- and race -- the first's, dropping the
+      // inter-region join (region B could read region A's writes early). Mirrors the region boundary in
+      // GraphManager::build_level; AMDGPU always streams graph_do_while, so this is the live path for the documented
+      // region-inside-graph_do_while pattern. (Within one launch_offloaded_tasks call the do_while level is constant
+      // and section tasks are checkpoint_id < 0, so region id is the only boundary needed here.)
+      const int region_id = offloaded_tasks[i].graph_parallel_region_id;
+      while (i < offloaded_tasks.size() && offloaded_tasks[i].stream_parallel_group_id != 0 &&
+             offloaded_tasks[i].graph_parallel_region_id == region_id) {
         i++;
       }
 
