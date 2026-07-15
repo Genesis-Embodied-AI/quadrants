@@ -754,6 +754,85 @@ def test_graph_parallel_static_loop_runtime_if_raises():
 
 
 @test_utils.test()
+def test_graph_parallel_section_graph_do_while_raises():
+    """A qd.graph_parallel() section body must be straight-line task work: a qd.graph_do_while nested inside a section is
+    rejected. Its body tasks carry a child graph_do_while_level_id, so the CUDA fork/join path would not group them into
+    the section's contiguous run -- the section would be silently serialized instead of failing at compile time. (The
+    supported composition is the reverse: a qd.graph_parallel_context region may sit inside a qd.graph_do_while loop.)
+    """
+
+    @qd.kernel(graph=True)
+    def k(x: qd.types.ndarray(qd.i32, ndim=1), counter: qd.types.ndarray(qd.i32, ndim=0)):
+        with qd.graph_parallel_context():
+            with qd.graph_parallel():
+                while qd.graph_do_while(counter):
+                    for i in range(x.shape[0]):
+                        x[i] = x[i] + 1
+
+    x = qd.ndarray(qd.i32, shape=(16,))
+    counter = qd.ndarray(qd.i32, shape=())
+    with pytest.raises(qd.QuadrantsSyntaxError, match="qd.graph_do_while.. cannot appear inside a qd.graph_parallel"):
+        k(x, counter)
+
+
+@test_utils.test()
+def test_graph_parallel_section_checkpoint_raises():
+    """A qd.graph_parallel() section body must be straight-line task work: a qd.checkpoint nested inside a section is
+    rejected. Its tasks carry checkpoint_id >= 0, which the CUDA fork/join path excludes from the section's run,
+    silently serializing the section instead of failing at compile time."""
+
+    @qd.kernel(graph=True, checkpoints=True)
+    def k(x: qd.types.ndarray(qd.i32, ndim=1), flag: qd.types.ndarray(qd.i32, ndim=0)):
+        with qd.graph_parallel_context():
+            with qd.graph_parallel():
+                with qd.checkpoint(0, yield_on=flag):
+                    for i in range(x.shape[0]):
+                        x[i] = x[i] + 1
+
+    x = qd.ndarray(qd.i32, shape=(16,))
+    flag = qd.ndarray(qd.i32, shape=())
+    with pytest.raises(qd.QuadrantsSyntaxError, match="qd.checkpoint.. cannot appear inside a qd.graph_parallel"):
+        k(x, flag)
+
+
+@test_utils.test()
+def test_graph_parallel_section_nested_section_raises():
+    """A qd.graph_parallel() section cannot contain another qd.graph_parallel() section (sections do not nest)."""
+
+    @qd.kernel(graph=True)
+    def k(x: qd.types.ndarray(qd.i32, ndim=1)):
+        with qd.graph_parallel_context():
+            with qd.graph_parallel():
+                with qd.graph_parallel():
+                    for i in range(x.shape[0]):
+                        x[i] = x[i] + 1
+
+    x = qd.ndarray(qd.i32, shape=(16,))
+    with pytest.raises(qd.QuadrantsSyntaxError, match="sections cannot be nested"):
+        k(x)
+
+
+@test_utils.test()
+def test_graph_parallel_section_nested_graph_do_while_deep_raises():
+    """The section-body check recurses (ast.walk): a qd.graph_do_while buried inside an inner static for-loop of a
+    section is still rejected, not just one written directly at the section top level."""
+
+    @qd.kernel(graph=True)
+    def k(x: qd.types.ndarray(qd.i32, ndim=2), counter: qd.types.ndarray(qd.i32, ndim=0)):
+        with qd.graph_parallel_context():
+            with qd.graph_parallel():
+                for b in qd.static(range(2)):
+                    while qd.graph_do_while(counter):
+                        for i in range(x.shape[1]):
+                            x[b, i] = x[b, i] + 1
+
+    x = qd.ndarray(qd.i32, shape=(2, 16))
+    counter = qd.ndarray(qd.i32, shape=())
+    with pytest.raises(qd.QuadrantsSyntaxError, match="qd.graph_do_while.. cannot appear inside a qd.graph_parallel"):
+        k(x, counter)
+
+
+@test_utils.test()
 def test_graph_parallel_static_loop_inside_graph_do_while():
     """A static section loop composes with qd.graph_do_while: each iteration runs all unrolled
     qd.graph_parallel sections, then decrements the counter."""
