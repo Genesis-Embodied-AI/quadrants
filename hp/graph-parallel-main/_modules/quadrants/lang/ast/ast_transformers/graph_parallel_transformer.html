@@ -440,11 +440,12 @@
 <span class="sd">        bare assignment, etc.) is a serial task that would silently fall outside any ``qd.graph_parallel`` section, so</span>
 <span class="sd">        reject it.</span>
 
-<span class="sd">        The `for` case is restricted to `qd.static(...)` loops on purpose: a static loop unrolls at trace time into its</span>
-<span class="sd">        repeated body, so it lowers to literal `with qd.graph_parallel():` blocks (each gets a fresh</span>
-<span class="sd">        stream_parallel_group_id). A *runtime* for-loop would instead trace a single parallel range_for with the section</span>
-<span class="sd">        tagging nested inside it -- malformed. Staticness is checked with `get_decorator` (the same resolution</span>
-<span class="sd">        `build_For` uses) at every nesting level, so a runtime loop nested under a static one is still rejected.&quot;&quot;&quot;</span>
+<span class="sd">        Both the `if` and `for` cases are restricted to `qd.static(...)` on purpose: a static branch/loop is resolved</span>
+<span class="sd">        at trace time, so it lowers to literal `with qd.graph_parallel():` blocks (each gets a fresh</span>
+<span class="sd">        stream_parallel_group_id). A *runtime* `if` would instead trace a FrontendIfStmt and a *runtime* for-loop a</span>
+<span class="sd">        single parallel range_for, in both cases nesting the section tagging inside that task -- malformed, and silently</span>
+<span class="sd">        dropping the fork/join. Staticness is checked with `get_decorator` (the same resolution `build_If` / `build_For`</span>
+<span class="sd">        use) at every nesting level, so a runtime branch/loop nested under a static one is still rejected.&quot;&quot;&quot;</span>
         <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">stmt</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">stmts</span><span class="p">):</span>
             <span class="k">if</span> <span class="n">FunctionDefTransformer</span><span class="o">.</span><span class="n">_is_docstring</span><span class="p">(</span><span class="n">stmt</span><span class="p">,</span> <span class="n">i</span><span class="p">)</span> <span class="ow">or</span> <span class="n">FunctionDefTransformer</span><span class="o">.</span><span class="n">_is_coverage_probe</span><span class="p">(</span><span class="n">stmt</span><span class="p">):</span>
                 <span class="k">continue</span>
@@ -453,7 +454,7 @@
             <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">stmt</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">With</span><span class="p">)</span> <span class="ow">and</span> <span class="n">stmt</span><span class="o">.</span><span class="n">items</span><span class="p">:</span>
                 <span class="k">if</span> <span class="n">GraphParallelTransformer</span><span class="o">.</span><span class="n">is_parallel_section_call</span><span class="p">(</span><span class="n">stmt</span><span class="o">.</span><span class="n">items</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">context_expr</span><span class="p">):</span>
                     <span class="k">continue</span>
-            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">stmt</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">If</span><span class="p">):</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">stmt</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">If</span><span class="p">)</span> <span class="ow">and</span> <span class="n">get_decorator</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">stmt</span><span class="o">.</span><span class="n">test</span><span class="p">)</span> <span class="o">==</span> <span class="s2">&quot;static&quot;</span><span class="p">:</span>
                 <span class="n">GraphParallelTransformer</span><span class="o">.</span><span class="n">_validate_graph_parallel_context_body</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">stmt</span><span class="o">.</span><span class="n">body</span><span class="p">)</span>
                 <span class="n">GraphParallelTransformer</span><span class="o">.</span><span class="n">_validate_graph_parallel_context_body</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">stmt</span><span class="o">.</span><span class="n">orelse</span><span class="p">)</span>
                 <span class="k">continue</span>
