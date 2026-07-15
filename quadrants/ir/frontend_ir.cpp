@@ -1280,6 +1280,11 @@ void ASTBuilder::insert(std::unique_ptr<Stmt> &&stmt, int location) {
   // for-loop body are also stamped, but harmlessly: they live inside the for-loop's task body and never reach the
   // offloader's root-level pending-serial bucket.
   stmt->region_tag = {current_graph_do_while_level_id_, current_stream_parallel_group_id_, current_checkpoint_id_};
+  // Also stamp the enclosing `qd.graph_parallel_context()` region id. For-loops get this from ForLoopConfig, but a bare
+  // side-effecting store written directly in a `qd.graph_parallel()` section has no ForLoopConfig -- without this stamp
+  // its offloaded serial task lands in region 0, so two back-to-back serial-only regions would merge into one fork/join
+  // and the second could race the first.
+  stmt->region_tag.graph_parallel_region_id = current_graph_parallel_region_id_;
   stack_.back()->insert(std::move(stmt), location);
 }
 

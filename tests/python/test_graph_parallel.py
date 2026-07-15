@@ -159,6 +159,65 @@ def test_graph_parallel_back_to_back_regions_keep_join():
 
 
 @test_utils.test()
+def test_graph_parallel_back_to_back_regions_serial_sections_keep_join():
+    """Same back-to-back-region guard as above, but each qd.graph_parallel section's body is a bare serial store
+    (a side-effecting statement, not a for-loop). Such statements are tagged by ASTBuilder::insert with the
+    section's stream_parallel_group_id; the region id must be stamped there too, otherwise every serial-only
+    section lands in region 0 and the graph builder merges the two contexts into one fork/join -- dropping A's
+    join, so context B's sections fork alongside (and can race) context A's. Regression test for serial-task
+    sections missing the graph_parallel_region_id stamp.
+
+    Each context's two sections stay disjoint (one touches only the first array, the other only the second); the
+    only dependency is across the context boundary (context B reads what context A wrote)."""
+
+    @qd.kernel(graph=True)
+    def k(
+        x: qd.types.ndarray(qd.f32, ndim=1),
+        y: qd.types.ndarray(qd.f32, ndim=1),
+        a: qd.types.ndarray(qd.f32, ndim=1),
+        b: qd.types.ndarray(qd.f32, ndim=1),
+    ):
+        # Context A: two serial-only sections writing disjoint scalars.
+        with qd.graph_parallel_context():
+            with qd.graph_parallel():
+                x[0] = 1.0
+            with qd.graph_parallel():
+                y[0] = 2.0
+        # Context B immediately after A (no serial statement between them). Each section reads the context-A
+        # section that wrote the array it consumes, so B must wait for A's join.
+        with qd.graph_parallel_context():
+            with qd.graph_parallel():
+                a[0] = x[0] * 10.0
+            with qd.graph_parallel():
+                b[0] = y[0] * 10.0
+
+    x = qd.ndarray(qd.f32, shape=(1,))
+    y = qd.ndarray(qd.f32, shape=(1,))
+    a = qd.ndarray(qd.f32, shape=(1,))
+    b = qd.ndarray(qd.f32, shape=(1,))
+    for arr in (x, y, a, b):
+        arr.from_numpy(np.zeros(1, dtype=np.float32))
+
+    k(x, y, a, b)
+
+    if _on_cuda():
+        # One empty join node per context (two contexts -> two joins). The merge bug this guards would build a
+        # single fork/join across both contexts, emitting only one join, i.e. num_tasks + 1.
+        assert _graph_num_nodes() == _num_offloaded_tasks() + 2
+
+    # Correct only if context A fully joined before context B ran: a = x * 10 = 10, b = y * 10 = 20.
+    np.testing.assert_allclose(a.to_numpy(), 10.0)
+    np.testing.assert_allclose(b.to_numpy(), 20.0)
+
+    # Relaunch: same cached graph, same result.
+    for arr in (x, y, a, b):
+        arr.from_numpy(np.zeros(1, dtype=np.float32))
+    k(x, y, a, b)
+    np.testing.assert_allclose(a.to_numpy(), 10.0)
+    np.testing.assert_allclose(b.to_numpy(), 20.0)
+
+
+@test_utils.test()
 def test_graph_parallel_three_sections():
     """Fan-out of three independent qd.graph_parallel sections; one empty join node."""
     n = 256
