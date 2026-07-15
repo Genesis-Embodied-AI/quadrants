@@ -387,6 +387,11 @@ class ASTSerializer : public IRVisitor, public ExpressionVisitor {
     // to the cache key. The per-for-loop level tag is the only record of which graph_do_while level a task belongs to,
     // so it must be part of the key.
     emit(stmt->graph_do_while_level_id);
+    // Likewise the enclosing qd.graph_parallel_context() region: its context managers emit no IR of their own, so the
+    // region id is the only trace of how sections are grouped. Two kernels that differ only by splitting the same
+    // qd.graph_parallel sections into separate back-to-back contexts must get distinct keys, else one reuses the
+    // other's cached module and their fork/join groups merge (letting the second context race the first).
+    emit(stmt->graph_parallel_region_id);
     emit(stmt->checkpoint_id);
     emit(stmt->body.get());
   }
@@ -597,6 +602,10 @@ class ASTSerializer : public IRVisitor, public ExpressionVisitor {
       // graph_do_while loop, or inside vs outside a qd.checkpoint, must get distinct keys.
       emit(stmt->region_tag.graph_do_while_level_id);
       emit(stmt->region_tag.stream_parallel_group_id);
+      // A bare side-effecting store inside a qd.graph_parallel() section carries its region only here (it has no
+      // ForLoopConfig), so it must be keyed too -- otherwise two serial-only-section kernels differing only in their
+      // qd.graph_parallel_context() grouping would collide and merge their fork/join groups.
+      emit(stmt->region_tag.graph_parallel_region_id);
       emit(stmt->region_tag.checkpoint_id);
       stmt->accept(this);
     } else {
