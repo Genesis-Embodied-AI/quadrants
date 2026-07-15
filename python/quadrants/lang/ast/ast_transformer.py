@@ -1631,6 +1631,12 @@ class ASTTransformer(Builder):
             )
         if not ctx.is_kernel:
             raise QuadrantsSyntaxError("qd.stream_parallel() can only be used inside @qd.kernel, not @qd.func")
+        kernel = ctx.global_context.current_kernel
+        if kernel is not None and kernel.use_graph:
+            raise QuadrantsSyntaxError(
+                "qd.stream_parallel() is not compatible with graph=True kernels. Streams and graphs cannot be "
+                "combined; remove graph=True or the qd.stream_parallel() block."
+            )
         ctx.ast_builder.begin_stream_parallel()
         build_stmts(ctx, node.body)
         ctx.ast_builder.end_stream_parallel()
