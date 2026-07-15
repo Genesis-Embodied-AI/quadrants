@@ -3,7 +3,7 @@
 Each top-level for-loop will be parallelized, within a kernel. Under the hood, each top-level for-loop will be launched as a separate GPU kernel.
 
 A top-level for-loop can be encapsulated in one or more of the following, and still be parallelized:
-- `if` statements where the conditional is `qd.static`
+- `if` statements where the conditional is [`qd.static`](static.md)
 - inline functions (`@qd.func`)
 
 Note that adding a non-static `if` over the top of a for-loop will lead to the for-loop NOT being parallelized.
