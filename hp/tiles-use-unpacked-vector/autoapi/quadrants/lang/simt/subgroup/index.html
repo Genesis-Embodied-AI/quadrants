@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>quadrants.lang.simt.subgroup &#8212; Quadrants 1.1.2 documentation</title>
+    <title>quadrants.lang.simt.subgroup &#8212; Quadrants 1.1.3 documentation</title>
   
   
   
@@ -43,7 +43,7 @@
   <link rel="preload" as="script" href="../../../../../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5" />
 <link rel="preload" as="script" href="../../../../../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5" />
 
-    <script src="../../../../../_static/documentation_options.js?v=6f037312"></script>
+    <script src="../../../../../_static/documentation_options.js?v=cb7bf70b"></script>
     <script src="../../../../../_static/doctools.js?v=9bcbadda"></script>
     <script src="../../../../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../../../../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -63,7 +63,7 @@
     <link rel="prev" title="quadrants.lang.simt.sorting" href="../sorting/index.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="1.1.2" />
+  <meta name="docsearch:version" content="1.1.3" />
   
     
     <script src="../../../../../_static/searchtools.js"></script>
@@ -131,7 +131,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 1.1.2 documentation</p>
+    <p class="title logo__title">Quadrants 1.1.3 documentation</p>
   
 </a></div>
     
@@ -370,10 +370,10 @@
 <div class="pst-scrollable-table-container"><table class="autosummary longtable table autosummary">
 <tbody>
 <tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.sync" title="quadrants.lang.simt.subgroup.sync"><code class="xref py py-obj docutils literal notranslate"><span class="pre">sync</span></code></a>()</p></td>
-<td><p></p></td>
+<td><p>Subgroup-scope thread-converging barrier: every lane in the subgroup must reach the call before any lane</p></td>
 </tr>
 <tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.mem_fence" title="quadrants.lang.simt.subgroup.mem_fence"><code class="xref py py-obj docutils literal notranslate"><span class="pre">mem_fence</span></code></a>()</p></td>
-<td><p></p></td>
+<td><p>Subgroup-scope memory fence: orders memory operations within the subgroup without requiring thread convergence.</p></td>
 </tr>
 <tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.barrier" title="quadrants.lang.simt.subgroup.barrier"><code class="xref py py-obj docutils literal notranslate"><span class="pre">barrier</span></code></a>()</p></td>
 <td><p></p></td>
@@ -427,19 +427,19 @@
 <td><p><code class="docutils literal notranslate"><span class="pre">log2(group_size())</span></code> as a Python <code class="docutils literal notranslate"><span class="pre">int</span></code>, asserting the subgroup size is a power of two.</p></td>
 </tr>
 <tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.invocation_id" title="quadrants.lang.simt.subgroup.invocation_id"><code class="xref py py-obj docutils literal notranslate"><span class="pre">invocation_id</span></code></a>()</p></td>
-<td><p></p></td>
+<td><p>Return this lane's subgroup-local index, in <code class="docutils literal notranslate"><span class="pre">0</span> <span class="pre">..</span> <span class="pre">group_size()</span> <span class="pre">-</span> <span class="pre">1</span></code> (an <code class="docutils literal notranslate"><span class="pre">i32</span></code>), on every backend.</p></td>
 </tr>
 <tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.shuffle" title="quadrants.lang.simt.subgroup.shuffle"><code class="xref py py-obj docutils literal notranslate"><span class="pre">shuffle</span></code></a>(value, index)</p></td>
-<td><p></p></td>
+<td><p>Each lane returns the <code class="docutils literal notranslate"><span class="pre">value</span></code> held by the lane whose subgroup-local id equals <code class="docutils literal notranslate"><span class="pre">index</span></code>.</p></td>
 </tr>
 <tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.shuffle_xor" title="quadrants.lang.simt.subgroup.shuffle_xor"><code class="xref py py-obj docutils literal notranslate"><span class="pre">shuffle_xor</span></code></a>(value, mask)</p></td>
 <td><p>Lane <code class="docutils literal notranslate"><span class="pre">i</span></code> reads <code class="docutils literal notranslate"><span class="pre">value</span></code> from lane <code class="docutils literal notranslate"><span class="pre">i</span> <span class="pre">^</span> <span class="pre">mask</span></code>.</p></td>
 </tr>
 <tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.shuffle_up" title="quadrants.lang.simt.subgroup.shuffle_up"><code class="xref py py-obj docutils literal notranslate"><span class="pre">shuffle_up</span></code></a>(value, offset)</p></td>
-<td><p></p></td>
+<td><p>Lane <code class="docutils literal notranslate"><span class="pre">i</span></code> returns the <code class="docutils literal notranslate"><span class="pre">value</span></code> held by lane <code class="docutils literal notranslate"><span class="pre">i</span> <span class="pre">-</span> <span class="pre">offset</span></code>.</p></td>
 </tr>
 <tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.shuffle_down" title="quadrants.lang.simt.subgroup.shuffle_down"><code class="xref py py-obj docutils literal notranslate"><span class="pre">shuffle_down</span></code></a>(value, offset)</p></td>
-<td><p></p></td>
+<td><p>Lane <code class="docutils literal notranslate"><span class="pre">i</span></code> returns the <code class="docutils literal notranslate"><span class="pre">value</span></code> held by lane <code class="docutils literal notranslate"><span class="pre">i</span> <span class="pre">+</span> <span class="pre">offset</span></code>.</p></td>
 </tr>
 <tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.simt.subgroup.all_true" title="quadrants.lang.simt.subgroup.all_true"><code class="xref py py-obj docutils literal notranslate"><span class="pre">all_true</span></code></a>(predicate)</p></td>
 <td><p><code class="docutils literal notranslate"><span class="pre">all_true_tiled</span></code> across the entire subgroup -- see <code class="docutils literal notranslate"><span class="pre">all_true_tiled(...,</span> <span class="pre">log2_size=log2_group_size())</span></code>.</p></td>
@@ -459,12 +459,25 @@
 <dl class="py function">
 <dt class="sig sig-object py" id="quadrants.lang.simt.subgroup.sync">
 <span class="sig-prename descclassname"><span class="pre">quadrants.lang.simt.subgroup.</span></span><span class="sig-name descname"><span class="pre">sync</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/quadrants/lang/simt/subgroup.html#sync"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.simt.subgroup.sync" title="Link to this definition">#</a></dt>
-<dd></dd></dl>
+<dd><p>Subgroup-scope thread-converging barrier: every lane in the subgroup must reach the call before any lane
+proceeds. Call from uniform control flow with all lanes active; calling from divergent control flow is
+implementation-defined (CUDA’s <code class="docutils literal notranslate"><span class="pre">nvvm.bar.warp.sync</span></code> deadlocks if the mask does not match the active set).</p>
+<p>Lowers to <code class="docutils literal notranslate"><span class="pre">OpControlBarrier(Subgroup,</span> <span class="pre">Subgroup,</span> <span class="pre">0)</span></code> on SPIR-V, <code class="docutils literal notranslate"><span class="pre">__syncwarp(0xFFFFFFFF)</span></code> on CUDA (reconverges
+lanes that diverged under independent thread scheduling on Volta+), and <code class="docutils literal notranslate"><span class="pre">llvm.amdgcn.wave.barrier</span></code> on AMDGPU (a
+compiler reordering barrier on lockstep GCN waves, a real wave-scope barrier on RDNA). The legacy name
+<code class="docutils literal notranslate"><span class="pre">subgroup.barrier()</span></code> is a deprecated alias that forwards here.</p>
+</dd></dl>
 
 <dl class="py function">
 <dt class="sig sig-object py" id="quadrants.lang.simt.subgroup.mem_fence">
 <span class="sig-prename descclassname"><span class="pre">quadrants.lang.simt.subgroup.</span></span><span class="sig-name descname"><span class="pre">mem_fence</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/quadrants/lang/simt/subgroup.html#mem_fence"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.simt.subgroup.mem_fence" title="Link to this definition">#</a></dt>
-<dd></dd></dl>
+<dd><p>Subgroup-scope memory fence: orders memory operations within the subgroup without requiring thread convergence.</p>
+<p>Lowers to <code class="docutils literal notranslate"><span class="pre">OpMemoryBarrier(Subgroup,</span> <span class="pre">AcquireRelease</span> <span class="pre">|</span> <span class="pre">UniformMemory</span> <span class="pre">|</span> <span class="pre">WorkgroupMemory)</span></code> on SPIR-V,
+<code class="docutils literal notranslate"><span class="pre">__threadfence_block()</span></code> on CUDA, and <code class="docutils literal notranslate"><span class="pre">fence</span> <span class="pre">syncscope(&quot;workgroup&quot;)</span> <span class="pre">seq_cst</span></code> on AMDGPU. The CUDA and AMDGPU
+forms are workgroup-scope – over-strict for the subgroup-scope ask but correct, since the subgroup is a strict
+subset of the workgroup. Call from uniform control flow with all lanes active (same caveats as <cite>sync</cite>). The legacy
+name <code class="docutils literal notranslate"><span class="pre">subgroup.memory_barrier()</span></code> is a deprecated alias that forwards here.</p>
+</dd></dl>
 
 <dl class="py function">
 <dt class="sig sig-object py" id="quadrants.lang.simt.subgroup.barrier">
@@ -652,12 +665,24 @@ is a compile-time constant on every backend — callers feed it straight into <c
 <dl class="py function">
 <dt class="sig sig-object py" id="quadrants.lang.simt.subgroup.invocation_id">
 <span class="sig-prename descclassname"><span class="pre">quadrants.lang.simt.subgroup.</span></span><span class="sig-name descname"><span class="pre">invocation_id</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/quadrants/lang/simt/subgroup.html#invocation_id"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.simt.subgroup.invocation_id" title="Link to this definition">#</a></dt>
-<dd></dd></dl>
+<dd><p>Return this lane’s subgroup-local index, in <code class="docutils literal notranslate"><span class="pre">0</span> <span class="pre">..</span> <span class="pre">group_size()</span> <span class="pre">-</span> <span class="pre">1</span></code> (an <code class="docutils literal notranslate"><span class="pre">i32</span></code>), on every backend.</p>
+<p>Used both as a lane id when computing a target lane for <cite>shuffle</cite> / <cite>broadcast</cite>, and as a per-lane identifier in
+cooperative algorithms.</p>
+</dd></dl>
 
 <dl class="py function">
 <dt class="sig sig-object py" id="quadrants.lang.simt.subgroup.shuffle">
 <span class="sig-prename descclassname"><span class="pre">quadrants.lang.simt.subgroup.</span></span><span class="sig-name descname"><span class="pre">shuffle</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">index</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/quadrants/lang/simt/subgroup.html#shuffle"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.simt.subgroup.shuffle" title="Link to this definition">#</a></dt>
-<dd></dd></dl>
+<dd><p>Each lane returns the <code class="docutils literal notranslate"><span class="pre">value</span></code> held by the lane whose subgroup-local id equals <code class="docutils literal notranslate"><span class="pre">index</span></code>.</p>
+<p><code class="docutils literal notranslate"><span class="pre">value</span></code> is a scalar in a register; supported dtypes are 32- and 64-bit signed / unsigned integers and <code class="docutils literal notranslate"><span class="pre">f32</span></code> /
+<code class="docutils literal notranslate"><span class="pre">f64</span></code> (64-bit types are split into two 32-bit shuffles on AMDGPU; CUDA dispatches to its native 64-bit helpers).
+<code class="docutils literal notranslate"><span class="pre">index</span></code> is a <code class="docutils literal notranslate"><span class="pre">u32</span></code>; if it is out of range for the active subgroup the result is implementation-defined, so pass
+<cite>invocation_id</cite>-derived values or known-good lane ids.</p>
+<p>Lowers to <code class="docutils literal notranslate"><span class="pre">__shfl_sync</span></code> on CUDA and <code class="docutils literal notranslate"><span class="pre">OpGroupNonUniformShuffle</span></code> on SPIR-V. On AMDGPU it goes through
+<code class="docutils literal notranslate"><span class="pre">ds_bpermute</span></code>; wave64 shuffles that cross the 32-lane boundary use a single wave-wide <code class="docutils literal notranslate"><span class="pre">ds_bpermute</span></code> on CDNA, or
+a <code class="docutils literal notranslate"><span class="pre">permlane64</span> <span class="pre">+</span> <span class="pre">ds_bpermute</span> <span class="pre">+</span> <span class="pre">select</span></code> sequence on RDNA (a few extra cycles). See the cross-half lowering comments
+in <code class="docutils literal notranslate"><span class="pre">runtime.cpp</span></code> for the per-ISA details.</p>
+</dd></dl>
 
 <dl class="py function">
 <dt class="sig sig-object py" id="quadrants.lang.simt.subgroup.shuffle_xor">
@@ -672,12 +697,24 @@ the calling kernel.</p>
 <dl class="py function">
 <dt class="sig sig-object py" id="quadrants.lang.simt.subgroup.shuffle_up">
 <span class="sig-prename descclassname"><span class="pre">quadrants.lang.simt.subgroup.</span></span><span class="sig-name descname"><span class="pre">shuffle_up</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">offset</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/quadrants/lang/simt/subgroup.html#shuffle_up"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.simt.subgroup.shuffle_up" title="Link to this definition">#</a></dt>
-<dd></dd></dl>
+<dd><p>Lane <code class="docutils literal notranslate"><span class="pre">i</span></code> returns the <code class="docutils literal notranslate"><span class="pre">value</span></code> held by lane <code class="docutils literal notranslate"><span class="pre">i</span> <span class="pre">-</span> <span class="pre">offset</span></code>.</p>
+<p>Lanes near the bottom of the subgroup – where <code class="docutils literal notranslate"><span class="pre">i</span> <span class="pre">-</span> <span class="pre">offset</span> <span class="pre">&lt;</span> <span class="pre">0</span></code> – receive an implementation-defined value
+(typically their own <code class="docutils literal notranslate"><span class="pre">value</span></code>), so the bottom <code class="docutils literal notranslate"><span class="pre">offset</span></code> lanes’ results should be ignored or masked. Same dtype
+rules as <cite>shuffle</cite>; <code class="docutils literal notranslate"><span class="pre">offset</span></code> is a <code class="docutils literal notranslate"><span class="pre">u32</span></code>. Lowers to <code class="docutils literal notranslate"><span class="pre">__shfl_up_sync</span></code> on CUDA and <code class="docutils literal notranslate"><span class="pre">OpGroupNonUniformShuffleUp</span></code>
+on SPIR-V; on AMDGPU it is emulated with <code class="docutils literal notranslate"><span class="pre">ds_bpermute</span></code>, with wave64 cross-half cases handled the same way as
+<cite>shuffle</cite>.</p>
+</dd></dl>
 
 <dl class="py function">
 <dt class="sig sig-object py" id="quadrants.lang.simt.subgroup.shuffle_down">
 <span class="sig-prename descclassname"><span class="pre">quadrants.lang.simt.subgroup.</span></span><span class="sig-name descname"><span class="pre">shuffle_down</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">offset</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/quadrants/lang/simt/subgroup.html#shuffle_down"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.simt.subgroup.shuffle_down" title="Link to this definition">#</a></dt>
-<dd></dd></dl>
+<dd><p>Lane <code class="docutils literal notranslate"><span class="pre">i</span></code> returns the <code class="docutils literal notranslate"><span class="pre">value</span></code> held by lane <code class="docutils literal notranslate"><span class="pre">i</span> <span class="pre">+</span> <span class="pre">offset</span></code>.</p>
+<p>Lanes near the top of the subgroup – where <code class="docutils literal notranslate"><span class="pre">i</span> <span class="pre">+</span> <span class="pre">offset</span> <span class="pre">&gt;=</span> <span class="pre">group_size()</span></code> – receive an implementation-defined
+value (typically their own <code class="docutils literal notranslate"><span class="pre">value</span></code>), so reduction patterns must only trust lane 0’s final result or mask out the
+out-of-range lanes. Same dtype rules as <cite>shuffle</cite>; <code class="docutils literal notranslate"><span class="pre">offset</span></code> is a <code class="docutils literal notranslate"><span class="pre">u32</span></code>. Lowers to <code class="docutils literal notranslate"><span class="pre">__shfl_down_sync</span></code> on CUDA
+and <code class="docutils literal notranslate"><span class="pre">OpGroupNonUniformShuffleDown</span></code> on SPIR-V; on AMDGPU it is emulated with <code class="docutils literal notranslate"><span class="pre">ds_bpermute</span></code>, with wave64
+cross-half cases handled the same way as <cite>shuffle</cite>.</p>
+</dd></dl>
 
 <dl class="py function">
 <dt class="sig sig-object py" id="quadrants.lang.simt.subgroup.all_true">

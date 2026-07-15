@@ -7,7 +7,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>quadrants.lang.simt.subgroup &#8212; Quadrants 1.1.2 documentation</title>
+    <title>quadrants.lang.simt.subgroup &#8212; Quadrants 1.1.3 documentation</title>
   
   
   
@@ -42,7 +42,7 @@
   <link rel="preload" as="script" href="../../../../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5" />
 <link rel="preload" as="script" href="../../../../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5" />
 
-    <script src="../../../../_static/documentation_options.js?v=6f037312"></script>
+    <script src="../../../../_static/documentation_options.js?v=cb7bf70b"></script>
     <script src="../../../../_static/doctools.js?v=9bcbadda"></script>
     <script src="../../../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../../../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -60,7 +60,7 @@
     <link rel="search" title="Search" href="../../../../search.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="1.1.2" />
+  <meta name="docsearch:version" content="1.1.3" />
   
     
     <script src="../../../../_static/searchtools.js"></script>
@@ -128,7 +128,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 1.1.2 documentation</p>
+    <p class="title logo__title">Quadrants 1.1.3 documentation</p>
   
 </a></div>
     
@@ -345,6 +345,15 @@
 <div class="viewcode-block" id="sync">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.sync">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">sync</span><span class="p">():</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Subgroup-scope thread-converging barrier: every lane in the subgroup must reach the call before any lane</span>
+<span class="sd">    proceeds. Call from uniform control flow with all lanes active; calling from divergent control flow is</span>
+<span class="sd">    implementation-defined (CUDA&#39;s ``nvvm.bar.warp.sync`` deadlocks if the mask does not match the active set).</span>
+
+<span class="sd">    Lowers to ``OpControlBarrier(Subgroup, Subgroup, 0)`` on SPIR-V, ``__syncwarp(0xFFFFFFFF)`` on CUDA (reconverges</span>
+<span class="sd">    lanes that diverged under independent thread scheduling on Volta+), and ``llvm.amdgcn.wave.barrier`` on AMDGPU (a</span>
+<span class="sd">    compiler reordering barrier on lockstep GCN waves, a real wave-scope barrier on RDNA). The legacy name</span>
+<span class="sd">    ``subgroup.barrier()`` is a deprecated alias that forwards here.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">call_internal</span><span class="p">(</span><span class="s2">&quot;subgroupBarrier&quot;</span><span class="p">,</span> <span class="n">with_runtime_context</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></div>
 
 
@@ -352,6 +361,14 @@
 <div class="viewcode-block" id="mem_fence">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.mem_fence">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">mem_fence</span><span class="p">():</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Subgroup-scope memory fence: orders memory operations within the subgroup without requiring thread convergence.</span>
+
+<span class="sd">    Lowers to ``OpMemoryBarrier(Subgroup, AcquireRelease | UniformMemory | WorkgroupMemory)`` on SPIR-V,</span>
+<span class="sd">    ``__threadfence_block()`` on CUDA, and ``fence syncscope(&quot;workgroup&quot;) seq_cst`` on AMDGPU. The CUDA and AMDGPU</span>
+<span class="sd">    forms are workgroup-scope -- over-strict for the subgroup-scope ask but correct, since the subgroup is a strict</span>
+<span class="sd">    subset of the workgroup. Call from uniform control flow with all lanes active (same caveats as `sync`). The legacy</span>
+<span class="sd">    name ``subgroup.memory_barrier()`` is a deprecated alias that forwards here.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">call_internal</span><span class="p">(</span><span class="s2">&quot;subgroupMemoryBarrier&quot;</span><span class="p">,</span> <span class="n">with_runtime_context</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></div>
 
 
@@ -594,6 +611,18 @@
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">broadcast</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">index</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Every lane in the subgroup returns the ``value`` held by the lane whose subgroup-local id equals ``index``.</span>
+
+<span class="sd">    Expresses intent (&quot;read lane ``index``&quot;) more directly than ``shuffle(value, index)``, and on backends with a</span>
+<span class="sd">    dedicated broadcast may map to a cheaper instruction. Same dtype rules as `shuffle`. Lowers to ``__shfl_sync`` on</span>
+<span class="sd">    CUDA, ``OpGroupNonUniformBroadcast`` on SPIR-V, and ``ds_bpermute`` on AMDGPU (a single wave-wide ``ds_bpermute``</span>
+<span class="sd">    on CDNA wave64, a ``permlane64``-driven cross-half select on RDNA wave64).</span>
+
+<span class="sd">    On SPIR-V, ``index`` **must be dynamically uniform** -- the same value on every lane in the subgroup -- because</span>
+<span class="sd">    ``OpGroupNonUniformBroadcast`` requires it; passing a per-lane-varying ``index`` is undefined behaviour. On CUDA /</span>
+<span class="sd">    AMDGPU, ``index`` may vary per lane and the call is identical to ``shuffle(value, index)``; use `shuffle` directly</span>
+<span class="sd">    if you need a per-lane-varying source lane.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">call_internal</span><span class="p">(</span><span class="s2">&quot;subgroupBroadcast&quot;</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">index</span><span class="p">,</span> <span class="n">with_runtime_context</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
 
 
@@ -728,6 +757,11 @@
 <div class="viewcode-block" id="invocation_id">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.invocation_id">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">invocation_id</span><span class="p">():</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Return this lane&#39;s subgroup-local index, in ``0 .. group_size() - 1`` (an ``i32``), on every backend.</span>
+
+<span class="sd">    Used both as a lane id when computing a target lane for `shuffle` / `broadcast`, and as a per-lane identifier in</span>
+<span class="sd">    cooperative algorithms.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">call_internal</span><span class="p">(</span><span class="s2">&quot;subgroupInvocationId&quot;</span><span class="p">,</span> <span class="n">with_runtime_context</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></div>
 
 
@@ -740,6 +774,18 @@
 <div class="viewcode-block" id="shuffle">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.shuffle">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">shuffle</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">index</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Each lane returns the ``value`` held by the lane whose subgroup-local id equals ``index``.</span>
+
+<span class="sd">    ``value`` is a scalar in a register; supported dtypes are 32- and 64-bit signed / unsigned integers and ``f32`` /</span>
+<span class="sd">    ``f64`` (64-bit types are split into two 32-bit shuffles on AMDGPU; CUDA dispatches to its native 64-bit helpers).</span>
+<span class="sd">    ``index`` is a ``u32``; if it is out of range for the active subgroup the result is implementation-defined, so pass</span>
+<span class="sd">    `invocation_id`-derived values or known-good lane ids.</span>
+
+<span class="sd">    Lowers to ``__shfl_sync`` on CUDA and ``OpGroupNonUniformShuffle`` on SPIR-V. On AMDGPU it goes through</span>
+<span class="sd">    ``ds_bpermute``; wave64 shuffles that cross the 32-lane boundary use a single wave-wide ``ds_bpermute`` on CDNA, or</span>
+<span class="sd">    a ``permlane64 + ds_bpermute + select`` sequence on RDNA (a few extra cycles). See the cross-half lowering comments</span>
+<span class="sd">    in ``runtime.cpp`` for the per-ISA details.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">call_internal</span><span class="p">(</span><span class="s2">&quot;subgroupShuffle&quot;</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">index</span><span class="p">,</span> <span class="n">with_runtime_context</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></div>
 
 
@@ -763,6 +809,14 @@
 <div class="viewcode-block" id="shuffle_up">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.shuffle_up">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">shuffle_up</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">offset</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Lane ``i`` returns the ``value`` held by lane ``i - offset``.</span>
+
+<span class="sd">    Lanes near the bottom of the subgroup -- where ``i - offset &lt; 0`` -- receive an implementation-defined value</span>
+<span class="sd">    (typically their own ``value``), so the bottom ``offset`` lanes&#39; results should be ignored or masked. Same dtype</span>
+<span class="sd">    rules as `shuffle`; ``offset`` is a ``u32``. Lowers to ``__shfl_up_sync`` on CUDA and ``OpGroupNonUniformShuffleUp``</span>
+<span class="sd">    on SPIR-V; on AMDGPU it is emulated with ``ds_bpermute``, with wave64 cross-half cases handled the same way as</span>
+<span class="sd">    `shuffle`.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">call_internal</span><span class="p">(</span><span class="s2">&quot;subgroupShuffleUp&quot;</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">offset</span><span class="p">,</span> <span class="n">with_runtime_context</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></div>
 
 
@@ -770,6 +824,14 @@
 <div class="viewcode-block" id="shuffle_down">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/subgroup/index.html#quadrants.lang.simt.subgroup.shuffle_down">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">shuffle_down</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">offset</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Lane ``i`` returns the ``value`` held by lane ``i + offset``.</span>
+
+<span class="sd">    Lanes near the top of the subgroup -- where ``i + offset &gt;= group_size()`` -- receive an implementation-defined</span>
+<span class="sd">    value (typically their own ``value``), so reduction patterns must only trust lane 0&#39;s final result or mask out the</span>
+<span class="sd">    out-of-range lanes. Same dtype rules as `shuffle`; ``offset`` is a ``u32``. Lowers to ``__shfl_down_sync`` on CUDA</span>
+<span class="sd">    and ``OpGroupNonUniformShuffleDown`` on SPIR-V; on AMDGPU it is emulated with ``ds_bpermute``, with wave64</span>
+<span class="sd">    cross-half cases handled the same way as `shuffle`.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">call_internal</span><span class="p">(</span><span class="s2">&quot;subgroupShuffleDown&quot;</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">offset</span><span class="p">,</span> <span class="n">with_runtime_context</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></div>
 
 
