@@ -382,17 +382,11 @@ class ASTSerializer : public IRVisitor, public ExpressionVisitor {
     emit(stmt->strictly_serialized);
     emit(stmt->mem_access_opt);
     emit(stmt->block_dim);
-    emit(stmt->stream_parallel_group_id);
-    // graph_do_while nesting emits no loop IR (the while body is inlined), so the loop structure is otherwise invisible
-    // to the cache key. The per-for-loop level tag is the only record of which graph_do_while level a task belongs to,
-    // so it must be part of the key.
-    emit(stmt->graph_do_while_level_id);
-    // Likewise the enclosing qd.graph_parallel_context() region: its context managers emit no IR of their own, so the
-    // region id is the only trace of how sections are grouped. Two kernels that differ only by splitting the same
-    // qd.graph_parallel sections into separate back-to-back contexts must get distinct keys, else one reuses the
-    // other's cached module and their fork/join groups merge (letting the second context race the first).
-    emit(stmt->graph_parallel_region_id);
-    emit(stmt->checkpoint_id);
+    // This for-loop's graph-region tags (see emit_graph_region_key): graph_do_while / graph_parallel_context emit no
+    // loop IR of their own, so these loose ints are the only record in the key of which loop level / stream_parallel
+    // group / region / checkpoint the loop belongs to.
+    emit_graph_region_key(stmt->graph_do_while_level_id, stmt->stream_parallel_group_id, stmt->graph_parallel_region_id,
+                          stmt->checkpoint_id);
     emit(stmt->body.get());
   }
 
@@ -596,17 +590,15 @@ class ASTSerializer : public IRVisitor, public ExpressionVisitor {
       emit(stmt->erased);
       emit(stmt->fields_registered);
       emit(stmt->ret_type);
-      // The graph-region (graph_do_while level / checkpoint cp_id / stream_parallel group) a statement sits in now
-      // affects how the offloader places it -- and graph_do_while emits no loop IR, so the region is otherwise
-      // invisible to the key. Two kernels that differ only in whether a bare statement is inside vs outside a
-      // graph_do_while loop, or inside vs outside a qd.checkpoint, must get distinct keys.
-      emit(stmt->region_tag.graph_do_while_level_id);
-      emit(stmt->region_tag.stream_parallel_group_id);
-      // A bare side-effecting store inside a qd.graph_parallel() section carries its region only here (it has no
-      // ForLoopConfig), so it must be keyed too -- otherwise two serial-only-section kernels differing only in their
-      // qd.graph_parallel_context() grouping would collide and merge their fork/join groups.
-      emit(stmt->region_tag.graph_parallel_region_id);
-      emit(stmt->region_tag.checkpoint_id);
+      // The graph-region tag (graph_do_while level / stream_parallel group / graph_parallel_context region / checkpoint
+      // cp_id) a statement sits in affects how the offloader places and gates it, and graph_do_while /
+      // graph_parallel_context emit no IR, so the tag is otherwise invisible to the key. A bare side-effecting store
+      // inside a qd.graph_parallel() section carries its region only here (it has no ForLoopConfig), so keying it is
+      // what keeps two serial-only-section kernels that differ only in their qd.graph_parallel_context() grouping from
+      // colliding. Routes through the same emit_graph_region_key helper as FrontendForStmt.
+      const auto &region_tag = stmt->region_tag;
+      emit_graph_region_key(region_tag.graph_do_while_level_id, region_tag.stream_parallel_group_id,
+                            region_tag.graph_parallel_region_id, region_tag.checkpoint_id);
       stmt->accept(this);
     } else {
       emit(StmtOpCode::NIL);
@@ -628,6 +620,29 @@ class ASTSerializer : public IRVisitor, public ExpressionVisitor {
   void emit(bool v) {
     emit_pod(v);
   }
+
+  // SINGLE PLACE the offline cache key names the graph-region tag fields. Emits every *semantic* field of a
+  // `GraphRegionTag` -- everything that changes how the offloader groups / gates a task, hence must distinguish cached
+  // modules. `graph_do_while` and `qd.graph_parallel_context` emit no IR of their own, so these tags are the ONLY trace
+  // in the key of which graph_do_while level / stream_parallel group / region / checkpoint a task belongs to: two
+  // kernels that differ only by how they group work into loops / sections / regions / checkpoints must get distinct
+  // keys, else one silently reuses the other's cached module and their fork/join or gating merges. `is_set` is
+  // deliberately excluded (a build-time "was this stamped" flag, not a property of the kernel). Both the
+  // `FrontendForStmt` loose ints and the per-`Stmt` `region_tag` route through here, so a field can never be keyed in
+  // one place and forgotten in the other (the bug that let back-to-back regions collide in the cache before #756). The
+  // static_assert below turns "added a GraphRegionTag field but forgot this helper" into a compile error.
+  void emit_graph_region_key(int graph_do_while_level_id,
+                             int stream_parallel_group_id,
+                             int graph_parallel_region_id,
+                             int checkpoint_id) {
+    emit(graph_do_while_level_id);
+    emit(stream_parallel_group_id);
+    emit(graph_parallel_region_id);
+    emit(checkpoint_id);
+  }
+  static_assert(sizeof(GraphRegionTag) == 20,
+                "GraphRegionTag layout changed: update emit_graph_region_key (offline cache key) above, and "
+                "GraphRegionTag::operator== if the new field is semantic.");
 
   void emit(const MemoryAccessOptions &mem_access_options) {
     auto all_options = mem_access_options.get_all();
