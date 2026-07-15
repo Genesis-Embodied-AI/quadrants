@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>Streams &#8212; Quadrants 1.1.2 documentation</title>
+    <title>Performance &#8212; Quadrants 1.1.2 documentation</title>
   
   
   
@@ -55,12 +55,12 @@
     <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
     <script src="../_static/design-tabs.js?v=f930bc37"></script>
     <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
-    <script>DOCUMENTATION_OPTIONS.pagename = 'user_guide/streams';</script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'user_guide/performance';</script>
     <script>DOCUMENTATION_OPTIONS.search_as_you_type = false;</script>
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
-    <link rel="next" title="Performance Dispatch" href="perf_dispatch.html" />
-    <link rel="prev" title="Graph" href="graph.html" />
+    <link rel="next" title="Fastcache" href="fastcache.html" />
+    <link rel="prev" title="Algorithms" href="algorithms.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
   <meta name="docsearch:version" content="1.1.2" />
@@ -336,10 +336,10 @@
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Performance</span></p>
 <ul class="current nav bd-sidenav">
-<li class="toctree-l1"><a class="reference internal" href="performance.html">Performance</a></li>
+<li class="toctree-l1 current active"><a class="current reference internal" href="#">Performance</a></li>
 <li class="toctree-l1"><a class="reference internal" href="fastcache.html">Fastcache</a></li>
 <li class="toctree-l1"><a class="reference internal" href="graph.html">Graph</a></li>
-<li class="toctree-l1 current active"><a class="current reference internal" href="#">Streams</a></li>
+<li class="toctree-l1"><a class="reference internal" href="streams.html">Streams</a></li>
 <li class="toctree-l1"><a class="reference internal" href="perf_dispatch.html">Performance Dispatch</a></li>
 <li class="toctree-l1"><a class="reference internal" href="init_options.html">qd.init options</a></li>
 </ul>
@@ -410,7 +410,7 @@
     
     <li class="breadcrumb-item"><a href="index.html" class="nav-link">User guide</a></li>
     
-    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">Streams</span></li>
+    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">Performance</span></li>
   </ul>
 </nav>
 </div>
@@ -427,157 +427,41 @@
 <div id="searchbox"></div>
                 <article class="bd-article">
                   
-  <section class="tex2jax_ignore mathjax_ignore" id="streams">
-<h1>Streams<a class="headerlink" href="#streams" title="Link to this heading">#</a></h1>
-<p>Streams allow concurrent execution of GPU operations. By default, all Quadrants kernels launch on the default stream, which serializes everything. With streams, you can run multiple top-level for loops in parallel.</p>
-<section id="supported-platforms">
-<h2>Supported platforms<a class="headerlink" href="#supported-platforms" title="Link to this heading">#</a></h2>
-<div class="pst-scrollable-table-container"><table class="table">
-<thead>
-<tr class="row-odd"><th class="head"><p>Backend</p></th>
-<th class="head"><p>Supported</p></th>
-</tr>
-</thead>
-<tbody>
-<tr class="row-even"><td><p>CUDA</p></td>
-<td><p>Yes</p></td>
-</tr>
-<tr class="row-odd"><td><p>AMDGPU</p></td>
-<td><p>Yes</p></td>
-</tr>
-<tr class="row-even"><td><p>CPU</p></td>
-<td><p>No-op</p></td>
-</tr>
-<tr class="row-odd"><td><p>Metal</p></td>
-<td><p>No-op</p></td>
-</tr>
-<tr class="row-even"><td><p>Vulkan</p></td>
-<td><p>No-op</p></td>
-</tr>
-</tbody>
-</table>
-</div>
-<p>On backends without native stream support, stream operations are no-ops and for loops run serially. Code using streams is portable across all backends — it will run without modifications, but serially.</p>
+  <section class="tex2jax_ignore mathjax_ignore" id="performance">
+<h1>Performance<a class="headerlink" href="#performance" title="Link to this heading">#</a></h1>
+<p>This page covers the execution model that the other performance guides build on: what happens when you launch a GPU kernel, where the time goes, and when reducing that time actually speeds up your program. The other pages in this section - graphs, streams, fastcache, and performance dispatch - are performance tools built on this execution model.</p>
+<section id="what-a-gpu-kernel-launch-is">
+<h2>What a GPU kernel launch is<a class="headerlink" href="#what-a-gpu-kernel-launch-is" title="Link to this heading">#</a></h2>
+<p>When you call a <code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel</span></code> from Python, the numerical work does not run inline in the calling thread. Instead Quadrants <em>launches</em> the work onto the GPU: it hands a compiled kernel plus its arguments to the GPU driver, the driver enqueues it onto a stream (an ordered queue of GPU work), and the launch call returns to the host before the GPU has finished - usually before it has even started. Host and GPU run asynchronously.</p>
+<p>Each top-level <code class="docutils literal notranslate"><span class="pre">for</span></code>-loop in a kernel is a separate <em>offloaded task</em>, and each offloaded task becomes one GPU kernel. So a kernel with three top-level for-loops launches three GPU kernels every time you call it. Every launch carries a fixed overhead that is independent of how much data the kernel processes - that per-launch overhead is what we call <em>kernel launch latency</em>. When a kernel crunches a lot of data the overhead is negligible; when it does little work, or when you relaunch small kernels many times in a loop, launch latency can dominate the total runtime.</p>
 </section>
-<section id="stream-parallelism">
-<h2>Stream parallelism<a class="headerlink" href="#stream-parallelism" title="Link to this heading">#</a></h2>
-<p>Inside a <code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel</span></code>, each <code class="docutils literal notranslate"><span class="pre">with</span> <span class="pre">qd.stream_parallel():</span></code> block runs on its own GPU stream.</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">quadrants</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">qd</span>
-
-<span class="n">qd</span><span class="o">.</span><span class="n">init</span><span class="p">(</span><span class="n">arch</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">cuda</span><span class="p">)</span>
-
-<span class="n">N</span> <span class="o">=</span> <span class="mi">1024</span>
-<span class="n">a</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="n">N</span><span class="p">,))</span>
-<span class="n">b</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="n">N</span><span class="p">,))</span>
-<span class="n">c</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="n">N</span><span class="p">,))</span>
-
-<span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
-<span class="k">def</span><span class="w"> </span><span class="nf">compute_ab</span><span class="p">():</span>
-    <span class="k">with</span> <span class="n">qd</span><span class="o">.</span><span class="n">stream_parallel</span><span class="p">():</span>
-        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">N</span><span class="p">):</span>
-            <span class="n">a</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">compute_a</span><span class="p">(</span><span class="n">i</span><span class="p">)</span>
-    <span class="k">with</span> <span class="n">qd</span><span class="o">.</span><span class="n">stream_parallel</span><span class="p">():</span>
-        <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">N</span><span class="p">):</span>
-            <span class="n">b</span><span class="p">[</span><span class="n">j</span><span class="p">]</span> <span class="o">=</span> <span class="n">compute_b</span><span class="p">(</span><span class="n">j</span><span class="p">)</span>
-
-<span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
-<span class="k">def</span><span class="w"> </span><span class="nf">combine</span><span class="p">():</span>
-    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">N</span><span class="p">):</span>
-        <span class="n">c</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">a</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">+</span> <span class="n">b</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
-
-<span class="n">compute_ab</span><span class="p">()</span>  <span class="c1"># the two stream_parallel blocks run concurrently</span>
-<span class="n">combine</span><span class="p">()</span>     <span class="c1"># runs after compute_ab() returns — a[] and b[] are ready</span>
-</pre></div>
-</div>
-<p>Consecutive <code class="docutils literal notranslate"><span class="pre">with</span> <span class="pre">qd.stream_parallel():</span></code> blocks run concurrently. Multiple for loops within a single block share a stream and run serially on it. All streams are synchronized before the kernel returns.</p>
-<section id="restrictions">
-<h3>Restrictions<a class="headerlink" href="#restrictions" title="Link to this heading">#</a></h3>
+<section id="where-kernel-launch-latency-comes-from">
+<h2>Where kernel launch latency comes from<a class="headerlink" href="#where-kernel-launch-latency-comes-from" title="Link to this heading">#</a></h2>
+<p>It helps to split the latency of a single launch into three parts:</p>
 <ul class="simple">
-<li><p>All top-level statements in a kernel must be either all <code class="docutils literal notranslate"><span class="pre">stream_parallel</span></code> blocks or all regular statements. Mixing the two at the top level is a compile-time error.</p></li>
-<li><p>Nesting <code class="docutils literal notranslate"><span class="pre">stream_parallel</span></code> blocks is not supported.</p></li>
+<li><p><strong>Python side.</strong> Everything that happens in the Python interpreter before control reaches Quadrants’ C++ runtime. This is the most expensive of the three per call, and it is paid once per <em>Python</em> call - so a Python <code class="docutils literal notranslate"><span class="pre">while</span></code>/<code class="docutils literal notranslate"><span class="pre">for</span></code> loop that calls a kernel N times pays it N times.</p></li>
+<li><p><strong>C++ side.</strong> Work inside the Quadrants runtime (C++) once control has crossed the boundary. Cheaper than the Python side, but non-zero, and paid per offloaded task.</p></li>
+<li><p><strong>GPU / driver side.</strong> The GPU driver’s own cost to place the kernel on a stream, plus the fixed scheduling latency on the GPU itself before the kernel begins running on the hardware.</p></li>
 </ul>
 </section>
+<section id="latency-hiding">
+<h2>Latency hiding<a class="headerlink" href="#latency-hiding" title="Link to this heading">#</a></h2>
+<p>Because host and GPU run asynchronously, kernel launches overlap with kernel execution: the host can be issuing the next launch while earlier kernels are still running on the GPU. As long as the host issues launches at least as fast as the GPU drains them, the queue never empties, the GPU stays busy, and the launch latency is fully <em>hidden</em> behind execution.</p>
+<p>So reducing launch latency does not always improve overall throughput. When each kernel runs long enough that its execution time exceeds the launch overhead, the GPU is the bottleneck and shaving launch latency changes nothing - the launches were already hidden behind execution.</p>
+<p>Kernel launch latency matters when kernels are relatively small. Then the GPU can finish a kernel before the host has issued the next one, so the GPU sits idle waiting for the next launch and the launch latency is <em>exposed</em> on the critical path. In that regime, cutting launch latency can directly increase throughput.</p>
 </section>
-<section id="explicit-streams">
-<h2>Explicit streams<a class="headerlink" href="#explicit-streams" title="Link to this heading">#</a></h2>
-<p>For cases that require manual control — such as launching separate kernels on different streams or interoperating with PyTorch — you can create and manage streams directly.</p>
-<section id="creating-and-using-streams">
-<h3>Creating and using streams<a class="headerlink" href="#creating-and-using-streams" title="Link to this heading">#</a></h3>
-<p>Any <code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel</span></code> function accepts a special <code class="docutils literal notranslate"><span class="pre">qd_stream</span></code> keyword argument — you do not need to declare it in the kernel signature. The <code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel</span></code> decorator handles it automatically.</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
-<span class="k">def</span><span class="w"> </span><span class="nf">my_kernel</span><span class="p">():</span>
-    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">N</span><span class="p">):</span>
-        <span class="n">a</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">i</span>
-
-<span class="n">s1</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">create_stream</span><span class="p">()</span>
-<span class="n">s2</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">create_stream</span><span class="p">()</span>
-
-<span class="n">my_kernel</span><span class="p">(</span><span class="n">qd_stream</span><span class="o">=</span><span class="n">s1</span><span class="p">)</span>
-<span class="n">my_kernel</span><span class="p">(</span><span class="n">qd_stream</span><span class="o">=</span><span class="n">s2</span><span class="p">)</span>
-
-<span class="n">s1</span><span class="o">.</span><span class="n">synchronize</span><span class="p">()</span>
-<span class="n">s2</span><span class="o">.</span><span class="n">synchronize</span><span class="p">()</span>
-
-<span class="n">s1</span><span class="o">.</span><span class="n">destroy</span><span class="p">()</span>
-<span class="n">s2</span><span class="o">.</span><span class="n">destroy</span><span class="p">()</span>
-</pre></div>
-</div>
-<p>Kernels on different streams may execute concurrently. Call <code class="docutils literal notranslate"><span class="pre">synchronize()</span></code> to block until all work on a stream completes.</p>
+<section id="reducing-launch-latency">
+<h2>Reducing launch latency<a class="headerlink" href="#reducing-launch-latency" title="Link to this heading">#</a></h2>
+<p><a class="reference internal" href="graph.html"><span class="std std-doc">Graphs</span></a> are the main tool for reducing launch latency. On backends with hardware graph support, the kernel’s whole sequence of GPU tasks is issued as a single graph launch rather than one launch per task, collapsing the per-task C++ and GPU/driver launch overhead. The per-call Python overhead is still paid on every call; to cut that too, move the loop itself into the graph with <code class="docutils literal notranslate"><span class="pre">graph_do_while</span></code> so that many iterations become a single call.</p>
+<p>Independently of graphs, you can also shrink the launch latency itself by reducing the number and complexity of kernel parameters - field arguments are cheaper than ndarray arguments, and global fields incur no parameter-related launch latency. See <a class="reference internal" href="parallelization.html#does-gpu-kernel-launch-latency-matter"><span class="std std-ref">Parallelization</span></a> for these launch-tuning guidelines.</p>
 </section>
-<section id="events">
-<h3>Events<a class="headerlink" href="#events" title="Link to this heading">#</a></h3>
-<p>Events let you express dependencies between streams without full synchronization.</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">s1</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">create_stream</span><span class="p">()</span>
-<span class="n">s2</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">create_stream</span><span class="p">()</span>
-
-<span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
-<span class="k">def</span><span class="w"> </span><span class="nf">produce</span><span class="p">():</span>
-    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">N</span><span class="p">):</span>
-        <span class="n">a</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="mf">10.0</span>
-
-<span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
-<span class="k">def</span><span class="w"> </span><span class="nf">consume</span><span class="p">():</span>
-    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">N</span><span class="p">):</span>
-        <span class="n">b</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">a</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
-
-<span class="n">produce</span><span class="p">(</span><span class="n">qd_stream</span><span class="o">=</span><span class="n">s1</span><span class="p">)</span>
-
-<span class="n">e</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">create_event</span><span class="p">()</span>
-<span class="n">e</span><span class="o">.</span><span class="n">record</span><span class="p">(</span><span class="n">s1</span><span class="p">)</span>       <span class="c1"># record when s1 finishes produce()</span>
-<span class="n">e</span><span class="o">.</span><span class="n">wait</span><span class="p">(</span><span class="n">qd_stream</span><span class="o">=</span><span class="n">s2</span><span class="p">)</span>  <span class="c1"># s2 waits for that event before proceeding</span>
-
-<span class="n">consume</span><span class="p">(</span><span class="n">qd_stream</span><span class="o">=</span><span class="n">s2</span><span class="p">)</span>  <span class="c1"># safe to read a[] — produce() is guaranteed complete</span>
-<span class="n">s2</span><span class="o">.</span><span class="n">synchronize</span><span class="p">()</span>
-
-<span class="n">e</span><span class="o">.</span><span class="n">destroy</span><span class="p">()</span>
-<span class="n">s1</span><span class="o">.</span><span class="n">destroy</span><span class="p">()</span>
-<span class="n">s2</span><span class="o">.</span><span class="n">destroy</span><span class="p">()</span>
-</pre></div>
-</div>
-<p><code class="docutils literal notranslate"><span class="pre">e.record(stream)</span></code> captures the point in <code class="docutils literal notranslate"><span class="pre">stream</span></code>’s execution. <code class="docutils literal notranslate"><span class="pre">e.wait(qd_stream=stream)</span></code> makes <code class="docutils literal notranslate"><span class="pre">stream</span></code> wait until the recorded point is reached. If <code class="docutils literal notranslate"><span class="pre">qd_stream</span></code> is omitted, the default stream waits.</p>
-</section>
-<section id="context-managers">
-<h3>Context managers<a class="headerlink" href="#context-managers" title="Link to this heading">#</a></h3>
-<p>Streams and events support <code class="docutils literal notranslate"><span class="pre">with</span></code> blocks for automatic cleanup:</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">with</span> <span class="n">qd</span><span class="o">.</span><span class="n">create_stream</span><span class="p">()</span> <span class="k">as</span> <span class="n">s</span><span class="p">:</span>
-    <span class="n">some_func1</span><span class="p">(</span><span class="n">qd_stream</span><span class="o">=</span><span class="n">s</span><span class="p">)</span>
-<span class="c1"># s.destroy() called automatically — waits for in-flight work</span>
-</pre></div>
-</div>
-</section>
-</section>
-<section id="synchronization-notes">
-<h2>Synchronization notes<a class="headerlink" href="#synchronization-notes" title="Link to this heading">#</a></h2>
+<section id="other-performance-tools">
+<h2>Other performance tools<a class="headerlink" href="#other-performance-tools" title="Link to this heading">#</a></h2>
+<p>The rest of this section covers tools that improve performance in other ways, not by reducing launch latency:</p>
 <ul class="simple">
-<li><p><strong><code class="docutils literal notranslate"><span class="pre">qd.sync()</span></code> only waits on the default stream.</strong> It does not drain explicit streams. Call <code class="docutils literal notranslate"><span class="pre">stream.synchronize()</span></code> on each stream you need to wait for.</p></li>
-<li><p><strong>No automatic synchronization with explicit streams.</strong> When using explicit streams, you are responsible for inserting events or <code class="docutils literal notranslate"><span class="pre">synchronize()</span></code> calls when one stream’s output is another stream’s input. <code class="docutils literal notranslate"><span class="pre">stream_parallel</span></code> handles this automatically.</p></li>
-</ul>
-</section>
-<section id="limitations">
-<h2>Limitations<a class="headerlink" href="#limitations" title="Link to this heading">#</a></h2>
-<ul class="simple">
-<li><p><strong>Not compatible with <a class="reference internal" href="graph.html"><span class="std std-doc">graphs</span></a>.</strong> Streams cannot be combined with <a class="reference internal" href="graph.html"><span class="std std-doc"><code class="docutils literal notranslate"><span class="pre">graph=True</span></code></span></a> kernels: passing <code class="docutils literal notranslate"><span class="pre">qd_stream</span></code> to a graph kernel raises a <code class="docutils literal notranslate"><span class="pre">RuntimeError</span></code>, and using <code class="docutils literal notranslate"><span class="pre">qd.stream_parallel()</span></code> inside a graph kernel raises a <code class="docutils literal notranslate"><span class="pre">QuadrantsSyntaxError</span></code>.</p></li>
-<li><p><strong>Not compatible with <a class="reference internal" href="autodiff.html"><span class="std std-doc">autodiff</span></a>.</strong> Do not pass <code class="docutils literal notranslate"><span class="pre">qd_stream</span></code> to a kernel that uses reverse-mode or forward-mode differentiation, or inside a <a class="reference internal" href="autodiff.html"><span class="std std-doc"><code class="docutils literal notranslate"><span class="pre">qd.ad.Tape</span></code></span></a> context (if you do, a <code class="docutils literal notranslate"><span class="pre">RuntimeError</span></code> will be raised).</p></li>
+<li><p><a class="reference internal" href="streams.html"><span class="std std-doc">Streams</span></a> let independent top-level for-loops run concurrently instead of serializing on the default stream.</p></li>
+<li><p><a class="reference internal" href="fastcache.html"><span class="std std-doc">Fastcache</span></a> reduces the time to load cached kernels when a new Python process starts.</p></li>
+<li><p><a class="reference internal" href="perf_dispatch.html"><span class="std std-doc">Performance dispatch</span></a> benchmarks multiple implementations of an operation at runtime and picks the fastest.</p></li>
 </ul>
 </section>
 </section>
@@ -593,20 +477,20 @@
                   
 <div class="prev-next-area">
     <a class="left-prev"
-       href="graph.html"
+       href="algorithms.html"
        title="previous page">
       <i class="fa-solid fa-angle-left"></i>
       <div class="prev-next-info">
         <p class="prev-next-subtitle">previous</p>
-        <p class="prev-next-title">Graph</p>
+        <p class="prev-next-title">Algorithms</p>
       </div>
     </a>
     <a class="right-next"
-       href="perf_dispatch.html"
+       href="fastcache.html"
        title="next page">
       <div class="prev-next-info">
         <p class="prev-next-subtitle">next</p>
-        <p class="prev-next-title">Performance Dispatch</p>
+        <p class="prev-next-title">Fastcache</p>
       </div>
       <i class="fa-solid fa-angle-right"></i>
     </a>
@@ -629,26 +513,18 @@
   </div>
   <nav id="pst-page-toc-nav" class="page-toc" aria-labelledby="pst-page-navigation-heading-2">
     <ul class="pst-show_toc_level nav section-nav flex-column">
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#supported-platforms">Supported platforms</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#stream-parallelism">Stream parallelism</a><ul class="nav section-nav flex-column">
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#restrictions">Restrictions</a></li>
-</ul>
-</li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#explicit-streams">Explicit streams</a><ul class="nav section-nav flex-column">
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#creating-and-using-streams">Creating and using streams</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#events">Events</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#context-managers">Context managers</a></li>
-</ul>
-</li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#synchronization-notes">Synchronization notes</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#limitations">Limitations</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#what-a-gpu-kernel-launch-is">What a GPU kernel launch is</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#where-kernel-launch-latency-comes-from">Where kernel launch latency comes from</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#latency-hiding">Latency hiding</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#reducing-launch-latency">Reducing launch latency</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#other-performance-tools">Other performance tools</a></li>
 </ul>
   </nav></div>
 
   <div class="sidebar-secondary-item">
 
   <div class="tocsection sourcelink">
-    <a href="../_sources/user_guide/streams.md.txt">
+    <a href="../_sources/user_guide/performance.md.txt">
       <i class="fa-solid fa-file-lines"></i> Show Source
     </a>
   </div>

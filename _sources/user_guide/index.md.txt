@@ -70,6 +70,7 @@ algorithms
 :maxdepth: 1
 :titlesonly:
 
+performance
 fastcache
 graph
 streams
