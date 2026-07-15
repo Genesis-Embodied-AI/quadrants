@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>Supported systems &#8212; Quadrants 1.1.1 documentation</title>
+    <title>Supported systems &#8212; Quadrants 1.1.3 documentation</title>
   
   
   
@@ -43,7 +43,7 @@
   <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5" />
 <link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5" />
 
-    <script src="../_static/documentation_options.js?v=58fbf978"></script>
+    <script src="../_static/documentation_options.js?v=cb7bf70b"></script>
     <script src="../_static/doctools.js?v=9bcbadda"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -63,7 +63,7 @@
     <link rel="prev" title="Getting started" href="getting_started.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="1.1.1" />
+  <meta name="docsearch:version" content="1.1.3" />
   
     
     <script src="../_static/searchtools.js"></script>
@@ -131,7 +131,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 1.1.1 documentation</p>
+    <p class="title logo__title">Quadrants 1.1.3 documentation</p>
   
 </a></div>
     
@@ -336,6 +336,7 @@
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Performance</span></p>
 <ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="performance.html">Performance</a></li>
 <li class="toctree-l1"><a class="reference internal" href="fastcache.html">Fastcache</a></li>
 <li class="toctree-l1"><a class="reference internal" href="graph.html">Graph</a></li>
 <li class="toctree-l1"><a class="reference internal" href="streams.html">Streams</a></li>
@@ -365,7 +366,7 @@
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Internal</span></p>
 <ul class="nav bd-sidenav">
-<li class="toctree-l1"><a class="reference internal" href="building_cudagraph_conditional_fatbin.html">Building the CUDA graph conditional fatbin</a></li>
+<li class="toctree-l1"><a class="reference internal" href="building_cudagraph_conditional_fatbin.html">Advanced: Building the CUDA graph conditional fatbin</a></li>
 </ul>
 </div>
 </nav></div>
@@ -451,11 +452,12 @@
 <section id="gpus">
 <h3>GPUs<a class="headerlink" href="#gpus" title="Link to this heading">#</a></h3>
 <ul class="simple">
-<li><p>CUDA GPUs, Pascal or later (&gt;=sm_60)</p></li>
+<li><p>CUDA GPUs, <code class="docutils literal notranslate"><span class="pre">sm_60</span></code> (Pascal) through <code class="docutils literal notranslate"><span class="pre">sm_120</span></code> (Blackwell / Thor) — i.e. <code class="docutils literal notranslate"><span class="pre">&gt;=sm_60</span></code> and <code class="docutils literal notranslate"><span class="pre">&lt;=sm_120</span></code></p></li>
 <li><p>Metal GPUs</p></li>
 <li><p>AMD GPUs</p></li>
 <li><p>Vulkan-compatible GPUs (e.g. Intel Arc)</p></li>
 </ul>
+<p>If you have a newer NVIDIA GPU (above <code class="docutils literal notranslate"><span class="pre">sm_120</span></code>), please <a class="reference external" href="https://github.com/Genesis-Embodied-AI/quadrants/issues">open an issue on the Quadrants repo</a>.</p>
 </section>
 <section id="backend-os-matrix">
 <h3>Backend / OS matrix<a class="headerlink" href="#backend-os-matrix" title="Link to this heading">#</a></h3>
@@ -511,10 +513,10 @@
 </div>
 <p>Notes:</p>
 <ul class="simple">
-<li><p><code class="docutils literal notranslate"><span class="pre">qd.cuda</span></code> requires an NVIDIA driver + CUDA runtime on the host; quadrants links against the CUDA runtime discovered at import time. NVIDIA ships CUDA for Linux ARM64 and Windows ARM64, but quadrants does not support them yet.</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">qd.amdgpu</span></code> currently wires up the Linux x64 ROCm path only. AMD’s HIP SDK also ships on Windows and on some Linux ARM64 targets, but quadrants does not support them yet. AMDGPU codegen always runs in wave64 mode, so <code class="docutils literal notranslate"><span class="pre">qd.simt.subgroup</span></code> primitives operate over 64 lanes regardless of whether the GPU is CDNA (Instinct, wave64-default) or RDNA (Radeon, wave32-default — quadrants overrides it to wave64).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">qd.cuda</span></code> requires an NVIDIA driver and CUDA runtime installed on the host. NVIDIA ships CUDA for Linux ARM64 and Windows ARM64, but quadrants does not support them yet.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">qd.amdgpu</span></code> currently wires up the Linux x64 ROCm path only. AMD’s GPU toolchain also ships on Windows and on some Linux ARM64 targets, but quadrants does not support them yet. On AMD GPUs, a subgroup is always 64 threads wide, so <a class="reference internal" href="subgroup.html"><span class="std std-doc"><code class="docutils literal notranslate"><span class="pre">qd.simt.subgroup</span></code></span></a> primitives operate over 64 lanes on both CDNA (Instinct) and RDNA (Radeon) hardware.</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">qd.metal</span></code> is only available on Apple hardware and is the recommended GPU backend there.</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">qd.vulkan</span></code> on macOS ships a bundled MoltenVK dylib inside the wheel, so no separate MoltenVK install is required.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">qd.vulkan</span></code> on macOS bundles a copy of MoltenVK (a Vulkan-to-Metal translation layer) inside the wheel, so no separate install is required.</p></li>
 </ul>
 </section>
 <section id="python-backend">

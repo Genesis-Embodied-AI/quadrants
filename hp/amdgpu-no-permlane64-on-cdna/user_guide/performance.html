@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>Kernel code coverage &#8212; Quadrants 1.1.3 documentation</title>
+    <title>Performance &#8212; Quadrants 1.1.3 documentation</title>
   
   
   
@@ -55,12 +55,12 @@
     <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
     <script src="../_static/design-tabs.js?v=f930bc37"></script>
     <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
-    <script>DOCUMENTATION_OPTIONS.pagename = 'user_guide/kernel_coverage';</script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'user_guide/performance';</script>
     <script>DOCUMENTATION_OPTIONS.search_as_you_type = false;</script>
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
-    <link rel="next" title="Python features in kernel scope" href="unsupported_python.html" />
-    <link rel="prev" title="Unit testing" href="unit_testing.html" />
+    <link rel="next" title="Fastcache" href="fastcache.html" />
+    <link rel="prev" title="Algorithms" href="algorithms.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
   <meta name="docsearch:version" content="1.1.3" />
@@ -335,8 +335,8 @@
 <li class="toctree-l1"><a class="reference internal" href="algorithms.html">Algorithms</a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Performance</span></p>
-<ul class="nav bd-sidenav">
-<li class="toctree-l1"><a class="reference internal" href="performance.html">Performance</a></li>
+<ul class="current nav bd-sidenav">
+<li class="toctree-l1 current active"><a class="current reference internal" href="#">Performance</a></li>
 <li class="toctree-l1"><a class="reference internal" href="fastcache.html">Fastcache</a></li>
 <li class="toctree-l1"><a class="reference internal" href="graph.html">Graph</a></li>
 <li class="toctree-l1"><a class="reference internal" href="streams.html">Streams</a></li>
@@ -344,9 +344,9 @@
 <li class="toctree-l1"><a class="reference internal" href="init_options.html">qd.init options</a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Testing</span></p>
-<ul class="current nav bd-sidenav">
+<ul class="nav bd-sidenav">
 <li class="toctree-l1"><a class="reference internal" href="unit_testing.html">Unit testing</a></li>
-<li class="toctree-l1 current active"><a class="current reference internal" href="#">Kernel code coverage</a></li>
+<li class="toctree-l1"><a class="reference internal" href="kernel_coverage.html">Kernel code coverage</a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Reference</span></p>
 <ul class="nav bd-sidenav">
@@ -410,7 +410,7 @@
     
     <li class="breadcrumb-item"><a href="index.html" class="nav-link">User guide</a></li>
     
-    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">Kernel code coverage</span></li>
+    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">Performance</span></li>
   </ul>
 </nav>
 </div>
@@ -427,96 +427,42 @@
 <div id="searchbox"></div>
                 <article class="bd-article">
                   
-  <section class="tex2jax_ignore mathjax_ignore" id="kernel-code-coverage">
-<h1>Kernel code coverage<a class="headerlink" href="#kernel-code-coverage" title="Link to this heading">#</a></h1>
-<p>Standard Python coverage tools only measure host-side code. Quadrants kernel coverage goes further — it tracks which lines actually execute <em>inside</em> compiled kernels on the device (CPU or GPU), including which branches of <code class="docutils literal notranslate"><span class="pre">if</span></code>/<code class="docutils literal notranslate"><span class="pre">else</span></code> blocks are taken at runtime.</p>
-<p>The coverage data is written in the standard <code class="docutils literal notranslate"><span class="pre">coverage.py</span></code> format, so it works with <code class="docutils literal notranslate"><span class="pre">coverage</span> <span class="pre">report</span></code>, <code class="docutils literal notranslate"><span class="pre">pytest-cov</span></code>, <code class="docutils literal notranslate"><span class="pre">diff-cover</span></code>, and IDE coverage viewers out of the box.</p>
-<section id="prerequisites">
-<h2>Prerequisites<a class="headerlink" href="#prerequisites" title="Link to this heading">#</a></h2>
-<p>Kernel coverage requires the <code class="docutils literal notranslate"><span class="pre">coverage</span></code> Python package:</p>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>pip<span class="w"> </span>install<span class="w"> </span>coverage
-</pre></div>
-</div>
+  <section class="tex2jax_ignore mathjax_ignore" id="performance">
+<h1>Performance<a class="headerlink" href="#performance" title="Link to this heading">#</a></h1>
+<p>This page covers the execution model that the other performance guides build on: what happens when you launch a GPU kernel, where the time goes, and when reducing that time actually speeds up your program. The other pages in this section - graphs, streams, fastcache, and performance dispatch - are performance tools built on this execution model.</p>
+<section id="what-a-gpu-kernel-launch-is">
+<h2>What a GPU kernel launch is<a class="headerlink" href="#what-a-gpu-kernel-launch-is" title="Link to this heading">#</a></h2>
+<p>When you call a <code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel</span></code> from Python, the numerical work does not run inline in the calling thread. Instead Quadrants <em>launches</em> the work onto the GPU: it hands a compiled kernel plus its arguments to the GPU driver, the driver enqueues it onto a stream (an ordered queue of GPU work), and the launch call returns to the host before the GPU has finished - usually before it has even started. Host and GPU run asynchronously.</p>
+<p>Each top-level <code class="docutils literal notranslate"><span class="pre">for</span></code>-loop in a kernel is a separate <em>offloaded task</em>, and each offloaded task becomes one GPU kernel. So a kernel with three top-level for-loops launches three GPU kernels every time you call it. Every launch carries a fixed overhead that is independent of how much data the kernel processes - that per-launch overhead is what we call <em>kernel launch latency</em>. When a kernel crunches a lot of data the overhead is negligible; when it does little work, or when you relaunch small kernels many times in a loop, launch latency can dominate the total runtime.</p>
 </section>
-<section id="enabling-kernel-coverage">
-<h2>Enabling kernel coverage<a class="headerlink" href="#enabling-kernel-coverage" title="Link to this heading">#</a></h2>
-<section id="automatic-with-pytest-cov">
-<h3>Automatic with pytest-cov<a class="headerlink" href="#automatic-with-pytest-cov" title="Link to this heading">#</a></h3>
-<p>If you use <code class="docutils literal notranslate"><span class="pre">pytest-cov</span></code>, kernel coverage is enabled automatically — no configuration needed. Quadrants ships a pytest plugin that detects <code class="docutils literal notranslate"><span class="pre">--cov</span></code> and sets <code class="docutils literal notranslate"><span class="pre">QD_KERNEL_COVERAGE=1</span></code> for you. Just run:</p>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>pytest<span class="w"> </span>--cov<span class="o">=</span>my_package<span class="w"> </span>--cov-branch<span class="w"> </span>tests/
-</pre></div>
-</div>
-<p>To disable kernel coverage while still collecting Python coverage, opt out explicitly:</p>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nv">QD_KERNEL_COVERAGE</span><span class="o">=</span><span class="m">0</span><span class="w"> </span>pytest<span class="w"> </span>--cov<span class="o">=</span>my_package<span class="w"> </span>--cov-branch<span class="w"> </span>tests/
-</pre></div>
-</div>
-</section>
-<section id="manual-with-any-script">
-<h3>Manual with any script<a class="headerlink" href="#manual-with-any-script" title="Link to this heading">#</a></h3>
-<p>For scripts outside pytest, set the <code class="docutils literal notranslate"><span class="pre">QD_KERNEL_COVERAGE</span></code> environment variable:</p>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nv">QD_KERNEL_COVERAGE</span><span class="o">=</span><span class="m">1</span><span class="w"> </span>python<span class="w"> </span>my_simulation.py
-</pre></div>
-</div>
-<p>This works with any script that uses quadrants kernels — no changes to your code are needed.</p>
-<p>When the process exits, quadrants writes one or more <code class="docutils literal notranslate"><span class="pre">_qd_kcov.&lt;pid&gt;</span></code> files in the working directory containing the collected coverage data.</p>
-</section>
-</section>
-<section id="viewing-results">
-<h2>Viewing results<a class="headerlink" href="#viewing-results" title="Link to this heading">#</a></h2>
-<section id="with-coverage-py">
-<h3>With coverage.py<a class="headerlink" href="#with-coverage-py" title="Link to this heading">#</a></h3>
-<p>Combine the kernel coverage files and produce a report using the standard <code class="docutils literal notranslate"><span class="pre">coverage</span></code> tool:</p>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Combine all kernel coverage files into .coverage</span>
-coverage<span class="w"> </span>combine<span class="w"> </span>_qd_kcov.*
-
-<span class="c1"># Terminal summary</span>
-coverage<span class="w"> </span>report<span class="w"> </span>--show-missing
-
-<span class="c1"># HTML report</span>
-coverage<span class="w"> </span>html
-</pre></div>
-</div>
-</section>
-<section id="with-pytest-cov">
-<h3>With pytest-cov<a class="headerlink" href="#with-pytest-cov" title="Link to this heading">#</a></h3>
-<p>When using <code class="docutils literal notranslate"><span class="pre">pytest-cov</span></code>, kernel coverage is enabled automatically (see above). The kernel coverage data is merged with Python coverage after the run:</p>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>coverage<span class="w"> </span>combine<span class="w"> </span>_qd_kcov.*<span class="w"> </span>.coverage
-</pre></div>
-</div>
-</section>
-</section>
-<section id="key-properties">
-<h2>Key properties<a class="headerlink" href="#key-properties" title="Link to this heading">#</a></h2>
+<section id="where-kernel-launch-latency-comes-from">
+<h2>Where kernel launch latency comes from<a class="headerlink" href="#where-kernel-launch-latency-comes-from" title="Link to this heading">#</a></h2>
+<p>It helps to split the latency of a single launch into three parts:</p>
 <ul class="simple">
-<li><p><strong>Zero overhead when disabled.</strong> The coverage module is never imported unless <code class="docutils literal notranslate"><span class="pre">QD_KERNEL_COVERAGE=1</span></code> is set. There is no cost in normal operation.</p></li>
-<li><p><strong>Branch coverage.</strong> Probes inside <code class="docutils literal notranslate"><span class="pre">if</span></code>/<code class="docutils literal notranslate"><span class="pre">else</span></code> bodies only fire when that branch is taken, giving true runtime branch coverage — not just kernel-level coverage, or static conditional coverage.</p></li>
-<li><p><strong>Works with pytest-xdist.</strong> Each worker writes to a separate file; combine them afterward.</p></li>
-<li><p><strong>Survives <code class="docutils literal notranslate"><span class="pre">qd.init()</span></code> resets.</strong> Coverage data is accumulated across multiple <code class="docutils literal notranslate"><span class="pre">qd.init()</span></code> calls within the same process.</p></li>
+<li><p><strong>Python side.</strong> Everything that happens in the Python interpreter before control reaches Quadrants’ C++ runtime. This is the most expensive of the three per call, and it is paid once per <em>Python</em> call - so a Python <code class="docutils literal notranslate"><span class="pre">while</span></code>/<code class="docutils literal notranslate"><span class="pre">for</span></code> loop that calls a kernel N times pays it N times.</p></li>
+<li><p><strong>C++ side.</strong> Work inside the Quadrants runtime (C++) once control has crossed the boundary. Cheaper than the Python side, but non-zero, and paid per offloaded task.</p></li>
+<li><p><strong>GPU / driver side.</strong> The GPU driver’s own cost to place the kernel on a stream, plus the fixed scheduling latency on the GPU itself before the kernel begins running on the hardware.</p></li>
 </ul>
 </section>
-<section id="advanced-usage">
-<h2>Advanced usage<a class="headerlink" href="#advanced-usage" title="Link to this heading">#</a></h2>
-<section id="probe-capacity">
-<h3>Probe capacity<a class="headerlink" href="#probe-capacity" title="Link to this heading">#</a></h3>
-<p>There is a limit of 100,000 coverage probes per process (one probe per unique source line per kernel/func). If you hit the limit — for example in a very large codebase with many kernels — increase it via the environment variable:</p>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nv">QD_COVERAGE_MAX_PROBES</span><span class="o">=</span><span class="m">500000</span><span class="w"> </span><span class="nv">QD_KERNEL_COVERAGE</span><span class="o">=</span><span class="m">1</span><span class="w"> </span>python<span class="w"> </span>my_simulation.py
-</pre></div>
-</div>
+<section id="latency-hiding">
+<h2>Latency hiding<a class="headerlink" href="#latency-hiding" title="Link to this heading">#</a></h2>
+<p>Because host and GPU run asynchronously, kernel launches overlap with kernel execution: the host can be issuing the next launch while earlier kernels are still running on the GPU. As long as the host issues launches at least as fast as the GPU drains them, the queue never empties, the GPU stays busy, and the launch latency is fully <em>hidden</em> behind execution.</p>
+<p>So reducing launch latency does not always improve overall throughput. When each kernel runs long enough that its execution time exceeds the launch overhead, the GPU is the bottleneck and shaving launch latency changes nothing - the launches were already hidden behind execution.</p>
+<p>Kernel launch latency matters when kernels are relatively small. Then the GPU can finish a kernel before the host has issued the next one, so the GPU sits idle waiting for the next launch and the launch latency is <em>exposed</em> on the critical path. In that regime, cutting launch latency can directly increase throughput.</p>
 </section>
+<section id="reducing-launch-latency">
+<h2>Reducing launch latency<a class="headerlink" href="#reducing-launch-latency" title="Link to this heading">#</a></h2>
+<p><a class="reference internal" href="graph.html"><span class="std std-doc">Graphs</span></a> are the main tool for reducing launch latency. On backends with hardware graph support, the kernel’s whole sequence of GPU tasks is issued as a single graph launch rather than one launch per task, collapsing the per-task C++ and GPU/driver launch overhead. The per-call Python overhead is still paid on every call; to cut that too, move the loop itself into the graph with <code class="docutils literal notranslate"><span class="pre">graph_do_while</span></code> so that many iterations become a single call.</p>
+<p>Independently of graphs, you can also shrink the launch latency itself by reducing the number and complexity of kernel parameters - field arguments are cheaper than ndarray arguments, and global fields incur no parameter-related launch latency. See <a class="reference internal" href="parallelization.html#does-gpu-kernel-launch-latency-matter"><span class="std std-ref">Parallelization</span></a> for these launch-tuning guidelines.</p>
 </section>
-<section id="coverage-and-autodiff">
-<h2>Coverage and autodiff<a class="headerlink" href="#coverage-and-autodiff" title="Link to this heading">#</a></h2>
-<p>The forward pass is covered. The backward pass is not, because instrumenting it would interfere with gradient computation. This is normally fine — the backward pass is auto-generated and replays the same control flow, so forward coverage is sufficient.</p>
-<p>One edge case: kernel calls inside a <code class="docutils literal notranslate"><span class="pre">qd.ad.Tape</span></code> with <code class="docutils literal notranslate"><span class="pre">validation=True</span></code> will not be covered.</p>
-</section>
-<section id="offline-cache-interaction">
-<h2>Offline cache interaction<a class="headerlink" href="#offline-cache-interaction" title="Link to this heading">#</a></h2>
-<p>Coverage probes change the compiled kernel, so the offline cache will see them as new kernels and recompile. This is expected and does not affect correctness, but the first run with coverage enabled will be slower if you normally rely on cached kernels.</p>
-</section>
-<section id="under-the-hood">
-<h2>Under the hood<a class="headerlink" href="#under-the-hood" title="Link to this heading">#</a></h2>
-<p>When <code class="docutils literal notranslate"><span class="pre">QD_KERNEL_COVERAGE=1</span></code> is set, quadrants rewrites the Python AST of each <code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel</span></code> and <code class="docutils literal notranslate"><span class="pre">&#64;qd.func</span></code> before compilation. It inserts lightweight probe statements (<code class="docutils literal notranslate"><span class="pre">field[probe_id]</span> <span class="pre">=</span> <span class="pre">1</span></code>) at each source line. These probes compile as ordinary field stores and execute on the device alongside your kernel code.</p>
-<p>At process exit, the probe data is read back from the device and written to a <code class="docutils literal notranslate"><span class="pre">.coverage</span></code>-compatible file.</p>
+<section id="other-performance-tools">
+<h2>Other performance tools<a class="headerlink" href="#other-performance-tools" title="Link to this heading">#</a></h2>
+<p>The rest of this section covers tools that improve performance in other ways, not by reducing launch latency:</p>
+<ul class="simple">
+<li><p><a class="reference internal" href="streams.html"><span class="std std-doc">Streams</span></a> let independent top-level for-loops run concurrently instead of serializing on the default stream.</p></li>
+<li><p><a class="reference internal" href="fastcache.html"><span class="std std-doc">Fastcache</span></a> reduces the time to load cached kernels when a new Python process starts.</p></li>
+<li><p><a class="reference internal" href="perf_dispatch.html"><span class="std std-doc">Performance dispatch</span></a> benchmarks multiple implementations of an operation at runtime and picks the fastest.</p></li>
+</ul>
 </section>
 </section>
 
@@ -531,20 +477,20 @@ coverage<span class="w"> </span>html
                   
 <div class="prev-next-area">
     <a class="left-prev"
-       href="unit_testing.html"
+       href="algorithms.html"
        title="previous page">
       <i class="fa-solid fa-angle-left"></i>
       <div class="prev-next-info">
         <p class="prev-next-subtitle">previous</p>
-        <p class="prev-next-title">Unit testing</p>
+        <p class="prev-next-title">Algorithms</p>
       </div>
     </a>
     <a class="right-next"
-       href="unsupported_python.html"
+       href="fastcache.html"
        title="next page">
       <div class="prev-next-info">
         <p class="prev-next-subtitle">next</p>
-        <p class="prev-next-title">Python features in kernel scope</p>
+        <p class="prev-next-title">Fastcache</p>
       </div>
       <i class="fa-solid fa-angle-right"></i>
     </a>
@@ -567,32 +513,18 @@ coverage<span class="w"> </span>html
   </div>
   <nav id="pst-page-toc-nav" class="page-toc" aria-labelledby="pst-page-navigation-heading-2">
     <ul class="pst-show_toc_level nav section-nav flex-column">
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#prerequisites">Prerequisites</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#enabling-kernel-coverage">Enabling kernel coverage</a><ul class="nav section-nav flex-column">
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#automatic-with-pytest-cov">Automatic with pytest-cov</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#manual-with-any-script">Manual with any script</a></li>
-</ul>
-</li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#viewing-results">Viewing results</a><ul class="nav section-nav flex-column">
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#with-coverage-py">With coverage.py</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#with-pytest-cov">With pytest-cov</a></li>
-</ul>
-</li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#key-properties">Key properties</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#advanced-usage">Advanced usage</a><ul class="nav section-nav flex-column">
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#probe-capacity">Probe capacity</a></li>
-</ul>
-</li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#coverage-and-autodiff">Coverage and autodiff</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#offline-cache-interaction">Offline cache interaction</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#under-the-hood">Under the hood</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#what-a-gpu-kernel-launch-is">What a GPU kernel launch is</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#where-kernel-launch-latency-comes-from">Where kernel launch latency comes from</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#latency-hiding">Latency hiding</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#reducing-launch-latency">Reducing launch latency</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#other-performance-tools">Other performance tools</a></li>
 </ul>
   </nav></div>
 
   <div class="sidebar-secondary-item">
 
   <div class="tocsection sourcelink">
-    <a href="../_sources/user_guide/kernel_coverage.md.txt">
+    <a href="../_sources/user_guide/performance.md.txt">
       <i class="fa-solid fa-file-lines"></i> Show Source
     </a>
   </div>
