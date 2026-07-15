@@ -175,6 +175,12 @@ class GraphManager {
   void ensure_cond_with_yield_kernel_loaded();
   void ensure_checkpoint_gate_kernel_loaded();
   void ensure_checkpoint_yield_check_kernel_loaded();
+  // Load the first bundled fatbin whose SASS matches the running GPU. The generated `*_fatbin.h` tables ship one fatbin
+  // per build toolkit (e.g. sm_90/100/120 built with CUDA 12.8 for wide driver compatibility, sm_110 built with CUDA
+  // 13.0), and a device can only load the fatbin containing its SM, so we try each in turn until `cuModuleLoadData`
+  // succeeds. Returns CUDA_SUCCESS and sets `*module_out` on the first fatbin that loads, otherwise the last CUDA
+  // error.
+  static uint32_t load_first_matching_fatbin(const unsigned char *const *fatbins, std::size_t count, void **module_out);
   // Scan offloaded_tasks + ctx once to derive the shape of the checkpoint build (how many distinct cp_ids, which need
   // yield-check, whether to use the SM 9.0+ IF-node path or the pre-Hopper flat-graph fallback, etc.). Loads the gate /
   // yield-check fatbins lazily as a side-effect (so the caller can see `gate_kernel_func_` populated by the time it

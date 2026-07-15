@@ -23,7 +23,7 @@ from .tinysh import Command, CommandFailed, nice, sh
 # -- code --
 @banner("Build Quadrants Wheel")
 def build_wheel(python: Command) -> None:
-    # cmake_args.writeback() populates both QUADRANTS_CMAKE_ARGS and (for scikit-build-core) CMAKE_ARGS.
+    # cmake_args.writeback() renders the effective options into CMAKE_ARGS for scikit-build-core.
     cmake_args.writeback()
 
     plat = None
