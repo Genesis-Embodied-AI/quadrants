@@ -402,6 +402,71 @@ def test_graph_parallel_inside_graph_do_while():
 
 
 @test_utils.test()
+def test_graph_parallel_back_to_back_regions_in_do_while_keep_join():
+    """Two back-to-back qd.graph_parallel_context() regions inside a qd.graph_do_while body must each keep their own
+    fork/join on the STREAMING launcher path, not only the CUDA-graph path. A qd.graph_do_while forces the streaming
+    launcher on AMDGPU (always) and on pre-Hopper CUDA (SM < 9.0); there, launch_offloaded_tasks batches a maximal run
+    of stream_parallel_group_id != 0 tasks into one fork/join. Without a graph_parallel_region_id boundary the two
+    regions merge into a single batch: region B's sections fork alongside -- and race -- region A's, so B reads x/y
+    before A has written them this iteration. Region B copies exactly what region A wrote in the same iteration, so a
+    dropped inter-region join corrupts a/b. Regression test for the region boundary missing from the streaming
+    launchers (it existed only in GraphManager::build_level).
+
+    On the CUDA-graph path (SM 9.0+) the same kernel instead exercises build_level's region boundary (already guarded),
+    so the assertion is a portable correctness check that holds on both code paths."""
+    n = 4096
+    iters = 4
+
+    @qd.kernel(graph=True)
+    def k(
+        x: qd.types.ndarray(qd.i32, ndim=1),
+        y: qd.types.ndarray(qd.i32, ndim=1),
+        a: qd.types.ndarray(qd.i32, ndim=1),
+        b: qd.types.ndarray(qd.i32, ndim=1),
+        counter: qd.types.ndarray(qd.i32, ndim=0),
+    ):
+        while qd.graph_do_while(counter):
+            # Region A: bump x and y in two independent sections.
+            with qd.graph_parallel_context():
+                with qd.graph_parallel():
+                    for i in range(x.shape[0]):
+                        x[i] = x[i] + 1
+                with qd.graph_parallel():
+                    for i in range(y.shape[0]):
+                        y[i] = y[i] + 2
+            # Region B, immediately after A (no serial statement between the regions): copy A's just-written values.
+            # Each section reads the array region A wrote, so B must wait for A's join or it races A's writes.
+            with qd.graph_parallel_context():
+                with qd.graph_parallel():
+                    for i in range(x.shape[0]):
+                        a[i] = x[i] * 10
+                with qd.graph_parallel():
+                    for i in range(y.shape[0]):
+                        b[i] = y[i] * 10
+            counter[()] = counter[()] - 1
+
+    x = qd.ndarray(qd.i32, shape=(n,))
+    y = qd.ndarray(qd.i32, shape=(n,))
+    a = qd.ndarray(qd.i32, shape=(n,))
+    b = qd.ndarray(qd.i32, shape=(n,))
+    counter = qd.ndarray(qd.i32, shape=())
+    x.from_numpy(np.zeros(n, dtype=np.int32))
+    y.from_numpy(np.zeros(n, dtype=np.int32))
+    a.from_numpy(np.zeros(n, dtype=np.int32))
+    b.from_numpy(np.zeros(n, dtype=np.int32))
+    counter.from_numpy(np.array(iters, dtype=np.int32))
+
+    k(x, y, a, b, counter)
+
+    assert counter.to_numpy() == 0
+    # After all iterations: x=iters, y=2*iters. Region A runs before region B each iteration, so a/b copy the last
+    # iteration's values: a = iters*10, b = 2*iters*10. A dropped inter-region join lets region B read a pre-write
+    # x/y for some elements, so a[i] != iters*10.
+    np.testing.assert_array_equal(a.to_numpy(), np.full(n, iters * 10, dtype=np.int32))
+    np.testing.assert_array_equal(b.to_numpy(), np.full(n, 2 * iters * 10, dtype=np.int32))
+
+
+@test_utils.test()
 def test_graph_parallel_outside_context_raises():
     @qd.kernel(graph=True)
     def k(x: qd.types.ndarray(qd.f32, ndim=1)):
