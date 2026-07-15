@@ -712,6 +712,48 @@ def test_graph_parallel_static_loop_runtime_inner_loop_raises():
 
 
 @test_utils.test()
+def test_graph_parallel_runtime_if_raises():
+    """A *runtime* `if` in a region body is rejected: only `if qd.static(...)` unrolls at trace time into sibling
+    qd.graph_parallel sections. A runtime `if` traces to a FrontendIfStmt that swallows the section work into a serial
+    task and silently drops the fork/join, so reject it (mirrors the runtime for-loop rejection)."""
+
+    @qd.kernel(graph=True)
+    def k(x: qd.types.ndarray(qd.f32, ndim=1), y: qd.types.ndarray(qd.f32, ndim=1), flag: qd.i32):
+        with qd.graph_parallel_context():
+            with qd.graph_parallel():
+                for i in range(x.shape[0]):
+                    x[i] = x[i] + 1.0
+            if flag:  # runtime if around a section -> rejected (only if qd.static(...) is allowed)
+                with qd.graph_parallel():
+                    for i in range(y.shape[0]):
+                        y[i] = y[i] + 1.0
+
+    x = qd.ndarray(qd.f32, shape=(16,))
+    y = qd.ndarray(qd.f32, shape=(16,))
+    with pytest.raises(qd.QuadrantsSyntaxError, match="may contain only .with qd.graph_parallel"):
+        k(x, y, 1)
+
+
+@test_utils.test()
+def test_graph_parallel_static_loop_runtime_if_raises():
+    """Staticness is re-checked at every nesting level for `if` too: a *runtime* `if` nested inside a static loop and
+    wrapping a qd.graph_parallel section is still rejected (only a static condition yields independent sections)."""
+
+    @qd.kernel(graph=True)
+    def k(x: qd.types.ndarray(qd.f32, ndim=2), flag: qd.i32):
+        with qd.graph_parallel_context():
+            for b in qd.static(range(2)):
+                if flag:  # runtime if around a section -> rejected
+                    with qd.graph_parallel():
+                        for i in range(x.shape[1]):
+                            x[b, i] = x[b, i] + 1.0
+
+    x = qd.ndarray(qd.f32, shape=(2, 16))
+    with pytest.raises(qd.QuadrantsSyntaxError, match="may contain only .with qd.graph_parallel"):
+        k(x, 1)
+
+
+@test_utils.test()
 def test_graph_parallel_static_loop_inside_graph_do_while():
     """A static section loop composes with qd.graph_do_while: each iteration runs all unrolled
     qd.graph_parallel sections, then decrements the counter."""

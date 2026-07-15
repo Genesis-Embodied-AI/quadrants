@@ -96,11 +96,12 @@ class GraphParallelTransformer:
         bare assignment, etc.) is a serial task that would silently fall outside any ``qd.graph_parallel`` section, so
         reject it.
 
-        The `for` case is restricted to `qd.static(...)` loops on purpose: a static loop unrolls at trace time into its
-        repeated body, so it lowers to literal `with qd.graph_parallel():` blocks (each gets a fresh
-        stream_parallel_group_id). A *runtime* for-loop would instead trace a single parallel range_for with the section
-        tagging nested inside it -- malformed. Staticness is checked with `get_decorator` (the same resolution
-        `build_For` uses) at every nesting level, so a runtime loop nested under a static one is still rejected."""
+        Both the `if` and `for` cases are restricted to `qd.static(...)` on purpose: a static branch/loop is resolved
+        at trace time, so it lowers to literal `with qd.graph_parallel():` blocks (each gets a fresh
+        stream_parallel_group_id). A *runtime* `if` would instead trace a FrontendIfStmt and a *runtime* for-loop a
+        single parallel range_for, in both cases nesting the section tagging inside that task -- malformed, and silently
+        dropping the fork/join. Staticness is checked with `get_decorator` (the same resolution `build_If` / `build_For`
+        use) at every nesting level, so a runtime branch/loop nested under a static one is still rejected."""
         for i, stmt in enumerate(stmts):
             if FunctionDefTransformer._is_docstring(stmt, i) or FunctionDefTransformer._is_coverage_probe(stmt):
                 continue
@@ -109,7 +110,7 @@ class GraphParallelTransformer:
             if isinstance(stmt, ast.With) and stmt.items:
                 if GraphParallelTransformer.is_parallel_section_call(stmt.items[0].context_expr):
                     continue
-            if isinstance(stmt, ast.If):
+            if isinstance(stmt, ast.If) and get_decorator(ctx, stmt.test) == "static":
                 GraphParallelTransformer._validate_graph_parallel_context_body(ctx, stmt.body)
                 GraphParallelTransformer._validate_graph_parallel_context_body(ctx, stmt.orelse)
                 continue
