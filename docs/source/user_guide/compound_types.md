@@ -167,6 +167,31 @@ sim.step()
 
 `@qd.data_oriented` objects can also be passed as `qd.Template` parameters to kernels defined outside the class, and they support nesting (one `@qd.data_oriented` struct containing another).
 
+### stable_members
+
+**Recommended for any `@qd.data_oriented` class whose ndarray members are allocated once (typically in `__init__`) and not subsequently rebound - the common case.** Decorate with `stable_members=True`:
+
+```python
+@qd.data_oriented(stable_members=True)
+class Simulation:
+    def __init__(self, n):
+        self.x = qd.ndarray(qd.f32, shape=(n,))
+        self.v = qd.ndarray(qd.f32, shape=(n,))
+        # ... more ndarray / field / primitive members
+```
+
+This skips a per-call walk that Quadrants otherwise runs to detect ndarray member rebinding between kernel launches. The walk is O(number of ndarray members) per kernel call, so the savings scale with the container's size.
+
+Microbenchmark on an RTX PRO 6000 Blackwell with a container holding 30 `qd.ndarray` members across two nesting levels, calling a trivial kernel that takes the container as a `qd.template()` arg:
+
+| | Per-launch Python overhead |
+|---|---|
+| `stable_members=False` (default) | 18.5 us/call |
+| `stable_members=True` | 13.5 us/call |
+| | **-5 us/call (-28%)** |
+
+**Trade-off:** with `stable_members=True`, reassigning an ndarray member on an instance is undefined behavior - the previously compiled kernel will be reused even if the new ndarray has a different `dtype`, `ndim`, or layout, silently bit-reinterpreting the new array's storage. Set it only on classes whose ndarray members are allocated once (typically in `__init__`) and never rebound. See [Reassigning ndarray members](#reassigning-ndarray-members) below for the supported alternative.
+
 ### Primitive members
 
 Primitive members on `self` (e.g. `int`, `float`, `bool`, `enum.Enum`) are supported, but they are treated as **template values**: each distinct primitive value across instances triggers a new kernel compilation, with the value baked into the compiled kernel.
@@ -310,6 +335,8 @@ The outermost annotation you put on the kernel parameter should match the parame
 ### Reassigning ndarray members
 
 For `@qd.data_oriented` containers passed via `qd.Template`, reassigning an ndarray member between kernel launches is supported, including changes to `dtype`, `ndim`, or layout. A new specialized kernel is compiled and cached for the new shape; subsequent launches with the original shape continue to use the original cached kernel. (For `@dataclasses.dataclass` containers — passed via the dataclass-type annotation — the member binding follows the standard dataclass mutability rules: frozen dataclasses can't rebind, non-frozen ones can, and a rebind triggers a fresh kernel arg setup on the next launch.)
+
+This support is only available on `@qd.data_oriented` classes *without* the [`stable_members=True`](#stable_members) opt-in. Setting `stable_members=True` is a promise that ndarray members on instances of the class are never reassigned; if you break that promise the previously compiled kernel is silently reused against the new ndarray.
 
 ### Restrictions
 

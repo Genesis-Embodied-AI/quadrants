@@ -95,8 +95,8 @@ Fastcache supports the following parameter types:
 | `qd.types.NDArray` (scalar, vector, matrix) | Yes | dtype, ndim, layout |
 | `torch.Tensor` | Yes | dtype, ndim |
 | `numpy.ndarray` | Yes | dtype, ndim |
-| [`dataclasses.dataclass`](compound_types.md#dataclassesdataclass) | Yes | member types recursively; member values if annotated with `FIELD_METADATA_CACHE_VALUE` (see [Appendix - compound-type cache keying](#compound-type-cache-keying)) |
-| [`@qd.data_oriented`](compound_types.md#qddata_oriented) objects | Yes | member types recursively; primitive member types and values baked into kernel (see [Appendix - compound-type cache keying](#compound-type-cache-keying)) |
+| [`dataclasses.dataclass`](compound_types.md#dataclassesdataclass) | Yes | member types recursively; member values if annotated with `FIELD_METADATA_CACHE_VALUE` (see [Advanced - compound-type cache keying](#compound-type-cache-keying)) |
+| [`@qd.data_oriented`](compound_types.md#qddata_oriented) objects | Yes | member types recursively; primitive member types and values baked into kernel (see [Advanced - compound-type cache keying](#compound-type-cache-keying)) |
 | `qd.Template` primitives (int, float, bool) | Yes | type and value (baked into kernel) |
 | Non-template primitives (int, float, bool) | Yes | type only |
 | `enum.Enum` | Yes | name and value |
@@ -120,6 +120,12 @@ Each compiled artifact is stored under a key derived from all of the following:
 
 When any of these change, the resulting key is different, so a new compilation occurs and a new entry is stored. Previous entries remain on disk - multiple cached versions coexist. You do not need to manually clear the cache when making code changes - the hash mismatch causes a transparent recompilation.
 
+### Two strict invariants
+
+1. **If the kernel does not read or write a variable, it is entirely ignored by fastcache.** It will not cause fastcache to fail, nor emit a warning, nor emit an error.
+
+2. **Unrecognised types at variables the kernel reads or writes must not be silently dropped or hashed by type-name.** If the value of such a variable has a type fastcache doesn't explicitly handle (Pydantic models, UUIDs, third-party tensor wrappers, ...), fastcache is disabled for the call with a one-shot `[FASTCACHE][UNKNOWN_TYPE]` warning identifying the offending type plus an `[INVALID_FUNC]` log line confirming the cache is off.
+
 ## Advanced
 
 ### Diagnostics
@@ -142,8 +148,6 @@ print(obs.cache_stored)         # True if the compiled kernel was stored to cach
 ```
 
 On the first run you'll see `cache_stored=True` but `cache_loaded=False`. On the second run (after `qd.init`), `cache_loaded=True`.
-
-## Appendix
 
 ### Compound-type cache keying
 

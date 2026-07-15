@@ -23,6 +23,13 @@ RET_SUCCESS = 42
 
 @test_utils.test()
 def test_src_hasher_create_cache_key_vary_config() -> None:
+    """Source+config key (L1) is stable across re-init with identical config, changes when the config changes.
+
+    Updated from the pre-refactor ``create_cache_key`` API (single-level, args-dependent) to the two-level
+    ``make_source_config_key`` (L1 - source+config only, no args). The L1 key is the right level to test
+    because config changes only affect the L1 layer; L2 adds the args-narrow hash on top.
+    """
+
     @qd.kernel
     def f1() -> None:
         pass
@@ -31,15 +38,15 @@ def test_src_hasher_create_cache_key_vary_config() -> None:
     # so we are forcing it to false each initialization for now
     qd_init_same_arch(print_ir_dbg_info=False)
     kernel_info, _src = get_source_info_and_src(f1.fn)
-    cache_key_base = src_hasher.create_cache_key(False, kernel_info, [], [])
+    cache_key_base = src_hasher.make_source_config_key(kernel_info)
 
     qd_init_same_arch(print_ir_dbg_info=False)
     kernel_info, _src = get_source_info_and_src(f1.fn)
-    cache_key_same = src_hasher.create_cache_key(False, kernel_info, [], [])
+    cache_key_same = src_hasher.make_source_config_key(kernel_info)
 
     qd_init_same_arch(print_ir_dbg_info=False, random_seed=123)
     kernel_info, _src = get_source_info_and_src(f1.fn)
-    cache_key_diff = src_hasher.create_cache_key(False, kernel_info, [], [])
+    cache_key_diff = src_hasher.make_source_config_key(kernel_info)
 
     assert cache_key_base == cache_key_same
     assert cache_key_same != cache_key_diff
@@ -103,7 +110,9 @@ def test_src_hasher_store_validate(monkeypatch: pytest.MonkeyPatch, tmp_path: pa
     mod = temporary_module("child_diff_test_src_hasher_store_validate")
     kernel_info = get_fileinfos([mod.f1.fn])[0]
     fileinfos = get_fileinfos([mod.f1.fn, mod.f2.fn])
-    fast_cache_key = src_hasher.create_cache_key(False, kernel_info, [], [])
+    # L2 key: source+config (L1) + narrow-args-hash. Use an empty narrow-args-hash since the test isn't
+    # exercising args at all - it tests the helper-source-change invalidation logic, which lives in L2.
+    fast_cache_key = src_hasher.make_full_cache_key(src_hasher.make_source_config_key(kernel_info), narrow_args_hash="")
 
     assert fast_cache_key is not None
 
@@ -202,7 +211,9 @@ def src_hasher_vary_kernel_func_child(args: list[str]) -> None:
     sys.path.append(args_obj.module_file_path)
     mod = importlib.import_module(args_obj.module_name)
     info, _src = _wrap_inspect.get_source_info_and_src(mod.f1.fn)
-    cache_key = src_hasher.create_cache_key(False, info, [], [])
+    # Source+config key (L1) - varies with the *kernel source* (the property this test exercises) and is
+    # the same level as the pre-refactor ``create_cache_key`` call site, just without the args-dependent tail.
+    cache_key = src_hasher.make_source_config_key(info)
     print(f"CACHE_KEY={cache_key}")
 
     print(TEST_RAN)

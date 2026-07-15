@@ -320,7 +320,7 @@ class _BoundedDifferentiableMethod:
         return self._adjoint(self._kernel_owner, *args, **kwargs)
 
 
-def data_oriented(cls):
+def data_oriented(cls=None, *, stable_members: bool = False):
     """Marks a class as Quadrants compatible.
 
     To allow for modularized code, Quadrants provides this decorator so that
@@ -344,21 +344,45 @@ def data_oriented(cls):
         >>> a.inc()
 
     Args:
-        cls (Class): the class to be decorated
+        cls (Class): the class to be decorated.
+        stable_members (bool): launch-context perf hint - if ``True``, declares that the class's ndarray-typed members
+            are allocated once and never reassigned between kernel calls. Quadrants will skip the per-call ndarray-
+            reference walk that ``Kernel.launch_kernel`` uses to detect ndarray reassignment on mutable containers
+            (~1-2 us/call savings on Genesis-style containers with dozens of ndarray attrs). Reassigning a member on
+            a ``stable_members`` class is undefined behaviour - the previously-compiled kernel will be reused even if
+            the new ndarray has different dtype/ndim/layout. May also be set as a class-level attribute
+            ``_qd_stable_members = True`` (equivalent).
+
+            Note: this flag is *purely* a launch-time perf hint. It no longer affects fastcache argument hashing - the
+            fastcache key is derived from pruning info (the set of flat names the kernel actually reads), and
+            unrecognised types at kernel-read paths fail fastcache loudly with a one-shot ``[UNKNOWN_TYPE]`` +
+            ``[INVALID_FUNC]`` diagnostic (no qualname fallback). See ``docs/source/user_guide/fastcache.md``.
 
     Returns:
-        The decorated class.
+        The decorated class (or, when called with arguments, a decorator).
     """
+    if cls is None:
+        return lambda c: data_oriented(c, stable_members=stable_members)
 
-    def make_kernel_indirect(fun, is_property):
+    def make_kernel_indirect(fun, is_property, attr_name):
+        # Capture the primal at decoration time so the per-call path skips the ``_BoundedDifferentiableMethod``
+        # allocation. The class itself is validated when ``_BoundedDifferentiableMethod`` is invoked via the
+        # ``.grad()`` path; for the common primal call here we replicate the check inline.
+        primal = fun._primal
+
         @wraps(fun)
         def _kernel_indirect(self, *args, **kwargs):
-            nonlocal fun
-            ret = _BoundedDifferentiableMethod(self, fun)
-            ret.__name__ = fun.__name__  # type: ignore
-            return ret(*args, **kwargs)
+            try:
+                return primal(self, *args, **kwargs)
+            except (QuadrantsCompilationError, QuadrantsRuntimeError) as e:
+                if impl.get_runtime().print_full_traceback:
+                    raise e
+                raise type(e)("\n" + str(e)) from None
 
         ret = QuadrantsCallable(fun, _kernel_indirect)
+        # setattr-after-class doesn't trigger __set_name__; set the name explicitly so QuadrantsCallable.__get__ can
+        # cache the BoundQuadrantsCallable on instance.__dict__.
+        ret._attr_name = attr_name
         if is_property:
             ret = property(ret)
         return ret
@@ -376,8 +400,10 @@ def data_oriented(cls):
         if isinstance(fun, (BoundQuadrantsCallable, QuadrantsCallable)):
             if fun._is_wrapped_kernel:
                 if fun._is_classkernel and attr_type is not staticmethod:
-                    setattr(cls, name, make_kernel_indirect(fun, is_property))
+                    setattr(cls, name, make_kernel_indirect(fun, is_property, name))
     cls._data_oriented = True
+    if stable_members:
+        cls._qd_stable_members = True
 
     return cls
 

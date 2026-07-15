@@ -142,10 +142,16 @@ def test_src_ll_cache_arg_warnings(tmp_path: pathlib.Path, capfd) -> None:
 
     k1(foo=RandomClass())
     _out, err = capfd.readouterr()
-    assert "[FASTCACHE][PARAM_INVALID]" in err
+    # Unrecognised types at a (top-level) kernel-read path now fail fastcache loudly: a one-shot ``[UNKNOWN_TYPE]``
+    # warning identifies the offending type, and ``[INVALID_FUNC]`` then reports the disabled cache. The old silent
+    # ``[PARAM_INVALID]`` dead-end is gone - the two rules driving this are documented in
+    # ``args_hasher.py::_fail_unknown_type`` and ``fastcache.md`` "Pruning-driven argument hashing": (1) only pruned
+    # paths may contribute to the cache key (so no qualname fallback), (2) unrecognised types at pruned paths must
+    # not be silently dropped.
+    assert "[FASTCACHE][UNKNOWN_TYPE]" in err
     assert RandomClass.__name__ in err
     assert "[FASTCACHE][INVALID_FUNC]" in err
-    assert k1.__name__ in err
+    assert "[FASTCACHE][PARAM_INVALID]" not in err
 
     @qd.kernel
     def not_pure_k1(foo: qd.Template) -> None:
@@ -153,8 +159,10 @@ def test_src_ll_cache_arg_warnings(tmp_path: pathlib.Path, capfd) -> None:
 
     not_pure_k1(foo=RandomClass())
     _out, err = capfd.readouterr()
+    # Without ``@qd.pure``, fastcache is not active at all - neither the new UNKNOWN_TYPE nor the old
+    # PARAM_INVALID / INVALID_FUNC warnings should fire.
+    assert "[FASTCACHE][UNKNOWN_TYPE]" not in err
     assert "[FASTCACHE][PARAM_INVALID]" not in err
-    assert RandomClass.__name__ not in err
     assert "[FASTCACHE][INVALID_FUNC]" not in err
     assert k1.__name__ not in err
 
@@ -431,6 +439,137 @@ def test_src_ll_cache_self_arg_checked(tmp_path: pathlib.Path) -> None:
     assert tuple(my_do.k1()) == (7, 30)
     assert my_do.k1._primal.src_ll_cache_observations.cache_key_generated
     assert my_do.k1._primal.src_ll_cache_observations.cache_validated
+
+
+@test_utils.test()
+def test_src_ll_cache_needs_grad_distinguishes_args_hash(tmp_path: pathlib.Path) -> None:
+    """Pin: fastcache narrow args_hash MUST fold in ``needs_grad`` for every ndarray leaf. Without this, two scenes
+    that differ only by whether their ndarrays carry ``.grad`` (e.g. Genesis ``requires_grad=True`` vs ``False``)
+    collide on the L2 key, and the second scene loads the artifact compiled with the first scene's needs_grad
+    flag. The kernel's compiled parameter slots have a fixed needs_grad (``insert_ndarray_param`` bakes it into
+    the struct type), and the launch path branches on ``v.grad is not None`` to pick between ``_QD_ARRAY`` and
+    ``_QD_ARRAY_WITH_GRAD`` buckets - bind a needs_grad=True ndarray to a slot declared without grad and the
+    parameter struct's primal pointer ends up at the wrong offset, producing silent wrong results or runtime OOB.
+
+    Reproduces the Genesis pattern (``kernel_init_link_fields`` taking a frozen-dataclass ``LinksState`` whose
+    members carry ``needs_grad`` from the scene's ``requires_grad``) with the smallest possible surface: a frozen
+    dataclass with two ``qd.f32`` ndarray members, a kernel that writes only the second one. First process compiles
+    without grad and stores L1+L2; second process (via ``qd.reset()`` + ``qd.init()``) runs the same kernel with
+    ``needs_grad=True`` members and asserts the second result is correct *and* that the L2 entry was a miss
+    (so the per-call needs_grad is correctly part of the cache key).
+    """
+    import dataclasses
+
+    import numpy as np
+
+    arch = getattr(qd, qd.lang.impl.current_cfg().arch.name)
+    N = 4
+
+    @dataclasses.dataclass(frozen=True)
+    class State:
+        a: qd.types.NDArray[qd.f32, 1]
+        b: qd.types.NDArray[qd.f32, 1]
+
+    @qd.pure
+    @qd.kernel
+    def write_b(s: State) -> None:
+        for i in range(N):
+            s.b[i] = qd.cast(i + 1, qd.f32) * 7.0
+
+    # Cold run: needs_grad=False (default). Populates L1 (pruning info) + L2 (artifact compiled with the slot for
+    # ``s.b`` declared needs_grad=False) using the narrow args_hash from ``stringify_obj_type`` on the without-grad
+    # ndarray ``[nd-f32-1]``.
+    qd.reset()
+    qd.init(arch=arch, offline_cache_file_path=str(tmp_path), offline_cache=True)
+    a1 = qd.ndarray(qd.f32, shape=(N,))
+    b1 = qd.ndarray(qd.f32, shape=(N,))
+    state1 = State(a=a1, b=b1)
+    write_b(state1)
+    assert write_b._primal.src_ll_cache_observations.cache_key_generated
+    assert not write_b._primal.src_ll_cache_observations.cache_loaded
+    expected = np.array([7, 14, 21, 28], dtype=np.float32)
+    np.testing.assert_allclose(b1.to_numpy(), expected)
+
+    # Hot run: needs_grad=True. With the bug, ``stringify_obj_type`` yields the same ``[nd-f32-1]`` string for the
+    # with-grad ndarray, the narrow args_hash collides, and L2 returns the without-grad artifact. The launch path
+    # then routes ``b2`` through ``_QD_ARRAY_WITH_GRAD`` because ``b2.grad`` is not None, against a slot the
+    # cached kernel declared as plain ``_QD_ARRAY`` - silent miscomputation or OOB.
+    #
+    # After the fix, the args_hash differs (needs_grad folded into the ndarray descriptor), L2 misses, the kernel
+    # is recompiled with the correct needs_grad=True slot, and the launch is well-typed.
+    qd.reset()
+    qd.init(arch=arch, offline_cache_file_path=str(tmp_path), offline_cache=True)
+    a2 = qd.ndarray(qd.f32, shape=(N,), needs_grad=True)
+    b2 = qd.ndarray(qd.f32, shape=(N,), needs_grad=True)
+    state2 = State(a=a2, b=b2)
+    write_b(state2)
+    # Diagnostic: the L2 must NOT load the no-grad artifact. After the fix this is a cache miss.
+    assert not write_b._primal.src_ll_cache_observations.cache_loaded, (
+        "fastcache hit between needs_grad=False (cold) and needs_grad=True (hot) - narrow args_hash is "
+        "missing needs_grad, the without-grad artifact will be launched against with-grad ndarrays"
+    )
+    # Correctness: the kernel writes the expected values, regardless of cache state.
+    np.testing.assert_allclose(b2.to_numpy(), expected)
+    # ``b2.grad`` is allocated but not written by this kernel - sanity check it survived as zero (i.e. the
+    # launch didn't smear primal data into the grad slot via a misaligned param struct).
+    np.testing.assert_allclose(b2.grad.to_numpy(), np.zeros(N, dtype=np.float32))
+
+
+@test_utils.test()
+def test_src_ll_cache_hit_predeclare_struct_ndarrays_pruned(tmp_path: pathlib.Path) -> None:
+    """Pin the cache-hit fix for ``_predeclare_struct_ndarrays``: on a fastcache hit pass 0 is skipped so the
+    ``id(nd)``-keyed used-ndarray set is empty; without flat-name fallback pruning every reachable ndarray gets
+    registered, scrambling the kernel's arg-slot bindings (e.g. a kernel compiled to write ``state.b`` ends up
+    writing ``state.a`` at launch). The fix uses the cached ``used_vars_by_func_id[KERNEL_FUNC_ID]`` flat-name
+    set to gate registration on the cache-hit branch, reproducing the exact ndarray set the originating compile
+    produced.
+
+    The test exercises both the cold (cache-store) and hot (cache-load) paths in the same process via
+    ``qd.reset()`` cycles, and asserts both that the ndarray the kernel writes to is the *correct* one and that
+    the other ndarrays are untouched - without the fix the value would land in ``state.a`` (the first
+    insertion-order ndarray) instead of ``state.b``.
+    """
+    import numpy as np  # local import keeps the test module's top-level deps unchanged
+
+    arch = getattr(qd, qd.lang.impl.current_cfg().arch.name)
+    N = 4
+
+    @qd.data_oriented
+    class State:
+        def __init__(self) -> None:
+            self.a = qd.ndarray(qd.i32, shape=(N,))
+            self.b = qd.ndarray(qd.i32, shape=(N,))
+            self.c = qd.ndarray(qd.i32, shape=(N,))
+
+    @qd.pure
+    @qd.kernel
+    def write_b(s: qd.template()) -> None:
+        for i in range(N):
+            s.b[i] = (i + 1) * 17
+
+    # Cold: cache-miss path populates the fastcache (including the kernel-used flat-name set folded in by
+    # ``_fold_struct_nd_paths_into_pruning``).
+    qd.reset()
+    qd.init(arch=arch, offline_cache_file_path=str(tmp_path), offline_cache=True)
+    state = State()
+    write_b(state)
+    assert write_b._primal.src_ll_cache_observations.cache_key_generated
+    assert not write_b._primal.src_ll_cache_observations.cache_loaded
+    np.testing.assert_array_equal(state.b.to_numpy(), np.array([17, 34, 51, 68], dtype=np.int32))
+    np.testing.assert_array_equal(state.a.to_numpy(), np.zeros(N, dtype=np.int32))
+    np.testing.assert_array_equal(state.c.to_numpy(), np.zeros(N, dtype=np.int32))
+
+    # Hot: cache-hit path skips pass 0; this is the branch the fix protects. Without flat-name pruning all three
+    # ndarrays would be registered in insertion order, displacing ``state.b`` from the slot the kernel was
+    # compiled to write - and the write would land in ``state.a`` instead.
+    qd.reset()
+    qd.init(arch=arch, offline_cache_file_path=str(tmp_path), offline_cache=True)
+    state = State()
+    write_b(state)
+    assert write_b._primal.src_ll_cache_observations.cache_loaded, "expected a fastcache hit on the second run"
+    np.testing.assert_array_equal(state.b.to_numpy(), np.array([17, 34, 51, 68], dtype=np.int32))
+    np.testing.assert_array_equal(state.a.to_numpy(), np.zeros(N, dtype=np.int32))
+    np.testing.assert_array_equal(state.c.to_numpy(), np.zeros(N, dtype=np.int32))
 
 
 class ModifySubFuncKernelArgs(pydantic.BaseModel):
