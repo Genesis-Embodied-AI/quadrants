@@ -116,6 +116,12 @@ class TemplateMapper:
         # path caching is load-bearing for correctness - @qd.data_oriented classes can have polymorphic attribute
         # structure across instances (Genesis ``DataManager`` only allocates adjoint-cache members when
         # ``requires_grad=True``); a per-class cache populated from one instance can't safely be reused for another.
+        #
+        # PERF: The per-instance ``arg.__dict__["_qd_nd_paths"]`` lookup is inlined here to skip the
+        # ``_struct_nd_paths_for`` function-call overhead on the steady-state hit path (measured ~60ns / call at 4
+        # template args on a warm process, ~15% of the loop's total cost). The function is only called on cold miss
+        # (first sighting of an instance, or ``__slots__`` class without ``__dict__``), where it handles the walk
+        # + per-class fallback cache.
         nd_ids: list = []
         for i in self.template_slot_locations:
             arg = args[i]
@@ -126,7 +132,10 @@ class TemplateMapper:
                 _arg_disposition[cls] = disposition
             if disposition is _SKIP:
                 continue
-            paths = _struct_nd_paths_for(arg)
+            try:
+                paths = arg.__dict__["_qd_nd_paths"]
+            except (AttributeError, KeyError):
+                paths = _struct_nd_paths_for(arg)
             if not paths:
                 continue
             for chain in paths:
