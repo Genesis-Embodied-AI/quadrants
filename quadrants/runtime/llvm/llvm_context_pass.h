@@ -8,12 +8,9 @@
 #include "llvm/Transforms/IPO.h"
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/IRBuilder.h"
-#include "llvm/IR/Metadata.h"
 #include "llvm/Support/SourceMgr.h"
 #include "llvm/Transforms/Utils/ValueMapper.h"
 #include "llvm/Transforms/Utils/Cloning.h"
-#include "llvm/Analysis/LoopInfo.h"
-#include "llvm/Transforms/Scalar/LoopPassManager.h"
 
 #if defined(QD_WITH_AMDGPU)
 #include "quadrants/rhi/amdgpu/amdgpu_context.h"

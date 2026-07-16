@@ -6,6 +6,7 @@
 #include "llvm/IR/Metadata.h"
 #include "llvm/IR/Module.h"
 #include "llvm/IR/PassManager.h"
+#include "llvm/Passes/PassBuilder.h"
 #include "llvm/Analysis/LoopInfo.h"
 #include "llvm/Transforms/Scalar/LoopPassManager.h"
 #include "llvm/Transforms/Utils/Cloning.h"
@@ -18,20 +19,19 @@ namespace lang {
 #if defined(QD_WITH_AMDGPU)
 
 namespace {
-// New-PM loop pass: annotates innermost loops with llvm.loop.interleave.count
-// IR metadata so the loop vectorizer uses the requested interleave factor.
-// Scoped to the compilation pipeline where it is registered; does not touch
-// any process-wide LLVM command-line state. Kept private to this AMDGPU JIT
-// translation unit to avoid expanding the shared LLVM header surface area.
-struct AMDGPUSetLoopInterleavePass
-    : public llvm::PassInfoMixin<AMDGPUSetLoopInterleavePass> {
+// New-PM loop pass: annotates innermost loops with llvm.loop.interleave.count IR metadata so the loop vectorizer uses
+// the requested interleave factor. Scoped to the compilation pipeline where it is registered; does not touch any
+// process-wide LLVM command-line state. Kept private to this AMDGPU JIT translation unit to avoid expanding the shared
+// LLVM header surface area.
+struct AMDGPUSetLoopInterleavePass : public llvm::PassInfoMixin<AMDGPUSetLoopInterleavePass> {
   unsigned count_;
-  explicit AMDGPUSetLoopInterleavePass(unsigned count) : count_(count) {}
+  explicit AMDGPUSetLoopInterleavePass(unsigned count) : count_(count) {
+  }
 
   llvm::PreservedAnalyses run(llvm::Loop &L,
-                               llvm::LoopAnalysisManager &,
-                               llvm::LoopStandardAnalysisResults &,
-                               llvm::LPMUpdater &) {
+                              llvm::LoopAnalysisManager &,
+                              llvm::LoopStandardAnalysisResults &,
+                              llvm::LPMUpdater &) {
     // Only annotate innermost loops
     if (!L.getSubLoops().empty())
       return llvm::PreservedAnalyses::all();
@@ -54,15 +54,13 @@ struct AMDGPUSetLoopInterleavePass
     }
 
     // Build new interleave hint node
-    llvm::MDNode *hint = llvm::MDNode::get(ctx, {
-        llvm::MDString::get(ctx, "llvm.loop.interleave.count"),
-        llvm::ConstantAsMetadata::get(
-            llvm::ConstantInt::get(llvm::Type::getInt32Ty(ctx), count_))
-    });
+    llvm::MDNode *hint = llvm::MDNode::get(
+        ctx, {llvm::MDString::get(ctx, "llvm.loop.interleave.count"),
+              llvm::ConstantAsMetadata::get(llvm::ConstantInt::get(llvm::Type::getInt32Ty(ctx), count_))});
 
     // Assemble updated loop metadata: [self-ref, ...existing..., hint]
     llvm::SmallVector<llvm::Metadata *, 4> ops;
-    ops.push_back(nullptr); // placeholder for self-reference
+    ops.push_back(nullptr);  // placeholder for self-reference
     if (existing_id) {
       for (unsigned i = 1, e = existing_id->getNumOperands(); i < e; ++i)
         ops.push_back(existing_id->getOperand(i).get());
@@ -70,12 +68,19 @@ struct AMDGPUSetLoopInterleavePass
     ops.push_back(hint);
 
     llvm::MDNode *new_id = llvm::MDNode::get(ctx, ops);
-    new_id->replaceOperandWith(0, new_id); // fix self-reference
+    new_id->replaceOperandWith(0, new_id);  // fix self-reference
     L.setLoopID(new_id);
 
     return llvm::PreservedAnalyses::none();
   }
 };
+
+// Registers AMDGPUSetLoopInterleavePass on the given PassBuilder. Shared by the HSACO code-generation pipeline and the
+// print_kernel_amdgcn dump pipeline so the emitted .gcn reflects the same interleave metadata as the linked object.
+void register_loop_interleave(llvm::PassBuilder &pb) {
+  pb.registerLoopOptimizerEndEPCallback(
+      [](llvm::LoopPassManager &lpm, llvm::OptimizationLevel) { lpm.addPass(AMDGPUSetLoopInterleavePass(8)); });
+}
 }  // namespace
 
 JITModule *JITSessionAMDGPU ::add_module(std::unique_ptr<llvm::Module> M, int max_reg) {
@@ -180,6 +185,9 @@ std::string JITSessionAMDGPU::compile_module_to_hsaco(std::unique_ptr<llvm::Modu
     pb.registerLoopAnalyses(lam);
     pb.crossRegisterProxies(lam, fam, cgam, mam);
 
+    // Keep the dumped .gcn in sync with the linked object: apply the same interleave metadata as the HSACO pipeline.
+    register_loop_interleave(pb);
+
     llvm::ModulePassManager mpm = pb.buildPerModuleDefaultPipeline(llvm::OptimizationLevel::O3);
     mpm.run(*module_clone, mam);
 
@@ -209,13 +217,9 @@ std::string JITSessionAMDGPU::compile_module_to_hsaco(std::unique_ptr<llvm::Modu
   pb.registerLoopAnalyses(lam);
   pb.crossRegisterProxies(lam, fam, cgam, mam);
 
-  // Annotate innermost loops with interleave-count=8 via IR metadata so the
-  // LLVM loop vectorizer uses it. This is scoped to this compilation pipeline
-  // and avoids mutating process-wide command-line state.
-  pb.registerLoopOptimizerEndEPCallback(
-      [](llvm::LoopPassManager &lpm, llvm::OptimizationLevel) {
-        lpm.addPass(AMDGPUSetLoopInterleavePass(8));
-      });
+  // Annotate innermost loops with interleave-count=8 via IR metadata so the LLVM loop vectorizer uses it. This is
+  // scoped to this compilation pipeline and avoids mutating process-wide command-line state.
+  register_loop_interleave(pb);
 
   llvm::ModulePassManager mpm = pb.buildPerModuleDefaultPipeline(llvm::OptimizationLevel::O3);
 
