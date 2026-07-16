@@ -131,6 +131,19 @@ void compile_to_offloads(IRNode *ir,
     irpass::analysis::verify_if_debug(ir, config);
   }
 
+  // Merge same-address pointer statements across the whole kernel BEFORE the first flag_access. flag_access stamps
+  // read-only pointers activate=false, cementing the read/write split; merging first gives each global one shared
+  // activate=true pointer, which is what cache_loop_invariant_global_vars needs to cache conditional/in-if stores
+  // (the contact-heavy duck_in_box optimization). Only pointers are merged here -- the expensive compute CSE is
+  // deferred to per-task CSE (post-offload). Set QD_NO_PTR_MERGE=1 to disable (A/B).
+  {
+    const char *no_merge = std::getenv("QD_NO_PTR_MERGE");
+    if (no_merge == nullptr || std::string(no_merge) != "1") {
+      irpass::merge_global_ptrs(ir);
+      irpass::analysis::verify_if_debug(ir, config);
+    }
+  }
+
   irpass::flag_access(ir);
   irpass::analysis::verify_if_debug(ir, config);
 

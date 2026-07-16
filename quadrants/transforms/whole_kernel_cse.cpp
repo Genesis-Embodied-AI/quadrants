@@ -78,12 +78,21 @@ class WholeKernelCSE : public BasicStmtVisitor {
   std::vector<std::vector<std::pair<std::size_t, Stmt *>>> scope_inserts_;
   DelayedIRModifier modifier_;
 
+  // When true, only address-computation statements (Global/External/MatrixPtr) are eliminated; all other statements
+  // are left untouched. Used pre-offload to merge same-address read/write pointers (the cheap, load-bearing part of
+  // whole-kernel CSE) without doing the expensive whole-kernel compute dedup, which is deferred to per-task CSE.
+  bool ptrs_only_ = false;
+
  public:
   using BasicStmtVisitor::visit;
 
-  WholeKernelCSE() {
+  explicit WholeKernelCSE(bool ptrs_only = false) : ptrs_only_(ptrs_only) {
     allow_undefined_visitor = true;
     invoke_default_visitor = true;
+  }
+
+  static bool is_ptr_stmt(Stmt *stmt) {
+    return stmt->is<GlobalPtrStmt>() || stmt->is<ExternalPtrStmt>() || stmt->is<MatrixPtrStmt>();
   }
 
   bool is_done(Stmt *stmt) {
@@ -160,6 +169,9 @@ class WholeKernelCSE : public BasicStmtVisitor {
     // container_statement does not need to be CSE-ed
     if (stmt->is_container_statement())
       return;
+    // Pointers-only mode: skip every non-address statement (leave compute CSE to per-task CSE).
+    if (ptrs_only_ && !is_ptr_stmt(stmt))
+      return;
     // Generic visitor for all CSE-able statements.
     std::size_t hash_value = operand_hash(stmt);
     if (is_done(stmt)) {
@@ -218,8 +230,8 @@ class WholeKernelCSE : public BasicStmtVisitor {
     }
 
     // Move common statements at the beginning or the end of both branches
-    // outside.
-    if (if_stmt->true_statements && if_stmt->false_statements) {
+    // outside. Skipped in pointers-only mode: we do not want to relocate arbitrary compute.
+    if (!ptrs_only_ && if_stmt->true_statements && if_stmt->false_statements) {
       auto &true_clause = if_stmt->true_statements;
       auto &false_clause = if_stmt->false_statements;
       if (irpass::analysis::same_statements(true_clause->statements[0].get(), false_clause->statements[0].get())) {
@@ -246,8 +258,8 @@ class WholeKernelCSE : public BasicStmtVisitor {
       if_stmt->false_statements->accept(this);
   }
 
-  static bool run(IRNode *node) {
-    WholeKernelCSE eliminator;
+  static bool run(IRNode *node, bool ptrs_only = false) {
+    WholeKernelCSE eliminator(ptrs_only);
     bool modified = false;
     while (true) {
       node->accept(&eliminator);
@@ -298,6 +310,15 @@ namespace irpass {
 bool whole_kernel_cse(IRNode *root) {
   QD_AUTO_PROF;
   return WholeKernelCSE::run(root);
+}
+
+// Cheap whole-kernel merge of same-address pointer statements only (Global/External/MatrixPtr), leaving all compute
+// alone. Run pre-offload (before the first flag_access) so a global's read and write pointers become one shared,
+// activate=true pointer -- the precondition cache_loop_invariant_global_vars relies on to cache conditional/in-if
+// stores. This is the load-bearing part of whole-kernel CSE; the expensive compute dedup stays per-task.
+bool merge_global_ptrs(IRNode *root) {
+  QD_AUTO_PROF;
+  return WholeKernelCSE::run(root, /*ptrs_only=*/true);
 }
 
 // Per-offloaded-task CSE, parallelized across the codegen worker pool. The post-offload full_simplify passes
