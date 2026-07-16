@@ -844,9 +844,12 @@ def test_graph_parallel_section_graph_do_while_raises():
 def test_graph_parallel_section_checkpoint_raises():
     """A qd.graph_parallel() section body must be straight-line task work: a qd.checkpoint nested inside a section is
     rejected. Its tasks carry checkpoint_id >= 0, which the CUDA fork/join path excludes from the section's run,
-    silently serializing the section instead of failing at compile time."""
+    silently serializing the section instead of failing at compile time. This section-body rule is a structural AST
+    check (`_validate_parallel_section_body`), independent of the kernel's `checkpoints=` mode, so a plain graph kernel
+    is enough to exercise it -- and it must be, since a `checkpoints=True` kernel is rejected earlier at the region
+    itself (see test_graph_parallel_context_in_checkpoints_kernel_raises)."""
 
-    @qd.kernel(graph=True, checkpoints=True)
+    @qd.kernel(graph=True)
     def k(x: qd.types.ndarray(qd.i32, ndim=1), flag: qd.types.ndarray(qd.i32, ndim=0)):
         with qd.graph_parallel_context():
             with qd.graph_parallel():
@@ -858,6 +861,30 @@ def test_graph_parallel_section_checkpoint_raises():
     flag = qd.ndarray(qd.i32, shape=())
     with pytest.raises(qd.QuadrantsSyntaxError, match="qd.checkpoint.. cannot appear inside a qd.graph_parallel"):
         k(x, flag)
+
+
+@test_utils.test()
+def test_graph_parallel_context_in_checkpoints_kernel_raises():
+    """A qd.graph_parallel_context() region is not supported in a @qd.kernel(graph=True, checkpoints=True) kernel and
+    must be rejected at compile time. A region's section for-loops escape the checkpoint net two ways, both wrong:
+    CheckpointTransformer.auto_wrap_for_loops does not recurse into the region's `with` block, so the sections are not
+    auto-wrapped into implicit checkpoints; and an explicit qd.checkpoint inside a section is itself rejected. Either
+    way every section task is emitted with checkpoint_id == -1 -- the prologue bucket that runs unconditionally on every
+    launch, ignoring the yield/resume model (a resume that should skip the region, or a yield before it, still runs it).
+    Wrapping the whole region in an explicit checkpoint doesn't rescue it either: the sections would then carry
+    cp_id >= 0, which build_level's fork/join path excludes (checkpoint_id < 0), silently serializing them. Until
+    regions participate in the checkpoint/resume model we reject the combination rather than miscompile it."""
+
+    @qd.kernel(graph=True, checkpoints=True)
+    def k(x: qd.types.ndarray(qd.i32, ndim=1)):
+        with qd.graph_parallel_context():
+            with qd.graph_parallel():
+                for i in range(x.shape[0]):
+                    x[i] = x[i] + 1
+
+    x = qd.ndarray(qd.i32, shape=(16,))
+    with pytest.raises(qd.QuadrantsSyntaxError, match="checkpoints=True"):
+        k(x)
 
 
 @test_utils.test()
