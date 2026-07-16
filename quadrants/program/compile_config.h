@@ -25,10 +25,10 @@ struct CompileConfig {
   bool lower_access;
   bool simplify_after_lower_access;
   bool move_loop_invariant_outside_if;
-  // Per-offloaded-task CSE no longer merges read/write GlobalPtrStmts to the same address before offload, which the
-  // post-offload cache_loop_invariant_global_vars pass relies on (it keys its cache by GlobalPtrStmt* identity).
-  // Defaulted off on this branch to keep that pass sound; per-task CSE already removes the redundant loads it targeted.
-  bool cache_loop_invariant_global_vars{false};
+  // Re-enabled: cache_loop_invariant_global_vars is now address-keyed (see cache_loop_invariant_global_vars.cpp), so it
+  // stays sound even when read/write GlobalPtrStmts to the same address are not merged (which per-task CSE cannot do
+  // post-offload). This keeps the pass's optimization (load-bearing on contact-heavy solves, e.g. duck_in_box).
+  bool cache_loop_invariant_global_vars{true};
   bool demote_dense_struct_fors;
   bool advanced_optimization;
   bool constant_folding;

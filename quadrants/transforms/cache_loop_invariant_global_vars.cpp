@@ -1,6 +1,10 @@
 #include "quadrants/transforms/loop_invariant_detector.h"
 #include "quadrants/ir/analysis.h"
 
+#include <cstdlib>
+#include <cstdio>
+#include <string>
+
 namespace quadrants::lang {
 
 namespace {
@@ -194,9 +198,63 @@ class CacheLoopInvariantGlobalVars : public LoopInvariantDetector {
     modifier.insert_before(get_loop_stmt(depth), std::move(local_store));
   }
 
+  static bool licm_log() {
+    static const bool v = []() {
+      const char *e = std::getenv("QD_LICM_LOG");
+      return e != nullptr && std::string(e) == "1";
+    }();
+    return v;
+  }
+
+  static std::string describe_dest(Stmt *dest) {
+    GlobalPtrStmt *g = nullptr;
+    if (dest->is<GlobalPtrStmt>()) {
+      g = dest->as<GlobalPtrStmt>();
+    } else if (dest->is<MatrixPtrStmt>() && dest->as<MatrixPtrStmt>()->origin->is<GlobalPtrStmt>()) {
+      g = dest->as<MatrixPtrStmt>()->origin->as<GlobalPtrStmt>();
+    }
+    if (g) {
+      return "id$" + std::to_string(dest->id) + " snode#" + std::to_string(g->snode->id) + "(" +
+             g->snode->get_node_type_name() + ")";
+    }
+    return "id$" + std::to_string(dest->id) + " non-global";
+  }
+
+  // Match an existing cache entry at |depth| by GlobalPtrStmt* identity, or by provable same-address
+  // (definitely_same_address). Address matching is required because per-task CSE (post-offload) cannot merge a
+  // read GlobalPtrStmt (activate=false, LICM-hoisted) with the in-loop write GlobalPtrStmts to the same address;
+  // keying purely by pointer identity would then allocate separate locals -> stale in-loop reads.
+  std::pair<CacheStatus, AllocaStmt *> *find_cache_entry(int depth, Stmt *dest) {
+    auto &m = cached_maps[depth];
+    auto it = m.find(dest);
+    if (it != m.end() && it->second.first != CacheStatus::None) {
+      return &it->second;
+    }
+    for (auto &kv : m) {
+      if (kv.second.first != CacheStatus::None && kv.first != dest &&
+          irpass::analysis::definitely_same_address(kv.first, dest)) {
+        return &kv.second;
+      }
+    }
+    return nullptr;
+  }
+
   AllocaStmt *cache_global_to_local(Stmt *dest, CacheStatus status, int depth) {
-    if (auto &[cached_status, alloca_stmt] = cached_maps[depth][dest]; cached_status != CacheStatus::None) {
-      // The global variable has already been cached.
+    auto *entry = find_cache_entry(depth, dest);
+    if (licm_log()) {
+      std::printf("[LICM] cache dest=%s status=%d depth=%d match=%s mapsz=%zu\n", describe_dest(dest).c_str(),
+                  (int)status, depth, entry ? "YES" : "NO", cached_maps[depth].size());
+      if (!entry) {
+        for (auto &kv : cached_maps[depth]) {
+          std::printf("[LICM]   existing=%s status=%d dsa=%d\n", describe_dest(kv.first).c_str(),
+                      (int)kv.second.first, (int)irpass::analysis::definitely_same_address(kv.first, dest));
+        }
+      }
+      std::fflush(stdout);
+    }
+    if (entry) {
+      auto &[cached_status, alloca_stmt] = *entry;
+      // The global variable has already been cached (same pointer or provably same address).
       if (cached_status == CacheStatus::Read && status == CacheStatus::Write) {
         add_writeback(alloca_stmt, dest, depth);
         cached_status = CacheStatus::ReadWrite;
