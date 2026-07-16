@@ -48,6 +48,8 @@ combine()     # runs after compute_ab() returns — a[] and b[] are ready
 
 Consecutive `with qd.stream_parallel():` blocks run concurrently. Multiple for loops within a single block share a stream and run serially on it. All streams are synchronized before the kernel returns.
 
+> **For `graph=True` kernels**, use [`qd.graph_parallel_context` / `qd.graph_parallel`](graph.md#qdgraph_parallel-sections-with-qdgraph_parallel_context-experimental) instead - `stream_parallel` is not compatible with graphs (see [Limitations](#limitations)). `qd.graph_parallel_context` expresses the same "run these independent sequences concurrently" idea but is honored by the graph builder.
+
 ### Restrictions
 
 - All top-level statements in a kernel must be either all `stream_parallel` blocks or all regular statements. Mixing the two at the top level is a compile-time error.

@@ -32,6 +32,9 @@ from quadrants.lang.ast.ast_transformers.checkpoint_transformer import (
 from quadrants.lang.ast.ast_transformers.function_def_transformer import (
     FunctionDefTransformer,
 )
+from quadrants.lang.ast.ast_transformers.graph_parallel_transformer import (
+    GraphParallelTransformer,
+)
 from quadrants.lang.exception import (
     QuadrantsIndexError,
     QuadrantsRuntimeTypeError,
@@ -1640,9 +1643,16 @@ class ASTTransformer(Builder):
         if checkpoint_info is not None:
             return ASTTransformer._build_checkpoint_with(ctx, node, checkpoint_info)
 
+        if GraphParallelTransformer.is_graph_parallel_context_call(item.context_expr):
+            return GraphParallelTransformer.build_graph_parallel_context_with(ctx, node, build_stmts)
+
+        if GraphParallelTransformer.is_parallel_section_call(item.context_expr):
+            return GraphParallelTransformer.build_parallel_section_with(ctx, node, build_stmts)
+
         if not FunctionDefTransformer._is_stream_parallel_with(node, ctx.global_vars):
             raise QuadrantsSyntaxError(
-                "'with' in Quadrants kernels only supports qd.stream_parallel() or qd.checkpoint()"
+                "'with' in Quadrants kernels only supports qd.stream_parallel(), qd.checkpoint(), "
+                "qd.graph_parallel_context(), or qd.graph_parallel()"
             )
         if not ctx.is_kernel:
             raise QuadrantsSyntaxError("qd.stream_parallel() can only be used inside @qd.kernel, not @qd.func")

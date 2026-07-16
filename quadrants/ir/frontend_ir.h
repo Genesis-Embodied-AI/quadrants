@@ -24,6 +24,11 @@ struct ForLoopConfig {
   int block_dim{0};
   bool uniform{false};
   int stream_parallel_group_id{0};
+  // Per-kernel id of the enclosing `qd.graph_parallel_context()` region (0 outside any region). Assigned by the AST
+  // builder's `current_graph_parallel_region_id_` at `begin_frontend_*_for` time and threaded alongside
+  // `stream_parallel_group_id` so the CUDA graph builder can tell two back-to-back regions apart and keep their joins
+  // (without it, adjacent regions merge into one fork/join and the second can race the first).
+  int graph_parallel_region_id{0};
   int graph_do_while_level_id{-1};
   // `cp_id` (see design doc `perso_hugh/doc/qipc/reentrant.md` section 5.1) of the enclosing `qd.checkpoint(...)` block
   // when this for-loop is emitted, or `-1` when the for-loop is outside any checkpoint. Assigned by the AST builder's
@@ -208,6 +213,7 @@ class FrontendForStmt : public Stmt {
   MemoryAccessOptions mem_access_opt;
   int block_dim;
   int stream_parallel_group_id{0};
+  int graph_parallel_region_id{0};
   int graph_do_while_level_id{-1};
   int checkpoint_id{-1};
   std::string loop_name;
@@ -929,6 +935,7 @@ class ASTBuilder {
       config.block_dim = 0;
       config.strictly_serialized = false;
       config.stream_parallel_group_id = 0;
+      config.graph_parallel_region_id = 0;
       config.graph_do_while_level_id = -1;
       config.checkpoint_id = -1;
       config.loop_name.clear();
@@ -943,6 +950,12 @@ class ASTBuilder {
   int id_counter_{0};
   int stream_parallel_group_counter_{0};
   int current_stream_parallel_group_id_{0};
+  // Per-kernel counter handed out by `begin_graph_parallel_context()` (one id per `qd.graph_parallel_context()`
+  // region), and the innermost active region id (0 outside any region). Reset per kernel via fresh ASTBuilder
+  // construction. Mirrors `stream_parallel_group_counter_` / `current_stream_parallel_group_id_`, but at region
+  // (not section) granularity, so for-loops created inside a region carry its id.
+  int graph_parallel_region_counter_{0};
+  int current_graph_parallel_region_id_{0};
   // Innermost active graph_do_while level id (-1 if not inside any). The Python AST transformer manages the stack and
   // calls set_graph_do_while_level_id() on enter/exit; for-loops created while it is >= 0 are tagged with it (mirrors
   // current_stream_parallel_group_id_).
@@ -1092,6 +1105,18 @@ class ASTBuilder {
 
   void end_stream_parallel() {
     current_stream_parallel_group_id_ = 0;
+  }
+
+  // Enter a `qd.graph_parallel_context()` region: hand out a fresh per-kernel region id that every for-loop emitted
+  // inside the region (across all its `qd.graph_parallel()` sections) carries, so the CUDA graph builder can keep
+  // adjacent regions' fork/join groups apart. The Python AST transformer calls these on region enter/exit.
+  void begin_graph_parallel_context() {
+    QD_ERROR_IF(current_graph_parallel_region_id_ != 0, "qd.graph_parallel_context() regions cannot be nested");
+    current_graph_parallel_region_id_ = ++graph_parallel_region_counter_;
+  }
+
+  void end_graph_parallel_context() {
+    current_graph_parallel_region_id_ = 0;
   }
 
   // Set the innermost active graph_do_while level id. Pass the new level id when entering a graph_do_while loop, and
