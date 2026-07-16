@@ -65,6 +65,12 @@ class CacheLoopInvariantGlobalVars : public LoopInvariantDetector {
 
   OffloadedStmt *current_offloaded;
 
+  // Two-phase soundness state. In phase 1 (analyzing_) we only record which snodes cannot be soundly cached;
+  // in phase 2 we transform, skipping those snodes. See visit(OffloadedStmt).
+  bool analyzing_ = false;
+  std::unordered_set<const SNode *> unsafe_analysis_;  // accumulator during phase 1
+  std::unordered_set<const SNode *> unsafe_snodes_;    // frozen result consulted during phase 2
+
   explicit CacheLoopInvariantGlobalVars(const CompileConfig &config) : LoopInvariantDetector(config) {
   }
 
@@ -83,14 +89,35 @@ class CacheLoopInvariantGlobalVars : public LoopInvariantDetector {
     gather_atomic_dests(stmt, atomic_dest_snodes_, atomic_dest_arr_ids_);
 
     // We don't need to visit TLS/BLS prologues/epilogues.
-    if (stmt->body) {
-      if (stmt->task_type == OffloadedStmt::TaskType::range_for || stmt->task_type == OffloadedTaskType::mesh_for ||
-          stmt->task_type == OffloadedStmt::TaskType::struct_for)
-        visit_loop(stmt->body.get());
-      else
-        stmt->body->accept(this);
+    if (!stmt->body) {
+      current_offloaded = nullptr;
+      return;
     }
+
+    // Phase 1 (analysis): find snodes that cannot be soundly cached. A snode is unsafe if some access to it is
+    // eligible for caching (offload-unique, static index, non-atomic) yet not cacheable at its own site -- e.g. a
+    // store inside an if-block that LICM did not hoist out (move_loop_invariant_outside_if is off). If we cached
+    // this snode's other (cacheable) accesses into a loop-invariant local, that un-hoistable access would still
+    // read/write global directly, so the local goes stale. Under whole-kernel CSE all accesses share one hoisted
+    // pointer and this never happens; under per-task CSE the read/write pointers stay split, exposing it (this is
+    // the solver break-flag / -88% regression). Excluding such snodes keeps every access on global -> correct.
+    analyzing_ = true;
+    unsafe_analysis_.clear();
+    run_body(stmt);
+    analyzing_ = false;
+    unsafe_snodes_ = std::move(unsafe_analysis_);
+
+    // Phase 2 (transform): cache as before, but skip the unsafe snodes.
+    run_body(stmt);
     current_offloaded = nullptr;
+  }
+
+  void run_body(OffloadedStmt *stmt) {
+    if (stmt->task_type == OffloadedStmt::TaskType::range_for || stmt->task_type == OffloadedTaskType::mesh_for ||
+        stmt->task_type == OffloadedStmt::TaskType::struct_for)
+      visit_loop(stmt->body.get());
+    else
+      stmt->body->accept(this);
   }
 
   bool is_dynamically_indexed(Stmt *stmt) {
@@ -323,9 +350,47 @@ class CacheLoopInvariantGlobalVars : public LoopInvariantDetector {
     return depth;
   }
 
+  static const SNode *dest_snode(Stmt *dest) {
+    if (dest->is<GlobalPtrStmt>()) {
+      return dest->as<GlobalPtrStmt>()->snode;
+    }
+    if (dest->is<MatrixPtrStmt>() && dest->as<MatrixPtrStmt>()->origin->is<GlobalPtrStmt>()) {
+      return dest->as<MatrixPtrStmt>()->origin->as<GlobalPtrStmt>()->snode;
+    }
+    return nullptr;
+  }
+
+  // Would this pass otherwise want to cache accesses to |dest| (offload-unique, statically indexed, non-atomic)?
+  // Whether a *particular* access is cacheable additionally depends on its scope (find_cache_depth_if_cacheable).
+  bool cache_eligible(Stmt *dest) {
+    return !is_dynamically_indexed(dest) && is_offload_unique(dest) && !is_atomic_dest(dest);
+  }
+
+  // Phase-1 hook: mark the snode unsafe if this access is cache-eligible but not cacheable at its own site.
+  void analyze_access(Stmt *dest, Block *scope) {
+    const SNode *sn = dest_snode(dest);
+    if (!sn || !cache_eligible(dest)) {
+      return;
+    }
+    if (!find_cache_depth_if_cacheable(dest, scope).has_value()) {
+      if (unsafe_analysis_.insert(sn).second && licm_log()) {
+        std::printf("[LICM] UNSAFE snode#%d(%s) via %s\n", sn->id, sn->get_node_type_name().c_str(),
+                    describe_dest(dest).c_str());
+        std::fflush(stdout);
+      }
+    }
+  }
+
   void visit(GlobalLoadStmt *stmt) override {
     // Volatile loads must read from memory on every execution (spin-wait correctness); skip caching.
     if (stmt->is_volatile) {
+      return;
+    }
+    if (analyzing_) {
+      analyze_access(stmt->src, stmt->parent);
+      return;
+    }
+    if (const SNode *sn = dest_snode(stmt->src); sn && unsafe_snodes_.count(sn)) {
       return;
     }
     if (auto depth = find_cache_depth_if_cacheable(stmt->src, stmt->parent)) {
@@ -338,6 +403,13 @@ class CacheLoopInvariantGlobalVars : public LoopInvariantDetector {
   }
 
   void visit(GlobalStoreStmt *stmt) override {
+    if (analyzing_) {
+      analyze_access(stmt->dest, stmt->parent);
+      return;
+    }
+    if (const SNode *sn = dest_snode(stmt->dest); sn && unsafe_snodes_.count(sn)) {
+      return;
+    }
     if (auto depth = find_cache_depth_if_cacheable(stmt->dest, stmt->parent)) {
       auto alloca_stmt = cache_global_to_local(stmt->dest, CacheStatus::Write, depth.value());
       auto local_store = std::make_unique<LocalStoreStmt>(alloca_stmt, stmt->val);
