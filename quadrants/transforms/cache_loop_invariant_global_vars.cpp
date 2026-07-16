@@ -101,15 +101,29 @@ class CacheLoopInvariantGlobalVars : public LoopInvariantDetector {
     // read/write global directly, so the local goes stale. Under whole-kernel CSE all accesses share one hoisted
     // pointer and this never happens; under per-task CSE the read/write pointers stay split, exposing it (this is
     // the solver break-flag / -88% regression). Excluding such snodes keeps every access on global -> correct.
-    analyzing_ = true;
-    unsafe_analysis_.clear();
-    run_body(stmt);
-    analyzing_ = false;
-    unsafe_snodes_ = std::move(unsafe_analysis_);
+    // The two-phase exclusion is a workaround for the read/write pointer split that per-task CSE used to leave in the
+    // IR. With merge_global_ptrs now unifying those pointers in the full_simplify fixpoint (like whole-kernel CSE on
+    // main), the split is gone and the exclusion is unnecessary; QD_LICM_NO_EXCLUDE=1 disables it to A/B that.
+    unsafe_snodes_.clear();
+    if (!no_exclude()) {
+      analyzing_ = true;
+      unsafe_analysis_.clear();
+      run_body(stmt);
+      analyzing_ = false;
+      unsafe_snodes_ = std::move(unsafe_analysis_);
+    }
 
     // Phase 2 (transform): cache as before, but skip the unsafe snodes.
     run_body(stmt);
     current_offloaded = nullptr;
+  }
+
+  static bool no_exclude() {
+    static const bool v = []() {
+      const char *e = std::getenv("QD_LICM_NO_EXCLUDE");
+      return e != nullptr && std::string(e) == "1";
+    }();
+    return v;
   }
 
   void run_body(OffloadedStmt *stmt) {
