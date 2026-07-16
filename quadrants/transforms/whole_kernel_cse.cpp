@@ -347,6 +347,13 @@ bool whole_kernel_cse(IRNode *root) {
 // stores. This is the load-bearing part of whole-kernel CSE; the expensive compute dedup stays per-task.
 bool merge_global_ptrs(IRNode *root) {
   QD_AUTO_PROF;
+  static const bool disabled = []() {
+    const char *e = std::getenv("QD_NO_PTR_MERGE");
+    return e != nullptr && std::string(e) == "1";
+  }();
+  if (disabled) {
+    return false;
+  }
   return WholeKernelCSE::run(root, /*ptrs_only=*/true);
 }
 
