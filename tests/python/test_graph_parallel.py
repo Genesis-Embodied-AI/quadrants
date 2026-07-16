@@ -844,9 +844,12 @@ def test_graph_parallel_section_graph_do_while_raises():
 def test_graph_parallel_section_checkpoint_raises():
     """A qd.graph_parallel() section body must be straight-line task work: a qd.checkpoint nested inside a section is
     rejected. Its tasks carry checkpoint_id >= 0, which the CUDA fork/join path excludes from the section's run,
-    silently serializing the section instead of failing at compile time."""
+    silently serializing the section instead of failing at compile time. This section-body rule is a structural AST
+    check (`_validate_parallel_section_body`), independent of the kernel's `checkpoints=` mode, so a plain graph kernel
+    is enough to exercise it -- and it must be, since a `checkpoints=True` kernel is rejected earlier at the region
+    itself (see test_graph_parallel_context_in_checkpoints_kernel_raises)."""
 
-    @qd.kernel(graph=True, checkpoints=True)
+    @qd.kernel(graph=True)
     def k(x: qd.types.ndarray(qd.i32, ndim=1), flag: qd.types.ndarray(qd.i32, ndim=0)):
         with qd.graph_parallel_context():
             with qd.graph_parallel():
