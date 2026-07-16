@@ -141,22 +141,6 @@ void compile_to_offloads(IRNode *ir,
   irpass::analysis::verify_if_debug(ir, config);
 
   dump_ir("after_offload");
-
-  // Merge same-address pointer statements across the whole (offloaded) kernel BEFORE this flag_access. `offload`
-  // clones each global's address computation into every task/access, so post-offload a global has separate read and
-  // write GlobalPtrStmts (still activate=true here). flag_access then stamps the read-only one activate=false,
-  // cementing the split that stops cache_loop_invariant_global_vars from caching conditional/in-if stores (the -88%
-  // solver break-flag bug + the lost duck_in_box optimization). Merging first gives each global one shared
-  // activate=true pointer. Only pointers + integer addressing arithmetic are merged; the expensive float compute CSE
-  // stays deferred to per-task CSE. Set QD_NO_PTR_MERGE=1 to disable (A/B).
-  {
-    const char *no_merge = std::getenv("QD_NO_PTR_MERGE");
-    if (no_merge == nullptr || std::string(no_merge) != "1") {
-      irpass::merge_global_ptrs(ir);
-      irpass::analysis::verify_if_debug(ir, config);
-    }
-  }
-
   // NOTE: There was an additional CFG pass here, removed in
   // https://github.com/taichi-dev/taichi/pull/8691
   irpass::flag_access(ir);
