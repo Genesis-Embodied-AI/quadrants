@@ -102,10 +102,12 @@ class CacheLoopInvariantGlobalVars : public LoopInvariantDetector {
     // pointer and this never happens; under per-task CSE the read/write pointers stay split, exposing it (this is
     // the solver break-flag / -88% regression). Excluding such snodes keeps every access on global -> correct.
     // The two-phase exclusion is a workaround for the read/write pointer split that per-task CSE used to leave in the
-    // IR. With merge_global_ptrs now unifying those pointers in the full_simplify fixpoint (like whole-kernel CSE on
-    // main), the split is gone and the exclusion is unnecessary; QD_LICM_NO_EXCLUDE=1 disables it to A/B that.
+    // IR. merge_global_ptrs now unifies those pointers in the full_simplify fixpoint (like whole-kernel CSE on main),
+    // so the split is gone at the root: this fixes the -88% break-flag bug AND recovers the duck_in_box cache
+    // optimization (bench: duck within noise of main), whereas the exclusion alone recovered anymal but left duck at
+    // pass-off -12%. The exclusion is therefore off by default; QD_LICM_EXCLUDE=1 re-enables it as a safety valve.
     unsafe_snodes_.clear();
-    if (!no_exclude()) {
+    if (do_exclude()) {
       analyzing_ = true;
       unsafe_analysis_.clear();
       run_body(stmt);
@@ -118,9 +120,9 @@ class CacheLoopInvariantGlobalVars : public LoopInvariantDetector {
     current_offloaded = nullptr;
   }
 
-  static bool no_exclude() {
+  static bool do_exclude() {
     static const bool v = []() {
-      const char *e = std::getenv("QD_LICM_NO_EXCLUDE");
+      const char *e = std::getenv("QD_LICM_EXCLUDE");
       return e != nullptr && std::string(e) == "1";
     }();
     return v;
