@@ -2,10 +2,14 @@
 #include "quadrants/ir/analysis.h"
 #include "quadrants/ir/statements.h"
 #include "quadrants/ir/transforms.h"
+#include "quadrants/ir/type_utils.h"
 #include "quadrants/ir/visitors.h"
 #include "quadrants/system/profiler.h"
 
 #include <typeindex>
+#include <cstdlib>
+#include <cstdio>
+#include <string>
 
 namespace quadrants::lang {
 
@@ -95,6 +99,21 @@ class WholeKernelCSE : public BasicStmtVisitor {
     return stmt->is<GlobalPtrStmt>() || stmt->is<ExternalPtrStmt>() || stmt->is<MatrixPtrStmt>();
   }
 
+  // What ptrs_only mode is allowed to eliminate: address-computation statements PLUS pure integer (addressing)
+  // arithmetic. The latter is required because two same-address pointers only prove equal (value_diff_ptr_index ->
+  // FindDirectValueBaseAndOffset) once their index arithmetic is itself merged to a common base statement. Global
+  // loads/stores are never eliminable (common_statement_eliminable()==false), so this stays sound; float solver
+  // compute is left untouched and deferred to per-task CSE.
+  static bool eligible_in_ptrs_only(Stmt *stmt) {
+    if (is_ptr_stmt(stmt)) {
+      return true;
+    }
+    if ((Type *)stmt->ret_type == nullptr) {
+      return false;
+    }
+    return is_integral(stmt->ret_type.get_element_type());
+  }
+
   bool is_done(Stmt *stmt) {
     return visited_.find(stmt->instance_id) != visited_.end();
   }
@@ -169,8 +188,9 @@ class WholeKernelCSE : public BasicStmtVisitor {
     // container_statement does not need to be CSE-ed
     if (stmt->is_container_statement())
       return;
-    // Pointers-only mode: skip every non-address statement (leave compute CSE to per-task CSE).
-    if (ptrs_only_ && !is_ptr_stmt(stmt))
+    // Pointers-only mode: skip every non-address / non-integer-addressing statement (leave float compute CSE to
+    // per-task CSE).
+    if (ptrs_only_ && !eligible_in_ptrs_only(stmt))
       return;
     // Generic visitor for all CSE-able statements.
     std::size_t hash_value = operand_hash(stmt);
@@ -261,12 +281,21 @@ class WholeKernelCSE : public BasicStmtVisitor {
   static bool run(IRNode *node, bool ptrs_only = false) {
     WholeKernelCSE eliminator(ptrs_only);
     bool modified = false;
+    int rounds = 0;
     while (true) {
       node->accept(&eliminator);
+      rounds++;
       if (eliminator.modifier_.modify_ir())
         modified = true;
       else
         break;
+    }
+    if (ptrs_only) {
+      const char *log = std::getenv("QD_LICM_LOG");
+      if (log != nullptr && std::string(log) == "1") {
+        std::printf("[PTRMERGE] ran %d round(s), modified=%d\n", rounds, (int)modified);
+        std::fflush(stdout);
+      }
     }
     return modified;
   }
