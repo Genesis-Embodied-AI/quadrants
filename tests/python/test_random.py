@@ -110,8 +110,9 @@ def test_random_seed_per_program():
 
     n = 10
     result = []
+    arch = qd.lang.impl.current_cfg().arch
     for s in [0, 1]:
-        qd.init(random_seed=s)
+        qd.init(arch=arch, random_seed=s)
         x = qd.field(qd.f32, shape=n)
 
         @qd.kernel
