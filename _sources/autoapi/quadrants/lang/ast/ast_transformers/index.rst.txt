@@ -13,5 +13,6 @@ Submodules
    /autoapi/quadrants/lang/ast/ast_transformers/call_transformer/index
    /autoapi/quadrants/lang/ast/ast_transformers/checkpoint_transformer/index
    /autoapi/quadrants/lang/ast/ast_transformers/function_def_transformer/index
+   /autoapi/quadrants/lang/ast/ast_transformers/ndarray_arg_resolver/index
 
 

@@ -1843,18 +1843,43 @@
 
 
     <span class="nd">@staticmethod</span>
-    <span class="k">def</span><span class="w"> </span><span class="nf">_is_graph_do_while_call</span><span class="p">(</span><span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">expr</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;If *node* is ``qd.graph_do_while(var)`` return the arg name, else None.&quot;&quot;&quot;</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_is_graph_do_while_call</span><span class="p">(</span><span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">expr</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ast</span><span class="o">.</span><span class="n">expr</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;If *node* is ``qd.graph_do_while(arg)`` return the arg AST node, else None.</span>
+
+<span class="sd">        ``arg`` may be an ``ast.Name`` (a bare kernel parameter, e.g. ``counter``) or an ``ast.Attribute`` chain (a</span>
+<span class="sd">        ``@qd.data_oriented`` member ndarray such as ``self.counter`` or a ``@dataclasses.dataclass`` parameter member</span>
+<span class="sd">        such as ``params.counter``). The actual resolution to a kernel ndarray argument happens in ``build_While`` via</span>
+<span class="sd">        ``_resolve_ndarray_kernel_arg_id``.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Call</span><span class="p">):</span>
             <span class="k">return</span> <span class="kc">None</span>
         <span class="n">func</span> <span class="o">=</span> <span class="n">node</span><span class="o">.</span><span class="n">func</span>
-        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">func</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Attribute</span><span class="p">)</span> <span class="ow">and</span> <span class="n">func</span><span class="o">.</span><span class="n">attr</span> <span class="o">==</span> <span class="s2">&quot;graph_do_while&quot;</span><span class="p">:</span>
-            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">args</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span> <span class="ow">and</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">ast</span><span class="o">.</span><span class="n">Name</span><span class="p">):</span>
-                <span class="k">return</span> <span class="n">node</span><span class="o">.</span><span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">id</span>
-        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">func</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Name</span><span class="p">)</span> <span class="ow">and</span> <span class="n">func</span><span class="o">.</span><span class="n">id</span> <span class="o">==</span> <span class="s2">&quot;graph_do_while&quot;</span><span class="p">:</span>
-            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">args</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span> <span class="ow">and</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">ast</span><span class="o">.</span><span class="n">Name</span><span class="p">):</span>
-                <span class="k">return</span> <span class="n">node</span><span class="o">.</span><span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">id</span>
+        <span class="n">is_gdw</span> <span class="o">=</span> <span class="p">(</span><span class="nb">isinstance</span><span class="p">(</span><span class="n">func</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Attribute</span><span class="p">)</span> <span class="ow">and</span> <span class="n">func</span><span class="o">.</span><span class="n">attr</span> <span class="o">==</span> <span class="s2">&quot;graph_do_while&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="p">(</span>
+            <span class="nb">isinstance</span><span class="p">(</span><span class="n">func</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Name</span><span class="p">)</span> <span class="ow">and</span> <span class="n">func</span><span class="o">.</span><span class="n">id</span> <span class="o">==</span> <span class="s2">&quot;graph_do_while&quot;</span>
+        <span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">is_gdw</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">None</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">args</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span> <span class="ow">and</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="p">(</span><span class="n">ast</span><span class="o">.</span><span class="n">Name</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Attribute</span><span class="p">)):</span>
+            <span class="k">return</span> <span class="n">node</span><span class="o">.</span><span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
         <span class="k">return</span> <span class="kc">None</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_resolve_ndarray_kernel_arg_id</span><span class="p">(</span>
+        <span class="n">ctx</span><span class="p">:</span> <span class="n">ASTTransformerFuncContext</span><span class="p">,</span>
+        <span class="n">kernel</span><span class="p">,</span>
+        <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">expr</span><span class="p">,</span>
+        <span class="n">usage</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">int</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Thin forwarding wrapper around ``ndarray_arg_resolver.resolve_ndarray_kernel_arg_id``; the actual logic lives</span>
+<span class="sd">        in module ``ast_transformers/ndarray_arg_resolver.py`` to keep this file from growing per-feature (same pattern</span>
+<span class="sd">        as ``_is_checkpoint_call`` / ``CheckpointTransformer``). Returns ``(label, flat_cpp_arg_id)`` or raises</span>
+<span class="sd">        ``QuadrantsSyntaxError``.&quot;&quot;&quot;</span>
+        <span class="c1"># pylint: disable-next=C0415,import-outside-toplevel</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.ast.ast_transformers.ndarray_arg_resolver</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+            <span class="n">resolve_ndarray_kernel_arg_id</span><span class="p">,</span>
+        <span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">resolve_ndarray_kernel_arg_id</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">kernel</span><span class="p">,</span> <span class="n">node</span><span class="p">,</span> <span class="n">usage</span><span class="p">)</span>
 
     <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">_is_checkpoint_call</span><span class="p">(</span><span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">expr</span><span class="p">,</span> <span class="n">global_vars</span><span class="p">:</span> <span class="nb">dict</span><span class="p">):</span>
@@ -1870,18 +1895,11 @@
         <span class="k">if</span> <span class="n">node</span><span class="o">.</span><span class="n">orelse</span><span class="p">:</span>
             <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">&quot;&#39;else&#39; clause for &#39;while&#39; not supported in Quadrants kernels&quot;</span><span class="p">)</span>
 
-        <span class="n">graph_do_while_arg</span> <span class="o">=</span> <span class="n">ASTTransformer</span><span class="o">.</span><span class="n">_is_graph_do_while_call</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">test</span><span class="p">)</span>
-        <span class="k">if</span> <span class="n">graph_do_while_arg</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">graph_do_while_node</span> <span class="o">=</span> <span class="n">ASTTransformer</span><span class="o">.</span><span class="n">_is_graph_do_while_call</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">test</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">graph_do_while_node</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
             <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.kernel</span><span class="w"> </span><span class="kn">import</span> <span class="n">GraphDoWhileLevel</span>  <span class="c1"># pylint: disable=C0415</span>
 
             <span class="n">kernel</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">global_context</span><span class="o">.</span><span class="n">current_kernel</span>
-            <span class="n">arg_names</span> <span class="o">=</span> <span class="p">[</span><span class="n">m</span><span class="o">.</span><span class="n">name</span> <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="n">kernel</span><span class="o">.</span><span class="n">arg_metas</span><span class="p">]</span>
-            <span class="k">if</span> <span class="n">graph_do_while_arg</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">arg_names</span><span class="p">:</span>
-                <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span>
-                    <span class="sa">f</span><span class="s2">&quot;qd.graph_do_while(</span><span class="si">{</span><span class="n">graph_do_while_arg</span><span class="si">!r}</span><span class="s2">) does not match any &quot;</span>
-                    <span class="sa">f</span><span class="s2">&quot;parameter of kernel </span><span class="si">{</span><span class="n">kernel</span><span class="o">.</span><span class="n">func</span><span class="o">.</span><span class="vm">__name__</span><span class="si">!r}</span><span class="s2">. &quot;</span>
-                    <span class="sa">f</span><span class="s2">&quot;Available parameters: </span><span class="si">{</span><span class="n">arg_names</span><span class="si">}</span><span class="s2">&quot;</span>
-                <span class="p">)</span>
             <span class="k">if</span> <span class="ow">not</span> <span class="n">kernel</span><span class="o">.</span><span class="n">use_graph</span><span class="p">:</span>
                 <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">&quot;qd.graph_do_while() requires @qd.kernel(graph=True)&quot;</span><span class="p">)</span>
             <span class="c1"># graph_do_while emits no loop IR; its body&#39;s for-loops must be top-level (offloaded) tasks. So it may only</span>
@@ -1892,15 +1910,22 @@
                     <span class="s2">&quot;qd.graph_do_while() must be at the kernel top level or directly nested inside &quot;</span>
                     <span class="s2">&quot;another qd.graph_do_while(); it cannot appear inside a for-loop.&quot;</span>
                 <span class="p">)</span>
+            <span class="c1"># Resolve the condition ndarray (bare parameter or @qd.data_oriented member) to its flat C++ arg-id at AST-</span>
+            <span class="c1"># build time -- the same id the runtime needs -- so the launch path forwards it directly with no per-launch</span>
+            <span class="c1"># name matching. ``cond_arg_name`` keeps the readable label (e.g. &quot;counter&quot; or &quot;self.counter&quot;) for</span>
+            <span class="c1"># introspection and for the legacy ``graph_do_while_arg`` alias surfaced on Kernel.</span>
+            <span class="n">cond_label</span><span class="p">,</span> <span class="n">cond_cpp_arg_id</span> <span class="o">=</span> <span class="n">ASTTransformer</span><span class="o">.</span><span class="n">_resolve_ndarray_kernel_arg_id</span><span class="p">(</span>
+                <span class="n">ctx</span><span class="p">,</span> <span class="n">kernel</span><span class="p">,</span> <span class="n">graph_do_while_node</span><span class="p">,</span> <span class="s2">&quot;qd.graph_do_while(...)&quot;</span>
+            <span class="p">)</span>
             <span class="c1"># Register this loop as a new nesting level (the body restriction is validated up-front in</span>
             <span class="c1"># FunctionDefTransformer). Outer loops get lower ids than the inner loops they contain.</span>
             <span class="n">parent_id</span> <span class="o">=</span> <span class="n">kernel</span><span class="o">.</span><span class="n">_graph_do_while_level_stack</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="k">if</span> <span class="n">kernel</span><span class="o">.</span><span class="n">_graph_do_while_level_stack</span> <span class="k">else</span> <span class="o">-</span><span class="mi">1</span>
             <span class="n">level_id</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">kernel</span><span class="o">.</span><span class="n">graph_do_while_levels</span><span class="p">)</span>
             <span class="n">kernel</span><span class="o">.</span><span class="n">graph_do_while_levels</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
-                <span class="n">GraphDoWhileLevel</span><span class="p">(</span><span class="n">cond_arg_name</span><span class="o">=</span><span class="n">graph_do_while_arg</span><span class="p">,</span> <span class="n">parent_id</span><span class="o">=</span><span class="n">parent_id</span><span class="p">)</span>
+                <span class="n">GraphDoWhileLevel</span><span class="p">(</span><span class="n">cond_arg_name</span><span class="o">=</span><span class="n">cond_label</span><span class="p">,</span> <span class="n">parent_id</span><span class="o">=</span><span class="n">parent_id</span><span class="p">,</span> <span class="n">cond_cpp_arg_id</span><span class="o">=</span><span class="n">cond_cpp_arg_id</span><span class="p">)</span>
             <span class="p">)</span>
             <span class="k">if</span> <span class="n">level_id</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
-                <span class="n">kernel</span><span class="o">.</span><span class="n">graph_do_while_arg</span> <span class="o">=</span> <span class="n">graph_do_while_arg</span>
+                <span class="n">kernel</span><span class="o">.</span><span class="n">graph_do_while_arg</span> <span class="o">=</span> <span class="n">cond_label</span>
             <span class="n">kernel</span><span class="o">.</span><span class="n">_graph_do_while_level_stack</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">level_id</span><span class="p">)</span>
             <span class="n">ctx</span><span class="o">.</span><span class="n">ast_builder</span><span class="o">.</span><span class="n">set_graph_do_while_level_id</span><span class="p">(</span><span class="n">level_id</span><span class="p">)</span>
             <span class="k">try</span><span class="p">:</span>

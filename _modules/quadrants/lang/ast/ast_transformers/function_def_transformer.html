@@ -851,6 +851,7 @@
                 <span class="c1"># different argument shape) start from an empty list. Mirrors how `graph_do_while_arg` gets overwritten</span>
                 <span class="c1"># unconditionally during AST traversal.</span>
                 <span class="n">kernel</span><span class="o">.</span><span class="n">checkpoint_yield_on_args</span> <span class="o">=</span> <span class="p">[]</span>
+                <span class="n">kernel</span><span class="o">.</span><span class="n">checkpoint_yield_on_cpp_arg_ids</span> <span class="o">=</span> <span class="p">[]</span>
                 <span class="n">kernel</span><span class="o">.</span><span class="n">checkpoint_user_labels_by_cp_id</span> <span class="o">=</span> <span class="p">[]</span>
                 <span class="c1"># Auto-wrap pass for `@qd.kernel(graph=True, checkpoints=True)` kernels. Mutates `node.body` in place so</span>
                 <span class="c1"># every top-level for-loop (and every for-loop inside a `qd.graph_do_while` body) that the user did not</span>

@@ -757,11 +757,25 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">_graph_do_while_level_stack</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
         <span class="c1"># Per-checkpoint metadata, one entry per `with qd.checkpoint(...)` block (explicit AND auto-injected implicit)</span>
         <span class="c1"># in declaration order. List index is the checkpoint&#39;s internal `cp_id` (0, 1, 2, ... dense, flat across the</span>
-        <span class="c1"># kernel). Each entry is the name of the `yield_on=` kernel parameter, or `None` for implicit checkpoints (which</span>
-        <span class="c1"># never yield). Populated by the AST transformer; empty means the kernel uses no checkpoints.</span>
+        <span class="c1"># kernel). Each entry is the readable label of the `yield_on=` argument (e.g. &quot;flag&quot; or &quot;self.flag&quot;), or</span>
+        <span class="c1"># `None` for implicit checkpoints (which never yield). Populated by the AST transformer; empty means the</span>
+        <span class="c1"># kernel uses no checkpoints. Used for error messages / introspection only -- the runtime forwards the flat</span>
+        <span class="c1"># C++ arg-id from `checkpoint_yield_on_cpp_arg_ids` below.</span>
 <div class="viewcode-block" id="Kernel.checkpoint_yield_on_args">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/kernel/index.html#quadrants.lang.kernel.Kernel.checkpoint_yield_on_args">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">checkpoint_yield_on_args</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span></div>
+
+        <span class="c1"># Flat C++ arg-ids (post-template) of each explicit checkpoint&#39;s `yield_on=` ndarray, resolved at AST-build time</span>
+        <span class="c1"># by `CheckpointTransformer.build_checkpoint_with` via `ASTTransformer._resolve_ndarray_kernel_arg_id`. Same</span>
+        <span class="c1"># indexing as `checkpoint_yield_on_args`: entry `i` is the flat arg-id the runtime uses to look up the ndarray&#39;s</span>
+        <span class="c1"># device pointer for the checkpoint whose internal cp_id is `i`. `-1` for implicit checkpoints (which never</span>
+        <span class="c1"># yield). Resolving at AST-build time uniformly handles bare kernel parameters (`yield_on=flag`),</span>
+        <span class="c1"># `@qd.data_oriented` member ndarrays (`yield_on=self.flag`), and `@dataclasses.dataclass` parameter members</span>
+        <span class="c1"># (`yield_on=params.flag`); the attribute forms cannot be resolved by the per-launch name match because</span>
+        <span class="c1"># `arg_metas[i].name` only carries top-level parameter names.</span>
+<div class="viewcode-block" id="Kernel.checkpoint_yield_on_cpp_arg_ids">
+<a class="viewcode-back" href="../../../autoapi/quadrants/lang/kernel/index.html#quadrants.lang.kernel.Kernel.checkpoint_yield_on_cpp_arg_ids">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">checkpoint_yield_on_cpp_arg_ids</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span></div>
 
         <span class="c1"># User-facing labels for explicit checkpoints. Same indexing as `checkpoint_yield_on_args`: entry `i` is the int</span>
         <span class="c1"># (or IntEnum value) the user passed as the first positional arg of `qd.checkpoint(cp_id, yield_on)` for the</span>
@@ -848,14 +862,12 @@
             <span class="bp">self</span><span class="o">.</span><span class="n">fast_checksum</span> <span class="o">=</span> <span class="n">src_hasher</span><span class="o">.</span><span class="n">create_cache_key</span><span class="p">(</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">raise_on_templated_floats</span><span class="p">,</span> <span class="n">kernel_source_info</span><span class="p">,</span> <span class="n">args</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">arg_metas</span>
             <span class="p">)</span>
-            <span class="n">used_py_dataclass_parameters</span> <span class="o">=</span> <span class="kc">None</span>
-            <span class="n">cached_graph_do_while_levels</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">int</span><span class="p">]]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+            <span class="n">cache_value</span> <span class="o">=</span> <span class="kc">None</span>
             <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">fast_checksum</span><span class="p">:</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">src_ll_cache_observations</span><span class="o">.</span><span class="n">cache_key_generated</span> <span class="o">=</span> <span class="kc">True</span>
-                <span class="n">used_py_dataclass_parameters</span><span class="p">,</span> <span class="n">frontend_cache_key</span><span class="p">,</span> <span class="n">cached_graph_do_while_levels</span> <span class="o">=</span> <span class="n">src_hasher</span><span class="o">.</span><span class="n">load</span><span class="p">(</span>  <span class="c1"># type: ignore[reportAssignmentType]</span>
-                    <span class="bp">self</span><span class="o">.</span><span class="n">fast_checksum</span>
-                <span class="p">)</span>
-            <span class="k">if</span> <span class="n">used_py_dataclass_parameters</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">frontend_cache_key</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">cache_value</span> <span class="o">=</span> <span class="n">src_hasher</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">fast_checksum</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">cache_value</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">frontend_cache_key</span> <span class="o">=</span> <span class="n">cache_value</span><span class="o">.</span><span class="n">frontend_cache_key</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">src_ll_cache_observations</span><span class="o">.</span><span class="n">cache_validated</span> <span class="o">=</span> <span class="kc">True</span>
                 <span class="n">prog</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">prog</span>
                 <span class="k">assert</span> <span class="bp">self</span><span class="o">.</span><span class="n">fast_checksum</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
@@ -867,16 +879,35 @@
                 <span class="p">)</span>
                 <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">compiled_kernel_data_by_key</span><span class="p">[</span><span class="n">key</span><span class="p">]:</span>
                     <span class="bp">self</span><span class="o">.</span><span class="n">src_ll_cache_observations</span><span class="o">.</span><span class="n">cache_loaded</span> <span class="o">=</span> <span class="kc">True</span>
-                    <span class="bp">self</span><span class="o">.</span><span class="n">used_py_dataclass_parameters_by_key_enforcing</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">used_py_dataclass_parameters</span>
-                    <span class="c1"># Fast-cache restore skips AST transformation, so rebuild the gdw level table (and the legacy</span>
-                    <span class="c1"># outermost-arg alias) from the cached (cond_arg_name, parent_id) pairs.</span>
-                    <span class="k">if</span> <span class="n">cached_graph_do_while_levels</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">used_py_dataclass_parameters_by_key_enforcing</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">cache_value</span><span class="o">.</span><span class="n">used_py_dataclass_parameters</span>
+                    <span class="c1"># Fast-cache restore skips AST transformation, so rebuild the AST-transformer-produced metadata from</span>
+                    <span class="c1"># the cache value: nested graph_do_while level table (with the AST-resolved flat C++ arg-id) plus</span>
+                    <span class="c1"># the per-checkpoint yield_on / user-label tables. Mirrors what `function_def_transformer.py` +</span>
+                    <span class="c1"># `checkpoint_transformer.py` + `build_While` would have written.</span>
+                    <span class="k">if</span> <span class="n">cache_value</span><span class="o">.</span><span class="n">graph_do_while_levels</span><span class="p">:</span>
                         <span class="bp">self</span><span class="o">.</span><span class="n">graph_do_while_levels</span> <span class="o">=</span> <span class="p">[</span>
-                            <span class="n">GraphDoWhileLevel</span><span class="p">(</span><span class="n">cond_arg_name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span> <span class="n">parent_id</span><span class="o">=</span><span class="n">parent</span><span class="p">)</span>
-                            <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">parent</span> <span class="ow">in</span> <span class="n">cached_graph_do_while_levels</span>
+                            <span class="n">GraphDoWhileLevel</span><span class="p">(</span><span class="n">cond_arg_name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span> <span class="n">parent_id</span><span class="o">=</span><span class="n">parent</span><span class="p">,</span> <span class="n">cond_cpp_arg_id</span><span class="o">=</span><span class="n">cpp_arg_id</span><span class="p">)</span>
+                            <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">parent</span><span class="p">,</span> <span class="n">cpp_arg_id</span> <span class="ow">in</span> <span class="n">cache_value</span><span class="o">.</span><span class="n">graph_do_while_levels</span>
                         <span class="p">]</span>
                         <span class="bp">self</span><span class="o">.</span><span class="n">graph_do_while_arg</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">graph_do_while_levels</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">cond_arg_name</span>
-                    <span class="k">return</span> <span class="n">used_py_dataclass_parameters</span>
+                    <span class="k">if</span> <span class="n">cache_value</span><span class="o">.</span><span class="n">checkpoint_yield_on_args</span><span class="p">:</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">checkpoint_yield_on_args</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">cache_value</span><span class="o">.</span><span class="n">checkpoint_yield_on_args</span><span class="p">)</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">checkpoint_yield_on_cpp_arg_ids</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">cache_value</span><span class="o">.</span><span class="n">checkpoint_yield_on_cpp_arg_ids</span><span class="p">)</span>
+                        <span class="c1"># Pydantic coerces IntEnum -&gt; int at CacheValue construction time, so the raw labels are plain</span>
+                        <span class="c1"># ints after JSON round-trip. ``checkpoint_user_label_enum_qualnames`` carries the parallel</span>
+                        <span class="c1"># ``module.ClassQualName.MEMBER`` strings that ``_resolve_intenum_member`` uses to rebuild the</span>
+                        <span class="c1"># original ``IntEnum`` member -- preserving the documented contract that</span>
+                        <span class="c1"># ``qd.checkpoint(Stage.X, ...)`` surfaces as ``Stage.X`` (not the raw int) on</span>
+                        <span class="c1"># ``status.checkpoint``. Older v3 caches predate the qualname column, so we default any missing</span>
+                        <span class="c1"># slots to ``None`` -&gt; raw-int fallback (the same behaviour they had on v3).</span>
+                        <span class="n">raw_labels</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">cache_value</span><span class="o">.</span><span class="n">checkpoint_user_labels_by_cp_id</span><span class="p">)</span>
+                        <span class="n">qualnames</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">cache_value</span><span class="o">.</span><span class="n">checkpoint_user_label_enum_qualnames</span><span class="p">)</span> <span class="ow">or</span> <span class="p">[</span><span class="kc">None</span><span class="p">]</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="n">raw_labels</span><span class="p">)</span>
+                        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">qualnames</span><span class="p">)</span> <span class="o">!=</span> <span class="nb">len</span><span class="p">(</span><span class="n">raw_labels</span><span class="p">):</span>
+                            <span class="n">qualnames</span> <span class="o">=</span> <span class="p">[</span><span class="kc">None</span><span class="p">]</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="n">raw_labels</span><span class="p">)</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">checkpoint_user_labels_by_cp_id</span> <span class="o">=</span> <span class="p">[</span>
+                            <span class="n">src_hasher</span><span class="o">.</span><span class="n">_resolve_intenum_member</span><span class="p">(</span><span class="n">qn</span><span class="p">,</span> <span class="n">lbl</span><span class="p">)</span> <span class="k">for</span> <span class="n">qn</span><span class="p">,</span> <span class="n">lbl</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">qualnames</span><span class="p">,</span> <span class="n">raw_labels</span><span class="p">)</span>
+                        <span class="p">]</span>
+                    <span class="k">return</span> <span class="n">cache_value</span><span class="o">.</span><span class="n">used_py_dataclass_parameters</span>
 
         <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">quadrants_callable</span> <span class="ow">and</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">quadrants_callable</span><span class="o">.</span><span class="n">is_pure</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">runtime</span><span class="o">.</span><span class="n">print_non_pure</span><span class="p">:</span>
             <span class="c1"># The bit in caps should not be modified without updating corresponding test</span>
@@ -1044,13 +1075,9 @@
             <span class="n">is_launch_ctx_cacheable</span> <span class="o">=</span> <span class="kc">True</span>
             <span class="n">template_num</span> <span class="o">=</span> <span class="mi">0</span>
             <span class="n">i_out</span> <span class="o">=</span> <span class="mi">0</span>
-            <span class="c1"># Hoist the `kernel has any yield_on= checkpoint` predicate out of the per-arg loop so non-checkpoint</span>
-            <span class="c1"># kernels (the overwhelming majority) skip the helper function call entirely on every arg. Gated on</span>
-            <span class="c1"># `use_checkpoints` first so non-checkpoint kernels pay only one attribute lookup, not the list-truthy</span>
-            <span class="c1"># check on every cache-miss build.</span>
-            <span class="n">_kernel_has_yield_on_checkpoint</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">use_checkpoints</span> <span class="ow">and</span> <span class="nb">bool</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">checkpoint_yield_on_args</span><span class="p">)</span>
-            <span class="k">if</span> <span class="n">_kernel_has_yield_on_checkpoint</span><span class="p">:</span>
-                <span class="n">_checkpoint_helpers</span><span class="o">.</span><span class="n">init_yield_on_arg_id_table</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+            <span class="c1"># `checkpoint_yield_on_cpp_arg_ids` is populated at AST-build time (see</span>
+            <span class="c1"># `CheckpointTransformer.build_checkpoint_with`); no per-arg name match is needed here. The launch path</span>
+            <span class="c1"># below forwards the table to the launch context with a single `forward_yield_on_table_to_ctx` call.</span>
             <span class="k">for</span> <span class="n">i_in</span><span class="p">,</span> <span class="n">val</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">args</span><span class="p">):</span>
                 <span class="n">needed_</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">arg_metas</span><span class="p">[</span><span class="n">i_in</span><span class="p">]</span><span class="o">.</span><span class="n">annotation</span>
                 <span class="k">if</span> <span class="n">needed_</span> <span class="ow">is</span> <span class="n">template</span> <span class="ow">or</span> <span class="nb">type</span><span class="p">(</span><span class="n">needed_</span><span class="p">)</span> <span class="ow">is</span> <span class="n">template</span><span class="p">:</span>
@@ -1064,12 +1091,11 @@
                 <span class="c1"># which weakens API/type safety and can route the wrong struct type through launch.</span>
                 <span class="k">if</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">val</span><span class="p">,</span> <span class="s2">&quot;_qd_all_field&quot;</span><span class="p">,</span> <span class="kc">False</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">needed_</span><span class="p">,</span> <span class="n">_FIELDS</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
                     <span class="k">continue</span>
-                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">graph_do_while_levels</span><span class="p">:</span>
-                    <span class="k">for</span> <span class="n">_gdw_level</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">graph_do_while_levels</span><span class="p">:</span>
-                        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">arg_metas</span><span class="p">[</span><span class="n">i_in</span><span class="p">]</span><span class="o">.</span><span class="n">name</span> <span class="o">==</span> <span class="n">_gdw_level</span><span class="o">.</span><span class="n">cond_arg_name</span><span class="p">:</span>
-                            <span class="n">_gdw_level</span><span class="o">.</span><span class="n">cond_cpp_arg_id</span> <span class="o">=</span> <span class="n">i_out</span> <span class="o">-</span> <span class="n">template_num</span>
-                <span class="k">if</span> <span class="n">_kernel_has_yield_on_checkpoint</span><span class="p">:</span>
-                    <span class="n">_checkpoint_helpers</span><span class="o">.</span><span class="n">maybe_record_yield_on_arg</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">arg_metas</span><span class="p">[</span><span class="n">i_in</span><span class="p">]</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">i_out</span> <span class="o">-</span> <span class="n">template_num</span><span class="p">)</span>
+                <span class="c1"># `graph_do_while_levels[*].cond_cpp_arg_id` is also populated at AST-build time (see</span>
+                <span class="c1"># `ASTTransformer.build_While` -&gt; `_resolve_ndarray_kernel_arg_id`), so the launch path forwards it</span>
+                <span class="c1"># directly below without per-arg name matching here. This uniformly handles bare parameter conditions</span>
+                <span class="c1"># (`qd.graph_do_while(counter)`) and `@qd.data_oriented` member conditions</span>
+                <span class="c1"># (`qd.graph_do_while(self.counter)`).</span>
                 <span class="n">num_args_</span><span class="p">,</span> <span class="n">is_launch_ctx_cacheable_</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_recursive_set_args</span><span class="p">(</span>
                     <span class="bp">self</span><span class="o">.</span><span class="n">used_py_dataclass_parameters_by_key_enforcing</span><span class="p">[</span><span class="n">key</span><span class="p">],</span>
                     <span class="bp">self</span><span class="o">.</span><span class="n">arg_metas</span><span class="p">[</span><span class="n">i_in</span><span class="p">]</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
@@ -1132,8 +1158,12 @@
                         <span class="bp">self</span><span class="o">.</span><span class="n">visited_functions</span><span class="p">,</span>
                         <span class="bp">self</span><span class="o">.</span><span class="n">used_py_dataclass_parameters_by_key_enforcing</span><span class="p">[</span><span class="n">key</span><span class="p">],</span>
                         <span class="n">graph_do_while_levels</span><span class="o">=</span><span class="p">[</span>  <span class="c1"># type: ignore[reportCallIssue]</span>
-                            <span class="p">(</span><span class="n">level</span><span class="o">.</span><span class="n">cond_arg_name</span><span class="p">,</span> <span class="n">level</span><span class="o">.</span><span class="n">parent_id</span><span class="p">)</span> <span class="k">for</span> <span class="n">level</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">graph_do_while_levels</span>
+                            <span class="p">(</span><span class="n">level</span><span class="o">.</span><span class="n">cond_arg_name</span><span class="p">,</span> <span class="n">level</span><span class="o">.</span><span class="n">parent_id</span><span class="p">,</span> <span class="n">level</span><span class="o">.</span><span class="n">cond_cpp_arg_id</span><span class="p">)</span>
+                            <span class="k">for</span> <span class="n">level</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">graph_do_while_levels</span>
                         <span class="p">],</span>
+                        <span class="n">checkpoint_yield_on_args</span><span class="o">=</span><span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">checkpoint_yield_on_args</span><span class="p">),</span>
+                        <span class="n">checkpoint_yield_on_cpp_arg_ids</span><span class="o">=</span><span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">checkpoint_yield_on_cpp_arg_ids</span><span class="p">),</span>
+                        <span class="n">checkpoint_user_labels_by_cp_id</span><span class="o">=</span><span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">checkpoint_user_labels_by_cp_id</span><span class="p">),</span>
                     <span class="p">)</span>
                     <span class="bp">self</span><span class="o">.</span><span class="n">src_ll_cache_observations</span><span class="o">.</span><span class="n">cache_stored</span> <span class="o">=</span> <span class="kc">True</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">_last_compiled_kernel_data</span> <span class="o">=</span> <span class="n">compiled_kernel_data</span>

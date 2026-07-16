@@ -36,8 +36,12 @@ Module Contents
 
    - ``cp_id``: the user-supplied label (an ``int`` or ``IntEnum`` value), or ``None`` for an auto-wrap implicit
      checkpoint.
-   - ``yield_on``: name of the kernel parameter passed as ``yield_on=`` (an ``ast.Name`` is required), or ``None`` for
-     an implicit checkpoint.
+   - ``yield_on_node``: the ``ast.expr`` passed as ``yield_on=`` -- either an ``ast.Name`` (bare kernel parameter, e.g.
+     ``flag``) or an ``ast.Attribute`` chain (e.g. ``self.flag`` for a ``@qd.data_oriented`` owner, or ``params.flag``
+     where ``params`` is a ``@dataclasses.dataclass`` kernel parameter). ``None`` for an implicit checkpoint.
+     ``build_checkpoint_with`` resolves the node to a flat C++ arg-id via
+     ``ASTTransformer._resolve_ndarray_kernel_arg_id`` so the runtime can forward it directly without per-launch name
+     matching.
    - ``is_implicit``: ``True`` iff this Call was synthesised by ``auto_wrap_for_loops``.
 
 
@@ -45,8 +49,8 @@ Module Contents
       :type:  int | None
 
 
-   .. py:attribute:: yield_on
-      :type:  str | None
+   .. py:attribute:: yield_on_node
+      :type:  ast.expr | None
 
 
    .. py:attribute:: is_implicit
