@@ -7,6 +7,8 @@
 #include <unordered_map>
 #include <variant>
 #include <tuple>
+#include <type_traits>
+#include <utility>
 
 #include "quadrants/common/core.h"
 #include "quadrants/common/exceptions.h"
@@ -432,15 +434,70 @@ struct GraphRegionTag {
   GraphRegionTag(int level, int group, int checkpoint)
       : graph_do_while_level_id(level), stream_parallel_group_id(group), checkpoint_id(checkpoint), is_set(true) {
   }
+  // 4-arg ctor: (level, group, region, checkpoint). Builds a full tag from the loose ForLoopConfig ints a
+  // `FrontendForStmt` carries, so the offline-cache-key generator can route a for-loop through the same
+  // `cache_key_members()` list as a per-`Stmt` `region_tag` (see gen_offline_cache_key.cpp).
+  GraphRegionTag(int level, int group, int region, int checkpoint)
+      : graph_do_while_level_id(level),
+        stream_parallel_group_id(group),
+        graph_parallel_region_id(region),
+        checkpoint_id(checkpoint),
+        is_set(true) {
+  }
 
+  // The fields that distinguish a tag for the OFFLINE CACHE KEY: everything *semantic* (anything that changes how the
+  // offloader groups or gates a task) except `is_set` (a build-time "was this stamped" provenance flag, not a property
+  // of the kernel). This is the SINGLE list gen_offline_cache_key.cpp iterates -- add a field here the moment you add
+  // one to the struct, or two kernels that differ only in that field silently share a cached module. The static_assert
+  // below ties this list to the struct's size so an >=int-sized field added to the struct but omitted here fails to
+  // compile.
+  auto cache_key_members() const {
+    return std::tie(graph_do_while_level_id, stream_parallel_group_id, graph_parallel_region_id, checkpoint_id);
+  }
+  // The fields that make two tags EQUAL for the offloader's serial-bucket comparison in `push_serial_statement`. A
+  // strict subset of `cache_key_members()`: `graph_parallel_region_id` is deliberately excluded (a section's
+  // `stream_parallel_group_id` is unique per kernel and a section belongs to exactly one region, so equal group already
+  // implies equal region for the tasks this compares), as is `is_set`. `operator==` derives from this so the exclusion
+  // lives in one place next to the field it excludes.
+  auto equality_members() const {
+    return std::tie(graph_do_while_level_id, stream_parallel_group_id, checkpoint_id);
+  }
   bool operator==(const GraphRegionTag &o) const {
-    return graph_do_while_level_id == o.graph_do_while_level_id &&
-           stream_parallel_group_id == o.stream_parallel_group_id && checkpoint_id == o.checkpoint_id;
+    return equality_members() == o.equality_members();
   }
   bool operator!=(const GraphRegionTag &o) const {
     return !(*this == o);
   }
 };
+
+namespace graph_region_tag_detail {
+constexpr std::size_t round_up(std::size_t n, std::size_t align) {
+  return (n + align - 1) / align * align;
+}
+template <typename Tuple>
+struct tuple_bytes;
+template <typename... Ts>
+struct tuple_bytes<std::tuple<Ts...>> {
+  // Sum of the sizes of the *referenced* field types (cache_key_members() ties them as references).
+  static constexpr std::size_t value = (std::size_t{0} + ... + sizeof(std::remove_reference_t<Ts>));
+};
+}  // namespace graph_region_tag_detail
+
+// Layout tripwire for GraphRegionTag, DERIVED from cache_key_members() (no magic size constant). Expected size = the
+// packed bytes of every cache-key field + `is_set`, rounded to the struct's alignment. Add an >=int-sized field to the
+// struct but forget to add it to cache_key_members() and the two sides disagree: `sizeof` grows while the derived sum
+// does not, and this fails the build -- forcing you to decide whether the new field belongs in the cache key (and, if
+// it is semantic for equality, in equality_members()). Residual gap: a field that fits in the <4-byte tail padding
+// after `is_set` (e.g. another bool) omitted from the list won't change `sizeof`, so keep `is_set` the LAST member and
+// put new fields before it.
+static_assert(sizeof(GraphRegionTag) ==
+                  graph_region_tag_detail::round_up(
+                      graph_region_tag_detail::tuple_bytes<
+                          decltype(std::declval<const GraphRegionTag &>().cache_key_members())>::value +
+                          sizeof(bool),
+                      alignof(GraphRegionTag)),
+              "GraphRegionTag layout changed: add the new field to cache_key_members() (offline cache key) and, if it "
+              "is semantic for equality, to equality_members(); keep is_set the last member.");
 
 class Stmt : public IRNode {
  protected:

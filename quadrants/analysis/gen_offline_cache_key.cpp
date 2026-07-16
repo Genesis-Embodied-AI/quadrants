@@ -384,9 +384,10 @@ class ASTSerializer : public IRVisitor, public ExpressionVisitor {
     emit(stmt->block_dim);
     // This for-loop's graph-region tags (see emit_graph_region_key): graph_do_while / graph_parallel_context emit no
     // loop IR of their own, so these loose ints are the only record in the key of which loop level / stream_parallel
-    // group / region / checkpoint the loop belongs to.
-    emit_graph_region_key(stmt->graph_do_while_level_id, stmt->stream_parallel_group_id, stmt->graph_parallel_region_id,
-                          stmt->checkpoint_id);
+    // group / region / checkpoint the loop belongs to. Wrap them in a temporary tag so they route through the same
+    // cache_key_members() list as a per-Stmt region_tag below.
+    emit_graph_region_key(GraphRegionTag(stmt->graph_do_while_level_id, stmt->stream_parallel_group_id,
+                                         stmt->graph_parallel_region_id, stmt->checkpoint_id));
     emit(stmt->body.get());
   }
 
@@ -596,9 +597,7 @@ class ASTSerializer : public IRVisitor, public ExpressionVisitor {
       // inside a qd.graph_parallel() section carries its region only here (it has no ForLoopConfig), so keying it is
       // what keeps two serial-only-section kernels that differ only in their qd.graph_parallel_context() grouping from
       // colliding. Routes through the same emit_graph_region_key helper as FrontendForStmt.
-      const auto &region_tag = stmt->region_tag;
-      emit_graph_region_key(region_tag.graph_do_while_level_id, region_tag.stream_parallel_group_id,
-                            region_tag.graph_parallel_region_id, region_tag.checkpoint_id);
+      emit_graph_region_key(stmt->region_tag);
       stmt->accept(this);
     } else {
       emit(StmtOpCode::NIL);
@@ -626,23 +625,14 @@ class ASTSerializer : public IRVisitor, public ExpressionVisitor {
   // modules. `graph_do_while` and `qd.graph_parallel_context` emit no IR of their own, so these tags are the ONLY trace
   // in the key of which graph_do_while level / stream_parallel group / region / checkpoint a task belongs to: two
   // kernels that differ only by how they group work into loops / sections / regions / checkpoints must get distinct
-  // keys, else one silently reuses the other's cached module and their fork/join or gating merges. `is_set` is
-  // deliberately excluded (a build-time "was this stamped" flag, not a property of the kernel). Both the
-  // `FrontendForStmt` loose ints and the per-`Stmt` `region_tag` route through here, so a field can never be keyed in
-  // one place and forgotten in the other (the bug that let back-to-back regions collide in the cache before #756). The
-  // static_assert below turns "added a GraphRegionTag field but forgot this helper" into a compile error.
-  void emit_graph_region_key(int graph_do_while_level_id,
-                             int stream_parallel_group_id,
-                             int graph_parallel_region_id,
-                             int checkpoint_id) {
-    emit(graph_do_while_level_id);
-    emit(stream_parallel_group_id);
-    emit(graph_parallel_region_id);
-    emit(checkpoint_id);
+  // keys, else one silently reuses the other's cached module and their fork/join or gating merges. The field list lives
+  // on the struct as `GraphRegionTag::cache_key_members()` (ir.h) -- this iterates it, and the `FrontendForStmt` loose
+  // ints route through here too (via a temporary tag), so a field can never be keyed in one place and forgotten in the
+  // other (the bug that let back-to-back regions collide in the cache before #756). Adding a field to the struct but
+  // not to cache_key_members() fails the static_assert next to that method.
+  void emit_graph_region_key(const GraphRegionTag &tag) {
+    std::apply([this](auto &&...fields) { (emit(fields), ...); }, tag.cache_key_members());
   }
-  static_assert(sizeof(GraphRegionTag) == 20,
-                "GraphRegionTag layout changed: update emit_graph_region_key (offline cache key) above, and "
-                "GraphRegionTag::operator== if the new field is semantic.");
 
   void emit(const MemoryAccessOptions &mem_access_options) {
     auto all_options = mem_access_options.get_all();
