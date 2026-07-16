@@ -55,12 +55,21 @@ Module Contents
 
       Handles ``with qd.graph_parallel_context():`` fork/join regions.
 
-      Validates the use-site (kernel must be graph=True, no nesting) and that the region body contains only
-      ``with qd.graph_parallel():`` blocks, then walks the body. The region is bracketed with
-      begin/end_graph_parallel_context() so its body carries a per-kernel region id, and each ``qd.graph_parallel``
-      section inside lowers to a stream-parallel group (via begin/end_stream_parallel). The graph builder forks the
-      distinct groups of one region in a contiguous run and joins them; the region id keeps two back-to-back regions
-      apart (each gets its own join).
+      Validates the use-site (kernel must be graph=True, no nesting), then validates the whole region grammar up-front
+      via ``validate_region`` (the single source of truth for what a region / section may contain), then walks the
+      body. The region is bracketed with begin/end_graph_parallel_context() so its body carries a per-kernel region id,
+      and each ``qd.graph_parallel`` section inside lowers to a stream-parallel group (via begin/end_stream_parallel).
+      The graph builder forks the distinct groups of one region in a contiguous run and joins them; the region id keeps
+      two back-to-back regions apart (each gets its own join).
+
+
+
+   .. py:method:: validate_region(ctx: quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext, node: ast.With) -> None
+      :staticmethod:
+
+
+      Validate an entire ``qd.graph_parallel_context()`` region (body + every section's body) up-front. The single
+      entry point for the region/section grammar; see the block comment above.
 
 
 
@@ -70,10 +79,11 @@ Module Contents
 
       Handles a ``with qd.graph_parallel():`` section of a ``qd.graph_parallel_context()`` region.
 
-      Validates that the section body is straight-line task work (no nested graph-structuring constructs), then reuses
-      the stream-parallel tagging: begin_stream_parallel() assigns this ``qd.graph_parallel`` section a fresh
-      ``stream_parallel_group_id`` that every for-loop in the body inherits, so the offloaded tasks carry the
-      ``qd.graph_parallel`` section id all the way to the graph builder.
+      The section body grammar is validated up-front by ``validate_region`` (called from
+      ``build_graph_parallel_context_with``); here we only re-check the use-site (a section must be inside a region --
+      a case ``validate_region`` never sees) and then reuse the stream-parallel tagging: begin_stream_parallel()
+      assigns this ``qd.graph_parallel`` section a fresh ``stream_parallel_group_id`` that every for-loop in the body
+      inherits, so the offloaded tasks carry the ``qd.graph_parallel`` section id all the way to the graph builder.
 
 
 

@@ -408,12 +408,12 @@
     <span class="k">def</span><span class="w"> </span><span class="nf">build_graph_parallel_context_with</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">ASTTransformerFuncContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">With</span><span class="p">,</span> <span class="n">build_stmts</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Handles ``with qd.graph_parallel_context():`` fork/join regions.</span>
 
-<span class="sd">        Validates the use-site (kernel must be graph=True, no nesting) and that the region body contains only</span>
-<span class="sd">        ``with qd.graph_parallel():`` blocks, then walks the body. The region is bracketed with</span>
-<span class="sd">        begin/end_graph_parallel_context() so its body carries a per-kernel region id, and each ``qd.graph_parallel``</span>
-<span class="sd">        section inside lowers to a stream-parallel group (via begin/end_stream_parallel). The graph builder forks the</span>
-<span class="sd">        distinct groups of one region in a contiguous run and joins them; the region id keeps two back-to-back regions</span>
-<span class="sd">        apart (each gets its own join).&quot;&quot;&quot;</span>
+<span class="sd">        Validates the use-site (kernel must be graph=True, no nesting), then validates the whole region grammar up-front</span>
+<span class="sd">        via ``validate_region`` (the single source of truth for what a region / section may contain), then walks the</span>
+<span class="sd">        body. The region is bracketed with begin/end_graph_parallel_context() so its body carries a per-kernel region id,</span>
+<span class="sd">        and each ``qd.graph_parallel`` section inside lowers to a stream-parallel group (via begin/end_stream_parallel).</span>
+<span class="sd">        The graph builder forks the distinct groups of one region in a contiguous run and joins them; the region id keeps</span>
+<span class="sd">        two back-to-back regions apart (each gets its own join).&quot;&quot;&quot;</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">ctx</span><span class="o">.</span><span class="n">is_kernel</span><span class="p">:</span>
             <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">&quot;qd.graph_parallel_context() can only be used inside @qd.kernel, not @qd.func&quot;</span><span class="p">)</span>
         <span class="n">kernel</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">global_context</span><span class="o">.</span><span class="n">current_kernel</span>
@@ -438,7 +438,7 @@
             <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">&quot;qd.graph_parallel_context() regions cannot be nested&quot;</span><span class="p">)</span>
         <span class="k">if</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="s2">&quot;_in_parallel_section&quot;</span><span class="p">,</span> <span class="kc">False</span><span class="p">):</span>
             <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">&quot;qd.graph_parallel_context() cannot appear inside a qd.graph_parallel() body&quot;</span><span class="p">)</span>
-        <span class="n">GraphParallelTransformer</span><span class="o">.</span><span class="n">_validate_graph_parallel_context_body</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">body</span><span class="p">)</span>
+        <span class="n">GraphParallelTransformer</span><span class="o">.</span><span class="n">validate_region</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="p">)</span>
         <span class="n">ctx</span><span class="o">.</span><span class="n">_in_graph_parallel_context</span> <span class="o">=</span> <span class="kc">True</span>
         <span class="n">ctx</span><span class="o">.</span><span class="n">ast_builder</span><span class="o">.</span><span class="n">begin_graph_parallel_context</span><span class="p">()</span>
         <span class="k">try</span><span class="p">:</span>
@@ -449,14 +449,36 @@
         <span class="k">return</span> <span class="kc">None</span></div>
 
 
+    <span class="c1"># ------------------------------------------------------------------------------------------------------------------</span>
+    <span class="c1"># Grammar validation -- SINGLE SOURCE OF TRUTH for what a `qd.graph_parallel_context()` region and its</span>
+    <span class="c1"># `qd.graph_parallel()` sections may contain. `validate_region` is called once, up-front, on the raw region AST</span>
+    <span class="c1"># (before `build_stmts` walks / unrolls it) from `build_graph_parallel_context_with`. It fully validates the region</span>
+    <span class="c1"># subtree, so no other lowering entry point re-validates the body: `build_parallel_section_with` only keeps the</span>
+    <span class="c1"># use-site check (a section outside any region), which `validate_region` never sees.</span>
+    <span class="c1">#</span>
+    <span class="c1"># The grammar (see docs/source/user_guide/graph.md):</span>
+    <span class="c1">#   region body  := ( section | `if qd.static(...)` &lt;region body&gt; | `for ... in qd.static(...)` &lt;region body&gt;</span>
+    <span class="c1">#                      | docstring | coverage-probe | `pass` )*</span>
+    <span class="c1">#   section body := straight-line task work; NO nested graph-structuring construct (`qd.graph_do_while`,</span>
+    <span class="c1">#                   `qd.checkpoint`, `qd.graph_parallel_context`, or a nested `qd.graph_parallel` section).</span>
+    <span class="c1"># ------------------------------------------------------------------------------------------------------------------</span>
     <span class="nd">@staticmethod</span>
-    <span class="k">def</span><span class="w"> </span><span class="nf">_validate_graph_parallel_context_body</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">ASTTransformerFuncContext</span><span class="p">,</span> <span class="n">stmts</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">ast</span><span class="o">.</span><span class="n">stmt</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;A qd.graph_parallel_context() region body may contain only `with qd.graph_parallel():` blocks, optionally</span>
-<span class="sd">        wrapped in compile-time `if qd.static(...)` (the optional ``qd.graph_parallel`` section pattern, e.g. qipc&#39;s</span>
-<span class="sd">        ENABLE_EE) or `for ... in qd.static(...)` loops (generate one ``qd.graph_parallel`` section per element of a</span>
-<span class="sd">        compile-time sequence). Docstrings / coverage probes / `pass` are allowed. Anything else (a runtime for-loop, a</span>
-<span class="sd">        bare assignment, etc.) is a serial task that would silently fall outside any ``qd.graph_parallel`` section, so</span>
-<span class="sd">        reject it.</span>
+<div class="viewcode-block" id="GraphParallelTransformer.validate_region">
+<a class="viewcode-back" href="../../../../../autoapi/quadrants/lang/ast/ast_transformers/graph_parallel_transformer/index.html#quadrants.lang.ast.ast_transformers.graph_parallel_transformer.GraphParallelTransformer.validate_region">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">validate_region</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">ASTTransformerFuncContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">With</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Validate an entire ``qd.graph_parallel_context()`` region (body + every section&#39;s body) up-front. The single</span>
+<span class="sd">        entry point for the region/section grammar; see the block comment above.&quot;&quot;&quot;</span>
+        <span class="n">GraphParallelTransformer</span><span class="o">.</span><span class="n">_validate_region_body</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">body</span><span class="p">)</span></div>
+
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_validate_region_body</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">ASTTransformerFuncContext</span><span class="p">,</span> <span class="n">stmts</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">ast</span><span class="o">.</span><span class="n">stmt</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;A region body may contain only `with qd.graph_parallel():` sections, optionally wrapped in compile-time</span>
+<span class="sd">        `if qd.static(...)` (the optional ``qd.graph_parallel`` section pattern, e.g. qipc&#39;s ENABLE_EE) or</span>
+<span class="sd">        `for ... in qd.static(...)` loops (one section per element of a compile-time sequence). Docstrings / coverage</span>
+<span class="sd">        probes / `pass` are allowed. Anything else (a runtime for-loop, a bare assignment, etc.) is a serial task that</span>
+<span class="sd">        would silently fall outside any ``qd.graph_parallel`` section, so reject it. Each section found here has its body</span>
+<span class="sd">        validated by `_validate_section_body`.</span>
 
 <span class="sd">        Both the `if` and `for` cases are restricted to `qd.static(...)` on purpose: a static branch/loop is resolved</span>
 <span class="sd">        at trace time, so it lowers to literal `with qd.graph_parallel():` blocks (each gets a fresh</span>
@@ -471,13 +493,14 @@
                 <span class="k">continue</span>
             <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">stmt</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">With</span><span class="p">)</span> <span class="ow">and</span> <span class="n">stmt</span><span class="o">.</span><span class="n">items</span><span class="p">:</span>
                 <span class="k">if</span> <span class="n">GraphParallelTransformer</span><span class="o">.</span><span class="n">is_parallel_section_call</span><span class="p">(</span><span class="n">stmt</span><span class="o">.</span><span class="n">items</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">context_expr</span><span class="p">):</span>
+                    <span class="n">GraphParallelTransformer</span><span class="o">.</span><span class="n">_validate_section_body</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">stmt</span><span class="o">.</span><span class="n">body</span><span class="p">)</span>
                     <span class="k">continue</span>
             <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">stmt</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">If</span><span class="p">)</span> <span class="ow">and</span> <span class="n">get_decorator</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">stmt</span><span class="o">.</span><span class="n">test</span><span class="p">)</span> <span class="o">==</span> <span class="s2">&quot;static&quot;</span><span class="p">:</span>
-                <span class="n">GraphParallelTransformer</span><span class="o">.</span><span class="n">_validate_graph_parallel_context_body</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">stmt</span><span class="o">.</span><span class="n">body</span><span class="p">)</span>
-                <span class="n">GraphParallelTransformer</span><span class="o">.</span><span class="n">_validate_graph_parallel_context_body</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">stmt</span><span class="o">.</span><span class="n">orelse</span><span class="p">)</span>
+                <span class="n">GraphParallelTransformer</span><span class="o">.</span><span class="n">_validate_region_body</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">stmt</span><span class="o">.</span><span class="n">body</span><span class="p">)</span>
+                <span class="n">GraphParallelTransformer</span><span class="o">.</span><span class="n">_validate_region_body</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">stmt</span><span class="o">.</span><span class="n">orelse</span><span class="p">)</span>
                 <span class="k">continue</span>
             <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">stmt</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">For</span><span class="p">)</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">stmt</span><span class="o">.</span><span class="n">orelse</span> <span class="ow">and</span> <span class="n">get_decorator</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">stmt</span><span class="o">.</span><span class="n">iter</span><span class="p">)</span> <span class="o">==</span> <span class="s2">&quot;static&quot;</span><span class="p">:</span>
-                <span class="n">GraphParallelTransformer</span><span class="o">.</span><span class="n">_validate_graph_parallel_context_body</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">stmt</span><span class="o">.</span><span class="n">body</span><span class="p">)</span>
+                <span class="n">GraphParallelTransformer</span><span class="o">.</span><span class="n">_validate_region_body</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">stmt</span><span class="o">.</span><span class="n">body</span><span class="p">)</span>
                 <span class="k">continue</span>
             <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span>
                 <span class="s2">&quot;A qd.graph_parallel_context() region may contain only &#39;with qd.graph_parallel():&#39; blocks &quot;</span>
@@ -486,44 +509,7 @@
             <span class="p">)</span>
 
     <span class="nd">@staticmethod</span>
-<div class="viewcode-block" id="GraphParallelTransformer.build_parallel_section_with">
-<a class="viewcode-back" href="../../../../../autoapi/quadrants/lang/ast/ast_transformers/graph_parallel_transformer/index.html#quadrants.lang.ast.ast_transformers.graph_parallel_transformer.GraphParallelTransformer.build_parallel_section_with">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">build_parallel_section_with</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">ASTTransformerFuncContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">With</span><span class="p">,</span> <span class="n">build_stmts</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Handles a ``with qd.graph_parallel():`` section of a ``qd.graph_parallel_context()`` region.</span>
-
-<span class="sd">        Validates that the section body is straight-line task work (no nested graph-structuring constructs), then reuses</span>
-<span class="sd">        the stream-parallel tagging: begin_stream_parallel() assigns this ``qd.graph_parallel`` section a fresh</span>
-<span class="sd">        ``stream_parallel_group_id`` that every for-loop in the body inherits, so the offloaded tasks carry the</span>
-<span class="sd">        ``qd.graph_parallel`` section id all the way to the graph builder.&quot;&quot;&quot;</span>
-        <span class="k">if</span> <span class="ow">not</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="s2">&quot;_in_graph_parallel_context&quot;</span><span class="p">,</span> <span class="kc">False</span><span class="p">):</span>
-            <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span>
-                <span class="s2">&quot;qd.graph_parallel() can only be used directly inside a qd.graph_parallel_context() region&quot;</span>
-            <span class="p">)</span>
-        <span class="n">GraphParallelTransformer</span><span class="o">.</span><span class="n">_validate_parallel_section_body</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">body</span><span class="p">)</span>
-        <span class="n">ctx</span><span class="o">.</span><span class="n">_in_parallel_section</span> <span class="o">=</span> <span class="kc">True</span>
-        <span class="n">ctx</span><span class="o">.</span><span class="n">ast_builder</span><span class="o">.</span><span class="n">begin_stream_parallel</span><span class="p">()</span>
-        <span class="k">try</span><span class="p">:</span>
-            <span class="n">build_stmts</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">body</span><span class="p">)</span>
-        <span class="k">finally</span><span class="p">:</span>
-            <span class="n">ctx</span><span class="o">.</span><span class="n">ast_builder</span><span class="o">.</span><span class="n">end_stream_parallel</span><span class="p">()</span>
-            <span class="n">ctx</span><span class="o">.</span><span class="n">_in_parallel_section</span> <span class="o">=</span> <span class="kc">False</span>
-        <span class="k">return</span> <span class="kc">None</span></div>
-
-
-    <span class="nd">@staticmethod</span>
-    <span class="k">def</span><span class="w"> </span><span class="nf">_is_graph_do_while_test</span><span class="p">(</span><span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">expr</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;True if *node* is a ``qd.graph_do_while(...)`` call (the test of a ``while`` loop). Mirrors</span>
-<span class="sd">        ``ASTTransformer._is_graph_do_while_call`` but returns a bool and lives here to avoid importing ``ASTTransformer``</span>
-<span class="sd">        (which would be a circular import).&quot;&quot;&quot;</span>
-        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Call</span><span class="p">):</span>
-            <span class="k">return</span> <span class="kc">False</span>
-        <span class="n">func</span> <span class="o">=</span> <span class="n">node</span><span class="o">.</span><span class="n">func</span>
-        <span class="k">return</span> <span class="p">(</span><span class="nb">isinstance</span><span class="p">(</span><span class="n">func</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Attribute</span><span class="p">)</span> <span class="ow">and</span> <span class="n">func</span><span class="o">.</span><span class="n">attr</span> <span class="o">==</span> <span class="s2">&quot;graph_do_while&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="p">(</span>
-            <span class="nb">isinstance</span><span class="p">(</span><span class="n">func</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Name</span><span class="p">)</span> <span class="ow">and</span> <span class="n">func</span><span class="o">.</span><span class="n">id</span> <span class="o">==</span> <span class="s2">&quot;graph_do_while&quot;</span>
-        <span class="p">)</span>
-
-    <span class="nd">@staticmethod</span>
-    <span class="k">def</span><span class="w"> </span><span class="nf">_validate_parallel_section_body</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">ASTTransformerFuncContext</span><span class="p">,</span> <span class="n">stmts</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">ast</span><span class="o">.</span><span class="n">stmt</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_validate_section_body</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">ASTTransformerFuncContext</span><span class="p">,</span> <span class="n">stmts</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">ast</span><span class="o">.</span><span class="n">stmt</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;A ``qd.graph_parallel()`` section body must be straight-line task work: no nested graph-structuring construct</span>
 <span class="sd">        (``qd.graph_do_while``, ``qd.checkpoint``, ``qd.graph_parallel_context``, or a nested ``qd.graph_parallel``</span>
 <span class="sd">        section) anywhere inside it. See ``docs/source/user_guide/graph.md``.</span>
@@ -532,10 +518,10 @@
 <span class="sd">        same-loop-level, non-checkpoint tasks: a nested ``qd.checkpoint`` stamps ``checkpoint_id &gt;= 0`` and a nested</span>
 <span class="sd">        ``qd.graph_do_while`` stamps a child ``graph_do_while_level_id``, so those tasks fall outside the contiguous run</span>
 <span class="sd">        the builder forks -- the supposedly parallel section would be silently serialized / split instead of failing</span>
-<span class="sd">        here. (A ``qd.graph_parallel_context`` nested in a section is separately caught downstream, and a nested section</span>
-<span class="sd">        by ``begin_stream_parallel``&#39;s guard, but catching all four here keeps the section grammar in one place and</span>
-<span class="sd">        fails early with a clear message.) The walk uses ``ast.walk`` so a construct buried inside an inner ``for`` /</span>
-<span class="sd">        ``if`` is still caught.&quot;&quot;&quot;</span>
+<span class="sd">        here. (A ``qd.graph_parallel_context`` nested in a section is also caught by the use-site check downstream, and a</span>
+<span class="sd">        nested section by ``begin_stream_parallel``&#39;s C++ guard, but naming all four here keeps the section grammar in</span>
+<span class="sd">        one place and fails early with a clear message.) The walk uses ``ast.walk`` so a construct buried inside an</span>
+<span class="sd">        inner ``for`` / ``if`` is still caught.&quot;&quot;&quot;</span>
         <span class="k">for</span> <span class="n">stmt</span> <span class="ow">in</span> <span class="n">stmts</span><span class="p">:</span>
             <span class="k">for</span> <span class="n">node</span> <span class="ow">in</span> <span class="n">ast</span><span class="o">.</span><span class="n">walk</span><span class="p">(</span><span class="n">stmt</span><span class="p">):</span>
                 <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">While</span><span class="p">)</span> <span class="ow">and</span> <span class="n">GraphParallelTransformer</span><span class="o">.</span><span class="n">_is_graph_do_while_test</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">test</span><span class="p">):</span>
@@ -559,7 +545,44 @@
                         <span class="k">if</span> <span class="n">GraphParallelTransformer</span><span class="o">.</span><span class="n">is_parallel_section_call</span><span class="p">(</span><span class="n">context_expr</span><span class="p">):</span>
                             <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span>
                                 <span class="s2">&quot;qd.graph_parallel() sections cannot be nested inside one another&quot;</span>
-                            <span class="p">)</span></div>
+                            <span class="p">)</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_is_graph_do_while_test</span><span class="p">(</span><span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">expr</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;True if *node* is a ``qd.graph_do_while(...)`` call (the test of a ``while`` loop). Mirrors</span>
+<span class="sd">        ``ASTTransformer._is_graph_do_while_call`` but returns a bool and lives here to avoid importing ``ASTTransformer``</span>
+<span class="sd">        (which would be a circular import).&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Call</span><span class="p">):</span>
+            <span class="k">return</span> <span class="kc">False</span>
+        <span class="n">func</span> <span class="o">=</span> <span class="n">node</span><span class="o">.</span><span class="n">func</span>
+        <span class="k">return</span> <span class="p">(</span><span class="nb">isinstance</span><span class="p">(</span><span class="n">func</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Attribute</span><span class="p">)</span> <span class="ow">and</span> <span class="n">func</span><span class="o">.</span><span class="n">attr</span> <span class="o">==</span> <span class="s2">&quot;graph_do_while&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="p">(</span>
+            <span class="nb">isinstance</span><span class="p">(</span><span class="n">func</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Name</span><span class="p">)</span> <span class="ow">and</span> <span class="n">func</span><span class="o">.</span><span class="n">id</span> <span class="o">==</span> <span class="s2">&quot;graph_do_while&quot;</span>
+        <span class="p">)</span>
+
+    <span class="nd">@staticmethod</span>
+<div class="viewcode-block" id="GraphParallelTransformer.build_parallel_section_with">
+<a class="viewcode-back" href="../../../../../autoapi/quadrants/lang/ast/ast_transformers/graph_parallel_transformer/index.html#quadrants.lang.ast.ast_transformers.graph_parallel_transformer.GraphParallelTransformer.build_parallel_section_with">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">build_parallel_section_with</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">ASTTransformerFuncContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">With</span><span class="p">,</span> <span class="n">build_stmts</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Handles a ``with qd.graph_parallel():`` section of a ``qd.graph_parallel_context()`` region.</span>
+
+<span class="sd">        The section body grammar is validated up-front by ``validate_region`` (called from</span>
+<span class="sd">        ``build_graph_parallel_context_with``); here we only re-check the use-site (a section must be inside a region --</span>
+<span class="sd">        a case ``validate_region`` never sees) and then reuse the stream-parallel tagging: begin_stream_parallel()</span>
+<span class="sd">        assigns this ``qd.graph_parallel`` section a fresh ``stream_parallel_group_id`` that every for-loop in the body</span>
+<span class="sd">        inherits, so the offloaded tasks carry the ``qd.graph_parallel`` section id all the way to the graph builder.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="s2">&quot;_in_graph_parallel_context&quot;</span><span class="p">,</span> <span class="kc">False</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span>
+                <span class="s2">&quot;qd.graph_parallel() can only be used directly inside a qd.graph_parallel_context() region&quot;</span>
+            <span class="p">)</span>
+        <span class="n">ctx</span><span class="o">.</span><span class="n">_in_parallel_section</span> <span class="o">=</span> <span class="kc">True</span>
+        <span class="n">ctx</span><span class="o">.</span><span class="n">ast_builder</span><span class="o">.</span><span class="n">begin_stream_parallel</span><span class="p">()</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">build_stmts</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">body</span><span class="p">)</span>
+        <span class="k">finally</span><span class="p">:</span>
+            <span class="n">ctx</span><span class="o">.</span><span class="n">ast_builder</span><span class="o">.</span><span class="n">end_stream_parallel</span><span class="p">()</span>
+            <span class="n">ctx</span><span class="o">.</span><span class="n">_in_parallel_section</span> <span class="o">=</span> <span class="kc">False</span>
+        <span class="k">return</span> <span class="kc">None</span></div>
+</div>
 
 </pre></div>
 

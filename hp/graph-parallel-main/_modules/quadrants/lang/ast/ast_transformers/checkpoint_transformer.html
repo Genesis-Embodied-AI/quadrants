@@ -373,8 +373,12 @@
 
 <span class="sd">    - ``cp_id``: the user-supplied label (an ``int`` or ``IntEnum`` value), or ``None`` for an auto-wrap implicit</span>
 <span class="sd">      checkpoint.</span>
-<span class="sd">    - ``yield_on``: name of the kernel parameter passed as ``yield_on=`` (an ``ast.Name`` is required), or ``None`` for</span>
-<span class="sd">      an implicit checkpoint.</span>
+<span class="sd">    - ``yield_on_node``: the ``ast.expr`` passed as ``yield_on=`` -- either an ``ast.Name`` (bare kernel parameter, e.g.</span>
+<span class="sd">      ``flag``) or an ``ast.Attribute`` chain (e.g. ``self.flag`` for a ``@qd.data_oriented`` owner, or ``params.flag``</span>
+<span class="sd">      where ``params`` is a ``@dataclasses.dataclass`` kernel parameter). ``None`` for an implicit checkpoint.</span>
+<span class="sd">      ``build_checkpoint_with`` resolves the node to a flat C++ arg-id via</span>
+<span class="sd">      ``ASTTransformer._resolve_ndarray_kernel_arg_id`` so the runtime can forward it directly without per-launch name</span>
+<span class="sd">      matching.</span>
 <span class="sd">    - ``is_implicit``: ``True`` iff this Call was synthesised by ``auto_wrap_for_loops``.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
@@ -382,9 +386,9 @@
 <a class="viewcode-back" href="../../../../../autoapi/quadrants/lang/ast/ast_transformers/checkpoint_transformer/index.html#quadrants.lang.ast.ast_transformers.checkpoint_transformer.CheckpointCallInfo.cp_id">[docs]</a>
     <span class="n">cp_id</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span></div>
 
-<div class="viewcode-block" id="CheckpointCallInfo.yield_on">
-<a class="viewcode-back" href="../../../../../autoapi/quadrants/lang/ast/ast_transformers/checkpoint_transformer/index.html#quadrants.lang.ast.ast_transformers.checkpoint_transformer.CheckpointCallInfo.yield_on">[docs]</a>
-    <span class="n">yield_on</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span></div>
+<div class="viewcode-block" id="CheckpointCallInfo.yield_on_node">
+<a class="viewcode-back" href="../../../../../autoapi/quadrants/lang/ast/ast_transformers/checkpoint_transformer/index.html#quadrants.lang.ast.ast_transformers.checkpoint_transformer.CheckpointCallInfo.yield_on_node">[docs]</a>
+    <span class="n">yield_on_node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">expr</span> <span class="o">|</span> <span class="kc">None</span></div>
 
 <div class="viewcode-block" id="CheckpointCallInfo.is_implicit">
 <a class="viewcode-back" href="../../../../../autoapi/quadrants/lang/ast/ast_transformers/checkpoint_transformer/index.html#quadrants.lang.ast.ast_transformers.checkpoint_transformer.CheckpointCallInfo.is_implicit">[docs]</a>
@@ -485,7 +489,7 @@
             <span class="k">return</span> <span class="kc">None</span>
         <span class="c1"># Auto-wrap-synthesised implicit checkpoint: no user-facing args, no validation.</span>
         <span class="k">if</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">_IMPLICIT_MARKER_ATTR</span><span class="p">,</span> <span class="kc">False</span><span class="p">):</span>
-            <span class="k">return</span> <span class="n">CheckpointCallInfo</span><span class="p">(</span><span class="n">cp_id</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">yield_on</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">is_implicit</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">CheckpointCallInfo</span><span class="p">(</span><span class="n">cp_id</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">yield_on_node</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">is_implicit</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
         <span class="c1"># User-written `qd.checkpoint(cp_id, yield_on)` -- both args are required.</span>
         <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">args</span><span class="p">)</span> <span class="o">+</span> <span class="nb">len</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">keywords</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
             <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">&quot;qd.checkpoint() takes two arguments: `qd.checkpoint(cp_id, yield_on=flag)`.&quot;</span><span class="p">)</span>
@@ -525,13 +529,18 @@
                 <span class="s2">&quot;qd.checkpoint() is missing required argument `yield_on` (e.g. &quot;</span>
                 <span class="s2">&quot;`qd.checkpoint(0, yield_on=overflow_flag)`)&quot;</span>
             <span class="p">)</span>
-        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">yield_on_arg</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Name</span><span class="p">):</span>
+        <span class="c1"># `yield_on=` must point at an ndarray kernel argument -- a bare parameter (`yield_on=flag`), a</span>
+        <span class="c1"># `@qd.data_oriented` member (`yield_on=self.flag`), or a `@dataclasses.dataclass` parameter member</span>
+        <span class="c1"># (`yield_on=params.flag`). Other expressions can&#39;t be lowered to a flat arg-id and are rejected here so the</span>
+        <span class="c1"># user gets a clear compile-time error at the `with` site.</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">yield_on_arg</span><span class="p">,</span> <span class="p">(</span><span class="n">ast</span><span class="o">.</span><span class="n">Name</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Attribute</span><span class="p">)):</span>
             <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span>
-                <span class="s2">&quot;qd.checkpoint(yield_on=...) must be the bare name of a kernel parameter (e.g. &quot;</span>
-                <span class="s2">&quot;`yield_on=overflow_flag`); expressions are not supported&quot;</span>
+                <span class="s2">&quot;qd.checkpoint(yield_on=...) must reference a kernel ndarray argument -- e.g. `yield_on=flag` for &quot;</span>
+                <span class="s2">&quot;a bare parameter, `yield_on=self.flag` for a @qd.data_oriented member, or `yield_on=params.flag` &quot;</span>
+                <span class="s2">&quot;for a @dataclasses.dataclass parameter member; arbitrary expressions are not supported&quot;</span>
             <span class="p">)</span>
         <span class="n">cp_id_value</span> <span class="o">=</span> <span class="n">CheckpointTransformer</span><span class="o">.</span><span class="n">_resolve_cp_id</span><span class="p">(</span><span class="n">cp_id_arg</span><span class="p">,</span> <span class="n">global_vars</span><span class="p">)</span>
-        <span class="k">return</span> <span class="n">CheckpointCallInfo</span><span class="p">(</span><span class="n">cp_id</span><span class="o">=</span><span class="n">cp_id_value</span><span class="p">,</span> <span class="n">yield_on</span><span class="o">=</span><span class="n">yield_on_arg</span><span class="o">.</span><span class="n">id</span><span class="p">,</span> <span class="n">is_implicit</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></div>
+        <span class="k">return</span> <span class="n">CheckpointCallInfo</span><span class="p">(</span><span class="n">cp_id</span><span class="o">=</span><span class="n">cp_id_value</span><span class="p">,</span> <span class="n">yield_on_node</span><span class="o">=</span><span class="n">yield_on_arg</span><span class="p">,</span> <span class="n">is_implicit</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></div>
 
 
     <span class="nd">@staticmethod</span>
@@ -571,14 +580,23 @@
                 <span class="s2">&quot;same kernel must be flat siblings (a checkpoint inside qd.graph_do_while is fine)&quot;</span>
             <span class="p">)</span>
 
+        <span class="n">yield_on_label</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="n">yield_on_cpp_arg_id</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="o">-</span><span class="mi">1</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">info</span><span class="o">.</span><span class="n">is_implicit</span><span class="p">:</span>
-            <span class="c1"># Validate `yield_on=` names a real kernel parameter.</span>
-            <span class="n">arg_names</span> <span class="o">=</span> <span class="p">[</span><span class="n">m</span><span class="o">.</span><span class="n">name</span> <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="n">kernel</span><span class="o">.</span><span class="n">arg_metas</span><span class="p">]</span>
-            <span class="k">if</span> <span class="n">info</span><span class="o">.</span><span class="n">yield_on</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">arg_names</span><span class="p">:</span>
-                <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span>
-                    <span class="sa">f</span><span class="s2">&quot;qd.checkpoint(yield_on=</span><span class="si">{</span><span class="n">info</span><span class="o">.</span><span class="n">yield_on</span><span class="si">!r}</span><span class="s2">) does not match any parameter of kernel &quot;</span>
-                    <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">kernel</span><span class="o">.</span><span class="n">func</span><span class="o">.</span><span class="vm">__name__</span><span class="si">!r}</span><span class="s2">. Available parameters: </span><span class="si">{</span><span class="n">arg_names</span><span class="si">}</span><span class="s2">&quot;</span>
-                <span class="p">)</span>
+            <span class="c1"># Resolve `yield_on=` (a bare parameter or `@qd.data_oriented` / `@dataclasses.dataclass` member ndarray) to</span>
+            <span class="c1"># its flat C++ arg-id at AST-build time. ``resolve_ndarray_kernel_arg_id`` raises a user-facing</span>
+            <span class="c1"># ``QuadrantsSyntaxError`` if the expression does not name a real ndarray kernel argument, which keeps the</span>
+            <span class="c1"># diagnostic at the `with` site instead of leaking into the launcher. Both the label (for</span>
+            <span class="c1"># ``checkpoint_yield_on_args`` / introspection) and the resolved arg-id (for the runtime) are stashed and</span>
+            <span class="c1"># forwarded to the launch path below.</span>
+            <span class="c1"># pylint: disable-next=C0415,import-outside-toplevel</span>
+            <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.ast.ast_transformers.ndarray_arg_resolver</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+                <span class="n">resolve_ndarray_kernel_arg_id</span><span class="p">,</span>
+            <span class="p">)</span>
+
+            <span class="n">yield_on_label</span><span class="p">,</span> <span class="n">yield_on_cpp_arg_id</span> <span class="o">=</span> <span class="n">resolve_ndarray_kernel_arg_id</span><span class="p">(</span>
+                <span class="n">ctx</span><span class="p">,</span> <span class="n">kernel</span><span class="p">,</span> <span class="n">info</span><span class="o">.</span><span class="n">yield_on_node</span><span class="p">,</span> <span class="s2">&quot;qd.checkpoint(yield_on=...)&quot;</span>
+            <span class="p">)</span>
             <span class="c1"># Reject duplicate user-supplied cp_id labels.</span>
             <span class="n">existing</span> <span class="o">=</span> <span class="p">[</span><span class="n">lbl</span> <span class="k">for</span> <span class="n">lbl</span> <span class="ow">in</span> <span class="n">kernel</span><span class="o">.</span><span class="n">checkpoint_user_labels_by_cp_id</span> <span class="k">if</span> <span class="n">lbl</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">]</span>
             <span class="k">if</span> <span class="n">info</span><span class="o">.</span><span class="n">cp_id</span> <span class="ow">in</span> <span class="n">existing</span><span class="p">:</span>
@@ -627,7 +645,8 @@
                 <span class="sa">f</span><span class="s2">&quot;            ...</span><span class="se">\n</span><span class="s2">&quot;</span>
             <span class="p">)</span>
 
-        <span class="n">kernel</span><span class="o">.</span><span class="n">checkpoint_yield_on_args</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">info</span><span class="o">.</span><span class="n">yield_on</span><span class="p">)</span>
+        <span class="n">kernel</span><span class="o">.</span><span class="n">checkpoint_yield_on_args</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">yield_on_label</span><span class="p">)</span>
+        <span class="n">kernel</span><span class="o">.</span><span class="n">checkpoint_yield_on_cpp_arg_ids</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">yield_on_cpp_arg_id</span><span class="p">)</span>
         <span class="n">kernel</span><span class="o">.</span><span class="n">checkpoint_user_labels_by_cp_id</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">info</span><span class="o">.</span><span class="n">cp_id</span><span class="p">)</span>
         <span class="c1"># Hand control to the C++ ASTBuilder so that every for-loop emitted by `build_stmts` below is tagged with this</span>
         <span class="c1"># checkpoint&#39;s internal `cp_id` on its `ForLoopConfig.checkpoint_id`. The C++ counter is the source of truth for</span>

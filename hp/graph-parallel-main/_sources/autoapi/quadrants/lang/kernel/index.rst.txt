@@ -141,6 +141,12 @@ Module Contents
 
 
 
+   .. py:attribute:: checkpoint_yield_on_cpp_arg_ids
+      :type:  list[int]
+      :value: []
+
+
+
    .. py:attribute:: checkpoint_user_labels_by_cp_id
       :type:  list[int | None]
       :value: []
