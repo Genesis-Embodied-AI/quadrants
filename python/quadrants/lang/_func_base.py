@@ -83,6 +83,19 @@ _ARG_EMPTY = inspect.Parameter.empty
 _arch_cuda = _qd_core.Arch.cuda
 _is_cpython = sys.implementation.name == "cpython"
 
+# The ndarray ExternalPtrStmt linear index is accumulated in int64 only in the LLVM codegen backends
+# (see TaskCodeGenLLVM::visit(ExternalPtrStmt)). The SPIR-V backends (Vulkan/Metal/...) still flatten the
+# offset in int32, so an ndarray whose total element count exceeds int32 can silently overflow there. We
+# keep a product-of-dimensions overflow warning for those backends below.
+_ARCHS_WITH_I64_LINEAR_INDEX = frozenset(
+    {
+        _qd_core.Arch.x64,
+        _qd_core.Arch.arm64,
+        _qd_core.Arch.cuda,
+        _qd_core.Arch.amdgpu,
+    }
+)
+
 # PERF: Frozen-dataclass dispatch caching.
 #
 # When a frozen dataclass (e.g. Genesis's StructConstraintState with ~43 fields) is passed to a kernel, the per-launch
@@ -735,6 +748,18 @@ class FuncBase:
                 array_shape = v.shape[element_dim:] if is_soa else v.shape[:-element_dim]
             if any(dim > np.iinfo(np.int32).max for dim in array_shape):
                 warnings.warn("Ndarray dimensions above int32 are not supported yet.")
+            elif (
+                impl.current_cfg().arch not in _ARCHS_WITH_I64_LINEAR_INDEX
+                and math.prod(v.shape) > np.iinfo(np.int32).max
+            ):
+                # No single dimension overflows int32, but the flattened element count does. Only the LLVM
+                # backends accumulate the linear index in int64; on the SPIR-V backends this offset is still
+                # computed in int32 and will overflow, so warn instead of silently reading the wrong element.
+                warnings.warn(
+                    "Ndarray total element count exceeds the int32 boundary; on this backend the linear index "
+                    "is computed in int32 and may overflow. int64 linear indexing is currently supported only "
+                    "on the LLVM backends (CPU/CUDA/AMDGPU)."
+                )
             if isinstance(v, np.ndarray):
                 # Check ndarray flags is expensive (~250ns), so it is important to order branches according to hit stats
                 if v.flags.c_contiguous:
