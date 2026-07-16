@@ -345,6 +345,7 @@
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">impl</span><span class="p">,</span> <span class="n">util</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.checkpoint</span><span class="w"> </span><span class="kn">import</span> <span class="n">checkpoint</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.expr</span><span class="w"> </span><span class="kn">import</span> <span class="n">Expr</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.graph_parallel</span><span class="w"> </span><span class="kn">import</span> <span class="n">graph_parallel</span><span class="p">,</span> <span class="n">graph_parallel_context</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.graph_status</span><span class="w"> </span><span class="kn">import</span> <span class="n">GraphStatus</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.impl</span><span class="w"> </span><span class="kn">import</span> <span class="n">axes</span><span class="p">,</span> <span class="n">get_runtime</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.profiler.kernel_profiler</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_default_kernel_profiler</span>
@@ -1182,7 +1183,7 @@
 <span class="sd">    iteration). The one structural rule is that a ``qd.graph_do_while`` ``while``-loop may appear only at the kernel top</span>
 <span class="sd">    level or directly inside another ``graph_do_while`` body, not inside a ``for``-loop.</span>
 
-<span class="sd">    This function should not be called directly at runtime; it is recognised and transformed during AST compilation.</span>
+<span class="sd">    This function should not be called directly at runtime; it is recognized and transformed during AST compilation.</span>
 <span class="sd">    Requires ``@qd.kernel(graph=True)``.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">return</span> <span class="nb">bool</span><span class="p">(</span><span class="n">condition</span><span class="p">)</span></div>
@@ -1340,6 +1341,8 @@
     <span class="s2">&quot;GraphStatus&quot;</span><span class="p">,</span>
     <span class="s2">&quot;checkpoint&quot;</span><span class="p">,</span>
     <span class="s2">&quot;graph_do_while&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;graph_parallel_context&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;graph_parallel&quot;</span><span class="p">,</span>
     <span class="s2">&quot;loop_config&quot;</span><span class="p">,</span>
     <span class="s2">&quot;global_thread_idx&quot;</span><span class="p">,</span>
     <span class="s2">&quot;assume_in_range&quot;</span><span class="p">,</span>

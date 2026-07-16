@@ -490,6 +490,9 @@
 </pre></div>
 </div>
 <p>Consecutive <code class="docutils literal notranslate"><span class="pre">with</span> <span class="pre">qd.stream_parallel():</span></code> blocks run concurrently. Multiple for loops within a single block share a stream and run serially on it. All streams are synchronized before the kernel returns.</p>
+<blockquote>
+<div><p><strong>For <code class="docutils literal notranslate"><span class="pre">graph=True</span></code> kernels</strong>, use <a class="reference internal" href="graph.html#qd-graph-parallel-sections-with-qd-graph-parallel-context-experimental"><span class="std std-ref"><code class="docutils literal notranslate"><span class="pre">qd.graph_parallel_context</span></code> / <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel</span></code></span></a> instead - <code class="docutils literal notranslate"><span class="pre">stream_parallel</span></code> is not compatible with graphs (see <a class="reference internal" href="#limitations">Limitations</a>). <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel_context</span></code> expresses the same “run these independent sequences concurrently” idea but is honored by the graph builder.</p>
+</div></blockquote>
 <section id="restrictions">
 <h3>Restrictions<a class="headerlink" href="#restrictions" title="Link to this heading">#</a></h3>
 <ul class="simple">

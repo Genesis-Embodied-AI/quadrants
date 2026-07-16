@@ -878,7 +878,7 @@ within the <code class="docutils literal notranslate"><span class="pre">while</s
 <code class="docutils literal notranslate"><span class="pre">graph_do_while</span></code> body; each runs at the loop level it is written at (top level = once, inside a loop = every
 iteration). The one structural rule is that a <code class="docutils literal notranslate"><span class="pre">qd.graph_do_while</span></code> <code class="docutils literal notranslate"><span class="pre">while</span></code>-loop may appear only at the kernel top
 level or directly inside another <code class="docutils literal notranslate"><span class="pre">graph_do_while</span></code> body, not inside a <code class="docutils literal notranslate"><span class="pre">for</span></code>-loop.</p>
-<p>This function should not be called directly at runtime; it is recognised and transformed during AST compilation.
+<p>This function should not be called directly at runtime; it is recognized and transformed during AST compilation.
 Requires <code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel(graph=True)</span></code>.</p>
 </dd></dl>
 

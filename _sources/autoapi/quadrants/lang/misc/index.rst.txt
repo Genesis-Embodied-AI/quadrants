@@ -378,7 +378,7 @@ Module Contents
    iteration). The one structural rule is that a ``qd.graph_do_while`` ``while``-loop may appear only at the kernel top
    level or directly inside another ``graph_do_while`` body, not inside a ``for``-loop.
 
-   This function should not be called directly at runtime; it is recognised and transformed during AST compilation.
+   This function should not be called directly at runtime; it is recognized and transformed during AST compilation.
    Requires ``@qd.kernel(graph=True)``.
 
 

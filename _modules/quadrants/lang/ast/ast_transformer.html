@@ -365,6 +365,9 @@
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.ast.ast_transformers.function_def_transformer</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
     <span class="n">FunctionDefTransformer</span><span class="p">,</span>
 <span class="p">)</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.ast.ast_transformers.graph_parallel_transformer</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">GraphParallelTransformer</span><span class="p">,</span>
+<span class="p">)</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.exception</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
     <span class="n">QuadrantsIndexError</span><span class="p">,</span>
     <span class="n">QuadrantsRuntimeTypeError</span><span class="p">,</span>
@@ -2157,9 +2160,16 @@
         <span class="k">if</span> <span class="n">checkpoint_info</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
             <span class="k">return</span> <span class="n">ASTTransformer</span><span class="o">.</span><span class="n">_build_checkpoint_with</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="p">,</span> <span class="n">checkpoint_info</span><span class="p">)</span>
 
+        <span class="k">if</span> <span class="n">GraphParallelTransformer</span><span class="o">.</span><span class="n">is_graph_parallel_context_call</span><span class="p">(</span><span class="n">item</span><span class="o">.</span><span class="n">context_expr</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">GraphParallelTransformer</span><span class="o">.</span><span class="n">build_graph_parallel_context_with</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="p">,</span> <span class="n">build_stmts</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">GraphParallelTransformer</span><span class="o">.</span><span class="n">is_parallel_section_call</span><span class="p">(</span><span class="n">item</span><span class="o">.</span><span class="n">context_expr</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">GraphParallelTransformer</span><span class="o">.</span><span class="n">build_parallel_section_with</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="p">,</span> <span class="n">build_stmts</span><span class="p">)</span>
+
         <span class="k">if</span> <span class="ow">not</span> <span class="n">FunctionDefTransformer</span><span class="o">.</span><span class="n">_is_stream_parallel_with</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">ctx</span><span class="o">.</span><span class="n">global_vars</span><span class="p">):</span>
             <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span>
-                <span class="s2">&quot;&#39;with&#39; in Quadrants kernels only supports qd.stream_parallel() or qd.checkpoint()&quot;</span>
+                <span class="s2">&quot;&#39;with&#39; in Quadrants kernels only supports qd.stream_parallel(), qd.checkpoint(), &quot;</span>
+                <span class="s2">&quot;qd.graph_parallel_context(), or qd.graph_parallel()&quot;</span>
             <span class="p">)</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">ctx</span><span class="o">.</span><span class="n">is_kernel</span><span class="p">:</span>
             <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">&quot;qd.stream_parallel() can only be used inside @qd.kernel, not @qd.func&quot;</span><span class="p">)</span>

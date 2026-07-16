@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>quadrants.lang.graph_status &#8212; Quadrants 1.1.3 documentation</title>
+    <title>quadrants.lang.graph_parallel &#8212; Quadrants 1.1.3 documentation</title>
   
   
   
@@ -55,12 +55,12 @@
     <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
     <script src="../../../../_static/design-tabs.js?v=f930bc37"></script>
     <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
-    <script>DOCUMENTATION_OPTIONS.pagename = 'autoapi/quadrants/lang/graph_status/index';</script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'autoapi/quadrants/lang/graph_parallel/index';</script>
     <script>DOCUMENTATION_OPTIONS.search_as_you_type = false;</script>
     <link rel="index" title="Index" href="../../../../genindex.html" />
     <link rel="search" title="Search" href="../../../../search.html" />
-    <link rel="next" title="quadrants.lang.impl" href="../impl/index.html" />
-    <link rel="prev" title="quadrants.lang.graph_parallel" href="../graph_parallel/index.html" />
+    <link rel="next" title="quadrants.lang.graph_status" href="../graph_status/index.html" />
+    <link rel="prev" title="quadrants.lang.func" href="../func/index.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
   <meta name="docsearch:version" content="1.1.3" />
@@ -343,7 +343,7 @@
     
     <li class="breadcrumb-item"><a href="../index.html" class="nav-link">quadrants.lang</a></li>
     
-    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">quadrants.lang.graph_status</span></li>
+    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">quadrants.lang.graph_parallel</span></li>
   </ul>
 </nav>
 </div>
@@ -360,18 +360,23 @@
 <div id="searchbox"></div>
                 <article class="bd-article">
                   
-  <section id="module-quadrants.lang.graph_status">
-<span id="quadrants-lang-graph-status"></span><h1>quadrants.lang.graph_status<a class="headerlink" href="#module-quadrants.lang.graph_status" title="Link to this heading">#</a></h1>
-<p>Plain-Python container returned from graph kernels that contain <code class="docutils literal notranslate"><span class="pre">qd.checkpoint(yield_on=...)</span></code>.</p>
-<p>Lives in its own module (with no Quadrants-internal imports) so it can be imported safely from both <code class="docutils literal notranslate"><span class="pre">kernel.py</span></code> and
-<code class="docutils literal notranslate"><span class="pre">misc.py</span></code> without re-introducing the circular import chain that <code class="docutils literal notranslate"><span class="pre">misc.py</span> <span class="pre">-&gt;</span> <span class="pre">impl.py</span> <span class="pre">-&gt;</span> <span class="pre">kernel.py</span></code> would create.</p>
-<p>Re-exported via <code class="docutils literal notranslate"><span class="pre">qd.lang.misc</span></code> (and therefore as <code class="docutils literal notranslate"><span class="pre">qd.GraphStatus</span></code>) for the user-facing canonical import path.</p>
-<section id="classes">
-<h2>Classes<a class="headerlink" href="#classes" title="Link to this heading">#</a></h2>
+  <section id="module-quadrants.lang.graph_parallel">
+<span id="quadrants-lang-graph-parallel"></span><h1>quadrants.lang.graph_parallel<a class="headerlink" href="#module-quadrants.lang.graph_parallel" title="Link to this heading">#</a></h1>
+<p>User-facing <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel_context</span></code> / <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel</span></code> context-managers and their no-op Python-runtime
+stubs.</p>
+<p>Kept in its own module to keep <code class="docutils literal notranslate"><span class="pre">lang/misc.py</span></code> from growing further (mirrors <code class="docutils literal notranslate"><span class="pre">checkpoint.py</span></code>) – the AST transformer
+and the C++ runtime do all the actual implementation work; this file is just the public API entry point.</p>
+<p>Re-exported via <code class="docutils literal notranslate"><span class="pre">qd.lang.misc</span></code> (and therefore as <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel_context</span></code> / <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel</span></code>) for the
+user-facing canonical import path.</p>
+<section id="functions">
+<h2>Functions<a class="headerlink" href="#functions" title="Link to this heading">#</a></h2>
 <div class="pst-scrollable-table-container"><table class="autosummary longtable table autosummary">
 <tbody>
-<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.graph_status.GraphStatus" title="quadrants.lang.graph_status.GraphStatus"><code class="xref py py-obj docutils literal notranslate"><span class="pre">GraphStatus</span></code></a></p></td>
-<td><p>Result returned by a graph kernel that contains <code class="docutils literal notranslate"><span class="pre">qd.checkpoint(cp_id,</span> <span class="pre">yield_on=...)</span></code> blocks.</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.graph_parallel.graph_parallel_context" title="quadrants.lang.graph_parallel.graph_parallel_context"><code class="xref py py-obj docutils literal notranslate"><span class="pre">graph_parallel_context</span></code></a>()</p></td>
+<td><p>Opens a fork/join region whose <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel()</span></code> sections run concurrently.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.graph_parallel.graph_parallel" title="quadrants.lang.graph_parallel.graph_parallel"><code class="xref py py-obj docutils literal notranslate"><span class="pre">graph_parallel</span></code></a>()</p></td>
+<td><p>Declares one <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel</span></code> section of an enclosing <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel_context()</span></code> region.</p></td>
 </tr>
 </tbody>
 </table>
@@ -379,58 +384,50 @@
 </section>
 <section id="module-contents">
 <h2>Module Contents<a class="headerlink" href="#module-contents" title="Link to this heading">#</a></h2>
-<dl class="py class">
-<dt class="sig sig-object py" id="quadrants.lang.graph_status.GraphStatus">
-<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">quadrants.lang.graph_status.</span></span><span class="sig-name descname"><span class="pre">GraphStatus</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">yielded</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">checkpoint</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/graph_status.html#GraphStatus"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.graph_status.GraphStatus" title="Link to this definition">#</a></dt>
-<dd><p>Result returned by a graph kernel that contains <code class="docutils literal notranslate"><span class="pre">qd.checkpoint(cp_id,</span> <span class="pre">yield_on=...)</span></code> blocks.</p>
-<div class="admonition warning">
-<p class="admonition-title">Warning</p>
-<p><strong>Experimental.</strong> <code class="docutils literal notranslate"><span class="pre">GraphStatus</span></code> is part of the experimental <code class="docutils literal notranslate"><span class="pre">qd.checkpoint</span></code> surface; its attributes and
-the conditions under which it is returned may change in any future release without a deprecation cycle.</p>
-</div>
-<p>Returned from <code class="docutils literal notranslate"><span class="pre">kernel(...)</span></code> and <code class="docutils literal notranslate"><span class="pre">kernel.resume(...,</span> <span class="pre">from_checkpoint=label)</span></code> whenever the kernel was decorated
-with <code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel(graph=True,</span> <span class="pre">checkpoints=True)</span></code>. Read <code class="docutils literal notranslate"><span class="pre">status.yielded</span></code> to decide whether to keep running the
-host loop, and <code class="docutils literal notranslate"><span class="pre">status.checkpoint</span></code> to find out which checkpoint asked the host to handle something.</p>
-<p>Canonical usage (see <code class="docutils literal notranslate"><span class="pre">graph.md</span></code>):</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">enum</span><span class="w"> </span><span class="kn">import</span> <span class="n">IntEnum</span>
-
-<span class="k">class</span><span class="w"> </span><span class="nc">Stage</span><span class="p">(</span><span class="n">IntEnum</span><span class="p">):</span>
-    <span class="n">SIM</span> <span class="o">=</span> <span class="mi">0</span>
-
-<span class="n">overflow_flag</span><span class="p">[()]</span> <span class="o">=</span> <span class="mi">0</span>  <span class="c1"># initialise before the first launch</span>
-<span class="n">status</span> <span class="o">=</span> <span class="n">step</span><span class="p">(</span><span class="n">arr</span><span class="p">,</span> <span class="n">overflow_flag</span><span class="p">,</span> <span class="n">newton_cond</span><span class="p">)</span>
-<span class="k">while</span> <span class="n">status</span><span class="o">.</span><span class="n">yielded</span><span class="p">:</span>
-    <span class="n">handle_overflow_for</span><span class="p">(</span><span class="n">status</span><span class="o">.</span><span class="n">checkpoint</span><span class="p">,</span> <span class="o">...</span><span class="p">)</span>
-    <span class="n">overflow_flag</span><span class="p">[()]</span> <span class="o">=</span> <span class="mi">0</span>  <span class="c1"># the framework never clears your yield_on flag</span>
-    <span class="n">status</span> <span class="o">=</span> <span class="n">step</span><span class="o">.</span><span class="n">resume</span><span class="p">(</span><span class="n">arr</span><span class="p">,</span> <span class="n">overflow_flag</span><span class="p">,</span> <span class="n">newton_cond</span><span class="p">,</span>
-                         <span class="n">from_checkpoint</span><span class="o">=</span><span class="n">status</span><span class="o">.</span><span class="n">checkpoint</span><span class="p">)</span>
-</pre></div>
-</div>
-<dl class="py attribute">
-<dt class="sig sig-object py" id="quadrants.lang.graph_status.GraphStatus.yielded">
-<span class="sig-name descname"><span class="pre">yielded</span></span><a class="reference internal" href="../../../../_modules/quadrants/lang/graph_status.html#GraphStatus.yielded"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.graph_status.GraphStatus.yielded" title="Link to this definition">#</a></dt>
-<dd><p><code class="docutils literal notranslate"><span class="pre">True</span></code> iff one of the kernel’s checkpoints paused on the most recent launch (i.e. its <code class="docutils literal notranslate"><span class="pre">yield_on=</span></code>
-flag was non-zero). <code class="docutils literal notranslate"><span class="pre">False</span></code> means the kernel completed normally and the host loop should exit.</p>
+<dl class="py function">
+<dt class="sig sig-object py" id="quadrants.lang.graph_parallel.graph_parallel_context">
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.graph_parallel.</span></span><span class="sig-name descname"><span class="pre">graph_parallel_context</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/graph_parallel.html#graph_parallel_context"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.graph_parallel.graph_parallel_context" title="Link to this definition">#</a></dt>
+<dd><p>Opens a fork/join region whose <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel()</span></code> sections run concurrently.</p>
+<p>Used as <code class="docutils literal notranslate"><span class="pre">with</span> <span class="pre">qd.graph_parallel_context():</span></code> inside a <code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel(graph=True)</span></code> kernel. The region’s
+body must contain only <code class="docutils literal notranslate"><span class="pre">with</span> <span class="pre">qd.graph_parallel():</span></code> blocks. Each <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel</span></code> section is an
+independent sequence of work; the <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel</span></code> sections have no ordering relative to each
+other and may execute concurrently, while everything after the region waits for <em>all</em> <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel</span></code>
+sections to finish (the join). This is the graph analogue of <code class="docutils literal notranslate"><span class="pre">qd.stream_parallel()</span></code> (which is for
+non-graph kernels): it lets independent stages – e.g. qipc’s point-triangle and edge-edge assembly
+– overlap inside a captured graph.</p>
+<p>Concurrency contract (the author’s responsibility): <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel</span></code> sections must be data-race
+free with respect to one another (no <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel</span></code> section reads what another writes, no two
+<code class="docutils literal notranslate"><span class="pre">qd.graph_parallel</span></code> sections write the same location). Calls <em>within</em> a <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel</span></code> section
+keep their program order.</p>
+<dl class="simple">
+<dt>Backend behavior:</dt><dd><ul class="simple">
+<li><p>CUDA SM graph path: <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel</span></code> sections become independent graph chains joined by an
+empty node, so the runtime schedules them on parallel streams (real overlap).</p></li>
+<li><p>CPU / Vulkan / Metal / AMDGPU graph: correct results, <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel</span></code> sections run serially
+(the concurrency tags are honored only by the graph builder today).</p></li>
+</ul>
+</dd>
+<dt>Restrictions (enforced at kernel compile time):</dt><dd><ul class="simple">
+<li><p>Must be used inside <code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel(graph=True)</span></code>.</p></li>
+<li><p>The region body may contain only <code class="docutils literal notranslate"><span class="pre">with</span> <span class="pre">qd.graph_parallel():</span></code> blocks.</p></li>
+<li><p>Regions cannot be nested, and a <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel</span></code> section body must be straight-line task work
+(no nested <code class="docutils literal notranslate"><span class="pre">qd.graph_do_while</span></code>, <code class="docutils literal notranslate"><span class="pre">qd.checkpoint</span></code>, or <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel_context</span></code>).</p></li>
+</ul>
+</dd>
+</dl>
+<p>This function should not be called directly at runtime; it is recognized and transformed during AST compilation.
+At Python runtime (outside kernels) it is a no-op context manager.</p>
+<p>See also <code class="docutils literal notranslate"><span class="pre">docs/source/user_guide/graph.md</span></code>.</p>
 </dd></dl>
 
-<dl class="py attribute">
-<dt class="sig sig-object py" id="quadrants.lang.graph_status.GraphStatus.checkpoint">
-<span class="sig-name descname"><span class="pre">checkpoint</span></span><a class="reference internal" href="../../../../_modules/quadrants/lang/graph_status.html#GraphStatus.checkpoint"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.graph_status.GraphStatus.checkpoint" title="Link to this definition">#</a></dt>
-<dd><p>The <code class="docutils literal notranslate"><span class="pre">cp_id</span></code> label of the checkpoint that paused (an <code class="docutils literal notranslate"><span class="pre">int</span></code> or the original <code class="docutils literal notranslate"><span class="pre">IntEnum</span></code> instance
-you passed to <code class="docutils literal notranslate"><span class="pre">qd.checkpoint(cp_id,</span> <span class="pre">...)</span></code>), or <code class="docutils literal notranslate"><span class="pre">None</span></code> when <code class="docutils literal notranslate"><span class="pre">yielded</span></code> is <code class="docutils literal notranslate"><span class="pre">False</span></code>. Pass it to
-<code class="docutils literal notranslate"><span class="pre">kernel.resume(...,</span> <span class="pre">from_checkpoint=...)</span></code> to continue from that point on the next launch.</p>
-</dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="id0">
-<span class="sig-name descname"><span class="pre">yielded</span></span><a class="reference internal" href="../../../../_modules/quadrants/lang/graph_status.html#GraphStatus.yielded"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#id0" title="Link to this definition">#</a></dt>
-<dd></dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="id1">
-<span class="sig-name descname"><span class="pre">checkpoint</span></span><a class="reference internal" href="../../../../_modules/quadrants/lang/graph_status.html#GraphStatus.checkpoint"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#id1" title="Link to this definition">#</a></dt>
-<dd></dd></dl>
-
+<dl class="py function">
+<dt class="sig sig-object py" id="quadrants.lang.graph_parallel.graph_parallel">
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.graph_parallel.</span></span><span class="sig-name descname"><span class="pre">graph_parallel</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/graph_parallel.html#graph_parallel"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.graph_parallel.graph_parallel" title="Link to this definition">#</a></dt>
+<dd><p>Declares one <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel</span></code> section of an enclosing <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel_context()</span></code> region.</p>
+<p>Used as <code class="docutils literal notranslate"><span class="pre">with</span> <span class="pre">qd.graph_parallel():</span></code> directly inside a <code class="docutils literal notranslate"><span class="pre">with</span> <span class="pre">qd.graph_parallel_context():</span></code> block.
+The <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel</span></code> section’s body is an independent sequence of work that may run concurrently
+with the region’s other <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel</span></code> sections.</p>
+<p>See <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel_context()</span></code> for the full contract and backend behavior.</p>
 </dd></dl>
 
 </section>
@@ -447,20 +444,20 @@ you passed to <code class="docutils literal notranslate"><span class="pre">qd.ch
                   
 <div class="prev-next-area">
     <a class="left-prev"
-       href="../graph_parallel/index.html"
+       href="../func/index.html"
        title="previous page">
       <i class="fa-solid fa-angle-left"></i>
       <div class="prev-next-info">
         <p class="prev-next-subtitle">previous</p>
-        <p class="prev-next-title">quadrants.lang.graph_parallel</p>
+        <p class="prev-next-title">quadrants.lang.func</p>
       </div>
     </a>
     <a class="right-next"
-       href="../impl/index.html"
+       href="../graph_status/index.html"
        title="next page">
       <div class="prev-next-info">
         <p class="prev-next-subtitle">next</p>
-        <p class="prev-next-title">quadrants.lang.impl</p>
+        <p class="prev-next-title">quadrants.lang.graph_status</p>
       </div>
       <i class="fa-solid fa-angle-right"></i>
     </a>
@@ -483,15 +480,10 @@ you passed to <code class="docutils literal notranslate"><span class="pre">qd.ch
   </div>
   <nav id="pst-page-toc-nav" class="page-toc" aria-labelledby="pst-page-navigation-heading-2">
     <ul class="pst-show_toc_level nav section-nav flex-column">
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#classes">Classes</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#functions">Functions</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#module-contents">Module Contents</a><ul class="nav section-nav flex-column">
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.graph_status.GraphStatus"><code class="docutils literal notranslate"><span class="pre">GraphStatus</span></code></a><ul class="nav section-nav flex-column">
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.graph_status.GraphStatus.yielded"><code class="docutils literal notranslate"><span class="pre">GraphStatus.yielded</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.graph_status.GraphStatus.checkpoint"><code class="docutils literal notranslate"><span class="pre">GraphStatus.checkpoint</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#id0"><code class="docutils literal notranslate"><span class="pre">GraphStatus.yielded</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#id1"><code class="docutils literal notranslate"><span class="pre">GraphStatus.checkpoint</span></code></a></li>
-</ul>
-</li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.graph_parallel.graph_parallel_context"><code class="docutils literal notranslate"><span class="pre">graph_parallel_context()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.graph_parallel.graph_parallel"><code class="docutils literal notranslate"><span class="pre">graph_parallel()</span></code></a></li>
 </ul>
 </li>
 </ul>
@@ -500,7 +492,7 @@ you passed to <code class="docutils literal notranslate"><span class="pre">qd.ch
   <div class="sidebar-secondary-item">
 
   <div class="tocsection sourcelink">
-    <a href="../../../../_sources/autoapi/quadrants/lang/graph_status/index.rst.txt">
+    <a href="../../../../_sources/autoapi/quadrants/lang/graph_parallel/index.rst.txt">
       <i class="fa-solid fa-file-lines"></i> Show Source
     </a>
   </div>

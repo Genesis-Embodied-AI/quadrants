@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>quadrants.lang.ast.ast_transformers.ndarray_arg_resolver &#8212; Quadrants 1.1.3 documentation</title>
+    <title>quadrants.lang.ast.ast_transformers.graph_parallel_transformer &#8212; Quadrants 1.1.3 documentation</title>
   
   
   
@@ -55,12 +55,12 @@
     <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
     <script src="../../../../../../_static/design-tabs.js?v=f930bc37"></script>
     <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
-    <script>DOCUMENTATION_OPTIONS.pagename = 'autoapi/quadrants/lang/ast/ast_transformers/ndarray_arg_resolver/index';</script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'autoapi/quadrants/lang/ast/ast_transformers/graph_parallel_transformer/index';</script>
     <script>DOCUMENTATION_OPTIONS.search_as_you_type = false;</script>
     <link rel="index" title="Index" href="../../../../../../genindex.html" />
     <link rel="search" title="Search" href="../../../../../../search.html" />
-    <link rel="next" title="quadrants.lang.ast.checkers" href="../../checkers/index.html" />
-    <link rel="prev" title="quadrants.lang.ast.ast_transformers.graph_parallel_transformer" href="../graph_parallel_transformer/index.html" />
+    <link rel="next" title="quadrants.lang.ast.ast_transformers.ndarray_arg_resolver" href="../ndarray_arg_resolver/index.html" />
+    <link rel="prev" title="quadrants.lang.ast.ast_transformers.function_def_transformer" href="../function_def_transformer/index.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
   <meta name="docsearch:version" content="1.1.3" />
@@ -349,7 +349,7 @@
     
     <li class="breadcrumb-item"><a href="../index.html" class="nav-link">quadrants.lang.ast.ast_transformers</a></li>
     
-    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">quadrants.lang.ast.ast_transformers.ndarray_arg_resolver</span></li>
+    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">quadrants.lang.ast.ast_transformers.graph_parallel_transformer</span></li>
   </ul>
 </nav>
 </div>
@@ -366,26 +366,23 @@
 <div id="searchbox"></div>
                 <article class="bd-article">
                   
-  <section id="module-quadrants.lang.ast.ast_transformers.ndarray_arg_resolver">
-<span id="quadrants-lang-ast-ast-transformers-ndarray-arg-resolver"></span><h1>quadrants.lang.ast.ast_transformers.ndarray_arg_resolver<a class="headerlink" href="#module-quadrants.lang.ast.ast_transformers.ndarray_arg_resolver" title="Link to this heading">#</a></h1>
-<p>Resolve an ndarray-referencing AST expression to its flat C++ kernel arg-id at AST-build time.</p>
-<p>Lives alongside <code class="docutils literal notranslate"><span class="pre">checkpoint_transformer.py</span></code> / <code class="docutils literal notranslate"><span class="pre">call_transformer.py</span></code> so the central <code class="docutils literal notranslate"><span class="pre">ast_transformer.py</span></code> file
-doesn’t have to grow per-feature. Both <code class="docutils literal notranslate"><span class="pre">qd.checkpoint(yield_on=...)</span></code> (via
-<code class="docutils literal notranslate"><span class="pre">CheckpointTransformer.build_checkpoint_with</span></code>) and <code class="docutils literal notranslate"><span class="pre">qd.graph_do_while(...)</span></code> (via <code class="docutils literal notranslate"><span class="pre">ASTTransformer.build_While</span></code>)
-share this helper: each form takes a control-flag / counter ndarray argument that may be a bare kernel parameter
-(e.g. <code class="docutils literal notranslate"><span class="pre">flag</span></code>), a <code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code> member ndarray (e.g. <code class="docutils literal notranslate"><span class="pre">self.flag</span></code>), or a <code class="docutils literal notranslate"><span class="pre">&#64;dataclasses.dataclass</span></code>
-parameter member (e.g. <code class="docutils literal notranslate"><span class="pre">params.flag</span></code>). All three flatten to the same <code class="docutils literal notranslate"><span class="pre">ExternalTensorExpression</span></code> after AST build,
-so resolving the arg-id here – once, at kernel build time – means the runtime launch path can forward it directly
-with no per-launch name matching (which was the original <code class="docutils literal notranslate"><span class="pre">_checkpoint_helpers</span></code> approach and is incompatible with
-member-ndarray flattening, since the flattened name is synthesised).</p>
-<p>See <code class="docutils literal notranslate"><span class="pre">docs/source/user_guide/graph.md</span></code> for the user-facing surface and <code class="docutils literal notranslate"><span class="pre">perso_hugh/doc/qipc/reentrant.md</span></code> for the
-design.</p>
-<section id="functions">
-<h2>Functions<a class="headerlink" href="#functions" title="Link to this heading">#</a></h2>
+  <section id="module-quadrants.lang.ast.ast_transformers.graph_parallel_transformer">
+<span id="quadrants-lang-ast-ast-transformers-graph-parallel-transformer"></span><h1>quadrants.lang.ast.ast_transformers.graph_parallel_transformer<a class="headerlink" href="#module-quadrants.lang.ast.ast_transformers.graph_parallel_transformer" title="Link to this heading">#</a></h1>
+<p>AST recognition, validation, and lowering for <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel_context()</span></code> / <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel()</span></code> blocks.</p>
+<p>Lives alongside <code class="docutils literal notranslate"><span class="pre">checkpoint_transformer.py</span></code> / <code class="docutils literal notranslate"><span class="pre">function_def_transformer.py</span></code> so that <code class="docutils literal notranslate"><span class="pre">ast_transformer.py</span></code> doesn’t
+have to grow per-feature. <code class="docutils literal notranslate"><span class="pre">ASTTransformer.build_With</span></code> forwards <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel_context()</span></code> regions and their
+<code class="docutils literal notranslate"><span class="pre">qd.graph_parallel()</span></code> sections into the static methods here.</p>
+<p>A <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel_context()</span></code> region tags its body with a per-kernel region id (via
+<code class="docutils literal notranslate"><span class="pre">begin/end_graph_parallel_context</span></code>) and each <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel()</span></code> section inside lowers to a stream-parallel group
+(via <code class="docutils literal notranslate"><span class="pre">begin/end_stream_parallel</span></code>). The graph builder forks the distinct groups of one region in a contiguous run and
+joins them; the region id keeps two back-to-back regions apart (each gets its own join). See
+<code class="docutils literal notranslate"><span class="pre">docs/source/user_guide/graph.md</span></code> for the user-facing surface.</p>
+<section id="classes">
+<h2>Classes<a class="headerlink" href="#classes" title="Link to this heading">#</a></h2>
 <div class="pst-scrollable-table-container"><table class="autosummary longtable table autosummary">
 <tbody>
-<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.ast.ast_transformers.ndarray_arg_resolver.resolve_ndarray_kernel_arg_id" title="quadrants.lang.ast.ast_transformers.ndarray_arg_resolver.resolve_ndarray_kernel_arg_id"><code class="xref py py-obj docutils literal notranslate"><span class="pre">resolve_ndarray_kernel_arg_id</span></code></a>(→ tuple[str, int])</p></td>
-<td><p>Resolve <code class="docutils literal notranslate"><span class="pre">node</span></code> to <code class="docutils literal notranslate"><span class="pre">(label,</span> <span class="pre">flat_cpp_arg_id)</span></code> at AST-build time.</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.ast.ast_transformers.graph_parallel_transformer.GraphParallelTransformer" title="quadrants.lang.ast.ast_transformers.graph_parallel_transformer.GraphParallelTransformer"><code class="xref py py-obj docutils literal notranslate"><span class="pre">GraphParallelTransformer</span></code></a></p></td>
+<td><p></p></td>
 </tr>
 </tbody>
 </table>
@@ -393,19 +390,52 @@ design.</p>
 </section>
 <section id="module-contents">
 <h2>Module Contents<a class="headerlink" href="#module-contents" title="Link to this heading">#</a></h2>
-<dl class="py function">
-<dt class="sig sig-object py" id="quadrants.lang.ast.ast_transformers.ndarray_arg_resolver.resolve_ndarray_kernel_arg_id">
-<span class="sig-prename descclassname"><span class="pre">quadrants.lang.ast.ast_transformers.ndarray_arg_resolver.</span></span><span class="sig-name descname"><span class="pre">resolve_ndarray_kernel_arg_id</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ctx</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../../ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext" title="quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext"><span class="pre">quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">kernel</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">node</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ast.expr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">usage</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">int</span><span class="p"><span class="pre">]</span></span></span></span><a class="reference internal" href="../../../../../../_modules/quadrants/lang/ast/ast_transformers/ndarray_arg_resolver.html#resolve_ndarray_kernel_arg_id"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.ast.ast_transformers.ndarray_arg_resolver.resolve_ndarray_kernel_arg_id" title="Link to this definition">#</a></dt>
-<dd><p>Resolve <code class="docutils literal notranslate"><span class="pre">node</span></code> to <code class="docutils literal notranslate"><span class="pre">(label,</span> <span class="pre">flat_cpp_arg_id)</span></code> at AST-build time.</p>
-<p>Shared between <code class="docutils literal notranslate"><span class="pre">qd.checkpoint(yield_on=...)</span></code> and <code class="docutils literal notranslate"><span class="pre">qd.graph_do_while(...)</span></code> to turn the control-flag argument into
-the flat C++ arg-id the runtime matches against. <code class="docutils literal notranslate"><span class="pre">node</span></code> is an <code class="docutils literal notranslate"><span class="pre">ast.Name</span></code> (a bare kernel parameter, e.g.
-<code class="docutils literal notranslate"><span class="pre">flag</span></code>) or an <code class="docutils literal notranslate"><span class="pre">ast.Attribute</span></code> chain (e.g. <code class="docutils literal notranslate"><span class="pre">self.flag</span></code> for a <code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code> owner, or <code class="docutils literal notranslate"><span class="pre">params.flag</span></code>
-where <code class="docutils literal notranslate"><span class="pre">params</span></code> is a <code class="docutils literal notranslate"><span class="pre">&#64;dataclasses.dataclass</span></code> kernel parameter). We build the expression through the normal AST
-machinery and read the arg-id off the resulting external-tensor expression – this unifies the bare-param and
-member-ndarray cases, since both flatten to a real ndarray kernel argument carrying its arg-id on the
-<code class="docutils literal notranslate"><span class="pre">ExternalTensorExpression</span></code>.</p>
-<p><code class="docutils literal notranslate"><span class="pre">usage</span></code> is the call form (e.g. <code class="docutils literal notranslate"><span class="pre">&quot;qd.checkpoint(yield_on=...)&quot;</span></code>) used in the error message. Raises
-<code class="docutils literal notranslate"><span class="pre">QuadrantsSyntaxError</span></code> if the expression does not resolve to an ndarray kernel argument.</p>
+<dl class="py class">
+<dt class="sig sig-object py" id="quadrants.lang.ast.ast_transformers.graph_parallel_transformer.GraphParallelTransformer">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">quadrants.lang.ast.ast_transformers.graph_parallel_transformer.</span></span><span class="sig-name descname"><span class="pre">GraphParallelTransformer</span></span><a class="reference internal" href="../../../../../../_modules/quadrants/lang/ast/ast_transformers/graph_parallel_transformer.html#GraphParallelTransformer"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.ast.ast_transformers.graph_parallel_transformer.GraphParallelTransformer" title="Link to this definition">#</a></dt>
+<dd><dl class="py method">
+<dt class="sig sig-object py" id="quadrants.lang.ast.ast_transformers.graph_parallel_transformer.GraphParallelTransformer.is_graph_parallel_context_call">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">is_graph_parallel_context_call</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">node</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ast.expr</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">bool</span></span></span><a class="reference internal" href="../../../../../../_modules/quadrants/lang/ast/ast_transformers/graph_parallel_transformer.html#GraphParallelTransformer.is_graph_parallel_context_call"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.ast.ast_transformers.graph_parallel_transformer.GraphParallelTransformer.is_graph_parallel_context_call" title="Link to this definition">#</a></dt>
+<dd><p>If <em>node</em> is a <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel_context()</span></code> call return True, else False.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="quadrants.lang.ast.ast_transformers.graph_parallel_transformer.GraphParallelTransformer.is_parallel_section_call">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">is_parallel_section_call</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">node</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ast.expr</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">bool</span></span></span><a class="reference internal" href="../../../../../../_modules/quadrants/lang/ast/ast_transformers/graph_parallel_transformer.html#GraphParallelTransformer.is_parallel_section_call"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.ast.ast_transformers.graph_parallel_transformer.GraphParallelTransformer.is_parallel_section_call" title="Link to this definition">#</a></dt>
+<dd><p>If <em>node</em> is a <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel()</span></code> (a section) call return True, else False. The call shape is validated
+here so misuse raises at the <code class="docutils literal notranslate"><span class="pre">with</span></code> site rather than later.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="quadrants.lang.ast.ast_transformers.graph_parallel_transformer.GraphParallelTransformer.build_graph_parallel_context_with">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">build_graph_parallel_context_with</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ctx</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../../ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext" title="quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext"><span class="pre">quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">node</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ast.With</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">build_stmts</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="../../../../../../_modules/quadrants/lang/ast/ast_transformers/graph_parallel_transformer.html#GraphParallelTransformer.build_graph_parallel_context_with"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.ast.ast_transformers.graph_parallel_transformer.GraphParallelTransformer.build_graph_parallel_context_with" title="Link to this definition">#</a></dt>
+<dd><p>Handles <code class="docutils literal notranslate"><span class="pre">with</span> <span class="pre">qd.graph_parallel_context():</span></code> fork/join regions.</p>
+<p>Validates the use-site (kernel must be graph=True, no nesting), then validates the whole region grammar up-front
+via <code class="docutils literal notranslate"><span class="pre">validate_region</span></code> (the single source of truth for what a region / section may contain), then walks the
+body. The region is bracketed with begin/end_graph_parallel_context() so its body carries a per-kernel region id,
+and each <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel</span></code> section inside lowers to a stream-parallel group (via begin/end_stream_parallel).
+The graph builder forks the distinct groups of one region in a contiguous run and joins them; the region id keeps
+two back-to-back regions apart (each gets its own join).</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="quadrants.lang.ast.ast_transformers.graph_parallel_transformer.GraphParallelTransformer.validate_region">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">validate_region</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ctx</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../../ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext" title="quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext"><span class="pre">quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">node</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ast.With</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="../../../../../../_modules/quadrants/lang/ast/ast_transformers/graph_parallel_transformer.html#GraphParallelTransformer.validate_region"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.ast.ast_transformers.graph_parallel_transformer.GraphParallelTransformer.validate_region" title="Link to this definition">#</a></dt>
+<dd><p>Validate an entire <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel_context()</span></code> region (body + every section’s body) up-front. The single
+entry point for the region/section grammar; see the block comment above.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="quadrants.lang.ast.ast_transformers.graph_parallel_transformer.GraphParallelTransformer.build_parallel_section_with">
+<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">build_parallel_section_with</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ctx</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../../ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext" title="quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext"><span class="pre">quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">node</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ast.With</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">build_stmts</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="../../../../../../_modules/quadrants/lang/ast/ast_transformers/graph_parallel_transformer.html#GraphParallelTransformer.build_parallel_section_with"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.ast.ast_transformers.graph_parallel_transformer.GraphParallelTransformer.build_parallel_section_with" title="Link to this definition">#</a></dt>
+<dd><p>Handles a <code class="docutils literal notranslate"><span class="pre">with</span> <span class="pre">qd.graph_parallel():</span></code> section of a <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel_context()</span></code> region.</p>
+<p>The section body grammar is validated up-front by <code class="docutils literal notranslate"><span class="pre">validate_region</span></code> (called from
+<code class="docutils literal notranslate"><span class="pre">build_graph_parallel_context_with</span></code>); here we only re-check the use-site (a section must be inside a region –
+a case <code class="docutils literal notranslate"><span class="pre">validate_region</span></code> never sees) and then reuse the stream-parallel tagging: begin_stream_parallel()
+assigns this <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel</span></code> section a fresh <code class="docutils literal notranslate"><span class="pre">stream_parallel_group_id</span></code> that every for-loop in the body
+inherits, so the offloaded tasks carry the <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel</span></code> section id all the way to the graph builder.</p>
+</dd></dl>
+
 </dd></dl>
 
 </section>
@@ -422,20 +452,20 @@ member-ndarray cases, since both flatten to a real ndarray kernel argument carry
                   
 <div class="prev-next-area">
     <a class="left-prev"
-       href="../graph_parallel_transformer/index.html"
+       href="../function_def_transformer/index.html"
        title="previous page">
       <i class="fa-solid fa-angle-left"></i>
       <div class="prev-next-info">
         <p class="prev-next-subtitle">previous</p>
-        <p class="prev-next-title">quadrants.lang.ast.ast_transformers.graph_parallel_transformer</p>
+        <p class="prev-next-title">quadrants.lang.ast.ast_transformers.function_def_transformer</p>
       </div>
     </a>
     <a class="right-next"
-       href="../../checkers/index.html"
+       href="../ndarray_arg_resolver/index.html"
        title="next page">
       <div class="prev-next-info">
         <p class="prev-next-subtitle">next</p>
-        <p class="prev-next-title">quadrants.lang.ast.checkers</p>
+        <p class="prev-next-title">quadrants.lang.ast.ast_transformers.ndarray_arg_resolver</p>
       </div>
       <i class="fa-solid fa-angle-right"></i>
     </a>
@@ -458,9 +488,16 @@ member-ndarray cases, since both flatten to a real ndarray kernel argument carry
   </div>
   <nav id="pst-page-toc-nav" class="page-toc" aria-labelledby="pst-page-navigation-heading-2">
     <ul class="pst-show_toc_level nav section-nav flex-column">
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#functions">Functions</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#classes">Classes</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#module-contents">Module Contents</a><ul class="nav section-nav flex-column">
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.ast.ast_transformers.ndarray_arg_resolver.resolve_ndarray_kernel_arg_id"><code class="docutils literal notranslate"><span class="pre">resolve_ndarray_kernel_arg_id()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.ast.ast_transformers.graph_parallel_transformer.GraphParallelTransformer"><code class="docutils literal notranslate"><span class="pre">GraphParallelTransformer</span></code></a><ul class="nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.ast.ast_transformers.graph_parallel_transformer.GraphParallelTransformer.is_graph_parallel_context_call"><code class="docutils literal notranslate"><span class="pre">GraphParallelTransformer.is_graph_parallel_context_call()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.ast.ast_transformers.graph_parallel_transformer.GraphParallelTransformer.is_parallel_section_call"><code class="docutils literal notranslate"><span class="pre">GraphParallelTransformer.is_parallel_section_call()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.ast.ast_transformers.graph_parallel_transformer.GraphParallelTransformer.build_graph_parallel_context_with"><code class="docutils literal notranslate"><span class="pre">GraphParallelTransformer.build_graph_parallel_context_with()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.ast.ast_transformers.graph_parallel_transformer.GraphParallelTransformer.validate_region"><code class="docutils literal notranslate"><span class="pre">GraphParallelTransformer.validate_region()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.ast.ast_transformers.graph_parallel_transformer.GraphParallelTransformer.build_parallel_section_with"><code class="docutils literal notranslate"><span class="pre">GraphParallelTransformer.build_parallel_section_with()</span></code></a></li>
+</ul>
+</li>
 </ul>
 </li>
 </ul>
@@ -469,7 +506,7 @@ member-ndarray cases, since both flatten to a real ndarray kernel argument carry
   <div class="sidebar-secondary-item">
 
   <div class="tocsection sourcelink">
-    <a href="../../../../../../_sources/autoapi/quadrants/lang/ast/ast_transformers/ndarray_arg_resolver/index.rst.txt">
+    <a href="../../../../../../_sources/autoapi/quadrants/lang/ast/ast_transformers/graph_parallel_transformer/index.rst.txt">
       <i class="fa-solid fa-file-lines"></i> Show Source
     </a>
   </div>
