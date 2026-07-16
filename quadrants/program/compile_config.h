@@ -25,7 +25,10 @@ struct CompileConfig {
   bool lower_access;
   bool simplify_after_lower_access;
   bool move_loop_invariant_outside_if;
-  bool cache_loop_invariant_global_vars{true};
+  // ISOLATING EXPERIMENT (cse/licm-cache-off-only): origin/main + ONLY this flag flipped to false, with NO per-task
+  // CSE change. Used to determine whether the duck_in_box regression on cse/per-task-parallel comes from disabling
+  // this pass (this branch will reproduce it) or from per-task CSE itself (this branch will NOT reproduce it).
+  bool cache_loop_invariant_global_vars{false};
   bool demote_dense_struct_fors;
   bool advanced_optimization;
   bool constant_folding;
