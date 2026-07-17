@@ -77,7 +77,7 @@ solve(x, counter)
 # x is now incremented 10 times; counter is 0
 ```
 
-The argument to `qd.graph_do_while()` must be the name of a scalar `qd.i32` ndarray parameter. The loop body repeats while this value is non-zero.
+The argument to `qd.graph_do_while()` must reference a scalar `qd.i32` ndarray that the kernel can access - a bare kernel parameter (`qd.graph_do_while(counter)`), a [`@qd.data_oriented`](compound_types.md#qddata_oriented) member ndarray (`qd.graph_do_while(self.counter)`), or a [`@dataclasses.dataclass`](compound_types.md#dataclassesdataclass) parameter member (`qd.graph_do_while(params.counter)`). The loop body repeats while this value is non-zero.
 
 - On [CUDA SM 9.0+](https://developer.nvidia.com/cuda/gpus), this uses [CUDA conditional while nodes](https://developer.nvidia.com/blog/dynamic-control-flow-in-cuda-graphs-with-conditional-nodes/) - the entire iteration runs on the GPU with no host involvement.
 - On older CUDA GPUs, AMDGPU, and non-GPU backends, it falls back to a host-side do-while loop (see the [backend support table](#backend-support)).
@@ -247,7 +247,7 @@ while status.yielded:
 
 - Must be used inside `@qd.kernel(graph=True, checkpoints=True)`. Without the flag, `qd.checkpoint(...)` raises `QuadrantsSyntaxError` at compile time.
 - `cp_id` must be an int literal or an `IntEnum` value, and must be unique across the kernel.
-- `yield_on=` must be a kernel parameter that is a 0-d `qd.types.ndarray(qd.i32, ndim=0)`; expressions are not supported.
+- `yield_on=` must reference a 0-d `qd.types.ndarray(qd.i32, ndim=0)` - a bare kernel parameter (`yield_on=flag`), a [`@qd.data_oriented`](compound_types.md#qddata_oriented) member ndarray (`yield_on=self.flag`), or a [`@dataclasses.dataclass`](compound_types.md#dataclassesdataclass) parameter member (`yield_on=params.flag`). Arbitrary expressions are not supported.
 - Checkpoints cannot be nested inside other checkpoints. Checkpoints inside a `qd.graph_do_while` body are fine.
 - The body of a `with qd.checkpoint(...)` block cannot contain bare top-level statements (assignments, augmented assignments, or bare call/expression statements). Every top-level statement must be inside a `for`-loop (or other control-flow construct). A docstring as the first statement is allowed. Bare statements raise `QuadrantsSyntaxError` at compile time.
 
@@ -261,6 +261,71 @@ while status.yielded:
 
 The restriction is by design: each top-level statement inside a checkpoint becomes its own GPU task / graph node, so silently wrapping bare statements would hide a sequence of N field writes ballooning into N kernel launches.
 
+## `qd.graph_parallel` sections with `qd.graph_parallel_context` *(experimental)*
+
+A `with qd.graph_parallel_context():` region lets you declare independent stages so the graph runs them concurrently.
+
+`qd.graph_parallel_context` is honored by the graph builder so it composes with `graph=True` and `graph_do_while`.
+
+```python
+@qd.kernel(graph=True)
+def step(...):
+    while qd.graph_do_while(ncond):
+        assemble_shared(...)                 # serial: feeds both `qd.graph_parallel` sections
+
+        with qd.graph_parallel_context():    # fork: `qd.graph_parallel` sections run concurrently
+            with qd.graph_parallel():            # point-triangle contacts
+                pt_assemble(...)
+                pt_hessian(...)
+            with qd.graph_parallel():            # edge-edge contacts (independent of pt)
+                ee_assemble(...)
+                ee_hessian(...)
+        # join: everything below waits for BOTH `qd.graph_parallel` sections to finish
+        merge_hessians(...)
+        precondition(...)
+```
+
+### Semantics
+
+- **Fork / join.** Every `qd.graph_parallel` section in the region forks from the work that precedes the region. All `qd.graph_parallel` sections must finish before any work *after* the region begins (the join).
+- **`qd.graph_parallel` sections are independent - you guarantee it.** Calls *within* a `qd.graph_parallel` section keep their program order, but calls in *different* `qd.graph_parallel` sections have no ordering. The `qd.graph_parallel` sections must be data-race free with respect to one another: no `qd.graph_parallel` section may read what another writes, and no two `qd.graph_parallel` sections may write the same memory. Quadrants does not check this; getting it wrong gives nondeterministic results.
+
+### Generating `qd.graph_parallel` sections from a compile-time sequence
+
+`qd.graph_parallel` sections do not have to be written out one by one. A `for ... in qd.static(...)` loop is unrolled at compile time, so each iteration that contains a `with qd.graph_parallel():` becomes its own section - handy for forking one section per element of a static list (e.g. per contact type):
+
+(Note: See [compound_types.md](compound_types.md) for qd.data_oriented description)
+```python
+@qd.data_oriented
+class Solver:
+    def __init__(self):
+        self.funcs = [self._assemble_pt, self._assemble_ee]   # static list of @qd.func members
+
+    @qd.kernel(graph=True)
+    def step(self):
+        with qd.graph_parallel_context():
+            for i in qd.static(range(len(self.funcs))):        # unrolls to one section per func
+                with qd.graph_parallel():
+                    self.funcs[i]()
+```
+
+The loop **must** be a `qd.static(...)` loop (its trip count is known at compile time). A plain runtime `for i in range(n):` is rejected - a runtime loop cannot be unrolled into independent sections.
+
+### Restrictions (enforced at kernel compile time)
+
+- `qd.graph_parallel_context` may contain only `with qd.graph_parallel():` blocks, optionally wrapped in `if qd.static(...)` (so an optional `qd.graph_parallel` section can be compiled in or out - e.g. enabling edge-edge contacts only when a feature flag is set) or `for ... in qd.static(...)` loops (generate one `qd.graph_parallel` section per element of a compile-time sequence).
+- `qd.graph_parallel()` may appear only directly inside a `qd.graph_parallel_context()`.
+- `qd.graph_parallel_context` cannot be nested, and a `qd.graph_parallel` section body must be straight-line task work - no `qd.graph_do_while`, `qd.checkpoint`, or nested `qd.graph_parallel_context` inside a `qd.graph_parallel` section (a `qd.graph_parallel_context` may, however, sit inside a `qd.graph_do_while` body, as shown above).
+
+### Backend behavior
+
+| backend | scheduling |
+| --- | --- |
+| CUDA | `qd.graph_parallel` sections run **concurrently** |
+| AMDGPU / CPU / Vulkan / Metal | `qd.graph_parallel` sections run **serially** |
+
+Because `qd.graph_parallel` sections are independent by construction, running them serially produces identical results - only the scheduling differs.
+
 ## Backend support
 
 `graph=True` and `graph_do_while` run on every backend. They are *hardware accelerated* on CUDA (via [CUDA graphs](https://docs.nvidia.com/cuda/cuda-programming-guide/04-special-topics/cuda-graphs.html)) and AMDGPU (via [HIP graphs](https://rocm.docs.amd.com/projects/HIP/en/latest/how-to/hip_runtime_api/hipgraph.html)); `graph_do_while` additionally requires [CUDA SM 9.0+](https://developer.nvidia.com/cuda/gpus) for its hardware-accelerated path. On other backends, `graph=True` is silently ignored and the kernel runs via the normal launch path, and `graph_do_while` falls back to a host-side do-while loop. `qd.checkpoint` gating runs entirely on the device on every GPU backend.
@@ -270,6 +335,7 @@ The restriction is by design: each top-level statement inside a checkpoint becom
 | `graph=True` | hardware accelerated | hardware accelerated | hardware accelerated | runs (no acceleration) | runs (no acceleration) | runs (no acceleration) |
 | `qd.graph_do_while` | hardware accelerated | host fallback | host fallback | host fallback | host fallback | host fallback |
 | `qd.checkpoint` | GPU-side | GPU-side | GPU-side | GPU-side | GPU-side | host-side |
+| `qd.graph_parallel_context` / `qd.graph_parallel` (sections) | concurrent | concurrent | runs serially | runs serially | runs serially | runs serially |
 
 AMDGPU `graph_do_while` falls back to the host-side loop because HIP does not currently expose conditional / while graph nodes (as of [ROCm](https://www.amd.com/en/products/software/rocm.html) 7.2).
 

@@ -109,6 +109,7 @@ class Offloader {
         const GraphRegionTag tag = bucket_has_side_effect ? bucket_tag : fallback_tag;
         pending_serial_statements->graph_do_while_level_id = tag.graph_do_while_level_id;
         pending_serial_statements->stream_parallel_group_id = tag.stream_parallel_group_id;
+        pending_serial_statements->graph_parallel_region_id = tag.graph_parallel_region_id;
         pending_serial_statements->checkpoint_id = tag.checkpoint_id;
         root_block->insert(std::move(pending_serial_statements));
         pending_serial_statements = Stmt::make_typed<OffloadedStmt>(OffloadedStmt::TaskType::serial, arch, kernel);
@@ -156,7 +157,9 @@ class Offloader {
       auto &stmt = root_statements[i];
       // Note that stmt->parent is root_block, which doesn't contain stmt now.
       if (auto s = stmt->cast<RangeForStmt>(); s && !s->strictly_serialized) {
-        assemble_serial_statements(GraphRegionTag{s->graph_do_while_level_id, s->stream_parallel_group_id});
+        GraphRegionTag pre_for_tag{s->graph_do_while_level_id, s->stream_parallel_group_id};
+        pre_for_tag.graph_parallel_region_id = s->graph_parallel_region_id;
+        assemble_serial_statements(pre_for_tag);
         auto offloaded = Stmt::make_typed<OffloadedStmt>(OffloadedStmt::TaskType::range_for, arch, kernel);
         // offloaded->body is an empty block now.
         offloaded->grid_dim = config.saturating_grid_dim;
@@ -192,12 +195,15 @@ class Offloader {
         }
         offloaded->range_hint = s->range_hint;
         offloaded->stream_parallel_group_id = s->stream_parallel_group_id;
+        offloaded->graph_parallel_region_id = s->graph_parallel_region_id;
         offloaded->graph_do_while_level_id = s->graph_do_while_level_id;
         offloaded->checkpoint_id = s->checkpoint_id;
         offloaded->loop_name = s->loop_name;
         root_block->insert(std::move(offloaded));
       } else if (auto st = stmt->cast<StructForStmt>()) {
-        assemble_serial_statements(GraphRegionTag{st->graph_do_while_level_id, st->stream_parallel_group_id});
+        GraphRegionTag pre_for_tag{st->graph_do_while_level_id, st->stream_parallel_group_id};
+        pre_for_tag.graph_parallel_region_id = st->graph_parallel_region_id;
+        assemble_serial_statements(pre_for_tag);
         emit_struct_for(st, root_block, config, st->mem_access_opt);
       } else if (auto st = stmt->cast<MeshForStmt>()) {
         assemble_serial_statements(GraphRegionTag{st->graph_do_while_level_id, /*group=*/0});
@@ -309,6 +315,7 @@ class Offloader {
     offloaded_struct_for->num_cpu_threads = std::min(for_stmt->num_cpu_threads, config.cpu_max_num_threads);
     offloaded_struct_for->mem_access_opt = mem_access_opt;
     offloaded_struct_for->stream_parallel_group_id = for_stmt->stream_parallel_group_id;
+    offloaded_struct_for->graph_parallel_region_id = for_stmt->graph_parallel_region_id;
     offloaded_struct_for->graph_do_while_level_id = for_stmt->graph_do_while_level_id;
     offloaded_struct_for->checkpoint_id = for_stmt->checkpoint_id;
     offloaded_struct_for->loop_name = for_stmt->loop_name;
