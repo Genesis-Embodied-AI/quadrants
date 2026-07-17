@@ -1261,6 +1261,17 @@ void GfxRuntime::init_nonroot_buffers() {
   cmdlist->buffer_fill(listgen_buffer_->get_ptr(0), kBufferSizeEntireSize,
                        /*data=*/0);
   stream->submit_synced(cmdlist.get());
+
+  // The RNG shader reads its seed from u32 element 1024 of this buffer.
+  // Metal can't buffer_fill nonzero values, so upload instead.
+  if (program_impl_ != nullptr && program_impl_->config != nullptr) {
+    const uint32_t rand_seed_state = static_cast<uint32_t>(program_impl_->config->random_seed) * 1048391u;
+    DevicePtr rand_state_ptr = global_tmps_buffer_->get_ptr(sizeof(uint32_t) * 1024);
+    const void *rand_seed_data = &rand_seed_state;
+    size_t rand_seed_size = sizeof(rand_seed_state);
+    RhiResult upload_res = device_->upload_data(&rand_state_ptr, &rand_seed_data, &rand_seed_size);
+    QD_ASSERT_INFO(upload_res == RhiResult::success, "failed to upload random seed to gtmp buffer");
+  }
 }
 
 void GfxRuntime::add_root_buffer(size_t root_buffer_size) {

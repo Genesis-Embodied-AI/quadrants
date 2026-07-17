@@ -80,7 +80,7 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
     else if (op == UnaryOpType::sgn) {
       if (input_quadrants_type->is_primitive(PrimitiveTypeID::i32)) {
         auto ashr = builder->CreateAShr(input, 31);
-        auto sub = builder->CreateSub(0, input);
+        auto sub = builder->CreateSub(tlctx->get_constant(0), input);
         auto lshr = builder->CreateLShr(sub, 31);
         llvm_val[stmt] = builder->CreateOr(ashr, lshr);
       } else if (input_quadrants_type->is_primitive(PrimitiveTypeID::f32)) {
@@ -417,6 +417,7 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
       }
       current_task->block_dim = stmt->block_dim;
       current_task->stream_parallel_group_id = stmt->stream_parallel_group_id;
+      current_task->graph_parallel_region_id = stmt->graph_parallel_region_id;
       current_task->checkpoint_id = stmt->checkpoint_id;
       QD_ASSERT(current_task->grid_dim != 0);
       QD_ASSERT(current_task->block_dim != 0);

@@ -320,6 +320,8 @@ void export_lang(nb::module_ &m) {
       .def("reset_snode_access_flag", &ASTBuilder::reset_snode_access_flag)
       .def("begin_stream_parallel", &ASTBuilder::begin_stream_parallel)
       .def("end_stream_parallel", &ASTBuilder::end_stream_parallel)
+      .def("begin_graph_parallel_context", &ASTBuilder::begin_graph_parallel_context)
+      .def("end_graph_parallel_context", &ASTBuilder::end_graph_parallel_context)
       .def("set_graph_do_while_level_id", &ASTBuilder::set_graph_do_while_level_id)
       .def("begin_checkpoint", &ASTBuilder::begin_checkpoint)
       .def("end_checkpoint", &ASTBuilder::end_checkpoint);
@@ -860,6 +862,15 @@ void export_lang(nb::module_ &m) {
       QD_ASSERT(false);
       return 0;
     }
+  });
+
+  // The (post-template) C++ arg-id vector of an external-tensor (ndarray) expression. For a top-level ndarray parameter
+  // or a flattened `@qd.data_oriented` member ndarray this is a single-element vector whose `[0]` entry is the flat
+  // arg-id the runtime matches against (e.g. for `qd.checkpoint(yield_on=...)` and `qd.graph_do_while(...)`
+  // AST-build-time resolution of bare-parameter vs `self.member` ndarray arguments).
+  m.def("get_external_tensor_arg_id", [](const Expr &expr) {
+    QD_ASSERT(expr.is<ExternalTensorExpression>());
+    return expr.cast<ExternalTensorExpression>()->arg_id;
   });
 
   m.def("get_external_tensor_shape_along_axis",
