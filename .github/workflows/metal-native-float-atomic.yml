@@ -60,20 +60,35 @@ jobs:
         run: |
           sysctl -n machdep.cpu.brand_string || true
           system_profiler SPDisplaysDataType 2>/dev/null | head -30 || true
-      - name: Run FEM99 headless + AD reduce (Metal)
+      - name: Step A - small AD scalar reduce only
         run: |
-          if [ "${{ matrix.arm }}" = "native" ]; then
-            export QD_METAL_NATIVE_FLOAT_ATOMICS=1
-          else
-            unset QD_METAL_NATIVE_FLOAT_ATOMICS
-          fi
+          if [ "${{ matrix.arm }}" = "native" ]; then export QD_METAL_NATIVE_FLOAT_ATOMICS=1; else unset QD_METAL_NATIVE_FLOAT_ATOMICS; fi
           export QD_WANTED_ARCHS=metal
-          echo "ARM=${{ matrix.arm }} QD_METAL_NATIVE_FLOAT_ATOMICS=${QD_METAL_NATIVE_FLOAT_ATOMICS:-<unset>}"
-          python -c "import os, quadrants as qd; qd.init(arch=qd.metal); print('init_ok', os.environ.get('QD_METAL_NATIVE_FLOAT_ATOMICS'))"
+          echo "ARM=${{ matrix.arm }} step=A env=${QD_METAL_NATIVE_FLOAT_ATOMICS:-<unset>}"
           set +e
-          python -m pytest -v --tb=short \
-            tests/python/test_fem99_headless.py \
-            tests/python/test_ad_atomic.py
+          python -m pytest -v --tb=long tests/python/test_ad_atomic.py::test_ad_reduce
           ec=$?
-          echo "########## RESULT arm=${{ matrix.arm }} exit=$ec ##########"
+          echo "########## RESULT arm=${{ matrix.arm }} step=A_ad_reduce exit=$ec ##########"
+          exit $ec
+      - name: Step B - closed-form AD reduce (fem99 helper)
+        if: success() || failure()
+        run: |
+          if [ "${{ matrix.arm }}" = "native" ]; then export QD_METAL_NATIVE_FLOAT_ATOMICS=1; else unset QD_METAL_NATIVE_FLOAT_ATOMICS; fi
+          export QD_WANTED_ARCHS=metal
+          set +e
+          python -m pytest -v --tb=long tests/python/test_fem99_headless.py::test_ad_scalar_atomic_reduce_matches_closed_form
+          ec=$?
+          echo "########## RESULT arm=${{ matrix.arm }} step=B_ad_closed exit=$ec ##########"
+          exit $ec
+      - name: Step C - full FEM99 headless (with MSL dump on native)
+        if: success() || failure()
+        run: |
+          if [ "${{ matrix.arm }}" = "native" ]; then export QD_METAL_NATIVE_FLOAT_ATOMICS=1; export QD_DUMP_MSL=1; else unset QD_METAL_NATIVE_FLOAT_ATOMICS; fi
+          export QD_WANTED_ARCHS=metal
+          set +e
+          python -m pytest -v --tb=long tests/python/test_fem99_headless.py::test_fem99_headless_stays_finite 2>&1 | tee fem99.log
+          ec=${PIPESTATUS[0]}
+          echo "########## RESULT arm=${{ matrix.arm }} step=C_fem99 exit=$ec ##########"
+          # Keep a slice of any dumped MSL / abort context in the log
+          rg -n "Abort|FATAL|Compilation|atomic_fetch|OpAtomic|=== MSL|FEM99_" fem99.log | head -80 || true
           exit $ec
