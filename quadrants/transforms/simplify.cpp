@@ -574,16 +574,11 @@ void full_simplify(IRNode *root, const CompileConfig &config, const FullSimplify
         modified = true;
       if (should_dump)
         dump_step("11_per_task_cse", iteration);
-      // Cheap whole-kernel merge of same-address pointers + integer addressing arithmetic, run in the fixpoint like
-      // main's whole_kernel_cse. Pre-offload (where per_task_cse no-ops because there are no tasks yet) this dedups a
-      // global's separate read/write pointers into one BEFORE the first flag_access can stamp the read-only copy
-      // activate=false -- the split that otherwise stops cache_loop_invariant_global_vars from caching conditional
-      // in-if stores (the -88% solver break-flag bug + the lost duck_in_box optimization). The expensive float
-      // compute dedup stays in per_task_cse (post-offload, per task).
-      if (config.opt_level > 0 && merge_global_ptrs(root))
-        modified = true;
-      if (should_dump)
-        dump_step("11b_merge_global_ptrs", iteration);
+      // NOTE: the pre-offload same-address pointer merge (merge_global_ptrs) used to run here, in the fixpoint. It only
+      // needs to happen ONCE before the first flag_access (compile_to_offloads), to unify a global's read/write
+      // pointers before flag_access stamps the read-only copy activate=false. Running a whole-kernel pointer CSE in
+      // every fixpoint iteration of every pre-offload phase was a +12-22s compile regression (measured on
+      // franka/duck/box_pyramid) for zero extra benefit, so it is now a single call in compile_to_offloads.
       // Don't do this time-consuming optimization pass again if the IR is
       // not modified.
       if (config.opt_level > 0 && first_iteration && config.cfg_optimization &&

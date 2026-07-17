@@ -354,11 +354,10 @@ bool merge_global_ptrs(IRNode *root) {
   if (disabled) {
     return false;
   }
-  // Only needed PRE-offload: this exists solely to unify a global's read/write pointers before the first
-  // flag_access splits them (activate=false read vs activate=true write). Once the kernel is offloaded, per_task_cse
-  // merges pointers within each task, so running here is redundant work -- and doing it in every post-offload
-  // full_simplify fixpoint iteration (per task, in the codegen workers) was a ~3.5% compile regression. Skip as soon
-  // as any top-level OffloadedStmt is present (post-offload monolith or a single-task worker block).
+  // Defensive: this is intended to run exactly once PRE-offload (single call in compile_to_offloads, before the first
+  // flag_access). It must never run post-offload -- per_task_cse handles pointers within each task there, and a
+  // whole-kernel pointer CSE over an offloaded kernel is both pointless and expensive. Skip if any top-level
+  // OffloadedStmt is present.
   if (auto *block = root->cast<Block>()) {
     for (auto &stmt : block->statements) {
       if (stmt->is<OffloadedStmt>()) {
