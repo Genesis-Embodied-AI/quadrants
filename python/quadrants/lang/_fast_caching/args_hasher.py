@@ -188,7 +188,7 @@ def stringify_obj_type(
         except AttributeError:
             _dict = obj.__dict__
         # A normal @qd.data_oriented bakes primitive members into the kernel (value in the cache key); one declared
-        # with template_primitives=False lifts them to runtime args (type only — value must NOT enter the key, or it
+        # with template_primitives=False lifts them to runtime args (type only - value must NOT enter the key, or it
         # would recompile on every value change, defeating the feature). Decide per object, since the flag is per class.
         child_meta = _NON_TEMPLATE_CHILD_META if wants_runtime_primitives(obj) else ArgMetadata(Template, "")
         for k, v in _dict.items():

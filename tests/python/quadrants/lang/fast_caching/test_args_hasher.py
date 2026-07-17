@@ -111,7 +111,7 @@ def test_args_hasher_data_oriented() -> None:
 def test_args_hasher_data_oriented_template_primitives_value_not_keyed() -> None:
     """A normal @qd.data_oriented bakes primitive members into the kernel, so the fastcache key includes their value.
     @qd.data_oriented(template_primitives=False) lifts them to runtime scalar args instead, so the key must depend on
-    the primitive's *type* only — otherwise fastcache would recompile on every value change, defeating the feature."""
+    the primitive's *type* only - otherwise fastcache would recompile on every value change, defeating the feature."""
 
     @qd.data_oriented(template_primitives=False)
     class Runtime:

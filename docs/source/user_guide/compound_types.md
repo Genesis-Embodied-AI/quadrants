@@ -214,7 +214,7 @@ sim.step()        # the new value of n takes effect immediately
 
 Notes and restrictions:
 
-- **dtype** follows the runtime defaults — an `int` / `bool` member becomes the default integer type
+- **dtype** follows the runtime defaults - an `int` / `bool` member becomes the default integer type
   (`qd.i32` unless changed via `default_ip`) and a `float` member becomes the default float type (`qd.f32` unless
   changed via `default_fp`). A member whose value falls outside the default integer range will overflow where a baked
   literal would not; if you need exact wide-integer constants, keep the default (baked) behaviour.
@@ -258,7 +258,7 @@ state.step()
 
 ### Under the hood
 
-Like `dataclasses.dataclass`, a `@qd.data_oriented` object is Python-only — the compiler flattens it into individual kernel parameters and the object itself has no kernel-side representation. Unlike `dataclasses.dataclass` it needs no member annotations: the compiler reads the live instance's attributes directly. Primitive members are baked into the kernel as constants by default, so each distinct primitive value compiles a new specialized kernel — unless the class is decorated `@qd.data_oriented(template_primitives=False)`, in which case the accessed primitives become runtime kernel arguments (see [Runtime primitives](#runtime-primitives-template_primitivesfalse) above).
+Like `dataclasses.dataclass`, a `@qd.data_oriented` object is Python-only - the compiler flattens it into individual kernel parameters and the object itself has no kernel-side representation. Unlike `dataclasses.dataclass` it needs no member annotations: the compiler reads the live instance's attributes directly. Primitive members are baked into the kernel as constants by default, so each distinct primitive value compiles a new specialized kernel - unless the class is decorated `@qd.data_oriented(template_primitives=False)`, in which case the accessed primitives become runtime kernel arguments (see [Runtime primitives](#runtime-primitives-template_primitivesfalse) above).
 
 ## qd.dataclass / qd.types.struct
 
