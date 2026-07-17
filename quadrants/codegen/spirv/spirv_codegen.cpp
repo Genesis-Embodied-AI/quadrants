@@ -861,7 +861,13 @@ void TaskCodegen::visit(ExternalTensorShapeAlongAxisStmt *stmt) {
 void TaskCodegen::visit(ExternalPtrStmt *stmt) {
   // Used mostly for transferring data between host (e.g. numpy array) and
   // device.
-  spirv::Value linear_offset = ir_->int_immediate_number(ir_->i32_type(), 0);
+  // Flatten the multi-dimensional index into a linear (byte) offset. When the device advertises 64-bit integers we
+  // accumulate in i64 so that ndarrays whose element count exceeds INT32_MAX do not wrap and silently address the
+  // wrong element (matches the int64 fix already applied on the LLVM backends). Devices without shaderInt64 keep the
+  // historical i32 arithmetic; the Python/C++ launch path emits an overflow warning for those.
+  const bool index_use_i64 = caps_->get(DeviceCapability::spirv_has_int64);
+  const spirv::SType index_type = index_use_i64 ? ir_->i64_type() : ir_->i32_type();
+  spirv::Value linear_offset = ir_->int_immediate_number(index_type, 0);
   const auto *argload = stmt->base_ptr->as<ArgLoadStmt>();
   const auto arg_id = argload->arg_id;
   {
@@ -885,17 +891,18 @@ void TaskCodegen::visit(ExternalPtrStmt *stmt) {
       spirv::Value size_var;
       // Use immediate numbers to flatten index for element shapes.
       if (i >= element_shape_index_offset && i < element_shape_index_offset + element_shape.size()) {
-        size_var = ir_->uint_immediate_number(ir_->i32_type(), element_shape[i - element_shape_index_offset]);
+        size_var = ir_->uint_immediate_number(index_type, element_shape[i - element_shape_index_offset]);
       } else {
-        size_var = ir_->query_value(size_var_names[size_var_names_idx++]);
+        // Shapes are stored as i32 in the args buffer; widen to the accumulation type when using i64.
+        size_var = ir_->cast(index_type, ir_->query_value(size_var_names[size_var_names_idx++]));
       }
-      spirv::Value indices = ir_->query_value(stmt->indices[i]->raw_name());
+      spirv::Value indices = ir_->cast(index_type, ir_->query_value(stmt->indices[i]->raw_name()));
       linear_offset = ir_->mul(linear_offset, size_var);
       linear_offset = ir_->add(linear_offset, indices);
     }
     size_t type_size = ir_->get_primitive_type_size(stmt->ret_type.ptr_removed());
-    linear_offset = ir_->make_value(spv::OpShiftLeftLogical, ir_->i32_type(), linear_offset,
-                                    ir_->int_immediate_number(ir_->i32_type(), log2int(type_size)));
+    linear_offset = ir_->make_value(spv::OpShiftLeftLogical, index_type, linear_offset,
+                                    ir_->int_immediate_number(index_type, log2int(type_size)));
     if (caps_->get(DeviceCapability::spirv_has_no_integer_wrap_decoration)) {
       ir_->decorate(spv::OpDecorate, linear_offset, spv::DecorationNoSignedWrap);
     }
@@ -908,7 +915,8 @@ void TaskCodegen::visit(ExternalPtrStmt *stmt) {
     spirv::Value addr_ptr = ir_->make_access_chain(ir_->get_pointer_type(ir_->u64_type(), spv::StorageClassUniform),
                                                    get_buffer_value(BufferType::Args, PrimitiveType::i32), indices);
     spirv::Value base_addr = ir_->load_variable(addr_ptr, ir_->u64_type());
-    spirv::Value addr = ir_->add(base_addr, ir_->make_value(spv::OpSConvert, ir_->u64_type(), linear_offset));
+    // cast() sign-extends an i32 offset to u64, or bitcasts an already-64-bit i64 offset to u64.
+    spirv::Value addr = ir_->add(base_addr, ir_->cast(ir_->u64_type(), linear_offset));
     ir_->register_value(stmt->raw_name(), addr);
 
     // Save decomposed base pointer and element index so at_buffer() can
@@ -917,8 +925,10 @@ void TaskCodegen::visit(ExternalPtrStmt *stmt) {
     // per-element reinterpret_cast from ulong arithmetic is miscompiled
     // when the stored value is loop-invariant.
     size_t type_size = ir_->get_primitive_type_size(stmt->ret_type.ptr_removed());
-    spirv::Value elem_index = ir_->make_value(spv::OpShiftRightLogical, ir_->i32_type(), linear_offset,
-                                              ir_->int_immediate_number(ir_->i32_type(), log2int(type_size)));
+    // Keep the element index in the same width as the offset accumulation so OpPtrAccessChain indexes the correct
+    // element for >INT32_MAX-element ndarrays on int64-capable devices.
+    spirv::Value elem_index = ir_->make_value(spv::OpShiftRightLogical, index_type, linear_offset,
+                                              ir_->int_immediate_number(index_type, log2int(type_size)));
     physical_ptr_components_[stmt] = {base_addr, elem_index};
   } else {
     ir_->register_value(stmt->raw_name(), linear_offset);

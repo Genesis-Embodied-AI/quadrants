@@ -47,17 +47,18 @@ Ndarray::Ndarray(Program *prog,
   } else if (layout == ExternalArrayLayout::kSOA) {
     total_shape_.insert(total_shape_.begin(), element_shape.begin(), element_shape.end());
   }
-  // On non-LLVM backends (SPIR-V: Vulkan/Metal/...) the ndarray linear offset in
-  // TaskCodegen::visit(ExternalPtrStmt) is still flattened in int32, so an owned ndarray whose total
-  // element count exceeds int32 will overflow. The LLVM backends (CPU/CUDA/AMDGPU) accumulate the offset
-  // in int64 and are safe, so the warning is scoped to the non-LLVM backends.
-  if (!arch_uses_llvm(prog->compile_config().arch)) {
+  // The ndarray linear offset in TaskCodegen::visit(ExternalPtrStmt) is flattened in int64 on the LLVM backends
+  // (CPU/CUDA/AMDGPU) and, on the SPIR-V backends (Vulkan/Metal/...), whenever the device advertises 64-bit
+  // integers (DeviceCapability::spirv_has_int64). Only a SPIR-V device *without* shaderInt64 still flattens in
+  // int32, so an owned ndarray whose total element count exceeds int32 would overflow there. Scope the warning to
+  // exactly that case.
+  if (!arch_uses_llvm(prog->compile_config().arch) && !prog->get_device_caps().get(DeviceCapability::spirv_has_int64)) {
     auto total_num_scalar = std::accumulate(std::begin(total_shape_), std::end(total_shape_), 1LL, std::multiplies<>());
     if (total_num_scalar > std::numeric_limits<int>::max()) {
       ErrorEmitter(QuadrantsIndexWarning(), &dbg_info,
-                   "Ndarray total element count exceeds the int32 boundary; on this backend the linear index "
-                   "is computed in int32 and may overflow. int64 linear indexing is currently supported only "
-                   "on the LLVM backends (CPU/CUDA/AMDGPU).");
+                   "Ndarray total element count exceeds the int32 boundary; this device lacks 64-bit integer "
+                   "support (shaderInt64), so the linear index is computed in int32 and may overflow. int64 linear "
+                   "indexing requires the LLVM backends (CPU/CUDA/AMDGPU) or a SPIR-V device with shaderInt64.");
     }
   }
   ndarray_alloc_ = prog->allocate_memory_on_device(nelement_ * element_size_, prog->result_buffer);

@@ -83,10 +83,11 @@ _ARG_EMPTY = inspect.Parameter.empty
 _arch_cuda = _qd_core.Arch.cuda
 _is_cpython = sys.implementation.name == "cpython"
 
-# The ndarray ExternalPtrStmt linear index is accumulated in int64 only in the LLVM codegen backends
-# (see TaskCodeGenLLVM::visit(ExternalPtrStmt)). The SPIR-V backends (Vulkan/Metal/...) still flatten the
-# offset in int32, so an ndarray whose total element count exceeds int32 can silently overflow there. We
-# keep a product-of-dimensions overflow warning for those backends below.
+# The ndarray ExternalPtrStmt linear index is accumulated in int64 in the LLVM codegen backends
+# (see TaskCodeGenLLVM::visit(ExternalPtrStmt)) and, on the SPIR-V backends (Vulkan/Metal/...), whenever the
+# device advertises 64-bit integers (DeviceCapability.spirv_has_int64 -> TaskCodegen::visit widens to i64).
+# Only a SPIR-V device without shaderInt64 still flattens the offset in int32 and can overflow, so the
+# product-of-dimensions warning below is gated on both the arch and the device capability.
 _ARCHS_WITH_I64_LINEAR_INDEX = frozenset(
     {
         _qd_core.Arch.x64,
@@ -751,14 +752,16 @@ class FuncBase:
             elif (
                 impl.current_cfg().arch not in _ARCHS_WITH_I64_LINEAR_INDEX
                 and math.prod(v.shape) > np.iinfo(np.int32).max
+                and not impl.get_runtime().prog.get_device_caps().get(_qd_core.DeviceCapability.spirv_has_int64)
             ):
-                # No single dimension overflows int32, but the flattened element count does. Only the LLVM
-                # backends accumulate the linear index in int64; on the SPIR-V backends this offset is still
-                # computed in int32 and will overflow, so warn instead of silently reading the wrong element.
+                # No single dimension overflows int32, but the flattened element count does. The LLVM backends
+                # accumulate the linear index in int64, and the SPIR-V backends do too when the device advertises
+                # shaderInt64. Only a SPIR-V device without shaderInt64 still flattens in int32 and would overflow,
+                # so warn (this is a cold path -- only huge ndarrays on a non-i64 device reach here).
                 warnings.warn(
-                    "Ndarray total element count exceeds the int32 boundary; on this backend the linear index "
-                    "is computed in int32 and may overflow. int64 linear indexing is currently supported only "
-                    "on the LLVM backends (CPU/CUDA/AMDGPU)."
+                    "Ndarray total element count exceeds the int32 boundary; this device lacks 64-bit integer "
+                    "support (shaderInt64), so the linear index is computed in int32 and may overflow. int64 "
+                    "linear indexing requires the LLVM backends (CPU/CUDA/AMDGPU) or a SPIR-V device with shaderInt64."
                 )
             if isinstance(v, np.ndarray):
                 # Check ndarray flags is expensive (~250ns), so it is important to order branches according to hit stats
