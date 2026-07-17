@@ -5,7 +5,6 @@
 #include "spirv_msl.hpp"
 
 #include <cstdlib>
-#include <cstring>
 
 namespace quadrants::lang {
 namespace metal {
@@ -1105,11 +1104,8 @@ DeviceCapabilityConfig collect_metal_device_caps(MTLDevice_id mtl_device) {
     caps.set(DeviceCapability::spirv_has_atomic_int64, 1);
   }
   if (feature_floating_point_atomics) {
-    const char *env = std::getenv("QD_METAL_NATIVE_FLOAT_ATOMICS");
-    if (env != nullptr && std::strcmp(env, "1") == 0) {
-      caps.set(DeviceCapability::spirv_has_atomic_float, 1);
-      caps.set(DeviceCapability::spirv_has_atomic_float_add, 1);
-    }
+    caps.set(DeviceCapability::spirv_has_atomic_float, 1);
+    caps.set(DeviceCapability::spirv_has_atomic_float_add, 1);
   }
   if (feature_simd_scoped_permute_operations || feature_quad_scoped_permute_operations) {
     caps.set(DeviceCapability::spirv_has_subgroup_vote, 1);

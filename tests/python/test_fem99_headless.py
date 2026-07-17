@@ -20,29 +20,16 @@ The critical atomic pattern in FEM99 is the scalar energy reduction under autodi
 This file ports that pattern headlessly and checks for the symptoms we can assert without a GUI:
 finite energy / positions, no blow-up, and gradients matching a CPU reference on a small case.
 
-A/B on Metal
-------------
-Default Metal path: float atomics -> uint CAS (cap off).
-Opt-in native path: ``QD_METAL_NATIVE_FLOAT_ATOMICS=1`` (see metal_device.mm).
-
     QD_WANTED_ARCHS=metal pytest tests/python/test_fem99_headless.py -v
-    QD_METAL_NATIVE_FLOAT_ATOMICS=1 QD_WANTED_ARCHS=metal pytest tests/python/test_fem99_headless.py -v
 """
 
 from __future__ import annotations
 
-import os
-
 import numpy as np
-import pytest
 
 import quadrants as qd
 
 from tests import test_utils
-
-
-def _native_float_atomics_env() -> bool:
-    return os.environ.get("QD_METAL_NATIVE_FLOAT_ATOMICS", "") == "1"
 
 
 def _run_fem99(n_grid: int, n_frames: int, substeps: int, seed: int = 0):
@@ -145,17 +132,7 @@ def _run_fem99(n_grid: int, n_frames: int, substeps: int, seed: int = 0):
 
 @test_utils.test(arch=[qd.cpu, qd.metal])
 def test_fem99_headless_stays_finite():
-    """Does the FEM99 autodiff+atomic-reduce pattern stay numerically alive?
-
-    On Metal this is the closest automated stand-in for the missing FEM99/FEM128 repro.
-    Run once with the default (CAS) path and once with QD_METAL_NATIVE_FLOAT_ATOMICS=1; if the
-    alleged 2023 bug still exists, the native arm should fail one of the asserts below (NaN,
-    explosion, or out-of-bounds positions) while CAS passes.
-    """
-    arch = qd.lang.impl.current_cfg().arch
-    native = _native_float_atomics_env()
-    print(f"FEM99_HEADLESS arch={arch} native_float_atomics_env={int(native)}")
-
+    """Does the FEM99 autodiff+atomic-reduce pattern stay numerically alive on Metal?"""
     # fem99 used N=32; keep it for fidelity on Metal. CPU can take the same size.
     n_grid = 32
     n_frames = 5
@@ -163,14 +140,14 @@ def test_fem99_headless_stays_finite():
 
     u_hist, pos = _run_fem99(n_grid=n_grid, n_frames=n_frames, substeps=substeps)
 
-    assert np.isfinite(u_hist).all(), f"energy became non-finite: {u_hist} (native={native})"
-    assert np.isfinite(pos).all(), f"positions became non-finite (native={native})"
+    assert np.isfinite(u_hist).all(), f"energy became non-finite: {u_hist}"
+    assert np.isfinite(pos).all(), "positions became non-finite"
     # Soft body starts in [0.45,0.70]^2-ish; after a few frames under gravity it should stay
     # roughly in the unit square (the demo clamps at the walls). Explosion => |pos| >> 10.
-    assert np.max(np.abs(pos)) < 10.0, f"positions exploded: max|pos|={np.max(np.abs(pos))} (native={native})"
+    assert np.max(np.abs(pos)) < 10.0, f"positions exploded: max|pos|={np.max(np.abs(pos))}"
     # Energy should not blow up by many orders of magnitude frame-to-frame.
-    assert np.max(np.abs(u_hist)) < 1e8, f"energy exploded: {u_hist} (native={native})"
-    print(f"FEM99_OK native={int(native)} u_hist={u_hist.tolist()} max|pos|={float(np.max(np.abs(pos)))}")
+    assert np.max(np.abs(u_hist)) < 1e8, f"energy exploded: {u_hist}"
+    print(f"FEM99_OK u_hist={u_hist.tolist()} max|pos|={float(np.max(np.abs(pos)))}")
 
 
 @test_utils.test(arch=[qd.cpu, qd.metal])
@@ -199,5 +176,4 @@ def test_ad_scalar_atomic_reduce_matches_closed_form():
     for i in range(N):
         assert x.grad[i] == test_utils.approx(2 * i * 0.1, rel=1e-4)
 
-    native = _native_float_atomics_env()
-    print(f"AD_REDUCE_OK native={int(native)} loss={float(loss[None])}")
+    print(f"AD_REDUCE_OK loss={float(loss[None])}")
