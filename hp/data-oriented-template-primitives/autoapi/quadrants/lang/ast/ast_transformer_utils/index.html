@@ -433,6 +433,9 @@
 <tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.ast.ast_transformer_utils.get_decorator" title="quadrants.lang.ast.ast_transformer_utils.get_decorator"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_decorator</span></code></a>(→ str)</p></td>
 <td><p></p></td>
 </tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.ast.ast_transformer_utils.maybe_lifted_primitive" title="quadrants.lang.ast.ast_transformer_utils.maybe_lifted_primitive"><code class="xref py py-obj docutils literal notranslate"><span class="pre">maybe_lifted_primitive</span></code></a>(ctx, parent, attr)</p></td>
+<td><p>Handle access to a primitive member that <code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented(template_primitives=False)</span></code> lifted into a</p></td>
+</tr>
 </tbody>
 </table>
 </div>
@@ -940,6 +943,20 @@
 <span class="sig-prename descclassname"><span class="pre">quadrants.lang.ast.ast_transformer_utils.</span></span><span class="sig-name descname"><span class="pre">get_decorator</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ctx</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="#quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext" title="quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext"><span class="pre">ASTTransformerFuncContext</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">node</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">str</span></span></span><a class="reference internal" href="../../../../../_modules/quadrants/lang/ast/ast_transformer_utils.html#get_decorator"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.ast.ast_transformer_utils.get_decorator" title="Link to this definition">#</a></dt>
 <dd></dd></dl>
 
+<dl class="py function">
+<dt class="sig sig-object py" id="quadrants.lang.ast.ast_transformer_utils.maybe_lifted_primitive">
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.ast.ast_transformer_utils.</span></span><span class="sig-name descname"><span class="pre">maybe_lifted_primitive</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ctx</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="#quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext" title="quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext"><span class="pre">ASTTransformerFuncContext</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">parent</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Any</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">attr</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../../_modules/quadrants/lang/ast/ast_transformer_utils.html#maybe_lifted_primitive"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.ast.ast_transformer_utils.maybe_lifted_primitive" title="Link to this definition">#</a></dt>
+<dd><p>Handle access to a primitive member that <code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented(template_primitives=False)</span></code> lifted into a
+runtime scalar kernel arg (see <code class="docutils literal notranslate"><span class="pre">_predeclare_struct_primitives</span></code>).</p>
+<p>Returns the arg-load <code class="docutils literal notranslate"><span class="pre">Expr</span></code> to substitute for the baked value in the enforcing pass; returns <code class="docutils literal notranslate"><span class="pre">None</span></code> when
+the attribute is not a lifted primitive, or during the non-enforcing discovery pass (where the access is
+instead recorded via <code class="docutils literal notranslate"><span class="pre">mark_used</span></code> and the caller falls back to baking the throw-away discovery-pass IR).</p>
+<p>Raises <code class="docutils literal notranslate"><span class="pre">QuadrantsSyntaxError</span></code> if the lifted primitive is used inside <code class="docutils literal notranslate"><span class="pre">qd.static(...)</span></code>: that context
+requires a compile-time constant, which a runtime-lifted primitive is not. Under this flag there is no
+per-attribute baked escape hatch, so a <code class="docutils literal notranslate"><span class="pre">qd.static</span></code> use is unambiguously a mistake and we surface it loudly
+rather than silently baking a value that will not track mutations.</p>
+</dd></dl>
+
 </section>
 </section>
 
@@ -1119,6 +1136,7 @@
 </ul>
 </li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.ast.ast_transformer_utils.get_decorator"><code class="docutils literal notranslate"><span class="pre">get_decorator()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.ast.ast_transformer_utils.maybe_lifted_primitive"><code class="docutils literal notranslate"><span class="pre">maybe_lifted_primitive()</span></code></a></li>
 </ul>
 </li>
 </ul>

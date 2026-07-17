@@ -1091,6 +1091,45 @@
             <span class="k">return</span> <span class="n">name</span>
     <span class="k">return</span> <span class="s2">&quot;&quot;</span></div>
 
+
+
+<div class="viewcode-block" id="maybe_lifted_primitive">
+<a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.maybe_lifted_primitive">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">maybe_lifted_primitive</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">ASTTransformerFuncContext</span><span class="p">,</span> <span class="n">parent</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">attr</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Handle access to a primitive member that ``@qd.data_oriented(template_primitives=False)`` lifted into a</span>
+<span class="sd">    runtime scalar kernel arg (see ``_predeclare_struct_primitives``).</span>
+
+<span class="sd">    Returns the arg-load ``Expr`` to substitute for the baked value in the enforcing pass; returns ``None`` when</span>
+<span class="sd">    the attribute is not a lifted primitive, or during the non-enforcing discovery pass (where the access is</span>
+<span class="sd">    instead recorded via ``mark_used`` and the caller falls back to baking the throw-away discovery-pass IR).</span>
+
+<span class="sd">    Raises ``QuadrantsSyntaxError`` if the lifted primitive is used inside ``qd.static(...)``: that context</span>
+<span class="sd">    requires a compile-time constant, which a runtime-lifted primitive is not. Under this flag there is no</span>
+<span class="sd">    per-attribute baked escape hatch, so a ``qd.static`` use is unambiguously a mistake and we surface it loudly</span>
+<span class="sd">    rather than silently baking a value that will not track mutations.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">provenance</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">global_context</span><span class="o">.</span><span class="n">struct_primitive_provenance</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">provenance</span><span class="p">:</span>
+        <span class="k">return</span> <span class="kc">None</span>
+    <span class="n">key</span> <span class="o">=</span> <span class="p">(</span><span class="nb">id</span><span class="p">(</span><span class="n">parent</span><span class="p">),</span> <span class="n">attr</span><span class="p">)</span>
+    <span class="n">entry</span> <span class="o">=</span> <span class="n">provenance</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">key</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">entry</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">return</span> <span class="kc">None</span>
+    <span class="k">if</span> <span class="n">ctx</span><span class="o">.</span><span class="n">is_in_static_scope</span><span class="p">():</span>
+        <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;&#39;</span><span class="si">{</span><span class="n">attr</span><span class="si">}</span><span class="s2">&#39; is a primitive member of a @qd.data_oriented(template_primitives=False) object, so it is &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;a runtime kernel argument and cannot be used inside qd.static(). Either remove qd.static(), or &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;decorate the class @qd.data_oriented (the default, template_primitives=True) to bake &#39;</span><span class="si">{</span><span class="n">attr</span><span class="si">}</span><span class="s2">&#39; as a &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;compile-time constant.&quot;</span>
+        <span class="p">)</span>
+    <span class="n">pruning</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">global_context</span><span class="o">.</span><span class="n">pruning</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">pruning</span><span class="o">.</span><span class="n">enforcing</span><span class="p">:</span>
+        <span class="c1"># Record under the kernel&#39;s func id (see ``_predeclare_struct_primitives``) so the enforcing pass declares</span>
+        <span class="c1"># this primitive and the existing fastcache serialisation captures it.</span>
+        <span class="n">pruning</span><span class="o">.</span><span class="n">mark_used</span><span class="p">(</span><span class="n">pruning</span><span class="o">.</span><span class="n">KERNEL_FUNC_ID</span><span class="p">,</span> <span class="n">entry</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+        <span class="k">return</span> <span class="kc">None</span>
+    <span class="k">return</span> <span class="n">ctx</span><span class="o">.</span><span class="n">global_context</span><span class="o">.</span><span class="n">struct_primitive_to_expr</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">key</span><span class="p">)</span></div>
+
 </pre></div>
 
                 </article>
