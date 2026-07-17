@@ -118,6 +118,14 @@ MetalPipeline *MetalPipeline::create_compute_pipeline(const MetalDevice &device,
   if (feature_64_bit_integer_math) {
     options.set_msl_version(2, 3, 0);
   }
+  // OpAtomicFAddEXT -> SPIRV-Cross emits `atomic_float` / atomic_fetch_add_explicit, which require
+  // Metal Shading Language 3.0. Without this (and a matching MTLCompileOptions languageVersion in
+  // get_mtl_library), newLibraryWithSource fails with "unknown type name 'atomic_float'" and the
+  // subsequent nil computeFunction triggers an ObjC assert (Abort trap: 6).
+  if (caps.contains(DeviceCapability::spirv_has_atomic_float_add) ||
+      caps.contains(DeviceCapability::spirv_has_atomic_float)) {
+    options.set_msl_version(3, 0, 0);
+  }
 
   compiler.set_msl_options(options);
 
@@ -138,8 +146,16 @@ MetalPipeline *MetalPipeline::create_compute_pipeline(const MetalDevice &device,
   }
 
   MTLLibrary_id mtl_library = device.get_mtl_library(msl);
+  if (mtl_library == nil) {
+    return nullptr;
+  }
 
   MTLFunction_id mtl_function = device.get_mtl_function(mtl_library, std::string("main0"));
+  if (mtl_function == nil) {
+    // Avoid -[MTLComputePipelineDescriptorInternal setComputeFunction:]: `computeFunction must not
+    // be nil` which hard-aborts the process (Abort trap: 6) instead of returning RhiResult::error.
+    return nullptr;
+  }
 
   MTLComputePipelineState_id mtl_compute_pipeline_state = nil;
   {
@@ -1090,12 +1106,12 @@ DeviceCapabilityConfig collect_metal_device_caps(MTLDevice_id mtl_device) {
   }
   if (feature_floating_point_atomics) {
     // Historically left disabled (PENGUINLIONG, Taichi #7093, 2023-01): "floating point atomics
-    // doesn't work and breaks the FEM99/FEM128 examples." Those were interactive autodiff neo-Hookean
-    // demos (scalar `U[None] += ...` under `ti.ad.Tape`); they were never turned into a regression test,
-    // and the failure mode was never written down. Default remains CAS (uint-backed
-    // OpAtomicCompareExchange) for qd.atomic_add(f32). Set QD_METAL_NATIVE_FLOAT_ATOMICS=1 to opt into
-    // native Metal atomic_float / OpAtomicFAddEXT for investigation / A/B against the FEM99 headless
-    // repro (tests/python/test_fem99_headless.py).
+    // doesn't work and breaks the FEM99/FEM128 examples." Root cause of today's hard abort when
+    // re-enabled: OpAtomicFAddEXT lowers via SPIRV-Cross to `atomic_float`, which needs MSL 3.0,
+    // but create_compute_pipeline targeted MSL 2.x and get_mtl_library used options:nil. Default
+    // remains CAS (uint-backed OpAtomicCompareExchange) for qd.atomic_add(f32). Set
+    // QD_METAL_NATIVE_FLOAT_ATOMICS=1 to opt into native Metal atomic_float / OpAtomicFAddEXT
+    // (also bumps SPIRV-Cross + MTLCompileOptions to MSL 3.0).
     const char *env = std::getenv("QD_METAL_NATIVE_FLOAT_ATOMICS");
     if (env != nullptr && std::strcmp(env, "1") == 0) {
       caps.set(DeviceCapability::spirv_has_atomic_float, 1);
@@ -1511,7 +1527,19 @@ MTLLibrary_id MetalDevice::get_mtl_library(const std::string &source) const {
   MTLLibrary_id mtl_library = nil;
   NSError *err = nil;
   NSString *msl_ns = [[NSString alloc] initWithUTF8String:source.c_str()];
-  mtl_library = [mtl_device_ newLibraryWithSource:msl_ns options:nil error:&err];
+  // Match SPIRV-Cross's MSL version. `atomic_float` (from OpAtomicFAddEXT) is only valid under
+  // MTLLanguageVersion3_0+; compiling with options:nil rejects it as "unknown type name".
+  MTLCompileOptions *compile_opts = nil;
+  DeviceCapabilityConfig caps = get_caps();
+  if (caps.contains(DeviceCapability::spirv_has_atomic_float_add) ||
+      caps.contains(DeviceCapability::spirv_has_atomic_float)) {
+    compile_opts = [[MTLCompileOptions alloc] init];
+    if (@available(macOS 13.0, iOS 16.0, *)) {
+      compile_opts.languageVersion = MTLLanguageVersion3_0;
+    }
+  }
+  mtl_library = [mtl_device_ newLibraryWithSource:msl_ns options:compile_opts error:&err];
+  [compile_opts release];
   [msl_ns release];
 
   if (mtl_library == nil) {

@@ -33,12 +33,25 @@ jobs:
           FORCE_REBUILD: ${{ vars.FORCE_REBUILD || '0' }}
         run: |
           mkdir -p dist
-          if [ "$FORCE_REBUILD" = "1" ]; then echo "reuse=no" >> "$GITHUB_OUTPUT"; exit 0; fi
-          # Prefer the last successful build artifact from this workflow on this branch.
+          if [ "$FORCE_REBUILD" = "1" ]; then echo "FORCE_REBUILD=1"; echo "reuse=no" >> "$GITHUB_OUTPUT"; exit 0; fi
           run_id=$(gh api "repos/${{ github.repository }}/actions/workflows/metal-native-float-atomic.yml/runs?branch=${{ github.ref_name }}&status=completed&per_page=5" \
             --jq '.workflow_runs[] | select(.conclusion=="success" or .conclusion=="failure") | .id' | head -1)
           echo "candidate_run=$run_id"
-          if [ -n "$run_id" ] && gh run download "$run_id" -n mac_wheel_fem99 -D dist 2>/dev/null; then
+          if [ -z "$run_id" ]; then echo "reuse=no" >> "$GITHUB_OUTPUT"; exit 0; fi
+          prev_sha=$(gh api "repos/${{ github.repository }}/actions/runs/$run_id" --jq .head_sha)
+          echo "candidate_sha=$prev_sha"
+          # Rebuild if Metal RHI / SPIR-V Metal path sources changed since that wheel.
+          if ! git diff --quiet "$prev_sha" HEAD -- \
+              quadrants/rhi/metal/ \
+              quadrants/codegen/spirv/ \
+              cmake/ \
+              setup.py \
+              pyproject.toml; then
+            echo "C++ / build inputs changed vs $prev_sha -> rebuild"
+            echo "reuse=no" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if gh run download "$run_id" -n mac_wheel_fem99 -D dist 2>/dev/null; then
             ls -la dist/
             echo "reuse=yes" >> "$GITHUB_OUTPUT"
           else
