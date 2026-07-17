@@ -189,10 +189,7 @@ Simulation(200).step()   # compiles kernel #2 with n=200 baked in
 
 #### Runtime primitives: `template_primitives=False`
 
-If you want a primitive member to be **mutable at runtime without recompiling**, decorate the class with
-`@qd.data_oriented(template_primitives=False)`. Every primitive member the kernel actually accesses (`int`, `float`,
-`bool`, including those reached through nested `dataclasses.dataclass` / `@qd.data_oriented` members) is then lifted
-into a runtime scalar kernel argument and read fresh on every launch, instead of being baked into the kernel IR.
+If you want a primitive member to be **mutable at runtime without recompiling**, decorate the class with `@qd.data_oriented(template_primitives=False)`. Every primitive member the kernel actually accesses (`int`, `float`, `bool`, including those reached through nested `dataclasses.dataclass` / `@qd.data_oriented` members) is then lifted into a runtime scalar kernel argument and read fresh on every launch, instead of being compiled into the kernel as a constant.
 
 ```python
 @qd.data_oriented(template_primitives=False)
@@ -214,18 +211,10 @@ sim.step()        # the new value of n takes effect immediately
 
 Notes and restrictions:
 
-- **dtype** follows the runtime defaults - an `int` / `bool` member becomes the default integer type
-  (`qd.i32` unless changed via `default_ip`) and a `float` member becomes the default float type (`qd.f32` unless
-  changed via `default_fp`). A member whose value falls outside the default integer range will overflow where a baked
-  literal would not; if you need exact wide-integer constants, keep the default (baked) behaviour.
-- **Pruning**: only the primitives the kernel actually reads are turned into kernel arguments, so a class with many
-  primitive members does not blow up the kernel argument count.
-- **`qd.static` is an error**: a lifted primitive cannot be used inside `qd.static(...)`, because that context
-  requires a compile-time constant. Doing so raises `QuadrantsSyntaxError`. Use the default
-  `template_primitives=True` for values that must be baked (e.g. unrolled loop bounds).
-- **No re-specialisation on value change**: because the value is a runtime argument, mutating it never triggers a
-  recompile. Distinct instances of the class still compile separately (the kernel is keyed per instance), exactly as
-  with the default.
+- **dtype** follows the runtime defaults - an `int` / `bool` member becomes the default integer type (`qd.i32` unless changed via `default_ip`) and a `float` member becomes the default float type (`qd.f32` unless changed via `default_fp`). A member whose value falls outside the default integer range will overflow where a baked literal would not; if you need exact wide-integer constants, keep the default (baked) behaviour.
+- **Pruning**: only the primitives the kernel actually reads are turned into kernel arguments, so a class with many primitive members does not blow up the kernel argument count.
+- **`qd.static` is an error**: a lifted primitive cannot be used inside `qd.static(...)`, because that context requires a compile-time constant. Doing so raises `QuadrantsSyntaxError`. Use the default `template_primitives=True` for values that must be baked (e.g. unrolled loop bounds).
+- **No re-specialisation on value change**: because the value is a runtime argument, mutating it never triggers a recompile. Distinct instances of the class still compile separately (the kernel is keyed per instance), exactly as with the default.
 - This is **opt-in**: the default `@qd.data_oriented` continues to bake primitive members as shown above.
 
 ### Tensor members

@@ -461,3 +461,39 @@ def get_decorator(ctx: ASTTransformerFuncContext, node) -> str:
         if ASTResolver.resolve_to(node.func, wanted, ctx.global_vars):
             return name
     return ""
+
+
+def maybe_lifted_primitive(ctx: ASTTransformerFuncContext, parent: Any, attr: str):
+    """Handle access to a primitive member that ``@qd.data_oriented(template_primitives=False)`` lifted into a
+    runtime scalar kernel arg (see ``_predeclare_struct_primitives``).
+
+    Returns the arg-load ``Expr`` to substitute for the baked value in the enforcing pass; returns ``None`` when
+    the attribute is not a lifted primitive, or during the non-enforcing discovery pass (where the access is
+    instead recorded via ``mark_used`` and the caller falls back to baking the throw-away discovery-pass IR).
+
+    Raises ``QuadrantsSyntaxError`` if the lifted primitive is used inside ``qd.static(...)``: that context
+    requires a compile-time constant, which a runtime-lifted primitive is not. Under this flag there is no
+    per-attribute baked escape hatch, so a ``qd.static`` use is unambiguously a mistake and we surface it loudly
+    rather than silently baking a value that will not track mutations.
+    """
+    provenance = ctx.global_context.struct_primitive_provenance
+    if not provenance:
+        return None
+    key = (id(parent), attr)
+    entry = provenance.get(key)
+    if entry is None:
+        return None
+    if ctx.is_in_static_scope():
+        raise QuadrantsSyntaxError(
+            f"'{attr}' is a primitive member of a @qd.data_oriented(template_primitives=False) object, so it is "
+            f"a runtime kernel argument and cannot be used inside qd.static(). Either remove qd.static(), or "
+            f"decorate the class @qd.data_oriented (the default, template_primitives=True) to bake '{attr}' as a "
+            f"compile-time constant."
+        )
+    pruning = ctx.global_context.pruning
+    if not pruning.enforcing:
+        # Record under the kernel's func id (see ``_predeclare_struct_primitives``) so the enforcing pass declares
+        # this primitive and the existing fastcache serialisation captures it.
+        pruning.mark_used(pruning.KERNEL_FUNC_ID, entry[0])
+        return None
+    return ctx.global_context.struct_primitive_to_expr.get(key)
