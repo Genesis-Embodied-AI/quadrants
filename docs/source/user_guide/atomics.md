@@ -146,14 +146,7 @@ val = qd.volatile_load(target)
 
 `target` must be a global lvalue (a field or ndarray subscript); function-scope local arrays are rejected because a local cannot be observed by another thread. Bit-packed / quantized fields (where several logical values share one physical memory word) are also rejected, because volatile semantics on one packed value inside a shared word are not meaningful.
 
-| Backend          | Lowering                                                                                  |
-|------------------|-------------------------------------------------------------------------------------------|
-| CUDA             | LLVM `load volatile` → PTX `ld.volatile.global`.                                          |
-| AMDGPU           | LLVM `load volatile` → unhoistable `global_load_*` (the optimizer is inhibited from forwarding / merging). |
-| Vulkan / Metal   | SPIR-V `OpLoad` with the `Volatile` `MemoryAccess` mask, propagated through SPIRV-Cross to a re-read on every use in the generated MSL / GLSL. |
-| CPU (x86_64)     | LLVM `load volatile` (the optimizer cannot hoist or merge it; the runtime cost is identical to an ordinary load on x86). |
-
-These guarantees hold even inside loops and across repeated reads of the same address: the compiler will not hoist the load out of an enclosing loop, reuse the value of an earlier read, or serve it from a read-only cache.
+The volatile guarantee holds even inside loops and across repeated reads of the same address: the compiler will not hoist the load out of an enclosing loop, reuse the value of an earlier read, or serve it from a read-only cache. Per-backend lowering details are in the advanced section below.
 
 #### Spin-wait pattern (the canonical use case)
 
@@ -246,6 +239,15 @@ Key:
 - `gfx906`, `gfx90a`, `gfx1030`, `gfx1100`: all f32 / f64 float atomics expand to CAS.
 
 ³ SPIR-V float `atomic_add` lowers to `OpAtomicFAddEXT` when the matching `spirv_has_atomic_float{32,64}_add` capability is present on the device, and to a CAS loop with a GLSL.std.450 payload otherwise. Quadrants does not currently emit `OpAtomicFMinEXT` / `OpAtomicFMaxEXT`, so float min/max is always CAS on SPIR-V backends.
+
+### `qd.volatile_load` lowering
+
+| Backend          | Lowering                                                                                  |
+|------------------|-------------------------------------------------------------------------------------------|
+| CUDA             | LLVM `load volatile` -> PTX `ld.volatile.global`.                                          |
+| AMDGPU           | LLVM `load volatile` -> unhoistable `global_load_*` (the optimizer is inhibited from forwarding / merging). |
+| Vulkan / Metal   | SPIR-V `OpLoad` with the `Volatile` `MemoryAccess` mask, propagated through SPIRV-Cross to a re-read on every use in the generated MSL / GLSL. |
+| CPU (x86_64)     | LLVM `load volatile` (the optimizer cannot hoist or merge it; the runtime cost is identical to an ordinary load on x86). |
 
 ## Related
 
