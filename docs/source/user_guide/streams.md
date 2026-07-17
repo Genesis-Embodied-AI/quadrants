@@ -48,6 +48,8 @@ combine()     # runs after compute_ab() returns — a[] and b[] are ready
 
 Consecutive `with qd.stream_parallel():` blocks run concurrently. Multiple for loops within a single block share a stream and run serially on it. All streams are synchronized before the kernel returns.
 
+> **For `graph=True` kernels**, use [`qd.graph_parallel_context` / `qd.graph_parallel`](graph.md#qdgraph_parallel-sections-with-qdgraph_parallel_context-experimental) instead - `stream_parallel` is not compatible with graphs (see [Limitations](#limitations)). `qd.graph_parallel_context` expresses the same "run these independent sequences concurrently" idea but is honored by the graph builder.
+
 ### Restrictions
 
 - All top-level statements in a kernel must be either all `stream_parallel` blocks or all regular statements. Mixing the two at the top level is a compile-time error.
@@ -133,5 +135,5 @@ with qd.create_stream() as s:
 
 ## Limitations
 
-- **Not compatible with graphs.** Do not pass `qd_stream` to a kernel decorated with `graph=True` (if you do, a `RuntimeError` will be raised).
-- **Not compatible with autodiff.** Do not pass `qd_stream` to a kernel that uses reverse-mode or forward-mode differentiation, or inside a `qd.ad.Tape` context (if you do, a `RuntimeError` will be raised).
+- **Not compatible with [graphs](graph.md).** Streams cannot be combined with [`graph=True`](graph.md) kernels: passing `qd_stream` to a graph kernel raises a `RuntimeError`, and using `qd.stream_parallel()` inside a graph kernel raises a `QuadrantsSyntaxError`.
+- **Not compatible with [autodiff](autodiff.md).** Do not pass `qd_stream` to a kernel that uses reverse-mode or forward-mode differentiation, or inside a [`qd.ad.Tape`](autodiff.md) context (if you do, a `RuntimeError` will be raised).

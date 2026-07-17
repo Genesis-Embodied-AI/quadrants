@@ -157,6 +157,8 @@ user_api[qd] = [
     "global_thread_idx",
     "gpu",
     "graph_do_while",
+    "graph_parallel",
+    "graph_parallel_context",
     "grouped",
     "i",
     "i16",
