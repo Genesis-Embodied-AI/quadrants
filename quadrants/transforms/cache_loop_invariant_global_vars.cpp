@@ -289,8 +289,8 @@ class CacheLoopInvariantGlobalVars : public LoopInvariantDetector {
                   (int)status, depth, entry ? "YES" : "NO", cached_maps[depth].size());
       if (!entry) {
         for (auto &kv : cached_maps[depth]) {
-          std::printf("[LICM]   existing=%s status=%d dsa=%d\n", describe_dest(kv.first).c_str(),
-                      (int)kv.second.first, (int)irpass::analysis::definitely_same_address(kv.first, dest));
+          std::printf("[LICM]   existing=%s status=%d dsa=%d\n", describe_dest(kv.first).c_str(), (int)kv.second.first,
+                      (int)irpass::analysis::definitely_same_address(kv.first, dest));
         }
       }
       std::fflush(stdout);
