@@ -11,8 +11,6 @@ See ``docs/source/user_guide/compound_types.md`` (section "Runtime primitives: `
 user-facing surface and ``perso_hugh/doc/data_oriented_template_primitives.md`` for the design.
 """
 
-from __future__ import annotations
-
 import dataclasses
 from typing import Any
 
