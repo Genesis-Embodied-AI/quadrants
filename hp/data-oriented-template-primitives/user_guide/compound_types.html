@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>Compound types &#8212; Quadrants 1.1.3 documentation</title>
+    <title>Compound types &#8212; Quadrants 1.1.4 documentation</title>
   
   
   
@@ -43,7 +43,7 @@
   <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5" />
 <link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5" />
 
-    <script src="../_static/documentation_options.js?v=cb7bf70b"></script>
+    <script src="../_static/documentation_options.js?v=00f267c6"></script>
     <script src="../_static/doctools.js?v=9bcbadda"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -63,7 +63,7 @@
     <link rel="prev" title="Tensors" href="tensor.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="1.1.3" />
+  <meta name="docsearch:version" content="1.1.4" />
   
     
     <script src="../_static/searchtools.js"></script>
@@ -131,7 +131,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 1.1.3 documentation</p>
+    <p class="title logo__title">Quadrants 1.1.4 documentation</p>
   
 </a></div>
     
@@ -650,7 +650,7 @@ my_struct.b[37] 5
 </div>
 <section id="runtime-primitives-template-primitives-false">
 <h4>Runtime primitives: <code class="docutils literal notranslate"><span class="pre">template_primitives=False</span></code><a class="headerlink" href="#runtime-primitives-template-primitives-false" title="Link to this heading">#</a></h4>
-<p>If you want a primitive member to be <strong>mutable at runtime without recompiling</strong>, decorate the class with <code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented(template_primitives=False)</span></code>. Every primitive member the kernel actually accesses (<code class="docutils literal notranslate"><span class="pre">int</span></code>, <code class="docutils literal notranslate"><span class="pre">float</span></code>, <code class="docutils literal notranslate"><span class="pre">bool</span></code>, including those reached through nested <code class="docutils literal notranslate"><span class="pre">dataclasses.dataclass</span></code> / <code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code> members) is then lifted into a runtime scalar kernel argument and read fresh on every launch, instead of being compiled into the kernel as a constant.</p>
+<p>If you want to change a primitive member’s value <strong>from Python between launches without triggering a recompile</strong>, decorate the class with <code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented(template_primitives=False)</span></code>. Every primitive member the kernel actually accesses (<code class="docutils literal notranslate"><span class="pre">int</span></code>, <code class="docutils literal notranslate"><span class="pre">float</span></code>, <code class="docutils literal notranslate"><span class="pre">bool</span></code>, including those reached through nested <code class="docutils literal notranslate"><span class="pre">dataclasses.dataclass</span></code> / <code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code> members) is then lifted into a runtime scalar kernel argument and read fresh on every launch, instead of being compiled into the kernel as a constant. The member stays read-only inside the kernel (it is a kernel argument, not a writable variable): you mutate it in Python, and the kernel sees the new value on the next launch.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">data_oriented</span><span class="p">(</span><span class="n">template_primitives</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
 <span class="k">class</span><span class="w"> </span><span class="nc">Simulation</span><span class="p">:</span>
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
@@ -670,9 +670,9 @@ my_struct.b[37] 5
 </div>
 <p>Notes and restrictions:</p>
 <ul class="simple">
-<li><p><strong>dtype</strong> follows the runtime defaults - an <code class="docutils literal notranslate"><span class="pre">int</span></code> / <code class="docutils literal notranslate"><span class="pre">bool</span></code> member becomes the default integer type (<code class="docutils literal notranslate"><span class="pre">qd.i32</span></code> unless changed via <code class="docutils literal notranslate"><span class="pre">default_ip</span></code>) and a <code class="docutils literal notranslate"><span class="pre">float</span></code> member becomes the default float type (<code class="docutils literal notranslate"><span class="pre">qd.f32</span></code> unless changed via <code class="docutils literal notranslate"><span class="pre">default_fp</span></code>). A member whose value falls outside the default integer range will overflow where a baked literal would not; if you need exact wide-integer constants, keep the default (baked) behaviour.</p></li>
+<li><p><strong>dtype</strong> follows the runtime defaults - an <code class="docutils literal notranslate"><span class="pre">int</span></code> / <code class="docutils literal notranslate"><span class="pre">bool</span></code> member becomes the default integer type (<code class="docutils literal notranslate"><span class="pre">qd.i32</span></code>, unless you override the runtime default integer type in <code class="docutils literal notranslate"><span class="pre">qd.init()</span></code>) and a <code class="docutils literal notranslate"><span class="pre">float</span></code> member becomes the default float type (<code class="docutils literal notranslate"><span class="pre">qd.f32</span></code>, unless you override the runtime default float type in <code class="docutils literal notranslate"><span class="pre">qd.init()</span></code>). A member whose value falls outside the default integer range will overflow where a baked literal would not; if you need exact wide-integer constants, keep the default (baked) behaviour.</p></li>
 <li><p><strong>Pruning</strong>: only the primitives the kernel actually reads are turned into kernel arguments, so a class with many primitive members does not blow up the kernel argument count.</p></li>
-<li><p><strong><code class="docutils literal notranslate"><span class="pre">qd.static</span></code> is an error</strong>: a lifted primitive cannot be used inside <code class="docutils literal notranslate"><span class="pre">qd.static(...)</span></code>, because that context requires a compile-time constant. Doing so raises <code class="docutils literal notranslate"><span class="pre">QuadrantsSyntaxError</span></code>. Use the default <code class="docutils literal notranslate"><span class="pre">template_primitives=True</span></code> for values that must be baked (e.g. unrolled loop bounds).</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">qd.static</span></code> is an error</strong>: a lifted primitive cannot be used inside <a class="reference internal" href="static.html"><span class="std std-doc"><code class="docutils literal notranslate"><span class="pre">qd.static(...)</span></code></span></a>, because that context requires a compile-time constant. Doing so raises <code class="docutils literal notranslate"><span class="pre">QuadrantsSyntaxError</span></code>. Use the default <code class="docutils literal notranslate"><span class="pre">template_primitives=True</span></code> for values that must be baked (e.g. unrolled loop bounds).</p></li>
 <li><p><strong>No re-specialisation on value change</strong>: because the value is a runtime argument, mutating it never triggers a recompile. Distinct instances of the class still compile separately (the kernel is keyed per instance), exactly as with the default.</p></li>
 <li><p>This is <strong>opt-in</strong>: the default <code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code> continues to bake primitive members as shown above.</p></li>
 </ul>
