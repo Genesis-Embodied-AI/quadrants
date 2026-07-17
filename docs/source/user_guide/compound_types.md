@@ -19,8 +19,6 @@ The following compound types are available:
 | Member declaration                  | type-annotated class fields           | live attributes (no annotations)      | type-annotated class fields         |
 | Kernel-arg annotation               | `MyStruct` (the dataclass type)       | `qd.Template`                       | `MyStruct` (the struct type)        |
 
-Note on the "Members can be tensors" row for `@qd.dataclass`: a `@qd.dataclass`'s members must be primitives, fixed vectors, or fixed matrices — not `qd.field` / `qd.ndarray`. However, *allocating* a `@qd.dataclass` as a tensor of structs in SoA layout (`MyStruct.field(shape=(N,), layout=qd.Layout.SOA)`) extrudes each member into its own length-`N` tensor — so the resulting *collection* effectively behaves like a struct of parallel tensors, even though the `@qd.dataclass` type itself doesn't have tensor-typed members. See the [`@qd.dataclass` section](#qddataclass-qdtypesstruct) below.
-
 > ⚠️ **Deprecation: `@dataclasses.dataclass` instance passed via `qd.Template`.**
 > Passing a `@dataclasses.dataclass` instance into a `qd.Template`-annotated kernel parameter is not supported and emits a `DeprecationWarning` at compile time. In a future release it will become an error.
 
@@ -171,7 +169,7 @@ sim.step()
 
 ### Primitive members
 
-Primitive members on `self` (e.g. `int`, `float`, `bool`, `enum.Enum`) are supported, but they are treated as **template values**: each distinct primitive value across instances triggers a new kernel compilation, with the value baked into the kernel IR.
+Primitive members on `self` (e.g. `int`, `float`, `bool`, `enum.Enum`) are supported, but they are treated as **template values**: each distinct primitive value across instances triggers a new kernel compilation, with the value baked into the compiled kernel.
 
 ```python
 @qd.data_oriented
@@ -232,7 +230,7 @@ Notes and restrictions:
 
 ### Tensor members
 
-`@qd.data_oriented` classes may hold tensor members of any backend: `qd.field`, `qd.ndarray`, or `qd.Tensor`.
+`@qd.data_oriented` classes may hold tensor members of any backend: `qd.field`, `qd.ndarray`, or [qd.Tensor](tensor.md).
 
 ```python
 @qd.data_oriented
@@ -281,6 +279,8 @@ A `@qd.dataclass` can be turned into a tensor of structs (e.g. `MyStruct.field(s
 - **Struct-of-arrays (SoA)** (`qd.Layout.SOA`): extrudes each member of the struct into its own tensor of length `N`.
 - **Array-of-structs (AoS)** (`qd.Layout.AOS`): the storage is an array of `N` struct cells laid out contiguously in memory. AoS is only available with `qd.field` backing.
 
+Note that although a `@qd.dataclass`'s members can't themselves be tensors, allocating one in SoA layout (`MyStruct.field(shape=(N,), layout=qd.Layout.SOA)`) extrudes each member into its own length-`N` tensor — so the resulting *collection* effectively behaves like a struct of parallel tensors, even though the `@qd.dataclass` type itself doesn't have tensor-typed members.
+
 ```python
 @qd.dataclass
 class Particle:
@@ -289,12 +289,10 @@ class Particle:
     mass: qd.f32
 
 # AOS layout: each element of `particles` is a (pos, vel, mass) cell contiguous in memory.
-# Only possible because Particle is a StructType — `@qd.data_oriented` and
+# Only possible because Particle is a `@qd.dataclass`. `@qd.data_oriented` and
 # `dataclasses.dataclass` containers can't be the element type of a tensor.
 particles = Particle.field(shape=(N,), layout=qd.Layout.AOS)
 ```
-
-For larger statically-indexed groups that might spill into local memory, and that you want to allow partial spilling for, see the [packed vs unpacked vectors](matrix_vector.md#storage-layout-packed-vs-unpacked-vectors) section of the matrix and vector page.
 
 Methods can be added to a `@qd.dataclass` and may be decorated with `@qd.func` so they can be called from kernels via `instance.method(...)` syntax (the call is inlined at compile time, like any other `@qd.func`).
 
@@ -319,7 +317,7 @@ def total_ke() -> qd.f32:
     return total
 ```
 
-`qd.types.struct(name1=type1, ...)` is the function-form equivalent of `@qd.dataclass`: it builds the same `StructType` without a class body.
+`qd.types.struct(name1=type1, ...)` is the function-form equivalent of `@qd.dataclass`: it builds a `@qd.dataclass` without a class body.
 
 ```python
 vec3 = qd.types.vector(3, qd.f32)
@@ -333,7 +331,7 @@ Unlike the other two compound types, `@qd.dataclass` is a real kernel-side type 
 
 ## Nesting compatibility
 
-This table summarizes which member types are allowed inside which container type. "yes" means the member is walked correctly when the container is passed to a kernel; "no" means the member is ignored or the combination raises an error.
+This table summarizes which member types are allowed inside which container type. "yes" means the member is handled correctly when the container is passed to a kernel; "no" means the member is ignored or the combination raises an error.
 
 | Container ↓ &nbsp;&nbsp;&nbsp; / &nbsp;&nbsp;&nbsp; Member → | `qd.ndarray` | `qd.field` | primitive | `dataclasses.dataclass` | `@qd.data_oriented` | `@qd.dataclass` |
 |---|:---:|:---:|:---:|:---:|:---:|:---:|
@@ -343,17 +341,12 @@ This table summarizes which member types are allowed inside which container type
 
 ### Outer kernel-arg annotation
 
-The outermost annotation you put on the kernel parameter determines how the container is walked:
+The outermost annotation you put on the kernel parameter should match the parameter type as follows:
 
-| Annotation | Kernel-arg walker | Notes |
-|---|---|---|
-| `qd.types.NDArray[...]`           | ndarray slot                                       | leaf-level only |
-| `MyDataclass` (dataclass type)    | per-member flatten using annotations               | recommended for `@dataclasses.dataclass`; needs every member to have a quadrants-typed annotation |
-| `qd.Template`                   | value-driven walk of `vars(self)`                  | for `@qd.data_oriented` containers (and primitives). **Not** supported for `@dataclasses.dataclass` — see the [deprecation notice in Overview](#overview). |
-
-Practical consequence:
-
-- **`@qd.data_oriented` containers** must be passed via `qd.Template` (or be the `self` of a `@qd.kernel` method on a `@qd.data_oriented` class). Using a typed-dataclass annotation on the outermost arg errors.
+| Kernel parameter compound type | Annotation |
+|--------------------------------|------------------------------|
+| `@dataclasses.dataclass`       | `MyDataclass` (dataclass type) |
+| `@qd.data_oriented`            | `qd.Template` |
 
 ### Reassigning ndarray members
 
@@ -362,7 +355,7 @@ For `@qd.data_oriented` containers passed via `qd.Template`, reassigning an ndar
 ### Restrictions
 
 - **`@qd.dataclass` cannot contain `qd.ndarray` or `qd.field` members.** See the [`@qd.dataclass`](#qddataclass-qdtypesstruct) section above for the full list of allowed member types. (The function-form factory `qd.types.struct(...)` has the same restrictions.)
-- **A typed-dataclass kernel-arg annotation cannot have a `@qd.data_oriented` member type** — errors clearly at compile time. Typed-dataclass kernel args are flattened from annotations, but `@qd.data_oriented` carries no per-member annotations, so its members can only be walked from the live instance, which only happens on the `qd.Template` path.
-- **Declare all ndarray members on a `@qd.data_oriented` class in `__init__`.** The template-mapper caches the set of ndarray-attribute paths reachable from each instance on its first kernel launch — *per instance*, not per class — so two instances of the same class can legitimately carry different ndarray attribute sets (e.g. an optional `*_adjoint_cache` member that's only allocated when `requires_grad=True`). But:
-  - **Deleting an ndarray attribute** that was present on an instance's first launch raises `AttributeError` on the next launch on that instance (the cached path still tries to `getattr` the missing attribute).
-  - **Adding a new ndarray attribute after first launch** on a given instance won't be tracked by the args-hash invalidator on that instance — reassigning the new attribute to a tensor of a different `dtype` / `ndim` after that point will silently reuse the originally compiled kernel.
+- **A typed-dataclass kernel-arg annotation cannot have a `@qd.data_oriented` member type** — errors clearly at compile time
+- **Declare all ndarray members on a `@qd.data_oriented` class in `__init__`.**
+    - **Deleting an ndarray attribute** that was present on an `@qd.data_oriented` instance's first launch raises `AttributeError` on the next launch on that instance.
+    - **Adding a new ndarray attribute after first launch** on a given `@qd.data_oriented` instance will cause incorrect undefined behavior.

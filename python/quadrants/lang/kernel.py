@@ -344,9 +344,20 @@ class Kernel(FuncBase):
         self._graph_do_while_level_stack: list[int] = []
         # Per-checkpoint metadata, one entry per `with qd.checkpoint(...)` block (explicit AND auto-injected implicit)
         # in declaration order. List index is the checkpoint's internal `cp_id` (0, 1, 2, ... dense, flat across the
-        # kernel). Each entry is the name of the `yield_on=` kernel parameter, or `None` for implicit checkpoints (which
-        # never yield). Populated by the AST transformer; empty means the kernel uses no checkpoints.
+        # kernel). Each entry is the readable label of the `yield_on=` argument (e.g. "flag" or "self.flag"), or
+        # `None` for implicit checkpoints (which never yield). Populated by the AST transformer; empty means the
+        # kernel uses no checkpoints. Used for error messages / introspection only -- the runtime forwards the flat
+        # C++ arg-id from `checkpoint_yield_on_cpp_arg_ids` below.
         self.checkpoint_yield_on_args: list[str | None] = []
+        # Flat C++ arg-ids (post-template) of each explicit checkpoint's `yield_on=` ndarray, resolved at AST-build time
+        # by `CheckpointTransformer.build_checkpoint_with` via `ASTTransformer._resolve_ndarray_kernel_arg_id`. Same
+        # indexing as `checkpoint_yield_on_args`: entry `i` is the flat arg-id the runtime uses to look up the ndarray's
+        # device pointer for the checkpoint whose internal cp_id is `i`. `-1` for implicit checkpoints (which never
+        # yield). Resolving at AST-build time uniformly handles bare kernel parameters (`yield_on=flag`),
+        # `@qd.data_oriented` member ndarrays (`yield_on=self.flag`), and `@dataclasses.dataclass` parameter members
+        # (`yield_on=params.flag`); the attribute forms cannot be resolved by the per-launch name match because
+        # `arg_metas[i].name` only carries top-level parameter names.
+        self.checkpoint_yield_on_cpp_arg_ids: list[int] = []
         # User-facing labels for explicit checkpoints. Same indexing as `checkpoint_yield_on_args`: entry `i` is the int
         # (or IntEnum value) the user passed as the first positional arg of `qd.checkpoint(cp_id, yield_on)` for the
         # checkpoint whose internal cp_id is `i`. Implicit checkpoints (auto-wrapped) get `None` (they have no
@@ -399,14 +410,12 @@ class Kernel(FuncBase):
             self.fast_checksum = src_hasher.create_cache_key(
                 self.raise_on_templated_floats, kernel_source_info, args, self.arg_metas
             )
-            used_py_dataclass_parameters = None
-            cached_graph_do_while_levels: list[tuple[str, int]] | None = None
+            cache_value = None
             if self.fast_checksum:
                 self.src_ll_cache_observations.cache_key_generated = True
-                used_py_dataclass_parameters, frontend_cache_key, cached_graph_do_while_levels = src_hasher.load(  # type: ignore[reportAssignmentType]
-                    self.fast_checksum
-                )
-            if used_py_dataclass_parameters is not None and frontend_cache_key is not None:
+                cache_value = src_hasher.load(self.fast_checksum)
+            if cache_value is not None:
+                frontend_cache_key = cache_value.frontend_cache_key
                 self.src_ll_cache_observations.cache_validated = True
                 prog = impl.get_runtime().prog
                 assert self.fast_checksum is not None
@@ -418,16 +427,35 @@ class Kernel(FuncBase):
                 )
                 if self.compiled_kernel_data_by_key[key]:
                     self.src_ll_cache_observations.cache_loaded = True
-                    self.used_py_dataclass_parameters_by_key_enforcing[key] = used_py_dataclass_parameters
-                    # Fast-cache restore skips AST transformation, so rebuild the gdw level table (and the legacy
-                    # outermost-arg alias) from the cached (cond_arg_name, parent_id) pairs.
-                    if cached_graph_do_while_levels:
+                    self.used_py_dataclass_parameters_by_key_enforcing[key] = cache_value.used_py_dataclass_parameters
+                    # Fast-cache restore skips AST transformation, so rebuild the AST-transformer-produced metadata from
+                    # the cache value: nested graph_do_while level table (with the AST-resolved flat C++ arg-id) plus
+                    # the per-checkpoint yield_on / user-label tables. Mirrors what `function_def_transformer.py` +
+                    # `checkpoint_transformer.py` + `build_While` would have written.
+                    if cache_value.graph_do_while_levels:
                         self.graph_do_while_levels = [
-                            GraphDoWhileLevel(cond_arg_name=name, parent_id=parent)
-                            for name, parent in cached_graph_do_while_levels
+                            GraphDoWhileLevel(cond_arg_name=name, parent_id=parent, cond_cpp_arg_id=cpp_arg_id)
+                            for name, parent, cpp_arg_id in cache_value.graph_do_while_levels
                         ]
                         self.graph_do_while_arg = self.graph_do_while_levels[0].cond_arg_name
-                    return used_py_dataclass_parameters
+                    if cache_value.checkpoint_yield_on_args:
+                        self.checkpoint_yield_on_args = list(cache_value.checkpoint_yield_on_args)
+                        self.checkpoint_yield_on_cpp_arg_ids = list(cache_value.checkpoint_yield_on_cpp_arg_ids)
+                        # Pydantic coerces IntEnum -> int at CacheValue construction time, so the raw labels are plain
+                        # ints after JSON round-trip. ``checkpoint_user_label_enum_qualnames`` carries the parallel
+                        # ``module.ClassQualName.MEMBER`` strings that ``_resolve_intenum_member`` uses to rebuild the
+                        # original ``IntEnum`` member -- preserving the documented contract that
+                        # ``qd.checkpoint(Stage.X, ...)`` surfaces as ``Stage.X`` (not the raw int) on
+                        # ``status.checkpoint``. Older v3 caches predate the qualname column, so we default any missing
+                        # slots to ``None`` -> raw-int fallback (the same behaviour they had on v3).
+                        raw_labels = list(cache_value.checkpoint_user_labels_by_cp_id)
+                        qualnames = list(cache_value.checkpoint_user_label_enum_qualnames) or [None] * len(raw_labels)
+                        if len(qualnames) != len(raw_labels):
+                            qualnames = [None] * len(raw_labels)
+                        self.checkpoint_user_labels_by_cp_id = [
+                            src_hasher._resolve_intenum_member(qn, lbl) for qn, lbl in zip(qualnames, raw_labels)
+                        ]
+                    return cache_value.used_py_dataclass_parameters
 
         elif self.quadrants_callable and not self.quadrants_callable.is_pure and self.runtime.print_non_pure:
             # The bit in caps should not be modified without updating corresponding test
@@ -598,13 +626,9 @@ class Kernel(FuncBase):
             is_launch_ctx_cacheable = True
             template_num = 0
             i_out = 0
-            # Hoist the `kernel has any yield_on= checkpoint` predicate out of the per-arg loop so non-checkpoint
-            # kernels (the overwhelming majority) skip the helper function call entirely on every arg. Gated on
-            # `use_checkpoints` first so non-checkpoint kernels pay only one attribute lookup, not the list-truthy
-            # check on every cache-miss build.
-            _kernel_has_yield_on_checkpoint = self.use_checkpoints and bool(self.checkpoint_yield_on_args)
-            if _kernel_has_yield_on_checkpoint:
-                _checkpoint_helpers.init_yield_on_arg_id_table(self)
+            # `checkpoint_yield_on_cpp_arg_ids` is populated at AST-build time (see
+            # `CheckpointTransformer.build_checkpoint_with`); no per-arg name match is needed here. The launch path
+            # below forwards the table to the launch context with a single `forward_yield_on_table_to_ctx` call.
             for i_in, val in enumerate(args):
                 needed_ = self.arg_metas[i_in].annotation
                 if needed_ is template or type(needed_) is template:
@@ -618,12 +642,11 @@ class Kernel(FuncBase):
                 # which weakens API/type safety and can route the wrong struct type through launch.
                 if getattr(val, "_qd_all_field", False) and getattr(needed_, _FIELDS, None) is not None:
                     continue
-                if self.graph_do_while_levels:
-                    for _gdw_level in self.graph_do_while_levels:
-                        if self.arg_metas[i_in].name == _gdw_level.cond_arg_name:
-                            _gdw_level.cond_cpp_arg_id = i_out - template_num
-                if _kernel_has_yield_on_checkpoint:
-                    _checkpoint_helpers.maybe_record_yield_on_arg(self, self.arg_metas[i_in].name, i_out - template_num)
+                # `graph_do_while_levels[*].cond_cpp_arg_id` is also populated at AST-build time (see
+                # `ASTTransformer.build_While` -> `_resolve_ndarray_kernel_arg_id`), so the launch path forwards it
+                # directly below without per-arg name matching here. This uniformly handles bare parameter conditions
+                # (`qd.graph_do_while(counter)`) and `@qd.data_oriented` member conditions
+                # (`qd.graph_do_while(self.counter)`).
                 num_args_, is_launch_ctx_cacheable_ = self._recursive_set_args(
                     self.used_py_dataclass_parameters_by_key_enforcing[key],
                     self.arg_metas[i_in].name,
@@ -698,8 +721,12 @@ class Kernel(FuncBase):
                         self.visited_functions,
                         self.used_py_dataclass_parameters_by_key_enforcing[key],
                         graph_do_while_levels=[  # type: ignore[reportCallIssue]
-                            (level.cond_arg_name, level.parent_id) for level in self.graph_do_while_levels
+                            (level.cond_arg_name, level.parent_id, level.cond_cpp_arg_id)
+                            for level in self.graph_do_while_levels
                         ],
+                        checkpoint_yield_on_args=list(self.checkpoint_yield_on_args),
+                        checkpoint_yield_on_cpp_arg_ids=list(self.checkpoint_yield_on_cpp_arg_ids),
+                        checkpoint_user_labels_by_cp_id=list(self.checkpoint_user_labels_by_cp_id),
                     )
                     self.src_ll_cache_observations.cache_stored = True
             self._last_compiled_kernel_data = compiled_kernel_data

@@ -977,6 +977,10 @@ class RangeForStmt : public Stmt {
   bool strictly_serialized;
   std::string range_hint;
   int stream_parallel_group_id{0};
+  // Per-kernel `qd.graph_parallel_context()` region id (0 outside any region). Propagated from
+  // `FrontendForStmt::graph_parallel_region_id` by `lower_ast.cpp` and on to `OffloadedStmt` by `offload.cpp`. See
+  // ForLoopConfig comment in `frontend_ir.h`.
+  int graph_parallel_region_id{0};
   // `cp_id` of the enclosing `qd.checkpoint(...)` block (`-1` outside any checkpoint). Propagated from
   // `FrontendForStmt::checkpoint_id` by `lower_ast.cpp`, then carried into the post-offload
   // `OffloadedStmt::checkpoint_id` by `offload.cpp`. See ForLoopConfig comment in `frontend_ir.h` for the full
@@ -1015,6 +1019,7 @@ class RangeForStmt : public Stmt {
                      block_dim,
                      strictly_serialized,
                      stream_parallel_group_id,
+                     graph_parallel_region_id,
                      checkpoint_id,
                      graph_do_while_level_id);
   QD_DEFINE_ACCEPT
@@ -1036,6 +1041,8 @@ class StructForStmt : public Stmt {
   int block_dim;
   MemoryAccessOptions mem_access_opt;
   int stream_parallel_group_id{0};
+  // See `RangeForStmt::graph_parallel_region_id` -- same lifecycle.
+  int graph_parallel_region_id{0};
   // See `RangeForStmt::checkpoint_id` -- same lifecycle, same `-1` sentinel.
   int checkpoint_id{-1};
   int graph_do_while_level_id{-1};
@@ -1060,6 +1067,7 @@ class StructForStmt : public Stmt {
                      block_dim,
                      mem_access_opt,
                      stream_parallel_group_id,
+                     graph_parallel_region_id,
                      checkpoint_id,
                      graph_do_while_level_id);
   QD_DEFINE_ACCEPT
@@ -1406,6 +1414,10 @@ class OffloadedStmt : public Stmt {
   std::size_t bls_size{0};
   MemoryAccessOptions mem_access_opt;
   int stream_parallel_group_id{0};
+  // Per-kernel `qd.graph_parallel_context()` region id (0 outside any region). Set by `offload.cpp` from the source
+  // `RangeForStmt` / `StructForStmt`. The CUDA LLVM codegen copies it into `OffloadedTask::graph_parallel_region_id`
+  // so the GraphManager keeps adjacent regions' fork/join groups apart.
+  int graph_parallel_region_id{0};
   // `cp_id` of the enclosing `qd.checkpoint(...)` block for this offloaded task (`-1` outside any checkpoint). Set by
   // `offload.cpp` from the source `RangeForStmt::checkpoint_id` / `StructForStmt::checkpoint_id`. Read by the CUDA /
   // AMDGPU LLVM codegen to populate `OffloadedTask::checkpoint_id`, which the GraphManager will consume in slice 1c.
@@ -1463,6 +1475,7 @@ class OffloadedStmt : public Stmt {
                      index_offsets,
                      mem_access_opt,
                      stream_parallel_group_id,
+                     graph_parallel_region_id,
                      checkpoint_id,
                      graph_do_while_level_id);
   QD_DEFINE_ACCEPT
