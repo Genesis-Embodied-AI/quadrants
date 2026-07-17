@@ -4,6 +4,9 @@
 #include "quadrants/rhi/impl_support.h"
 #include "spirv_msl.hpp"
 
+#include <cstdlib>
+#include <cstring>
+
 namespace quadrants::lang {
 namespace metal {
 
@@ -1086,11 +1089,18 @@ DeviceCapabilityConfig collect_metal_device_caps(MTLDevice_id mtl_device) {
     caps.set(DeviceCapability::spirv_has_atomic_int64, 1);
   }
   if (feature_floating_point_atomics) {
-    // FIXME: (penguinliong) For some reason floating point atomics doesn't
-    // work and breaks the FEM99/FEM128 examples. Should consider add them back
-    // figured out why.
-    // caps.set(DeviceCapability::spirv_has_atomic_float, 1);
-    // caps.set(DeviceCapability::spirv_has_atomic_float_add, 1);
+    // Historically left disabled (PENGUINLIONG, Taichi #7093, 2023-01): "floating point atomics
+    // doesn't work and breaks the FEM99/FEM128 examples." Those were interactive autodiff neo-Hookean
+    // demos (scalar `U[None] += ...` under `ti.ad.Tape`); they were never turned into a regression test,
+    // and the failure mode was never written down. Default remains CAS (uint-backed
+    // OpAtomicCompareExchange) for qd.atomic_add(f32). Set QD_METAL_NATIVE_FLOAT_ATOMICS=1 to opt into
+    // native Metal atomic_float / OpAtomicFAddEXT for investigation / A/B against the FEM99 headless
+    // repro (tests/python/test_fem99_headless.py).
+    const char *env = std::getenv("QD_METAL_NATIVE_FLOAT_ATOMICS");
+    if (env != nullptr && std::strcmp(env, "1") == 0) {
+      caps.set(DeviceCapability::spirv_has_atomic_float, 1);
+      caps.set(DeviceCapability::spirv_has_atomic_float_add, 1);
+    }
   }
   if (feature_simd_scoped_permute_operations || feature_quad_scoped_permute_operations) {
     caps.set(DeviceCapability::spirv_has_subgroup_vote, 1);

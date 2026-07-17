@@ -1,0 +1,79 @@
+name: Metal native float atomic A/B (FEM99)
+
+on:
+  push:
+    branches:
+      - hp/metal-native-float-atomics
+  workflow_dispatch:
+
+# Investigate the Jan 2023 FIXME in metal_device.mm ("floating point atomics doesn't work and
+# breaks the FEM99/FEM128 examples"). Builds Metal-enabled Quadrants once, then runs the new
+# headless FEM99 / AD-reduce tests twice on macos-15:
+#   cas    = default (QD_METAL_NATIVE_FLOAT_ATOMICS unset) -> uint CAS path
+#   native = QD_METAL_NATIVE_FLOAT_ATOMICS=1               -> OpAtomicFAddEXT / atomic_float
+# If the alleged bug still exists, `native` should fail while `cas` passes.
+
+jobs:
+  build:
+    name: build-macos-15
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Prerequisites
+        run: bash .github/workflows/scripts_new/macosx/1_prerequisites.sh
+      - name: Build wheel
+        run: bash .github/workflows/scripts_new/macosx/2_build.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mac_wheel_fem99
+          path: dist/*.whl
+
+  ab:
+    name: ${{ matrix.arm }}
+    needs: build
+    runs-on: macos-15
+    strategy:
+      fail-fast: false
+      matrix:
+        arm: [cas, native]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/download-artifact@v4
+        with:
+          name: mac_wheel_fem99
+          path: dist
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install dist/*.whl
+          pip install --prefer-binary --group test
+          python -c "import quadrants as qd; print(qd.__version__ if hasattr(qd,'__version__') else qd)"
+      - name: System info
+        run: |
+          sysctl -n machdep.cpu.brand_string || true
+          system_profiler SPDisplaysDataType 2>/dev/null | head -30 || true
+      - name: Run FEM99 headless + AD reduce (Metal)
+        run: |
+          if [ "${{ matrix.arm }}" = "native" ]; then
+            export QD_METAL_NATIVE_FLOAT_ATOMICS=1
+          else
+            unset QD_METAL_NATIVE_FLOAT_ATOMICS
+          fi
+          export QD_WANTED_ARCHS=metal
+          echo "ARM=${{ matrix.arm }} QD_METAL_NATIVE_FLOAT_ATOMICS=${QD_METAL_NATIVE_FLOAT_ATOMICS:-<unset>}"
+          python -c "import os, quadrants as qd; qd.init(arch=qd.metal); print('init_ok', os.environ.get('QD_METAL_NATIVE_FLOAT_ATOMICS'))"
+          set +e
+          python -m pytest -v --tb=short \
+            tests/python/test_fem99_headless.py \
+            tests/python/test_ad_atomic.py
+          ec=$?
+          echo "########## RESULT arm=${{ matrix.arm }} exit=$ec ##########"
+          exit $ec
