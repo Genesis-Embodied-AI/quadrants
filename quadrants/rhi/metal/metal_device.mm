@@ -1105,13 +1105,6 @@ DeviceCapabilityConfig collect_metal_device_caps(MTLDevice_id mtl_device) {
     caps.set(DeviceCapability::spirv_has_atomic_int64, 1);
   }
   if (feature_floating_point_atomics) {
-    // Historically left disabled (PENGUINLIONG, Taichi #7093, 2023-01): "floating point atomics
-    // doesn't work and breaks the FEM99/FEM128 examples." Root cause of today's hard abort when
-    // re-enabled: OpAtomicFAddEXT lowers via SPIRV-Cross to `atomic_float`, which needs MSL 3.0,
-    // but create_compute_pipeline targeted MSL 2.x and get_mtl_library used options:nil. Default
-    // remains CAS (uint-backed OpAtomicCompareExchange) for qd.atomic_add(f32). Set
-    // QD_METAL_NATIVE_FLOAT_ATOMICS=1 to opt into native Metal atomic_float / OpAtomicFAddEXT
-    // (also bumps SPIRV-Cross + MTLCompileOptions to MSL 3.0).
     const char *env = std::getenv("QD_METAL_NATIVE_FLOAT_ATOMICS");
     if (env != nullptr && std::strcmp(env, "1") == 0) {
       caps.set(DeviceCapability::spirv_has_atomic_float, 1);
