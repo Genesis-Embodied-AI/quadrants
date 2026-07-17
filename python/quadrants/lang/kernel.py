@@ -385,7 +385,7 @@ class Kernel(FuncBase):
         self.launch_context_buffer_cache = LaunchContextBufferCache()
         self._struct_ndarray_launch_info_by_key: dict[CompiledKernelKeyType, list] = {}
         # Launch info for primitives lifted from ``@qd.data_oriented(template_primitives=False)`` template args (see
-        # ``_predeclare_struct_primitives``). Maps key -> list of ``(arg_id, template_arg_idx, attr_chain, kind)``.
+        # ``predeclare_struct_primitives``). Maps key -> list of ``(arg_id, template_arg_idx, attr_chain, kind)``.
         self._struct_primitive_launch_info_by_key: dict[CompiledKernelKeyType, list] = {}
         self._mutable_nd_cached_key: CompiledKernelKeyType | None = None
         self._mutable_nd_cached_val: list = []

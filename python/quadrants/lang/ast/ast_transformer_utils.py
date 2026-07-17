@@ -465,7 +465,7 @@ def get_decorator(ctx: ASTTransformerFuncContext, node) -> str:
 
 def maybe_lifted_primitive(ctx: ASTTransformerFuncContext, parent: Any, attr: str):
     """Handle access to a primitive member that ``@qd.data_oriented(template_primitives=False)`` lifted into a
-    runtime scalar kernel arg (see ``_predeclare_struct_primitives``).
+    runtime scalar kernel arg (see ``predeclare_struct_primitives``).
 
     Returns the arg-load ``Expr`` to substitute for the baked value in the enforcing pass; returns ``None`` when
     the attribute is not a lifted primitive, or during the non-enforcing discovery pass (where the access is
@@ -492,7 +492,7 @@ def maybe_lifted_primitive(ctx: ASTTransformerFuncContext, parent: Any, attr: st
         )
     pruning = ctx.global_context.pruning
     if not pruning.enforcing:
-        # Record under the kernel's func id (see ``_predeclare_struct_primitives``) so the enforcing pass declares
+        # Record under the kernel's func id (see ``predeclare_struct_primitives``) so the enforcing pass declares
         # this primitive and the existing fastcache serialisation captures it.
         pruning.mark_used(pruning.KERNEL_FUNC_ID, entry[0])
         return None
