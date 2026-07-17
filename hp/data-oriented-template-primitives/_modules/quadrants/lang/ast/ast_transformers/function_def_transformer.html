@@ -362,6 +362,9 @@
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.ast.ast_transformers.checkpoint_transformer</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
     <span class="n">CheckpointTransformer</span><span class="p">,</span>
 <span class="p">)</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.ast.ast_transformers.struct_primitive_predeclarer</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">predeclare_struct_primitives</span><span class="p">,</span>
+<span class="p">)</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.ast.symbol_resolver</span><span class="w"> </span><span class="kn">import</span> <span class="n">ASTResolver</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.buffer_view</span><span class="w"> </span><span class="kn">import</span> <span class="n">BufferView</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.exception</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
@@ -374,7 +377,6 @@
     <span class="n">is_data_oriented</span><span class="p">,</span>
     <span class="n">is_dataclass_instance</span><span class="p">,</span>
     <span class="n">to_quadrants_type</span><span class="p">,</span>
-    <span class="n">wants_runtime_primitives</span><span class="p">,</span>
 <span class="p">)</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.types</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span><span class="p">,</span> <span class="n">buffer_view_type</span><span class="p">,</span> <span class="n">ndarray_type</span><span class="p">,</span> <span class="n">primitive_types</span>
 
@@ -557,7 +559,7 @@
             <span class="p">)</span>
 
         <span class="n">FunctionDefTransformer</span><span class="o">.</span><span class="n">_predeclare_struct_ndarrays</span><span class="p">(</span><span class="n">ctx</span><span class="p">)</span>
-        <span class="n">FunctionDefTransformer</span><span class="o">.</span><span class="n">_predeclare_struct_primitives</span><span class="p">(</span><span class="n">ctx</span><span class="p">)</span>
+        <span class="n">predeclare_struct_primitives</span><span class="p">(</span><span class="n">ctx</span><span class="p">)</span>
         <span class="n">compiling_callable</span><span class="o">.</span><span class="n">finalize_params</span><span class="p">()</span>
         <span class="c1"># remove original args</span>
         <span class="n">node</span><span class="o">.</span><span class="n">args</span><span class="o">.</span><span class="n">args</span> <span class="o">=</span> <span class="p">[]</span>
@@ -640,111 +642,6 @@
                 <span class="n">_walk_obj</span><span class="p">(</span><span class="n">val</span><span class="p">,</span> <span class="n">i</span><span class="p">,</span> <span class="p">(),</span> <span class="nb">set</span><span class="p">())</span>
             <span class="k">elif</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">val</span><span class="p">,</span> <span class="s2">&quot;__dict__&quot;</span><span class="p">):</span>
                 <span class="n">_walk_obj</span><span class="p">(</span><span class="n">val</span><span class="p">,</span> <span class="n">i</span><span class="p">,</span> <span class="p">(),</span> <span class="nb">set</span><span class="p">())</span>
-
-    <span class="nd">@staticmethod</span>
-    <span class="k">def</span><span class="w"> </span><span class="nf">_predeclare_struct_primitives</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">ASTTransformerFuncContext</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;For each templated arg whose root class is decorated ``@qd.data_oriented(template_primitives=False)``, walk</span>
-<span class="sd">        the reachable attribute graph and declare every primitive (``int`` / ``float`` / ``bool``) member as a runtime</span>
-<span class="sd">        scalar kernel arg, instead of letting ``build_Attribute`` bake it as a compile-time constant. The arg-load</span>
-<span class="sd">        ``Expr`` is cached on the global context keyed by ``(id(parent_obj), attr_name)`` for ``build_Attribute`` to</span>
-<span class="sd">        substitute, and a ``(arg_id, template_arg_idx, attr_chain, kind)`` tuple is recorded for the launch path to</span>
-<span class="sd">        bind the live value.</span>
-
-<span class="sd">        Mirrors ``_predeclare_struct_ndarrays``. Primitive leaves have no stable identity (``id(5)`` is interned), so</span>
-<span class="sd">        the cache is keyed on the parent container&#39;s identity plus the attribute name. Only plain Python ``int`` /</span>
-<span class="sd">        ``float`` / ``bool`` are lifted (matched by exact type so numpy scalars etc. keep their previous baked</span>
-<span class="sd">        behaviour). dtype follows the runtime defaults (``default_ip`` / ``default_fp``), matching how a baked Python</span>
-<span class="sd">        constant would be typed.</span>
-
-<span class="sd">        ``_seen`` guards against attribute-graph cycles (e.g. ``sim.solver.sim is sim``), same as the ndarray walker.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
-        <span class="k">assert</span> <span class="n">ctx</span><span class="o">.</span><span class="n">py_args</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
-        <span class="c1"># Cheap early-out for the common case (no flagged template arg): the default ``template_primitives=True`` path</span>
-        <span class="c1"># never builds a walk, so genesis-style data_oriented kernels pay only one ``wants_runtime_primitives`` check</span>
-        <span class="c1"># per template arg at compile time, and nothing at launch.</span>
-        <span class="n">flagged</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span> <span class="o">=</span> <span class="p">[]</span>
-        <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">arg_meta</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">ctx</span><span class="o">.</span><span class="n">func</span><span class="o">.</span><span class="n">arg_metas</span><span class="p">):</span>
-            <span class="n">anno</span> <span class="o">=</span> <span class="n">arg_meta</span><span class="o">.</span><span class="n">annotation</span>
-            <span class="n">is_template</span> <span class="o">=</span> <span class="n">anno</span> <span class="ow">is</span> <span class="n">annotations</span><span class="o">.</span><span class="n">template</span> <span class="ow">or</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">anno</span><span class="p">,</span> <span class="n">annotations</span><span class="o">.</span><span class="n">template</span><span class="p">)</span>
-            <span class="n">is_tensor_anno</span> <span class="o">=</span> <span class="n">anno</span> <span class="ow">is</span> <span class="n">_TensorClass</span>
-            <span class="k">if</span> <span class="ow">not</span> <span class="p">(</span><span class="n">is_template</span> <span class="ow">or</span> <span class="n">is_tensor_anno</span><span class="p">):</span>
-                <span class="k">continue</span>
-            <span class="n">val</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">py_args</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
-            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">val</span><span class="p">,</span> <span class="n">_TensorClass</span><span class="p">):</span>
-                <span class="n">val</span> <span class="o">=</span> <span class="n">val</span><span class="o">.</span><span class="n">_unwrap</span><span class="p">()</span>
-            <span class="k">if</span> <span class="n">wants_runtime_primitives</span><span class="p">(</span><span class="n">val</span><span class="p">):</span>
-                <span class="n">flagged</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">i</span><span class="p">,</span> <span class="n">val</span><span class="p">))</span>
-        <span class="k">if</span> <span class="ow">not</span> <span class="n">flagged</span><span class="p">:</span>
-            <span class="k">return</span>
-
-        <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._lib</span><span class="w"> </span><span class="kn">import</span> <span class="n">core</span> <span class="k">as</span> <span class="n">_qd_core</span>  <span class="c1"># pylint: disable=C0415</span>
-        <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.util</span><span class="w"> </span><span class="kn">import</span> <span class="n">cook_dtype</span>  <span class="c1"># pylint: disable=C0415</span>
-        <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.types.utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">is_signed</span>  <span class="c1"># pylint: disable=C0415</span>
-
-        <span class="n">runtime</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span>
-        <span class="n">default_ip</span> <span class="o">=</span> <span class="n">runtime</span><span class="o">.</span><span class="n">default_ip</span>
-        <span class="n">default_fp</span> <span class="o">=</span> <span class="n">runtime</span><span class="o">.</span><span class="n">default_fp</span>
-        <span class="n">provenance</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">global_context</span><span class="o">.</span><span class="n">struct_primitive_provenance</span>
-        <span class="n">expr_cache</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">global_context</span><span class="o">.</span><span class="n">struct_primitive_to_expr</span>
-        <span class="n">launch_info</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">global_context</span><span class="o">.</span><span class="n">struct_primitive_launch_info</span>
-        <span class="n">pruning</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">global_context</span><span class="o">.</span><span class="n">pruning</span>
-        <span class="c1"># Lifted primitives are tracked under the kernel&#39;s func id (rather than the accessing function&#39;s), so a</span>
-        <span class="c1"># primitive accessed only inside an inlined ``@qd.func`` is still declared, and so the used set is captured by</span>
-        <span class="c1"># the existing ``KERNEL_FUNC_ID`` fastcache serialisation. Flat names are globally unique, so this never</span>
-        <span class="c1"># collides with dataclass-field pruning.</span>
-        <span class="n">func_id</span> <span class="o">=</span> <span class="n">pruning</span><span class="o">.</span><span class="n">KERNEL_FUNC_ID</span>
-
-        <span class="k">def</span><span class="w"> </span><span class="nf">_register_primitive</span><span class="p">(</span><span class="n">parent</span><span class="p">,</span> <span class="n">attr_name</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">arg_idx</span><span class="p">,</span> <span class="n">attr_chain</span><span class="p">):</span>
-            <span class="n">key</span> <span class="o">=</span> <span class="p">(</span><span class="nb">id</span><span class="p">(</span><span class="n">parent</span><span class="p">),</span> <span class="n">attr_name</span><span class="p">)</span>
-            <span class="k">if</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">provenance</span><span class="p">:</span>
-                <span class="k">return</span>
-            <span class="n">value_type</span> <span class="o">=</span> <span class="nb">type</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
-            <span class="k">if</span> <span class="n">value_type</span> <span class="ow">is</span> <span class="nb">bool</span> <span class="ow">or</span> <span class="n">value_type</span> <span class="ow">is</span> <span class="nb">int</span><span class="p">:</span>
-                <span class="n">dtype</span><span class="p">,</span> <span class="n">kind</span> <span class="o">=</span> <span class="n">default_ip</span><span class="p">,</span> <span class="p">(</span><span class="s2">&quot;i&quot;</span> <span class="k">if</span> <span class="n">is_signed</span><span class="p">(</span><span class="n">default_ip</span><span class="p">)</span> <span class="k">else</span> <span class="s2">&quot;u&quot;</span><span class="p">)</span>
-            <span class="k">elif</span> <span class="n">value_type</span> <span class="ow">is</span> <span class="nb">float</span><span class="p">:</span>
-                <span class="n">dtype</span><span class="p">,</span> <span class="n">kind</span> <span class="o">=</span> <span class="n">default_fp</span><span class="p">,</span> <span class="s2">&quot;f&quot;</span>
-            <span class="k">else</span><span class="p">:</span>
-                <span class="k">return</span>
-            <span class="n">flat_name</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;__qd_doprim_</span><span class="si">{</span><span class="n">arg_idx</span><span class="si">}</span><span class="s2">__</span><span class="si">{</span><span class="s1">&#39;__&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">attr_chain</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
-            <span class="n">provenance</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="n">flat_name</span><span class="p">,</span> <span class="n">arg_idx</span><span class="p">,</span> <span class="n">attr_chain</span><span class="p">,</span> <span class="n">kind</span><span class="p">)</span>
-            <span class="c1"># Declare a real kernel arg only in the enforcing pass, and only for primitives the body actually accessed</span>
-            <span class="c1"># (recorded via ``mark_used`` in ``build_Attribute`` during the discovery pass). This keeps the kernel arg</span>
-            <span class="c1"># count proportional to what is used rather than to every reachable scalar (a Genesis solver has hundreds),</span>
-            <span class="c1"># avoiding the MAX_ARG_NUM limit. The discovery pass declares nothing; its IR is discarded.</span>
-            <span class="k">if</span> <span class="ow">not</span> <span class="n">pruning</span><span class="o">.</span><span class="n">enforcing</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">pruning</span><span class="o">.</span><span class="n">is_used</span><span class="p">(</span><span class="n">func_id</span><span class="p">,</span> <span class="n">flat_name</span><span class="p">):</span>
-                <span class="k">return</span>
-            <span class="n">cooked</span> <span class="o">=</span> <span class="n">cook_dtype</span><span class="p">(</span><span class="n">dtype</span><span class="p">)</span>
-            <span class="c1"># ``insert_scalar_param`` returns an arg-id vector (like ``insert_ndarray_param``); ``make_arg_load_expr``</span>
-            <span class="c1"># consumes the vector, while the launch path needs the integer slot ``arg_id[0]``.</span>
-            <span class="n">arg_id</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">compiling_callable</span><span class="o">.</span><span class="n">insert_scalar_param</span><span class="p">(</span><span class="n">cooked</span><span class="p">,</span> <span class="n">flat_name</span><span class="p">)</span>
-            <span class="n">argload_di</span> <span class="o">=</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">DebugInfo</span><span class="p">(</span><span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">get_current_src_info</span><span class="p">())</span>
-            <span class="n">expr_cache</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">expr</span><span class="o">.</span><span class="n">Expr</span><span class="p">(</span>
-                <span class="n">_qd_core</span><span class="o">.</span><span class="n">make_arg_load_expr</span><span class="p">(</span><span class="n">arg_id</span><span class="p">,</span> <span class="n">cooked</span><span class="p">,</span> <span class="kc">False</span><span class="p">,</span> <span class="n">create_load</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">dbg_info</span><span class="o">=</span><span class="n">argload_di</span><span class="p">)</span>
-            <span class="p">)</span>
-            <span class="n">launch_info</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">arg_id</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">arg_idx</span><span class="p">,</span> <span class="n">attr_chain</span><span class="p">,</span> <span class="n">kind</span><span class="p">))</span>
-
-        <span class="k">def</span><span class="w"> </span><span class="nf">_walk</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="n">arg_idx</span><span class="p">,</span> <span class="n">path</span><span class="p">,</span> <span class="n">seen</span><span class="p">):</span>
-            <span class="n">obj_id</span> <span class="o">=</span> <span class="nb">id</span><span class="p">(</span><span class="n">obj</span><span class="p">)</span>
-            <span class="k">if</span> <span class="n">obj_id</span> <span class="ow">in</span> <span class="n">seen</span><span class="p">:</span>
-                <span class="k">return</span>
-            <span class="n">seen</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">obj_id</span><span class="p">)</span>
-            <span class="k">if</span> <span class="n">is_dataclass_instance</span><span class="p">(</span><span class="n">obj</span><span class="p">):</span>
-                <span class="n">items</span> <span class="o">=</span> <span class="p">[(</span><span class="n">f</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="n">f</span><span class="o">.</span><span class="n">name</span><span class="p">))</span> <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">dataclasses</span><span class="o">.</span><span class="n">fields</span><span class="p">(</span><span class="n">obj</span><span class="p">)]</span>
-            <span class="k">elif</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="s2">&quot;__dict__&quot;</span><span class="p">):</span>
-                <span class="n">items</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="nb">vars</span><span class="p">(</span><span class="n">obj</span><span class="p">)</span><span class="o">.</span><span class="n">items</span><span class="p">())</span>
-            <span class="k">else</span><span class="p">:</span>
-                <span class="k">return</span>
-            <span class="k">for</span> <span class="n">attr_name</span><span class="p">,</span> <span class="n">attr_val</span> <span class="ow">in</span> <span class="n">items</span><span class="p">:</span>
-                <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">attr_val</span><span class="p">,</span> <span class="n">_TensorClass</span><span class="p">):</span>
-                    <span class="n">attr_val</span> <span class="o">=</span> <span class="n">attr_val</span><span class="o">.</span><span class="n">_unwrap</span><span class="p">()</span>
-                <span class="n">attr_type</span> <span class="o">=</span> <span class="nb">type</span><span class="p">(</span><span class="n">attr_val</span><span class="p">)</span>
-                <span class="k">if</span> <span class="n">attr_type</span> <span class="ow">is</span> <span class="nb">bool</span> <span class="ow">or</span> <span class="n">attr_type</span> <span class="ow">is</span> <span class="nb">int</span> <span class="ow">or</span> <span class="n">attr_type</span> <span class="ow">is</span> <span class="nb">float</span><span class="p">:</span>
-                    <span class="n">_register_primitive</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="n">attr_name</span><span class="p">,</span> <span class="n">attr_val</span><span class="p">,</span> <span class="n">arg_idx</span><span class="p">,</span> <span class="p">(</span><span class="o">*</span><span class="n">path</span><span class="p">,</span> <span class="n">attr_name</span><span class="p">))</span>
-                <span class="k">elif</span> <span class="n">is_dataclass_instance</span><span class="p">(</span><span class="n">attr_val</span><span class="p">)</span> <span class="ow">or</span> <span class="n">is_data_oriented</span><span class="p">(</span><span class="n">attr_val</span><span class="p">):</span>
-                    <span class="n">_walk</span><span class="p">(</span><span class="n">attr_val</span><span class="p">,</span> <span class="n">arg_idx</span><span class="p">,</span> <span class="p">(</span><span class="o">*</span><span class="n">path</span><span class="p">,</span> <span class="n">attr_name</span><span class="p">),</span> <span class="n">seen</span><span class="p">)</span>
-
-        <span class="k">for</span> <span class="n">arg_idx</span><span class="p">,</span> <span class="n">val</span> <span class="ow">in</span> <span class="n">flagged</span><span class="p">:</span>
-            <span class="n">_walk</span><span class="p">(</span><span class="n">val</span><span class="p">,</span> <span class="n">arg_idx</span><span class="p">,</span> <span class="p">(),</span> <span class="nb">set</span><span class="p">())</span>
 
     <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">_unwrap_tensor</span><span class="p">(</span><span class="n">data</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>

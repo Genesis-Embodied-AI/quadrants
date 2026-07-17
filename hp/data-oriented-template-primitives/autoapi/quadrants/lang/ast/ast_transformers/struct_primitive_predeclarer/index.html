@@ -2,13 +2,13 @@
 <!DOCTYPE html>
 
 
-<html lang="en" data-content_root="../../../../../" >
+<html lang="en" data-content_root="../../../../../../" >
 
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>quadrants.lang.ast.ast_transformers &#8212; Quadrants 1.1.4 documentation</title>
+    <title>quadrants.lang.ast.ast_transformers.struct_primitive_predeclarer &#8212; Quadrants 1.1.4 documentation</title>
   
   
   
@@ -27,48 +27,48 @@
   </noscript>
   
   <!-- Loaded before other Sphinx assets -->
-  <link href="../../../../../_static/styles/theme.css?digest=a95f357e85573c9b56d5" rel="stylesheet" />
-<link href="../../../../../_static/styles/pydata-sphinx-theme.css?digest=a95f357e85573c9b56d5" rel="stylesheet" />
+  <link href="../../../../../../_static/styles/theme.css?digest=a95f357e85573c9b56d5" rel="stylesheet" />
+<link href="../../../../../../_static/styles/pydata-sphinx-theme.css?digest=a95f357e85573c9b56d5" rel="stylesheet" />
 
-    <link rel="stylesheet" type="text/css" href="../../../../../_static/pygments.css?v=8f2a1f02" />
-    <link rel="stylesheet" type="text/css" href="../../../../../_static/copybutton.css?v=76b2166b" />
-    <link rel="stylesheet" type="text/css" href="../../../../../_static/togglebutton.css?v=9c3e77be" />
-    <link rel="stylesheet" type="text/css" href="../../../../../_static/graphviz.css?v=4ae1632d" />
-    <link rel="stylesheet" type="text/css" href="../../../../../_static/sphinx-design.min.css?v=95c83b7e" />
-    <link rel="stylesheet" type="text/css" href="../../../../../_static/css/custom.css" />
+    <link rel="stylesheet" type="text/css" href="../../../../../../_static/pygments.css?v=8f2a1f02" />
+    <link rel="stylesheet" type="text/css" href="../../../../../../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../../../../../../_static/togglebutton.css?v=9c3e77be" />
+    <link rel="stylesheet" type="text/css" href="../../../../../../_static/graphviz.css?v=4ae1632d" />
+    <link rel="stylesheet" type="text/css" href="../../../../../../_static/sphinx-design.min.css?v=95c83b7e" />
+    <link rel="stylesheet" type="text/css" href="../../../../../../_static/css/custom.css" />
   
   <!-- So that users can add custom icons -->
-  <script defer src="../../../../../_static/scripts/fontawesome.js?digest=a95f357e85573c9b56d5"></script>
+  <script defer src="../../../../../../_static/scripts/fontawesome.js?digest=a95f357e85573c9b56d5"></script>
   <!-- Pre-loaded scripts that we'll load fully later -->
-  <link rel="preload" as="script" href="../../../../../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5" />
-<link rel="preload" as="script" href="../../../../../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5" />
+  <link rel="preload" as="script" href="../../../../../../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5" />
+<link rel="preload" as="script" href="../../../../../../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5" />
 
-    <script src="../../../../../_static/documentation_options.js?v=00f267c6"></script>
-    <script src="../../../../../_static/doctools.js?v=9bcbadda"></script>
-    <script src="../../../../../_static/sphinx_highlight.js?v=dc90522c"></script>
-    <script src="../../../../../_static/clipboard.min.js?v=a7894cd8"></script>
-    <script src="../../../../../_static/copybutton.js?v=f281be69"></script>
+    <script src="../../../../../../_static/documentation_options.js?v=00f267c6"></script>
+    <script src="../../../../../../_static/doctools.js?v=9bcbadda"></script>
+    <script src="../../../../../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../../../../../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../../../../../../_static/copybutton.js?v=f281be69"></script>
     <script>let toggleHintShow = 'Click to show';</script>
     <script>let toggleHintHide = 'Click to hide';</script>
     <script>let toggleOpenOnPrint = 'true';</script>
-    <script src="../../../../../_static/togglebutton.js?v=b8b12719"></script>
+    <script src="../../../../../../_static/togglebutton.js?v=b8b12719"></script>
     <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
-    <script src="../../../../../_static/design-tabs.js?v=f930bc37"></script>
+    <script src="../../../../../../_static/design-tabs.js?v=f930bc37"></script>
     <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
-    <script>DOCUMENTATION_OPTIONS.pagename = 'autoapi/quadrants/lang/ast/ast_transformers/index';</script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'autoapi/quadrants/lang/ast/ast_transformers/struct_primitive_predeclarer/index';</script>
     <script>DOCUMENTATION_OPTIONS.search_as_you_type = false;</script>
-    <link rel="index" title="Index" href="../../../../../genindex.html" />
-    <link rel="search" title="Search" href="../../../../../search.html" />
-    <link rel="next" title="quadrants.lang.ast.ast_transformers.call_transformer" href="call_transformer/index.html" />
-    <link rel="prev" title="quadrants.lang.ast.ast_transformer_utils" href="../ast_transformer_utils/index.html" />
+    <link rel="index" title="Index" href="../../../../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../../../../search.html" />
+    <link rel="next" title="quadrants.lang.ast.checkers" href="../../checkers/index.html" />
+    <link rel="prev" title="quadrants.lang.ast.ast_transformers.ndarray_arg_resolver" href="../ndarray_arg_resolver/index.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
   <meta name="docsearch:version" content="1.1.4" />
   
     
-    <script src="../../../../../_static/searchtools.js"></script>
-    <script src="../../../../../_static/language_data.js"></script>
-    <script src="../../../../../searchindex.js"></script>
+    <script src="../../../../../../_static/searchtools.js"></script>
+    <script src="../../../../../../_static/language_data.js"></script>
+    <script src="../../../../../../searchindex.js"></script>
   
   </head>
   <body data-default-mode="">
@@ -88,7 +88,7 @@
   <dialog id="pst-search-dialog">
     
 <form class="bd-search d-flex align-items-center"
-      action="../../../../../search.html"
+      action="../../../../../../search.html"
       method="get">
   <i class="fa-solid fa-magnifying-glass"></i>
   <input type="search"
@@ -124,7 +124,7 @@
     
   
 
-<a class="navbar-brand logo" href="../../../../../index.html">
+<a class="navbar-brand logo" href="../../../../../../index.html">
   
   
   
@@ -146,14 +146,14 @@
   <ul class="bd-navbar-elements navbar-nav">
     
 <li class="nav-item ">
-  <a class="nav-link nav-internal" href="../../../../../user_guide/index.html">
+  <a class="nav-link nav-internal" href="../../../../../../user_guide/index.html">
     User guide
   </a>
 </li>
 
 
 <li class="nav-item current active">
-  <a class="nav-link nav-internal" href="../../../../index.html">
+  <a class="nav-link nav-internal" href="../../../../../index.html">
     API Reference
   </a>
 </li>
@@ -239,14 +239,14 @@
   <ul class="bd-navbar-elements navbar-nav">
     
 <li class="nav-item ">
-  <a class="nav-link nav-internal" href="../../../../../user_guide/index.html">
+  <a class="nav-link nav-internal" href="../../../../../../user_guide/index.html">
     User guide
   </a>
 </li>
 
 
 <li class="nav-item current active">
-  <a class="nav-link nav-internal" href="../../../../index.html">
+  <a class="nav-link nav-internal" href="../../../../../index.html">
     API Reference
   </a>
 </li>
@@ -293,7 +293,7 @@
      aria-label="Section Navigation">
   <p class="bd-links__title" role="heading" aria-level="1">Section Navigation</p>
   <div class="bd-toc-item navbar-nav"><ul class="current nav bd-sidenav">
-<li class="toctree-l1 current active"><a class="reference internal" href="../../../index.html">quadrants</a></li>
+<li class="toctree-l1 current active"><a class="reference internal" href="../../../../index.html">quadrants</a></li>
 </ul>
 </div>
 </nav></div>
@@ -330,23 +330,26 @@
   <ul class="bd-breadcrumbs">
     
     <li class="breadcrumb-item breadcrumb-home">
-      <a href="../../../../../index.html" class="nav-link" aria-label="Home">
+      <a href="../../../../../../index.html" class="nav-link" aria-label="Home">
         <i class="fa-solid fa-home"></i>
       </a>
     </li>
     
-    <li class="breadcrumb-item"><a href="../../../../index.html" class="nav-link">API Reference</a></li>
+    <li class="breadcrumb-item"><a href="../../../../../index.html" class="nav-link">API Reference</a></li>
     
     
-    <li class="breadcrumb-item"><a href="../../../index.html" class="nav-link">quadrants</a></li>
+    <li class="breadcrumb-item"><a href="../../../../index.html" class="nav-link">quadrants</a></li>
     
     
-    <li class="breadcrumb-item"><a href="../../index.html" class="nav-link">quadrants.lang</a></li>
+    <li class="breadcrumb-item"><a href="../../../index.html" class="nav-link">quadrants.lang</a></li>
     
     
-    <li class="breadcrumb-item"><a href="../index.html" class="nav-link">quadrants.lang.ast</a></li>
+    <li class="breadcrumb-item"><a href="../../index.html" class="nav-link">quadrants.lang.ast</a></li>
     
-    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">quadrants.lang.ast.ast_transformers</span></li>
+    
+    <li class="breadcrumb-item"><a href="../index.html" class="nav-link">quadrants.lang.ast.ast_transformers</a></li>
+    
+    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">quadrants.lang.ast.ast_transformers.struct_primitive_predeclarer</span></li>
   </ul>
 </nav>
 </div>
@@ -363,20 +366,46 @@
 <div id="searchbox"></div>
                 <article class="bd-article">
                   
-  <section id="module-quadrants.lang.ast.ast_transformers">
-<span id="quadrants-lang-ast-ast-transformers"></span><h1>quadrants.lang.ast.ast_transformers<a class="headerlink" href="#module-quadrants.lang.ast.ast_transformers" title="Link to this heading">#</a></h1>
-<section id="submodules">
-<h2>Submodules<a class="headerlink" href="#submodules" title="Link to this heading">#</a></h2>
-<div class="toctree-wrapper compound">
-<ul>
-<li class="toctree-l1"><a class="reference internal" href="call_transformer/index.html">quadrants.lang.ast.ast_transformers.call_transformer</a></li>
-<li class="toctree-l1"><a class="reference internal" href="checkpoint_transformer/index.html">quadrants.lang.ast.ast_transformers.checkpoint_transformer</a></li>
-<li class="toctree-l1"><a class="reference internal" href="function_def_transformer/index.html">quadrants.lang.ast.ast_transformers.function_def_transformer</a></li>
-<li class="toctree-l1"><a class="reference internal" href="graph_parallel_transformer/index.html">quadrants.lang.ast.ast_transformers.graph_parallel_transformer</a></li>
-<li class="toctree-l1"><a class="reference internal" href="ndarray_arg_resolver/index.html">quadrants.lang.ast.ast_transformers.ndarray_arg_resolver</a></li>
-<li class="toctree-l1"><a class="reference internal" href="struct_primitive_predeclarer/index.html">quadrants.lang.ast.ast_transformers.struct_primitive_predeclarer</a></li>
-</ul>
+  <section id="module-quadrants.lang.ast.ast_transformers.struct_primitive_predeclarer">
+<span id="quadrants-lang-ast-ast-transformers-struct-primitive-predeclarer"></span><h1>quadrants.lang.ast.ast_transformers.struct_primitive_predeclarer<a class="headerlink" href="#module-quadrants.lang.ast.ast_transformers.struct_primitive_predeclarer" title="Link to this heading">#</a></h1>
+<p>Lift primitive members of <code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented(template_primitives=False)</span></code> template args into runtime scalar kernel
+args at AST-build time.</p>
+<p>Lives alongside <code class="docutils literal notranslate"><span class="pre">ndarray_arg_resolver.py</span></code> / <code class="docutils literal notranslate"><span class="pre">checkpoint_transformer.py</span></code> so the central
+<code class="docutils literal notranslate"><span class="pre">function_def_transformer.py</span></code> file doesn’t have to grow per-feature (the same rationale the ndarray resolver
+documents). <code class="docutils literal notranslate"><span class="pre">FunctionDefTransformer.transform</span></code> delegates here right after <code class="docutils literal notranslate"><span class="pre">_predeclare_struct_ndarrays</span></code>; this is
+the only entry point.</p>
+<p>See <code class="docutils literal notranslate"><span class="pre">docs/source/user_guide/compound_types.md</span></code> (section “Runtime primitives: <code class="docutils literal notranslate"><span class="pre">template_primitives=False</span></code>”) for the
+user-facing surface and <code class="docutils literal notranslate"><span class="pre">perso_hugh/doc/data_oriented_template_primitives.md</span></code> for the design.</p>
+<section id="functions">
+<h2>Functions<a class="headerlink" href="#functions" title="Link to this heading">#</a></h2>
+<div class="pst-scrollable-table-container"><table class="autosummary longtable table autosummary">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.ast.ast_transformers.struct_primitive_predeclarer.predeclare_struct_primitives" title="quadrants.lang.ast.ast_transformers.struct_primitive_predeclarer.predeclare_struct_primitives"><code class="xref py py-obj docutils literal notranslate"><span class="pre">predeclare_struct_primitives</span></code></a>(→ None)</p></td>
+<td><p>For each templated arg whose root class is decorated <code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented(template_primitives=False)</span></code>, walk</p></td>
+</tr>
+</tbody>
+</table>
 </div>
+</section>
+<section id="module-contents">
+<h2>Module Contents<a class="headerlink" href="#module-contents" title="Link to this heading">#</a></h2>
+<dl class="py function">
+<dt class="sig sig-object py" id="quadrants.lang.ast.ast_transformers.struct_primitive_predeclarer.predeclare_struct_primitives">
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.ast.ast_transformers.struct_primitive_predeclarer.</span></span><span class="sig-name descname"><span class="pre">predeclare_struct_primitives</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ctx</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../../ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext" title="quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext"><span class="pre">quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext</span></a></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="../../../../../../_modules/quadrants/lang/ast/ast_transformers/struct_primitive_predeclarer.html#predeclare_struct_primitives"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.ast.ast_transformers.struct_primitive_predeclarer.predeclare_struct_primitives" title="Link to this definition">#</a></dt>
+<dd><p>For each templated arg whose root class is decorated <code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented(template_primitives=False)</span></code>, walk
+the reachable attribute graph and declare every primitive (<code class="docutils literal notranslate"><span class="pre">int</span></code> / <code class="docutils literal notranslate"><span class="pre">float</span></code> / <code class="docutils literal notranslate"><span class="pre">bool</span></code>) member as a runtime
+scalar kernel arg, instead of letting <code class="docutils literal notranslate"><span class="pre">build_Attribute</span></code> bake it as a compile-time constant. The arg-load
+<code class="docutils literal notranslate"><span class="pre">Expr</span></code> is cached on the global context keyed by <code class="docutils literal notranslate"><span class="pre">(id(parent_obj),</span> <span class="pre">attr_name)</span></code> for <code class="docutils literal notranslate"><span class="pre">build_Attribute</span></code> to
+substitute, and a <code class="docutils literal notranslate"><span class="pre">(arg_id,</span> <span class="pre">template_arg_idx,</span> <span class="pre">attr_chain,</span> <span class="pre">kind)</span></code> tuple is recorded for the launch path to
+bind the live value.</p>
+<p>Mirrors <code class="docutils literal notranslate"><span class="pre">_predeclare_struct_ndarrays</span></code>. Primitive leaves have no stable identity (<code class="docutils literal notranslate"><span class="pre">id(5)</span></code> is interned), so
+the cache is keyed on the parent container’s identity plus the attribute name. Only plain Python <code class="docutils literal notranslate"><span class="pre">int</span></code> /
+<code class="docutils literal notranslate"><span class="pre">float</span></code> / <code class="docutils literal notranslate"><span class="pre">bool</span></code> are lifted (matched by exact type so numpy scalars etc. keep their previous baked
+behaviour). dtype follows the runtime defaults (<code class="docutils literal notranslate"><span class="pre">default_ip</span></code> / <code class="docutils literal notranslate"><span class="pre">default_fp</span></code>), matching how a baked Python
+constant would be typed.</p>
+<p><code class="docutils literal notranslate"><span class="pre">_seen</span></code> guards against attribute-graph cycles (e.g. <code class="docutils literal notranslate"><span class="pre">sim.solver.sim</span> <span class="pre">is</span> <span class="pre">sim</span></code>), same as the ndarray walker.</p>
+</dd></dl>
+
 </section>
 </section>
 
@@ -391,20 +420,20 @@
                   
 <div class="prev-next-area">
     <a class="left-prev"
-       href="../ast_transformer_utils/index.html"
+       href="../ndarray_arg_resolver/index.html"
        title="previous page">
       <i class="fa-solid fa-angle-left"></i>
       <div class="prev-next-info">
         <p class="prev-next-subtitle">previous</p>
-        <p class="prev-next-title">quadrants.lang.ast.ast_transformer_utils</p>
+        <p class="prev-next-title">quadrants.lang.ast.ast_transformers.ndarray_arg_resolver</p>
       </div>
     </a>
     <a class="right-next"
-       href="call_transformer/index.html"
+       href="../../checkers/index.html"
        title="next page">
       <div class="prev-next-info">
         <p class="prev-next-subtitle">next</p>
-        <p class="prev-next-title">quadrants.lang.ast.ast_transformers.call_transformer</p>
+        <p class="prev-next-title">quadrants.lang.ast.checkers</p>
       </div>
       <i class="fa-solid fa-angle-right"></i>
     </a>
@@ -427,14 +456,18 @@
   </div>
   <nav id="pst-page-toc-nav" class="page-toc" aria-labelledby="pst-page-navigation-heading-2">
     <ul class="pst-show_toc_level nav section-nav flex-column">
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#submodules">Submodules</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#functions">Functions</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#module-contents">Module Contents</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.ast.ast_transformers.struct_primitive_predeclarer.predeclare_struct_primitives"><code class="docutils literal notranslate"><span class="pre">predeclare_struct_primitives()</span></code></a></li>
+</ul>
+</li>
 </ul>
   </nav></div>
 
   <div class="sidebar-secondary-item">
 
   <div class="tocsection sourcelink">
-    <a href="../../../../../_sources/autoapi/quadrants/lang/ast/ast_transformers/index.rst.txt">
+    <a href="../../../../../../_sources/autoapi/quadrants/lang/ast/ast_transformers/struct_primitive_predeclarer/index.rst.txt">
       <i class="fa-solid fa-file-lines"></i> Show Source
     </a>
   </div>
@@ -453,8 +486,8 @@
   </div>
   
   <!-- Scripts loaded after <body> so the DOM is not blocked -->
-  <script defer src="../../../../../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5"></script>
-<script defer src="../../../../../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5"></script>
+  <script defer src="../../../../../../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5"></script>
+<script defer src="../../../../../../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5"></script>
 
   <footer class="bd-footer">
 <div class="bd-footer__inner bd-page-width">

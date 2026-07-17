@@ -834,7 +834,7 @@
 
         <span class="bp">self</span><span class="o">.</span><span class="n">_struct_ndarray_launch_info_by_key</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="n">CompiledKernelKeyType</span><span class="p">,</span> <span class="nb">list</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
         <span class="c1"># Launch info for primitives lifted from ``@qd.data_oriented(template_primitives=False)`` template args (see</span>
-        <span class="c1"># ``_predeclare_struct_primitives``). Maps key -&gt; list of ``(arg_id, template_arg_idx, attr_chain, kind)``.</span>
+        <span class="c1"># ``predeclare_struct_primitives``). Maps key -&gt; list of ``(arg_id, template_arg_idx, attr_chain, kind)``.</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_struct_primitive_launch_info_by_key</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="n">CompiledKernelKeyType</span><span class="p">,</span> <span class="nb">list</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_mutable_nd_cached_key</span><span class="p">:</span> <span class="n">CompiledKernelKeyType</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_mutable_nd_cached_val</span><span class="p">:</span> <span class="nb">list</span> <span class="o">=</span> <span class="p">[]</span>

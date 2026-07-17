@@ -430,7 +430,7 @@ Module Contents
 .. py:function:: maybe_lifted_primitive(ctx: ASTTransformerFuncContext, parent: Any, attr: str)
 
    Handle access to a primitive member that ``@qd.data_oriented(template_primitives=False)`` lifted into a
-   runtime scalar kernel arg (see ``_predeclare_struct_primitives``).
+   runtime scalar kernel arg (see ``predeclare_struct_primitives``).
 
    Returns the arg-load ``Expr`` to substitute for the baked value in the enforcing pass; returns ``None`` when
    the attribute is not a lifted primitive, or during the non-enforcing discovery pass (where the access is
