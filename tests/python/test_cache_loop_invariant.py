@@ -59,3 +59,40 @@ def test_atomic_dest_not_cached(use_ndarray: bool) -> None:
     k(x, result)
     for i in range(n):
         assert result[i] == m, f"result[{i}] = {result[i]}, expected {m}"
+
+
+@test_utils.test()
+def test_conditional_store_to_loop_invariant_global() -> None:
+    """Regression: a loop-invariant global written *conditionally* inside an ``if`` must not read stale.
+
+    ``flag[i]`` is invariant w.r.t. the inner ``j`` loop, so its load is a candidate for
+    cache_loop_invariant_global_vars.  It is written conditionally (``if j >= threshold``) inside that
+    loop, and the read must observe the store.  Before the read and write ``GlobalPtrStmt``s to the same
+    address were unified pre-offload (``merge_global_ptrs``, run once before the first ``flag_access``),
+    per-task CSE left them split: ``flag_access`` stamped the hoisted read ``activate=false`` and the CSE
+    eliminability rule refused to re-merge the later ``activate=true`` conditional write, so the cache served
+    the pre-loop value.  That stale read broke the rigid solver's convergence break-flag (an ~88% runtime
+    regression).  Here it manifests as ``acc`` summing the stale ``0`` instead of the stored ``1``.
+    """
+    n = 4
+    m = 8
+    threshold = 3
+
+    @qd.kernel
+    def k(flag: qd.template(), result: qd.template()):
+        for i in range(n):  # offloaded task
+            flag[i] = 0
+            acc = 0
+            for j in range(m):  # inner loop; flag[i] is loop-invariant here
+                if j >= threshold:
+                    flag[i] = 1  # conditional in-if store to the loop-invariant global
+                acc += flag[i]  # must observe the store, not a stale cached load
+            result[i] = acc
+
+    flag = qd.field(dtype=qd.i32, shape=(n,))
+    result = qd.field(dtype=qd.i32, shape=(n,))
+
+    k(flag, result)
+    expected = m - threshold  # flag == 1 for j in [threshold, m)
+    for i in range(n):
+        assert result[i] == expected, f"result[{i}] = {result[i]}, expected {expected}"
