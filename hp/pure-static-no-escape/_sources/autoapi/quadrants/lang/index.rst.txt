@@ -19,6 +19,7 @@ Submodules
    /autoapi/quadrants/lang/expr/index
    /autoapi/quadrants/lang/field/index
    /autoapi/quadrants/lang/func/index
+   /autoapi/quadrants/lang/graph_parallel/index
    /autoapi/quadrants/lang/graph_status/index
    /autoapi/quadrants/lang/impl/index
    /autoapi/quadrants/lang/intrinsics/index

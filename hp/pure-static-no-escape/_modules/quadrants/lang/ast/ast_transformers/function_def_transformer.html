@@ -7,7 +7,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>quadrants.lang.ast.ast_transformers.function_def_transformer &#8212; Quadrants 1.1.2 documentation</title>
+    <title>quadrants.lang.ast.ast_transformers.function_def_transformer &#8212; Quadrants 1.1.3 documentation</title>
   
   
   
@@ -42,7 +42,7 @@
   <link rel="preload" as="script" href="../../../../../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5" />
 <link rel="preload" as="script" href="../../../../../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5" />
 
-    <script src="../../../../../_static/documentation_options.js?v=6f037312"></script>
+    <script src="../../../../../_static/documentation_options.js?v=cb7bf70b"></script>
     <script src="../../../../../_static/doctools.js?v=9bcbadda"></script>
     <script src="../../../../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../../../../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -60,7 +60,7 @@
     <link rel="search" title="Search" href="../../../../../search.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="1.1.2" />
+  <meta name="docsearch:version" content="1.1.3" />
   
     
     <script src="../../../../../_static/searchtools.js"></script>
@@ -128,7 +128,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 1.1.2 documentation</p>
+    <p class="title logo__title">Quadrants 1.1.3 documentation</p>
   
 </a></div>
     
@@ -851,6 +851,7 @@
                 <span class="c1"># different argument shape) start from an empty list. Mirrors how `graph_do_while_arg` gets overwritten</span>
                 <span class="c1"># unconditionally during AST traversal.</span>
                 <span class="n">kernel</span><span class="o">.</span><span class="n">checkpoint_yield_on_args</span> <span class="o">=</span> <span class="p">[]</span>
+                <span class="n">kernel</span><span class="o">.</span><span class="n">checkpoint_yield_on_cpp_arg_ids</span> <span class="o">=</span> <span class="p">[]</span>
                 <span class="n">kernel</span><span class="o">.</span><span class="n">checkpoint_user_labels_by_cp_id</span> <span class="o">=</span> <span class="p">[]</span>
                 <span class="c1"># Auto-wrap pass for `@qd.kernel(graph=True, checkpoints=True)` kernels. Mutates `node.body` in place so</span>
                 <span class="c1"># every top-level for-loop (and every for-loop inside a `qd.graph_do_while` body) that the user did not</span>
@@ -939,6 +940,38 @@
         <span class="k">return</span> <span class="kc">False</span>
 
     <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_is_graph_parallel_context_with</span><span class="p">(</span><span class="n">stmt</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">stmt</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Syntactic check matching GraphParallelTransformer.is_graph_parallel_context_call: a</span>
+<span class="sd">        ``with qd.graph_parallel_context():`` fork/join region.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">stmt</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">With</span><span class="p">)</span> <span class="ow">or</span> <span class="nb">len</span><span class="p">(</span><span class="n">stmt</span><span class="o">.</span><span class="n">items</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">False</span>
+        <span class="n">ctx_expr</span> <span class="o">=</span> <span class="n">stmt</span><span class="o">.</span><span class="n">items</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">context_expr</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">ctx_expr</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Call</span><span class="p">):</span>
+            <span class="k">return</span> <span class="kc">False</span>
+        <span class="n">func</span> <span class="o">=</span> <span class="n">ctx_expr</span><span class="o">.</span><span class="n">func</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">func</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Attribute</span><span class="p">)</span> <span class="ow">and</span> <span class="n">func</span><span class="o">.</span><span class="n">attr</span> <span class="o">==</span> <span class="s2">&quot;graph_parallel_context&quot;</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">True</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">func</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Name</span><span class="p">)</span> <span class="ow">and</span> <span class="n">func</span><span class="o">.</span><span class="n">id</span> <span class="o">==</span> <span class="s2">&quot;graph_parallel_context&quot;</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">True</span>
+        <span class="k">return</span> <span class="kc">False</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_is_parallel_section_with</span><span class="p">(</span><span class="n">stmt</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">stmt</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Syntactic check matching GraphParallelTransformer.is_parallel_section_call: a ``with qd.graph_parallel(...):``</span>
+<span class="sd">        section of a ``qd.graph_parallel_context()`` region.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">stmt</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">With</span><span class="p">)</span> <span class="ow">or</span> <span class="nb">len</span><span class="p">(</span><span class="n">stmt</span><span class="o">.</span><span class="n">items</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">False</span>
+        <span class="n">ctx_expr</span> <span class="o">=</span> <span class="n">stmt</span><span class="o">.</span><span class="n">items</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">context_expr</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">ctx_expr</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Call</span><span class="p">):</span>
+            <span class="k">return</span> <span class="kc">False</span>
+        <span class="n">func</span> <span class="o">=</span> <span class="n">ctx_expr</span><span class="o">.</span><span class="n">func</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">func</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Attribute</span><span class="p">)</span> <span class="ow">and</span> <span class="n">func</span><span class="o">.</span><span class="n">attr</span> <span class="o">==</span> <span class="s2">&quot;graph_parallel&quot;</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">True</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">func</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Name</span><span class="p">)</span> <span class="ow">and</span> <span class="n">func</span><span class="o">.</span><span class="n">id</span> <span class="o">==</span> <span class="s2">&quot;graph_parallel&quot;</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">True</span>
+        <span class="k">return</span> <span class="kc">False</span>
+
+    <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">_validate_graph_do_while_structure</span><span class="p">(</span><span class="n">body</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">ast</span><span class="o">.</span><span class="n">stmt</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;If a kernel uses qd.graph_do_while() anywhere, enforce the structural rules that remain after</span>
 <span class="sd">        per-statement graph-region tagging landed (see the offloader&#39;s region-boundary flushing and</span>
@@ -996,6 +1029,27 @@
                 <span class="c1"># checkpoint body is still caught; the checkpoint&#39;s own body restrictions are enforced by</span>
                 <span class="c1"># `CheckpointTransformer.build_checkpoint_with`.</span>
                 <span class="n">FunctionDefTransformer</span><span class="o">.</span><span class="n">_validate_graph_do_while_stmt_list</span><span class="p">(</span><span class="n">stmt</span><span class="o">.</span><span class="n">body</span><span class="p">,</span> <span class="n">is_kernel_top</span><span class="o">=</span><span class="n">is_kernel_top</span><span class="p">)</span>
+                <span class="k">continue</span>
+            <span class="k">if</span> <span class="n">FunctionDefTransformer</span><span class="o">.</span><span class="n">_is_graph_parallel_context_with</span><span class="p">(</span><span class="n">stmt</span><span class="p">):</span>
+                <span class="c1"># A `with qd.graph_parallel_context()` region groups concurrent `with qd.graph_parallel()`</span>
+                <span class="c1"># sections; it is a legal sibling of for-loops / checkpoints. Its body must be</span>
+                <span class="c1"># `qd.graph_parallel` section blocks (optionally under `if qd.static(...)`); the full check</span>
+                <span class="c1"># is in GraphParallelTransformer.build_graph_parallel_context_with. Each `qd.graph_parallel` section&#39;s</span>
+                <span class="c1"># body is task territory, validated here with the in-loop rules. Descend through `if` members</span>
+                <span class="c1"># so `qd.graph_parallel` sections inside an optional `if qd.static(...)` are reached too.</span>
+                <span class="n">pending</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">stmt</span><span class="o">.</span><span class="n">body</span><span class="p">)</span>
+                <span class="k">while</span> <span class="n">pending</span><span class="p">:</span>
+                    <span class="n">member</span> <span class="o">=</span> <span class="n">pending</span><span class="o">.</span><span class="n">pop</span><span class="p">()</span>
+                    <span class="k">if</span> <span class="n">FunctionDefTransformer</span><span class="o">.</span><span class="n">_is_parallel_section_with</span><span class="p">(</span><span class="n">member</span><span class="p">):</span>
+                        <span class="n">FunctionDefTransformer</span><span class="o">.</span><span class="n">_validate_graph_do_while_stmt_list</span><span class="p">(</span><span class="n">member</span><span class="o">.</span><span class="n">body</span><span class="p">,</span> <span class="n">is_kernel_top</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+                    <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">member</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">If</span><span class="p">):</span>
+                        <span class="n">pending</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">member</span><span class="o">.</span><span class="n">body</span><span class="p">)</span>
+                        <span class="n">pending</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">member</span><span class="o">.</span><span class="n">orelse</span><span class="p">)</span>
+                    <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">member</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">For</span><span class="p">):</span>
+                        <span class="c1"># `for ... in qd.static(...)` generates sections; descend so each unrolled section</span>
+                        <span class="c1"># body is still validated with the in-loop rules (a runtime for here is rejected</span>
+                        <span class="c1"># earlier by GraphParallelTransformer.build_graph_parallel_context_with).</span>
+                        <span class="n">pending</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">member</span><span class="o">.</span><span class="n">body</span><span class="p">)</span>
                 <span class="k">continue</span>
             <span class="n">where</span> <span class="o">=</span> <span class="s2">&quot;the kernel body&quot;</span> <span class="k">if</span> <span class="n">is_kernel_top</span> <span class="k">else</span> <span class="s2">&quot;a qd.graph_do_while() body&quot;</span>
             <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span>

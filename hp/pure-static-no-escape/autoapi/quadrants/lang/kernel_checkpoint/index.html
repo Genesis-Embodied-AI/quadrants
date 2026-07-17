@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>quadrants.lang.kernel_checkpoint &#8212; Quadrants 1.1.2 documentation</title>
+    <title>quadrants.lang.kernel_checkpoint &#8212; Quadrants 1.1.3 documentation</title>
   
   
   
@@ -43,7 +43,7 @@
   <link rel="preload" as="script" href="../../../../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5" />
 <link rel="preload" as="script" href="../../../../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5" />
 
-    <script src="../../../../_static/documentation_options.js?v=6f037312"></script>
+    <script src="../../../../_static/documentation_options.js?v=cb7bf70b"></script>
     <script src="../../../../_static/doctools.js?v=9bcbadda"></script>
     <script src="../../../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../../../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -63,7 +63,7 @@
     <link rel="prev" title="quadrants.lang.kernel_arguments" href="../kernel_arguments/index.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="1.1.2" />
+  <meta name="docsearch:version" content="1.1.3" />
   
     
     <script src="../../../../_static/searchtools.js"></script>
@@ -131,7 +131,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 1.1.2 documentation</p>
+    <p class="title logo__title">Quadrants 1.1.3 documentation</p>
   
 </a></div>
     
@@ -377,14 +377,8 @@ below so the central <code class="docutils literal notranslate"><span class="pre
 <tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.kernel_checkpoint.translate_user_label_to_internal_cp_id" title="quadrants.lang.kernel_checkpoint.translate_user_label_to_internal_cp_id"><code class="xref py py-obj docutils literal notranslate"><span class="pre">translate_user_label_to_internal_cp_id</span></code></a>(→ int)</p></td>
 <td><p>Translate a user-supplied <code class="docutils literal notranslate"><span class="pre">from_checkpoint=</span></code> label (int or IntEnum) to the runtime's internal dense cp_id.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.kernel_checkpoint.init_yield_on_arg_id_table" title="quadrants.lang.kernel_checkpoint.init_yield_on_arg_id_table"><code class="xref py py-obj docutils literal notranslate"><span class="pre">init_yield_on_arg_id_table</span></code></a>(→ None)</p></td>
-<td><p>Allocate / reset the per-launch <code class="docutils literal notranslate"><span class="pre">cp_id</span> <span class="pre">-&gt;</span> <span class="pre">C++</span> <span class="pre">arg-id</span></code> table at the top of <code class="docutils literal notranslate"><span class="pre">launch_kernel</span></code>'s arg iteration.</p></td>
-</tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.kernel_checkpoint.maybe_record_yield_on_arg" title="quadrants.lang.kernel_checkpoint.maybe_record_yield_on_arg"><code class="xref py py-obj docutils literal notranslate"><span class="pre">maybe_record_yield_on_arg</span></code></a>(→ None)</p></td>
-<td><p>Fill the <code class="docutils literal notranslate"><span class="pre">cp_id</span> <span class="pre">-&gt;</span> <span class="pre">C++</span> <span class="pre">arg-id</span></code> slot when the arg iterator visits a named <code class="docutils literal notranslate"><span class="pre">yield_on=</span></code> kernel parameter.</p></td>
-</tr>
 <tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.kernel_checkpoint.forward_yield_on_table_to_ctx" title="quadrants.lang.kernel_checkpoint.forward_yield_on_table_to_ctx"><code class="xref py py-obj docutils literal notranslate"><span class="pre">forward_yield_on_table_to_ctx</span></code></a>(→ None)</p></td>
-<td><p>Copy the resolved <code class="docutils literal notranslate"><span class="pre">cp_id</span> <span class="pre">-&gt;</span> <span class="pre">C++</span> <span class="pre">arg-id</span></code> table onto the launch context so the runtime can find each</p></td>
+<td><p>Copy the <code class="docutils literal notranslate"><span class="pre">cp_id</span> <span class="pre">-&gt;</span> <span class="pre">C++</span> <span class="pre">arg-id</span></code> table onto the launch context so the runtime can find each <code class="docutils literal notranslate"><span class="pre">yield_on=</span></code></p></td>
 </tr>
 <tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.kernel_checkpoint.maybe_build_graph_status" title="quadrants.lang.kernel_checkpoint.maybe_build_graph_status"><code class="xref py py-obj docutils literal notranslate"><span class="pre">maybe_build_graph_status</span></code></a>(→ Any)</p></td>
 <td><p>Translate the runtime's internal yielding cp_id back to the user-supplied label and return a <code class="docutils literal notranslate"><span class="pre">GraphStatus</span></code>.</p></td>
@@ -415,27 +409,14 @@ resume targets. Raises <code class="docutils literal notranslate"><span class="p
 </dd></dl>
 
 <dl class="py function">
-<dt class="sig sig-object py" id="quadrants.lang.kernel_checkpoint.init_yield_on_arg_id_table">
-<span class="sig-prename descclassname"><span class="pre">quadrants.lang.kernel_checkpoint.</span></span><span class="sig-name descname"><span class="pre">init_yield_on_arg_id_table</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">kernel</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Any</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="../../../../_modules/quadrants/lang/kernel_checkpoint.html#init_yield_on_arg_id_table"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.kernel_checkpoint.init_yield_on_arg_id_table" title="Link to this definition">#</a></dt>
-<dd><p>Allocate / reset the per-launch <code class="docutils literal notranslate"><span class="pre">cp_id</span> <span class="pre">-&gt;</span> <span class="pre">C++</span> <span class="pre">arg-id</span></code> table at the top of <code class="docutils literal notranslate"><span class="pre">launch_kernel</span></code>’s arg iteration.</p>
-<p>Each entry defaults to <code class="docutils literal notranslate"><span class="pre">-1</span></code> (“no yield_on”); the per-arg loop below fills in the C++ arg id when it visits the
-named parameter. Sized to the kernel’s checkpoint count once per launch so any changes to the checkpoint set (only
-possible via re-AST-walk) reset the table cleanly. No-op for kernels with no <code class="docutils literal notranslate"><span class="pre">yield_on=</span></code> checkpoints.</p>
-</dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="quadrants.lang.kernel_checkpoint.maybe_record_yield_on_arg">
-<span class="sig-prename descclassname"><span class="pre">quadrants.lang.kernel_checkpoint.</span></span><span class="sig-name descname"><span class="pre">maybe_record_yield_on_arg</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">kernel</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Any</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">arg_name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cpp_arg_id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="../../../../_modules/quadrants/lang/kernel_checkpoint.html#maybe_record_yield_on_arg"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.kernel_checkpoint.maybe_record_yield_on_arg" title="Link to this definition">#</a></dt>
-<dd><p>Fill the <code class="docutils literal notranslate"><span class="pre">cp_id</span> <span class="pre">-&gt;</span> <span class="pre">C++</span> <span class="pre">arg-id</span></code> slot when the arg iterator visits a named <code class="docutils literal notranslate"><span class="pre">yield_on=</span></code> kernel parameter.</p>
-<p>Walked once per kernel arg in <code class="docutils literal notranslate"><span class="pre">launch_kernel</span></code>; cheap O(checkpoints) match. A single parameter can be the
-<code class="docutils literal notranslate"><span class="pre">yield_on=</span></code> for multiple checkpoints (the inner loop fills every matching slot).</p>
-</dd></dl>
-
-<dl class="py function">
 <dt class="sig sig-object py" id="quadrants.lang.kernel_checkpoint.forward_yield_on_table_to_ctx">
 <span class="sig-prename descclassname"><span class="pre">quadrants.lang.kernel_checkpoint.</span></span><span class="sig-name descname"><span class="pre">forward_yield_on_table_to_ctx</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">kernel</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Any</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">launch_ctx</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Any</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="../../../../_modules/quadrants/lang/kernel_checkpoint.html#forward_yield_on_table_to_ctx"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.kernel_checkpoint.forward_yield_on_table_to_ctx" title="Link to this definition">#</a></dt>
-<dd><p>Copy the resolved <code class="docutils literal notranslate"><span class="pre">cp_id</span> <span class="pre">-&gt;</span> <span class="pre">C++</span> <span class="pre">arg-id</span></code> table onto the launch context so the runtime can find each
-<code class="docutils literal notranslate"><span class="pre">yield_on=</span></code> ndarray’s device address at launch.</p>
+<dd><p>Copy the <code class="docutils literal notranslate"><span class="pre">cp_id</span> <span class="pre">-&gt;</span> <span class="pre">C++</span> <span class="pre">arg-id</span></code> table onto the launch context so the runtime can find each <code class="docutils literal notranslate"><span class="pre">yield_on=</span></code>
+ndarray’s device address at launch.</p>
+<p>The table (<code class="docutils literal notranslate"><span class="pre">kernel.checkpoint_yield_on_cpp_arg_ids</span></code>) is populated at AST-build time by
+<code class="docutils literal notranslate"><span class="pre">CheckpointTransformer.build_checkpoint_with</span></code> via <code class="docutils literal notranslate"><span class="pre">ASTTransformer._resolve_ndarray_kernel_arg_id</span></code>, which
+uniformly handles bare kernel parameters (<code class="docutils literal notranslate"><span class="pre">yield_on=flag</span></code>) and <code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code> member ndarrays
+(<code class="docutils literal notranslate"><span class="pre">yield_on=self.flag</span></code>). No per-launch arg iteration / name match is required.</p>
 </dd></dl>
 
 <dl class="py function">
@@ -502,8 +483,6 @@ so the runtime can’t surface them as the yielding cp – the lookup is always 
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#module-contents">Module Contents</a><ul class="nav section-nav flex-column">
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.kernel_checkpoint.validate_resume_cookie"><code class="docutils literal notranslate"><span class="pre">validate_resume_cookie()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.kernel_checkpoint.translate_user_label_to_internal_cp_id"><code class="docutils literal notranslate"><span class="pre">translate_user_label_to_internal_cp_id()</span></code></a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.kernel_checkpoint.init_yield_on_arg_id_table"><code class="docutils literal notranslate"><span class="pre">init_yield_on_arg_id_table()</span></code></a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.kernel_checkpoint.maybe_record_yield_on_arg"><code class="docutils literal notranslate"><span class="pre">maybe_record_yield_on_arg()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.kernel_checkpoint.forward_yield_on_table_to_ctx"><code class="docutils literal notranslate"><span class="pre">forward_yield_on_table_to_ctx()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.kernel_checkpoint.maybe_build_graph_status"><code class="docutils literal notranslate"><span class="pre">maybe_build_graph_status()</span></code></a></li>
 </ul>

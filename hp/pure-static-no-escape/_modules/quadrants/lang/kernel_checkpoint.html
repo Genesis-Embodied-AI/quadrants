@@ -7,7 +7,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>quadrants.lang.kernel_checkpoint &#8212; Quadrants 1.1.2 documentation</title>
+    <title>quadrants.lang.kernel_checkpoint &#8212; Quadrants 1.1.3 documentation</title>
   
   
   
@@ -42,7 +42,7 @@
   <link rel="preload" as="script" href="../../../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5" />
 <link rel="preload" as="script" href="../../../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5" />
 
-    <script src="../../../_static/documentation_options.js?v=6f037312"></script>
+    <script src="../../../_static/documentation_options.js?v=cb7bf70b"></script>
     <script src="../../../_static/doctools.js?v=9bcbadda"></script>
     <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -60,7 +60,7 @@
     <link rel="search" title="Search" href="../../../search.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="1.1.2" />
+  <meta name="docsearch:version" content="1.1.3" />
   
     
     <script src="../../../_static/searchtools.js"></script>
@@ -128,7 +128,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 1.1.2 documentation</p>
+    <p class="title logo__title">Quadrants 1.1.3 documentation</p>
   
 </a></div>
     
@@ -385,44 +385,19 @@
 
 
 
-<div class="viewcode-block" id="init_yield_on_arg_id_table">
-<a class="viewcode-back" href="../../../autoapi/quadrants/lang/kernel_checkpoint/index.html#quadrants.lang.kernel_checkpoint.init_yield_on_arg_id_table">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">init_yield_on_arg_id_table</span><span class="p">(</span><span class="n">kernel</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Allocate / reset the per-launch ``cp_id -&gt; C++ arg-id`` table at the top of ``launch_kernel``&#39;s arg iteration.</span>
-
-<span class="sd">    Each entry defaults to ``-1`` (&quot;no yield_on&quot;); the per-arg loop below fills in the C++ arg id when it visits the</span>
-<span class="sd">    named parameter. Sized to the kernel&#39;s checkpoint count once per launch so any changes to the checkpoint set (only</span>
-<span class="sd">    possible via re-AST-walk) reset the table cleanly. No-op for kernels with no ``yield_on=`` checkpoints.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
-    <span class="k">if</span> <span class="n">kernel</span><span class="o">.</span><span class="n">checkpoint_yield_on_args</span><span class="p">:</span>
-        <span class="n">kernel</span><span class="o">.</span><span class="n">_checkpoint_yield_on_cpp_arg_ids</span> <span class="o">=</span> <span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="n">kernel</span><span class="o">.</span><span class="n">checkpoint_yield_on_args</span><span class="p">)</span></div>
-
-
-
-<div class="viewcode-block" id="maybe_record_yield_on_arg">
-<a class="viewcode-back" href="../../../autoapi/quadrants/lang/kernel_checkpoint/index.html#quadrants.lang.kernel_checkpoint.maybe_record_yield_on_arg">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">maybe_record_yield_on_arg</span><span class="p">(</span><span class="n">kernel</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">arg_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">cpp_arg_id</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Fill the ``cp_id -&gt; C++ arg-id`` slot when the arg iterator visits a named ``yield_on=`` kernel parameter.</span>
-
-<span class="sd">    Walked once per kernel arg in ``launch_kernel``; cheap O(checkpoints) match. A single parameter can be the</span>
-<span class="sd">    ``yield_on=`` for multiple checkpoints (the inner loop fills every matching slot).</span>
-<span class="sd">    &quot;&quot;&quot;</span>
-    <span class="k">if</span> <span class="ow">not</span> <span class="n">kernel</span><span class="o">.</span><span class="n">checkpoint_yield_on_args</span><span class="p">:</span>
-        <span class="k">return</span>
-    <span class="k">for</span> <span class="n">cp_idx</span><span class="p">,</span> <span class="n">yield_name</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">kernel</span><span class="o">.</span><span class="n">checkpoint_yield_on_args</span><span class="p">):</span>
-        <span class="k">if</span> <span class="n">yield_name</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">arg_name</span> <span class="o">==</span> <span class="n">yield_name</span><span class="p">:</span>
-            <span class="n">kernel</span><span class="o">.</span><span class="n">_checkpoint_yield_on_cpp_arg_ids</span><span class="p">[</span><span class="n">cp_idx</span><span class="p">]</span> <span class="o">=</span> <span class="n">cpp_arg_id</span></div>
-
-
-
 <div class="viewcode-block" id="forward_yield_on_table_to_ctx">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/kernel_checkpoint/index.html#quadrants.lang.kernel_checkpoint.forward_yield_on_table_to_ctx">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">forward_yield_on_table_to_ctx</span><span class="p">(</span><span class="n">kernel</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">launch_ctx</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Copy the resolved ``cp_id -&gt; C++ arg-id`` table onto the launch context so the runtime can find each</span>
-<span class="sd">    ``yield_on=`` ndarray&#39;s device address at launch.</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Copy the ``cp_id -&gt; C++ arg-id`` table onto the launch context so the runtime can find each ``yield_on=``</span>
+<span class="sd">    ndarray&#39;s device address at launch.</span>
+
+<span class="sd">    The table (``kernel.checkpoint_yield_on_cpp_arg_ids``) is populated at AST-build time by</span>
+<span class="sd">    ``CheckpointTransformer.build_checkpoint_with`` via ``ASTTransformer._resolve_ndarray_kernel_arg_id``, which</span>
+<span class="sd">    uniformly handles bare kernel parameters (``yield_on=flag``) and ``@qd.data_oriented`` member ndarrays</span>
+<span class="sd">    (``yield_on=self.flag``). No per-launch arg iteration / name match is required.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
-    <span class="k">if</span> <span class="n">kernel</span><span class="o">.</span><span class="n">checkpoint_yield_on_args</span> <span class="ow">and</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">kernel</span><span class="p">,</span> <span class="s2">&quot;_checkpoint_yield_on_cpp_arg_ids&quot;</span><span class="p">):</span>
-        <span class="n">launch_ctx</span><span class="o">.</span><span class="n">checkpoint_yield_on_arg_ids</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">kernel</span><span class="o">.</span><span class="n">_checkpoint_yield_on_cpp_arg_ids</span><span class="p">)</span></div>
+    <span class="k">if</span> <span class="n">kernel</span><span class="o">.</span><span class="n">checkpoint_yield_on_cpp_arg_ids</span><span class="p">:</span>
+        <span class="n">launch_ctx</span><span class="o">.</span><span class="n">checkpoint_yield_on_arg_ids</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">kernel</span><span class="o">.</span><span class="n">checkpoint_yield_on_cpp_arg_ids</span><span class="p">)</span></div>
 
 
 

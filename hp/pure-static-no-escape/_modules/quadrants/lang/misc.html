@@ -7,7 +7,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>quadrants.lang.misc &#8212; Quadrants 1.1.2 documentation</title>
+    <title>quadrants.lang.misc &#8212; Quadrants 1.1.3 documentation</title>
   
   
   
@@ -42,7 +42,7 @@
   <link rel="preload" as="script" href="../../../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5" />
 <link rel="preload" as="script" href="../../../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5" />
 
-    <script src="../../../_static/documentation_options.js?v=6f037312"></script>
+    <script src="../../../_static/documentation_options.js?v=cb7bf70b"></script>
     <script src="../../../_static/doctools.js?v=9bcbadda"></script>
     <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -60,7 +60,7 @@
     <link rel="search" title="Search" href="../../../search.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="1.1.2" />
+  <meta name="docsearch:version" content="1.1.3" />
   
     
     <script src="../../../_static/searchtools.js"></script>
@@ -128,7 +128,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 1.1.2 documentation</p>
+    <p class="title logo__title">Quadrants 1.1.3 documentation</p>
   
 </a></div>
     
@@ -345,6 +345,7 @@
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">impl</span><span class="p">,</span> <span class="n">util</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.checkpoint</span><span class="w"> </span><span class="kn">import</span> <span class="n">checkpoint</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.expr</span><span class="w"> </span><span class="kn">import</span> <span class="n">Expr</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.graph_parallel</span><span class="w"> </span><span class="kn">import</span> <span class="n">graph_parallel</span><span class="p">,</span> <span class="n">graph_parallel_context</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.graph_status</span><span class="w"> </span><span class="kn">import</span> <span class="n">GraphStatus</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.impl</span><span class="w"> </span><span class="kn">import</span> <span class="n">axes</span><span class="p">,</span> <span class="n">get_runtime</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.profiler.kernel_profiler</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_default_kernel_profiler</span>
@@ -1182,7 +1183,7 @@
 <span class="sd">    iteration). The one structural rule is that a ``qd.graph_do_while`` ``while``-loop may appear only at the kernel top</span>
 <span class="sd">    level or directly inside another ``graph_do_while`` body, not inside a ``for``-loop.</span>
 
-<span class="sd">    This function should not be called directly at runtime; it is recognised and transformed during AST compilation.</span>
+<span class="sd">    This function should not be called directly at runtime; it is recognized and transformed during AST compilation.</span>
 <span class="sd">    Requires ``@qd.kernel(graph=True)``.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">return</span> <span class="nb">bool</span><span class="p">(</span><span class="n">condition</span><span class="p">)</span></div>
@@ -1340,6 +1341,8 @@
     <span class="s2">&quot;GraphStatus&quot;</span><span class="p">,</span>
     <span class="s2">&quot;checkpoint&quot;</span><span class="p">,</span>
     <span class="s2">&quot;graph_do_while&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;graph_parallel_context&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;graph_parallel&quot;</span><span class="p">,</span>
     <span class="s2">&quot;loop_config&quot;</span><span class="p">,</span>
     <span class="s2">&quot;global_thread_idx&quot;</span><span class="p">,</span>
     <span class="s2">&quot;assume_in_range&quot;</span><span class="p">,</span>

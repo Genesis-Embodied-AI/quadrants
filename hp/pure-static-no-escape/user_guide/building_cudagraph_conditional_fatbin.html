@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>Building the CUDA graph conditional fatbin &#8212; Quadrants 1.1.2 documentation</title>
+    <title>Advanced: Building the CUDA graph conditional fatbin &#8212; Quadrants 1.1.3 documentation</title>
   
   
   
@@ -43,7 +43,7 @@
   <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5" />
 <link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5" />
 
-    <script src="../_static/documentation_options.js?v=6f037312"></script>
+    <script src="../_static/documentation_options.js?v=cb7bf70b"></script>
     <script src="../_static/doctools.js?v=9bcbadda"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -63,7 +63,7 @@
     <link rel="prev" title="Advanced: Contributing to quadrants" href="contributing.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="1.1.2" />
+  <meta name="docsearch:version" content="1.1.3" />
   
     
     <script src="../_static/searchtools.js"></script>
@@ -131,7 +131,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 1.1.2 documentation</p>
+    <p class="title logo__title">Quadrants 1.1.3 documentation</p>
   
 </a></div>
     
@@ -336,6 +336,7 @@
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Performance</span></p>
 <ul class="nav bd-sidenav">
+<li class="toctree-l1"><a class="reference internal" href="performance.html">Performance</a></li>
 <li class="toctree-l1"><a class="reference internal" href="fastcache.html">Fastcache</a></li>
 <li class="toctree-l1"><a class="reference internal" href="graph.html">Graph</a></li>
 <li class="toctree-l1"><a class="reference internal" href="streams.html">Streams</a></li>
@@ -344,7 +345,7 @@
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Testing</span></p>
 <ul class="nav bd-sidenav">
-<li class="toctree-l1"><a class="reference internal" href="unit_testing.html">Unit testing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="unit_testing.html">Advanced: Unit testing</a></li>
 <li class="toctree-l1"><a class="reference internal" href="kernel_coverage.html">Kernel code coverage</a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Reference</span></p>
@@ -365,7 +366,7 @@
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Internal</span></p>
 <ul class="current nav bd-sidenav">
-<li class="toctree-l1 current active"><a class="current reference internal" href="#">Building the CUDA graph conditional fatbin</a></li>
+<li class="toctree-l1 current active"><a class="current reference internal" href="#">Advanced: Building the CUDA graph conditional fatbin</a></li>
 </ul>
 </div>
 </nav></div>
@@ -409,7 +410,7 @@
     
     <li class="breadcrumb-item"><a href="index.html" class="nav-link">User guide</a></li>
     
-    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">Building the CUDA graph conditional fatbin</span></li>
+    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">Advanced: Building the CUDA graph conditional fatbin</span></li>
   </ul>
 </nav>
 </div>
@@ -426,42 +427,35 @@
 <div id="searchbox"></div>
                 <article class="bd-article">
                   
-  <section class="tex2jax_ignore mathjax_ignore" id="building-the-cuda-graph-conditional-fatbin">
-<h1>Building the CUDA graph conditional fatbin<a class="headerlink" href="#building-the-cuda-graph-conditional-fatbin" title="Link to this heading">#</a></h1>
-<p>The <code class="docutils literal notranslate"><span class="pre">graph_do_while</span></code> feature uses a tiny CUDA kernel that calls
-<code class="docutils literal notranslate"><span class="pre">cudaGraphSetConditional</span></code> (a device-side function from NVIDIA’s
-<code class="docutils literal notranslate"><span class="pre">libcudadevrt.a</span></code>) to control CUDA graph conditional while nodes. These
-conditional nodes require SM 9.0+ (Hopper or later); on older GPUs,
-<code class="docutils literal notranslate"><span class="pre">graph_do_while</span></code> falls back to a host-side loop automatically.</p>
+  <section class="tex2jax_ignore mathjax_ignore" id="advanced-building-the-cuda-graph-conditional-fatbin">
+<h1>Advanced: Building the CUDA graph conditional fatbin<a class="headerlink" href="#advanced-building-the-cuda-graph-conditional-fatbin" title="Link to this heading">#</a></h1>
+<p>The <code class="docutils literal notranslate"><span class="pre">graph_do_while</span></code> feature uses a tiny CUDA kernel that calls <code class="docutils literal notranslate"><span class="pre">cudaGraphSetConditional</span></code> (a device-side function from NVIDIA’s <code class="docutils literal notranslate"><span class="pre">libcudadevrt.a</span></code>) to control CUDA graph conditional while nodes. These conditional nodes require SM 9.0+ (Hopper or later); on older GPUs, <code class="docutils literal notranslate"><span class="pre">graph_do_while</span></code> falls back to a host-side loop automatically.</p>
 <p>There are three distinct phases:</p>
 <ol class="arabic simple">
-<li><p><strong>Fatbin generation</strong> (rare, manual) — A developer runs
-<code class="docutils literal notranslate"><span class="pre">scripts/build_condition_kernel_fatbin.py</span></code>, which compiles the kernel and
-device-links it with <code class="docutils literal notranslate"><span class="pre">libcudadevrt.a</span></code> to resolve <code class="docutils literal notranslate"><span class="pre">cudaGraphSetConditional</span></code>.
-The output is a self-contained fatbin, committed to git as a C header.
-Requires <code class="docutils literal notranslate"><span class="pre">nvcc</span></code> and the CUDA toolkit.</p></li>
-<li><p><strong>Quadrants build</strong> (CI / developers) — The C header is <code class="docutils literal notranslate"><span class="pre">#include</span></code>d as a
-plain byte array. No CUDA toolkit needed.</p></li>
-<li><p><strong>Runtime</strong> (end users) — The fatbin is loaded via <code class="docutils literal notranslate"><span class="pre">cuModuleLoadData</span></code>.
-No CUDA toolkit needed.</p></li>
+<li><p><strong>Fatbin generation</strong> (rare, manual) — A developer runs <code class="docutils literal notranslate"><span class="pre">scripts/build_condition_kernel_fatbin.py</span></code> (and the sibling <code class="docutils literal notranslate"><span class="pre">build_checkpoint_gate_fatbin.py</span></code> / <code class="docutils literal notranslate"><span class="pre">build_checkpoint_yield_check_fatbin.py</span></code>), which compiles the kernel and device-links it with <code class="docutils literal notranslate"><span class="pre">libcudadevrt.a</span></code> to resolve <code class="docutils literal notranslate"><span class="pre">cudaGraphSetConditional</span></code>. Each script emits <strong>one fatbin per build toolkit</strong> (see Prerequisites), all committed to git in a single C header. Requires the CUDA toolkits listed below.</p></li>
+<li><p><strong>Quadrants build</strong> (CI / developers) — The C header is <code class="docutils literal notranslate"><span class="pre">#include</span></code>d as plain byte arrays. No CUDA toolkit needed.</p></li>
+<li><p><strong>Runtime</strong> (end users) — The fatbins are loaded via <code class="docutils literal notranslate"><span class="pre">cuModuleLoadData</span></code>. No CUDA toolkit needed.</p></li>
 </ol>
-<p>This page documents phase 1: regenerating the pre-built fatbin.</p>
+<p>This page documents phase 1: regenerating the pre-built fatbins.</p>
 <section id="when-to-regenerate">
 <h2>When to regenerate<a class="headerlink" href="#when-to-regenerate" title="Link to this heading">#</a></h2>
 <p>You only need to regenerate the fatbin if:</p>
 <ul class="simple">
-<li><p>The condition kernel source (<code class="docutils literal notranslate"><span class="pre">quadrants/runtime/cuda/graph_do_while_cond.cu</span></code>)
-changes.</p></li>
+<li><p>The condition kernel source (<code class="docutils literal notranslate"><span class="pre">quadrants/runtime/cuda/graph_do_while_cond.cu</span></code>) changes.</p></li>
 <li><p>You need to add support for a new SM architecture.</p></li>
 </ul>
 </section>
 <section id="prerequisites">
 <h2>Prerequisites<a class="headerlink" href="#prerequisites" title="Link to this heading">#</a></h2>
+<p>Each SM architecture is compiled with the oldest suitable CUDA toolkit, and the per-toolkit results are bundled into one header. This is what keeps each cubin loadable on the widest range of drivers: a SASS cubin can only be loaded by a driver whose CUDA version is <code class="docutils literal notranslate"><span class="pre">&gt;=</span></code> the toolkit that produced it, so building e.g. sm_120 (RTX 5090) with a newer toolkit than necessary would make it reject older drivers with <code class="docutils literal notranslate"><span class="pre">CUDA_ERROR_INVALID_IMAGE</span></code>. The per-arch toolkit requirement lives in the <code class="docutils literal notranslate"><span class="pre">SM_TOOLKIT</span></code> mapping in <code class="docutils literal notranslate"><span class="pre">scripts/_fatbin_common.py</span></code>, where each SM maps to a version spec — <code class="docutils literal notranslate"><span class="pre">==X.Y</span></code> (exact) or <code class="docutils literal notranslate"><span class="pre">&gt;=X.Y</span></code> (minimum):</p>
 <ul class="simple">
-<li><p>CUDA toolkit with <code class="docutils literal notranslate"><span class="pre">nvcc</span></code> (13.0 or later, required for SM 110 support;
-earlier toolkits will fail with <code class="docutils literal notranslate"><span class="pre">Unsupported</span> <span class="pre">gpu</span> <span class="pre">architecture</span> <span class="pre">'compute_110'</span></code>).</p></li>
-<li><p>The <code class="docutils literal notranslate"><span class="pre">nvcc</span></code> binary must be on your <code class="docutils literal notranslate"><span class="pre">PATH</span></code>, or set <code class="docutils literal notranslate"><span class="pre">CUDA_HOME</span></code>.</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">==12.8</span></code> (matched exactly)</strong> — every architecture except sm_110 (pre-Hopper sm_60 / sm_70 / sm_80, Hopper sm_90, Blackwell sm_100 / sm_120). 12.8 is the oldest toolkit that covers all shipping Blackwell parts, and is the wide-compatibility anchor, so it is matched exactly rather than “or newer”.</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">&gt;=13.0</span></code></strong> — sm_110 (Thor) only; earlier toolkits fail with <code class="docutils literal notranslate"><span class="pre">Unsupported</span> <span class="pre">gpu</span> <span class="pre">architecture</span> <span class="pre">'compute_110'</span></code>. This is a minimum: the oldest available toolkit <code class="docutils literal notranslate"><span class="pre">&gt;=</span></code> 13.0 is used (e.g. 13.1 is fine). There is no old-driver constraint pulling it lower, since Thor is new hardware.</p></li>
 </ul>
+<p><strong>All</strong> required toolkits must be installed; the scripts raise <code class="docutils literal notranslate"><span class="pre">MissingToolkitError</span></code> (listing what is missing and what was discovered) before compiling anything if any is absent. Toolkits are auto-discovered from <code class="docutils literal notranslate"><span class="pre">/usr/local/cuda-*/bin/nvcc</span></code>, <code class="docutils literal notranslate"><span class="pre">nvcc</span></code> on <code class="docutils literal notranslate"><span class="pre">PATH</span></code>, and <code class="docutils literal notranslate"><span class="pre">CUDA_HOME</span></code> / <code class="docutils literal notranslate"><span class="pre">CUDA_PATH</span></code>. To point at toolkits in non-standard locations, set <code class="docutils literal notranslate"><span class="pre">QUADRANTS_NVCC_CANDIDATES</span></code> to an <code class="docutils literal notranslate"><span class="pre">os.pathsep</span></code>-separated list of nvcc binaries and/or CUDA root directories, e.g.:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nb">export</span><span class="w"> </span><span class="nv">QUADRANTS_NVCC_CANDIDATES</span><span class="o">=</span>/opt/cuda-12.8:/opt/cuda-13.1/bin/nvcc
+</pre></div>
+</div>
 </section>
 <section id="regenerating">
 <h2>Regenerating<a class="headerlink" href="#regenerating" title="Link to this heading">#</a></h2>
@@ -469,22 +463,27 @@ earlier toolkits will fail with <code class="docutils literal notranslate"><span
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>python<span class="w"> </span>scripts/build_condition_kernel_fatbin.py
 </pre></div>
 </div>
-<p>This will:</p>
+<p>This will, for each build toolkit:</p>
 <ol class="arabic simple">
-<li><p>Compile <code class="docutils literal notranslate"><span class="pre">quadrants/runtime/cuda/graph_do_while_cond.cu</span></code> with relocatable device
-code for each target SM architecture.</p></li>
-<li><p>Device-link the result with <code class="docutils literal notranslate"><span class="pre">libcudadevrt.a</span></code> to resolve the
-<code class="docutils literal notranslate"><span class="pre">cudaGraphSetConditional</span></code> extern.</p></li>
-<li><p>Write the fatbin as a C byte array to
-<code class="docutils literal notranslate"><span class="pre">quadrants/runtime/cuda/graph_do_while_cond_fatbin.h</span></code>.</p></li>
+<li><p>Compile <code class="docutils literal notranslate"><span class="pre">quadrants/runtime/cuda/graph_do_while_cond.cu</span></code> with relocatable device code for that toolkit’s target SM architectures.</p></li>
+<li><p>Device-link the result with <code class="docutils literal notranslate"><span class="pre">libcudadevrt.a</span></code> to resolve the <code class="docutils literal notranslate"><span class="pre">cudaGraphSetConditional</span></code> extern.</p></li>
 </ol>
-<p>After regenerating, commit the updated header. Quadrants must be rebuilt to
-pick up the new fatbin.</p>
+<p>It then writes all the per-toolkit fatbins as C byte arrays (plus a small lookup table) to <code class="docutils literal notranslate"><span class="pre">quadrants/runtime/cuda/graph_do_while_cond_fatbin.h</span></code>.</p>
+<p>Regenerate the checkpoint kernels the same way with <code class="docutils literal notranslate"><span class="pre">scripts/build_checkpoint_gate_fatbin.py</span></code> and <code class="docutils literal notranslate"><span class="pre">scripts/build_checkpoint_yield_check_fatbin.py</span></code>. The generator emits a compact byte-array layout; run <code class="docutils literal notranslate"><span class="pre">pre-commit</span> <span class="pre">run</span> <span class="pre">-a</span></code> (clang-format) on the regenerated headers so they match the committed formatting before committing them. Quadrants must be rebuilt to pick up the new fatbins.</p>
+</section>
+<section id="verifying-the-committed-fatbins">
+<h2>Verifying the committed fatbins<a class="headerlink" href="#verifying-the-committed-fatbins" title="Link to this heading">#</a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">tests/python/test_fatbin_arch_coverage.py</span></code> holds an explicit, hand-maintained <code class="docutils literal notranslate"><span class="pre">EXPECTED_LAYOUT</span></code> for each committed <code class="docutils literal notranslate"><span class="pre">*_fatbin.h</span></code> — the architectures and the CUDA toolkit expected in every blob (e.g. <code class="docutils literal notranslate"><span class="pre">sm_90</span> <span class="pre">/</span> <span class="pre">sm_100</span> <span class="pre">/</span> <span class="pre">sm_120</span></code> built with CUDA 12.8 in blob 0 and <code class="docutils literal notranslate"><span class="pre">sm_110</span></code> built with CUDA 13.0+ in blob 1 for the condition kernel). It deliberately does <em>not</em> re-derive this from <code class="docutils literal notranslate"><span class="pre">scripts/_fatbin_common.py</span></code>, so a regression in the <code class="docutils literal notranslate"><span class="pre">SM_TOOLKIT</span></code> mapping is caught rather than silently baked into a new header. For every embedded cubin it checks both the SASS arch and the build toolkit that <code class="docutils literal notranslate"><span class="pre">cuobjdump</span></code> reports, so it directly asserts the load-bearing fact behind #2942: the sm_120 (RTX 5090) cubin is built with the wide-compatibility CUDA 12.8, not a newer toolkit that would reintroduce <code class="docutils literal notranslate"><span class="pre">CUDA_ERROR_INVALID_IMAGE</span></code> on 570-series drivers. It also drift-guards each <code class="docutils literal notranslate"><span class="pre">SM_VERSIONS</span></code> list against the arch set actually baked into the checked-in header.</p>
+<p>The test shells out to <code class="docutils literal notranslate"><span class="pre">cuobjdump</span></code>, so it is skipped unless <code class="docutils literal notranslate"><span class="pre">cuobjdump</span></code> is on <code class="docutils literal notranslate"><span class="pre">PATH</span></code>; the toolkit providing it must also be at least as new as the newest one used to build the fatbins (CUDA 13.0+, for sm_110), otherwise the affected header is skipped rather than failed. Run it after regenerating:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Make a recent CUDA toolkit&#39;s cuobjdump visible on PATH, e.g.:</span>
+<span class="nb">export</span><span class="w"> </span><span class="nv">PATH</span><span class="o">=</span>/usr/local/cuda/bin:<span class="nv">$PATH</span>
+python<span class="w"> </span>-m<span class="w"> </span>pytest<span class="w"> </span>tests/python/test_fatbin_arch_coverage.py<span class="w"> </span>-v
+</pre></div>
+</div>
 </section>
 <section id="adding-a-new-sm-architecture">
 <h2>Adding a new SM architecture<a class="headerlink" href="#adding-a-new-sm-architecture" title="Link to this heading">#</a></h2>
-<p>Edit the <code class="docutils literal notranslate"><span class="pre">SM_VERSIONS</span></code> list in <code class="docutils literal notranslate"><span class="pre">scripts/build_condition_kernel_fatbin.py</span></code> to
-add the new SM version number (e.g., <code class="docutils literal notranslate"><span class="pre">130</span></code>), then regenerate.</p>
+<p>Add the new SM version number to the <code class="docutils literal notranslate"><span class="pre">SM_VERSIONS</span></code> list in the relevant <code class="docutils literal notranslate"><span class="pre">scripts/build_*_fatbin.py</span></code>, and add an entry for it to <code class="docutils literal notranslate"><span class="pre">SM_TOOLKIT</span></code> in <code class="docutils literal notranslate"><span class="pre">scripts/_fatbin_common.py</span></code>: use <code class="docutils literal notranslate"><span class="pre">&quot;==X.Y&quot;</span></code> to pin it to an exact toolkit (the oldest one that covers it, as for the <code class="docutils literal notranslate"><span class="pre">==12.8</span></code> archs) or <code class="docutils literal notranslate"><span class="pre">&quot;&gt;=X.Y&quot;</span></code> for a minimum (as done for <code class="docutils literal notranslate"><span class="pre">110:</span> <span class="pre">&quot;&gt;=13.0&quot;</span></code>). Then make sure a matching toolkit is installed and regenerate. (Every SM in <code class="docutils literal notranslate"><span class="pre">SM_VERSIONS</span></code> must have an <code class="docutils literal notranslate"><span class="pre">SM_TOOLKIT</span></code> entry, or the scripts raise <code class="docutils literal notranslate"><span class="pre">KeyError</span></code>.)</p>
 </section>
 <section id="files">
 <h2>Files<a class="headerlink" href="#files" title="Link to this heading">#</a></h2>
@@ -495,14 +494,26 @@ add the new SM version number (e.g., <code class="docutils literal notranslate">
 </tr>
 </thead>
 <tbody>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">quadrants/runtime/cuda/graph_do_while_cond.cu</span></code></p></td>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">scripts/_fatbin_common.py</span></code></p></td>
+<td><p>Shared multi-toolkit build + header generation; arch → toolkit mapping</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">quadrants/runtime/cuda/graph_do_while_cond.cu</span></code></p></td>
 <td><p>CUDA C source for the condition kernel</p></td>
 </tr>
-<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">scripts/build_condition_kernel_fatbin.py</span></code></p></td>
-<td><p>Regeneration script</p></td>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">scripts/build_condition_kernel_fatbin.py</span></code></p></td>
+<td><p>Regeneration script (condition kernel)</p></td>
 </tr>
-<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">quadrants/runtime/cuda/graph_do_while_cond_fatbin.h</span></code></p></td>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">quadrants/runtime/cuda/graph_do_while_cond_fatbin.h</span></code></p></td>
 <td><p>Generated C header (checked into git)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">scripts/build_checkpoint_gate_fatbin.py</span></code>, <code class="docutils literal notranslate"><span class="pre">scripts/build_checkpoint_yield_check_fatbin.py</span></code></p></td>
+<td><p>Regeneration scripts (checkpoint kernels)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">quadrants/runtime/cuda/checkpoint_gate_fatbin.h</span></code>, <code class="docutils literal notranslate"><span class="pre">quadrants/runtime/cuda/checkpoint_yield_check_fatbin.h</span></code></p></td>
+<td><p>Generated C headers (checked into git)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">tests/python/test_fatbin_arch_coverage.py</span></code></p></td>
+<td><p>Regression test: committed headers match an explicit per-blob arch + toolkit layout (needs <code class="docutils literal notranslate"><span class="pre">cuobjdump</span></code>)</p></td>
 </tr>
 </tbody>
 </table>
@@ -510,10 +521,7 @@ add the new SM version number (e.g., <code class="docutils literal notranslate">
 </section>
 <section id="how-it-s-used-at-runtime">
 <h2>How it’s used at runtime<a class="headerlink" href="#how-it-s-used-at-runtime" title="Link to this heading">#</a></h2>
-<p><code class="docutils literal notranslate"><span class="pre">GraphManager::ensure_condition_kernel_loaded()</span></code> in
-<code class="docutils literal notranslate"><span class="pre">quadrants/runtime/cuda/graph_manager.cpp</span></code> loads the fatbin via
-<code class="docutils literal notranslate"><span class="pre">cuModuleLoadData</span></code>. If the fatbin does not contain SASS for the current GPU’s
-SM architecture, loading fails with a clear error pointing to this script.</p>
+<p><code class="docutils literal notranslate"><span class="pre">GraphManager::ensure_condition_kernel_loaded()</span></code> in <code class="docutils literal notranslate"><span class="pre">quadrants/runtime/cuda/graph_manager.cpp</span></code> loads the fatbins via <code class="docutils literal notranslate"><span class="pre">GraphManager::load_first_matching_fatbin()</span></code>, which tries each bundled per-toolkit fatbin with <code class="docutils literal notranslate"><span class="pre">cuModuleLoadData</span></code> and keeps the first that loads (a device only loads the fatbin containing SASS for its SM). If none contain SASS for the current GPU’s SM architecture, loading fails with a clear error pointing to the relevant regeneration script. The checkpoint kernels load the same way from <code class="docutils literal notranslate"><span class="pre">graph_manager_checkpoint.cpp</span></code>.</p>
 </section>
 </section>
 
@@ -567,6 +575,7 @@ SM architecture, loading fails with a clear error pointing to this script.</p>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#when-to-regenerate">When to regenerate</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#prerequisites">Prerequisites</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#regenerating">Regenerating</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#verifying-the-committed-fatbins">Verifying the committed fatbins</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#adding-a-new-sm-architecture">Adding a new SM architecture</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#files">Files</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#how-it-s-used-at-runtime">How it’s used at runtime</a></li>
