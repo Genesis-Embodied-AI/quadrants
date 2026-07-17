@@ -211,9 +211,9 @@ sim.step()        # the new value of n takes effect immediately
 
 Notes and restrictions:
 
-- **dtype** follows the runtime defaults - an `int` / `bool` member becomes the default integer type (`qd.i32` unless changed via `default_ip`) and a `float` member becomes the default float type (`qd.f32` unless changed via `default_fp`). A member whose value falls outside the default integer range will overflow where a baked literal would not; if you need exact wide-integer constants, keep the default (baked) behaviour.
+- **dtype** follows the runtime defaults - an `int` / `bool` member becomes the default integer type (`qd.i32`, unless you override the runtime default integer type in `qd.init()`) and a `float` member becomes the default float type (`qd.f32`, unless you override the runtime default float type in `qd.init()`). A member whose value falls outside the default integer range will overflow where a baked literal would not; if you need exact wide-integer constants, keep the default (baked) behaviour.
 - **Pruning**: only the primitives the kernel actually reads are turned into kernel arguments, so a class with many primitive members does not blow up the kernel argument count.
-- **`qd.static` is an error**: a lifted primitive cannot be used inside `qd.static(...)`, because that context requires a compile-time constant. Doing so raises `QuadrantsSyntaxError`. Use the default `template_primitives=True` for values that must be baked (e.g. unrolled loop bounds).
+- **`qd.static` is an error**: a lifted primitive cannot be used inside [`qd.static(...)`](static.md), because that context requires a compile-time constant. Doing so raises `QuadrantsSyntaxError`. Use the default `template_primitives=True` for values that must be baked (e.g. unrolled loop bounds).
 - **No re-specialisation on value change**: because the value is a runtime argument, mutating it never triggers a recompile. Distinct instances of the class still compile separately (the kernel is keyed per instance), exactly as with the default.
 - This is **opt-in**: the default `@qd.data_oriented` continues to bake primitive members as shown above.
 
