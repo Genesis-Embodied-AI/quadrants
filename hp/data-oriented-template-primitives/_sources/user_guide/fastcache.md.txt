@@ -4,9 +4,9 @@
 
 Fastcache reduces the time it takes to load cached kernels when a new Python process starts.
 
-The standard [offline cache](init_options.md#offline_cache) already persists compiled kernels to disk. However, loading a cached kernel still requires some initial front-end parsing steps, which take non-negligible time. For applications with many kernels this front-end overhead alone can take several seconds.
+The standard [offline cache](init_options.md#offline_cache) already persists compiled kernels to disk. However, loading a cached kernel still requires re-reading and re-analyzing the Python kernel source (parsing it and preparing it for the compiler) before the saved artifact can be matched and reused, which takes non-negligible time. For applications with many kernels this parsing overhead alone can take several seconds.
 
-Fastcache bypasses that front-end work. It computes a cheap cache key from the kernel source text, argument types, and compiler config, and uses it to load the compiled artifact directly.
+Fastcache bypasses that parsing and analysis work. It computes a cheap cache key from the kernel source text, argument types, and compiler config, and uses it to load the compiled artifact directly.
 
 On a Genesis simulator benchmark (`single_franka_envs.py`, Ubuntu 24.04, NVIDIA 5090):
 

@@ -432,8 +432,8 @@
 <section id="what-it-is">
 <h2>What it is<a class="headerlink" href="#what-it-is" title="Link to this heading">#</a></h2>
 <p>Fastcache reduces the time it takes to load cached kernels when a new Python process starts.</p>
-<p>The standard <a class="reference internal" href="init_options.html#offline-cache"><span class="std std-ref">offline cache</span></a> already persists compiled kernels to disk. However, loading a cached kernel still requires some initial front-end parsing steps, which take non-negligible time. For applications with many kernels this front-end overhead alone can take several seconds.</p>
-<p>Fastcache bypasses that front-end work. It computes a cheap cache key from the kernel source text, argument types, and compiler config, and uses it to load the compiled artifact directly.</p>
+<p>The standard <a class="reference internal" href="init_options.html#offline-cache"><span class="std std-ref">offline cache</span></a> already persists compiled kernels to disk. However, loading a cached kernel still requires re-reading and re-analyzing the Python kernel source (parsing it and preparing it for the compiler) before the saved artifact can be matched and reused, which takes non-negligible time. For applications with many kernels this parsing overhead alone can take several seconds.</p>
+<p>Fastcache bypasses that parsing and analysis work. It computes a cheap cache key from the kernel source text, argument types, and compiler config, and uses it to load the compiled artifact directly.</p>
 <p>On a Genesis simulator benchmark (<code class="docutils literal notranslate"><span class="pre">single_franka_envs.py</span></code>, Ubuntu 24.04, NVIDIA 5090):</p>
 <div class="pst-scrollable-table-container"><table class="table">
 <thead>
