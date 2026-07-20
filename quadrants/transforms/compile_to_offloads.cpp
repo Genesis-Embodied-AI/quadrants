@@ -206,6 +206,11 @@ void offload_to_executable(IRNode *ir,
   irpass::analysis::verify_if_debug(ir, config);
 
   if (config.cache_loop_invariant_global_vars) {
+    // Merge each task's same-address pointer statements (fields and ndarrays) right before caching. Pre-offload
+    // merge_global_ptrs cannot reach ndarray accesses (not yet ExternalPtrStmts before offload), and per-task CSE
+    // runs later in this function's full_simplify passes, so without this the ndarray break-flag's read/write
+    // pointers reach cache_loop split and get cached into a stale local -> non-terminating loop (see the pass).
+    irpass::merge_offloaded_ptrs(ir);
     irpass::cache_loop_invariant_global_vars(ir, config);
     print("Cache loop-invariant global vars");
   }

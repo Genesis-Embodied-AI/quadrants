@@ -124,8 +124,12 @@ class WholeKernelCSE : public BasicStmtVisitor {
     // Use the dynamic type via `typeid(*stmt)` - `typeid(stmt)` operates on the pointer expression and returns the
     // `Stmt*` static type for every input, collapsing every statement class into the same hash component.
     auto hash_type = std::hash<std::type_index>{}(std::type_index(typeid(*stmt)));
-    if (stmt->is<GlobalPtrStmt>() || stmt->is<LoopUniqueStmt>()) {
-      // special cases in common_statement_eliminable()
+    if (stmt->is<GlobalPtrStmt>() || stmt->is<ExternalPtrStmt>() || stmt->is<LoopUniqueStmt>()) {
+      // special cases in common_statement_eliminable(): these bucket by type alone so every same-typed candidate is
+      // compared via the value-based check below (definitely_same_address / same_value), rather than by operand-pointer
+      // identity. ExternalPtr needs this too: two accesses to the same ndarray address can have distinct index-compute
+      // statements (not yet merged), so operand-address hashing would split them into separate buckets and miss the
+      // merge -- leaving the read/write pointers split for cache_loop_invariant_global_vars (the ndarray break-flag).
       return hash_type;
     }
     auto op = stmt->get_operands();
@@ -311,12 +315,12 @@ std::vector<OffloadedStmt *> collect_offloaded_tasks(IRNode *root) {
 }
 
 // Run CSE on a single offloaded task, scoped to that task alone via a throwaway wrapper block.
-bool cse_one_task(Block *parent, OffloadedStmt *off) {
+bool cse_one_task(Block *parent, OffloadedStmt *off, bool ptrs_only = false) {
   const int location = parent->locate(off);
   QD_ASSERT(location != -1);
   Block wrapper;
   wrapper.insert(parent->extract(off));
-  const bool modified = WholeKernelCSE::run(&wrapper);
+  const bool modified = WholeKernelCSE::run(&wrapper, ptrs_only);
   parent->insert(wrapper.extract(off), location);
   return modified;
 }
@@ -347,6 +351,30 @@ bool merge_global_ptrs(IRNode *root) {
     }
   }
   return WholeKernelCSE::run(root, /*ptrs_only=*/true);
+}
+
+// Per-task, pointers-only merge run POST-offload (just before cache_loop_invariant_global_vars). merge_global_ptrs
+// (pre-offload) unifies a field's split read/write GlobalPtrStmts so cache_loop can cache soundly, but ndarray
+// accesses are not yet ExternalPtrStmts pre-offload -- that lowering happens during offload -- so the pre-offload
+// merge can't reach them. Per-task CSE (which would merge them) runs inside offload_to_executable's full_simplify,
+// which is AFTER cache_loop. Without a merge here the ndarray break-flag's read and write ExternalPtrStmts stay
+// split into cache_loop, which then caches the read into a stale local -> the loop's break never fires. This runs
+// the same cheap ptrs-only CSE per offloaded task, so cache_loop sees one shared pointer per address (fields and
+// ndarrays alike). Scoped per task so pointers from different tasks are never merged.
+bool merge_offloaded_ptrs(IRNode *root) {
+  QD_AUTO_PROF;
+  auto tasks = collect_offloaded_tasks(root);
+  if (tasks.empty()) {
+    return false;
+  }
+  auto *block = root->as<Block>();
+  bool modified = false;
+  for (auto *off : tasks) {
+    if (cse_one_task(block, off, /*ptrs_only=*/true)) {
+      modified = true;
+    }
+  }
+  return modified;
 }
 
 // Per-offloaded-task CSE, parallelized across the codegen worker pool. The post-offload full_simplify passes
