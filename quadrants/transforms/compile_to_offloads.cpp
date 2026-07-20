@@ -152,6 +152,16 @@ void compile_to_offloads(IRNode *ir,
   irpass::analysis::verify_if_debug(ir, config);
 
   dump_ir("after_offload");
+
+  // Merge each task's same-address pointers NOW, before flag_access #2 splits a global's read/write pointers by
+  // access flag and before simplify_III's LICM hoists the read pointer out of the loop. This is the post-offload
+  // analog of the pre-offload merge_global_ptrs at flag_access #1: ndarray accesses are only lowered to
+  // ExternalPtrStmts during offload, so the pre-offload merge cannot reach them. Without this, the ndarray
+  // break-flag's read/write pointers stay split into cache_loop_invariant_global_vars, which then either caches a
+  // stale local (miscompile) or -- with the ndarray exclusion -- declines to cache at all (lost optimization,
+  // ~12% on contact-heavy GJK scenes). Merging here lets cache_loop cache soundly, restoring the optimization.
+  irpass::merge_offloaded_ptrs(ir);
+
   // NOTE: There was an additional CFG pass here, removed in
   // https://github.com/taichi-dev/taichi/pull/8691
   irpass::flag_access(ir);
@@ -206,11 +216,6 @@ void offload_to_executable(IRNode *ir,
   irpass::analysis::verify_if_debug(ir, config);
 
   if (config.cache_loop_invariant_global_vars) {
-    // Merge each task's same-address pointer statements (fields and ndarrays) right before caching. Pre-offload
-    // merge_global_ptrs cannot reach ndarray accesses (not yet ExternalPtrStmts before offload), and per-task CSE
-    // runs later in this function's full_simplify passes, so without this the ndarray break-flag's read/write
-    // pointers reach cache_loop split and get cached into a stale local -> non-terminating loop (see the pass).
-    irpass::merge_offloaded_ptrs(ir);
     irpass::cache_loop_invariant_global_vars(ir, config);
     print("Cache loop-invariant global vars");
   }
