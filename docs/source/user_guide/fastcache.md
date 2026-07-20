@@ -76,13 +76,17 @@ def good_kernel(a: qd.types.NDArray[qd.f32, 1]) -> None:
 
 Sub-functions called by the kernel are also checked - they must not capture external state either.
 
-Reaching data through the members of a [`@qd.data_oriented`](compound_types.md#qddata_oriented) or [`dataclasses.dataclass`](compound_types.md#dataclassesdataclass) parameter is **not** capture, even though the Python source (e.g. `self.x` inside a data-oriented method) reads like member access rather than a parameter. The object is itself an explicit parameter; the compiler flattens it at compile time and handles each accessed member by kind:
+Reaching data through the members of a [`@qd.data_oriented`](compound_types.md#qddata_oriented) or [`dataclasses.dataclass`](compound_types.md#dataclassesdataclass) parameter is **not** capture, even though the Python source (e.g. `self.x` inside a data-oriented method) reads like member access rather than a parameter. The container is itself an explicit parameter with no kernel-side representation; the compiler flattens it at compile time, and how each accessed member reaches the kernel depends on the container.
 
-- an **ndarray** member is passed as a real runtime kernel parameter (an external tensor, bound at launch);
-- a **primitive** member (`int` / `float` / `bool`) is baked into the kernel as a compile-time constant - its value becomes part of the kernel's specialization and is folded into the fastcache key - unless the class is declared [`template_primitives=False`](compound_types.md#runtime-primitives-template_primitivesfalse), in which case it becomes a runtime scalar parameter instead;
+For a [`@qd.data_oriented`](compound_types.md#qddata_oriented) object, the compiler reads the live instance's attributes:
+
+- an **ndarray** member is passed as a real runtime kernel parameter (an external tensor bound at launch; only its `dtype` / `ndim` / layout affect specialization);
+- a **primitive** member (`int` / `float` / `bool`) is baked into the kernel as a compile-time constant, so its value specialises the kernel and is part of the fastcache key - unless the class is declared [`template_primitives=False`](compound_types.md#runtime-primitives-template_primitivesfalse), in which case it becomes a runtime scalar parameter instead;
 - a **`qd.field`** member is a globally-allocated tensor referenced directly, not a parameter (and, being baked in, disables fastcache for the call - see [Supported parameter types](#2-supported-parameter-types) below).
 
-None of these are free variables captured from the enclosing Python scope, which is what the purity check forbids.
+For a [`dataclasses.dataclass`](compound_types.md#dataclassesdataclass) parameter, each declared field is flattened into its own kernel parameter: an **ndarray** field becomes a runtime external tensor, and a **primitive** field becomes a **runtime scalar parameter** whose value is *not* baked - only its type participates in the cache key - unless the field is annotated `FIELD_METADATA_CACHE_VALUE`, which bakes the value in.
+
+In every case the member is parameter-derived, not a free variable captured from the enclosing Python scope, which is what the purity check forbids.
 
 **Exemptions:** The following may be accessed from the enclosing scope without violating purity:
 
