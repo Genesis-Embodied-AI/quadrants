@@ -5202,13 +5202,11 @@ def test_above_cap_out_of_grammar_kernel_raises():
 
 @test_utils.test(require=qd.extension.adstack, cfg_optimization=False)
 def test_adstack_scalarized_tensor_component_loop_trip_grad_correct():
-    # A reverse-mode kernel with a tensor-valued loop-carried variable divided by a scalar inside a field-bounded
-    # loop must size each scalar component of the adstack for the full trip count. `determine_ad_stack_size` records
-    # a `size_expr` on the tensor-typed adstack while leaving `max_size` at the seed 1; the later scalarize pass
-    # splits the tensor stack into per-component scalar stacks. Before the fix the split dropped `size_expr`, so each
-    # component kept only the seed and overflowed once the loop ran more than once (loud on SPIR-V, silently
-    # replicated per-lane gradients on a `__debug__`-disabled build). The vector-by-scalar division keeps the value
-    # tensor-typed past the pre-pass so the split happens after sizing.
+    # A tensor-valued loop-carried variable divided by a scalar (`q / q.norm()`) stays tensor-typed past
+    # `determine_ad_stack_size`, which records a `size_expr` on the tensor adstack while leaving `max_size` at the
+    # seed 1. The later scalarize pass splits the tensor stack into per-component scalar stacks; before the fix the
+    # split dropped `size_expr`, so each component kept only the seed and overflowed once the loop ran more than once
+    # (loud on SPIR-V, silently per-lane-replicated gradients on a `__debug__`-disabled build).
     n_iter_np = np.array([3], dtype=np.int32)
     denom_val = 2.0
     x_np = np.array([0.3, 0.7], dtype=np.float32)
