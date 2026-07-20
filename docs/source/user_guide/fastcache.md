@@ -78,6 +78,8 @@ Sub-functions called by the kernel are also checked - they must not capture exte
 
 Reaching data through the members of a [`@qd.data_oriented`](compound_types.md#qddata_oriented) parameter is **not** capture, even though the Python source (e.g. `self.x` inside a data-oriented method) reads like member access rather than a parameter. The object is itself an explicit kernel parameter, and the compiler resolves each accessed member at compile time - either passing it as a real kernel argument (e.g. a `qd.ndarray` member) or compiling it into the kernel (e.g. a primitive or `qd.field` member); see [Compound-type cache keying](#compound-type-cache-keying) for exactly how each member kind is treated and keyed. Either way the member is parameter-derived, not a free variable captured from the enclosing Python scope, which is what the purity check forbids.
 
+The same holds for a [`dataclasses.dataclass`](compound_types.md#dataclassesdataclass) passed as a typed parameter: the compiler flattens each declared field into its own kernel parameter, so `params.dt` inside the kernel is a parameter access, not capture. By default a primitive field is passed as a runtime scalar argument - only its type enters the fastcache key, not its value (annotate the field with `FIELD_METADATA_CACHE_VALUE` to bake the value in instead) - and an ndarray field becomes a runtime external tensor. See [Compound-type cache keying](#compound-type-cache-keying) for the full keying rules.
+
 **Exemptions:** The following may be accessed from the enclosing scope without violating purity:
 
 | Allowed capture | Why |
