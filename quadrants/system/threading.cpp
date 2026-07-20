@@ -73,12 +73,24 @@ void ThreadPool::run(int splits, int desired_num_threads, void *range_for_task_c
     QD_ASSERT(timestamp < (1LL << 62));  // avoid overflowing here
   }
 
+  static const bool tplog2 = []() {
+    const char *e = std::getenv("QD_TPLOG");
+    return e != nullptr && std::string(e) == "1";
+  }();
+  if (tplog2) {
+    std::printf("[TPRUN] ENTER splits=%d desired=%d\n", splits, this->desired_num_threads);
+    std::fflush(stdout);
+  }
   // wake up all slaves
   slave_cv.notify_all();
   {
     std::unique_lock<std::mutex> lock(mutex);
     // TODO: the workers may have finished before master waiting on master_cv
     master_cv.wait(lock, [this] { return started && running_threads == 0; });
+  }
+  if (tplog2) {
+    std::printf("[TPRUN] EXIT splits=%d\n", splits);
+    std::fflush(stdout);
   }
   QD_ASSERT(task_head >= task_tail);
 }

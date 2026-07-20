@@ -1,7 +1,21 @@
 #include <quadrants/system/timeline.h>
 #include "quadrants/program/parallel_executor.h"
 
+#include <cstdio>
+#include <cstdlib>
+#include <string>
+#include <atomic>
+
 namespace quadrants::lang {
+
+static bool pexec_log() {
+  static const bool v = []() {
+    const char *e = std::getenv("QD_TPLOG");
+    return e != nullptr && std::string(e) == "1";
+  }();
+  return v;
+}
+static std::atomic<int> g_pexec_task_seq{0};
 
 ParallelExecutor::ParallelExecutor(const std::string &name, int num_threads)
     : name_(name), num_threads_(num_threads), status_(ExecutorStatus::uninitialized), running_threads_(0) {
@@ -55,8 +69,16 @@ void ParallelExecutor::flush() {
     return;
   }
   std::unique_lock<std::mutex> lock(mut_);
+  if (pexec_log()) {
+    std::printf("[PEXEC:%s] flush ENTER queued=%zu running=%d\n", name_.c_str(), task_queue_.size(), running_threads_);
+    std::fflush(stdout);
+  }
   while (!flush_cv_cond()) {
     flush_cv_.wait(lock);
+  }
+  if (pexec_log()) {
+    std::printf("[PEXEC:%s] flush EXIT\n", name_.c_str());
+    std::fflush(stdout);
   }
 }
 
@@ -94,10 +116,20 @@ void ParallelExecutor::worker_loop() {
         auto task = task_queue_.front();
         running_threads_++;
         task_queue_.pop_front();
+        const bool log = pexec_log();
+        const int seq = log ? ++g_pexec_task_seq : 0;
         lock.unlock();
 
+        if (log) {
+          std::printf("[PEXEC:%s] task #%d START\n", name_.c_str(), seq);
+          std::fflush(stdout);
+        }
         // Run the task
         task();
+        if (log) {
+          std::printf("[PEXEC:%s] task #%d END\n", name_.c_str(), seq);
+          std::fflush(stdout);
+        }
 
         lock.lock();
         running_threads_--;
