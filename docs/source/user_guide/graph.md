@@ -67,9 +67,7 @@ The graph-structuring constructs live under the `qd.graph` namespace:
 | `qd.graph.parallel_context` | `qd.graph_parallel_context`   |
 | `qd.graph.parallel`         | `qd.graph_parallel`           |
 
-Always use the `qd.graph.*` spellings (used throughout this guide). The flat `qd.graph_*` names still work but emit a
-`DeprecationWarning` when used inside a kernel and will be removed in a future release. Both spellings compile to the
-same construct.
+Always use the `qd.graph.*` spellings (used throughout this guide). The flat `qd.graph_*` names still work but emit a `DeprecationWarning` when used inside a kernel and will be removed in a future release. Both spellings compile to the same construct.
 
 ## GPU-side iteration with `qd.graph.do_while`
 
