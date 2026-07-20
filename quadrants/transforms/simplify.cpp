@@ -570,8 +570,16 @@ void full_simplify(IRNode *root, const CompileConfig &config, const FullSimplify
         modified = true;
       if (should_dump)
         dump_step("10_die", iteration);
-      if (config.opt_level > 0 && per_task_cse(root))
-        modified = true;
+      if (config.opt_level > 0) {
+        // QD_CSE_WHOLE=1: fall back to whole-kernel CSE (main's placement) instead of per-task CSE, to A/B whether
+        // per-task CSE specifically is what produces the deadlocking ndarray kernel. Diagnostic only.
+        static const bool cse_whole = []() {
+          const char *e = std::getenv("QD_CSE_WHOLE");
+          return e != nullptr && std::string(e) == "1";
+        }();
+        if (cse_whole ? whole_kernel_cse(root) : per_task_cse(root))
+          modified = true;
+      }
       if (should_dump)
         dump_step("11_per_task_cse", iteration);
       // NOTE: the pre-offload same-address pointer merge (merge_global_ptrs) used to run here, in the fixpoint. It only
