@@ -732,7 +732,7 @@ def test_graph_parallel_takes_no_arguments():
                     x[i] = x[i] + 1.0
 
     x = qd.ndarray(qd.f32, shape=(16,))
-    with pytest.raises(qd.QuadrantsSyntaxError, match="qd.graph_parallel.. takes no arguments"):
+    with pytest.raises(qd.QuadrantsSyntaxError, match=r"qd\.graph\.parallel\(\) takes no arguments"):
         k(x)
 
 
