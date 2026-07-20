@@ -5255,28 +5255,27 @@ def test_adstack_loop_carried_vector_component_grad_correct():
     # saw a load of it and left it a single overwrite-each-iteration slot; the reverse then read the final iteration's
     # component for every reverse step, scaling the second-order term of the gradient by a spurious extra factor. The
     # scalar-valued analogue was already correct, so this guards specifically the tensor component read off the stack.
-    n_iter_np = np.array([2], dtype=np.int32)
+    n_env = 2
     x_np = np.array([0.3, 0.7], dtype=np.float32)
-    n_env = x_np.size
 
-    n_iter = qd.ndarray(qd.i32, shape=(1,))
-    n_iter.from_numpy(n_iter_np)
-    x = qd.ndarray(qd.f32, shape=(n_env,), needs_grad=True)
-    out = qd.ndarray(qd.f32, shape=(n_env,), needs_grad=True)
+    n_iter = qd.field(qd.i32, shape=())
+    x = qd.field(qd.f32, shape=n_env, needs_grad=True)
+    out = qd.field(qd.f32, shape=n_env, needs_grad=True)
 
     @qd.kernel
-    def compute(x: qd.types.ndarray(), out: qd.types.ndarray(), n_iter: qd.types.ndarray()):
+    def compute():
         for i_env in range(n_env):
             q = qd.Vector([x[i_env], x[i_env] * 0.5], dt=qd.f32)
-            for _ in range(n_iter[0]):
+            for _ in range(n_iter[None]):
                 q = qd.Vector([q[0] * q[0], q[1] + q[0] * 0.1], dt=qd.f32)
             out[i_env] = q[1]
 
+    n_iter[None] = 2
     x.from_numpy(x_np)
-    compute(x, out, n_iter)
+    compute()
     out.grad.from_numpy(np.ones(n_env, dtype=np.float32))
     x.grad.fill(0.0)
-    compute.grad(x, out, n_iter)
+    compute.grad()
 
     # After two iterations out = 0.6 * x + 0.1 * x^2, so d(out)/dx = 0.6 + 0.2 * x.
     grad = x.grad.to_numpy()
