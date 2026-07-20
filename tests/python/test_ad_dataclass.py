@@ -23,15 +23,12 @@ import quadrants as qd
 
 from tests import test_utils
 
-archs_support_ndarray_ad = [qd.cpu, qd.cuda, qd.amdgpu, qd.metal]
-
-
 # ----------------------------------------------------------------------------
 # qd.ndarray members
 # ----------------------------------------------------------------------------
 
 
-@test_utils.test(arch=archs_support_ndarray_ad, require=qd.extension.adstack)
+@test_utils.test(require=qd.extension.adstack)
 def test_ad_dataclass_ndarray_typed_annotation():
     """dataclass holding qd.ndarrays, passed via typed-dataclass kernel-arg annotation."""
     N = 5
@@ -65,7 +62,7 @@ def test_ad_dataclass_ndarray_typed_annotation():
     np.testing.assert_allclose(a.grad.to_numpy(), b.to_numpy())
 
 
-@test_utils.test(arch=archs_support_ndarray_ad, require=qd.extension.adstack)
+@test_utils.test(require=qd.extension.adstack)
 def test_ad_dataclass_ndarray_template():
     """dataclass holding qd.ndarrays, passed via qd.template()."""
     N = 5
@@ -143,7 +140,7 @@ def test_ad_dataclass_field_template_tape():
 # ----------------------------------------------------------------------------
 
 
-@test_utils.test(arch=archs_support_ndarray_ad, require=qd.extension.adstack)
+@test_utils.test(require=qd.extension.adstack)
 def test_ad_dataclass_tensor_ndarray_backend():
     """dataclass holding qd.tensor(..., backend=NDARRAY) members; ndarray-AD via kernel.grad()."""
     N = 5
@@ -219,7 +216,7 @@ def test_ad_dataclass_tensor_field_backend_tape():
 # ----------------------------------------------------------------------------
 
 
-@test_utils.test(arch=archs_support_ndarray_ad, require=qd.extension.adstack)
+@test_utils.test(require=qd.extension.adstack)
 def test_ad_dataclass_mixed_ndarray_and_tensor_ndarray_backend():
     """Single dataclass holds one qd.ndarray member and one qd.tensor(NDARRAY) member; verify the kernel can read/write
     both and that gradients flow through both."""
@@ -259,7 +256,7 @@ def test_ad_dataclass_mixed_ndarray_and_tensor_ndarray_backend():
     np.testing.assert_allclose(a_tens.grad.to_numpy(), b.to_numpy())
 
 
-@test_utils.test(arch=archs_support_ndarray_ad, require=qd.extension.adstack)
+@test_utils.test(require=qd.extension.adstack)
 def test_ad_dataclass_mixed_ndarray_and_field_in_same_class():
     """Single dataclass holds both a qd.ndarray member and a qd.field member. The kernel reads and writes both;
     differentiation is checked through the ndarray path via ``kernel.grad()`` (the field is along for the ride; its

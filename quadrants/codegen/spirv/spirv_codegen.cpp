@@ -900,10 +900,16 @@ void TaskCodegen::visit(ExternalPtrStmt *stmt) {
       ir_->decorate(spv::OpDecorate, linear_offset, spv::DecorationNoSignedWrap);
     }
   }
-  if (caps_->get(DeviceCapability::spirv_has_physical_storage_buffer)) {
+  if (caps_->get(DeviceCapability::spirv_has_physical_storage_buffer) && !stmt->is_grad) {
     std::vector<int> indices = arg_id;
     // Pick the data or gradient pointer slot of the ndarray argument struct. Without this, reverse-mode AD kernels
     // accumulate into x.data instead of x.grad and host-side gradients stay at zero.
+    //
+    // Gradient slots deliberately do NOT take this physical_storage_buffer path: MoltenVK misreads the second
+    // buffer_device_address member of the args struct (the grad pointer), so the reverse accumulate lands on a
+    // garbage address and host gradients stay zero. Route the gradient through the bound-storage-buffer path
+    // instead (the same path used on backends without physical_storage_buffer, and the reason field gradients work
+    // on Vulkan), which binds the grad ndarray as its own descriptor.
     indices.push_back(stmt->is_grad ? TypeFactory::GRAD_PTR_POS_IN_NDARRAY : TypeFactory::DATA_PTR_POS_IN_NDARRAY);
     spirv::Value addr_ptr = ir_->make_access_chain(ir_->get_pointer_type(ir_->u64_type(), spv::StorageClassUniform),
                                                    get_buffer_value(BufferType::Args, PrimitiveType::i32), indices);
