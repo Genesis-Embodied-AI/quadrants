@@ -1,0 +1,140 @@
+quadrants.lang.kernel_impl
+==========================
+
+.. py:module:: quadrants.lang.kernel_impl
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   quadrants.lang.kernel_impl.func
+   quadrants.lang.kernel_impl.real_func
+   quadrants.lang.kernel_impl.pyfunc
+   quadrants.lang.kernel_impl.kernel
+   quadrants.lang.kernel_impl.data_oriented
+
+
+Module Contents
+---------------
+
+.. py:function:: func(fn: F, *, is_real_function: bool = ..., requires_top_level: bool = ...) -> F
+                 func(fn: None = ..., *, is_real_function: bool = ..., requires_top_level: bool = ...) -> Callable[[F], F]
+
+   Marks a function as callable in Quadrants-scope.
+
+   This decorator transforms a Python function into a Quadrants one. Quadrants
+   will JIT compile it into native instructions.
+
+   Can be applied bare (``@qd.func``) or with parameters (``@qd.func(requires_top_level=True)``).
+
+   :param fn: The Python function to be decorated
+   :type fn: Callable
+   :param is_real_function: Whether the function is a real function
+   :type is_real_function: bool
+   :param requires_top_level: **Experimental** (behaviour/API may change). If True, the func may only
+                              be called at the **top level** of a kernel (or directly inside a ``while qd.graph.do_while(...)``
+                              body). Calling it nested inside ordinary runtime ``for`` / ``if`` / ``while`` control flow raises a
+                              :class:`QuadrantsSyntaxError` at compile time. Intended for multi-phase device ops whose per-phase
+                              top-level ``for`` loops must each lower to their own offloaded launch (e.g. the ``qd.algorithms``
+                              reductions / scans / sort); nesting the call demotes those loops out of top-level position,
+                              collapsing the inter-phase grid-wide barriers and silently corrupting the result. ``qd.static``
+                              (compile-time) loops do not trip the check.
+   :type requires_top_level: bool
+
+   :returns: The decorated function
+   :rtype: Callable
+
+   Example::
+
+       >>> @qd.func
+       >>> def foo(x):
+       >>>     return x + 2
+       >>>
+       >>> @qd.kernel
+       >>> def run():
+       >>>     print(foo(40))  # 42
+
+
+.. py:function:: real_func(fn: Callable) -> quadrants.lang._quadrants_callable.QuadrantsCallable
+
+.. py:function:: pyfunc(fn: Callable) -> quadrants.lang._quadrants_callable.QuadrantsCallable
+
+   Marks a function as callable in both Quadrants and Python scopes.
+
+   When called inside the Quadrants scope, Quadrants will JIT compile it into
+   native instructions. Otherwise it will be invoked directly as a
+   Python function.
+
+   See also :func:`~quadrants.lang.kernel_impl.func`.
+
+   :param fn: The Python function to be decorated
+   :type fn: Callable
+
+   :returns: The decorated function
+   :rtype: Callable
+
+
+.. py:function:: kernel(_fn: None = None, *, pure: bool = False, graph: bool = False, checkpoints: bool = False) -> Callable[[Any], Any]
+                 kernel(_fn: Any, *, pure: bool = False, graph: bool = False, checkpoints: bool = False) -> Any
+
+   Marks a function as a Quadrants kernel.
+
+   A Quadrants kernel is a function written in Python, and gets JIT compiled by
+   Quadrants into native CPU/GPU instructions (e.g. a series of CUDA kernels).
+   The top-level ``for`` loops are automatically parallelized, and distributed
+   to either a CPU thread pool or massively parallel GPUs.
+
+   Kernel's gradient kernel would be generated automatically by the AutoDiff system.
+
+   :param graph: If True, kernels with 2+ top-level for loops are captured
+                 into a CUDA graph on first launch and replayed on subsequent
+                 launches, reducing per-kernel launch overhead. Non-CUDA backends
+                 are not supported currently.
+   :param checkpoints: If True, opt into the (experimental) ``qd.checkpoint`` pause / resume model.
+                       ``with qd.checkpoint(cp_id, yield_on=flag):`` blocks in the kernel body become pause points the host can
+                       resume from via ``kernel.resume(from_checkpoint=cp_id)``. Requires ``graph=True``.
+                       ``qd.checkpoint(...)`` in the body is rejected unless this flag is set.
+
+   Example::
+
+       >>> x = qd.field(qd.i32, shape=(4, 8))
+       >>>
+       >>> @qd.kernel
+       >>> def run():
+       >>>     # Assigns all the elements of `x` in parallel.
+       >>>     for i in x:
+       >>>         x[i] = i
+
+
+.. py:function:: data_oriented(cls)
+
+   Marks a class as Quadrants compatible.
+
+   To allow for modularized code, Quadrants provides this decorator so that
+   Quadrants kernels can be defined inside a class.
+
+   See also https://docs.taichi-lang.org/docs/odop
+
+   Example::
+
+       >>> @qd.data_oriented
+       >>> class QdArray:
+       >>>     def __init__(self, n):
+       >>>         self.x = qd.field(qd.f32, shape=n)
+       >>>
+       >>>     @qd.kernel
+       >>>     def inc(self):
+       >>>         for i in self.x:
+       >>>             self.x[i] += 1.0
+       >>>
+       >>> a = QdArray(32)
+       >>> a.inc()
+
+   :param cls: the class to be decorated
+   :type cls: Class
+
+   :returns: The decorated class.
+
+
