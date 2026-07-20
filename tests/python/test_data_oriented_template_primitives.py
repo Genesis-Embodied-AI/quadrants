@@ -368,3 +368,64 @@ def test_runtime_primitive_distinct_instances():
     step(a)
     assert a.out.to_numpy()[0] == 100
     assert b.out.to_numpy()[0] == 8
+
+
+# ---------------------------------------------------------------------------
+# 13. dtype is frozen at first compile: a member lifted as an integer that is later mutated to a float is rejected at
+#     launch (coercing it would silently truncate), rather than corrupting the value.
+# ---------------------------------------------------------------------------
+
+
+@test_utils.test(arch=qd.cpu)
+def test_runtime_primitive_int_to_float_mutation_raises():
+    @qd.data_oriented(template_primitives=False)
+    class Sim:
+        def __init__(self):
+            self.k = 2  # int at first compile -> lifted as an integer kernel argument
+            self.out = qd.field(qd.i32, shape=1)
+
+    sim = Sim()
+
+    @qd.kernel
+    def step(s: qd.template()):
+        s.out[0] = s.k
+
+    step(sim)
+    assert sim.out.to_numpy()[0] == 2
+
+    # Reassigning the same member to a float would silently truncate against the frozen integer dtype (int(1.5) == 1),
+    # so the launch path rejects it instead of corrupting the value.
+    sim.k = 1.5
+    with pytest.raises(TypeError, match="truncate"):
+        step(sim)
+
+
+# ---------------------------------------------------------------------------
+# 14. The lossless directions still coerce (they are not rejected): int -> a float-lifted member, and int -> a
+#     bool-lifted (integer-kind) member.
+# ---------------------------------------------------------------------------
+
+
+@test_utils.test(arch=qd.cpu)
+def test_runtime_primitive_lossless_coercions_still_bind():
+    @qd.data_oriented(template_primitives=False)
+    class Sim:
+        def __init__(self):
+            self.scale = 2.0  # float at first compile -> lifted as a float argument
+            self.flag = True  # bool at first compile -> lifted as an integer argument
+            self.out = qd.field(qd.f32, shape=1)
+
+    sim = Sim()
+
+    @qd.kernel
+    def step(s: qd.template()):
+        s.out[0] = s.scale * s.flag
+
+    step(sim)
+    assert sim.out.to_numpy()[0] == 2.0
+
+    # int -> float-lifted arg and int -> integer-kind arg are both lossless, so they bind (coerce) rather than raise.
+    sim.scale = 3
+    sim.flag = 2
+    step(sim)
+    assert sim.out.to_numpy()[0] == 6.0
