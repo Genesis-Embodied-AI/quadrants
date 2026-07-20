@@ -10,6 +10,7 @@
 #include <cstdlib>
 #include <cstdio>
 #include <string>
+#include <chrono>
 
 namespace quadrants::lang {
 
@@ -86,6 +87,11 @@ class WholeKernelCSE : public BasicStmtVisitor {
   // are left untouched. Used pre-offload to merge same-address read/write pointers (the cheap, load-bearing part of
   // whole-kernel CSE) without doing the expensive whole-kernel compute dedup, which is deferred to per-task CSE.
   bool ptrs_only_ = false;
+
+  // QD_CSE_PROF diagnostics: track the worst hash-bucket scanned and the total number of
+  // common_statement_eliminable() comparisons, to locate the O(n^2) blowup.
+  std::size_t max_bucket_scan_ = 0;
+  unsigned long long cmp_count_ = 0;
 
  public:
   using BasicStmtVisitor::visit;
@@ -200,7 +206,11 @@ class WholeKernelCSE : public BasicStmtVisitor {
     }
     auto it = visible_stmts_.find(hash_value);
     if (it != visible_stmts_.end()) {
+      if (it->second.size() > max_bucket_scan_) {
+        max_bucket_scan_ = it->second.size();
+      }
       for (auto *prev_stmt : it->second) {
+        cmp_count_++;
         if (common_statement_eliminable(stmt, prev_stmt)) {
           ReplaceAndMarkUndone::run(&visited_, stmt, prev_stmt);
           modifier_.erase(stmt);
@@ -278,10 +288,24 @@ class WholeKernelCSE : public BasicStmtVisitor {
       if_stmt->false_statements->accept(this);
   }
 
+  static bool prof_enabled() {
+    static const bool v = []() {
+      const char *e = std::getenv("QD_CSE_PROF");
+      return e != nullptr && std::string(e) == "1";
+    }();
+    return v;
+  }
+
   static bool run(IRNode *node, bool ptrs_only = false) {
     WholeKernelCSE eliminator(ptrs_only);
     bool modified = false;
     int rounds = 0;
+    const bool prof = prof_enabled();
+    std::size_t nstmts = 0;
+    auto t0 = std::chrono::steady_clock::now();
+    if (prof) {
+      nstmts = irpass::analysis::gather_statements(node, [](Stmt *) { return true; }).size();
+    }
     while (true) {
       node->accept(&eliminator);
       rounds++;
@@ -289,6 +313,14 @@ class WholeKernelCSE : public BasicStmtVisitor {
         modified = true;
       else
         break;
+    }
+    if (prof) {
+      auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - t0).count();
+      if (ms >= 50 || nstmts >= 2000) {
+        std::printf("[CSEPROF] ptrs_only=%d nstmts=%zu rounds=%d max_bucket=%zu cmps=%llu elapsed_ms=%lld\n",
+                    (int)ptrs_only, nstmts, rounds, eliminator.max_bucket_scan_, eliminator.cmp_count_, (long long)ms);
+        std::fflush(stdout);
+      }
     }
     if (ptrs_only) {
       const char *log = std::getenv("QD_LICM_LOG");
