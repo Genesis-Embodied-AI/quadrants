@@ -67,10 +67,10 @@ class GraphParallelTransformer:
         two back-to-back regions apart (each gets its own join)."""
         graph_api.warn_if_deprecated(node.items[0].context_expr.func, "parallel_context")
         if not ctx.is_kernel:
-            raise QuadrantsSyntaxError("qd.graph_parallel_context() can only be used inside @qd.kernel, not @qd.func")
+            raise QuadrantsSyntaxError("qd.graph.parallel_context() can only be used inside @qd.kernel, not @qd.func")
         kernel = ctx.global_context.current_kernel
         if kernel is None or not kernel.use_graph:
-            raise QuadrantsSyntaxError("qd.graph_parallel_context() requires @qd.kernel(graph=True)")
+            raise QuadrantsSyntaxError("qd.graph.parallel_context() requires @qd.kernel(graph=True)")
         # A region cannot coexist with the checkpoint/resume model. Its section for-loops escape the checkpoint net:
         # CheckpointTransformer.auto_wrap_for_loops does not recurse into this `with`, and a section body rejects an
         # explicit qd.checkpoint, so every section task is emitted with checkpoint_id == -1 -- the prologue bucket that
@@ -81,15 +81,15 @@ class GraphParallelTransformer:
         # rather than miscompile it; making regions checkpoint-aware is a separate feature (see graph.md).
         if kernel.use_checkpoints:
             raise QuadrantsSyntaxError(
-                "qd.graph_parallel_context() is not supported in a @qd.kernel(graph=True, checkpoints=True) kernel: a "
+                "qd.graph.parallel_context() is not supported in a @qd.kernel(graph=True, checkpoints=True) kernel: a "
                 "fork/join region does not participate in the checkpoint/resume model (its sections would run "
-                "unconditionally on every launch, ignoring yield/resume). Use qd.graph_parallel_context() only in a "
+                "unconditionally on every launch, ignoring yield/resume). Use qd.graph.parallel_context() only in a "
                 "non-checkpoints kernel, or express the work as ordinary qd.checkpoint() stages."
             )
         if getattr(ctx, "_in_graph_parallel_context", False):
-            raise QuadrantsSyntaxError("qd.graph_parallel_context() regions cannot be nested")
+            raise QuadrantsSyntaxError("qd.graph.parallel_context() regions cannot be nested")
         if getattr(ctx, "_in_parallel_section", False):
-            raise QuadrantsSyntaxError("qd.graph_parallel_context() cannot appear inside a qd.graph_parallel() body")
+            raise QuadrantsSyntaxError("qd.graph.parallel_context() cannot appear inside a qd.graph.parallel() body")
         GraphParallelTransformer.validate_region(ctx, node)
         ctx._in_graph_parallel_context = True
         ctx.ast_builder.begin_graph_parallel_context()
@@ -151,7 +151,7 @@ class GraphParallelTransformer:
                 GraphParallelTransformer._validate_region_body(ctx, stmt.body)
                 continue
             raise QuadrantsSyntaxError(
-                "A qd.graph_parallel_context() region may contain only 'with qd.graph_parallel():' blocks "
+                "A qd.graph.parallel_context() region may contain only 'with qd.graph.parallel():' blocks "
                 "(optionally inside 'if qd.static(...)' or 'for ... in qd.static(...)'). Move other work "
                 f"outside the region. [offending stmt {i}: {type(stmt).__name__}]"
             )
@@ -174,25 +174,25 @@ class GraphParallelTransformer:
             for node in ast.walk(stmt):
                 if isinstance(node, ast.While) and GraphParallelTransformer._is_graph_do_while_test(node.test):
                     raise QuadrantsSyntaxError(
-                        "qd.graph_do_while() cannot appear inside a qd.graph_parallel() section; a section body must be "
-                        "straight-line task work (put the qd.graph_parallel_context() region inside the "
-                        "qd.graph_do_while() loop, not the other way around)"
+                        "qd.graph.do_while() cannot appear inside a qd.graph.parallel() section; a section body must be "
+                        "straight-line task work (put the qd.graph.parallel_context() region inside the "
+                        "qd.graph.do_while() loop, not the other way around)"
                     )
                 if isinstance(node, ast.With):
                     for item in node.items:
                         context_expr = item.context_expr
                         if CheckpointTransformer.is_checkpoint_call(context_expr, ctx.global_vars) is not None:
                             raise QuadrantsSyntaxError(
-                                "qd.checkpoint() cannot appear inside a qd.graph_parallel() section; a section body "
+                                "qd.checkpoint() cannot appear inside a qd.graph.parallel() section; a section body "
                                 "must be straight-line task work"
                             )
                         if GraphParallelTransformer.is_graph_parallel_context_call(context_expr):
                             raise QuadrantsSyntaxError(
-                                "qd.graph_parallel_context() cannot appear inside a qd.graph_parallel() section"
+                                "qd.graph.parallel_context() cannot appear inside a qd.graph.parallel() section"
                             )
                         if GraphParallelTransformer.is_parallel_section_call(context_expr):
                             raise QuadrantsSyntaxError(
-                                "qd.graph_parallel() sections cannot be nested inside one another"
+                                "qd.graph.parallel() sections cannot be nested inside one another"
                             )
 
     @staticmethod
@@ -216,7 +216,7 @@ class GraphParallelTransformer:
         graph_api.warn_if_deprecated(node.items[0].context_expr.func, "parallel")
         if not getattr(ctx, "_in_graph_parallel_context", False):
             raise QuadrantsSyntaxError(
-                "qd.graph_parallel() can only be used directly inside a qd.graph_parallel_context() region"
+                "qd.graph.parallel() can only be used directly inside a qd.graph.parallel_context() region"
             )
         ctx._in_parallel_section = True
         ctx.ast_builder.begin_stream_parallel()

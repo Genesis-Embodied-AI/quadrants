@@ -696,8 +696,8 @@ def test_offline_cache_for_kernels_calling_real_func(curr_arch):
 @pytest.mark.parametrize("curr_arch", {qd.cpu, qd.cuda, qd.amdgpu} & supported_archs_offline_cache)
 @_test_offline_cache_dec
 def test_offline_cache_key_distinguishes_graph_parallel_regions(curr_arch):
-    """Two graph kernels identical except for how their qd.graph_parallel() sections are grouped into
-    qd.graph_parallel_context() regions must get distinct offline cache keys. The grouping shows up in the IR only as
+    """Two graph kernels identical except for how their qd.graph.parallel() sections are grouped into
+    qd.graph.parallel_context() regions must get distinct offline cache keys. The grouping shows up in the IR only as
     graph_parallel_region_id -- the context managers emit no statements of their own -- so if gen_offline_cache_key
     omits that field the two kernels collide: the second reuses the first's cached module, its two regions merge into
     one fork/join, and the second region can race the first. Regression test for the region id missing from the key."""
@@ -708,17 +708,17 @@ def test_offline_cache_key_distinguishes_graph_parallel_regions(curr_arch):
 
     n = 16
 
-    # Both kernels write x and y in two independent qd.graph_parallel sections; they differ only in whether the two
+    # Both kernels write x and y in two independent qd.graph.parallel sections; they differ only in whether the two
     # sections share one context (one fork/join) or live in two back-to-back contexts (two fork/joins). That difference
     # lives purely in graph_parallel_region_id, so it must still change the cache key.
     def helper_one_context():
         @qd.kernel(graph=True)
         def k(x: qd.types.ndarray(qd.f32, ndim=1), y: qd.types.ndarray(qd.f32, ndim=1)):
-            with qd.graph_parallel_context():
-                with qd.graph_parallel():
+            with qd.graph.parallel_context():
+                with qd.graph.parallel():
                     for i in range(x.shape[0]):
                         x[i] = 1.0
-                with qd.graph_parallel():
+                with qd.graph.parallel():
                     for i in range(y.shape[0]):
                         y[i] = 2.0
 
@@ -729,12 +729,12 @@ def test_offline_cache_key_distinguishes_graph_parallel_regions(curr_arch):
     def helper_two_contexts():
         @qd.kernel(graph=True)
         def k(x: qd.types.ndarray(qd.f32, ndim=1), y: qd.types.ndarray(qd.f32, ndim=1)):
-            with qd.graph_parallel_context():
-                with qd.graph_parallel():
+            with qd.graph.parallel_context():
+                with qd.graph.parallel():
                     for i in range(x.shape[0]):
                         x[i] = 1.0
-            with qd.graph_parallel_context():
-                with qd.graph_parallel():
+            with qd.graph.parallel_context():
+                with qd.graph.parallel():
                     for i in range(y.shape[0]):
                         y[i] = 2.0
 

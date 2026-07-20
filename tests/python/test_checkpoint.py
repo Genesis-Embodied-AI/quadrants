@@ -6,7 +6,7 @@ These tests cover the auto-checkpoint surface:
     label (``int`` or ``IntEnum`` value), and ``yield_on`` is a 0-d ``qd.i32`` ndarray kernel parameter.
   - The kernel must be decorated with ``@qd.kernel(graph=True, checkpoints=True)`` to use ``qd.checkpoint(...)``. The
     flag opts the kernel into the resume model and enables the auto-wrap pass.
-  - Auto-wrap: every top-level for-loop in the kernel body (including inside ``while qd.graph_do_while(...):``) that
+  - Auto-wrap: every top-level for-loop in the kernel body (including inside ``while qd.graph.do_while(...):``) that
     is not inside a ``with qd.checkpoint(...)`` becomes an implicit no-yield checkpoint. Implicit checkpoints carry no
     user label and never appear in ``GraphStatus.checkpoint``, but they DO consume an internal cp_id slot so a resume
     launch can skip them along with the explicit checkpoints declared earlier in source order.
@@ -76,7 +76,7 @@ def _supports_checkpoint_yield_resume():
 
 def _supports_checkpoint_yield_resume_in_while_loop():
     """Strict subset of `_supports_checkpoint_yield_resume`: returns true on backends where yield/resume also works
-    inside a `qd.graph_do_while` body. Same predicate today since slice 4 ported the CPU launcher's host-branch gating
+    inside a `qd.graph.do_while` body. Same predicate today since slice 4 ported the CPU launcher's host-branch gating
     plus per-iter resume_point reset to the AMDGPU streaming path."""
     return _supports_checkpoint_yield_resume()
 
@@ -341,7 +341,7 @@ def test_autowrap_mixes_explicit_and_implicit_in_source_order():
 
 @test_utils.test()
 def test_autowrap_recurses_into_graph_do_while_body():
-    """The auto-wrap pass recurses into ``while qd.graph_do_while(...):`` bodies so for-loops nested inside the WHILE
+    """The auto-wrap pass recurses into ``while qd.graph.do_while(...):`` bodies so for-loops nested inside the WHILE
     body get the same implicit-checkpoint treatment."""
     N = 4
 
@@ -351,7 +351,7 @@ def test_autowrap_recurses_into_graph_do_while_body():
         counter: qd.types.ndarray(qd.i32, ndim=0),
         flag: qd.types.ndarray(qd.i32, ndim=0),
     ):
-        while qd.graph_do_while(counter):
+        while qd.graph.do_while(counter):
             for i in range(x.shape[0]):  # implicit
                 x[i] = x[i] + 1
             with qd.checkpoint(0, yield_on=flag):
@@ -789,7 +789,7 @@ def test_canonical_yield_resume_loop():
 
 @test_utils.test()
 def test_checkpoint_inside_graph_do_while_completes_when_no_yield():
-    """A checkpoint inside a ``qd.graph_do_while`` body is the canonical qipc pattern. With ``yield_on`` flag == 0 the
+    """A checkpoint inside a ``qd.graph.do_while`` body is the canonical qipc pattern. With ``yield_on`` flag == 0 the
     WHILE loop runs to completion as if there were no checkpoint."""
     N = 8
 
@@ -799,7 +799,7 @@ def test_checkpoint_inside_graph_do_while_completes_when_no_yield():
         counter: qd.types.ndarray(qd.i32, ndim=0),
         flag: qd.types.ndarray(qd.i32, ndim=0),
     ):
-        while qd.graph_do_while(counter):
+        while qd.graph.do_while(counter):
             for i in range(x.shape[0]):
                 x[i] = x[i] + 1
             with qd.checkpoint(0, yield_on=flag):
@@ -831,7 +831,7 @@ def test_checkpoint_yield_exits_graph_do_while_early():
         counter: qd.types.ndarray(qd.i32, ndim=0),
         flag: qd.types.ndarray(qd.i32, ndim=0),
     ):
-        while qd.graph_do_while(counter):
+        while qd.graph.do_while(counter):
             with qd.checkpoint(0, yield_on=flag):
                 for i in range(x.shape[0]):
                     x[i] = x[i] + 1

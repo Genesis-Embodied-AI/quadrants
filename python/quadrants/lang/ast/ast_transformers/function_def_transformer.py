@@ -699,10 +699,10 @@ class FunctionDefTransformer:
                         # earlier by GraphParallelTransformer.build_graph_parallel_context_with).
                         pending.extend(member.body)
                 continue
-            where = "the kernel body" if is_kernel_top else "a qd.graph_do_while() body"
+            where = "the kernel body" if is_kernel_top else "a qd.graph.do_while() body"
             raise QuadrantsSyntaxError(
-                f"When a kernel uses qd.graph_do_while(), {where} may not contain a {type(stmt).__name__} "
-                f"statement. Allowed: for-loops, qd.graph_do_while() while-loops, bare assignments, and "
+                f"When a kernel uses qd.graph.do_while(), {where} may not contain a {type(stmt).__name__} "
+                f"statement. Allowed: for-loops, qd.graph.do_while() while-loops, bare assignments, and "
                 f"@qd.func calls (freely mixed and nested). [offending stmt {i}: {type(stmt).__name__}]"
             )
 

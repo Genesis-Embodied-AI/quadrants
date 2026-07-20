@@ -296,7 +296,7 @@ class CallTransformer:
             func_name = getattr(func, "__name__", None) or "this @qd.func"
             raise QuadrantsSyntaxError(
                 f"`{func_name}` is decorated with requires_top_level=True and must be called at the top "
-                f"level of a @qd.kernel (or directly inside a `while qd.graph_do_while(...)` body). It "
+                f"level of a @qd.kernel (or directly inside a `while qd.graph.do_while(...)` body). It "
                 f"cannot be nested inside a runtime for / if / while: that demotes its phase loops out of "
                 f"top-level position, collapsing the per-phase grid-wide barriers and corrupting the result."
             )

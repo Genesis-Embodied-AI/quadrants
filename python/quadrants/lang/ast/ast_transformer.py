@@ -1420,21 +1420,21 @@ class ASTTransformer(Builder):
 
             kernel = ctx.global_context.current_kernel
             if not kernel.use_graph:
-                raise QuadrantsSyntaxError("qd.graph_do_while() requires @qd.kernel(graph=True)")
+                raise QuadrantsSyntaxError("qd.graph.do_while() requires @qd.kernel(graph=True)")
             # graph_do_while emits no loop IR; its body's for-loops must be top-level (offloaded) tasks. So it may only
             # appear at the kernel top level or directly inside another graph_do_while (both at loop_depth 0), never
             # inside a real for-loop.
             if ctx.loop_depth != 0:
                 raise QuadrantsSyntaxError(
-                    "qd.graph_do_while() must be at the kernel top level or directly nested inside "
-                    "another qd.graph_do_while(); it cannot appear inside a for-loop."
+                    "qd.graph.do_while() must be at the kernel top level or directly nested inside "
+                    "another qd.graph.do_while(); it cannot appear inside a for-loop."
                 )
             # Resolve the condition ndarray (bare parameter or @qd.data_oriented member) to its flat C++ arg-id at AST-
             # build time -- the same id the runtime needs -- so the launch path forwards it directly with no per-launch
             # name matching. ``cond_arg_name`` keeps the readable label (e.g. "counter" or "self.counter") for
             # introspection and for the legacy ``graph_do_while_arg`` alias surfaced on Kernel.
             cond_label, cond_cpp_arg_id = ASTTransformer._resolve_ndarray_kernel_arg_id(
-                ctx, kernel, graph_do_while_node, "qd.graph_do_while(...)"
+                ctx, kernel, graph_do_while_node, "qd.graph.do_while(...)"
             )
             # Register this loop as a new nesting level (the body restriction is validated up-front in
             # FunctionDefTransformer). Outer loops get lower ids than the inner loops they contain.
@@ -1661,7 +1661,7 @@ class ASTTransformer(Builder):
         if not FunctionDefTransformer._is_stream_parallel_with(node, ctx.global_vars):
             raise QuadrantsSyntaxError(
                 "'with' in Quadrants kernels only supports qd.stream_parallel(), qd.checkpoint(), "
-                "qd.graph_parallel_context(), or qd.graph_parallel()"
+                "qd.graph.parallel_context(), or qd.graph.parallel()"
             )
         if not ctx.is_kernel:
             raise QuadrantsSyntaxError("qd.stream_parallel() can only be used inside @qd.kernel, not @qd.func")

@@ -3,7 +3,7 @@
 Two cross-product axes:
 
   - **Scenario A**: three sequential checkpoints (no enclosing WHILE).
-  - **Scenario B**: three checkpoints inside a ``qd.graph_do_while`` body.
+  - **Scenario B**: three checkpoints inside a ``qd.graph.do_while`` body.
 
   - **YieldResume::This**: ``kernel.resume(from_checkpoint=status.checkpoint)`` -- re-run the yielding cp.
   - **YieldResume::Next**: the user labels every checkpoint AND the "next" one they want to resume past the yielder
@@ -13,7 +13,7 @@ Two cross-product axes:
     the target label explicitly.
 
 The qipc test's nested-WHILE Scenario C is out of scope for now because Quadrants does not yet support nesting of
-``qd.graph_do_while``.
+``qd.graph.do_while``.
 
 All tests gate on backends that implement the host-side yield/resume contract; backends without it (e.g. older CUDA)
 skip rather than asserting.
@@ -169,7 +169,7 @@ def test_resume_offset_sequential_next():
 
 @test_utils.test()
 def test_resume_offset_loop_this():
-    """Scenario B, YieldResume::This: yield inside a ``qd.graph_do_while`` re-runs the yielding cp.
+    """Scenario B, YieldResume::This: yield inside a ``qd.graph.do_while`` re-runs the yielding cp.
 
     Three checkpoints inside a WHILE loop of 3 iterations: SIM yields on the first iteration of the first launch; the
     WHILE exits early. The host calls ``resume(from_checkpoint=SIM)``. On the resume's first iteration, the leading
@@ -189,7 +189,7 @@ def test_resume_offset_loop_this():
         counter: qd.types.ndarray(qd.i32, ndim=0),
         flag: qd.types.ndarray(qd.i32, ndim=0),
     ):
-        while qd.graph_do_while(counter):
+        while qd.graph.do_while(counter):
             for i in range(a.shape[0]):  # implicit
                 a[i] = a[i] + 1
             with qd.checkpoint(_CP.SIM, yield_on=flag):
@@ -218,7 +218,7 @@ def test_resume_offset_loop_this():
 
 @test_utils.test()
 def test_resume_offset_loop_next():
-    """Scenario B, YieldResume::Next: yield in ``qd.graph_do_while`` skips yielding cp on resume.
+    """Scenario B, YieldResume::Next: yield in ``qd.graph.do_while`` skips yielding cp on resume.
 
     Same shape as ``_loop_this`` but with an explicit AFTER_SIM checkpoint after the yielder, so the host can resume
     past SIM. The labels make the resume target stable across renumbering of any neighbouring implicit checkpoints.
@@ -240,7 +240,7 @@ def test_resume_offset_loop_next():
         flag: qd.types.ndarray(qd.i32, ndim=0),
         zero: qd.types.ndarray(qd.i32, ndim=0),
     ):
-        while qd.graph_do_while(counter):
+        while qd.graph.do_while(counter):
             for i in range(a.shape[0]):  # implicit
                 a[i] = a[i] + 1
             with qd.checkpoint(_CP.SIM, yield_on=flag):
