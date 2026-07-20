@@ -48,7 +48,7 @@ def func(fn=None, *, is_real_function=False, requires_top_level=False):
         fn (Callable): The Python function to be decorated
         is_real_function (bool): Whether the function is a real function
         requires_top_level (bool): **Experimental** (behaviour/API may change). If True, the func may only
-            be called at the **top level** of a kernel (or directly inside a ``while qd.graph_do_while(...)``
+            be called at the **top level** of a kernel (or directly inside a ``while qd.graph.do_while(...)``
             body). Calling it nested inside ordinary runtime ``for`` / ``if`` / ``while`` control flow raises a
             :class:`QuadrantsSyntaxError` at compile time. Intended for multi-phase device ops whose per-phase
             top-level ``for`` loops must each lower to their own offloaded launch (e.g. the ``qd.algorithms``
