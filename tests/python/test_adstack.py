@@ -5198,3 +5198,52 @@ def test_above_cap_out_of_grammar_kernel_raises():
             x.grad[i] = 0.0
         compute.grad(a)
         qd.sync()
+
+
+@test_utils.test(require=qd.extension.adstack, cfg_optimization=False)
+def test_adstack_scalarized_tensor_component_loop_trip_grad_correct():
+    # A reverse-mode kernel with a tensor-valued loop-carried variable divided by a scalar inside a field-bounded
+    # loop must size each scalar component of the adstack for the full trip count. `determine_ad_stack_size` records
+    # a `size_expr` on the tensor-typed adstack while leaving `max_size` at the seed 1; the later scalarize pass
+    # splits the tensor stack into per-component scalar stacks. Before the fix the split dropped `size_expr`, so each
+    # component kept only the seed and overflowed once the loop ran more than once (loud on SPIR-V, silently
+    # replicated per-lane gradients on a `__debug__`-disabled build). The vector-by-scalar division keeps the value
+    # tensor-typed past the pre-pass so the split happens after sizing.
+    n_iter_np = np.array([3], dtype=np.int32)
+    denom_val = 2.0
+    x_np = np.array([0.3, 0.7], dtype=np.float32)
+    n_env = x_np.size
+
+    n_iter = qd.ndarray(qd.i32, shape=(1,))
+    n_iter.from_numpy(n_iter_np)
+    denom = qd.ndarray(qd.f32, shape=(1,))
+    denom.from_numpy(np.array([denom_val], dtype=np.float32))
+    x = qd.ndarray(qd.f32, shape=(n_env,), needs_grad=True)
+    out = qd.ndarray(qd.f32, shape=(n_env,), needs_grad=True)
+
+    @qd.kernel
+    def compute(x: qd.types.ndarray(), out: qd.types.ndarray(), n_iter: qd.types.ndarray(), denom: qd.types.ndarray()):
+        for i in range(n_env):
+            q = qd.Vector([x[i], x[i] * 0.5], dt=qd.f32)
+            s = denom[0]
+            for _ in range(n_iter[0]):
+                q = qd.Vector([q[0] + q[1] * 0.1, q[1] + q[0] * 0.2], dt=qd.f32)
+                q = q / s
+            out[i] = q[0] + q[1]
+
+    x.from_numpy(x_np)
+    compute(x, out, n_iter, denom)
+    out.grad.from_numpy(np.ones(n_env, dtype=np.float32))
+    x.grad.fill(0.0)
+    compute.grad(x, out, n_iter, denom)
+
+    # The recurrence q <- (M @ q) / s with M = [[1, 0.1], [0.2, 1]] is linear, so d(out)/d(x[i]) is the same for
+    # every env: sum of the columns of (M / s)^n_iter applied to the initial jacobian (1, 0.5).
+    mat = np.array([[1.0, 0.1], [0.2, 1.0]], dtype=np.float64) / denom_val
+    jac = np.array([1.0, 0.5], dtype=np.float64)
+    for _ in range(int(n_iter_np[0])):
+        jac = mat @ jac
+    expected = float(jac.sum())
+    grad = x.grad.to_numpy()
+    for i in range(n_env):
+        assert grad[i] == pytest.approx(expected, rel=1e-5)
