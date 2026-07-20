@@ -5205,23 +5205,22 @@ def test_adstack_offset_array_difference_loop_trip_grad_correct():
     # Inner loop trip count is the difference of two adjacent offset-array reads (`starts[i + 1] - starts[i]`, the
     # ragged-segment length pattern); the adstack must be sized for the widest segment. The outer parallel `ndrange`
     # forces the reverse pass to spill and recover the loop index, so both reads index through an opaque expression
-    # and each takes a whole-shape `MaxOverRange` fallback with alpha-equal `ExternalTensorShape` ends. Before the
-    # fix `expr_sub` fused those into `MaxOverRange(starts[v] - starts[v]) = 0`, zeroing the loop's push multiplier:
-    # the stack was sized for the root pushes only and overflowed for any segment longer than one (loud on SPIR-V,
-    # silently per-lane-replicated gradients on a `__debug__`-disabled build).
+    # and each takes a whole-shape `MaxOverRange` fallback with alpha-equal shape ends. Before the fix `expr_sub`
+    # fused those into `MaxOverRange(starts[v] - starts[v]) = 0`, zeroing the loop's push multiplier: the stack was
+    # sized for the root pushes only and overflowed for any segment longer than one (loud on SPIR-V, silently
+    # per-lane-replicated gradients on a `__debug__`-disabled build).
     starts_np = np.array([0, 2, 3, 6], dtype=np.int32)  # segment lengths 2, 1, 3
     n_seg = starts_np.size - 1
     total = int(starts_np[-1])
     n_env = 2
     x_np = np.linspace(0.2, 0.9, total * n_env).astype(np.float32).reshape(total, n_env)
 
-    starts = qd.ndarray(qd.i32, shape=(n_seg + 1,))
-    starts.from_numpy(starts_np)
-    x = qd.ndarray(qd.f32, shape=(total, n_env), needs_grad=True)
-    out = qd.ndarray(qd.f32, shape=(n_seg, n_env), needs_grad=True)
+    starts = qd.field(qd.i32, shape=n_seg + 1)
+    x = qd.field(qd.f32, shape=(total, n_env), needs_grad=True)
+    out = qd.field(qd.f32, shape=(n_seg, n_env), needs_grad=True)
 
     @qd.kernel
-    def compute(x: qd.types.ndarray(), out: qd.types.ndarray(), starts: qd.types.ndarray()):
+    def compute():
         for i, i_env in qd.ndrange(n_seg, n_env):
             seg_start = starts[i]
             seg_end = starts[i + 1]
@@ -5230,11 +5229,12 @@ def test_adstack_offset_array_difference_loop_trip_grad_correct():
                 acc = acc + x[seg_start + j, i_env] * x[seg_start + j, i_env]
             out[i, i_env] = acc
 
+    starts.from_numpy(starts_np)
     x.from_numpy(x_np)
-    compute(x, out, starts)
+    compute()
     out.grad.from_numpy(np.ones((n_seg, n_env), dtype=np.float32))
     x.grad.fill(0.0)
-    compute.grad(x, out, starts)
+    compute.grad()
 
     # out[i, e] = sum_{j in segment i} x[j, e]^2, so d(out)/d(x[j, e]) = 2 * x[j, e] for the owning segment.
     grad = x.grad.to_numpy()
