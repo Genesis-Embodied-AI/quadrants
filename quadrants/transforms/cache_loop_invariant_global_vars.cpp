@@ -267,11 +267,24 @@ class CacheLoopInvariantGlobalVars : public LoopInvariantDetector {
   // (definitely_same_address). Address matching is required because per-task CSE (post-offload) cannot merge a
   // read GlobalPtrStmt (activate=false, LICM-hoisted) with the in-loop write GlobalPtrStmts to the same address;
   // keying purely by pointer identity would then allocate separate locals -> stale in-loop reads.
+  static bool ptrid_only() {
+    // QD_LICM_PTRID=1: disable the address-keyed fallback and match only by GlobalPtrStmt* identity (main's behavior).
+    // Diagnostic: isolates whether the address-keyed cache merge is what produces the non-terminating ndarray kernel.
+    static const bool v = []() {
+      const char *e = std::getenv("QD_LICM_PTRID");
+      return e != nullptr && std::string(e) == "1";
+    }();
+    return v;
+  }
+
   std::pair<CacheStatus, AllocaStmt *> *find_cache_entry(int depth, Stmt *dest) {
     auto &m = cached_maps[depth];
     auto it = m.find(dest);
     if (it != m.end() && it->second.first != CacheStatus::None) {
       return &it->second;
+    }
+    if (ptrid_only()) {
+      return nullptr;
     }
     for (auto &kv : m) {
       if (kv.second.first != CacheStatus::None && kv.first != dest &&
