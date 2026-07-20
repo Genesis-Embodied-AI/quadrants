@@ -1,0 +1,77 @@
+quadrants.types.compound_types
+==============================
+
+.. py:module:: quadrants.types.compound_types
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   quadrants.types.compound_types.matrix
+   quadrants.types.compound_types.vector
+   quadrants.types.compound_types.struct
+
+
+Module Contents
+---------------
+
+.. py:function:: matrix(n=None, m=None, dtype=None)
+
+   Creates a matrix type with given shape and data type.
+
+   :param n: number of rows of the matrix.
+   :type n: int
+   :param m: number of columns of the matrix.
+   :type m: int
+   :param dtype: matrix data type.
+   :type dtype: :mod:`~quadrants.types.primitive_types`
+
+   :returns: A matrix type.
+
+   Example::
+
+       >>> mat2x2 = qd.types.matrix(2, 2, qd.f32)  # 2x2 matrix type
+       >>> M = mat2x2([[1., 2.], [3., 4.]])  # an instance of this type
+
+
+.. py:function:: vector(n=None, dtype=None, *, unpacked: bool = False)
+
+   Creates a vector type with given shape and data type.
+
+   :param n: dimension of the vector.
+   :type n: int
+   :param dtype: vector data type.
+   :type dtype: :mod:`~quadrants.types.primitive_types`
+   :param unpacked: per-thread storage-layout marker. When ``True``, the type is only valid as a
+                    ``@qd.dataclass`` field annotation, where it expands into ``n`` independent scalar slots (one ``alloca``
+                    per slot) instead of one packed slot. The unpacked layout lets the optimiser promote slots to registers
+                    independently and spill only the ones it has to. See :doc:`/user_guide/matrix_vector` for details.
+   :type unpacked: bool
+
+   :returns: A vector type.
+
+   Example::
+
+       >>> vec3 = qd.types.vector(3, qd.f32)  # 3d vector type
+       >>> v = vec3([1., 2., 3.])  # an instance of this type
+
+
+.. py:function:: struct(**kwargs)
+
+   Creates a struct type with given members.
+
+   :param kwargs: a dictionary contains the names and types of the
+                  struct members.
+   :type kwargs: dict
+
+   :returns: A struct type.
+
+   Example::
+
+       >>> vec3 = qd.types.vector(3, qd.f32)
+       >>> sphere = qd.types.struct(center=vec3, radius=float)
+       >>> s = sphere(center=vec3([0., 0., 0.]), radius=1.0)
+
+
