@@ -3,7 +3,9 @@
 
 #include <cstdlib>
 #include <cstdio>
+#include <optional>
 #include <string>
+#include <vector>
 
 namespace quadrants::lang {
 
@@ -65,11 +67,14 @@ class CacheLoopInvariantGlobalVars : public LoopInvariantDetector {
 
   OffloadedStmt *current_offloaded;
 
-  // Two-phase soundness state. In phase 1 (analyzing_) we only record which snodes cannot be soundly cached;
-  // in phase 2 we transform, skipping those snodes. See visit(OffloadedStmt).
+  // Two-phase soundness state. In phase 1 (analyzing_) we only record which snodes/ndarrays cannot be soundly
+  // cached; in phase 2 we transform, skipping those. See visit(OffloadedStmt).
   bool analyzing_ = false;
-  std::unordered_set<const SNode *> unsafe_analysis_;  // accumulator during phase 1
-  std::unordered_set<const SNode *> unsafe_snodes_;    // frozen result consulted during phase 2
+  std::unordered_set<const SNode *> unsafe_analysis_;  // field accumulator during phase 1
+  std::unordered_set<const SNode *> unsafe_snodes_;    // frozen field result consulted during phase 2
+  using ArgIdSet = std::unordered_set<std::vector<int>, hashing::Hasher<std::vector<int>>>;
+  ArgIdSet unsafe_arr_analysis_;  // ndarray accumulator during phase 1
+  ArgIdSet unsafe_arr_ids_;       // frozen ndarray result consulted during phase 2
 
   explicit CacheLoopInvariantGlobalVars(const CompileConfig &config) : LoopInvariantDetector(config) {
   }
@@ -106,16 +111,25 @@ class CacheLoopInvariantGlobalVars : public LoopInvariantDetector {
     // so the split is gone at the root: this fixes the -88% break-flag bug AND recovers the duck_in_box cache
     // optimization (bench: duck within noise of main), whereas the exclusion alone recovered anymal but left duck at
     // pass-off -12%. The exclusion is therefore off by default; QD_LICM_EXCLUDE=1 re-enables it as a safety valve.
+    // Phase 1 (analysis) runs unconditionally: it is cheap (no IR mutation) and is required for ndarray soundness.
+    // merge_global_ptrs unifies split read/write GlobalPtrStmts (field case) in the full_simplify fixpoint, so the
+    // field exclusion is off by default (QD_LICM_EXCLUDE=1 re-enables it) to preserve the duck_in_box optimization.
+    // merge_global_ptrs does NOT touch ExternalPtrStmt, so the split persists for ndarrays under per-task CSE: the
+    // ndarray exclusion is therefore always honored, otherwise a cached-load-to-local goes stale against an in-loop
+    // store to the same array and the loop's break condition never fires (CPU: non-terminating; GPU: iteration cap).
     unsafe_snodes_.clear();
+    unsafe_arr_ids_.clear();
+    analyzing_ = true;
+    unsafe_analysis_.clear();
+    unsafe_arr_analysis_.clear();
+    run_body(stmt);
+    analyzing_ = false;
+    unsafe_arr_ids_ = std::move(unsafe_arr_analysis_);
     if (do_exclude()) {
-      analyzing_ = true;
-      unsafe_analysis_.clear();
-      run_body(stmt);
-      analyzing_ = false;
       unsafe_snodes_ = std::move(unsafe_analysis_);
     }
 
-    // Phase 2 (transform): cache as before, but skip the unsafe snodes.
+    // Phase 2 (transform): cache as before, but skip the unsafe snodes/ndarrays.
     run_body(stmt);
     current_offloaded = nullptr;
   }
@@ -376,25 +390,60 @@ class CacheLoopInvariantGlobalVars : public LoopInvariantDetector {
     return nullptr;
   }
 
+  // The ndarray arg_id backing |dest| (via ExternalPtrStmt), or nullopt for non-ndarray accesses.
+  static std::optional<std::vector<int>> dest_arg_id(Stmt *dest) {
+    ExternalPtrStmt *eptr = nullptr;
+    if (dest->is<ExternalPtrStmt>()) {
+      eptr = dest->as<ExternalPtrStmt>();
+    } else if (dest->is<MatrixPtrStmt>() && dest->as<MatrixPtrStmt>()->origin->is<ExternalPtrStmt>()) {
+      eptr = dest->as<MatrixPtrStmt>()->origin->as<ExternalPtrStmt>();
+    }
+    if (eptr) {
+      if (auto *arg = eptr->base_ptr->cast<ArgLoadStmt>()) {
+        return arg->arg_id;
+      }
+    }
+    return std::nullopt;
+  }
+
   // Would this pass otherwise want to cache accesses to |dest| (offload-unique, statically indexed, non-atomic)?
   // Whether a *particular* access is cacheable additionally depends on its scope (find_cache_depth_if_cacheable).
   bool cache_eligible(Stmt *dest) {
     return !is_dynamically_indexed(dest) && is_offload_unique(dest) && !is_atomic_dest(dest);
   }
 
-  // Phase-1 hook: mark the snode unsafe if this access is cache-eligible but not cacheable at its own site.
+  // Phase-1 hook: mark the snode/ndarray unsafe if this access is cache-eligible but not cacheable at its own site.
   void analyze_access(Stmt *dest, Block *scope) {
     const SNode *sn = dest_snode(dest);
-    if (!sn || !cache_eligible(dest)) {
+    auto arg_id = dest_arg_id(dest);
+    if ((!sn && !arg_id) || !cache_eligible(dest)) {
       return;
     }
     if (!find_cache_depth_if_cacheable(dest, scope).has_value()) {
-      if (unsafe_analysis_.insert(sn).second && licm_log()) {
-        std::printf("[LICM] UNSAFE snode#%d(%s) via %s\n", sn->id, sn->get_node_type_name().c_str(),
-                    describe_dest(dest).c_str());
-        std::fflush(stdout);
+      if (sn) {
+        if (unsafe_analysis_.insert(sn).second && licm_log()) {
+          std::printf("[LICM] UNSAFE snode#%d(%s) via %s\n", sn->id, sn->get_node_type_name().c_str(),
+                      describe_dest(dest).c_str());
+          std::fflush(stdout);
+        }
+      } else if (arg_id) {
+        if (unsafe_arr_analysis_.insert(*arg_id).second && licm_log()) {
+          std::printf("[LICM] UNSAFE ndarray arg via %s\n", describe_dest(dest).c_str());
+          std::fflush(stdout);
+        }
       }
     }
+  }
+
+  // A previously-identified unsafe access (field snode or ndarray arg) that must not be cached in phase 2.
+  bool dest_is_unsafe(Stmt *dest) {
+    if (const SNode *sn = dest_snode(dest); sn && unsafe_snodes_.count(sn)) {
+      return true;
+    }
+    if (auto arg_id = dest_arg_id(dest); arg_id && unsafe_arr_ids_.count(*arg_id)) {
+      return true;
+    }
+    return false;
   }
 
   void visit(GlobalLoadStmt *stmt) override {
@@ -406,7 +455,7 @@ class CacheLoopInvariantGlobalVars : public LoopInvariantDetector {
       analyze_access(stmt->src, stmt->parent);
       return;
     }
-    if (const SNode *sn = dest_snode(stmt->src); sn && unsafe_snodes_.count(sn)) {
+    if (dest_is_unsafe(stmt->src)) {
       return;
     }
     if (auto depth = find_cache_depth_if_cacheable(stmt->src, stmt->parent)) {
@@ -423,7 +472,7 @@ class CacheLoopInvariantGlobalVars : public LoopInvariantDetector {
       analyze_access(stmt->dest, stmt->parent);
       return;
     }
-    if (const SNode *sn = dest_snode(stmt->dest); sn && unsafe_snodes_.count(sn)) {
+    if (dest_is_unsafe(stmt->dest)) {
       return;
     }
     if (auto depth = find_cache_depth_if_cacheable(stmt->dest, stmt->parent)) {
