@@ -92,6 +92,7 @@ class WholeKernelCSE : public BasicStmtVisitor {
   // common_statement_eliminable() comparisons, to locate the O(n^2) blowup.
   std::size_t max_bucket_scan_ = 0;
   unsigned long long cmp_count_ = 0;
+  bool prof_ = false;
 
  public:
   using BasicStmtVisitor::visit;
@@ -211,6 +212,10 @@ class WholeKernelCSE : public BasicStmtVisitor {
       }
       for (auto *prev_stmt : it->second) {
         cmp_count_++;
+        if (prof_ && (cmp_count_ & ((1ULL << 22) - 1)) == 0) {
+          std::printf("[CSEPROF-PROG] cmps=%llu max_bucket=%zu\n", cmp_count_, max_bucket_scan_);
+          std::fflush(stdout);
+        }
         if (common_statement_eliminable(stmt, prev_stmt)) {
           ReplaceAndMarkUndone::run(&visited_, stmt, prev_stmt);
           modifier_.erase(stmt);
@@ -301,10 +306,13 @@ class WholeKernelCSE : public BasicStmtVisitor {
     bool modified = false;
     int rounds = 0;
     const bool prof = prof_enabled();
+    eliminator.prof_ = prof;
     std::size_t nstmts = 0;
     auto t0 = std::chrono::steady_clock::now();
     if (prof) {
       nstmts = irpass::analysis::gather_statements(node, [](Stmt *) { return true; }).size();
+      std::printf("[CSEPROF-START] ptrs_only=%d nstmts=%zu\n", (int)ptrs_only, nstmts);
+      std::fflush(stdout);
     }
     while (true) {
       node->accept(&eliminator);
