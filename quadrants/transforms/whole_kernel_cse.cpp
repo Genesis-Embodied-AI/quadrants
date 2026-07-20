@@ -7,9 +7,6 @@
 #include "quadrants/system/profiler.h"
 
 #include <typeindex>
-#include <cstdlib>
-#include <cstdio>
-#include <string>
 
 namespace quadrants::lang {
 
@@ -281,21 +278,12 @@ class WholeKernelCSE : public BasicStmtVisitor {
   static bool run(IRNode *node, bool ptrs_only = false) {
     WholeKernelCSE eliminator(ptrs_only);
     bool modified = false;
-    int rounds = 0;
     while (true) {
       node->accept(&eliminator);
-      rounds++;
       if (eliminator.modifier_.modify_ir())
         modified = true;
       else
         break;
-    }
-    if (ptrs_only) {
-      const char *log = std::getenv("QD_LICM_LOG");
-      if (log != nullptr && std::string(log) == "1") {
-        std::printf("[PTRMERGE] ran %d round(s), modified=%d\n", rounds, (int)modified);
-        std::fflush(stdout);
-      }
     }
     return modified;
   }
@@ -347,13 +335,6 @@ bool whole_kernel_cse(IRNode *root) {
 // stores. This is the load-bearing part of whole-kernel CSE; the expensive compute dedup stays per-task.
 bool merge_global_ptrs(IRNode *root) {
   QD_AUTO_PROF;
-  static const bool disabled = []() {
-    const char *e = std::getenv("QD_NO_PTR_MERGE");
-    return e != nullptr && std::string(e) == "1";
-  }();
-  if (disabled) {
-    return false;
-  }
   // Defensive: this is intended to run exactly once PRE-offload (single call in compile_to_offloads, before the first
   // flag_access). It must never run post-offload -- per_task_cse handles pointers within each task there, and a
   // whole-kernel pointer CSE over an offloaded kernel is both pointless and expensive. Skip if any top-level
