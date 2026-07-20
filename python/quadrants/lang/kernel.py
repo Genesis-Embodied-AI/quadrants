@@ -834,17 +834,30 @@ class Kernel(FuncBase):
     ) -> None:
         """Set scalar kernel args lifted from ``@qd.data_oriented(template_primitives=False)`` template-arg primitive
         members. Walks each recorded attr-chain to read the live value and buckets it by declared dtype kind (``'f'``
-        float, ``'i'`` signed int, ``'u'`` unsigned int), so the value is bound fresh on every launch."""
+        float, ``'i'`` signed int, ``'u'`` unsigned int), so the value is bound fresh on every launch.
+
+        The dtype kind is frozen at first compile (see ``struct_primitive_predeclarer``). Binding a ``float`` to an
+        arg that was lifted as an integer would silently truncate (``int(1.5) == 1``), so that one lossy direction is
+        rejected here rather than corrupting the value; the lossless directions (``int``/``bool`` -> float, and
+        ``bool`` <-> ``int``) still coerce, matching typed-scalar-arg semantics."""
         for arg_id, template_arg_idx, attr_chain, kind in launch_info:
             obj = args[template_arg_idx]
             for attr_name in attr_chain:
                 obj = getattr(obj, attr_name)
             if kind == "f":
                 launch_ctx_buffer[_FLOAT].append((arg_id, float(obj)))
-            elif kind == "u":
-                launch_ctx_buffer[_UINT].append((arg_id, int(obj)))
             else:
-                launch_ctx_buffer[_INT].append((arg_id, int(obj)))
+                if type(obj) is float:
+                    raise TypeError(
+                        f"Primitive member '{'.'.join(attr_chain)}' of a @qd.data_oriented(template_primitives=False) "
+                        f"object was lifted as an integer kernel argument (its type at first compile), but is now a "
+                        f"float ({obj!r}); coercing it would truncate. Keep the member's type stable across launches, "
+                        f"or use the default template_primitives=True to re-specialise the kernel per type."
+                    )
+                if kind == "u":
+                    launch_ctx_buffer[_UINT].append((arg_id, int(obj)))
+                else:
+                    launch_ctx_buffer[_INT].append((arg_id, int(obj)))
 
     def ensure_compiled(self, *py_args: tuple[Any, ...]) -> tuple[Callable, int, AutodiffMode]:
         try:
