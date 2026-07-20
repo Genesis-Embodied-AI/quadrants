@@ -76,7 +76,7 @@ def good_kernel(a: qd.types.NDArray[qd.f32, 1]) -> None:
 
 Sub-functions called by the kernel are also checked - they must not capture external state either.
 
-Accessing data through a `qd.template()`, [`@qd.data_oriented`](compound_types.md#qddata_oriented), or [`dataclasses.dataclass`](compound_types.md#dataclassesdataclass) parameter is **not** capture, even though the Python source (e.g. `self.x` inside a data-oriented method) reads like member access rather than a parameter. The object is itself an explicit parameter; the compiler flattens it at compile time and handles each accessed member by kind:
+Reaching data through the members of a [`@qd.data_oriented`](compound_types.md#qddata_oriented) or [`dataclasses.dataclass`](compound_types.md#dataclassesdataclass) parameter is **not** capture, even though the Python source (e.g. `self.x` inside a data-oriented method) reads like member access rather than a parameter. The object is itself an explicit parameter; the compiler flattens it at compile time and handles each accessed member by kind:
 
 - an **ndarray** member is passed as a real runtime kernel parameter (an external tensor, bound at launch);
 - a **primitive** member (`int` / `float` / `bool`) is baked into the kernel as a compile-time constant - its value becomes part of the kernel's specialization and is folded into the fastcache key - unless the class is declared [`template_primitives=False`](compound_types.md#runtime-primitives-template_primitivesfalse), in which case it becomes a runtime scalar parameter instead;
