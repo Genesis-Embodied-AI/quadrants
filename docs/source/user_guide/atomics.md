@@ -17,7 +17,7 @@ All atomic ops follow the same shape: `qd.atomic_op(x, y)` performs `x = op(x, y
 | `atomic_mul`                                | CAS on every dtype                         | CAS                                   | CAS                                                    | CAS                              |
 | `atomic_min`, `atomic_max`                  | int native; floats via CAS                 | int native; floats via CAS            | int native; floats via CAS                             | int native; floats via CAS       |
 | `atomic_and`, `atomic_or`, `atomic_xor`     | int only (native)                          | int only (native)                     | int only (native)                                      | int only (native)                |
-| `atomic_exchange`                           | int / float native (`atomicExch`)          | int / float native (`*_atomic_swap`)  | int native; f32 / f64 global via uint-bitcast `OpAtomicExchange`; f16, shared float, workgroup f64 deferred[2] | int / float native (`xchg`)      |
+| `atomic_exchange`                           | int / float native (`atomicExch`)          | int / float native (`*_atomic_swap`)  | int native; f32 / f64 global supported (`OpAtomicExchange`); f16, shared float, workgroup f64 deferred[2] | int / float native (`xchg`)      |
 | `atomic_cas`                                | int native (`atomicCAS`)                   | int native (`*_atomic_cmpswap`)       | int native (`OpAtomicCompareExchange`); f32 / f64 rejected at compile time[3]                             | int native (`cmpxchg`)           |
 
 A few cross-cutting notes that the cells above abbreviate:
@@ -25,7 +25,7 @@ A few cross-cutting notes that the cells above abbreviate:
 - **`atomic_sub` behaves exactly like `atomic_add`.** Every `atomic_sub(x, y)` is treated as `atomic_add(x, -y)`, so its per-backend support and per-dtype behavior are exactly those of `atomic_add`.
 - **CAS-loop ops are noticeably slower than native atomics**, especially under contention — every contending thread retries the load + compare-exchange until it wins. Prefer pre-aggregating into a register or shared array and issuing a single atomic at the end of the block where possible.
 - **f16 floats always use a CAS loop** (no native f16 atomic on any backend except SPIR-V with the right capability bit).
-- **On CPU, "native" does not guarantee a single machine instruction.** On x86 and other architectures without hardware float atomics, the compiler backend lowers native float `atomic_add` (and integer `min` / `max`) to a CAS loop in machine code. Under high contention the performance is similar to the explicit "CAS" entries; the difference is that "native" ops benefit from hardware acceleration where available.
+- **On CPU, "native" does not guarantee a single machine instruction.** On x86 and other architectures without hardware float atomics, native float `atomic_add` (and integer `min` / `max`) runs as a CAS loop in machine code. Under high contention the performance is similar to the explicit "CAS" entries; the difference is that "native" ops benefit from hardware acceleration where available.
 - **On Vulkan / Metal, whether float `atomic_add` is native depends on the device.** If the device reports the matching float-atomic capability, `atomic_add` uses a native float atomic; otherwise it falls back to a CAS loop.
 - **`i64` / `u64` atomic read-modify-write is not portable to Metal.** Metal only exposes 64-bit atomics as `atomic_min` / `atomic_max` on unsigned 64-bit values (Apple GPU family 9+, i.e. M3 / A17 and newer); `atomic_add` / `sub` / `mul` and the bitwise family are unavailable on every Apple GPU. Attempting a 64-bit integer atomic under Metal currently fails when the shader is built. Use `i32` / `u32` for Metal portability. CUDA, AMDGPU, and Vulkan with the `VK_KHR_shader_atomic_int64` extension are unaffected.
 
@@ -60,10 +60,10 @@ Properties common to every `qd.atomic_*`:
 
 Atomically writes back `min(x, y)` (resp. `max(x, y)`); returns the old value of `x`. Float min/max are `minNum` / `maxNum`-style: if exactly one operand is `NaN`, the non-`NaN` operand wins.
 
-| Backends                  | `f16`                                  | `f32`, `f64`                       | Both inputs `NaN`                          |
-|---------------------------|----------------------------------------|------------------------------------|--------------------------------------------|
-| CPU, CUDA, AMDGPU (LLVM)  | CAS over `llvm.minnum` / `llvm.maxnum` | LLVM `atomicrmw fmin` / `fmax`           | `NaN` (per LLVM `minnum` / `maxnum` spec)  |
-| Vulkan, Metal (SPIR-V)    | capability-gated, usually unsupported  | CAS loop with GLSL `FMin` / `FMax`       | undefined per spec; `NaN` in practice      |
+| Backends                | `f16` min/max                          | Both inputs `NaN`                        |
+|-------------------------|----------------------------------------|------------------------------------------|
+| CPU, CUDA, AMDGPU       | CAS loop                               | `NaN`                                     |
+| Vulkan, Metal (SPIR-V)  | capability-gated, usually unsupported  | undefined per spec; `NaN` in practice    |
 
 ### `qd.atomic_and(x, y)` / `qd.atomic_or(x, y)` / `qd.atomic_xor(x, y)`
 
@@ -186,8 +186,7 @@ The decoupled-look-back scan in [grid](grid.md) shows the full pattern.
 
 ## Under the hood (advanced)
 
-The rest of this page describes backend and compiler internals. You do not need any of it to use the
-atomic ops above; it is here for readers debugging performance or backend-specific behavior.
+The rest of this page describes backend and compiler internals. You do not need any of it to use the atomic ops above; it is here for readers debugging performance or backend-specific behavior.
 
 ### Atomic visibility scope across backends
 
