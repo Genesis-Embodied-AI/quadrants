@@ -5,10 +5,10 @@ from quadrants.lang.exception import QuadrantsRuntimeError
 
 from tests import test_utils
 
-archs_support_ndarray_ad = [qd.cpu, qd.cuda, qd.amdgpu]
+archs_support_ndarray_ad = [qd.cpu, qd.cuda, qd.amdgpu, qd.metal]
 
 
-@test_utils.test(arch=archs_support_ndarray_ad, default_fp=qd.f64, require=qd.extension.adstack)
+@test_utils.test(arch=archs_support_ndarray_ad, require=qd.extension.adstack)
 def test_ad_sum():
 
     N = 10
@@ -40,7 +40,7 @@ def test_ad_sum():
         assert a.grad[i] == b[i]
 
 
-@test_utils.test(arch=archs_support_ndarray_ad, default_fp=qd.f64, require=qd.extension.adstack)
+@test_utils.test(arch=archs_support_ndarray_ad, require=qd.extension.adstack)
 def test_ad_sum_local_atomic():
 
     N = 10
@@ -72,7 +72,7 @@ def test_ad_sum_local_atomic():
         assert a.grad[i] == b[i]
 
 
-@test_utils.test(arch=archs_support_ndarray_ad, default_fp=qd.f64, require=qd.extension.adstack)
+@test_utils.test(arch=archs_support_ndarray_ad, require=qd.extension.adstack)
 def test_ad_power():
     N = 10
     a = qd.ndarray(qd.f32, shape=N, needs_grad=True)
@@ -103,7 +103,7 @@ def test_ad_power():
         assert a.grad[i] == b[i] * 3 ** (b[i] - 1)
 
 
-@test_utils.test(arch=archs_support_ndarray_ad, default_fp=qd.f64, require=qd.extension.adstack)
+@test_utils.test(arch=archs_support_ndarray_ad, require=qd.extension.adstack)
 def test_ad_fibonacci():
     N = 15
     a = qd.ndarray(qd.f32, shape=N, needs_grad=True)
@@ -173,7 +173,7 @@ def test_ad_fibonacci_index():
         assert b[i] == is_fib * N
 
 
-@test_utils.test(arch=archs_support_ndarray_ad, default_fp=qd.f64, require=qd.extension.adstack)
+@test_utils.test(arch=archs_support_ndarray_ad, require=qd.extension.adstack)
 def test_integer_stack():
     N = 5
     a = qd.ndarray(qd.f32, shape=N, needs_grad=True)
@@ -212,7 +212,7 @@ def test_integer_stack():
         t = t * 10 + 1
 
 
-@test_utils.test(arch=archs_support_ndarray_ad, default_fp=qd.f64, require=qd.extension.adstack)
+@test_utils.test(arch=archs_support_ndarray_ad, require=qd.extension.adstack)
 def test_double_for_loops():
     N = 5
     a = qd.ndarray(qd.f32, shape=N, needs_grad=True)
@@ -250,7 +250,7 @@ def test_double_for_loops():
         assert b.grad[i] == 2 * i
 
 
-@test_utils.test(arch=archs_support_ndarray_ad, default_fp=qd.f64, require=qd.extension.adstack)
+@test_utils.test(arch=archs_support_ndarray_ad, require=qd.extension.adstack)
 def test_double_for_loops_more_nests():
     N = 6
     a = qd.ndarray(qd.f32, shape=N, needs_grad=True)
@@ -296,7 +296,7 @@ def test_double_for_loops_more_nests():
         assert b.grad[i] == total_grad_b
 
 
-@test_utils.test(arch=archs_support_ndarray_ad, default_fp=qd.f64, require=qd.extension.adstack)
+@test_utils.test(arch=archs_support_ndarray_ad, default_fp=qd.f64, require=[qd.extension.adstack, qd.extension.data64])
 def test_complex_body():
     N = 5
     a = qd.ndarray(qd.f32, shape=N, needs_grad=True)
@@ -335,7 +335,7 @@ def test_complex_body():
         # assert a.grad[i] == g[i]
 
 
-@test_utils.test(arch=archs_support_ndarray_ad, default_fp=qd.f64, require=qd.extension.adstack)
+@test_utils.test(arch=archs_support_ndarray_ad, require=qd.extension.adstack)
 def test_mixed_inner_loops():
     x = qd.ndarray(dtype=qd.f32, shape=(1,), needs_grad=True)
     arr = qd.ndarray(dtype=qd.f32, shape=(5))
@@ -357,7 +357,7 @@ def test_mixed_inner_loops():
     assert x.grad[0] == 15.0
 
 
-@test_utils.test(arch=archs_support_ndarray_ad, default_fp=qd.f64, require=qd.extension.adstack)
+@test_utils.test(arch=archs_support_ndarray_ad, require=qd.extension.adstack)
 def test_mixed_inner_loops_tape():
     x = qd.ndarray(dtype=qd.f32, shape=(1,), needs_grad=True)
     arr = qd.ndarray(dtype=qd.f32, shape=(5))
@@ -1002,7 +1002,7 @@ def test_ad_if_parallel():
     assert x.grad[1] == 1
 
 
-@test_utils.test(arch=archs_support_ndarray_ad, require=qd.extension.adstack)
+@test_utils.test(arch=archs_support_ndarray_ad, require=[qd.extension.adstack, qd.extension.data64])
 def test_ad_if_parallel_f64():
     x = qd.ndarray(qd.f64, shape=2, needs_grad=True)
     y = qd.ndarray(qd.f64, shape=2, needs_grad=True)
