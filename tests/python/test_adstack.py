@@ -5202,18 +5202,13 @@ def test_above_cap_out_of_grammar_kernel_raises():
 
 @test_utils.test(require=qd.extension.adstack, cfg_optimization=False)
 def test_adstack_offset_array_difference_loop_trip_grad_correct():
-    # A reverse-mode kernel whose inner loop trip count is the difference of two adjacent reads of an offset array
-    # (`starts[i + 1] - starts[i]`, the ragged-segment length pattern) must size the loop-carried adstack for the
-    # widest segment, and the analytical gradient must match the closed form. The structural pre-pass wraps each of
-    # the two reads in a whole-shape `MaxOverRange` fallback because the recovered loop index is opaque; the two
-    # wrappers carry alpha-equal `ExternalTensorShape` ends, so before the fix `expr_sub` fused them into
-    # `MaxOverRange(starts[v] - starts[v]) = 0`, collapsing the loop's push multiplier to zero. The stack was then
-    # sized for the root pushes only and overflowed once a segment had more than one element (loud
-    # `QuadrantsAssertionError` on SPIR-V, silently replicated per-lane gradients on a `__debug__`-disabled build).
-    # The outer parallel `ndrange` forces the reverse pass to spill and recover the loop index (via a stash), so
-    # both `starts` reads index through an opaque expression and take the whole-shape `MaxOverRange` fallback -
-    # the shape that fuses to zero before the fix. A compile-time outer `range` would keep the index concrete and
-    # not exercise the fusion.
+    # Inner loop trip count is the difference of two adjacent offset-array reads (`starts[i + 1] - starts[i]`, the
+    # ragged-segment length pattern); the adstack must be sized for the widest segment. The outer parallel `ndrange`
+    # forces the reverse pass to spill and recover the loop index, so both reads index through an opaque expression
+    # and each takes a whole-shape `MaxOverRange` fallback with alpha-equal `ExternalTensorShape` ends. Before the
+    # fix `expr_sub` fused those into `MaxOverRange(starts[v] - starts[v]) = 0`, zeroing the loop's push multiplier:
+    # the stack was sized for the root pushes only and overflowed for any segment longer than one (loud on SPIR-V,
+    # silently per-lane-replicated gradients on a `__debug__`-disabled build).
     starts_np = np.array([0, 2, 3, 6], dtype=np.int32)  # segment lengths 2, 1, 3
     n_seg = starts_np.size - 1
     total = int(starts_np[-1])
