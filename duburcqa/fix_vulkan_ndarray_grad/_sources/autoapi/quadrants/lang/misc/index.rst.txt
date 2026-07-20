@@ -411,9 +411,12 @@ Module Contents
 
 .. py:function:: is_extension_enabled(ext: quadrants._lib.core.quadrants_python.Extension) -> bool
 
-   Directly returns whether extension is enabled, without needing to
-   pass in current architecture. Also takes into account config, in the case
-   of adstack.
+   Directly returns whether extension is enabled on the CURRENT program, without needing to pass in the current
+   architecture.
+
+   Unlike the arch-level `is_extension_supported`, this also accounts for the config (for adstack) and for the
+   capabilities of the initialized device: on the SPIR-V archs (vulkan, metal), extension support depends on
+   per-device capabilities that only the running device can report.
 
 
 .. py:function:: dump_compile_config() -> None
