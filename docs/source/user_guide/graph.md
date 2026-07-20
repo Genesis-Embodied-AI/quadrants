@@ -422,7 +422,7 @@ After migrating to graph with graph do while we have:
 ```
 @qd.kernel(graph=True)
 def k1(a: qd.types.NDArray, cond: qd.types.NDArray):
-    while qd.graph.do_while(condition=cond):
+    while qd.graph.do_while(cond):
         fn_1(a, cond)
         fn_2(a, cond)
         fn_3(a, cond)
@@ -517,7 +517,7 @@ When we migrate this to graph do while, we get:
 ```
 @qd.kernel(graph=True)
 def k1(a: qd.types.NDArray, cond: qd.types.NDArray):
-    while qd.graph.do_while(condition=cond):
+    while qd.graph.do_while(cond):
         for j in range(a.shape[0]):  # off-loaded task (gpu kernel)
             ....  # no need for cond check
         for j in range(a.shape[0]):  # off-loaded task (gpu kernel)
