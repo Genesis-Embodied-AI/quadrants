@@ -9,6 +9,9 @@
 #include <condition_variable>
 #include <thread>
 #include <vector>
+#include <cstdio>
+#include <cstdlib>
+#include <string>
 
 namespace quadrants {
 
@@ -47,6 +50,20 @@ void ThreadPool::run(int splits, int desired_num_threads, void *range_for_task_c
     this->range_for_task_context = range_for_task_context;
     this->func = func;
     this->desired_num_threads = std::min(desired_num_threads, max_num_threads);
+    if (this->desired_num_threads <= 0) {
+      // In a release build QD_ASSERT below is compiled out, so a 0 here silently deadlocks the master (no slave
+      // ever satisfies `thread_id < desired_num_threads`, so `started` stays false forever). Diagnostic + clamp.
+      static const bool tplog = []() {
+        const char *e = std::getenv("QD_TPLOG");
+        return e != nullptr && std::string(e) == "1";
+      }();
+      if (tplog) {
+        std::printf("[TPRUN] desired_num_threads<=0 (passed=%d max=%d splits=%d) -> clamp to 1\n", desired_num_threads,
+                    max_num_threads, splits);
+        std::fflush(stdout);
+      }
+      this->desired_num_threads = 1;
+    }
     QD_ASSERT(this->desired_num_threads > 0);
     // QD_P(this->desired_num_threads);
     started = false;
