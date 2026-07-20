@@ -15,6 +15,10 @@
 
 namespace quadrants {
 
+// Re-entrancy tracking: >0 while this thread is executing a ThreadPool task body. If ThreadPool::run() is called
+// while this is >0, the kernel body is dispatching a NESTED parallel_for onto the same pool.
+static thread_local int g_tp_task_depth = 0;
+
 bool test_threading() {
   auto tp = ThreadPool(20);
   for (int j = 0; j < 100; j++) {
@@ -78,7 +82,8 @@ void ThreadPool::run(int splits, int desired_num_threads, void *range_for_task_c
     return e != nullptr && std::string(e) == "1";
   }();
   if (tplog2) {
-    std::printf("[TPRUN] ENTER splits=%d desired=%d\n", splits, this->desired_num_threads);
+    std::printf("[TPRUN] ENTER splits=%d desired=%d nested_depth=%d%s\n", splits, this->desired_num_threads,
+                g_tp_task_depth, g_tp_task_depth > 0 ? " <<< NESTED parallel_for" : "");
     std::fflush(stdout);
   }
   // wake up all slaves
@@ -133,7 +138,9 @@ void ThreadPool::target() {
           break;
       }
 
+      g_tp_task_depth++;
       func(this->range_for_task_context, thread_id, task_id);
+      g_tp_task_depth--;
     }
 
     bool all_finished = false;
