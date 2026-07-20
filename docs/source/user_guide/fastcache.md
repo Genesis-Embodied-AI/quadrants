@@ -76,17 +76,7 @@ def good_kernel(a: qd.types.NDArray[qd.f32, 1]) -> None:
 
 Sub-functions called by the kernel are also checked - they must not capture external state either.
 
-Reaching data through the members of a [`@qd.data_oriented`](compound_types.md#qddata_oriented) or [`dataclasses.dataclass`](compound_types.md#dataclassesdataclass) parameter is **not** capture, even though the Python source (e.g. `self.x` inside a data-oriented method) reads like member access rather than a parameter. The container is itself an explicit parameter with no kernel-side representation; the compiler flattens it at compile time, and how each accessed member reaches the kernel depends on the container.
-
-For a [`@qd.data_oriented`](compound_types.md#qddata_oriented) object, the compiler reads the live instance's attributes:
-
-- an **ndarray** member is passed as a real runtime kernel parameter (an external tensor bound at launch; only its `dtype` / `ndim` / layout affect specialization);
-- a **primitive** member (`int` / `float` / `bool`) is baked into the kernel as a compile-time constant, so its value specialises the kernel and is part of the fastcache key - unless the class is declared [`template_primitives=False`](compound_types.md#runtime-primitives-template_primitivesfalse), in which case it becomes a runtime scalar parameter instead;
-- a **`qd.field`** member is a globally-allocated tensor referenced directly, not a parameter (and, being baked in, disables fastcache for the call - see [Supported parameter types](#2-supported-parameter-types) below).
-
-For a [`dataclasses.dataclass`](compound_types.md#dataclassesdataclass) parameter, each declared field is flattened into its own kernel parameter: an **ndarray** field becomes a runtime external tensor, and a **primitive** field becomes a **runtime scalar parameter** whose value is *not* baked - only its type participates in the cache key - unless the field is annotated `FIELD_METADATA_CACHE_VALUE`, which bakes the value in.
-
-In every case the member is parameter-derived, not a free variable captured from the enclosing Python scope, which is what the purity check forbids.
+Reaching data through the members of a [`@qd.data_oriented`](compound_types.md#qddata_oriented) parameter is **not** capture, even though the Python source (e.g. `self.x` inside a data-oriented method) reads like member access rather than a parameter. The object is itself an explicit kernel parameter, and the compiler resolves each accessed member at compile time - either passing it as a real kernel argument (e.g. a `qd.ndarray` member) or compiling it into the kernel (e.g. a primitive or `qd.field` member); see [Compound-type cache keying](#compound-type-cache-keying) for exactly how each member kind is treated and keyed. Either way the member is parameter-derived, not a free variable captured from the enclosing Python scope, which is what the purity check forbids.
 
 **Exemptions:** The following may be accessed from the enclosing scope without violating purity:
 
@@ -157,6 +147,14 @@ print(obs.cache_stored)         # True if the compiled kernel was stored to cach
 
 On the first run you'll see `cache_stored=True` but `cache_loaded=False`. On the second run (after `qd.init`), `cache_loaded=True`.
 
+### Why `qd.field` disables fastcache
+
+Fields are allocated contiguously in a single global memory region, one after another. A compiled kernel bakes in the memory bindings (offsets into that region) of the fields it accesses. Because all fields share one layout, redimensioning *any* field - including one completely unrelated to the fields this kernel touches - shifts the offsets of every field allocated after it, so the bindings baked into an already-compiled kernel no longer point at the right memory.
+
+Fastcache reuses a compiled kernel across separate Python processes, keyed only on the kernel source, argument types, and compiler config. That key cannot capture the global field layout, which depends on the sizes and allocation order of *all* fields created in the program - state that is external to this kernel and can differ from run to run. So a kernel loaded from cache in a later process could carry field bindings that no longer match the current layout, silently reading or writing the wrong memory.
+
+For this reason a kernel that touches any `qd.field` - directly, or through a `@qd.data_oriented` or other compound-type member - can never use fastcache: fastcache is disabled for that call and the kernel falls back to normal compilation. If you need fastcache, use `qd.ndarray` instead: an ndarray is passed as a runtime parameter (a data pointer bound at launch), so no field-layout state is baked into the kernel.
+
 ## Appendix
 
 ### Compound-type cache keying
@@ -169,7 +167,7 @@ As part of generating the fastcache cache key, fastcache hashes each kernel para
 - Primitive (`int` / `float` / `bool` / `enum.Enum`) member - value is baked into the kernel (same semantics as a `qd.Template` primitive). Two instances of the same class with different primitive member values get different cache entries. **Exception:** if the class is declared `@qd.data_oriented(template_primitives=False)`, primitive members are lifted to runtime scalar args rather than baked, so only their *type* contributes to the cache key - two instances with different primitive values share one cache entry and changing a value does not recompile.
 - Nested `@qd.data_oriented` member - recurses.
 - Nested `dataclasses.dataclass` member - recurses (with the dataclass rules below).
-- `qd.field` member - fastcache is disabled for the entire kernel call. The kernel still runs via normal compilation; a warn-level log line is emitted.
+- `qd.field` member - fastcache is disabled for the entire kernel call. The kernel still runs via normal compilation; a warn-level log line is emitted. See [Why `qd.field` disables fastcache](#why-qdfield-disables-fastcache) for the reason.
 
 **`dataclasses.dataclass`:** each declared member is hashed. For each member, only the *type* is included in the cache key by default - **not** the value. To include a member's value, annotate it:
 
