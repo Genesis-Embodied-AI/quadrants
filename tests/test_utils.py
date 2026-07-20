@@ -247,33 +247,32 @@ def test(arch=None, exclude=None, require=None, **options):
             if exclude_arch_platform(req_arch, curr_system, exclude):
                 continue
 
-            if not all(_qd_core.is_extension_supported(req_arch, e) for e in require):
-                continue
-
             if qd.extension.adstack in require:
                 options["ad_stack_experimental_enabled"] = True
 
+            # Extension support can depend on the capabilities of the device, which does not exist yet at collection
+            # time: the requirements are carried along the parametrization and resolved against the initialized
+            # program by the `wanted_arch` fixture, which skips when one is unsupported.
             current_options = copy.deepcopy(options)
+            required_extensions = list(require)
             for feature, param in zip(_test_features, req_params):
                 value = param.value
-                required_extensions = param.required_extensions
-                if current_options.setdefault(feature, value) != value or any(
-                    not _qd_core.is_extension_supported(req_arch, e) for e in required_extensions
-                ):
+                if current_options.setdefault(feature, value) != value:
                     break
-            else:  # no break occurs, required extensions are supported
-                parameters.append((req_arch, current_options))
+                required_extensions.extend(param.required_extensions)
+            else:  # no break occurs, the feature options are consistent
+                parameters.append((req_arch, current_options, tuple(required_extensions)))
 
         if not parameters:
-            marks.append(pytest.mark.skip(reason="No all required extensions are supported"))
+            marks.append(pytest.mark.skip(reason="No supported archs after exclusions"))
         else:
             marks.append(
                 pytest.mark.parametrize(
-                    "req_arch,req_options",
+                    "req_arch,req_options,req_extensions",
                     parameters,
                     ids=[
                         f"arch={arch.name}-{i}" if len(parameters) > 1 else f"arch={arch.name}"
-                        for i, (arch, _) in enumerate(parameters)
+                        for i, (arch, _, _) in enumerate(parameters)
                     ],
                 )
             )

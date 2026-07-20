@@ -96,7 +96,7 @@ def _vulkan_debug_warmup():
 
 
 @pytest.fixture(autouse=True)
-def wanted_arch(request, req_arch, req_options):
+def wanted_arch(request, req_arch, req_options, req_extensions):
     if req_arch is not None:
         if req_arch in (qd.cuda, qd.amdgpu):
             if not request.node.get_closest_marker("run_in_serial"):
@@ -113,6 +113,13 @@ def wanted_arch(request, req_arch, req_options):
         if "print_full_traceback" not in req_options:
             req_options["print_full_traceback"] = True
         qd.init(arch=req_arch, enable_fallback=False, **req_options)
+
+        # Extension support can depend on the capabilities of the device that `qd.init` just created, so the test
+        # requirements resolve against the initialized program rather than a static arch table.
+        for ext in req_extensions:
+            if not qd.is_extension_enabled(ext):
+                qd.reset()
+                pytest.skip(f"Extension '{ext.name}' is unsupported by the '{req_arch.name}' device on this machine.")
     yield
     if req_arch is not None:
         qd.reset()
@@ -122,7 +129,7 @@ def pytest_generate_tests(metafunc):
     if not getattr(metafunc.function, "__qd_test__", False):
         # For test functions not wrapped with @test_utils.test(),
         # fill with empty values to avoid undefined fixtures
-        metafunc.parametrize("req_arch,req_options", [(None, None)], ids=["none"])
+        metafunc.parametrize("req_arch,req_options,req_extensions", [(None, None, ())], ids=["none"])
 
 
 def _exit_marker_dir():
