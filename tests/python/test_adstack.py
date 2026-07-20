@@ -5198,3 +5198,51 @@ def test_above_cap_out_of_grammar_kernel_raises():
             x.grad[i] = 0.0
         compute.grad(a)
         qd.sync()
+
+
+@test_utils.test(require=qd.extension.adstack, cfg_optimization=False)
+def test_adstack_offset_array_difference_loop_trip_grad_correct():
+    # A reverse-mode kernel whose inner loop trip count is the difference of two adjacent reads of an offset array
+    # (`starts[i + 1] - starts[i]`, the ragged-segment length pattern) must size the loop-carried adstack for the
+    # widest segment, and the analytical gradient must match the closed form. The structural pre-pass wraps each of
+    # the two reads in a whole-shape `MaxOverRange` fallback because the recovered loop index is opaque; the two
+    # wrappers carry alpha-equal `ExternalTensorShape` ends, so before the fix `expr_sub` fused them into
+    # `MaxOverRange(starts[v] - starts[v]) = 0`, collapsing the loop's push multiplier to zero. The stack was then
+    # sized for the root pushes only and overflowed once a segment had more than one element (loud
+    # `QuadrantsAssertionError` on SPIR-V, silently replicated per-lane gradients on a `__debug__`-disabled build).
+    # The outer parallel `ndrange` forces the reverse pass to spill and recover the loop index (via a stash), so
+    # both `starts` reads index through an opaque expression and take the whole-shape `MaxOverRange` fallback -
+    # the shape that fuses to zero before the fix. A compile-time outer `range` would keep the index concrete and
+    # not exercise the fusion.
+    starts_np = np.array([0, 2, 3, 6], dtype=np.int32)  # segment lengths 2, 1, 3
+    n_seg = starts_np.size - 1
+    total = int(starts_np[-1])
+    n_env = 2
+    x_np = np.linspace(0.2, 0.9, total * n_env).astype(np.float32).reshape(total, n_env)
+
+    starts = qd.ndarray(qd.i32, shape=(n_seg + 1,))
+    starts.from_numpy(starts_np)
+    x = qd.ndarray(qd.f32, shape=(total, n_env), needs_grad=True)
+    out = qd.ndarray(qd.f32, shape=(n_seg, n_env), needs_grad=True)
+
+    @qd.kernel
+    def compute(x: qd.types.ndarray(), out: qd.types.ndarray(), starts: qd.types.ndarray()):
+        for i, i_env in qd.ndrange(n_seg, n_env):
+            seg_start = starts[i]
+            seg_end = starts[i + 1]
+            acc = qd.f32(0.0)
+            for j in range(seg_end - seg_start):
+                acc = acc + x[seg_start + j, i_env] * x[seg_start + j, i_env]
+            out[i, i_env] = acc
+
+    x.from_numpy(x_np)
+    compute(x, out, starts)
+    out.grad.from_numpy(np.ones((n_seg, n_env), dtype=np.float32))
+    x.grad.fill(0.0)
+    compute.grad(x, out, starts)
+
+    # out[i, e] = sum_{j in segment i} x[j, e]^2, so d(out)/d(x[j, e]) = 2 * x[j, e] for the owning segment.
+    grad = x.grad.to_numpy()
+    for j in range(total):
+        for e in range(n_env):
+            assert grad[j, e] == pytest.approx(2.0 * x_np[j, e], rel=1e-5)
