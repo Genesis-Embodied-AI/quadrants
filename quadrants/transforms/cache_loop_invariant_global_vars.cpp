@@ -1,9 +1,6 @@
 #include "quadrants/transforms/loop_invariant_detector.h"
 #include "quadrants/ir/analysis.h"
 
-#include <optional>
-#include <vector>
-
 namespace quadrants::lang {
 
 namespace {
@@ -64,13 +61,6 @@ class CacheLoopInvariantGlobalVars : public LoopInvariantDetector {
 
   OffloadedStmt *current_offloaded;
 
-  // Two-phase soundness state. In phase 1 (analyzing_) we record which ndarrays cannot be soundly cached;
-  // in phase 2 we transform, skipping those. See visit(OffloadedStmt).
-  bool analyzing_ = false;
-  using ArgIdSet = std::unordered_set<std::vector<int>, hashing::Hasher<std::vector<int>>>;
-  ArgIdSet unsafe_arr_analysis_;  // ndarray accumulator during phase 1
-  ArgIdSet unsafe_arr_ids_;       // frozen ndarray result consulted during phase 2
-
   explicit CacheLoopInvariantGlobalVars(const CompileConfig &config) : LoopInvariantDetector(config) {
   }
 
@@ -89,41 +79,14 @@ class CacheLoopInvariantGlobalVars : public LoopInvariantDetector {
     gather_atomic_dests(stmt, atomic_dest_snodes_, atomic_dest_arr_ids_);
 
     // We don't need to visit TLS/BLS prologues/epilogues.
-    if (!stmt->body) {
-      current_offloaded = nullptr;
-      return;
+    if (stmt->body) {
+      if (stmt->task_type == OffloadedStmt::TaskType::range_for || stmt->task_type == OffloadedTaskType::mesh_for ||
+          stmt->task_type == OffloadedStmt::TaskType::struct_for)
+        visit_loop(stmt->body.get());
+      else
+        stmt->body->accept(this);
     }
-
-    // Phase 1 (analysis): find ndarrays that cannot be soundly cached. An ndarray is unsafe if some access to it is
-    // eligible for caching (offload-unique, static index, non-atomic) yet not cacheable at its own site -- e.g. a
-    // store inside an if-block that LICM did not hoist out (move_loop_invariant_outside_if is off). If we cached
-    // that array's other (cacheable) accesses into a loop-invariant local, the un-hoistable access would still
-    // read/write global directly, so the local goes stale -- the loop's break condition then never fires (CPU:
-    // non-terminating; GPU: iteration cap). This is the solver break-flag / -88% regression, on the ndarray path.
-    //
-    // The equivalent field (SNode) split is instead resolved upstream: merge_global_ptrs unifies the split read/write
-    // GlobalPtrStmts in the full_simplify fixpoint (like whole-kernel CSE on main), so cache_loop_invariant sees one
-    // shared pointer and caches soundly -- this fixes the field -88% bug AND keeps the duck_in_box optimization.
-    // merge_global_ptrs does NOT touch ExternalPtrStmt, so the ndarray split persists under per-task CSE and must be
-    // excluded here. Phase 1 is cheap (no IR mutation).
-    unsafe_arr_ids_.clear();
-    analyzing_ = true;
-    unsafe_arr_analysis_.clear();
-    run_body(stmt);
-    analyzing_ = false;
-    unsafe_arr_ids_ = std::move(unsafe_arr_analysis_);
-
-    // Phase 2 (transform): cache as before, but skip the unsafe ndarrays.
-    run_body(stmt);
     current_offloaded = nullptr;
-  }
-
-  void run_body(OffloadedStmt *stmt) {
-    if (stmt->task_type == OffloadedStmt::TaskType::range_for || stmt->task_type == OffloadedTaskType::mesh_for ||
-        stmt->task_type == OffloadedStmt::TaskType::struct_for)
-      visit_loop(stmt->body.get());
-    else
-      stmt->body->accept(this);
   }
 
   bool is_dynamically_indexed(Stmt *stmt) {
@@ -231,30 +194,9 @@ class CacheLoopInvariantGlobalVars : public LoopInvariantDetector {
     modifier.insert_before(get_loop_stmt(depth), std::move(local_store));
   }
 
-  // Match an existing cache entry at |depth| by GlobalPtrStmt* identity, or by provable same-address
-  // (definitely_same_address). Address matching is required because per-task CSE (post-offload) cannot merge a
-  // read GlobalPtrStmt (activate=false, LICM-hoisted) with the in-loop write GlobalPtrStmts to the same address;
-  // keying purely by pointer identity would then allocate separate locals -> stale in-loop reads.
-  std::pair<CacheStatus, AllocaStmt *> *find_cache_entry(int depth, Stmt *dest) {
-    auto &m = cached_maps[depth];
-    auto it = m.find(dest);
-    if (it != m.end() && it->second.first != CacheStatus::None) {
-      return &it->second;
-    }
-    for (auto &kv : m) {
-      if (kv.second.first != CacheStatus::None && kv.first != dest &&
-          irpass::analysis::definitely_same_address(kv.first, dest)) {
-        return &kv.second;
-      }
-    }
-    return nullptr;
-  }
-
   AllocaStmt *cache_global_to_local(Stmt *dest, CacheStatus status, int depth) {
-    auto *entry = find_cache_entry(depth, dest);
-    if (entry) {
-      auto &[cached_status, alloca_stmt] = *entry;
-      // The global variable has already been cached (same pointer or provably same address).
+    if (auto &[cached_status, alloca_stmt] = cached_maps[depth][dest]; cached_status != CacheStatus::None) {
+      // The global variable has already been cached.
       if (cached_status == CacheStatus::Read && status == CacheStatus::Write) {
         add_writeback(alloca_stmt, dest, depth);
         cached_status = CacheStatus::ReadWrite;
@@ -323,55 +265,9 @@ class CacheLoopInvariantGlobalVars : public LoopInvariantDetector {
     return depth;
   }
 
-  // The ndarray arg_id backing |dest| (via ExternalPtrStmt), or nullopt for non-ndarray accesses.
-  static std::optional<std::vector<int>> dest_arg_id(Stmt *dest) {
-    ExternalPtrStmt *eptr = nullptr;
-    if (dest->is<ExternalPtrStmt>()) {
-      eptr = dest->as<ExternalPtrStmt>();
-    } else if (dest->is<MatrixPtrStmt>() && dest->as<MatrixPtrStmt>()->origin->is<ExternalPtrStmt>()) {
-      eptr = dest->as<MatrixPtrStmt>()->origin->as<ExternalPtrStmt>();
-    }
-    if (eptr) {
-      if (auto *arg = eptr->base_ptr->cast<ArgLoadStmt>()) {
-        return arg->arg_id;
-      }
-    }
-    return std::nullopt;
-  }
-
-  // Would this pass otherwise want to cache accesses to |dest| (offload-unique, statically indexed, non-atomic)?
-  // Whether a *particular* access is cacheable additionally depends on its scope (find_cache_depth_if_cacheable).
-  bool cache_eligible(Stmt *dest) {
-    return !is_dynamically_indexed(dest) && is_offload_unique(dest) && !is_atomic_dest(dest);
-  }
-
-  // Phase-1 hook: mark the ndarray unsafe if this access is cache-eligible but not cacheable at its own site.
-  void analyze_access(Stmt *dest, Block *scope) {
-    auto arg_id = dest_arg_id(dest);
-    if (!arg_id || !cache_eligible(dest)) {
-      return;
-    }
-    if (!find_cache_depth_if_cacheable(dest, scope).has_value()) {
-      unsafe_arr_analysis_.insert(*arg_id);
-    }
-  }
-
-  // A previously-identified unsafe ndarray access that must not be cached in phase 2.
-  bool dest_is_unsafe(Stmt *dest) {
-    auto arg_id = dest_arg_id(dest);
-    return arg_id && unsafe_arr_ids_.count(*arg_id);
-  }
-
   void visit(GlobalLoadStmt *stmt) override {
     // Volatile loads must read from memory on every execution (spin-wait correctness); skip caching.
     if (stmt->is_volatile) {
-      return;
-    }
-    if (analyzing_) {
-      analyze_access(stmt->src, stmt->parent);
-      return;
-    }
-    if (dest_is_unsafe(stmt->src)) {
       return;
     }
     if (auto depth = find_cache_depth_if_cacheable(stmt->src, stmt->parent)) {
@@ -384,13 +280,6 @@ class CacheLoopInvariantGlobalVars : public LoopInvariantDetector {
   }
 
   void visit(GlobalStoreStmt *stmt) override {
-    if (analyzing_) {
-      analyze_access(stmt->dest, stmt->parent);
-      return;
-    }
-    if (dest_is_unsafe(stmt->dest)) {
-      return;
-    }
     if (auto depth = find_cache_depth_if_cacheable(stmt->dest, stmt->parent)) {
       auto alloca_stmt = cache_global_to_local(stmt->dest, CacheStatus::Write, depth.value());
       auto local_store = std::make_unique<LocalStoreStmt>(alloca_stmt, stmt->val);

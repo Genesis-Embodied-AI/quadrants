@@ -353,15 +353,19 @@ bool merge_global_ptrs(IRNode *root) {
   return WholeKernelCSE::run(root, /*ptrs_only=*/true);
 }
 
-// Per-task, pointers-only merge run POST-offload (just before cache_loop_invariant_global_vars). merge_global_ptrs
-// (pre-offload) unifies a field's split read/write GlobalPtrStmts so cache_loop can cache soundly, but ndarray
-// accesses are not yet ExternalPtrStmts pre-offload -- that lowering happens during offload -- so the pre-offload
-// merge can't reach them. Per-task CSE (which would merge them) runs inside offload_to_executable's full_simplify,
-// which is AFTER cache_loop. Without a merge here the ndarray break-flag's read and write ExternalPtrStmts stay
-// split into cache_loop, which then caches the read into a stale local -> the loop's break never fires. This runs
-// the same cheap ptrs-only CSE per offloaded task, so cache_loop sees one shared pointer per address (fields and
-// ndarrays alike). Scoped per task so pointers from different tasks are never merged.
-bool merge_offloaded_ptrs(IRNode *root) {
+// Full per-task CSE run POST-offload, on the pre-split monolith, right after offload (before flag_access #2 and
+// simplify_III's LICM). This is the post-offload analog of the pre-offload merge_global_ptrs: main runs
+// whole_kernel_cse inside every full_simplify -- including the post-offload simplify_III that precedes
+// cache_loop_invariant_global_vars -- which unifies each global's read and write pointers so the caching pass sees
+// one shared, loop-invariant pointer and caches soundly. Per-task CSE (per_task_cse) skips the monolith and runs in
+// the codegen workers, which is AFTER cache_loop, so without this pass cache_loop sees split read/write pointers and
+// either caches a stale local (miscompile: the solver break flag never updates -> non-terminating loop / iteration
+// cap) or must decline to cache (lost optimization, ~12% on contact-heavy GJK scenes). Fields are already unified by
+// the pre-offload merge_global_ptrs, but ndarray accesses only become ExternalPtrStmts during offload, so they can
+// only be unified here. Full CSE (not pointers-only) is required: an ExternalPtr merges with another only once their
+// index-compute statements are themselves merged. Scoped per task (independent tasks are never cross-merged); still
+// cheaper than main's cross-task whole_kernel_cse because each task's CSE buckets are smaller.
+bool cse_offloaded_tasks(IRNode *root) {
   QD_AUTO_PROF;
   auto tasks = collect_offloaded_tasks(root);
   if (tasks.empty()) {
@@ -370,7 +374,7 @@ bool merge_offloaded_ptrs(IRNode *root) {
   auto *block = root->as<Block>();
   bool modified = false;
   for (auto *off : tasks) {
-    if (cse_one_task(block, off, /*ptrs_only=*/true)) {
+    if (cse_one_task(block, off)) {
       modified = true;
     }
   }
