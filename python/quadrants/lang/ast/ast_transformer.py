@@ -25,6 +25,7 @@ from quadrants.lang.ast.ast_transformer_utils import (
     ReturnStatus,
     get_decorator,
 )
+from quadrants.lang.ast.ast_transformers import graph_api
 from quadrants.lang.ast.ast_transformers.call_transformer import CallTransformer
 from quadrants.lang.ast.ast_transformers.checkpoint_transformer import (
     CheckpointTransformer,
@@ -1366,7 +1367,8 @@ class ASTTransformer(Builder):
 
     @staticmethod
     def _is_graph_do_while_call(node: ast.expr) -> ast.expr | None:
-        """If *node* is ``qd.graph_do_while(arg)`` return the arg AST node, else None.
+        """If *node* is ``qd.graph.do_while(arg)`` (or the deprecated ``qd.graph_do_while(arg)``) return the arg AST
+        node, else None.
 
         ``arg`` may be an ``ast.Name`` (a bare kernel parameter, e.g. ``counter``) or an ``ast.Attribute`` chain (a
         ``@qd.data_oriented`` member ndarray such as ``self.counter`` or a ``@dataclasses.dataclass`` parameter member
@@ -1375,11 +1377,7 @@ class ASTTransformer(Builder):
         """
         if not isinstance(node, ast.Call):
             return None
-        func = node.func
-        is_gdw = (isinstance(func, ast.Attribute) and func.attr == "graph_do_while") or (
-            isinstance(func, ast.Name) and func.id == "graph_do_while"
-        )
-        if not is_gdw:
+        if not graph_api.matches(node.func, "do_while"):
             return None
         if len(node.args) == 1 and isinstance(node.args[0], (ast.Name, ast.Attribute)):
             return node.args[0]
@@ -1417,6 +1415,7 @@ class ASTTransformer(Builder):
 
         graph_do_while_node = ASTTransformer._is_graph_do_while_call(node.test)
         if graph_do_while_node is not None:
+            graph_api.warn_if_deprecated(node.test.func, "do_while")
             from quadrants.lang.kernel import GraphDoWhileLevel  # pylint: disable=C0415
 
             kernel = ctx.global_context.current_kernel

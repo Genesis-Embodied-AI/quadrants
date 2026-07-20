@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import ast
 
+from quadrants.lang.ast.ast_transformers import graph_api
 from quadrants.lang.ast.ast_transformer_utils import (
     ASTTransformerFuncContext,
     get_decorator,
@@ -32,33 +33,26 @@ from quadrants.lang.exception import QuadrantsSyntaxError
 class GraphParallelTransformer:
     @staticmethod
     def is_graph_parallel_context_call(node: ast.expr) -> bool:
-        """If *node* is a ``qd.graph_parallel_context()`` call return True, else False."""
+        """If *node* is a ``qd.graph.parallel_context()`` (or deprecated ``qd.graph_parallel_context()``) call return
+        True, else False."""
         if not isinstance(node, ast.Call):
             return False
-        func = node.func
-        is_gpc = (isinstance(func, ast.Attribute) and func.attr == "graph_parallel_context") or (
-            isinstance(func, ast.Name) and func.id == "graph_parallel_context"
-        )
-        if not is_gpc:
+        if not graph_api.matches(node.func, "parallel_context"):
             return False
         if node.args or node.keywords:
-            raise QuadrantsSyntaxError("qd.graph_parallel_context() takes no arguments")
+            raise QuadrantsSyntaxError("qd.graph.parallel_context() takes no arguments")
         return True
 
     @staticmethod
     def is_parallel_section_call(node: ast.expr) -> bool:
-        """If *node* is a ``qd.graph_parallel()`` (a section) call return True, else False. The call shape is validated
-        here so misuse raises at the ``with`` site rather than later."""
+        """If *node* is a ``qd.graph.parallel()`` (or deprecated ``qd.graph_parallel()``) section call return True, else
+        False. The call shape is validated here so misuse raises at the ``with`` site rather than later."""
         if not isinstance(node, ast.Call):
             return False
-        func = node.func
-        is_parallel_section = (isinstance(func, ast.Attribute) and func.attr == "graph_parallel") or (
-            isinstance(func, ast.Name) and func.id == "graph_parallel"
-        )
-        if not is_parallel_section:
+        if not graph_api.matches(node.func, "parallel"):
             return False
         if node.args or node.keywords:
-            raise QuadrantsSyntaxError("qd.graph_parallel() takes no arguments")
+            raise QuadrantsSyntaxError("qd.graph.parallel() takes no arguments")
         return True
 
     @staticmethod
@@ -71,6 +65,7 @@ class GraphParallelTransformer:
         and each ``qd.graph_parallel`` section inside lowers to a stream-parallel group (via begin/end_stream_parallel).
         The graph builder forks the distinct groups of one region in a contiguous run and joins them; the region id keeps
         two back-to-back regions apart (each gets its own join)."""
+        graph_api.warn_if_deprecated(node.items[0].context_expr.func, "parallel_context")
         if not ctx.is_kernel:
             raise QuadrantsSyntaxError("qd.graph_parallel_context() can only be used inside @qd.kernel, not @qd.func")
         kernel = ctx.global_context.current_kernel
@@ -202,15 +197,12 @@ class GraphParallelTransformer:
 
     @staticmethod
     def _is_graph_do_while_test(node: ast.expr) -> bool:
-        """True if *node* is a ``qd.graph_do_while(...)`` call (the test of a ``while`` loop). Mirrors
-        ``ASTTransformer._is_graph_do_while_call`` but returns a bool and lives here to avoid importing ``ASTTransformer``
-        (which would be a circular import)."""
+        """True if *node* is a ``qd.graph.do_while(...)`` (or deprecated ``qd.graph_do_while(...)``) call (the test of a
+        ``while`` loop). Mirrors ``ASTTransformer._is_graph_do_while_call`` but returns a bool and lives here to avoid
+        importing ``ASTTransformer`` (which would be a circular import)."""
         if not isinstance(node, ast.Call):
             return False
-        func = node.func
-        return (isinstance(func, ast.Attribute) and func.attr == "graph_do_while") or (
-            isinstance(func, ast.Name) and func.id == "graph_do_while"
-        )
+        return graph_api.matches(node.func, "do_while")
 
     @staticmethod
     def build_parallel_section_with(ctx: ASTTransformerFuncContext, node: ast.With, build_stmts) -> None:
@@ -221,6 +213,7 @@ class GraphParallelTransformer:
         a case ``validate_region`` never sees) and then reuse the stream-parallel tagging: begin_stream_parallel()
         assigns this ``qd.graph_parallel`` section a fresh ``stream_parallel_group_id`` that every for-loop in the body
         inherits, so the offloaded tasks carry the ``qd.graph_parallel`` section id all the way to the graph builder."""
+        graph_api.warn_if_deprecated(node.items[0].context_expr.func, "parallel")
         if not getattr(ctx, "_in_graph_parallel_context", False):
             raise QuadrantsSyntaxError(
                 "qd.graph_parallel() can only be used directly inside a qd.graph_parallel_context() region"
