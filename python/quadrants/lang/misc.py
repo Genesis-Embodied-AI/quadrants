@@ -836,13 +836,33 @@ def get_host_arch_list():
 
 def is_extension_enabled(ext: Extension) -> bool:
     """
-    Directly returns whether extension is enabled, without needing to
-    pass in current architecture. Also takes into account config, in the case
-    of adstack.
+    Directly returns whether extension is enabled on the CURRENT program, without needing to pass in the current
+    architecture.
+
+    Unlike the arch-level `is_extension_supported`, this also accounts for the config (for adstack) and for the
+    capabilities of the initialized device: on the SPIR-V archs (vulkan, metal), extension support depends on
+    per-device capabilities that only the running device can report.
     """
     arch = impl.current_cfg().arch
     if ext == extension.adstack:
-        return is_extension_supported(arch, ext) and impl.current_cfg().ad_stack_experimental_enabled
+        if not (is_extension_supported(arch, ext) and impl.current_cfg().ad_stack_experimental_enabled):
+            return False
+        if arch in (vulkan, metal):
+            # The on-device adstack size-expression interpreter reads through raw 64-bit buffer addresses, so it
+            # requires physical storage buffers and 64-bit integer arithmetic (see the launch gate in
+            # runtime/gfx/adstack_sizer_launch.cpp).
+            caps = impl.get_runtime().prog.get_device_caps()
+            return bool(caps.get(_qd_core.DeviceCapability.spirv_has_physical_storage_buffer)) and bool(
+                caps.get(_qd_core.DeviceCapability.spirv_has_int64)
+            )
+        return True
+    if ext == extension.data64 and arch in (vulkan, metal):
+        # 64-bit data support on the SPIR-V archs is a property of the device, so the static arch-level table (which
+        # cannot advertise it) is superseded by the device capabilities.
+        caps = impl.get_runtime().prog.get_device_caps()
+        return bool(caps.get(_qd_core.DeviceCapability.spirv_has_int64)) and bool(
+            caps.get(_qd_core.DeviceCapability.spirv_has_float64)
+        )
     return is_extension_supported(arch, ext)
 
 
