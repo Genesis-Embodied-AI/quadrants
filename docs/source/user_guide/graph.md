@@ -57,6 +57,20 @@ y2 = qd.ndarray(qd.f32, shape=(1024,))
 my_kernel(x2, y2)  # replays graph with new array pointers
 ```
 
+## The `qd.graph` namespace
+
+The graph-structuring constructs live under the `qd.graph` namespace:
+
+| Canonical spelling         | Deprecated flat alias        |
+|----------------------------|------------------------------|
+| `qd.graph.do_while`        | `qd.graph_do_while`          |
+| `qd.graph.parallel_context`| `qd.graph_parallel_context`  |
+| `qd.graph.parallel`        | `qd.graph_parallel`          |
+
+Prefer the `qd.graph.*` spellings. The flat `qd.graph_*` names still work but emit a `DeprecationWarning` when used
+inside a kernel and will be removed in a future release. Both spellings compile to the same construct. The examples
+below use the flat names; either spelling is accepted.
+
 ## GPU-side iteration with `graph_do_while`
 
 For iterative algorithms (physics solvers, convergence loops), you often want to repeat the kernel body until a condition is met, without returning to the host each iteration. Use `while qd.graph_do_while(flag):` inside a `graph=True` kernel:

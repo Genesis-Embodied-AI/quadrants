@@ -156,6 +156,7 @@ user_api[qd] = [
     "get_addr",
     "global_thread_idx",
     "gpu",
+    "graph",
     "graph_do_while",
     "graph_parallel",
     "graph_parallel_context",
@@ -260,6 +261,11 @@ user_api[qd] = [
     "x64",
     "x86_64",
     "zero",
+]
+user_api[qd.graph] = [
+    "do_while",
+    "parallel",
+    "parallel_context",
 ]
 user_api[qd.ad] = [
     "FwdMode",
