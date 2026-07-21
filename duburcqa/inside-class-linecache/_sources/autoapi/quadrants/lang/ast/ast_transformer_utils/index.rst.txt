@@ -407,6 +407,9 @@ Module Contents
    .. py:method:: get_var_by_name(name: str) -> tuple[bool, Any, str | None]
 
 
+   .. py:method:: get_pos_header(node: ast.AST) -> str
+
+
    .. py:method:: get_pos_info(node: ast.AST) -> str
 
 
