@@ -359,6 +359,7 @@
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.ast.ast_transformer_utils</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
     <span class="n">ASTTransformerFuncContext</span><span class="p">,</span>
 <span class="p">)</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.ast.ast_transformers</span><span class="w"> </span><span class="kn">import</span> <span class="n">graph_api</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.ast.ast_transformers.checkpoint_transformer</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
     <span class="n">CheckpointTransformer</span><span class="p">,</span>
 <span class="p">)</span>
@@ -900,18 +901,13 @@
 
     <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">_is_graph_do_while_while</span><span class="p">(</span><span class="n">stmt</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">stmt</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Syntactic check matching ASTTransformer._is_graph_do_while_call: a ``while qd.graph_do_while(var):`` loop.&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Syntactic check matching ASTTransformer._is_graph_do_while_call: a ``while qd.graph.do_while(var):`` loop (or</span>
+<span class="sd">        the deprecated ``while qd.graph_do_while(var):``).&quot;&quot;&quot;</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">stmt</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">While</span><span class="p">):</span>
             <span class="k">return</span> <span class="kc">False</span>
-        <span class="n">test</span> <span class="o">=</span> <span class="n">stmt</span><span class="o">.</span><span class="n">test</span>
-        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">test</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Call</span><span class="p">):</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">stmt</span><span class="o">.</span><span class="n">test</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Call</span><span class="p">):</span>
             <span class="k">return</span> <span class="kc">False</span>
-        <span class="n">func</span> <span class="o">=</span> <span class="n">test</span><span class="o">.</span><span class="n">func</span>
-        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">func</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Attribute</span><span class="p">)</span> <span class="ow">and</span> <span class="n">func</span><span class="o">.</span><span class="n">attr</span> <span class="o">==</span> <span class="s2">&quot;graph_do_while&quot;</span><span class="p">:</span>
-            <span class="k">return</span> <span class="kc">True</span>
-        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">func</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Name</span><span class="p">)</span> <span class="ow">and</span> <span class="n">func</span><span class="o">.</span><span class="n">id</span> <span class="o">==</span> <span class="s2">&quot;graph_do_while&quot;</span><span class="p">:</span>
-            <span class="k">return</span> <span class="kc">True</span>
-        <span class="k">return</span> <span class="kc">False</span>
+        <span class="k">return</span> <span class="n">graph_api</span><span class="o">.</span><span class="n">matches</span><span class="p">(</span><span class="n">stmt</span><span class="o">.</span><span class="n">test</span><span class="o">.</span><span class="n">func</span><span class="p">,</span> <span class="s2">&quot;do_while&quot;</span><span class="p">)</span>
 
     <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">_is_checkpoint_with</span><span class="p">(</span><span class="n">stmt</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">With</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
@@ -946,34 +942,24 @@
     <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">_is_graph_parallel_context_with</span><span class="p">(</span><span class="n">stmt</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">stmt</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Syntactic check matching GraphParallelTransformer.is_graph_parallel_context_call: a</span>
-<span class="sd">        ``with qd.graph_parallel_context():`` fork/join region.&quot;&quot;&quot;</span>
+<span class="sd">        ``with qd.graph.parallel_context():`` fork/join region (or the deprecated ``qd.graph_parallel_context()``).&quot;&quot;&quot;</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">stmt</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">With</span><span class="p">)</span> <span class="ow">or</span> <span class="nb">len</span><span class="p">(</span><span class="n">stmt</span><span class="o">.</span><span class="n">items</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">1</span><span class="p">:</span>
             <span class="k">return</span> <span class="kc">False</span>
         <span class="n">ctx_expr</span> <span class="o">=</span> <span class="n">stmt</span><span class="o">.</span><span class="n">items</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">context_expr</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">ctx_expr</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Call</span><span class="p">):</span>
             <span class="k">return</span> <span class="kc">False</span>
-        <span class="n">func</span> <span class="o">=</span> <span class="n">ctx_expr</span><span class="o">.</span><span class="n">func</span>
-        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">func</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Attribute</span><span class="p">)</span> <span class="ow">and</span> <span class="n">func</span><span class="o">.</span><span class="n">attr</span> <span class="o">==</span> <span class="s2">&quot;graph_parallel_context&quot;</span><span class="p">:</span>
-            <span class="k">return</span> <span class="kc">True</span>
-        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">func</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Name</span><span class="p">)</span> <span class="ow">and</span> <span class="n">func</span><span class="o">.</span><span class="n">id</span> <span class="o">==</span> <span class="s2">&quot;graph_parallel_context&quot;</span><span class="p">:</span>
-            <span class="k">return</span> <span class="kc">True</span>
-        <span class="k">return</span> <span class="kc">False</span>
+        <span class="k">return</span> <span class="n">graph_api</span><span class="o">.</span><span class="n">matches</span><span class="p">(</span><span class="n">ctx_expr</span><span class="o">.</span><span class="n">func</span><span class="p">,</span> <span class="s2">&quot;parallel_context&quot;</span><span class="p">)</span>
 
     <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">_is_parallel_section_with</span><span class="p">(</span><span class="n">stmt</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">stmt</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Syntactic check matching GraphParallelTransformer.is_parallel_section_call: a ``with qd.graph_parallel(...):``</span>
-<span class="sd">        section of a ``qd.graph_parallel_context()`` region.&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Syntactic check matching GraphParallelTransformer.is_parallel_section_call: a ``with qd.graph.parallel():``</span>
+<span class="sd">        section of a ``qd.graph.parallel_context()`` region (or the deprecated ``qd.graph_parallel()``).&quot;&quot;&quot;</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">stmt</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">With</span><span class="p">)</span> <span class="ow">or</span> <span class="nb">len</span><span class="p">(</span><span class="n">stmt</span><span class="o">.</span><span class="n">items</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">1</span><span class="p">:</span>
             <span class="k">return</span> <span class="kc">False</span>
         <span class="n">ctx_expr</span> <span class="o">=</span> <span class="n">stmt</span><span class="o">.</span><span class="n">items</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">context_expr</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">ctx_expr</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Call</span><span class="p">):</span>
             <span class="k">return</span> <span class="kc">False</span>
-        <span class="n">func</span> <span class="o">=</span> <span class="n">ctx_expr</span><span class="o">.</span><span class="n">func</span>
-        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">func</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Attribute</span><span class="p">)</span> <span class="ow">and</span> <span class="n">func</span><span class="o">.</span><span class="n">attr</span> <span class="o">==</span> <span class="s2">&quot;graph_parallel&quot;</span><span class="p">:</span>
-            <span class="k">return</span> <span class="kc">True</span>
-        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">func</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Name</span><span class="p">)</span> <span class="ow">and</span> <span class="n">func</span><span class="o">.</span><span class="n">id</span> <span class="o">==</span> <span class="s2">&quot;graph_parallel&quot;</span><span class="p">:</span>
-            <span class="k">return</span> <span class="kc">True</span>
-        <span class="k">return</span> <span class="kc">False</span>
+        <span class="k">return</span> <span class="n">graph_api</span><span class="o">.</span><span class="n">matches</span><span class="p">(</span><span class="n">ctx_expr</span><span class="o">.</span><span class="n">func</span><span class="p">,</span> <span class="s2">&quot;parallel&quot;</span><span class="p">)</span>
 
     <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">_validate_graph_do_while_structure</span><span class="p">(</span><span class="n">body</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">ast</span><span class="o">.</span><span class="n">stmt</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
@@ -1055,10 +1041,10 @@
                         <span class="c1"># earlier by GraphParallelTransformer.build_graph_parallel_context_with).</span>
                         <span class="n">pending</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">member</span><span class="o">.</span><span class="n">body</span><span class="p">)</span>
                 <span class="k">continue</span>
-            <span class="n">where</span> <span class="o">=</span> <span class="s2">&quot;the kernel body&quot;</span> <span class="k">if</span> <span class="n">is_kernel_top</span> <span class="k">else</span> <span class="s2">&quot;a qd.graph_do_while() body&quot;</span>
+            <span class="n">where</span> <span class="o">=</span> <span class="s2">&quot;the kernel body&quot;</span> <span class="k">if</span> <span class="n">is_kernel_top</span> <span class="k">else</span> <span class="s2">&quot;a qd.graph.do_while() body&quot;</span>
             <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span>
-                <span class="sa">f</span><span class="s2">&quot;When a kernel uses qd.graph_do_while(), </span><span class="si">{</span><span class="n">where</span><span class="si">}</span><span class="s2"> may not contain a </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">stmt</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2"> &quot;</span>
-                <span class="sa">f</span><span class="s2">&quot;statement. Allowed: for-loops, qd.graph_do_while() while-loops, bare assignments, and &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;When a kernel uses qd.graph.do_while(), </span><span class="si">{</span><span class="n">where</span><span class="si">}</span><span class="s2"> may not contain a </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">stmt</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2"> &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;statement. Allowed: for-loops, qd.graph.do_while() while-loops, bare assignments, and &quot;</span>
                 <span class="sa">f</span><span class="s2">&quot;@qd.func calls (freely mixed and nested). [offending stmt </span><span class="si">{</span><span class="n">i</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">stmt</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">]&quot;</span>
             <span class="p">)</span>
 

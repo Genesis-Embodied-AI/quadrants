@@ -415,7 +415,7 @@ into this buffer – the host owns it end-to-end and must initialise it to <code
 <li><p>Must be used inside <code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel(graph=True,</span> <span class="pre">checkpoints=True)</span></code>.</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">cp_id</span></code> must be an <code class="docutils literal notranslate"><span class="pre">int</span></code> (or <code class="docutils literal notranslate"><span class="pre">IntEnum</span></code> value), and must be unique across the kernel.</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">yield_on</span></code> must name a kernel parameter that is a 0-d <code class="docutils literal notranslate"><span class="pre">qd.types.ndarray(qd.i32,</span> <span class="pre">ndim=0)</span></code>.</p></li>
-<li><p>Checkpoints cannot be nested inside other checkpoints. Checkpoints inside a <code class="docutils literal notranslate"><span class="pre">qd.graph_do_while</span></code> body are fine.</p></li>
+<li><p>Checkpoints cannot be nested inside other checkpoints. Checkpoints inside a <code class="docutils literal notranslate"><span class="pre">qd.graph.do_while</span></code> body are fine.</p></li>
 <li><p>Cannot be combined with <code class="docutils literal notranslate"><span class="pre">qd.stream_parallel()</span></code> in the same kernel.</p></li>
 <li><p>The body cannot contain bare top-level statements (assignments, expressions); wrap them in
 <code class="docutils literal notranslate"><span class="pre">for</span> <span class="pre">_</span> <span class="pre">in</span> <span class="pre">range(1):</span></code> so the lowering surfaces the per-statement task cost.</p></li>

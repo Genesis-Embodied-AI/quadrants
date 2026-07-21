@@ -36,7 +36,8 @@ Module Contents
       :staticmethod:
 
 
-      If *node* is a ``qd.graph_parallel_context()`` call return True, else False.
+      If *node* is a ``qd.graph.parallel_context()`` (or deprecated ``qd.graph_parallel_context()``) call return
+      True, else False.
 
 
 
@@ -44,8 +45,8 @@ Module Contents
       :staticmethod:
 
 
-      If *node* is a ``qd.graph_parallel()`` (a section) call return True, else False. The call shape is validated
-      here so misuse raises at the ``with`` site rather than later.
+      If *node* is a ``qd.graph.parallel()`` (or deprecated ``qd.graph_parallel()``) section call return True, else
+      False. The call shape is validated here so misuse raises at the ``with`` site rather than later.
 
 
 

@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>quadrants.lang.ast.ast_transformers.function_def_transformer &#8212; Quadrants 1.1.4 documentation</title>
+    <title>quadrants.lang.ast.ast_transformers.graph_api &#8212; Quadrants 1.1.4 documentation</title>
   
   
   
@@ -55,12 +55,12 @@
     <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
     <script src="../../../../../../_static/design-tabs.js?v=f930bc37"></script>
     <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
-    <script>DOCUMENTATION_OPTIONS.pagename = 'autoapi/quadrants/lang/ast/ast_transformers/function_def_transformer/index';</script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'autoapi/quadrants/lang/ast/ast_transformers/graph_api/index';</script>
     <script>DOCUMENTATION_OPTIONS.search_as_you_type = false;</script>
     <link rel="index" title="Index" href="../../../../../../genindex.html" />
     <link rel="search" title="Search" href="../../../../../../search.html" />
-    <link rel="next" title="quadrants.lang.ast.ast_transformers.graph_api" href="../graph_api/index.html" />
-    <link rel="prev" title="quadrants.lang.ast.ast_transformers.checkpoint_transformer" href="../checkpoint_transformer/index.html" />
+    <link rel="next" title="quadrants.lang.ast.ast_transformers.graph_parallel_transformer" href="../graph_parallel_transformer/index.html" />
+    <link rel="prev" title="quadrants.lang.ast.ast_transformers.function_def_transformer" href="../function_def_transformer/index.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
   <meta name="docsearch:version" content="1.1.4" />
@@ -349,7 +349,7 @@
     
     <li class="breadcrumb-item"><a href="../index.html" class="nav-link">quadrants.lang.ast.ast_transformers</a></li>
     
-    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">quadrants.lang.ast.ast_transformers.function_def_transformer</span></li>
+    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">quadrants.lang.ast.ast_transformers.graph_api</span></li>
   </ul>
 </nav>
 </div>
@@ -366,14 +366,28 @@
 <div id="searchbox"></div>
                 <article class="bd-article">
                   
-  <section id="module-quadrants.lang.ast.ast_transformers.function_def_transformer">
-<span id="quadrants-lang-ast-ast-transformers-function-def-transformer"></span><h1>quadrants.lang.ast.ast_transformers.function_def_transformer<a class="headerlink" href="#module-quadrants.lang.ast.ast_transformers.function_def_transformer" title="Link to this heading">#</a></h1>
-<section id="classes">
-<h2>Classes<a class="headerlink" href="#classes" title="Link to this heading">#</a></h2>
+  <section id="module-quadrants.lang.ast.ast_transformers.graph_api">
+<span id="quadrants-lang-ast-ast-transformers-graph-api"></span><h1>quadrants.lang.ast.ast_transformers.graph_api<a class="headerlink" href="#module-quadrants.lang.ast.ast_transformers.graph_api" title="Link to this heading">#</a></h1>
+<p>Shared syntactic recognition of the graph-structuring kernel constructs, covering both the canonical
+<code class="docutils literal notranslate"><span class="pre">qd.graph.&lt;name&gt;</span></code> namespace spelling and the deprecated flat <code class="docutils literal notranslate"><span class="pre">qd.graph_&lt;name&gt;</span></code> spelling.</p>
+<p>These constructs (<code class="docutils literal notranslate"><span class="pre">do_while</span></code>, <code class="docutils literal notranslate"><span class="pre">parallel_context</span></code>, <code class="docutils literal notranslate"><span class="pre">parallel</span></code>) are lowered at compile time and never actually
+called, so the AST transformers recognize them purely by their source spelling. Matching both spellings lives here in
+one place so the several detection sites (<code class="docutils literal notranslate"><span class="pre">ast_transformer.py</span></code>, <code class="docutils literal notranslate"><span class="pre">graph_parallel_transformer.py</span></code>,
+<code class="docutils literal notranslate"><span class="pre">function_def_transformer.py</span></code>) stay in sync. Using the deprecated flat spelling emits a <code class="docutils literal notranslate"><span class="pre">DeprecationWarning</span></code> at
+compile time (see <code class="docutils literal notranslate"><span class="pre">warn_if_deprecated</span></code>), which is the only place a warning can fire: the flat functions are recognized
+by the AST transformer and never executed inside a kernel.</p>
+<section id="functions">
+<h2>Functions<a class="headerlink" href="#functions" title="Link to this heading">#</a></h2>
 <div class="pst-scrollable-table-container"><table class="autosummary longtable table autosummary">
 <tbody>
-<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.ast.ast_transformers.function_def_transformer.FunctionDefTransformer" title="quadrants.lang.ast.ast_transformers.function_def_transformer.FunctionDefTransformer"><code class="xref py py-obj docutils literal notranslate"><span class="pre">FunctionDefTransformer</span></code></a></p></td>
-<td><p></p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.ast.ast_transformers.graph_api.is_deprecated_spelling" title="quadrants.lang.ast.ast_transformers.graph_api.is_deprecated_spelling"><code class="xref py py-obj docutils literal notranslate"><span class="pre">is_deprecated_spelling</span></code></a>(→ bool)</p></td>
+<td><p>True if <em>func</em> uses the deprecated flat <code class="docutils literal notranslate"><span class="pre">qd.graph_&lt;name&gt;</span></code> spelling (attribute <code class="docutils literal notranslate"><span class="pre">x.graph_&lt;name&gt;</span></code> or bare name</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.ast.ast_transformers.graph_api.matches" title="quadrants.lang.ast.ast_transformers.graph_api.matches"><code class="xref py py-obj docutils literal notranslate"><span class="pre">matches</span></code></a>(→ bool)</p></td>
+<td><p>True if <em>func</em> refers to the construct <em>name</em>, in either the canonical <code class="docutils literal notranslate"><span class="pre">qd.graph.&lt;name&gt;</span></code> spelling or the</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.ast.ast_transformers.graph_api.warn_if_deprecated" title="quadrants.lang.ast.ast_transformers.graph_api.warn_if_deprecated"><code class="xref py py-obj docutils literal notranslate"><span class="pre">warn_if_deprecated</span></code></a>(→ None)</p></td>
+<td><p>If <em>func</em> uses the deprecated flat <code class="docutils literal notranslate"><span class="pre">qd.graph_&lt;name&gt;</span></code> spelling, emit a <code class="docutils literal notranslate"><span class="pre">DeprecationWarning</span></code> pointing at the</p></td>
 </tr>
 </tbody>
 </table>
@@ -381,14 +395,26 @@
 </section>
 <section id="module-contents">
 <h2>Module Contents<a class="headerlink" href="#module-contents" title="Link to this heading">#</a></h2>
-<dl class="py class">
-<dt class="sig sig-object py" id="quadrants.lang.ast.ast_transformers.function_def_transformer.FunctionDefTransformer">
-<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">quadrants.lang.ast.ast_transformers.function_def_transformer.</span></span><span class="sig-name descname"><span class="pre">FunctionDefTransformer</span></span><a class="reference internal" href="../../../../../../_modules/quadrants/lang/ast/ast_transformers/function_def_transformer.html#FunctionDefTransformer"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.ast.ast_transformers.function_def_transformer.FunctionDefTransformer" title="Link to this definition">#</a></dt>
-<dd><dl class="py method">
-<dt class="sig sig-object py" id="quadrants.lang.ast.ast_transformers.function_def_transformer.FunctionDefTransformer.build_FunctionDef">
-<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">build_FunctionDef</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ctx</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../../ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext" title="quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext"><span class="pre">quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">node</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ast.FunctionDef</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">build_stmts</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Callable</span><span class="p"><span class="pre">[</span></span><span class="p"><span class="pre">[</span></span><a class="reference internal" href="../../ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext" title="quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext"><span class="pre">quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">list</span><span class="p"><span class="pre">[</span></span><span class="pre">ast.stmt</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">None</span><span class="p"><span class="pre">]</span></span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="../../../../../../_modules/quadrants/lang/ast/ast_transformers/function_def_transformer.html#FunctionDefTransformer.build_FunctionDef"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.ast.ast_transformers.function_def_transformer.FunctionDefTransformer.build_FunctionDef" title="Link to this definition">#</a></dt>
-<dd></dd></dl>
+<dl class="py function">
+<dt class="sig sig-object py" id="quadrants.lang.ast.ast_transformers.graph_api.is_deprecated_spelling">
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.ast.ast_transformers.graph_api.</span></span><span class="sig-name descname"><span class="pre">is_deprecated_spelling</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">func</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ast.expr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">bool</span></span></span><a class="reference internal" href="../../../../../../_modules/quadrants/lang/ast/ast_transformers/graph_api.html#is_deprecated_spelling"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.ast.ast_transformers.graph_api.is_deprecated_spelling" title="Link to this definition">#</a></dt>
+<dd><p>True if <em>func</em> uses the deprecated flat <code class="docutils literal notranslate"><span class="pre">qd.graph_&lt;name&gt;</span></code> spelling (attribute <code class="docutils literal notranslate"><span class="pre">x.graph_&lt;name&gt;</span></code> or bare name
+<code class="docutils literal notranslate"><span class="pre">graph_&lt;name&gt;</span></code>).</p>
+</dd></dl>
 
+<dl class="py function">
+<dt class="sig sig-object py" id="quadrants.lang.ast.ast_transformers.graph_api.matches">
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.ast.ast_transformers.graph_api.</span></span><span class="sig-name descname"><span class="pre">matches</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">func</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ast.expr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">bool</span></span></span><a class="reference internal" href="../../../../../../_modules/quadrants/lang/ast/ast_transformers/graph_api.html#matches"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.ast.ast_transformers.graph_api.matches" title="Link to this definition">#</a></dt>
+<dd><p>True if <em>func</em> refers to the construct <em>name</em>, in either the canonical <code class="docutils literal notranslate"><span class="pre">qd.graph.&lt;name&gt;</span></code> spelling or the
+deprecated flat <code class="docutils literal notranslate"><span class="pre">qd.graph_&lt;name&gt;</span></code> spelling. <code class="docutils literal notranslate"><span class="pre">name</span></code> is one of <code class="docutils literal notranslate"><span class="pre">do_while</span></code> / <code class="docutils literal notranslate"><span class="pre">parallel_context</span></code> / <code class="docutils literal notranslate"><span class="pre">parallel</span></code>.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="quadrants.lang.ast.ast_transformers.graph_api.warn_if_deprecated">
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.ast.ast_transformers.graph_api.</span></span><span class="sig-name descname"><span class="pre">warn_if_deprecated</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">func</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ast.expr</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="../../../../../../_modules/quadrants/lang/ast/ast_transformers/graph_api.html#warn_if_deprecated"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.ast.ast_transformers.graph_api.warn_if_deprecated" title="Link to this definition">#</a></dt>
+<dd><p>If <em>func</em> uses the deprecated flat <code class="docutils literal notranslate"><span class="pre">qd.graph_&lt;name&gt;</span></code> spelling, emit a <code class="docutils literal notranslate"><span class="pre">DeprecationWarning</span></code> pointing at the
+canonical <code class="docutils literal notranslate"><span class="pre">qd.graph.&lt;name&gt;</span></code> spelling. Called once from each construct’s lowering entry point so the warning fires
+per use-site (deduplicated to once per message by the <code class="docutils literal notranslate"><span class="pre">filterwarnings('once',</span> <span class="pre">...)</span></code> set up in <code class="docutils literal notranslate"><span class="pre">lang/misc.py</span></code>).</p>
 </dd></dl>
 
 </section>
@@ -405,20 +431,20 @@
                   
 <div class="prev-next-area">
     <a class="left-prev"
-       href="../checkpoint_transformer/index.html"
+       href="../function_def_transformer/index.html"
        title="previous page">
       <i class="fa-solid fa-angle-left"></i>
       <div class="prev-next-info">
         <p class="prev-next-subtitle">previous</p>
-        <p class="prev-next-title">quadrants.lang.ast.ast_transformers.checkpoint_transformer</p>
+        <p class="prev-next-title">quadrants.lang.ast.ast_transformers.function_def_transformer</p>
       </div>
     </a>
     <a class="right-next"
-       href="../graph_api/index.html"
+       href="../graph_parallel_transformer/index.html"
        title="next page">
       <div class="prev-next-info">
         <p class="prev-next-subtitle">next</p>
-        <p class="prev-next-title">quadrants.lang.ast.ast_transformers.graph_api</p>
+        <p class="prev-next-title">quadrants.lang.ast.ast_transformers.graph_parallel_transformer</p>
       </div>
       <i class="fa-solid fa-angle-right"></i>
     </a>
@@ -441,12 +467,11 @@
   </div>
   <nav id="pst-page-toc-nav" class="page-toc" aria-labelledby="pst-page-navigation-heading-2">
     <ul class="pst-show_toc_level nav section-nav flex-column">
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#classes">Classes</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#functions">Functions</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#module-contents">Module Contents</a><ul class="nav section-nav flex-column">
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.ast.ast_transformers.function_def_transformer.FunctionDefTransformer"><code class="docutils literal notranslate"><span class="pre">FunctionDefTransformer</span></code></a><ul class="nav section-nav flex-column">
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.ast.ast_transformers.function_def_transformer.FunctionDefTransformer.build_FunctionDef"><code class="docutils literal notranslate"><span class="pre">FunctionDefTransformer.build_FunctionDef()</span></code></a></li>
-</ul>
-</li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.ast.ast_transformers.graph_api.is_deprecated_spelling"><code class="docutils literal notranslate"><span class="pre">is_deprecated_spelling()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.ast.ast_transformers.graph_api.matches"><code class="docutils literal notranslate"><span class="pre">matches()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.ast.ast_transformers.graph_api.warn_if_deprecated"><code class="docutils literal notranslate"><span class="pre">warn_if_deprecated()</span></code></a></li>
 </ul>
 </li>
 </ul>
@@ -455,7 +480,7 @@
   <div class="sidebar-secondary-item">
 
   <div class="tocsection sourcelink">
-    <a href="../../../../../../_sources/autoapi/quadrants/lang/ast/ast_transformers/function_def_transformer/index.rst.txt">
+    <a href="../../../../../../_sources/autoapi/quadrants/lang/ast/ast_transformers/graph_api/index.rst.txt">
       <i class="fa-solid fa-file-lines"></i> Show Source
     </a>
   </div>

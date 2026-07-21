@@ -402,7 +402,7 @@ will JIT compile it into native instructions.</p>
 <li><p><strong>fn</strong> (<em>Callable</em>) – The Python function to be decorated</p></li>
 <li><p><strong>is_real_function</strong> (<em>bool</em>) – Whether the function is a real function</p></li>
 <li><p><strong>requires_top_level</strong> (<em>bool</em>) – <strong>Experimental</strong> (behaviour/API may change). If True, the func may only
-be called at the <strong>top level</strong> of a kernel (or directly inside a <code class="docutils literal notranslate"><span class="pre">while</span> <span class="pre">qd.graph_do_while(...)</span></code>
+be called at the <strong>top level</strong> of a kernel (or directly inside a <code class="docutils literal notranslate"><span class="pre">while</span> <span class="pre">qd.graph.do_while(...)</span></code>
 body). Calling it nested inside ordinary runtime <code class="docutils literal notranslate"><span class="pre">for</span></code> / <code class="docutils literal notranslate"><span class="pre">if</span></code> / <code class="docutils literal notranslate"><span class="pre">while</span></code> control flow raises a
 <code class="xref py py-class docutils literal notranslate"><span class="pre">QuadrantsSyntaxError</span></code> at compile time. Intended for multi-phase device ops whose per-phase
 top-level <code class="docutils literal notranslate"><span class="pre">for</span></code> loops must each lower to their own offloaded launch (e.g. the <code class="docutils literal notranslate"><span class="pre">qd.algorithms</span></code>

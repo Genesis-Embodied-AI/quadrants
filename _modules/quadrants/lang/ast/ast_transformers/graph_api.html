@@ -6,9 +6,8 @@
 
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
-
-    <title>quadrants.lang.ast.ast_transformers &#8212; Quadrants 1.1.4 documentation</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>quadrants.lang.ast.ast_transformers.graph_api &#8212; Quadrants 1.1.4 documentation</title>
   
   
   
@@ -55,12 +54,10 @@
     <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
     <script src="../../../../../_static/design-tabs.js?v=f930bc37"></script>
     <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
-    <script>DOCUMENTATION_OPTIONS.pagename = 'autoapi/quadrants/lang/ast/ast_transformers/index';</script>
+    <script>DOCUMENTATION_OPTIONS.pagename = '_modules/quadrants/lang/ast/ast_transformers/graph_api';</script>
     <script>DOCUMENTATION_OPTIONS.search_as_you_type = false;</script>
     <link rel="index" title="Index" href="../../../../../genindex.html" />
     <link rel="search" title="Search" href="../../../../../search.html" />
-    <link rel="next" title="quadrants.lang.ast.ast_transformers.call_transformer" href="call_transformer/index.html" />
-    <link rel="prev" title="quadrants.lang.ast.ast_transformer_utils" href="../ast_transformer_utils/index.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
   <meta name="docsearch:version" content="1.1.4" />
@@ -152,8 +149,8 @@
 </li>
 
 
-<li class="nav-item current active">
-  <a class="nav-link nav-internal" href="../../../../index.html">
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../../../autoapi/index.html">
     API Reference
   </a>
 </li>
@@ -208,10 +205,6 @@
   
 
   
-    <button class="pst-navbar-icon sidebar-toggle secondary-toggle" aria-label="On this page">
-      <span class="fa-solid fa-outdent"></span>
-    </button>
-  
 </div>
 
     </header>
@@ -222,8 +215,10 @@
       
       
       
+        
+      
       <dialog id="pst-primary-sidebar-modal"></dialog>
-      <div id="pst-primary-sidebar" class="bd-sidebar-primary bd-sidebar">
+      <div id="pst-primary-sidebar" class="bd-sidebar-primary bd-sidebar hide-on-wide">
         
 
   
@@ -245,8 +240,8 @@
 </li>
 
 
-<li class="nav-item current active">
-  <a class="nav-link nav-internal" href="../../../../index.html">
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../../../autoapi/index.html">
     API Reference
   </a>
 </li>
@@ -279,25 +274,6 @@
       </div>
     
   </div>
-  
-    <div class="sidebar-primary-items__start sidebar-primary__section">
-        <div class="sidebar-primary-item pst-sidebar-collapse"><button id="pst-collapse-sidebar-button" aria-expanded="true" aria-controls="pst-primary-sidebar"><svg class="pst-icon svg-inline--fa" role="img" aria-hidden="true" focusable="false" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
-    <path fill="currentColor" d="M3 15.5C2.36232 15.5 1.74874 15.2564 1.28478 14.8189C0.820828 14.3815 0.541576 13.7832 0.504167 13.1467L0.5 13L0.5 3C0.499965 2.36232 0.743605 1.74874 1.18107 1.28478C1.61854 0.820828 2.21676 0.541576 2.85333 0.504167L3 0.5L13 0.5C13.6377 0.499965 14.2513 0.743605 14.7152 1.18107C15.1792 1.61854 15.4584 2.21676 15.4958 2.85333L15.5 3L15.5 13C15.5 13.6377 15.2564 14.2513 14.8189 14.7152C14.3815 15.1792 13.7832 15.4584 13.1467 15.4958L13 15.5L3 15.5ZM3 13.8333L10.5 13.8333L10.5 2.16667L3 2.16667C2.79589 2.16669 2.59889 2.24163 2.44636 2.37726C2.29383 2.5129 2.19638 2.69979 2.1725 2.9025L2.16667 3L2.16667 13C2.16669 13.2041 2.24163 13.4011 2.37726 13.5536C2.5129 13.7062 2.69979 13.8036 2.9025 13.8275L3 13.8333ZM6.65583 10.325L6.5775 10.2558L4.91083 8.58917C4.76735 8.44567 4.68116 8.25476 4.66843 8.05223C4.65569 7.84971 4.71729 7.6495 4.84167 7.48917L4.91083 7.41083L6.5775 5.74417C6.72747 5.59471 6.9287 5.50794 7.14032 5.50148C7.35194 5.49502 7.55809 5.56935 7.7169 5.70937C7.8757 5.8494 7.97525 6.04463 7.99533 6.25539C8.01541 6.46616 7.95451 6.67667 7.825 6.84417L7.75583 6.9225L6.67917 8L7.75583 9.0775C7.89931 9.22099 7.98551 9.41191 7.99824 9.61443C8.01097 9.81695 7.94938 10.0172 7.825 10.1775L7.75583 10.2558C7.61234 10.3993 7.42142 10.4855 7.2189 10.4982C7.01638 10.511 6.81617 10.4494 6.65583 10.325Z"/>
-  </svg>
-  <span class="pst-collapse-sidebar-label">Collapse Sidebar</span>
-  <span class="pst-expand-sidebar-label">Expand Sidebar</span>
-</button></div>
-        <div class="sidebar-primary-item">
-
-<nav class="bd-docs-nav bd-links"
-     aria-label="Section Navigation">
-  <p class="bd-links__title" role="heading" aria-level="1">Section Navigation</p>
-  <div class="bd-toc-item navbar-nav"><ul class="current nav bd-sidenav">
-<li class="toctree-l1 current active"><a class="reference internal" href="../../../index.html">quadrants</a></li>
-</ul>
-</div>
-</nav></div>
-    </div>
   
   
   <div class="sidebar-primary-items__end sidebar-primary__section">
@@ -335,18 +311,9 @@
       </a>
     </li>
     
-    <li class="breadcrumb-item"><a href="../../../../index.html" class="nav-link">API Reference</a></li>
+    <li class="breadcrumb-item"><a href="../../../../index.html" class="nav-link">Module code</a></li>
     
-    
-    <li class="breadcrumb-item"><a href="../../../index.html" class="nav-link">quadrants</a></li>
-    
-    
-    <li class="breadcrumb-item"><a href="../../index.html" class="nav-link">quadrants.lang</a></li>
-    
-    
-    <li class="breadcrumb-item"><a href="../index.html" class="nav-link">quadrants.lang.ast</a></li>
-    
-    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">quadrants.lang.ast.ast_transformers</span></li>
+    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">quadrants.lang.ast.ast_transformers.graph_api</span></li>
   </ul>
 </nav>
 </div>
@@ -363,24 +330,83 @@
 <div id="searchbox"></div>
                 <article class="bd-article">
                   
-  <section id="module-quadrants.lang.ast.ast_transformers">
-<span id="quadrants-lang-ast-ast-transformers"></span><h1>quadrants.lang.ast.ast_transformers<a class="headerlink" href="#module-quadrants.lang.ast.ast_transformers" title="Link to this heading">#</a></h1>
-<section id="submodules">
-<h2>Submodules<a class="headerlink" href="#submodules" title="Link to this heading">#</a></h2>
-<div class="toctree-wrapper compound">
-<ul>
-<li class="toctree-l1"><a class="reference internal" href="call_transformer/index.html">quadrants.lang.ast.ast_transformers.call_transformer</a></li>
-<li class="toctree-l1"><a class="reference internal" href="checkpoint_transformer/index.html">quadrants.lang.ast.ast_transformers.checkpoint_transformer</a></li>
-<li class="toctree-l1"><a class="reference internal" href="function_def_transformer/index.html">quadrants.lang.ast.ast_transformers.function_def_transformer</a></li>
-<li class="toctree-l1"><a class="reference internal" href="graph_api/index.html">quadrants.lang.ast.ast_transformers.graph_api</a></li>
-<li class="toctree-l1"><a class="reference internal" href="graph_parallel_transformer/index.html">quadrants.lang.ast.ast_transformers.graph_parallel_transformer</a></li>
-<li class="toctree-l1"><a class="reference internal" href="ndarray_arg_resolver/index.html">quadrants.lang.ast.ast_transformers.ndarray_arg_resolver</a></li>
-<li class="toctree-l1"><a class="reference internal" href="struct_primitive_predeclarer/index.html">quadrants.lang.ast.ast_transformers.struct_primitive_predeclarer</a></li>
-</ul>
-</div>
-</section>
-</section>
+  <h1>Source code for quadrants.lang.ast.ast_transformers.graph_api</h1><div class="highlight"><pre>
+<span></span><span class="c1"># type: ignore</span>
+<span class="sd">&quot;&quot;&quot;Shared syntactic recognition of the graph-structuring kernel constructs, covering both the canonical</span>
+<span class="sd">``qd.graph.&lt;name&gt;`` namespace spelling and the deprecated flat ``qd.graph_&lt;name&gt;`` spelling.</span>
 
+<span class="sd">These constructs (``do_while``, ``parallel_context``, ``parallel``) are lowered at compile time and never actually</span>
+<span class="sd">called, so the AST transformers recognize them purely by their source spelling. Matching both spellings lives here in</span>
+<span class="sd">one place so the several detection sites (``ast_transformer.py``, ``graph_parallel_transformer.py``,</span>
+<span class="sd">``function_def_transformer.py``) stay in sync. Using the deprecated flat spelling emits a ``DeprecationWarning`` at</span>
+<span class="sd">compile time (see ``warn_if_deprecated``), which is the only place a warning can fire: the flat functions are recognized</span>
+<span class="sd">by the AST transformer and never executed inside a kernel.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">ast</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">warnings</span>
+
+<span class="c1"># Canonical attribute name under ``qd.graph`` -&gt; deprecated flat ``qd.&lt;name&gt;`` spelling.</span>
+<span class="n">_FLAT_NAME</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s2">&quot;do_while&quot;</span><span class="p">:</span> <span class="s2">&quot;graph_do_while&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;parallel_context&quot;</span><span class="p">:</span> <span class="s2">&quot;graph_parallel_context&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;parallel&quot;</span><span class="p">:</span> <span class="s2">&quot;graph_parallel&quot;</span><span class="p">,</span>
+<span class="p">}</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_value_is_graph</span><span class="p">(</span><span class="n">value</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">expr</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;True if *value* is the ``graph`` of a ``&lt;...&gt;.graph.&lt;attr&gt;`` chain (e.g. the ``graph`` in ``qd.graph.do_while``)</span>
+<span class="sd">    or a bare ``graph`` name (``from quadrants import graph; graph.do_while(...)``).&quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Attribute</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">value</span><span class="o">.</span><span class="n">attr</span> <span class="o">==</span> <span class="s2">&quot;graph&quot;</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Name</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">value</span><span class="o">.</span><span class="n">id</span> <span class="o">==</span> <span class="s2">&quot;graph&quot;</span>
+    <span class="k">return</span> <span class="kc">False</span>
+
+
+<div class="viewcode-block" id="is_deprecated_spelling">
+<a class="viewcode-back" href="../../../../../autoapi/quadrants/lang/ast/ast_transformers/graph_api/index.html#quadrants.lang.ast.ast_transformers.graph_api.is_deprecated_spelling">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">is_deprecated_spelling</span><span class="p">(</span><span class="n">func</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">expr</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;True if *func* uses the deprecated flat ``qd.graph_&lt;name&gt;`` spelling (attribute ``x.graph_&lt;name&gt;`` or bare name</span>
+<span class="sd">    ``graph_&lt;name&gt;``).&quot;&quot;&quot;</span>
+    <span class="n">flat</span> <span class="o">=</span> <span class="n">_FLAT_NAME</span><span class="p">[</span><span class="n">name</span><span class="p">]</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">func</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Attribute</span><span class="p">)</span> <span class="ow">and</span> <span class="n">func</span><span class="o">.</span><span class="n">attr</span> <span class="o">==</span> <span class="n">flat</span><span class="p">:</span>
+        <span class="k">return</span> <span class="kc">True</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">func</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Name</span><span class="p">)</span> <span class="ow">and</span> <span class="n">func</span><span class="o">.</span><span class="n">id</span> <span class="o">==</span> <span class="n">flat</span><span class="p">:</span>
+        <span class="k">return</span> <span class="kc">True</span>
+    <span class="k">return</span> <span class="kc">False</span></div>
+
+
+
+<div class="viewcode-block" id="matches">
+<a class="viewcode-back" href="../../../../../autoapi/quadrants/lang/ast/ast_transformers/graph_api/index.html#quadrants.lang.ast.ast_transformers.graph_api.matches">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">matches</span><span class="p">(</span><span class="n">func</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">expr</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;True if *func* refers to the construct *name*, in either the canonical ``qd.graph.&lt;name&gt;`` spelling or the</span>
+<span class="sd">    deprecated flat ``qd.graph_&lt;name&gt;`` spelling. ``name`` is one of ``do_while`` / ``parallel_context`` / ``parallel``.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">func</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Attribute</span><span class="p">)</span> <span class="ow">and</span> <span class="n">func</span><span class="o">.</span><span class="n">attr</span> <span class="o">==</span> <span class="n">name</span> <span class="ow">and</span> <span class="n">_value_is_graph</span><span class="p">(</span><span class="n">func</span><span class="o">.</span><span class="n">value</span><span class="p">):</span>
+        <span class="k">return</span> <span class="kc">True</span>
+    <span class="k">return</span> <span class="n">is_deprecated_spelling</span><span class="p">(</span><span class="n">func</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="warn_if_deprecated">
+<a class="viewcode-back" href="../../../../../autoapi/quadrants/lang/ast/ast_transformers/graph_api/index.html#quadrants.lang.ast.ast_transformers.graph_api.warn_if_deprecated">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">warn_if_deprecated</span><span class="p">(</span><span class="n">func</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">expr</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;If *func* uses the deprecated flat ``qd.graph_&lt;name&gt;`` spelling, emit a ``DeprecationWarning`` pointing at the</span>
+<span class="sd">    canonical ``qd.graph.&lt;name&gt;`` spelling. Called once from each construct&#39;s lowering entry point so the warning fires</span>
+<span class="sd">    per use-site (deduplicated to once per message by the ``filterwarnings(&#39;once&#39;, ...)`` set up in ``lang/misc.py``).</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="n">is_deprecated_spelling</span><span class="p">(</span><span class="n">func</span><span class="p">,</span> <span class="n">name</span><span class="p">):</span>
+        <span class="n">flat</span> <span class="o">=</span> <span class="n">_FLAT_NAME</span><span class="p">[</span><span class="n">name</span><span class="p">]</span>
+        <span class="n">warnings</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;qd.</span><span class="si">{</span><span class="n">flat</span><span class="si">}</span><span class="s2">() is deprecated and will be removed in a future release; use qd.graph.</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">() instead.&quot;</span><span class="p">,</span>
+            <span class="ne">DeprecationWarning</span><span class="p">,</span>
+        <span class="p">)</span></div>
+
+</pre></div>
 
                 </article>
               
@@ -391,57 +417,12 @@
                 <footer class="prev-next-footer d-print-none">
                   
 <div class="prev-next-area">
-    <a class="left-prev"
-       href="../ast_transformer_utils/index.html"
-       title="previous page">
-      <i class="fa-solid fa-angle-left"></i>
-      <div class="prev-next-info">
-        <p class="prev-next-subtitle">previous</p>
-        <p class="prev-next-title">quadrants.lang.ast.ast_transformer_utils</p>
-      </div>
-    </a>
-    <a class="right-next"
-       href="call_transformer/index.html"
-       title="next page">
-      <div class="prev-next-info">
-        <p class="prev-next-subtitle">next</p>
-        <p class="prev-next-title">quadrants.lang.ast.ast_transformers.call_transformer</p>
-      </div>
-      <i class="fa-solid fa-angle-right"></i>
-    </a>
 </div>
                 </footer>
               
             </div>
             
             
-              
-                <dialog id="pst-secondary-sidebar-modal"></dialog>
-                <div id="pst-secondary-sidebar" class="bd-sidebar-secondary bd-toc"><div class="sidebar-secondary-items sidebar-secondary__inner">
-
-
-  <div class="sidebar-secondary-item">
-<div
-    id="pst-page-navigation-heading-2"
-    class="page-toc tocsection onthispage">
-    <i class="fa-solid fa-list"></i> On this page
-  </div>
-  <nav id="pst-page-toc-nav" class="page-toc" aria-labelledby="pst-page-navigation-heading-2">
-    <ul class="pst-show_toc_level nav section-nav flex-column">
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#submodules">Submodules</a></li>
-</ul>
-  </nav></div>
-
-  <div class="sidebar-secondary-item">
-
-  <div class="tocsection sourcelink">
-    <a href="../../../../../_sources/autoapi/quadrants/lang/ast/ast_transformers/index.rst.txt">
-      <i class="fa-solid fa-file-lines"></i> Show Source
-    </a>
-  </div>
-</div>
-
-</div></div>
               
             
           </div>

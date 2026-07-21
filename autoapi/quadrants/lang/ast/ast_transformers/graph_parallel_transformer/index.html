@@ -60,7 +60,7 @@
     <link rel="index" title="Index" href="../../../../../../genindex.html" />
     <link rel="search" title="Search" href="../../../../../../search.html" />
     <link rel="next" title="quadrants.lang.ast.ast_transformers.ndarray_arg_resolver" href="../ndarray_arg_resolver/index.html" />
-    <link rel="prev" title="quadrants.lang.ast.ast_transformers.function_def_transformer" href="../function_def_transformer/index.html" />
+    <link rel="prev" title="quadrants.lang.ast.ast_transformers.graph_api" href="../graph_api/index.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
   <meta name="docsearch:version" content="1.1.4" />
@@ -396,14 +396,15 @@ joins them; the region id keeps two back-to-back regions apart (each gets its ow
 <dd><dl class="py method">
 <dt class="sig sig-object py" id="quadrants.lang.ast.ast_transformers.graph_parallel_transformer.GraphParallelTransformer.is_graph_parallel_context_call">
 <em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">is_graph_parallel_context_call</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">node</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ast.expr</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">bool</span></span></span><a class="reference internal" href="../../../../../../_modules/quadrants/lang/ast/ast_transformers/graph_parallel_transformer.html#GraphParallelTransformer.is_graph_parallel_context_call"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.ast.ast_transformers.graph_parallel_transformer.GraphParallelTransformer.is_graph_parallel_context_call" title="Link to this definition">#</a></dt>
-<dd><p>If <em>node</em> is a <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel_context()</span></code> call return True, else False.</p>
+<dd><p>If <em>node</em> is a <code class="docutils literal notranslate"><span class="pre">qd.graph.parallel_context()</span></code> (or deprecated <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel_context()</span></code>) call return
+True, else False.</p>
 </dd></dl>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="quadrants.lang.ast.ast_transformers.graph_parallel_transformer.GraphParallelTransformer.is_parallel_section_call">
 <em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">is_parallel_section_call</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">node</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ast.expr</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">bool</span></span></span><a class="reference internal" href="../../../../../../_modules/quadrants/lang/ast/ast_transformers/graph_parallel_transformer.html#GraphParallelTransformer.is_parallel_section_call"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.ast.ast_transformers.graph_parallel_transformer.GraphParallelTransformer.is_parallel_section_call" title="Link to this definition">#</a></dt>
-<dd><p>If <em>node</em> is a <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel()</span></code> (a section) call return True, else False. The call shape is validated
-here so misuse raises at the <code class="docutils literal notranslate"><span class="pre">with</span></code> site rather than later.</p>
+<dd><p>If <em>node</em> is a <code class="docutils literal notranslate"><span class="pre">qd.graph.parallel()</span></code> (or deprecated <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel()</span></code>) section call return True, else
+False. The call shape is validated here so misuse raises at the <code class="docutils literal notranslate"><span class="pre">with</span></code> site rather than later.</p>
 </dd></dl>
 
 <dl class="py method">
@@ -452,12 +453,12 @@ inherits, so the offloaded tasks carry the <code class="docutils literal notrans
                   
 <div class="prev-next-area">
     <a class="left-prev"
-       href="../function_def_transformer/index.html"
+       href="../graph_api/index.html"
        title="previous page">
       <i class="fa-solid fa-angle-left"></i>
       <div class="prev-next-info">
         <p class="prev-next-subtitle">previous</p>
-        <p class="prev-next-title">quadrants.lang.ast.ast_transformers.function_def_transformer</p>
+        <p class="prev-next-title">quadrants.lang.ast.ast_transformers.graph_api</p>
       </div>
     </a>
     <a class="right-next"

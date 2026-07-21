@@ -478,13 +478,37 @@
 </div>
 </section>
 </section>
-<section id="gpu-side-iteration-with-graph-do-while">
-<h2>GPU-side iteration with <code class="docutils literal notranslate"><span class="pre">graph_do_while</span></code><a class="headerlink" href="#gpu-side-iteration-with-graph-do-while" title="Link to this heading">#</a></h2>
-<p>For iterative algorithms (physics solvers, convergence loops), you often want to repeat the kernel body until a condition is met, without returning to the host each iteration. Use <code class="docutils literal notranslate"><span class="pre">while</span> <span class="pre">qd.graph_do_while(flag):</span></code> inside a <code class="docutils literal notranslate"><span class="pre">graph=True</span></code> kernel:</p>
+<section id="the-qd-graph-namespace">
+<h2>The <code class="docutils literal notranslate"><span class="pre">qd.graph</span></code> namespace<a class="headerlink" href="#the-qd-graph-namespace" title="Link to this heading">#</a></h2>
+<p>The graph-structuring constructs live under the <code class="docutils literal notranslate"><span class="pre">qd.graph</span></code> namespace:</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>Canonical spelling</p></th>
+<th class="head"><p>Deprecated flat alias</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">qd.graph.do_while</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">qd.graph_do_while</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">qd.graph.parallel_context</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">qd.graph_parallel_context</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">qd.graph.parallel</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">qd.graph_parallel</span></code></p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Always use the <code class="docutils literal notranslate"><span class="pre">qd.graph.*</span></code> spellings (used throughout this guide). The flat <code class="docutils literal notranslate"><span class="pre">qd.graph_*</span></code> names still work but emit a <code class="docutils literal notranslate"><span class="pre">DeprecationWarning</span></code> when used inside a kernel and will be removed in a future release. Both spellings compile to the same construct.</p>
+</section>
+<section id="gpu-side-iteration-with-qd-graph-do-while">
+<h2>GPU-side iteration with <code class="docutils literal notranslate"><span class="pre">qd.graph.do_while</span></code><a class="headerlink" href="#gpu-side-iteration-with-qd-graph-do-while" title="Link to this heading">#</a></h2>
+<p>For iterative algorithms (physics solvers, convergence loops), you often want to repeat the kernel body until a condition is met, without returning to the host each iteration. Use <code class="docutils literal notranslate"><span class="pre">while</span> <span class="pre">qd.graph.do_while(flag):</span></code> inside a <code class="docutils literal notranslate"><span class="pre">graph=True</span></code> kernel:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span><span class="p">(</span><span class="n">graph</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">solve</span><span class="p">(</span><span class="n">x</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">ndim</span><span class="o">=</span><span class="mi">1</span><span class="p">),</span>
           <span class="n">counter</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">,</span> <span class="n">ndim</span><span class="o">=</span><span class="mi">0</span><span class="p">)):</span>
-    <span class="k">while</span> <span class="n">qd</span><span class="o">.</span><span class="n">graph_do_while</span><span class="p">(</span><span class="n">counter</span><span class="p">):</span>
+    <span class="k">while</span> <span class="n">qd</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">do_while</span><span class="p">(</span><span class="n">counter</span><span class="p">):</span>
         <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>
             <span class="n">x</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">x</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">+</span> <span class="mf">1.0</span>
         <span class="n">counter</span><span class="p">[()]</span> <span class="o">=</span> <span class="n">counter</span><span class="p">[()]</span> <span class="o">-</span> <span class="mi">1</span>   <span class="c1"># bare statement: runs every iteration</span>
@@ -496,7 +520,7 @@
 <span class="c1"># x is now incremented 10 times; counter is 0</span>
 </pre></div>
 </div>
-<p>The argument to <code class="docutils literal notranslate"><span class="pre">qd.graph_do_while()</span></code> must reference a scalar <code class="docutils literal notranslate"><span class="pre">qd.i32</span></code> ndarray that the kernel can access - a bare kernel parameter (<code class="docutils literal notranslate"><span class="pre">qd.graph_do_while(counter)</span></code>), a <a class="reference internal" href="compound_types.html#qd-data-oriented"><span class="std std-ref"><code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code></span></a> member ndarray (<code class="docutils literal notranslate"><span class="pre">qd.graph_do_while(self.counter)</span></code>), or a <a class="reference internal" href="compound_types.html#dataclasses-dataclass"><span class="std std-ref"><code class="docutils literal notranslate"><span class="pre">&#64;dataclasses.dataclass</span></code></span></a> parameter member (<code class="docutils literal notranslate"><span class="pre">qd.graph_do_while(params.counter)</span></code>). The loop body repeats while this value is non-zero.</p>
+<p>The argument to <code class="docutils literal notranslate"><span class="pre">qd.graph.do_while()</span></code> must reference a scalar <code class="docutils literal notranslate"><span class="pre">qd.i32</span></code> ndarray that the kernel can access - a bare kernel parameter (<code class="docutils literal notranslate"><span class="pre">qd.graph.do_while(counter)</span></code>), a <a class="reference internal" href="compound_types.html#qd-data-oriented"><span class="std std-ref"><code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code></span></a> member ndarray (<code class="docutils literal notranslate"><span class="pre">qd.graph.do_while(self.counter)</span></code>), or a <a class="reference internal" href="compound_types.html#dataclasses-dataclass"><span class="std std-ref"><code class="docutils literal notranslate"><span class="pre">&#64;dataclasses.dataclass</span></code></span></a> parameter member (<code class="docutils literal notranslate"><span class="pre">qd.graph.do_while(params.counter)</span></code>). The loop body repeats while this value is non-zero.</p>
 <ul class="simple">
 <li><p>On <a class="reference external" href="https://developer.nvidia.com/cuda/gpus">CUDA SM 9.0+</a>, this uses <a class="reference external" href="https://developer.nvidia.com/blog/dynamic-control-flow-in-cuda-graphs-with-conditional-nodes/">CUDA conditional while nodes</a> - the entire iteration runs on the GPU with no host involvement.</p></li>
 <li><p>On older CUDA GPUs, AMDGPU, and non-GPU backends, it falls back to a host-side do-while loop (see the <a class="reference internal" href="#backend-support">backend support table</a>).</p></li>
@@ -507,7 +531,7 @@
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span><span class="p">(</span><span class="n">graph</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">iterate</span><span class="p">(</span><span class="n">x</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">ndim</span><span class="o">=</span><span class="mi">1</span><span class="p">),</span>
             <span class="n">counter</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">,</span> <span class="n">ndim</span><span class="o">=</span><span class="mi">0</span><span class="p">)):</span>
-    <span class="k">while</span> <span class="n">qd</span><span class="o">.</span><span class="n">graph_do_while</span><span class="p">(</span><span class="n">counter</span><span class="p">):</span>
+    <span class="k">while</span> <span class="n">qd</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">do_while</span><span class="p">(</span><span class="n">counter</span><span class="p">):</span>
         <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>
             <span class="n">x</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">x</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">+</span> <span class="mf">1.0</span>
         <span class="n">counter</span><span class="p">[()]</span> <span class="o">=</span> <span class="n">counter</span><span class="p">[()]</span> <span class="o">-</span> <span class="mi">1</span>
@@ -517,7 +541,7 @@
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span><span class="p">(</span><span class="n">graph</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">converge</span><span class="p">(</span><span class="n">x</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">ndim</span><span class="o">=</span><span class="mi">1</span><span class="p">),</span>
              <span class="n">keep_going</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">,</span> <span class="n">ndim</span><span class="o">=</span><span class="mi">0</span><span class="p">)):</span>
-    <span class="k">while</span> <span class="n">qd</span><span class="o">.</span><span class="n">graph_do_while</span><span class="p">(</span><span class="n">keep_going</span><span class="p">):</span>
+    <span class="k">while</span> <span class="n">qd</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">do_while</span><span class="p">(</span><span class="n">keep_going</span><span class="p">):</span>
         <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>
             <span class="c1"># ... do work ...</span>
             <span class="k">pass</span>
@@ -528,19 +552,19 @@
 </section>
 <section id="do-while-semantics">
 <h3>Do-while semantics<a class="headerlink" href="#do-while-semantics" title="Link to this heading">#</a></h3>
-<p><code class="docutils literal notranslate"><span class="pre">graph_do_while</span></code> has <strong>do-while</strong> semantics: the kernel body always executes at least once before the condition is checked. This matches the behavior of CUDA conditional while nodes. The flag value must be &gt;= 1 at launch time. Passing 0 with a kernel that decrements the counter will cause an infinite loop.</p>
+<p><code class="docutils literal notranslate"><span class="pre">qd.graph.do_while</span></code> has <strong>do-while</strong> semantics: the kernel body always executes at least once before the condition is checked. This matches the behavior of CUDA conditional while nodes. The flag value must be &gt;= 1 at launch time. Passing 0 with a kernel that decrements the counter will cause an infinite loop.</p>
 </section>
 <section id="ndarray-vs-field">
 <h3>ndarray vs field<a class="headerlink" href="#ndarray-vs-field" title="Link to this heading">#</a></h3>
-<p>The parameter used by <code class="docutils literal notranslate"><span class="pre">graph_do_while</span></code> MUST be an ndarray.</p>
+<p>The parameter used by <code class="docutils literal notranslate"><span class="pre">qd.graph.do_while</span></code> MUST be an ndarray.</p>
 <p>However, other parameters can be any supported Quadrants kernel parameter type.</p>
 </section>
 <section id="nested-loops-and-mixing-with-for-loops">
 <h3>Nested loops and mixing with for-loops<a class="headerlink" href="#nested-loops-and-mixing-with-for-loops" title="Link to this heading">#</a></h3>
 <blockquote>
-<div><p><strong>Experimental.</strong> Nested / sibling <code class="docutils literal notranslate"><span class="pre">graph_do_while</span></code> loops, and mixing <code class="docutils literal notranslate"><span class="pre">graph_do_while</span></code> with top-level <code class="docutils literal notranslate"><span class="pre">for</span></code>-loops, are experimental for now. Single-loop <code class="docutils literal notranslate"><span class="pre">graph_do_while</span></code> is the stable path.</p>
+<div><p><strong>Experimental.</strong> Nested / sibling <code class="docutils literal notranslate"><span class="pre">qd.graph.do_while</span></code> loops, and mixing <code class="docutils literal notranslate"><span class="pre">qd.graph.do_while</span></code> with top-level <code class="docutils literal notranslate"><span class="pre">for</span></code>-loops, are experimental for now. Single-loop <code class="docutils literal notranslate"><span class="pre">qd.graph.do_while</span></code> is the stable path.</p>
 </div></blockquote>
-<p><code class="docutils literal notranslate"><span class="pre">graph_do_while</span></code> loops can be <strong>nested</strong> inside one another, placed <strong>side by side</strong> (siblings), and freely <strong>mixed with plain top-level for-loops</strong>. Each loop has its own scalar <code class="docutils literal notranslate"><span class="pre">qd.i32</span></code> counter ndarray.</p>
+<p><code class="docutils literal notranslate"><span class="pre">qd.graph.do_while</span></code> loops can be <strong>nested</strong> inside one another, placed <strong>side by side</strong> (siblings), and freely <strong>mixed with plain top-level for-loops</strong>. Each loop has its own scalar <code class="docutils literal notranslate"><span class="pre">qd.i32</span></code> counter ndarray.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span><span class="p">(</span><span class="n">graph</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">nested</span><span class="p">(</span><span class="n">x</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">,</span> <span class="n">ndim</span><span class="o">=</span><span class="mi">1</span><span class="p">),</span>
            <span class="n">outer</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">,</span> <span class="n">ndim</span><span class="o">=</span><span class="mi">0</span><span class="p">),</span>
@@ -549,17 +573,17 @@
     <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>
         <span class="n">x</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">x</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">+</span> <span class="mi">100</span>
 
-    <span class="k">while</span> <span class="n">qd</span><span class="o">.</span><span class="n">graph_do_while</span><span class="p">(</span><span class="n">outer</span><span class="p">):</span>
+    <span class="k">while</span> <span class="n">qd</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">do_while</span><span class="p">(</span><span class="n">outer</span><span class="p">):</span>
         <span class="c1"># Reset the inner counter at the start of each outer iteration, else it only runs on the first outer pass.</span>
         <span class="n">inner</span><span class="p">[()]</span> <span class="o">=</span> <span class="mi">5</span>                  <span class="c1"># bare statement: runs every outer iteration</span>
-        <span class="k">while</span> <span class="n">qd</span><span class="o">.</span><span class="n">graph_do_while</span><span class="p">(</span><span class="n">inner</span><span class="p">):</span>
+        <span class="k">while</span> <span class="n">qd</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">do_while</span><span class="p">(</span><span class="n">inner</span><span class="p">):</span>
             <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>
                 <span class="n">x</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">x</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">+</span> <span class="mi">1</span>
             <span class="n">inner</span><span class="p">[()]</span> <span class="o">=</span> <span class="n">inner</span><span class="p">[()]</span> <span class="o">-</span> <span class="mi">1</span>
         <span class="n">outer</span><span class="p">[()]</span> <span class="o">=</span> <span class="n">outer</span><span class="p">[()]</span> <span class="o">-</span> <span class="mi">1</span>
 </pre></div>
 </div>
-<p>A <code class="docutils literal notranslate"><span class="pre">graph_do_while</span></code>-loop may only appear at the kernel top level or directly inside another <code class="docutils literal notranslate"><span class="pre">graph_do_while</span></code> body.</p>
+<p>A <code class="docutils literal notranslate"><span class="pre">qd.graph.do_while</span></code>-loop may only appear at the kernel top level or directly inside another <code class="docutils literal notranslate"><span class="pre">qd.graph.do_while</span></code> body.</p>
 <p>Note that <code class="docutils literal notranslate"><span class="pre">qd.func</span></code>’s are inlined, so you can freely factorize these structures across <code class="docutils literal notranslate"><span class="pre">qd.func</span></code> boundaries.</p>
 </section>
 <section id="id1">
@@ -572,13 +596,13 @@
 <h3>Caveats<a class="headerlink" href="#caveats" title="Link to this heading">#</a></h3>
 <p>On GPU backends without native device-side conditional graph nodes (see <a class="reference internal" href="#backend-support">Backend Support</a> below):</p>
 <ul class="simple">
-<li><p>the value of the <code class="docutils literal notranslate"><span class="pre">graph_do_while</span></code> parameter will be copied from the GPU to the host each iteration, in order to check whether we should continue iterating. This causes a GPU pipeline stall. For nested loops this host round-trip happens once per iteration of each loop level, and each loop-body task is replayed individually, so deeply nested loops on these backends pay correspondingly more host overhead (they remain correct, just slower than the CUDA SM 9.0+ native path). At the end of each loop iteration:</p></li>
+<li><p>the value of the <code class="docutils literal notranslate"><span class="pre">qd.graph.do_while</span></code> parameter will be copied from the GPU to the host each iteration, in order to check whether we should continue iterating. This causes a GPU pipeline stall. For nested loops this host round-trip happens once per iteration of each loop level, and each loop-body task is replayed individually, so deeply nested loops on these backends pay correspondingly more host overhead (they remain correct, just slower than the CUDA SM 9.0+ native path). At the end of each loop iteration:</p></li>
 <li><p>wait for GPU async queue to finish processing</p></li>
 <li><p>copy condition value to hostside</p></li>
 <li><p>evaluate condition value on hostside</p></li>
 <li><p>launch new kernels for next loop iteration, if not finished yet</p></li>
 </ul>
-<p>Note: the basic <code class="docutils literal notranslate"><span class="pre">graph=True</span></code> path (without <code class="docutils literal notranslate"><span class="pre">graph_do_while</span></code>) does <strong>not</strong> stall the host like this on either CUDA or AMDGPU - the entire kernel sequence runs as a single GPU-side graph replay.</p>
+<p>Note: the basic <code class="docutils literal notranslate"><span class="pre">graph=True</span></code> path (without <code class="docutils literal notranslate"><span class="pre">qd.graph.do_while</span></code>) does <strong>not</strong> stall the host like this on either CUDA or AMDGPU - the entire kernel sequence runs as a single GPU-side graph replay.</p>
 <p>Therefore on unsupported platforms, you might consider creating a second implementation, which works differently. e.g.:</p>
 <ul class="simple">
 <li><p>fixed number of loop iterations, so no dependency on gpu data for kernel launch; combined perhaps with:</p></li>
@@ -608,7 +632,7 @@
     <span class="n">overflow_flag</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">,</span> <span class="n">ndim</span><span class="o">=</span><span class="mi">0</span><span class="p">),</span>
     <span class="n">newton_cond</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">,</span> <span class="n">ndim</span><span class="o">=</span><span class="mi">0</span><span class="p">),</span>
 <span class="p">):</span>
-    <span class="k">while</span> <span class="n">qd</span><span class="o">.</span><span class="n">graph_do_while</span><span class="p">(</span><span class="n">newton_cond</span><span class="p">):</span>
+    <span class="k">while</span> <span class="n">qd</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">do_while</span><span class="p">(</span><span class="n">newton_cond</span><span class="p">):</span>
         <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">arr</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>
             <span class="c1"># ...</span>
             <span class="k">pass</span>
@@ -627,7 +651,7 @@
 <p>When the body of a checkpoint writes a non-zero value into <code class="docutils literal notranslate"><span class="pre">yield_on[()]</span></code>:</p>
 <ol class="arabic simple">
 <li><p>Everything after the yielding checkpoint in the same launch is skipped.</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">qd.checkpoint</span></code> will exit any surrounding <code class="docutils literal notranslate"><span class="pre">qd.graph_do_while</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">qd.checkpoint</span></code> will exit any surrounding <code class="docutils literal notranslate"><span class="pre">qd.graph.do_while</span></code>.</p></li>
 </ol>
 <p>The framework never writes into your <code class="docutils literal notranslate"><span class="pre">yield_on</span></code> buffer - you own it end-to-end. That means:</p>
 <ul class="simple">
@@ -667,7 +691,7 @@
 <li><p>Must be used inside <code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel(graph=True,</span> <span class="pre">checkpoints=True)</span></code>. Without the flag, <code class="docutils literal notranslate"><span class="pre">qd.checkpoint(...)</span></code> raises <code class="docutils literal notranslate"><span class="pre">QuadrantsSyntaxError</span></code> at compile time.</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">cp_id</span></code> must be an int literal or an <code class="docutils literal notranslate"><span class="pre">IntEnum</span></code> value, and must be unique across the kernel.</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">yield_on=</span></code> must reference a 0-d <code class="docutils literal notranslate"><span class="pre">qd.types.ndarray(qd.i32,</span> <span class="pre">ndim=0)</span></code> - a bare kernel parameter (<code class="docutils literal notranslate"><span class="pre">yield_on=flag</span></code>), a <a class="reference internal" href="compound_types.html#qd-data-oriented"><span class="std std-ref"><code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code></span></a> member ndarray (<code class="docutils literal notranslate"><span class="pre">yield_on=self.flag</span></code>), or a <a class="reference internal" href="compound_types.html#dataclasses-dataclass"><span class="std std-ref"><code class="docutils literal notranslate"><span class="pre">&#64;dataclasses.dataclass</span></code></span></a> parameter member (<code class="docutils literal notranslate"><span class="pre">yield_on=params.flag</span></code>). Arbitrary expressions are not supported.</p></li>
-<li><p>Checkpoints cannot be nested inside other checkpoints. Checkpoints inside a <code class="docutils literal notranslate"><span class="pre">qd.graph_do_while</span></code> body are fine.</p></li>
+<li><p>Checkpoints cannot be nested inside other checkpoints. Checkpoints inside a <code class="docutils literal notranslate"><span class="pre">qd.graph.do_while</span></code> body are fine.</p></li>
 <li><p>The body of a <code class="docutils literal notranslate"><span class="pre">with</span> <span class="pre">qd.checkpoint(...)</span></code> block cannot contain bare top-level statements (assignments, augmented assignments, or bare call/expression statements). Every top-level statement must be inside a <code class="docutils literal notranslate"><span class="pre">for</span></code>-loop (or other control-flow construct). A docstring as the first statement is allowed. Bare statements raise <code class="docutils literal notranslate"><span class="pre">QuadrantsSyntaxError</span></code> at compile time.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">with</span> <span class="n">qd</span><span class="o">.</span><span class="n">checkpoint</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">yield_on</span><span class="o">=</span><span class="n">flag</span><span class="p">):</span>
     <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">):</span>
@@ -682,22 +706,22 @@
 </section>
 </section>
 <section id="qd-graph-parallel-sections-with-qd-graph-parallel-context-experimental">
-<h2><code class="docutils literal notranslate"><span class="pre">qd.graph_parallel</span></code> sections with <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel_context</span></code> <em>(experimental)</em><a class="headerlink" href="#qd-graph-parallel-sections-with-qd-graph-parallel-context-experimental" title="Link to this heading">#</a></h2>
-<p>A <code class="docutils literal notranslate"><span class="pre">with</span> <span class="pre">qd.graph_parallel_context():</span></code> region lets you declare independent stages so the graph runs them concurrently.</p>
-<p><code class="docutils literal notranslate"><span class="pre">qd.graph_parallel_context</span></code> is honored by the graph builder so it composes with <code class="docutils literal notranslate"><span class="pre">graph=True</span></code> and <code class="docutils literal notranslate"><span class="pre">graph_do_while</span></code>.</p>
+<h2><code class="docutils literal notranslate"><span class="pre">qd.graph.parallel</span></code> sections with <code class="docutils literal notranslate"><span class="pre">qd.graph.parallel_context</span></code> <em>(experimental)</em><a class="headerlink" href="#qd-graph-parallel-sections-with-qd-graph-parallel-context-experimental" title="Link to this heading">#</a></h2>
+<p>A <code class="docutils literal notranslate"><span class="pre">with</span> <span class="pre">qd.graph.parallel_context():</span></code> region lets you declare independent stages so the graph runs them concurrently.</p>
+<p><code class="docutils literal notranslate"><span class="pre">qd.graph.parallel_context</span></code> is honored by the graph builder so it composes with <code class="docutils literal notranslate"><span class="pre">graph=True</span></code> and <code class="docutils literal notranslate"><span class="pre">qd.graph.do_while</span></code>.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span><span class="p">(</span><span class="n">graph</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">step</span><span class="p">(</span><span class="o">...</span><span class="p">):</span>
-    <span class="k">while</span> <span class="n">qd</span><span class="o">.</span><span class="n">graph_do_while</span><span class="p">(</span><span class="n">ncond</span><span class="p">):</span>
-        <span class="n">assemble_shared</span><span class="p">(</span><span class="o">...</span><span class="p">)</span>                 <span class="c1"># serial: feeds both `qd.graph_parallel` sections</span>
+    <span class="k">while</span> <span class="n">qd</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">do_while</span><span class="p">(</span><span class="n">ncond</span><span class="p">):</span>
+        <span class="n">assemble_shared</span><span class="p">(</span><span class="o">...</span><span class="p">)</span>                 <span class="c1"># serial: feeds both `qd.graph.parallel` sections</span>
 
-        <span class="k">with</span> <span class="n">qd</span><span class="o">.</span><span class="n">graph_parallel_context</span><span class="p">():</span>    <span class="c1"># fork: `qd.graph_parallel` sections run concurrently</span>
-            <span class="k">with</span> <span class="n">qd</span><span class="o">.</span><span class="n">graph_parallel</span><span class="p">():</span>            <span class="c1"># point-triangle contacts</span>
+        <span class="k">with</span> <span class="n">qd</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">parallel_context</span><span class="p">():</span>    <span class="c1"># fork: `qd.graph.parallel` sections run concurrently</span>
+            <span class="k">with</span> <span class="n">qd</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">parallel</span><span class="p">():</span>            <span class="c1"># point-triangle contacts</span>
                 <span class="n">pt_assemble</span><span class="p">(</span><span class="o">...</span><span class="p">)</span>
                 <span class="n">pt_hessian</span><span class="p">(</span><span class="o">...</span><span class="p">)</span>
-            <span class="k">with</span> <span class="n">qd</span><span class="o">.</span><span class="n">graph_parallel</span><span class="p">():</span>            <span class="c1"># edge-edge contacts (independent of pt)</span>
+            <span class="k">with</span> <span class="n">qd</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">parallel</span><span class="p">():</span>            <span class="c1"># edge-edge contacts (independent of pt)</span>
                 <span class="n">ee_assemble</span><span class="p">(</span><span class="o">...</span><span class="p">)</span>
                 <span class="n">ee_hessian</span><span class="p">(</span><span class="o">...</span><span class="p">)</span>
-        <span class="c1"># join: everything below waits for BOTH `qd.graph_parallel` sections to finish</span>
+        <span class="c1"># join: everything below waits for BOTH `qd.graph.parallel` sections to finish</span>
         <span class="n">merge_hessians</span><span class="p">(</span><span class="o">...</span><span class="p">)</span>
         <span class="n">precondition</span><span class="p">(</span><span class="o">...</span><span class="p">)</span>
 </pre></div>
@@ -705,13 +729,13 @@
 <section id="semantics">
 <h3>Semantics<a class="headerlink" href="#semantics" title="Link to this heading">#</a></h3>
 <ul class="simple">
-<li><p><strong>Fork / join.</strong> Every <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel</span></code> section in the region forks from the work that precedes the region. All <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel</span></code> sections must finish before any work <em>after</em> the region begins (the join).</p></li>
-<li><p><strong><code class="docutils literal notranslate"><span class="pre">qd.graph_parallel</span></code> sections are independent - you guarantee it.</strong> Calls <em>within</em> a <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel</span></code> section keep their program order, but calls in <em>different</em> <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel</span></code> sections have no ordering. The <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel</span></code> sections must be data-race free with respect to one another: no <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel</span></code> section may read what another writes, and no two <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel</span></code> sections may write the same memory. Quadrants does not check this; getting it wrong gives nondeterministic results.</p></li>
+<li><p><strong>Fork / join.</strong> Every <code class="docutils literal notranslate"><span class="pre">qd.graph.parallel</span></code> section in the region forks from the work that precedes the region. All <code class="docutils literal notranslate"><span class="pre">qd.graph.parallel</span></code> sections must finish before any work <em>after</em> the region begins (the join).</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">qd.graph.parallel</span></code> sections are independent - you guarantee it.</strong> Calls <em>within</em> a <code class="docutils literal notranslate"><span class="pre">qd.graph.parallel</span></code> section keep their program order, but calls in <em>different</em> <code class="docutils literal notranslate"><span class="pre">qd.graph.parallel</span></code> sections have no ordering. The <code class="docutils literal notranslate"><span class="pre">qd.graph.parallel</span></code> sections must be data-race free with respect to one another: no <code class="docutils literal notranslate"><span class="pre">qd.graph.parallel</span></code> section may read what another writes, and no two <code class="docutils literal notranslate"><span class="pre">qd.graph.parallel</span></code> sections may write the same memory. Quadrants does not check this; getting it wrong gives nondeterministic results.</p></li>
 </ul>
 </section>
 <section id="generating-qd-graph-parallel-sections-from-a-compile-time-sequence">
-<h3>Generating <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel</span></code> sections from a compile-time sequence<a class="headerlink" href="#generating-qd-graph-parallel-sections-from-a-compile-time-sequence" title="Link to this heading">#</a></h3>
-<p><code class="docutils literal notranslate"><span class="pre">qd.graph_parallel</span></code> sections do not have to be written out one by one. A <code class="docutils literal notranslate"><span class="pre">for</span> <span class="pre">...</span> <span class="pre">in</span> <span class="pre">qd.static(...)</span></code> loop is unrolled at compile time, so each iteration that contains a <code class="docutils literal notranslate"><span class="pre">with</span> <span class="pre">qd.graph_parallel():</span></code> becomes its own section - handy for forking one section per element of a static list (e.g. per contact type):</p>
+<h3>Generating <code class="docutils literal notranslate"><span class="pre">qd.graph.parallel</span></code> sections from a compile-time sequence<a class="headerlink" href="#generating-qd-graph-parallel-sections-from-a-compile-time-sequence" title="Link to this heading">#</a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">qd.graph.parallel</span></code> sections do not have to be written out one by one. A <code class="docutils literal notranslate"><span class="pre">for</span> <span class="pre">...</span> <span class="pre">in</span> <span class="pre">qd.static(...)</span></code> loop is unrolled at compile time, so each iteration that contains a <code class="docutils literal notranslate"><span class="pre">with</span> <span class="pre">qd.graph.parallel():</span></code> becomes its own section - handy for forking one section per element of a static list (e.g. per contact type):</p>
 <p>(Note: See <a class="reference internal" href="compound_types.html"><span class="std std-doc">compound_types.md</span></a> for qd.data_oriented description)</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">data_oriented</span>
 <span class="k">class</span><span class="w"> </span><span class="nc">Solver</span><span class="p">:</span>
@@ -720,9 +744,9 @@
 
     <span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span><span class="p">(</span><span class="n">graph</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">step</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-        <span class="k">with</span> <span class="n">qd</span><span class="o">.</span><span class="n">graph_parallel_context</span><span class="p">():</span>
+        <span class="k">with</span> <span class="n">qd</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">parallel_context</span><span class="p">():</span>
             <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">qd</span><span class="o">.</span><span class="n">static</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">funcs</span><span class="p">))):</span>        <span class="c1"># unrolls to one section per func</span>
-                <span class="k">with</span> <span class="n">qd</span><span class="o">.</span><span class="n">graph_parallel</span><span class="p">():</span>
+                <span class="k">with</span> <span class="n">qd</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">parallel</span><span class="p">():</span>
                     <span class="bp">self</span><span class="o">.</span><span class="n">funcs</span><span class="p">[</span><span class="n">i</span><span class="p">]()</span>
 </pre></div>
 </div>
@@ -731,9 +755,9 @@
 <section id="restrictions-enforced-at-kernel-compile-time">
 <h3>Restrictions (enforced at kernel compile time)<a class="headerlink" href="#restrictions-enforced-at-kernel-compile-time" title="Link to this heading">#</a></h3>
 <ul class="simple">
-<li><p><code class="docutils literal notranslate"><span class="pre">qd.graph_parallel_context</span></code> may contain only <code class="docutils literal notranslate"><span class="pre">with</span> <span class="pre">qd.graph_parallel():</span></code> blocks, optionally wrapped in <code class="docutils literal notranslate"><span class="pre">if</span> <span class="pre">qd.static(...)</span></code> (so an optional <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel</span></code> section can be compiled in or out - e.g. enabling edge-edge contacts only when a feature flag is set) or <code class="docutils literal notranslate"><span class="pre">for</span> <span class="pre">...</span> <span class="pre">in</span> <span class="pre">qd.static(...)</span></code> loops (generate one <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel</span></code> section per element of a compile-time sequence).</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">qd.graph_parallel()</span></code> may appear only directly inside a <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel_context()</span></code>.</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">qd.graph_parallel_context</span></code> cannot be nested, and a <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel</span></code> section body must be straight-line task work - no <code class="docutils literal notranslate"><span class="pre">qd.graph_do_while</span></code>, <code class="docutils literal notranslate"><span class="pre">qd.checkpoint</span></code>, or nested <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel_context</span></code> inside a <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel</span></code> section (a <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel_context</span></code> may, however, sit inside a <code class="docutils literal notranslate"><span class="pre">qd.graph_do_while</span></code> body, as shown above).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">qd.graph.parallel_context</span></code> may contain only <code class="docutils literal notranslate"><span class="pre">with</span> <span class="pre">qd.graph.parallel():</span></code> blocks, optionally wrapped in <code class="docutils literal notranslate"><span class="pre">if</span> <span class="pre">qd.static(...)</span></code> (so an optional <code class="docutils literal notranslate"><span class="pre">qd.graph.parallel</span></code> section can be compiled in or out - e.g. enabling edge-edge contacts only when a feature flag is set) or <code class="docutils literal notranslate"><span class="pre">for</span> <span class="pre">...</span> <span class="pre">in</span> <span class="pre">qd.static(...)</span></code> loops (generate one <code class="docutils literal notranslate"><span class="pre">qd.graph.parallel</span></code> section per element of a compile-time sequence).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">qd.graph.parallel()</span></code> may appear only directly inside a <code class="docutils literal notranslate"><span class="pre">qd.graph.parallel_context()</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">qd.graph.parallel_context</span></code> cannot be nested, and a <code class="docutils literal notranslate"><span class="pre">qd.graph.parallel</span></code> section body must be straight-line task work - no <code class="docutils literal notranslate"><span class="pre">qd.graph.do_while</span></code>, <code class="docutils literal notranslate"><span class="pre">qd.checkpoint</span></code>, or nested <code class="docutils literal notranslate"><span class="pre">qd.graph.parallel_context</span></code> inside a <code class="docutils literal notranslate"><span class="pre">qd.graph.parallel</span></code> section (a <code class="docutils literal notranslate"><span class="pre">qd.graph.parallel_context</span></code> may, however, sit inside a <code class="docutils literal notranslate"><span class="pre">qd.graph.do_while</span></code> body, as shown above).</p></li>
 </ul>
 </section>
 <section id="backend-behavior">
@@ -746,20 +770,20 @@
 </thead>
 <tbody>
 <tr class="row-even"><td><p>CUDA</p></td>
-<td><p><code class="docutils literal notranslate"><span class="pre">qd.graph_parallel</span></code> sections run <strong>concurrently</strong></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">qd.graph.parallel</span></code> sections run <strong>concurrently</strong></p></td>
 </tr>
 <tr class="row-odd"><td><p>AMDGPU / CPU / Vulkan / Metal</p></td>
-<td><p><code class="docutils literal notranslate"><span class="pre">qd.graph_parallel</span></code> sections run <strong>serially</strong></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">qd.graph.parallel</span></code> sections run <strong>serially</strong></p></td>
 </tr>
 </tbody>
 </table>
 </div>
-<p>Because <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel</span></code> sections are independent by construction, running them serially produces identical results - only the scheduling differs.</p>
+<p>Because <code class="docutils literal notranslate"><span class="pre">qd.graph.parallel</span></code> sections are independent by construction, running them serially produces identical results - only the scheduling differs.</p>
 </section>
 </section>
 <section id="backend-support">
 <h2>Backend support<a class="headerlink" href="#backend-support" title="Link to this heading">#</a></h2>
-<p><code class="docutils literal notranslate"><span class="pre">graph=True</span></code> and <code class="docutils literal notranslate"><span class="pre">graph_do_while</span></code> run on every backend. They are <em>hardware accelerated</em> on CUDA (via <a class="reference external" href="https://docs.nvidia.com/cuda/cuda-programming-guide/04-special-topics/cuda-graphs.html">CUDA graphs</a>) and AMDGPU (via <a class="reference external" href="https://rocm.docs.amd.com/projects/HIP/en/latest/how-to/hip_runtime_api/hipgraph.html">HIP graphs</a>); <code class="docutils literal notranslate"><span class="pre">graph_do_while</span></code> additionally requires <a class="reference external" href="https://developer.nvidia.com/cuda/gpus">CUDA SM 9.0+</a> for its hardware-accelerated path. On other backends, <code class="docutils literal notranslate"><span class="pre">graph=True</span></code> is silently ignored and the kernel runs via the normal launch path, and <code class="docutils literal notranslate"><span class="pre">graph_do_while</span></code> falls back to a host-side do-while loop. <code class="docutils literal notranslate"><span class="pre">qd.checkpoint</span></code> gating runs entirely on the device on every GPU backend.</p>
+<p><code class="docutils literal notranslate"><span class="pre">graph=True</span></code> and <code class="docutils literal notranslate"><span class="pre">qd.graph.do_while</span></code> run on every backend. They are <em>hardware accelerated</em> on CUDA (via <a class="reference external" href="https://docs.nvidia.com/cuda/cuda-programming-guide/04-special-topics/cuda-graphs.html">CUDA graphs</a>) and AMDGPU (via <a class="reference external" href="https://rocm.docs.amd.com/projects/HIP/en/latest/how-to/hip_runtime_api/hipgraph.html">HIP graphs</a>); <code class="docutils literal notranslate"><span class="pre">qd.graph.do_while</span></code> additionally requires <a class="reference external" href="https://developer.nvidia.com/cuda/gpus">CUDA SM 9.0+</a> for its hardware-accelerated path. On other backends, <code class="docutils literal notranslate"><span class="pre">graph=True</span></code> is silently ignored and the kernel runs via the normal launch path, and <code class="docutils literal notranslate"><span class="pre">qd.graph.do_while</span></code> falls back to a host-side do-while loop. <code class="docutils literal notranslate"><span class="pre">qd.checkpoint</span></code> gating runs entirely on the device on every GPU backend.</p>
 <div class="pst-scrollable-table-container"><table class="table">
 <thead>
 <tr class="row-odd"><th class="head"><p>Feature</p></th>
@@ -780,7 +804,7 @@
 <td><p>runs (no acceleration)</p></td>
 <td><p>runs (no acceleration)</p></td>
 </tr>
-<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">qd.graph_do_while</span></code></p></td>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">qd.graph.do_while</span></code></p></td>
 <td><p>hardware accelerated</p></td>
 <td><p>host fallback</p></td>
 <td><p>host fallback</p></td>
@@ -796,7 +820,7 @@
 <td><p>GPU-side</p></td>
 <td><p>host-side</p></td>
 </tr>
-<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">qd.graph_parallel_context</span></code> / <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel</span></code> (sections)</p></td>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">qd.graph.parallel_context</span></code> / <code class="docutils literal notranslate"><span class="pre">qd.graph.parallel</span></code> (sections)</p></td>
 <td><p>concurrent</p></td>
 <td><p>concurrent</p></td>
 <td><p>runs serially</p></td>
@@ -807,8 +831,8 @@
 </tbody>
 </table>
 </div>
-<p>AMDGPU <code class="docutils literal notranslate"><span class="pre">graph_do_while</span></code> falls back to the host-side loop because HIP does not currently expose conditional / while graph nodes (as of <a class="reference external" href="https://www.amd.com/en/products/software/rocm.html">ROCm</a> 7.2).</p>
-<p>Nested and sibling <code class="docutils literal notranslate"><span class="pre">graph_do_while</span></code> loops (and mixing <code class="docutils literal notranslate"><span class="pre">graph_do_while</span></code> with top-level <code class="docutils literal notranslate"><span class="pre">for</span></code>-loops) are <strong>experimental</strong> for now - see <a class="reference internal" href="#nested-loops-and-mixing-with-for-loops">Nested loops and mixing with for-loops</a>.</p>
+<p>AMDGPU <code class="docutils literal notranslate"><span class="pre">qd.graph.do_while</span></code> falls back to the host-side loop because HIP does not currently expose conditional / while graph nodes (as of <a class="reference external" href="https://www.amd.com/en/products/software/rocm.html">ROCm</a> 7.2).</p>
+<p>Nested and sibling <code class="docutils literal notranslate"><span class="pre">qd.graph.do_while</span></code> loops (and mixing <code class="docutils literal notranslate"><span class="pre">qd.graph.do_while</span></code> with top-level <code class="docutils literal notranslate"><span class="pre">for</span></code>-loops) are <strong>experimental</strong> for now - see <a class="reference internal" href="#nested-loops-and-mixing-with-for-loops">Nested loops and mixing with for-loops</a>.</p>
 </section>
 <section id="performance">
 <h2>Performance<a class="headerlink" href="#performance" title="Link to this heading">#</a></h2>
@@ -877,7 +901,7 @@
 <p>After migrating to graph with graph do while we have:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span><span class="p">(</span><span class="n">graph</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">k1</span><span class="p">(</span><span class="n">a</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">NDArray</span><span class="p">,</span> <span class="n">cond</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">NDArray</span><span class="p">):</span>
-    <span class="k">while</span> <span class="n">qd</span><span class="o">.</span><span class="n">graph_do_while</span><span class="p">(</span><span class="n">condition</span><span class="o">=</span><span class="n">cond</span><span class="p">):</span>
+    <span class="k">while</span> <span class="n">qd</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">do_while</span><span class="p">(</span><span class="n">cond</span><span class="p">):</span>
         <span class="n">fn_1</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">cond</span><span class="p">)</span>
         <span class="n">fn_2</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">cond</span><span class="p">)</span>
         <span class="n">fn_3</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">cond</span><span class="p">)</span>
@@ -921,7 +945,7 @@
 <p>After migrating to graph we have something like:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span><span class="p">(</span><span class="n">graph</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">k1</span><span class="p">(</span><span class="n">a</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">NDArray</span><span class="p">,</span> <span class="n">count</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">NDArray</span><span class="p">):</span>
-    <span class="k">while</span> <span class="n">qd</span><span class="o">.</span><span class="n">graph_do_while</span><span class="p">(</span><span class="n">count</span><span class="p">):</span>
+    <span class="k">while</span> <span class="n">qd</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">do_while</span><span class="p">(</span><span class="n">count</span><span class="p">):</span>
         <span class="n">fn_1</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>
         <span class="n">fn_2</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>
         <span class="n">fn_3</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>
@@ -993,7 +1017,7 @@
 <p>When we migrate this to graph do while, we get:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span><span class="p">(</span><span class="n">graph</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">k1</span><span class="p">(</span><span class="n">a</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">NDArray</span><span class="p">,</span> <span class="n">cond</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">NDArray</span><span class="p">):</span>
-    <span class="k">while</span> <span class="n">qd</span><span class="o">.</span><span class="n">graph_do_while</span><span class="p">(</span><span class="n">condition</span><span class="o">=</span><span class="n">cond</span><span class="p">):</span>
+    <span class="k">while</span> <span class="n">qd</span><span class="o">.</span><span class="n">graph</span><span class="o">.</span><span class="n">do_while</span><span class="p">(</span><span class="n">cond</span><span class="p">):</span>
         <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">a</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>  <span class="c1"># off-loaded task (gpu kernel)</span>
             <span class="o">....</span>  <span class="c1"># no need for cond check</span>
         <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">a</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>  <span class="c1"># off-loaded task (gpu kernel)</span>
@@ -1036,10 +1060,10 @@
 <section id="advanced">
 <h2>Advanced<a class="headerlink" href="#advanced" title="Link to this heading">#</a></h2>
 <p>For background on what a GPU kernel launch is, where kernel launch latency comes from, and when reducing it actually helps throughput, see <a class="reference internal" href="performance.html"><span class="std std-doc">Performance</span></a>. This section covers one graph-specific subtlety on top of that background.</p>
-<section id="why-using-graph-do-while-is-relevant-even-without-hardware-support">
-<h3>Why using graph_do_while is relevant even without hardware support<a class="headerlink" href="#why-using-graph-do-while-is-relevant-even-without-hardware-support" title="Link to this heading">#</a></h3>
+<section id="why-using-qd-graph-do-while-is-relevant-even-without-hardware-support">
+<h3>Why using qd.graph.do_while is relevant even without hardware support<a class="headerlink" href="#why-using-qd-graph-do-while-is-relevant-even-without-hardware-support" title="Link to this heading">#</a></h3>
 <p>Recall the earlier example <strong>A while loop, conditional on a device-side scalar tensor</strong>. Written as a plain Python loop, every iteration pays the full Python-side launch latency: Python re-enters the kernel wrapper, and Python itself reads <code class="docutils literal notranslate"><span class="pre">cond[()]</span></code> and evaluates the <code class="docutils literal notranslate"><span class="pre">if</span></code> before deciding whether to loop again.</p>
-<p>On hardware with native device-side conditional graph nodes, <code class="docutils literal notranslate"><span class="pre">graph_do_while</span></code> removes the host from the loop entirely - the ideal case. But even on hardware <em>without</em> that support - where <code class="docutils literal notranslate"><span class="pre">graph_do_while</span></code> falls back to a host-side do-while loop (see <a class="reference internal" href="#backend-support">Backend support</a>) - the launch latency can be slightly reduced compared to the hand-written Python version, because the fallback loop is driven entirely in the C++ runtime rather than in Python. A single Python call enters the runtime, and the runtime then repeats internally: launch the loop body’s tasks, read back the condition flag, and decide whether to iterate again - all in C++, with no trip back through the Python interpreter between iterations.</p>
+<p>On hardware with native device-side conditional graph nodes, <code class="docutils literal notranslate"><span class="pre">qd.graph.do_while</span></code> removes the host from the loop entirely - the ideal case. But even on hardware <em>without</em> that support - where <code class="docutils literal notranslate"><span class="pre">qd.graph.do_while</span></code> falls back to a host-side do-while loop (see <a class="reference internal" href="#backend-support">Backend support</a>) - the launch latency can be slightly reduced compared to the hand-written Python version, because the fallback loop is driven entirely in the C++ runtime rather than in Python. A single Python call enters the runtime, and the runtime then repeats internally: launch the loop body’s tasks, read back the condition flag, and decide whether to iterate again - all in C++, with no trip back through the Python interpreter between iterations.</p>
 </section>
 </section>
 </section>
@@ -1096,7 +1120,8 @@
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#passing-different-arguments">Passing different arguments</a></li>
 </ul>
 </li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#gpu-side-iteration-with-graph-do-while">GPU-side iteration with <code class="docutils literal notranslate"><span class="pre">graph_do_while</span></code></a><ul class="nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#the-qd-graph-namespace">The <code class="docutils literal notranslate"><span class="pre">qd.graph</span></code> namespace</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#gpu-side-iteration-with-qd-graph-do-while">GPU-side iteration with <code class="docutils literal notranslate"><span class="pre">qd.graph.do_while</span></code></a><ul class="nav section-nav flex-column">
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#patterns">Patterns</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#do-while-semantics">Do-while semantics</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#ndarray-vs-field">ndarray vs field</a></li>
@@ -1112,9 +1137,9 @@
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id2">Restrictions</a></li>
 </ul>
 </li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#qd-graph-parallel-sections-with-qd-graph-parallel-context-experimental"><code class="docutils literal notranslate"><span class="pre">qd.graph_parallel</span></code> sections with <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel_context</span></code> <em>(experimental)</em></a><ul class="nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#qd-graph-parallel-sections-with-qd-graph-parallel-context-experimental"><code class="docutils literal notranslate"><span class="pre">qd.graph.parallel</span></code> sections with <code class="docutils literal notranslate"><span class="pre">qd.graph.parallel_context</span></code> <em>(experimental)</em></a><ul class="nav section-nav flex-column">
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#semantics">Semantics</a></li>
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#generating-qd-graph-parallel-sections-from-a-compile-time-sequence">Generating <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel</span></code> sections from a compile-time sequence</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#generating-qd-graph-parallel-sections-from-a-compile-time-sequence">Generating <code class="docutils literal notranslate"><span class="pre">qd.graph.parallel</span></code> sections from a compile-time sequence</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#restrictions-enforced-at-kernel-compile-time">Restrictions (enforced at kernel compile time)</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#backend-behavior">Backend behavior</a></li>
 </ul>
@@ -1128,7 +1153,7 @@
 </ul>
 </li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#advanced">Advanced</a><ul class="nav section-nav flex-column">
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#why-using-graph-do-while-is-relevant-even-without-hardware-support">Why using graph_do_while is relevant even without hardware support</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#why-using-qd-graph-do-while-is-relevant-even-without-hardware-support">Why using qd.graph.do_while is relevant even without hardware support</a></li>
 </ul>
 </li>
 </ul>
