@@ -4,9 +4,9 @@
 
 Fastcache reduces the time it takes to load cached kernels when a new Python process starts.
 
-The standard [offline cache](init_options.md#offline_cache) already persists compiled kernels to disk. However, loading a cached kernel still requires some initial front-end parsing steps, which take non-negligible time. For applications with many kernels this front-end overhead alone can take several seconds.
+The standard [offline cache](init_options.md#offline_cache) already persists compiled kernels to disk. However, loading a cached kernel still requires re-reading and re-analyzing the Python kernel source (parsing it and preparing it for the compiler) before the saved artifact can be matched and reused, which takes non-negligible time. For applications with many kernels this parsing overhead alone can take several seconds.
 
-Fastcache bypasses that front-end work. It computes a cheap cache key from the kernel source text, argument types, and compiler config, and uses it to load the compiled artifact directly.
+Fastcache bypasses that parsing and analysis work. It computes a cheap cache key from the kernel source text, argument types, and compiler config, and uses it to load the compiled artifact directly.
 
 On a Genesis simulator benchmark (`single_franka_envs.py`, Ubuntu 24.04, NVIDIA 5090):
 
@@ -76,6 +76,10 @@ def good_kernel(a: qd.types.NDArray[qd.f32, 1]) -> None:
 
 Sub-functions called by the kernel are also checked - they must not capture external state either.
 
+Reaching data through the members of a [`@qd.data_oriented`](compound_types.md#qddata_oriented) parameter is **not** capture, even though the Python source (e.g. `self.x` inside a data-oriented method) reads like member access rather than a parameter. The object is itself an explicit kernel parameter, and the compiler resolves each accessed member at compile time - either passing it as a real kernel argument (e.g. a `qd.ndarray` member) or compiling it into the kernel (e.g. a primitive or `qd.field` member); see [Compound-type cache keying](#compound-type-cache-keying) for exactly how each member kind is treated and keyed. Either way the member is parameter-derived, not a free variable captured from the enclosing Python scope, which is what the purity check forbids.
+
+The same holds for a [`dataclasses.dataclass`](compound_types.md#dataclassesdataclass) passed as a typed parameter: the compiler flattens each declared field into its own kernel parameter, so `params.dt` inside the kernel is a parameter access, not capture. By default a primitive field is passed as a runtime scalar argument - only its type enters the fastcache key, not its value (annotate the field with `FIELD_METADATA_CACHE_VALUE` to bake the value in instead) - and an ndarray field becomes a runtime external tensor. See [Compound-type cache keying](#compound-type-cache-keying) for the full keying rules.
+
 **Exemptions:** The following may be accessed from the enclosing scope without violating purity:
 
 | Allowed capture | Why |
@@ -98,7 +102,7 @@ Fastcache supports the following parameter types:
 | `torch.Tensor` | Yes | dtype, ndim |
 | `numpy.ndarray` | Yes | dtype, ndim |
 | [`dataclasses.dataclass`](compound_types.md#dataclassesdataclass) | Yes | member types recursively; member values if annotated with `FIELD_METADATA_CACHE_VALUE` (see [Appendix - compound-type cache keying](#compound-type-cache-keying)) |
-| [`@qd.data_oriented`](compound_types.md#qddata_oriented) objects | Yes | member types recursively; primitive member types and values baked into kernel (see [Appendix - compound-type cache keying](#compound-type-cache-keying)) |
+| [`@qd.data_oriented`](compound_types.md#qddata_oriented) objects | Yes | member types recursively; primitive member types and values baked into kernel, unless declared `template_primitives=False`, in which case primitive members contribute their *type* only (see [Appendix - compound-type cache keying](#compound-type-cache-keying)) |
 | `qd.Template` primitives (int, float, bool) | Yes | type and value (baked into kernel) |
 | Non-template primitives (int, float, bool) | Yes | type only |
 | `enum.Enum` | Yes | name and value |
@@ -145,6 +149,14 @@ print(obs.cache_stored)         # True if the compiled kernel was stored to cach
 
 On the first run you'll see `cache_stored=True` but `cache_loaded=False`. On the second run (after `qd.init`), `cache_loaded=True`.
 
+### Why `qd.field` disables fastcache
+
+Fields are allocated contiguously in a single global memory region, one after another. A compiled kernel bakes in the memory bindings (offsets into that region) of the fields it accesses. Because all fields share one layout, redimensioning *any* field - including one completely unrelated to the fields this kernel touches - shifts the offsets of every field allocated after it, so the bindings baked into an already-compiled kernel no longer point at the right memory.
+
+Fastcache reuses a compiled kernel across separate Python processes, keyed only on the kernel source, argument types, and compiler config. That key cannot capture the global field layout, which depends on the sizes and allocation order of *all* fields created in the program - state that is external to this kernel and can differ from run to run. So a kernel loaded from cache in a later process could carry field bindings that no longer match the current layout, silently reading or writing the wrong memory.
+
+For this reason a kernel that touches any `qd.field` - directly, or through a `@qd.data_oriented` or other compound-type member - can never use fastcache: fastcache is disabled for that call and the kernel falls back to normal compilation. If you need fastcache, use `qd.ndarray` instead: an ndarray is passed as a runtime parameter (a data pointer bound at launch), so no field-layout state is baked into the kernel.
+
 ## Appendix
 
 ### Compound-type cache keying
@@ -154,10 +166,10 @@ As part of generating the fastcache cache key, fastcache hashes each kernel para
 **`@qd.data_oriented`:** each attribute in `vars(obj)` is hashed. For each child:
 
 - `qd.ndarray` member - `(dtype, ndim, layout)` is included in the cache key. Element values are not.
-- Primitive (`int` / `float` / `bool` / `enum.Enum`) member - value is baked into the kernel (same semantics as a `qd.Template` primitive). Two instances of the same class with different primitive member values get different cache entries.
+- Primitive (`int` / `float` / `bool` / `enum.Enum`) member - value is baked into the kernel (same semantics as a `qd.Template` primitive). Two instances of the same class with different primitive member values get different cache entries. **Exception:** if the class is declared `@qd.data_oriented(template_primitives=False)`, primitive members are lifted to runtime scalar args rather than baked, so only their *type* contributes to the cache key - two instances with different primitive values share one cache entry and changing a value does not recompile.
 - Nested `@qd.data_oriented` member - recurses.
 - Nested `dataclasses.dataclass` member - recurses (with the dataclass rules below).
-- `qd.field` member - fastcache is disabled for the entire kernel call. The kernel still runs via normal compilation; a warn-level log line is emitted.
+- `qd.field` member - fastcache is disabled for the entire kernel call. The kernel still runs via normal compilation; a warn-level log line is emitted. See [Why `qd.field` disables fastcache](#why-qdfield-disables-fastcache) for the reason.
 
 **`dataclasses.dataclass`:** each declared member is hashed. For each member, only the *type* is included in the cache key by default - **not** the value. To include a member's value, annotate it:
 

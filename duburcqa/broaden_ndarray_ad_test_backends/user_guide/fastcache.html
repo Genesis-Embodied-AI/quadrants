@@ -432,8 +432,8 @@
 <section id="what-it-is">
 <h2>What it is<a class="headerlink" href="#what-it-is" title="Link to this heading">#</a></h2>
 <p>Fastcache reduces the time it takes to load cached kernels when a new Python process starts.</p>
-<p>The standard <a class="reference internal" href="init_options.html#offline-cache"><span class="std std-ref">offline cache</span></a> already persists compiled kernels to disk. However, loading a cached kernel still requires some initial front-end parsing steps, which take non-negligible time. For applications with many kernels this front-end overhead alone can take several seconds.</p>
-<p>Fastcache bypasses that front-end work. It computes a cheap cache key from the kernel source text, argument types, and compiler config, and uses it to load the compiled artifact directly.</p>
+<p>The standard <a class="reference internal" href="init_options.html#offline-cache"><span class="std std-ref">offline cache</span></a> already persists compiled kernels to disk. However, loading a cached kernel still requires re-reading and re-analyzing the Python kernel source (parsing it and preparing it for the compiler) before the saved artifact can be matched and reused, which takes non-negligible time. For applications with many kernels this parsing overhead alone can take several seconds.</p>
+<p>Fastcache bypasses that parsing and analysis work. It computes a cheap cache key from the kernel source text, argument types, and compiler config, and uses it to load the compiled artifact directly.</p>
 <p>On a Genesis simulator benchmark (<code class="docutils literal notranslate"><span class="pre">single_franka_envs.py</span></code>, Ubuntu 24.04, NVIDIA 5090):</p>
 <div class="pst-scrollable-table-container"><table class="table">
 <thead>
@@ -521,6 +521,8 @@
 </pre></div>
 </div>
 <p>Sub-functions called by the kernel are also checked - they must not capture external state either.</p>
+<p>Reaching data through the members of a <a class="reference internal" href="compound_types.html#qd-data-oriented"><span class="std std-ref"><code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code></span></a> parameter is <strong>not</strong> capture, even though the Python source (e.g. <code class="docutils literal notranslate"><span class="pre">self.x</span></code> inside a data-oriented method) reads like member access rather than a parameter. The object is itself an explicit kernel parameter, and the compiler resolves each accessed member at compile time - either passing it as a real kernel argument (e.g. a <code class="docutils literal notranslate"><span class="pre">qd.ndarray</span></code> member) or compiling it into the kernel (e.g. a primitive or <code class="docutils literal notranslate"><span class="pre">qd.field</span></code> member); see <a class="reference internal" href="#compound-type-cache-keying">Compound-type cache keying</a> for exactly how each member kind is treated and keyed. Either way the member is parameter-derived, not a free variable captured from the enclosing Python scope, which is what the purity check forbids.</p>
+<p>The same holds for a <a class="reference internal" href="compound_types.html#dataclasses-dataclass"><span class="std std-ref"><code class="docutils literal notranslate"><span class="pre">dataclasses.dataclass</span></code></span></a> passed as a typed parameter: the compiler flattens each declared field into its own kernel parameter, so <code class="docutils literal notranslate"><span class="pre">params.dt</span></code> inside the kernel is a parameter access, not capture. By default a primitive field is passed as a runtime scalar argument - only its type enters the fastcache key, not its value (annotate the field with <code class="docutils literal notranslate"><span class="pre">FIELD_METADATA_CACHE_VALUE</span></code> to bake the value in instead) - and an ndarray field becomes a runtime external tensor. See <a class="reference internal" href="#compound-type-cache-keying">Compound-type cache keying</a> for the full keying rules.</p>
 <p><strong>Exemptions:</strong> The following may be accessed from the enclosing scope without violating purity:</p>
 <div class="pst-scrollable-table-container"><table class="table">
 <thead>
@@ -573,7 +575,7 @@
 </tr>
 <tr class="row-even"><td><p><a class="reference internal" href="compound_types.html#qd-data-oriented"><span class="std std-ref"><code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code></span></a> objects</p></td>
 <td><p>Yes</p></td>
-<td><p>member types recursively; primitive member types and values baked into kernel (see <a class="reference internal" href="#compound-type-cache-keying">Appendix - compound-type cache keying</a>)</p></td>
+<td><p>member types recursively; primitive member types and values baked into kernel, unless declared <code class="docutils literal notranslate"><span class="pre">template_primitives=False</span></code>, in which case primitive members contribute their <em>type</em> only (see <a class="reference internal" href="#compound-type-cache-keying">Appendix - compound-type cache keying</a>)</p></td>
 </tr>
 <tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">qd.Template</span></code> primitives (int, float, bool)</p></td>
 <td><p>Yes</p></td>
@@ -634,6 +636,12 @@
 </div>
 <p>On the first run you’ll see <code class="docutils literal notranslate"><span class="pre">cache_stored=True</span></code> but <code class="docutils literal notranslate"><span class="pre">cache_loaded=False</span></code>. On the second run (after <code class="docutils literal notranslate"><span class="pre">qd.init</span></code>), <code class="docutils literal notranslate"><span class="pre">cache_loaded=True</span></code>.</p>
 </section>
+<section id="why-qd-field-disables-fastcache">
+<h3>Why <code class="docutils literal notranslate"><span class="pre">qd.field</span></code> disables fastcache<a class="headerlink" href="#why-qd-field-disables-fastcache" title="Link to this heading">#</a></h3>
+<p>Fields are allocated contiguously in a single global memory region, one after another. A compiled kernel bakes in the memory bindings (offsets into that region) of the fields it accesses. Because all fields share one layout, redimensioning <em>any</em> field - including one completely unrelated to the fields this kernel touches - shifts the offsets of every field allocated after it, so the bindings baked into an already-compiled kernel no longer point at the right memory.</p>
+<p>Fastcache reuses a compiled kernel across separate Python processes, keyed only on the kernel source, argument types, and compiler config. That key cannot capture the global field layout, which depends on the sizes and allocation order of <em>all</em> fields created in the program - state that is external to this kernel and can differ from run to run. So a kernel loaded from cache in a later process could carry field bindings that no longer match the current layout, silently reading or writing the wrong memory.</p>
+<p>For this reason a kernel that touches any <code class="docutils literal notranslate"><span class="pre">qd.field</span></code> - directly, or through a <code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code> or other compound-type member - can never use fastcache: fastcache is disabled for that call and the kernel falls back to normal compilation. If you need fastcache, use <code class="docutils literal notranslate"><span class="pre">qd.ndarray</span></code> instead: an ndarray is passed as a runtime parameter (a data pointer bound at launch), so no field-layout state is baked into the kernel.</p>
+</section>
 </section>
 <section id="appendix">
 <h2>Appendix<a class="headerlink" href="#appendix" title="Link to this heading">#</a></h2>
@@ -643,10 +651,10 @@
 <p><strong><code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code>:</strong> each attribute in <code class="docutils literal notranslate"><span class="pre">vars(obj)</span></code> is hashed. For each child:</p>
 <ul class="simple">
 <li><p><code class="docutils literal notranslate"><span class="pre">qd.ndarray</span></code> member - <code class="docutils literal notranslate"><span class="pre">(dtype,</span> <span class="pre">ndim,</span> <span class="pre">layout)</span></code> is included in the cache key. Element values are not.</p></li>
-<li><p>Primitive (<code class="docutils literal notranslate"><span class="pre">int</span></code> / <code class="docutils literal notranslate"><span class="pre">float</span></code> / <code class="docutils literal notranslate"><span class="pre">bool</span></code> / <code class="docutils literal notranslate"><span class="pre">enum.Enum</span></code>) member - value is baked into the kernel (same semantics as a <code class="docutils literal notranslate"><span class="pre">qd.Template</span></code> primitive). Two instances of the same class with different primitive member values get different cache entries.</p></li>
+<li><p>Primitive (<code class="docutils literal notranslate"><span class="pre">int</span></code> / <code class="docutils literal notranslate"><span class="pre">float</span></code> / <code class="docutils literal notranslate"><span class="pre">bool</span></code> / <code class="docutils literal notranslate"><span class="pre">enum.Enum</span></code>) member - value is baked into the kernel (same semantics as a <code class="docutils literal notranslate"><span class="pre">qd.Template</span></code> primitive). Two instances of the same class with different primitive member values get different cache entries. <strong>Exception:</strong> if the class is declared <code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented(template_primitives=False)</span></code>, primitive members are lifted to runtime scalar args rather than baked, so only their <em>type</em> contributes to the cache key - two instances with different primitive values share one cache entry and changing a value does not recompile.</p></li>
 <li><p>Nested <code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code> member - recurses.</p></li>
 <li><p>Nested <code class="docutils literal notranslate"><span class="pre">dataclasses.dataclass</span></code> member - recurses (with the dataclass rules below).</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">qd.field</span></code> member - fastcache is disabled for the entire kernel call. The kernel still runs via normal compilation; a warn-level log line is emitted.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">qd.field</span></code> member - fastcache is disabled for the entire kernel call. The kernel still runs via normal compilation; a warn-level log line is emitted. See <a class="reference internal" href="#why-qd-field-disables-fastcache">Why <code class="docutils literal notranslate"><span class="pre">qd.field</span></code> disables fastcache</a> for the reason.</p></li>
 </ul>
 <p><strong><code class="docutils literal notranslate"><span class="pre">dataclasses.dataclass</span></code>:</strong> each declared member is hashed. For each member, only the <em>type</em> is included in the cache key by default - <strong>not</strong> the value. To include a member’s value, annotate it:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">dataclasses</span>
@@ -726,6 +734,7 @@
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#cache-keying">Cache keying</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#advanced">Advanced</a><ul class="nav section-nav flex-column">
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#diagnostics">Diagnostics</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#why-qd-field-disables-fastcache">Why <code class="docutils literal notranslate"><span class="pre">qd.field</span></code> disables fastcache</a></li>
 </ul>
 </li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#appendix">Appendix</a><ul class="nav section-nav flex-column">
