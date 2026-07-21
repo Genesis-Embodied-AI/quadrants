@@ -5248,6 +5248,42 @@ def test_adstack_scalarized_tensor_component_loop_trip_grad_correct():
 
 
 @test_utils.test(require=qd.extension.adstack, cfg_optimization=False)
+def test_adstack_loop_carried_vector_component_grad_correct():
+    # A multi-component `qd.Vector` carried across a field-bounded loop and rebuilt from its own previous components
+    # each iteration must have its reverse-mode gradient read each iteration's component value, not the last one. The
+    # loop-carried tensor local is read component-wise through a `MatrixPtr`, so before the fix the adstack judge never
+    # saw a load of it and left it a single overwrite-each-iteration slot; the reverse then read the final iteration's
+    # component for every reverse step, scaling the second-order term of the gradient by a spurious extra factor. The
+    # scalar-valued analogue was already correct, so this guards specifically the tensor component read off the stack.
+    n_env = 2
+    x_np = np.array([0.3, 0.7], dtype=np.float32)
+
+    n_iter = qd.field(qd.i32, shape=())
+    x = qd.field(qd.f32, shape=n_env, needs_grad=True)
+    out = qd.field(qd.f32, shape=n_env, needs_grad=True)
+
+    @qd.kernel
+    def compute():
+        for i_env in range(n_env):
+            q = qd.Vector([x[i_env], x[i_env] * 0.5], dt=qd.f32)
+            for _ in range(n_iter[None]):
+                q = qd.Vector([q[0] * q[0], q[1] + q[0] * 0.1], dt=qd.f32)
+            out[i_env] = q[1]
+
+    n_iter[None] = 2
+    x.from_numpy(x_np)
+    compute()
+    out.grad.from_numpy(np.ones(n_env, dtype=np.float32))
+    x.grad.fill(0.0)
+    compute.grad()
+
+    # After two iterations out = 0.6 * x + 0.1 * x^2, so d(out)/dx = 0.6 + 0.2 * x.
+    grad = x.grad.to_numpy()
+    for i in range(n_env):
+        assert grad[i] == pytest.approx(0.6 + 0.2 * x_np[i], rel=1e-5)
+
+
+@test_utils.test(require=qd.extension.adstack, cfg_optimization=False)
 def test_adstack_offset_array_difference_loop_trip_grad_correct():
     # Inner loop trip count is the difference of two adjacent offset-array reads (`starts[i + 1] - starts[i]`, the
     # ragged-segment length pattern); the adstack must be sized for the widest segment. The outer parallel `ndrange`
