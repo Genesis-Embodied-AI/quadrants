@@ -378,7 +378,7 @@
 <tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.kernel_impl.kernel" title="quadrants.lang.kernel_impl.kernel"><code class="xref py py-obj docutils literal notranslate"><span class="pre">kernel</span></code></a>(…)</p></td>
 <td><p>Marks a function as a Quadrants kernel.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.kernel_impl.data_oriented" title="quadrants.lang.kernel_impl.data_oriented"><code class="xref py py-obj docutils literal notranslate"><span class="pre">data_oriented</span></code></a>(cls)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.kernel_impl.data_oriented" title="quadrants.lang.kernel_impl.data_oriented"><code class="xref py py-obj docutils literal notranslate"><span class="pre">data_oriented</span></code></a>([cls, template_primitives])</p></td>
 <td><p>Marks a class as Quadrants compatible.</p></td>
 </tr>
 </tbody>
@@ -495,7 +495,7 @@ resume from via <code class="docutils literal notranslate"><span class="pre">ker
 
 <dl class="py function">
 <dt class="sig sig-object py" id="quadrants.lang.kernel_impl.data_oriented">
-<span class="sig-prename descclassname"><span class="pre">quadrants.lang.kernel_impl.</span></span><span class="sig-name descname"><span class="pre">data_oriented</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">cls</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/kernel_impl.html#data_oriented"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.kernel_impl.data_oriented" title="Link to this definition">#</a></dt>
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.kernel_impl.</span></span><span class="sig-name descname"><span class="pre">data_oriented</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">cls</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">template_primitives</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/kernel_impl.html#data_oriented"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.kernel_impl.data_oriented" title="Link to this definition">#</a></dt>
 <dd><p>Marks a class as Quadrants compatible.</p>
 <p>To allow for modularized code, Quadrants provides this decorator so that
 Quadrants kernels can be defined inside a class.</p>
@@ -517,7 +517,19 @@ Quadrants kernels can be defined inside a class.</p>
 </div>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>cls</strong> (<em>Class</em>) – the class to be decorated</p>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>cls</strong> (<em>Class</em>) – the class to be decorated</p></li>
+<li><p><strong>template_primitives</strong> (<em>bool</em>) – controls how the primitive (<code class="docutils literal notranslate"><span class="pre">int</span></code> / <code class="docutils literal notranslate"><span class="pre">float</span></code> / <code class="docutils literal notranslate"><span class="pre">bool</span></code>)
+members of instances of this class are treated when an instance is passed into a kernel
+as a <code class="docutils literal notranslate"><span class="pre">qd.template()</span></code> argument (including as the implicit <code class="docutils literal notranslate"><span class="pre">self</span></code> of a member kernel).
+When <code class="docutils literal notranslate"><span class="pre">True</span></code> (the default, and the historical behaviour) each primitive member is baked
+into the compiled kernel as a compile-time constant: mutating it afterwards does not take
+effect until the kernel is re-specialised. When <code class="docutils literal notranslate"><span class="pre">False</span></code> every primitive member accessed
+by the kernel is instead lifted into a runtime scalar kernel argument, so its value is
+read fresh on every launch and may be mutated without recompiling. A primitive lifted
+this way may not be used inside <code class="docutils literal notranslate"><span class="pre">qd.static(...)</span></code> (doing so raises
+<code class="docutils literal notranslate"><span class="pre">QuadrantsSyntaxError</span></code>), since that context requires a compile-time constant.</p></li>
+</ul>
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
 <dd class="field-even"><p>The decorated class.</p>
