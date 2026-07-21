@@ -24,6 +24,7 @@ from quadrants.lang.ast.ast_transformer_utils import (
     LoopStatus,
     ReturnStatus,
     get_decorator,
+    maybe_lifted_primitive,
 )
 from quadrants.lang.ast.ast_transformers.call_transformer import CallTransformer
 from quadrants.lang.ast.ast_transformers.checkpoint_transformer import (
@@ -757,6 +758,10 @@ class ASTTransformer(Builder):
                 node.ptr = getattr(tensor_ops, node.attr)
                 setattr(node, "caller", node.value.ptr)
         elif dataclasses.is_dataclass(node.value.ptr):
+            lifted = maybe_lifted_primitive(ctx, node.value.ptr, node.attr)
+            if lifted is not None:
+                node.ptr = lifted
+                return node.ptr
             node.ptr = getattr(node.value.ptr, node.attr)
             from quadrants._tensor_wrapper import (  # pylint: disable=C0415
                 Tensor as _TensorClass,
@@ -775,6 +780,10 @@ class ASTTransformer(Builder):
             if groups and node.attr in groups:
                 count, dtype, naming_fn = groups[node.attr]
                 node.ptr = _UnpackedVectorRef(node.value.ptr, node.attr, count, dtype, naming_fn)
+                return node.ptr
+            lifted = maybe_lifted_primitive(ctx, node.value.ptr, node.attr)
+            if lifted is not None:
+                node.ptr = lifted
                 return node.ptr
             node.ptr = getattr(node.value.ptr, node.attr)
             # ``qd.Tensor`` wrappers reached via attribute access on a ``@qd.data_oriented`` struct field at AST-build

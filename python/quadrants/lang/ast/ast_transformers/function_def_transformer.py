@@ -29,6 +29,9 @@ from quadrants.lang.ast.ast_transformer_utils import (
 from quadrants.lang.ast.ast_transformers.checkpoint_transformer import (
     CheckpointTransformer,
 )
+from quadrants.lang.ast.ast_transformers.struct_primitive_predeclarer import (
+    predeclare_struct_primitives,
+)
 from quadrants.lang.ast.symbol_resolver import ASTResolver
 from quadrants.lang.buffer_view import BufferView
 from quadrants.lang.exception import (
@@ -221,6 +224,7 @@ class FunctionDefTransformer:
             )
 
         FunctionDefTransformer._predeclare_struct_ndarrays(ctx)
+        predeclare_struct_primitives(ctx)
         compiling_callable.finalize_params()
         # remove original args
         node.args.args = []
