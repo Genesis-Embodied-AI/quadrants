@@ -8,31 +8,32 @@ The companion read-side primitive `qd.volatile_load(target)` is documented at th
 
 All atomic ops follow the same shape: `qd.atomic_op(x, y)` performs `x = op(x, y)` atomically and returns the **old** value of `x`. `x` must be a writable memory target (a field element, ndarray element, or matrix slot); scalars and constant expressions are not allowed.
 
-"int" below means any of `i32` / `u32` / `i64` / `u64`. "Floats" means any of `f16` / `f32` / `f64`. Unless otherwise noted, "native" means the op lowers to a single hardware atomic instruction (or its SPIR-V / LLVM-IR equivalent), and "CAS" means a software compare-and-swap loop emitted around a non-atomic compute.
+"int" below means any of `i32` / `u32` / `i64` / `u64`. "Floats" means any of `f16` / `f32` / `f64`. Unless otherwise noted, "native" means the op lowers to a single hardware atomic instruction (or the backend's direct equivalent), and "CAS" means a software compare-and-swap loop the compiler emits around a non-atomic computation.
 
 | Op                                          | CUDA                                       | AMDGPU                                | SPIR-V (Vulkan / Metal)                                | CPU                              |
 |---------------------------------------------|--------------------------------------------|---------------------------------------|--------------------------------------------------------|----------------------------------|
-| `atomic_add`                                | int / f32 native; f64 native (sm_60+)      | int / f32 native; f64 hardware-dependent | int native; Metal global f32 native (Apple7+/Mac2+); Vulkan f16 / f32 / f64 capability-gated, else CAS; Metal f16 / f64 / shared float via CAS | int / f32 / f64 native; f16 via CAS |
-| `atomic_sub`                                | rewritten to `atomic_add(x, -y)` at IR-construction time - see note below | (same as `atomic_add`) | (same as `atomic_add`) | (same as `atomic_add`) |
+| `atomic_add`                                | int / f32 native; f64 native (sm_60+)      | int / f32 native; f64 hardware-dependent | int native; f16 / f32 / f64 capability-gated, else CAS | int / f32 / f64 native; f16 via CAS |
+| `atomic_sub`                                | behaves as `atomic_add(x, -y)`; see note below | (same) | (same) | (same) |
 | `atomic_mul`                                | CAS on every dtype                         | CAS                                   | CAS                                                    | CAS                              |
 | `atomic_min`, `atomic_max`                  | int native; floats via CAS                 | int native; floats via CAS            | int native; floats via CAS                             | int native; floats via CAS       |
 | `atomic_and`, `atomic_or`, `atomic_xor`     | int only (native)                          | int only (native)                     | int only (native)                                      | int only (native)                |
-| `atomic_exchange`                           | int / float native (`atomicExch`)          | int / float native (`*_atomic_swap`)  | int native; f32 / f64 global via uint-bitcast `OpAtomicExchange`; f16, shared float, workgroup f64 deferred‡ | int / float native (`xchg`)      |
-| `atomic_cas`                                | int native (`atomicCAS`)                   | int native (`*_atomic_cmpswap`)       | int native (`OpAtomicCompareExchange`); f32 / f64 rejected at compile time§                               | int native (`cmpxchg`)           |
+| `atomic_exchange`                           | int / float native (`atomicExch`)          | int / float native (`*_atomic_swap`)  | int native; f32 / f64 global supported (`OpAtomicExchange`); f16, shared float, workgroup f64 deferred[2] | int / float native (`xchg`)      |
+| `atomic_cas`                                | int native (`atomicCAS`)                   | int native (`*_atomic_cmpswap`)       | int native (`OpAtomicCompareExchange`); f32 / f64 rejected at compile time[3]                             | int native (`cmpxchg`)           |
 
 A few cross-cutting notes that the cells above abbreviate:
 
-- **`atomic_sub` is not a separate operation.** Every `atomic_sub(x, y)` is rewritten into `atomic_add(x, -y)` before code generation, so per-backend support and per-dtype behavior are exactly those of `atomic_add`.
+- **`atomic_sub` behaves exactly like `atomic_add`.** Every `atomic_sub(x, y)` is treated as `atomic_add(x, -y)`, so its per-backend support and per-dtype behavior are exactly those of `atomic_add`.
 - **CAS-loop ops are noticeably slower than native atomics**, especially under contention — every contending thread retries the load + compare-exchange until it wins. Prefer pre-aggregating into a register or shared array and issuing a single atomic at the end of the block where possible.
 - **f16 floats always use a CAS loop** (no native f16 atomic on any backend except SPIR-V with the right capability bit).
-- **On CPU, "native" does not guarantee a single machine instruction.** On x86 and other architectures without hardware float atomics, the compiler backend lowers native float `atomic_add` (and integer `min` / `max`) to a CAS loop in machine code. Under high contention the performance is similar to the explicit "CAS" entries; the difference is that "native" ops benefit from hardware acceleration where available.
-- **SPIR-V capability bits** (`spirv_has_atomic_float_add`, `spirv_has_atomic_float64_add`, `spirv_has_atomic_float16_add`, plus the matching `spirv_has_shared_atomic_float*_add` bits for workgroup memory) decide whether `atomic_add` lowers to a native `OpAtomicFAddEXT` or a uint-backed CAS; the choice is made per call at code-generation time.
-- **Metal float `atomic_add`.** On Apple7+ / Mac2+ Quadrants advertises `spirv_has_atomic_float` / `spirv_has_atomic_float_add`, so global / device-buffer `f32` `atomic_add` (and `atomic_sub`, rewritten to add) lowers to `OpAtomicFAddEXT`: a native `atomic_fetch_add` on a `device atomic_float` in the generated Metal Shading Language (MSL). That path requires the MSL 3.0 target, which Quadrants selects automatically. Metal does **not** support threadgroup `atomic_float`, and has no native float min/max / f16 / f64 atomics, so shared float atomics and those dtypes stay on the uint CAS path. Vulkan still reads the same capability bits from `VK_EXT_shader_atomic_float*`.
-- **`i64` / `u64` atomic RMW is not portable to Metal.** MSL only exposes 64-bit atomics as `atomic_fetch_min` / `atomic_fetch_max` on `uint64` (Apple GPU family 9+, M3 / A17); `atomic_add` / `sub` / `mul` and the bitwise family are unavailable on every Apple GPU. On Metal, 64-bit integer atomics currently fail when the kernel is compiled. Use `i32` / `u32` for Metal portability. CUDA, AMDGPU, and Vulkan with `VK_KHR_shader_atomic_int64` are unaffected.
+- **On CPU, "native" does not guarantee a single machine instruction.** On x86 and other architectures without hardware float atomics, native float `atomic_add` (and integer `min` / `max`) runs as a CAS loop in machine code. Under high contention the performance is similar to the explicit "CAS" entries; the difference is that "native" ops benefit from hardware acceleration where available.
+- **On Vulkan / Metal, whether float `atomic_add` is native depends on the device.** If the device reports the matching float-atomic capability, `atomic_add` uses a native float atomic; otherwise it falls back to a CAS loop.
+- **`i64` / `u64` atomic read-modify-write is not portable to Metal.** Metal only exposes 64-bit atomics as `atomic_min` / `atomic_max` on unsigned 64-bit values (Apple GPU family 9+, i.e. M3 / A17 and newer); `atomic_add` / `sub` / `mul` and the bitwise family are unavailable on every Apple GPU. Attempting a 64-bit integer atomic under Metal currently fails when the shader is built. Use `i32` / `u32` for Metal portability. CUDA, AMDGPU, and Vulkan with the `VK_KHR_shader_atomic_int64` extension are unaffected.
 
-‡ `atomic_exchange` on `f16`, on shared (`qd.simt.block.SharedArray`) float arrays, and on f64 in workgroup memory is not yet wired up. Global-memory `atomic_exchange` on every other dtype/backend combination listed above is supported; the SPIR-V path bitcasts through the corresponding uint type so no `spirv_has_atomic_float_*` capability is required.
+[1] `i64` / `u64` atomic read-modify-write is **not portable to Metal**. Metal only exposes 64-bit atomics as `atomic_min` / `atomic_max` on unsigned 64-bit values, starting at Apple GPU family 9 (M3 / A17 and newer); `atomic_add` / `sub` / `mul` and the bitwise family are unavailable on every Apple GPU. Trying to use a 64-bit integer atomic under Metal currently fails when the shader is built. Use `i32` / `u32` if you need cross-Metal portability. CUDA, AMDGPU, and Vulkan with the `VK_KHR_shader_atomic_int64` extension are unaffected.
 
-§ `atomic_cas` on `f32` / `f64` is rejected at compile time (raises `QuadrantsTypeError`). Integer CAS (`i32` / `u32` / `i64` / `u64`) is supported on every backend listed in the table above, with the same Metal caveat for `i64` / `u64` (†) as the rest of the 64-bit integer atomic family.
+[2] `atomic_exchange` on `f16`, on shared (`qd.simt.block.SharedArray`) float arrays, and on f64 in shared (workgroup) memory is not yet supported. Global-memory `atomic_exchange` on every other dtype/backend combination listed above is supported; on Vulkan / Metal it works for float types without needing any special device capability.
+
+[3] `atomic_cas` on `f32` / `f64` is rejected at compile time (raises `QuadrantsTypeError`). Integer CAS (`i32` / `u32` / `i64` / `u64`) is supported on every backend listed in the table above, with the same Metal caveat for `i64` / `u64` ([1]) as the rest of the 64-bit integer atomic family.
 
 All atomic ops can be called on either global memory (fields, ndarrays) or block-shared memory (`qd.simt.block.SharedArray`). They are sequentially consistent on the location they touch; they are **not** memory fences for the rest of the address space - to publish other writes alongside an atomic, pair the atomic with `qd.simt.block.mem_fence()` (block scope) or `qd.simt.grid.mem_fence()` (device scope).
 
@@ -59,10 +60,10 @@ Properties common to every `qd.atomic_*`:
 
 Atomically writes back `min(x, y)` (resp. `max(x, y)`); returns the old value of `x`. Float min/max are `minNum` / `maxNum`-style: if exactly one operand is `NaN`, the non-`NaN` operand wins.
 
-| Backends                  | `f16`                                  | `f32`, `f64`                       | Both inputs `NaN`                          |
-|---------------------------|----------------------------------------|------------------------------------|--------------------------------------------|
-| CPU, CUDA, AMDGPU (LLVM)  | CAS over `llvm.minnum` / `llvm.maxnum` | LLVM `atomicrmw fmin` / `fmax`           | `NaN` (per LLVM `minnum` / `maxnum` spec)  |
-| Vulkan, Metal (SPIR-V)    | capability-gated, usually unsupported  | CAS loop with GLSL `FMin` / `FMax`       | undefined per spec; `NaN` in practice      |
+| Backends                | `f16` min/max                          | Both inputs `NaN`                        |
+|-------------------------|----------------------------------------|------------------------------------------|
+| CPU, CUDA, AMDGPU       | CAS loop                               | `NaN`                                     |
+| Vulkan, Metal (SPIR-V)  | capability-gated, usually unsupported  | undefined per spec; `NaN` in practice    |
 
 ### `qd.atomic_and(x, y)` / `qd.atomic_or(x, y)` / `qd.atomic_xor(x, y)`
 
@@ -70,7 +71,7 @@ Bitwise atomics. Integer dtypes only — passing `f32` / `f64` raises a type err
 
 ### `qd.atomic_sub(x, y)` / `qd.atomic_mul(x, y)`
 
-Atomic subtract and atomic multiply. `atomic_sub` is rewritten to `atomic_add(x, -y)` before code generation, so its per-backend behavior is identical to `atomic_add`. `atomic_mul` always lowers to a CAS loop - no single hardware atomic corresponds to multiply - and is intentionally not heavily optimized; prefer reducing to a different scheme on hot paths.
+Atomic subtract and atomic multiply. `atomic_sub` behaves exactly like `atomic_add(x, -y)`, so its per-backend behavior is identical to `atomic_add`. `atomic_mul` always uses a CAS loop - no backend has a native atomic-multiply instruction - and is intentionally not heavily optimized; prefer reducing to a different scheme on hot paths.
 
 ### `qd.atomic_exchange(x, y)`
 
@@ -130,11 +131,11 @@ def cas_loop_max():
         # Otherwise some other thread won the race; loop back and re-read.
 ```
 
-Currently restricted to integer dtypes (`i32` / `u32` / `i64` / `u64`); float CAS is rejected at compile time. The Metal `i64` / `u64` caveat noted in the atomics table above applies here too. There is no shared-memory CAS path yet.
+Currently restricted to integer dtypes (`i32` / `u32` / `i64` / `u64`); float CAS is rejected at compile time. The Metal `i64` / `u64` caveat in the support table footnote applies here too. There is no shared-memory CAS path yet.
 
 ### `qd.volatile_load(target)`
 
-Read `target` from memory with **volatile** semantics: the compiler is forbidden from caching, hoisting, or merging the load with prior reads of the same address. Strictly speaking this is not an atomic op (it does not modify the cell, and per-thread it is no more atomic than an ordinary load) — it lives on this page because it is the read-side counterpart to `qd.atomic_*` in producer / consumer patterns. Without it, a spin-wait loop reading the location written by another thread or block is undefined at the LLVM-IR / SPIR-V level.
+Read `target` from memory with **volatile** semantics: the compiler is forbidden from caching, hoisting, or merging the load with prior reads of the same address. Strictly speaking this is not an atomic op (it does not modify the cell, and per-thread it is no more atomic than an ordinary load) - it lives on this page because it is the read-side counterpart to `qd.atomic_*` in producer / consumer patterns. Without it, a spin-wait loop reading a location written by another thread or block has undefined behavior.
 
 ```python
 val = qd.volatile_load(target)
@@ -143,22 +144,9 @@ val = qd.volatile_load(target)
 #   not be reused from a register or hoisted out of an enclosing loop.
 ```
 
-`target` must be a global lvalue (a field or ndarray subscript); function-scope local arrays are rejected because a local cannot be observed by another thread. Bit-packed quantized fields are also rejected (per-field volatile semantics on a shared physical word are not meaningful).
+`target` must be a global lvalue (a field or ndarray subscript); function-scope local arrays are rejected because a local cannot be observed by another thread. Bit-packed / quantized fields (where several logical values share one physical memory word) are also rejected, because volatile semantics on one packed value inside a shared word are not meaningful.
 
-#### Under the hood: lowering and suppressed optimizations
-
-| Backend          | Lowering                                                                                  |
-|------------------|-------------------------------------------------------------------------------------------|
-| CUDA             | LLVM `load volatile` → PTX `ld.volatile.global`.                                          |
-| AMDGPU           | LLVM `load volatile` → unhoistable `global_load_*` (the optimizer is inhibited from forwarding / merging). |
-| Vulkan / Metal   | SPIR-V `OpLoad` with the `Volatile` `MemoryAccess` mask, propagated through SPIRV-Cross to a re-read on every use in the generated MSL / GLSL. |
-| CPU (x86_64)     | LLVM `load volatile` (the optimizer cannot hoist or merge it; the runtime cost is identical to an ordinary load on x86). |
-
-Quadrants additionally suppresses the optimizations that would otherwise let an aliased rewrite slip past code generation:
-
-- `cache_loop_invariant_global_vars` does not hoist a volatile load out of an enclosing loop.
-- `simplify` does not replace a volatile load with the value of an earlier load of the same address.
-- On CUDA, the `__ldg` / `!invariant.load` read-only-cache fast path is suppressed for volatile loads (the two attributes are contradictory).
+The volatile guarantee holds even inside loops and across repeated reads of the same address: the compiler will not hoist the load out of an enclosing loop, reuse the value of an earlier read, or serve it from a read-only cache. Per-backend lowering details are in the advanced section below.
 
 #### Spin-wait pattern (the canonical use case)
 
@@ -196,7 +184,11 @@ The decoupled-look-back scan in [grid](grid.md) shows the full pattern.
 - **`f64` atomics fall off the fast path** on most backends; if you only need monotonic accumulation, consider Kahan summation in registers and a single atomic-add at the end of the block.
 - **`atomic_mul` is generally a CAS loop** under the hood; don't put it on the hot path.
 
-### Atomic visibility scope across backends (advanced)
+## Under the hood (advanced)
+
+The rest of this page describes backend and compiler internals. You do not need any of it to use the atomic ops above; it is here for readers debugging performance or backend-specific behavior.
+
+### Atomic visibility scope across backends
 
 Every `qd.atomic_*` is emitted at **device-wide scope**: visible to all threads on the GPU executing the kernel, but not required to be coherent with the host CPU mid-kernel. The host only observes results once the kernel completes, at which point the launcher's stream-sync flushes everything regardless. Choosing device scope (rather than the strongest "system" scope) lets every backend lower the op to a single hardware atomic instruction instead of a software CAS retry loop, which matters for correctness as much as for speed: under heavy contention, a CAS loop on a non-converging op like `atomic_xor` can livelock.
 
@@ -245,7 +237,16 @@ Key:
 - `gfx942` (CDNA3 / MI300X, Quadrants' default AMDGPU target): `atomic_add` f32 / f64 are native (`flat_atomic_add_f32` / `_f64`), `atomic_min` / `max` f64 are native (`flat_atomic_min_f64` / `max_f64`); f32 min/max still expand to CAS.
 - `gfx906`, `gfx90a`, `gfx1030`, `gfx1100`: all f32 / f64 float atomics expand to CAS.
 
-3. SPIR-V float `atomic_add` lowers to `OpAtomicFAddEXT` when the matching `spirv_has_atomic_float{,64,16}_add` capability is present on the device, and to a CAS loop with a GLSL.std.450 payload otherwise. Metal always advertises global f32 add on Apple7+/Mac2+ (see bullet above); Vulkan is capability-gated per `VK_EXT_shader_atomic_float*`. Shared float add needs `spirv_has_shared_atomic_float*_add`, which Metal never sets. Quadrants does not currently emit `OpAtomicFMinEXT` / `OpAtomicFMaxEXT`, so float min/max is always CAS on SPIR-V backends.
+³ SPIR-V float `atomic_add` lowers to `OpAtomicFAddEXT` when the matching `spirv_has_atomic_float{32,64}_add` capability is present on the device, and to a CAS loop with a GLSL.std.450 payload otherwise. Quadrants does not currently emit `OpAtomicFMinEXT` / `OpAtomicFMaxEXT`, so float min/max is always CAS on SPIR-V backends.
+
+### `qd.volatile_load` lowering
+
+| Backend          | Lowering                                                                                  |
+|------------------|-------------------------------------------------------------------------------------------|
+| CUDA             | LLVM `load volatile` -> PTX `ld.volatile.global`.                                          |
+| AMDGPU           | LLVM `load volatile` -> unhoistable `global_load_*` (the optimizer is inhibited from forwarding / merging). |
+| Vulkan / Metal   | SPIR-V `OpLoad` with the `Volatile` `MemoryAccess` mask, propagated through SPIRV-Cross to a re-read on every use in the generated MSL / GLSL. |
+| CPU (x86_64)     | LLVM `load volatile` (the optimizer cannot hoist or merge it; the runtime cost is identical to an ordinary load on x86). |
 
 ## Related
 

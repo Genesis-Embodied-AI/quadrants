@@ -15,7 +15,7 @@ from .._ndarray import ScalarNdarray
 from ..field import ScalarField
 from ..kernel_arguments import ArgMetadata
 from ..matrix import MatrixField, MatrixNdarray, VectorNdarray
-from ..util import is_data_oriented
+from ..util import is_data_oriented, wants_runtime_primitives
 from .hash_utils import hash_iterable_strings
 
 _FIELD_TYPES = (ScalarField, MatrixField)
@@ -38,6 +38,12 @@ g_num_ignored_calls = 0
 FIELD_METADATA_CACHE_VALUE = "add_value_to_cache_key"
 
 _DC_REPR_NONE = object()
+
+# arg_meta used when walking the children of a ``@qd.data_oriented(template_primitives=False)`` object. Its annotation
+# is non-Template (so primitive members contribute their *type* only, not their value, since they are lifted to runtime
+# scalar args rather than baked into the kernel) and non-Tensor (so a stray ``qd.field`` child still triggers the
+# warn-and-disable path, exactly as for a normal data_oriented object).
+_NON_TEMPLATE_CHILD_META = ArgMetadata(None, "")
 
 
 class FastcacheSkip(enum.Enum):
@@ -181,8 +187,12 @@ def stringify_obj_type(
             _dict = _asdict()
         except AttributeError:
             _dict = obj.__dict__
+        # A normal @qd.data_oriented bakes primitive members into the kernel (value in the cache key); one declared
+        # with template_primitives=False lifts them to runtime args (type only - value must NOT enter the key, or it
+        # would recompile on every value change, defeating the feature). Decide per object, since the flag is per class.
+        child_meta = _NON_TEMPLATE_CHILD_META if wants_runtime_primitives(obj) else ArgMetadata(Template, "")
         for k, v in _dict.items():
-            _child_repr = stringify_obj_type(raise_on_templated_floats, (*path, k), v, ArgMetadata(Template, ""))
+            _child_repr = stringify_obj_type(raise_on_templated_floats, (*path, k), v, child_meta)
             if _child_repr is None:
                 if _should_warn:
                     _logging.warn(

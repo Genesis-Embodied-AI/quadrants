@@ -250,7 +250,7 @@ def test_do_while_oob_does_not_loop_forever():
         a: qd.types.ndarray(dtype=qd.f32, ndim=1),
         c: qd.types.ndarray(dtype=qd.i32, ndim=0),
     ):
-        while qd.graph_do_while(c):
+        while qd.graph.do_while(c):
             # Serial loop so the OOB fires on the shared context immediately,
             # guaranteeing the do-while condition sees it on the same iteration.
             for i in qd.static(range(10)):
@@ -287,7 +287,7 @@ def test_do_while_oob_2d_does_not_loop_forever():
         a: qd.types.ndarray(dtype=qd.f32, ndim=2),
         c: qd.types.ndarray(dtype=qd.i32, ndim=0),
     ):
-        while qd.graph_do_while(c):
+        while qd.graph.do_while(c):
             for i in qd.static(range(4)):
                 for j in qd.static(range(4)):
                     a[i, j] = 1.0

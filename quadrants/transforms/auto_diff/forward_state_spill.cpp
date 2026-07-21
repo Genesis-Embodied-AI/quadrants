@@ -181,6 +181,15 @@ class AdStackAllocaJudger : public BasicStmtVisitor {
     if (stmt->src == target_alloca_) {
       local_loaded_ = true;
       target_alloca_ = stmt;
+      return;
+    }
+    // Tensor-typed allocas are read component-wise through a `MatrixPtrStmt` (`shift ptr [alloca + i]`), so the
+    // load's `src` is the MatrixPtr, not the alloca. Without matching this shape the load+store recurrence rule in
+    // `visit(LocalStoreStmt)` never fires for a loop-carried tensor local: it stays a single overwrite-each-iteration
+    // slot, and the reverse pass reads only the last forward iteration's value for every reverse iteration.
+    if (auto *mp = stmt->src->cast<MatrixPtrStmt>()) {
+      if (mp->origin == target_alloca_backup_)
+        local_loaded_ = true;
     }
   }
 
