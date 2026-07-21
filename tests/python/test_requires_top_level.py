@@ -1,7 +1,7 @@
 """Tests for ``@qd.func(requires_top_level=True)``.
 
 A func marked ``requires_top_level=True`` may only be called at the **top level** of a kernel (or
-directly inside a ``while qd.graph_do_while(...)`` body, which the compiler also treats as top level).
+directly inside a ``while qd.graph.do_while(...)`` body, which the compiler also treats as top level).
 Calling it nested inside ordinary runtime ``for`` / ``if`` / ``while`` control flow is rejected at
 compile time with a :class:`QuadrantsSyntaxError`, because nesting demotes the func's per-phase
 top-level loops out of top-level position (collapsing the inter-phase grid-wide barriers) and would
@@ -329,7 +329,7 @@ def test_graph_do_while_body_counts_as_top_level():
         n: qd.i32,
         counter: qd.types.ndarray(qd.i32, ndim=0),
     ):
-        while qd.graph_do_while(counter):
+        while qd.graph.do_while(counter):
             bump(x, n)
             for _ in range(1):
                 counter[()] = counter[()] - 1

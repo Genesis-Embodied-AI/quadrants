@@ -26,6 +26,7 @@ from quadrants.lang._dataclass_util import create_flat_name
 from quadrants.lang.ast.ast_transformer_utils import (
     ASTTransformerFuncContext,
 )
+from quadrants.lang.ast.ast_transformers import graph_api
 from quadrants.lang.ast.ast_transformers.checkpoint_transformer import (
     CheckpointTransformer,
 )
@@ -562,18 +563,13 @@ class FunctionDefTransformer:
 
     @staticmethod
     def _is_graph_do_while_while(stmt: ast.stmt) -> bool:
-        """Syntactic check matching ASTTransformer._is_graph_do_while_call: a ``while qd.graph_do_while(var):`` loop."""
+        """Syntactic check matching ASTTransformer._is_graph_do_while_call: a ``while qd.graph.do_while(var):`` loop (or
+        the deprecated ``while qd.graph_do_while(var):``)."""
         if not isinstance(stmt, ast.While):
             return False
-        test = stmt.test
-        if not isinstance(test, ast.Call):
+        if not isinstance(stmt.test, ast.Call):
             return False
-        func = test.func
-        if isinstance(func, ast.Attribute) and func.attr == "graph_do_while":
-            return True
-        if isinstance(func, ast.Name) and func.id == "graph_do_while":
-            return True
-        return False
+        return graph_api.matches(stmt.test.func, "do_while")
 
     @staticmethod
     def _is_checkpoint_with(stmt: ast.With) -> bool:
@@ -608,34 +604,24 @@ class FunctionDefTransformer:
     @staticmethod
     def _is_graph_parallel_context_with(stmt: ast.stmt) -> bool:
         """Syntactic check matching GraphParallelTransformer.is_graph_parallel_context_call: a
-        ``with qd.graph_parallel_context():`` fork/join region."""
+        ``with qd.graph.parallel_context():`` fork/join region (or the deprecated ``qd.graph_parallel_context()``)."""
         if not isinstance(stmt, ast.With) or len(stmt.items) != 1:
             return False
         ctx_expr = stmt.items[0].context_expr
         if not isinstance(ctx_expr, ast.Call):
             return False
-        func = ctx_expr.func
-        if isinstance(func, ast.Attribute) and func.attr == "graph_parallel_context":
-            return True
-        if isinstance(func, ast.Name) and func.id == "graph_parallel_context":
-            return True
-        return False
+        return graph_api.matches(ctx_expr.func, "parallel_context")
 
     @staticmethod
     def _is_parallel_section_with(stmt: ast.stmt) -> bool:
-        """Syntactic check matching GraphParallelTransformer.is_parallel_section_call: a ``with qd.graph_parallel(...):``
-        section of a ``qd.graph_parallel_context()`` region."""
+        """Syntactic check matching GraphParallelTransformer.is_parallel_section_call: a ``with qd.graph.parallel():``
+        section of a ``qd.graph.parallel_context()`` region (or the deprecated ``qd.graph_parallel()``)."""
         if not isinstance(stmt, ast.With) or len(stmt.items) != 1:
             return False
         ctx_expr = stmt.items[0].context_expr
         if not isinstance(ctx_expr, ast.Call):
             return False
-        func = ctx_expr.func
-        if isinstance(func, ast.Attribute) and func.attr == "graph_parallel":
-            return True
-        if isinstance(func, ast.Name) and func.id == "graph_parallel":
-            return True
-        return False
+        return graph_api.matches(ctx_expr.func, "parallel")
 
     @staticmethod
     def _validate_graph_do_while_structure(body: list[ast.stmt]) -> None:
@@ -717,10 +703,10 @@ class FunctionDefTransformer:
                         # earlier by GraphParallelTransformer.build_graph_parallel_context_with).
                         pending.extend(member.body)
                 continue
-            where = "the kernel body" if is_kernel_top else "a qd.graph_do_while() body"
+            where = "the kernel body" if is_kernel_top else "a qd.graph.do_while() body"
             raise QuadrantsSyntaxError(
-                f"When a kernel uses qd.graph_do_while(), {where} may not contain a {type(stmt).__name__} "
-                f"statement. Allowed: for-loops, qd.graph_do_while() while-loops, bare assignments, and "
+                f"When a kernel uses qd.graph.do_while(), {where} may not contain a {type(stmt).__name__} "
+                f"statement. Allowed: for-loops, qd.graph.do_while() while-loops, bare assignments, and "
                 f"@qd.func calls (freely mixed and nested). [offending stmt {i}: {type(stmt).__name__}]"
             )
 

@@ -57,15 +57,27 @@ y2 = qd.ndarray(qd.f32, shape=(1024,))
 my_kernel(x2, y2)  # replays graph with new array pointers
 ```
 
-## GPU-side iteration with `graph_do_while`
+## The `qd.graph` namespace
 
-For iterative algorithms (physics solvers, convergence loops), you often want to repeat the kernel body until a condition is met, without returning to the host each iteration. Use `while qd.graph_do_while(flag):` inside a `graph=True` kernel:
+The graph-structuring constructs live under the `qd.graph` namespace:
+
+| Canonical spelling          | Deprecated flat alias         |
+|-----------------------------|-------------------------------|
+| `qd.graph.do_while`         | `qd.graph_do_while`           |
+| `qd.graph.parallel_context` | `qd.graph_parallel_context`   |
+| `qd.graph.parallel`         | `qd.graph_parallel`           |
+
+Always use the `qd.graph.*` spellings (used throughout this guide). The flat `qd.graph_*` names still work but emit a `DeprecationWarning` when used inside a kernel and will be removed in a future release. Both spellings compile to the same construct.
+
+## GPU-side iteration with `qd.graph.do_while`
+
+For iterative algorithms (physics solvers, convergence loops), you often want to repeat the kernel body until a condition is met, without returning to the host each iteration. Use `while qd.graph.do_while(flag):` inside a `graph=True` kernel:
 
 ```python
 @qd.kernel(graph=True)
 def solve(x: qd.types.ndarray(qd.f32, ndim=1),
           counter: qd.types.ndarray(qd.i32, ndim=0)):
-    while qd.graph_do_while(counter):
+    while qd.graph.do_while(counter):
         for i in range(x.shape[0]):
             x[i] = x[i] + 1.0
         counter[()] = counter[()] - 1   # bare statement: runs every iteration
@@ -77,7 +89,7 @@ solve(x, counter)
 # x is now incremented 10 times; counter is 0
 ```
 
-The argument to `qd.graph_do_while()` must reference a scalar `qd.i32` ndarray that the kernel can access - a bare kernel parameter (`qd.graph_do_while(counter)`), a [`@qd.data_oriented`](compound_types.md#qddata_oriented) member ndarray (`qd.graph_do_while(self.counter)`), or a [`@dataclasses.dataclass`](compound_types.md#dataclassesdataclass) parameter member (`qd.graph_do_while(params.counter)`). The loop body repeats while this value is non-zero.
+The argument to `qd.graph.do_while()` must reference a scalar `qd.i32` ndarray that the kernel can access - a bare kernel parameter (`qd.graph.do_while(counter)`), a [`@qd.data_oriented`](compound_types.md#qddata_oriented) member ndarray (`qd.graph.do_while(self.counter)`), or a [`@dataclasses.dataclass`](compound_types.md#dataclassesdataclass) parameter member (`qd.graph.do_while(params.counter)`). The loop body repeats while this value is non-zero.
 
 - On [CUDA SM 9.0+](https://developer.nvidia.com/cuda/gpus), this uses [CUDA conditional while nodes](https://developer.nvidia.com/blog/dynamic-control-flow-in-cuda-graphs-with-conditional-nodes/) - the entire iteration runs on the GPU with no host involvement.
 - On older CUDA GPUs, AMDGPU, and non-GPU backends, it falls back to a host-side do-while loop (see the [backend support table](#backend-support)).
@@ -90,7 +102,7 @@ The argument to `qd.graph_do_while()` must reference a scalar `qd.i32` ndarray t
 @qd.kernel(graph=True)
 def iterate(x: qd.types.ndarray(qd.f32, ndim=1),
             counter: qd.types.ndarray(qd.i32, ndim=0)):
-    while qd.graph_do_while(counter):
+    while qd.graph.do_while(counter):
         for i in range(x.shape[0]):
             x[i] = x[i] + 1.0
         counter[()] = counter[()] - 1
@@ -102,7 +114,7 @@ def iterate(x: qd.types.ndarray(qd.f32, ndim=1),
 @qd.kernel(graph=True)
 def converge(x: qd.types.ndarray(qd.f32, ndim=1),
              keep_going: qd.types.ndarray(qd.i32, ndim=0)):
-    while qd.graph_do_while(keep_going):
+    while qd.graph.do_while(keep_going):
         for i in range(x.shape[0]):
             # ... do work ...
             pass
@@ -112,19 +124,19 @@ def converge(x: qd.types.ndarray(qd.f32, ndim=1),
 
 ### Do-while semantics
 
-`graph_do_while` has **do-while** semantics: the kernel body always executes at least once before the condition is checked. This matches the behavior of CUDA conditional while nodes. The flag value must be >= 1 at launch time. Passing 0 with a kernel that decrements the counter will cause an infinite loop.
+`qd.graph.do_while` has **do-while** semantics: the kernel body always executes at least once before the condition is checked. This matches the behavior of CUDA conditional while nodes. The flag value must be >= 1 at launch time. Passing 0 with a kernel that decrements the counter will cause an infinite loop.
 
 ### ndarray vs field
 
-The parameter used by `graph_do_while` MUST be an ndarray.
+The parameter used by `qd.graph.do_while` MUST be an ndarray.
 
 However, other parameters can be any supported Quadrants kernel parameter type.
 
 ### Nested loops and mixing with for-loops
 
-> **Experimental.** Nested / sibling `graph_do_while` loops, and mixing `graph_do_while` with top-level `for`-loops, are experimental for now. Single-loop `graph_do_while` is the stable path.
+> **Experimental.** Nested / sibling `qd.graph.do_while` loops, and mixing `qd.graph.do_while` with top-level `for`-loops, are experimental for now. Single-loop `qd.graph.do_while` is the stable path.
 
-`graph_do_while` loops can be **nested** inside one another, placed **side by side** (siblings), and freely **mixed with plain top-level for-loops**. Each loop has its own scalar `qd.i32` counter ndarray.
+`qd.graph.do_while` loops can be **nested** inside one another, placed **side by side** (siblings), and freely **mixed with plain top-level for-loops**. Each loop has its own scalar `qd.i32` counter ndarray.
 
 ```python
 @qd.kernel(graph=True)
@@ -135,17 +147,17 @@ def nested(x: qd.types.ndarray(qd.i32, ndim=1),
     for i in range(x.shape[0]):
         x[i] = x[i] + 100
 
-    while qd.graph_do_while(outer):
+    while qd.graph.do_while(outer):
         # Reset the inner counter at the start of each outer iteration, else it only runs on the first outer pass.
         inner[()] = 5                  # bare statement: runs every outer iteration
-        while qd.graph_do_while(inner):
+        while qd.graph.do_while(inner):
             for i in range(x.shape[0]):
                 x[i] = x[i] + 1
             inner[()] = inner[()] - 1
         outer[()] = outer[()] - 1
 ```
 
-A `graph_do_while`-loop may only appear at the kernel top level or directly inside another `graph_do_while` body.
+A `qd.graph.do_while`-loop may only appear at the kernel top level or directly inside another `qd.graph.do_while` body.
 
 Note that `qd.func`'s are inlined, so you can freely factorize these structures across `qd.func` boundaries.
 
@@ -156,13 +168,13 @@ Note that `qd.func`'s are inlined, so you can freely factorize these structures 
 ### Caveats
 
 On GPU backends without native device-side conditional graph nodes (see [Backend Support](#backend-support) below):
-- the value of the `graph_do_while` parameter will be copied from the GPU to the host each iteration, in order to check whether we should continue iterating. This causes a GPU pipeline stall. For nested loops this host round-trip happens once per iteration of each loop level, and each loop-body task is replayed individually, so deeply nested loops on these backends pay correspondingly more host overhead (they remain correct, just slower than the CUDA SM 9.0+ native path). At the end of each loop iteration:
+- the value of the `qd.graph.do_while` parameter will be copied from the GPU to the host each iteration, in order to check whether we should continue iterating. This causes a GPU pipeline stall. For nested loops this host round-trip happens once per iteration of each loop level, and each loop-body task is replayed individually, so deeply nested loops on these backends pay correspondingly more host overhead (they remain correct, just slower than the CUDA SM 9.0+ native path). At the end of each loop iteration:
 - wait for GPU async queue to finish processing
 - copy condition value to hostside
 - evaluate condition value on hostside
 - launch new kernels for next loop iteration, if not finished yet
 
-Note: the basic `graph=True` path (without `graph_do_while`) does **not** stall the host like this on either CUDA or AMDGPU - the entire kernel sequence runs as a single GPU-side graph replay.
+Note: the basic `graph=True` path (without `qd.graph.do_while`) does **not** stall the host like this on either CUDA or AMDGPU - the entire kernel sequence runs as a single GPU-side graph replay.
 
 Therefore on unsupported platforms, you might consider creating a second implementation, which works differently. e.g.:
 - fixed number of loop iterations, so no dependency on gpu data for kernel launch; combined perhaps with:
@@ -191,7 +203,7 @@ def step(
     overflow_flag: qd.types.ndarray(qd.i32, ndim=0),
     newton_cond: qd.types.ndarray(qd.i32, ndim=0),
 ):
-    while qd.graph_do_while(newton_cond):
+    while qd.graph.do_while(newton_cond):
         for i in range(arr.shape[0]):
             # ...
             pass
@@ -211,7 +223,7 @@ The `cp_id` argument is the label you'll use to identify the checkpoint from the
 When the body of a checkpoint writes a non-zero value into `yield_on[()]`:
 
 1. Everything after the yielding checkpoint in the same launch is skipped.
-2. `qd.checkpoint` will exit any surrounding `qd.graph_do_while`.
+2. `qd.checkpoint` will exit any surrounding `qd.graph.do_while`.
 
 The framework never writes into your `yield_on` buffer - you own it end-to-end. That means:
 
@@ -248,7 +260,7 @@ while status.yielded:
 - Must be used inside `@qd.kernel(graph=True, checkpoints=True)`. Without the flag, `qd.checkpoint(...)` raises `QuadrantsSyntaxError` at compile time.
 - `cp_id` must be an int literal or an `IntEnum` value, and must be unique across the kernel.
 - `yield_on=` must reference a 0-d `qd.types.ndarray(qd.i32, ndim=0)` - a bare kernel parameter (`yield_on=flag`), a [`@qd.data_oriented`](compound_types.md#qddata_oriented) member ndarray (`yield_on=self.flag`), or a [`@dataclasses.dataclass`](compound_types.md#dataclassesdataclass) parameter member (`yield_on=params.flag`). Arbitrary expressions are not supported.
-- Checkpoints cannot be nested inside other checkpoints. Checkpoints inside a `qd.graph_do_while` body are fine.
+- Checkpoints cannot be nested inside other checkpoints. Checkpoints inside a `qd.graph.do_while` body are fine.
 - The body of a `with qd.checkpoint(...)` block cannot contain bare top-level statements (assignments, augmented assignments, or bare call/expression statements). Every top-level statement must be inside a `for`-loop (or other control-flow construct). A docstring as the first statement is allowed. Bare statements raise `QuadrantsSyntaxError` at compile time.
 
   ```python
@@ -261,38 +273,38 @@ while status.yielded:
 
 The restriction is by design: each top-level statement inside a checkpoint becomes its own GPU task / graph node, so silently wrapping bare statements would hide a sequence of N field writes ballooning into N kernel launches.
 
-## `qd.graph_parallel` sections with `qd.graph_parallel_context` *(experimental)*
+## `qd.graph.parallel` sections with `qd.graph.parallel_context` *(experimental)*
 
-A `with qd.graph_parallel_context():` region lets you declare independent stages so the graph runs them concurrently.
+A `with qd.graph.parallel_context():` region lets you declare independent stages so the graph runs them concurrently.
 
-`qd.graph_parallel_context` is honored by the graph builder so it composes with `graph=True` and `graph_do_while`.
+`qd.graph.parallel_context` is honored by the graph builder so it composes with `graph=True` and `qd.graph.do_while`.
 
 ```python
 @qd.kernel(graph=True)
 def step(...):
-    while qd.graph_do_while(ncond):
-        assemble_shared(...)                 # serial: feeds both `qd.graph_parallel` sections
+    while qd.graph.do_while(ncond):
+        assemble_shared(...)                 # serial: feeds both `qd.graph.parallel` sections
 
-        with qd.graph_parallel_context():    # fork: `qd.graph_parallel` sections run concurrently
-            with qd.graph_parallel():            # point-triangle contacts
+        with qd.graph.parallel_context():    # fork: `qd.graph.parallel` sections run concurrently
+            with qd.graph.parallel():            # point-triangle contacts
                 pt_assemble(...)
                 pt_hessian(...)
-            with qd.graph_parallel():            # edge-edge contacts (independent of pt)
+            with qd.graph.parallel():            # edge-edge contacts (independent of pt)
                 ee_assemble(...)
                 ee_hessian(...)
-        # join: everything below waits for BOTH `qd.graph_parallel` sections to finish
+        # join: everything below waits for BOTH `qd.graph.parallel` sections to finish
         merge_hessians(...)
         precondition(...)
 ```
 
 ### Semantics
 
-- **Fork / join.** Every `qd.graph_parallel` section in the region forks from the work that precedes the region. All `qd.graph_parallel` sections must finish before any work *after* the region begins (the join).
-- **`qd.graph_parallel` sections are independent - you guarantee it.** Calls *within* a `qd.graph_parallel` section keep their program order, but calls in *different* `qd.graph_parallel` sections have no ordering. The `qd.graph_parallel` sections must be data-race free with respect to one another: no `qd.graph_parallel` section may read what another writes, and no two `qd.graph_parallel` sections may write the same memory. Quadrants does not check this; getting it wrong gives nondeterministic results.
+- **Fork / join.** Every `qd.graph.parallel` section in the region forks from the work that precedes the region. All `qd.graph.parallel` sections must finish before any work *after* the region begins (the join).
+- **`qd.graph.parallel` sections are independent - you guarantee it.** Calls *within* a `qd.graph.parallel` section keep their program order, but calls in *different* `qd.graph.parallel` sections have no ordering. The `qd.graph.parallel` sections must be data-race free with respect to one another: no `qd.graph.parallel` section may read what another writes, and no two `qd.graph.parallel` sections may write the same memory. Quadrants does not check this; getting it wrong gives nondeterministic results.
 
-### Generating `qd.graph_parallel` sections from a compile-time sequence
+### Generating `qd.graph.parallel` sections from a compile-time sequence
 
-`qd.graph_parallel` sections do not have to be written out one by one. A `for ... in qd.static(...)` loop is unrolled at compile time, so each iteration that contains a `with qd.graph_parallel():` becomes its own section - handy for forking one section per element of a static list (e.g. per contact type):
+`qd.graph.parallel` sections do not have to be written out one by one. A `for ... in qd.static(...)` loop is unrolled at compile time, so each iteration that contains a `with qd.graph.parallel():` becomes its own section - handy for forking one section per element of a static list (e.g. per contact type):
 
 (Note: See [compound_types.md](compound_types.md) for qd.data_oriented description)
 ```python
@@ -303,9 +315,9 @@ class Solver:
 
     @qd.kernel(graph=True)
     def step(self):
-        with qd.graph_parallel_context():
+        with qd.graph.parallel_context():
             for i in qd.static(range(len(self.funcs))):        # unrolls to one section per func
-                with qd.graph_parallel():
+                with qd.graph.parallel():
                     self.funcs[i]()
 ```
 
@@ -313,33 +325,33 @@ The loop **must** be a `qd.static(...)` loop (its trip count is known at compile
 
 ### Restrictions (enforced at kernel compile time)
 
-- `qd.graph_parallel_context` may contain only `with qd.graph_parallel():` blocks, optionally wrapped in `if qd.static(...)` (so an optional `qd.graph_parallel` section can be compiled in or out - e.g. enabling edge-edge contacts only when a feature flag is set) or `for ... in qd.static(...)` loops (generate one `qd.graph_parallel` section per element of a compile-time sequence).
-- `qd.graph_parallel()` may appear only directly inside a `qd.graph_parallel_context()`.
-- `qd.graph_parallel_context` cannot be nested, and a `qd.graph_parallel` section body must be straight-line task work - no `qd.graph_do_while`, `qd.checkpoint`, or nested `qd.graph_parallel_context` inside a `qd.graph_parallel` section (a `qd.graph_parallel_context` may, however, sit inside a `qd.graph_do_while` body, as shown above).
+- `qd.graph.parallel_context` may contain only `with qd.graph.parallel():` blocks, optionally wrapped in `if qd.static(...)` (so an optional `qd.graph.parallel` section can be compiled in or out - e.g. enabling edge-edge contacts only when a feature flag is set) or `for ... in qd.static(...)` loops (generate one `qd.graph.parallel` section per element of a compile-time sequence).
+- `qd.graph.parallel()` may appear only directly inside a `qd.graph.parallel_context()`.
+- `qd.graph.parallel_context` cannot be nested, and a `qd.graph.parallel` section body must be straight-line task work - no `qd.graph.do_while`, `qd.checkpoint`, or nested `qd.graph.parallel_context` inside a `qd.graph.parallel` section (a `qd.graph.parallel_context` may, however, sit inside a `qd.graph.do_while` body, as shown above).
 
 ### Backend behavior
 
 | backend | scheduling |
 | --- | --- |
-| CUDA | `qd.graph_parallel` sections run **concurrently** |
-| AMDGPU / CPU / Vulkan / Metal | `qd.graph_parallel` sections run **serially** |
+| CUDA | `qd.graph.parallel` sections run **concurrently** |
+| AMDGPU / CPU / Vulkan / Metal | `qd.graph.parallel` sections run **serially** |
 
-Because `qd.graph_parallel` sections are independent by construction, running them serially produces identical results - only the scheduling differs.
+Because `qd.graph.parallel` sections are independent by construction, running them serially produces identical results - only the scheduling differs.
 
 ## Backend support
 
-`graph=True` and `graph_do_while` run on every backend. They are *hardware accelerated* on CUDA (via [CUDA graphs](https://docs.nvidia.com/cuda/cuda-programming-guide/04-special-topics/cuda-graphs.html)) and AMDGPU (via [HIP graphs](https://rocm.docs.amd.com/projects/HIP/en/latest/how-to/hip_runtime_api/hipgraph.html)); `graph_do_while` additionally requires [CUDA SM 9.0+](https://developer.nvidia.com/cuda/gpus) for its hardware-accelerated path. On other backends, `graph=True` is silently ignored and the kernel runs via the normal launch path, and `graph_do_while` falls back to a host-side do-while loop. `qd.checkpoint` gating runs entirely on the device on every GPU backend.
+`graph=True` and `qd.graph.do_while` run on every backend. They are *hardware accelerated* on CUDA (via [CUDA graphs](https://docs.nvidia.com/cuda/cuda-programming-guide/04-special-topics/cuda-graphs.html)) and AMDGPU (via [HIP graphs](https://rocm.docs.amd.com/projects/HIP/en/latest/how-to/hip_runtime_api/hipgraph.html)); `qd.graph.do_while` additionally requires [CUDA SM 9.0+](https://developer.nvidia.com/cuda/gpus) for its hardware-accelerated path. On other backends, `graph=True` is silently ignored and the kernel runs via the normal launch path, and `qd.graph.do_while` falls back to a host-side do-while loop. `qd.checkpoint` gating runs entirely on the device on every GPU backend.
 
 | Feature | `qd.cuda` SM 9.0+ | `qd.cuda` < SM 9.0 | `qd.amdgpu` | `qd.metal` | `qd.vulkan` | `qd.cpu` |
 | --- | --- | --- | --- | --- | --- | --- |
 | `graph=True` | hardware accelerated | hardware accelerated | hardware accelerated | runs (no acceleration) | runs (no acceleration) | runs (no acceleration) |
-| `qd.graph_do_while` | hardware accelerated | host fallback | host fallback | host fallback | host fallback | host fallback |
+| `qd.graph.do_while` | hardware accelerated | host fallback | host fallback | host fallback | host fallback | host fallback |
 | `qd.checkpoint` | GPU-side | GPU-side | GPU-side | GPU-side | GPU-side | host-side |
-| `qd.graph_parallel_context` / `qd.graph_parallel` (sections) | concurrent | concurrent | runs serially | runs serially | runs serially | runs serially |
+| `qd.graph.parallel_context` / `qd.graph.parallel` (sections) | concurrent | concurrent | runs serially | runs serially | runs serially | runs serially |
 
-AMDGPU `graph_do_while` falls back to the host-side loop because HIP does not currently expose conditional / while graph nodes (as of [ROCm](https://www.amd.com/en/products/software/rocm.html) 7.2).
+AMDGPU `qd.graph.do_while` falls back to the host-side loop because HIP does not currently expose conditional / while graph nodes (as of [ROCm](https://www.amd.com/en/products/software/rocm.html) 7.2).
 
-Nested and sibling `graph_do_while` loops (and mixing `graph_do_while` with top-level `for`-loops) are **experimental** for now - see [Nested loops and mixing with for-loops](#nested-loops-and-mixing-with-for-loops).
+Nested and sibling `qd.graph.do_while` loops (and mixing `qd.graph.do_while` with top-level `for`-loops) are **experimental** for now - see [Nested loops and mixing with for-loops](#nested-loops-and-mixing-with-for-loops).
 
 ## Performance
 
@@ -408,7 +420,7 @@ After migrating to graph with graph do while we have:
 ```
 @qd.kernel(graph=True)
 def k1(a: qd.types.NDArray, cond: qd.types.NDArray):
-    while qd.graph_do_while(condition=cond):
+    while qd.graph.do_while(cond):
         fn_1(a, cond)
         fn_2(a, cond)
         fn_3(a, cond)
@@ -444,7 +456,7 @@ After migrating to graph we have something like:
 ```
 @qd.kernel(graph=True)
 def k1(a: qd.types.NDArray, count: qd.types.NDArray):
-    while qd.graph_do_while(count):
+    while qd.graph.do_while(count):
         fn_1(a)
         fn_2(a)
         fn_3(a)
@@ -503,7 +515,7 @@ When we migrate this to graph do while, we get:
 ```
 @qd.kernel(graph=True)
 def k1(a: qd.types.NDArray, cond: qd.types.NDArray):
-    while qd.graph_do_while(condition=cond):
+    while qd.graph.do_while(cond):
         for j in range(a.shape[0]):  # off-loaded task (gpu kernel)
             ....  # no need for cond check
         for j in range(a.shape[0]):  # off-loaded task (gpu kernel)
@@ -536,8 +548,8 @@ In this case, our recommendation is:
 
 For background on what a GPU kernel launch is, where kernel launch latency comes from, and when reducing it actually helps throughput, see [Performance](performance.md). This section covers one graph-specific subtlety on top of that background.
 
-### Why using graph_do_while is relevant even without hardware support
+### Why using qd.graph.do_while is relevant even without hardware support
 
 Recall the earlier example **A while loop, conditional on a device-side scalar tensor**. Written as a plain Python loop, every iteration pays the full Python-side launch latency: Python re-enters the kernel wrapper, and Python itself reads `cond[()]` and evaluates the `if` before deciding whether to loop again.
 
-On hardware with native device-side conditional graph nodes, `graph_do_while` removes the host from the loop entirely - the ideal case. But even on hardware *without* that support - where `graph_do_while` falls back to a host-side do-while loop (see [Backend support](#backend-support)) - the launch latency can be slightly reduced compared to the hand-written Python version, because the fallback loop is driven entirely in the C++ runtime rather than in Python. A single Python call enters the runtime, and the runtime then repeats internally: launch the loop body's tasks, read back the condition flag, and decide whether to iterate again - all in C++, with no trip back through the Python interpreter between iterations.
+On hardware with native device-side conditional graph nodes, `qd.graph.do_while` removes the host from the loop entirely - the ideal case. But even on hardware *without* that support - where `qd.graph.do_while` falls back to a host-side do-while loop (see [Backend support](#backend-support)) - the launch latency can be slightly reduced compared to the hand-written Python version, because the fallback loop is driven entirely in the C++ runtime rather than in Python. A single Python call enters the runtime, and the runtime then repeats internally: launch the loop body's tasks, read back the condition flag, and decide whether to iterate again - all in C++, with no trip back through the Python interpreter between iterations.
