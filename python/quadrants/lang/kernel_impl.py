@@ -1,4 +1,4 @@
-import inspect
+import linecache
 import re
 import sys
 import typing
@@ -141,10 +141,13 @@ _KERNEL_CLASS_STACKFRAME_STMT_RES = [
 def _inside_class(level_of_class_stackframe: int) -> bool:
     try:
         maybe_class_frame = sys._getframe(level_of_class_stackframe)
-        statement_list = inspect.getframeinfo(maybe_class_frame)[3]
-        if statement_list is None:
+        # Read the decoration-site source line via linecache rather than inspect.getframeinfo: getframeinfo
+        # resolves the frame's module through inspect.getmodule, an O(len(sys.modules)) scan run once per kernel
+        # creation. With thousands of modules loaded this dominates kernel build time; linecache.getline returns
+        # the same source line with no such scan.
+        first_statment = linecache.getline(maybe_class_frame.f_code.co_filename, maybe_class_frame.f_lineno).strip()
+        if not first_statment:
             return False
-        first_statment = statement_list[0].strip()
         for pat in _KERNEL_CLASS_STACKFRAME_STMT_RES:
             if pat.match(first_statment):
                 return True
