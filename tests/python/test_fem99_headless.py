@@ -2,23 +2,22 @@
 
 Background
 ----------
-In Jan 2023 (Taichi #7093, PENGUINLIONG), when Metal switched to SPIR-V codegen, native float
-atomics were detected for Apple7+/Mac2+ but immediately commented out with:
+In Jan 2023 (Taichi #7093, PENGUINLIONG), when Metal switched to SPIR-V codegen, native float atomics were detected for
+Apple7+/Mac2+ but immediately commented out with:
 
     FIXME: floating point atomics doesn't work and breaks the FEM99/FEM128 examples.
 
-Those examples were interactive autodiff neo-Hookean soft-body demos
-(`python/taichi/examples/simulation/fem99.py`, later removed from Quadrants). They were NEVER
-turned into a CI test, and the failure mode (wrong numbers? NaN? hang? visual explosion?) was
-never written down. Upstream taichi still carries the identical FIXME.
+Those examples were interactive autodiff neo-Hookean soft-body demos (`python/taichi/examples/simulation/fem99.py`,
+later removed from Quadrants). They were NEVER turned into a CI test, and the failure mode (wrong numbers? NaN? hang?
+visual explosion?) was never written down. Upstream taichi still carries the identical FIXME.
 
 The critical atomic pattern in FEM99 is the scalar energy reduction under autodiff::
 
     U[None] += V[i] * phi_i          # parallel over faces; becomes qd.atomic_add(f32)
     with qd.ad.Tape(loss=U): ...     # reverse scatter also uses float atomics into pos.grad
 
-This file ports that pattern headlessly and checks for the symptoms we can assert without a GUI:
-finite energy / positions, no blow-up, and gradients matching a CPU reference on a small case.
+This file ports that pattern headlessly and checks for the symptoms we can assert without a GUI: finite energy /
+positions, no blow-up, and gradients matching a CPU reference on a small case.
 
     QD_WANTED_ARCHS=metal pytest tests/python/test_fem99_headless.py -v
 """
@@ -142,8 +141,8 @@ def test_fem99_headless_stays_finite():
 
     assert np.isfinite(u_hist).all(), f"energy became non-finite: {u_hist}"
     assert np.isfinite(pos).all(), "positions became non-finite"
-    # Soft body starts in [0.45,0.70]^2-ish; after a few frames under gravity it should stay
-    # roughly in the unit square (the demo clamps at the walls). Explosion => |pos| >> 10.
+    # Soft body starts in [0.45,0.70]^2-ish; after a few frames under gravity it should stay roughly in the unit square
+    # (the demo clamps at the walls). Explosion => |pos| >> 10.
     assert np.max(np.abs(pos)) < 10.0, f"positions exploded: max|pos|={np.max(np.abs(pos))}"
     # Energy should not blow up by many orders of magnitude frame-to-frame.
     assert np.max(np.abs(u_hist)) < 1e8, f"energy exploded: {u_hist}"
