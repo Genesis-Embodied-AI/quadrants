@@ -35,7 +35,11 @@ class Builder:
             if method is None:
                 error_msg = f'Unsupported node "{node.__class__.__name__}"'
                 raise QuadrantsSyntaxError(error_msg)
-            info = ctx.get_pos_info(node) if isinstance(node, (ast.stmt, ast.expr)) else ""
+            # Attach only the cheap file/line/function header to every IR node. Building the full source-line
+            # hint (get_pos_info) here means running TextWrapper for every AST node of every kernel compilation,
+            # which dominates kernel build time. The full hint is still produced on the actual compile-error path
+            # below (get_pos_info in the except handler), so error messages are unchanged.
+            info = ctx.get_pos_header(node) if isinstance(node, (ast.stmt, ast.expr)) else ""
             with impl.get_runtime().src_info_guard(info):
                 res = method(ctx, node)
                 if not hasattr(node, "violates_pure"):
@@ -387,8 +391,11 @@ class ASTTransformerFuncContext:
         except AttributeError:
             raise QuadrantsNameError(f'Name "{name}" is not defined')
 
+    def get_pos_header(self, node: ast.AST) -> str:
+        return f'File "{self.file}", line {node.lineno + self.lineno_offset}, in {self.func.func.__name__}:\n'
+
     def get_pos_info(self, node: ast.AST) -> str:
-        msg = f'File "{self.file}", line {node.lineno + self.lineno_offset}, in {self.func.func.__name__}:\n'
+        msg = self.get_pos_header(node)
         col_offset = self.indent + node.col_offset
         end_col_offset = self.indent + node.end_col_offset
 
