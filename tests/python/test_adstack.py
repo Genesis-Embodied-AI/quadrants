@@ -5245,7 +5245,8 @@ def test_adstack_scalarized_tensor_component_loop_trip_grad_correct():
     grad = x.grad.to_numpy()
     for i in range(n_env):
         assert grad[i] == pytest.approx(expected, rel=1e-5)
-        
+
+
 @test_utils.test(require=qd.extension.adstack, cfg_optimization=False)
 def test_adstack_offset_array_difference_loop_trip_grad_correct():
     # Inner loop trip count is the difference of two adjacent offset-array reads (`starts[i + 1] - starts[i]`, the
