@@ -1,0 +1,17 @@
+quadrants.lang.graph
+====================
+
+.. py:module:: quadrants.lang.graph
+
+.. autoapi-nested-parse::
+
+   The ``qd.graph`` namespace: the canonical home for the graph-structuring kernel constructs.
+
+   ``qd.graph.do_while`` / ``qd.graph.parallel_context`` / ``qd.graph.parallel`` are the preferred spellings. The flat
+   ``qd.graph_do_while`` / ``qd.graph_parallel_context`` / ``qd.graph_parallel`` names remain valid (they are the same
+   objects re-exported here) but are deprecated: using a flat name inside a kernel emits a ``DeprecationWarning`` at
+   compile time. Both spellings are recognized by the AST compiler (see
+   ``quadrants/lang/ast/ast_transformers/graph_api.py``).
+
+
+

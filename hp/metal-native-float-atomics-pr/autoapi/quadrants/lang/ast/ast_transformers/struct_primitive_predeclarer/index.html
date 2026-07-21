@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>quadrants.lang.ast.ast_transformers.function_def_transformer &#8212; Quadrants 1.1.3 documentation</title>
+    <title>quadrants.lang.ast.ast_transformers.struct_primitive_predeclarer &#8212; Quadrants 1.1.3 documentation</title>
   
   
   
@@ -55,12 +55,12 @@
     <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
     <script src="../../../../../../_static/design-tabs.js?v=f930bc37"></script>
     <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
-    <script>DOCUMENTATION_OPTIONS.pagename = 'autoapi/quadrants/lang/ast/ast_transformers/function_def_transformer/index';</script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'autoapi/quadrants/lang/ast/ast_transformers/struct_primitive_predeclarer/index';</script>
     <script>DOCUMENTATION_OPTIONS.search_as_you_type = false;</script>
     <link rel="index" title="Index" href="../../../../../../genindex.html" />
     <link rel="search" title="Search" href="../../../../../../search.html" />
-    <link rel="next" title="quadrants.lang.ast.ast_transformers.graph_api" href="../graph_api/index.html" />
-    <link rel="prev" title="quadrants.lang.ast.ast_transformers.checkpoint_transformer" href="../checkpoint_transformer/index.html" />
+    <link rel="next" title="quadrants.lang.ast.checkers" href="../../checkers/index.html" />
+    <link rel="prev" title="quadrants.lang.ast.ast_transformers.ndarray_arg_resolver" href="../ndarray_arg_resolver/index.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
   <meta name="docsearch:version" content="1.1.3" />
@@ -349,7 +349,7 @@
     
     <li class="breadcrumb-item"><a href="../index.html" class="nav-link">quadrants.lang.ast.ast_transformers</a></li>
     
-    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">quadrants.lang.ast.ast_transformers.function_def_transformer</span></li>
+    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">quadrants.lang.ast.ast_transformers.struct_primitive_predeclarer</span></li>
   </ul>
 </nav>
 </div>
@@ -366,14 +366,22 @@
 <div id="searchbox"></div>
                 <article class="bd-article">
                   
-  <section id="module-quadrants.lang.ast.ast_transformers.function_def_transformer">
-<span id="quadrants-lang-ast-ast-transformers-function-def-transformer"></span><h1>quadrants.lang.ast.ast_transformers.function_def_transformer<a class="headerlink" href="#module-quadrants.lang.ast.ast_transformers.function_def_transformer" title="Link to this heading">#</a></h1>
-<section id="classes">
-<h2>Classes<a class="headerlink" href="#classes" title="Link to this heading">#</a></h2>
+  <section id="module-quadrants.lang.ast.ast_transformers.struct_primitive_predeclarer">
+<span id="quadrants-lang-ast-ast-transformers-struct-primitive-predeclarer"></span><h1>quadrants.lang.ast.ast_transformers.struct_primitive_predeclarer<a class="headerlink" href="#module-quadrants.lang.ast.ast_transformers.struct_primitive_predeclarer" title="Link to this heading">#</a></h1>
+<p>Lift primitive members of <code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented(template_primitives=False)</span></code> template args into runtime scalar kernel
+args at AST-build time.</p>
+<p>Lives alongside <code class="docutils literal notranslate"><span class="pre">ndarray_arg_resolver.py</span></code> / <code class="docutils literal notranslate"><span class="pre">checkpoint_transformer.py</span></code> so the central
+<code class="docutils literal notranslate"><span class="pre">function_def_transformer.py</span></code> file doesn’t have to grow per-feature (the same rationale the ndarray resolver
+documents). <code class="docutils literal notranslate"><span class="pre">FunctionDefTransformer.transform</span></code> delegates here right after <code class="docutils literal notranslate"><span class="pre">_predeclare_struct_ndarrays</span></code>; this is
+the only entry point.</p>
+<p>See <code class="docutils literal notranslate"><span class="pre">docs/source/user_guide/compound_types.md</span></code> (section “Runtime primitives: <code class="docutils literal notranslate"><span class="pre">template_primitives=False</span></code>”) for the
+user-facing surface and <code class="docutils literal notranslate"><span class="pre">perso_hugh/doc/data_oriented_template_primitives.md</span></code> for the design.</p>
+<section id="functions">
+<h2>Functions<a class="headerlink" href="#functions" title="Link to this heading">#</a></h2>
 <div class="pst-scrollable-table-container"><table class="autosummary longtable table autosummary">
 <tbody>
-<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.ast.ast_transformers.function_def_transformer.FunctionDefTransformer" title="quadrants.lang.ast.ast_transformers.function_def_transformer.FunctionDefTransformer"><code class="xref py py-obj docutils literal notranslate"><span class="pre">FunctionDefTransformer</span></code></a></p></td>
-<td><p></p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.ast.ast_transformers.struct_primitive_predeclarer.predeclare_struct_primitives" title="quadrants.lang.ast.ast_transformers.struct_primitive_predeclarer.predeclare_struct_primitives"><code class="xref py py-obj docutils literal notranslate"><span class="pre">predeclare_struct_primitives</span></code></a>(→ None)</p></td>
+<td><p>For each templated arg whose root class is decorated <code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented(template_primitives=False)</span></code>, walk</p></td>
 </tr>
 </tbody>
 </table>
@@ -381,14 +389,21 @@
 </section>
 <section id="module-contents">
 <h2>Module Contents<a class="headerlink" href="#module-contents" title="Link to this heading">#</a></h2>
-<dl class="py class">
-<dt class="sig sig-object py" id="quadrants.lang.ast.ast_transformers.function_def_transformer.FunctionDefTransformer">
-<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">quadrants.lang.ast.ast_transformers.function_def_transformer.</span></span><span class="sig-name descname"><span class="pre">FunctionDefTransformer</span></span><a class="reference internal" href="../../../../../../_modules/quadrants/lang/ast/ast_transformers/function_def_transformer.html#FunctionDefTransformer"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.ast.ast_transformers.function_def_transformer.FunctionDefTransformer" title="Link to this definition">#</a></dt>
-<dd><dl class="py method">
-<dt class="sig sig-object py" id="quadrants.lang.ast.ast_transformers.function_def_transformer.FunctionDefTransformer.build_FunctionDef">
-<em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">build_FunctionDef</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ctx</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../../ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext" title="quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext"><span class="pre">quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">node</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ast.FunctionDef</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">build_stmts</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Callable</span><span class="p"><span class="pre">[</span></span><span class="p"><span class="pre">[</span></span><a class="reference internal" href="../../ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext" title="quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext"><span class="pre">quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">list</span><span class="p"><span class="pre">[</span></span><span class="pre">ast.stmt</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">None</span><span class="p"><span class="pre">]</span></span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="../../../../../../_modules/quadrants/lang/ast/ast_transformers/function_def_transformer.html#FunctionDefTransformer.build_FunctionDef"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.ast.ast_transformers.function_def_transformer.FunctionDefTransformer.build_FunctionDef" title="Link to this definition">#</a></dt>
-<dd></dd></dl>
-
+<dl class="py function">
+<dt class="sig sig-object py" id="quadrants.lang.ast.ast_transformers.struct_primitive_predeclarer.predeclare_struct_primitives">
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.ast.ast_transformers.struct_primitive_predeclarer.</span></span><span class="sig-name descname"><span class="pre">predeclare_struct_primitives</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ctx</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../../ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext" title="quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext"><span class="pre">quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext</span></a></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="../../../../../../_modules/quadrants/lang/ast/ast_transformers/struct_primitive_predeclarer.html#predeclare_struct_primitives"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.ast.ast_transformers.struct_primitive_predeclarer.predeclare_struct_primitives" title="Link to this definition">#</a></dt>
+<dd><p>For each templated arg whose root class is decorated <code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented(template_primitives=False)</span></code>, walk
+the reachable attribute graph and declare every primitive (<code class="docutils literal notranslate"><span class="pre">int</span></code> / <code class="docutils literal notranslate"><span class="pre">float</span></code> / <code class="docutils literal notranslate"><span class="pre">bool</span></code>) member as a runtime
+scalar kernel arg, instead of letting <code class="docutils literal notranslate"><span class="pre">build_Attribute</span></code> bake it as a compile-time constant. The arg-load
+<code class="docutils literal notranslate"><span class="pre">Expr</span></code> is cached on the global context keyed by <code class="docutils literal notranslate"><span class="pre">(id(parent_obj),</span> <span class="pre">attr_name)</span></code> for <code class="docutils literal notranslate"><span class="pre">build_Attribute</span></code> to
+substitute, and a <code class="docutils literal notranslate"><span class="pre">(arg_id,</span> <span class="pre">template_arg_idx,</span> <span class="pre">attr_chain,</span> <span class="pre">kind)</span></code> tuple is recorded for the launch path to
+bind the live value.</p>
+<p>Mirrors <code class="docutils literal notranslate"><span class="pre">_predeclare_struct_ndarrays</span></code>. Primitive leaves have no stable identity (<code class="docutils literal notranslate"><span class="pre">id(5)</span></code> is interned), so
+the cache is keyed on the parent container’s identity plus the attribute name. Only plain Python <code class="docutils literal notranslate"><span class="pre">int</span></code> /
+<code class="docutils literal notranslate"><span class="pre">float</span></code> / <code class="docutils literal notranslate"><span class="pre">bool</span></code> are lifted (matched by exact type so numpy scalars etc. keep their previous baked
+behaviour). dtype follows the runtime defaults (<code class="docutils literal notranslate"><span class="pre">default_ip</span></code> / <code class="docutils literal notranslate"><span class="pre">default_fp</span></code>), matching how a baked Python
+constant would be typed.</p>
+<p><code class="docutils literal notranslate"><span class="pre">_seen</span></code> guards against attribute-graph cycles (e.g. <code class="docutils literal notranslate"><span class="pre">sim.solver.sim</span> <span class="pre">is</span> <span class="pre">sim</span></code>), same as the ndarray walker.</p>
 </dd></dl>
 
 </section>
@@ -405,20 +420,20 @@
                   
 <div class="prev-next-area">
     <a class="left-prev"
-       href="../checkpoint_transformer/index.html"
+       href="../ndarray_arg_resolver/index.html"
        title="previous page">
       <i class="fa-solid fa-angle-left"></i>
       <div class="prev-next-info">
         <p class="prev-next-subtitle">previous</p>
-        <p class="prev-next-title">quadrants.lang.ast.ast_transformers.checkpoint_transformer</p>
+        <p class="prev-next-title">quadrants.lang.ast.ast_transformers.ndarray_arg_resolver</p>
       </div>
     </a>
     <a class="right-next"
-       href="../graph_api/index.html"
+       href="../../checkers/index.html"
        title="next page">
       <div class="prev-next-info">
         <p class="prev-next-subtitle">next</p>
-        <p class="prev-next-title">quadrants.lang.ast.ast_transformers.graph_api</p>
+        <p class="prev-next-title">quadrants.lang.ast.checkers</p>
       </div>
       <i class="fa-solid fa-angle-right"></i>
     </a>
@@ -441,12 +456,9 @@
   </div>
   <nav id="pst-page-toc-nav" class="page-toc" aria-labelledby="pst-page-navigation-heading-2">
     <ul class="pst-show_toc_level nav section-nav flex-column">
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#classes">Classes</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#functions">Functions</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#module-contents">Module Contents</a><ul class="nav section-nav flex-column">
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.ast.ast_transformers.function_def_transformer.FunctionDefTransformer"><code class="docutils literal notranslate"><span class="pre">FunctionDefTransformer</span></code></a><ul class="nav section-nav flex-column">
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.ast.ast_transformers.function_def_transformer.FunctionDefTransformer.build_FunctionDef"><code class="docutils literal notranslate"><span class="pre">FunctionDefTransformer.build_FunctionDef()</span></code></a></li>
-</ul>
-</li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants.lang.ast.ast_transformers.struct_primitive_predeclarer.predeclare_struct_primitives"><code class="docutils literal notranslate"><span class="pre">predeclare_struct_primitives()</span></code></a></li>
 </ul>
 </li>
 </ul>
@@ -455,7 +467,7 @@
   <div class="sidebar-secondary-item">
 
   <div class="tocsection sourcelink">
-    <a href="../../../../../../_sources/autoapi/quadrants/lang/ast/ast_transformers/function_def_transformer/index.rst.txt">
+    <a href="../../../../../../_sources/autoapi/quadrants/lang/ast/ast_transformers/struct_primitive_predeclarer/index.rst.txt">
       <i class="fa-solid fa-file-lines"></i> Show Source
     </a>
   </div>

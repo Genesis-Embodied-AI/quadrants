@@ -60,7 +60,7 @@
     <link rel="index" title="Index" href="../../../../genindex.html" />
     <link rel="search" title="Search" href="../../../../search.html" />
     <link rel="next" title="quadrants.lang.graph_status" href="../graph_status/index.html" />
-    <link rel="prev" title="quadrants.lang.func" href="../func/index.html" />
+    <link rel="prev" title="quadrants.lang.graph" href="../graph/index.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
   <meta name="docsearch:version" content="1.1.3" />
@@ -362,21 +362,22 @@
                   
   <section id="module-quadrants.lang.graph_parallel">
 <span id="quadrants-lang-graph-parallel"></span><h1>quadrants.lang.graph_parallel<a class="headerlink" href="#module-quadrants.lang.graph_parallel" title="Link to this heading">#</a></h1>
-<p>User-facing <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel_context</span></code> / <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel</span></code> context-managers and their no-op Python-runtime
+<p>User-facing <code class="docutils literal notranslate"><span class="pre">qd.graph.parallel_context</span></code> / <code class="docutils literal notranslate"><span class="pre">qd.graph.parallel</span></code> context-managers and their no-op Python-runtime
 stubs.</p>
 <p>Kept in its own module to keep <code class="docutils literal notranslate"><span class="pre">lang/misc.py</span></code> from growing further (mirrors <code class="docutils literal notranslate"><span class="pre">checkpoint.py</span></code>) – the AST transformer
 and the C++ runtime do all the actual implementation work; this file is just the public API entry point.</p>
-<p>Re-exported via <code class="docutils literal notranslate"><span class="pre">qd.lang.misc</span></code> (and therefore as <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel_context</span></code> / <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel</span></code>) for the
-user-facing canonical import path.</p>
+<p>Exposed under the canonical <code class="docutils literal notranslate"><span class="pre">qd.graph</span></code> namespace as <code class="docutils literal notranslate"><span class="pre">qd.graph.parallel_context</span></code> / <code class="docutils literal notranslate"><span class="pre">qd.graph.parallel</span></code> (see
+<code class="docutils literal notranslate"><span class="pre">quadrants/lang/graph.py</span></code>). Also re-exported via <code class="docutils literal notranslate"><span class="pre">qd.lang.misc</span></code> under the deprecated flat names
+<code class="docutils literal notranslate"><span class="pre">qd.graph_parallel_context</span></code> / <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel</span></code>, which still work but emit a <code class="docutils literal notranslate"><span class="pre">DeprecationWarning</span></code>.</p>
 <section id="functions">
 <h2>Functions<a class="headerlink" href="#functions" title="Link to this heading">#</a></h2>
 <div class="pst-scrollable-table-container"><table class="autosummary longtable table autosummary">
 <tbody>
 <tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.graph_parallel.graph_parallel_context" title="quadrants.lang.graph_parallel.graph_parallel_context"><code class="xref py py-obj docutils literal notranslate"><span class="pre">graph_parallel_context</span></code></a>()</p></td>
-<td><p>Opens a fork/join region whose <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel()</span></code> sections run concurrently.</p></td>
+<td><p>Opens a fork/join region whose <code class="docutils literal notranslate"><span class="pre">qd.graph.parallel()</span></code> sections run concurrently.</p></td>
 </tr>
 <tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.graph_parallel.graph_parallel" title="quadrants.lang.graph_parallel.graph_parallel"><code class="xref py py-obj docutils literal notranslate"><span class="pre">graph_parallel</span></code></a>()</p></td>
-<td><p>Declares one <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel</span></code> section of an enclosing <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel_context()</span></code> region.</p></td>
+<td><p>Declares one <code class="docutils literal notranslate"><span class="pre">qd.graph.parallel</span></code> section of an enclosing <code class="docutils literal notranslate"><span class="pre">qd.graph.parallel_context()</span></code> region.</p></td>
 </tr>
 </tbody>
 </table>
@@ -387,31 +388,31 @@ user-facing canonical import path.</p>
 <dl class="py function">
 <dt class="sig sig-object py" id="quadrants.lang.graph_parallel.graph_parallel_context">
 <span class="sig-prename descclassname"><span class="pre">quadrants.lang.graph_parallel.</span></span><span class="sig-name descname"><span class="pre">graph_parallel_context</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/graph_parallel.html#graph_parallel_context"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.graph_parallel.graph_parallel_context" title="Link to this definition">#</a></dt>
-<dd><p>Opens a fork/join region whose <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel()</span></code> sections run concurrently.</p>
-<p>Used as <code class="docutils literal notranslate"><span class="pre">with</span> <span class="pre">qd.graph_parallel_context():</span></code> inside a <code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel(graph=True)</span></code> kernel. The region’s
-body must contain only <code class="docutils literal notranslate"><span class="pre">with</span> <span class="pre">qd.graph_parallel():</span></code> blocks. Each <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel</span></code> section is an
-independent sequence of work; the <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel</span></code> sections have no ordering relative to each
-other and may execute concurrently, while everything after the region waits for <em>all</em> <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel</span></code>
+<dd><p>Opens a fork/join region whose <code class="docutils literal notranslate"><span class="pre">qd.graph.parallel()</span></code> sections run concurrently.</p>
+<p>Used as <code class="docutils literal notranslate"><span class="pre">with</span> <span class="pre">qd.graph.parallel_context():</span></code> inside a <code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel(graph=True)</span></code> kernel. The region’s
+body must contain only <code class="docutils literal notranslate"><span class="pre">with</span> <span class="pre">qd.graph.parallel():</span></code> blocks. Each <code class="docutils literal notranslate"><span class="pre">qd.graph.parallel</span></code> section is an
+independent sequence of work; the <code class="docutils literal notranslate"><span class="pre">qd.graph.parallel</span></code> sections have no ordering relative to each
+other and may execute concurrently, while everything after the region waits for <em>all</em> <code class="docutils literal notranslate"><span class="pre">qd.graph.parallel</span></code>
 sections to finish (the join). This is the graph analogue of <code class="docutils literal notranslate"><span class="pre">qd.stream_parallel()</span></code> (which is for
 non-graph kernels): it lets independent stages – e.g. qipc’s point-triangle and edge-edge assembly
 – overlap inside a captured graph.</p>
-<p>Concurrency contract (the author’s responsibility): <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel</span></code> sections must be data-race
-free with respect to one another (no <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel</span></code> section reads what another writes, no two
-<code class="docutils literal notranslate"><span class="pre">qd.graph_parallel</span></code> sections write the same location). Calls <em>within</em> a <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel</span></code> section
+<p>Concurrency contract (the author’s responsibility): <code class="docutils literal notranslate"><span class="pre">qd.graph.parallel</span></code> sections must be data-race
+free with respect to one another (no <code class="docutils literal notranslate"><span class="pre">qd.graph.parallel</span></code> section reads what another writes, no two
+<code class="docutils literal notranslate"><span class="pre">qd.graph.parallel</span></code> sections write the same location). Calls <em>within</em> a <code class="docutils literal notranslate"><span class="pre">qd.graph.parallel</span></code> section
 keep their program order.</p>
 <dl class="simple">
 <dt>Backend behavior:</dt><dd><ul class="simple">
-<li><p>CUDA SM graph path: <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel</span></code> sections become independent graph chains joined by an
+<li><p>CUDA SM graph path: <code class="docutils literal notranslate"><span class="pre">qd.graph.parallel</span></code> sections become independent graph chains joined by an
 empty node, so the runtime schedules them on parallel streams (real overlap).</p></li>
-<li><p>CPU / Vulkan / Metal / AMDGPU graph: correct results, <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel</span></code> sections run serially
+<li><p>CPU / Vulkan / Metal / AMDGPU graph: correct results, <code class="docutils literal notranslate"><span class="pre">qd.graph.parallel</span></code> sections run serially
 (the concurrency tags are honored only by the graph builder today).</p></li>
 </ul>
 </dd>
 <dt>Restrictions (enforced at kernel compile time):</dt><dd><ul class="simple">
 <li><p>Must be used inside <code class="docutils literal notranslate"><span class="pre">&#64;qd.kernel(graph=True)</span></code>.</p></li>
-<li><p>The region body may contain only <code class="docutils literal notranslate"><span class="pre">with</span> <span class="pre">qd.graph_parallel():</span></code> blocks.</p></li>
-<li><p>Regions cannot be nested, and a <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel</span></code> section body must be straight-line task work
-(no nested <code class="docutils literal notranslate"><span class="pre">qd.graph_do_while</span></code>, <code class="docutils literal notranslate"><span class="pre">qd.checkpoint</span></code>, or <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel_context</span></code>).</p></li>
+<li><p>The region body may contain only <code class="docutils literal notranslate"><span class="pre">with</span> <span class="pre">qd.graph.parallel():</span></code> blocks.</p></li>
+<li><p>Regions cannot be nested, and a <code class="docutils literal notranslate"><span class="pre">qd.graph.parallel</span></code> section body must be straight-line task work
+(no nested <code class="docutils literal notranslate"><span class="pre">qd.graph.do_while</span></code>, <code class="docutils literal notranslate"><span class="pre">qd.checkpoint</span></code>, or <code class="docutils literal notranslate"><span class="pre">qd.graph.parallel_context</span></code>).</p></li>
 </ul>
 </dd>
 </dl>
@@ -423,11 +424,11 @@ At Python runtime (outside kernels) it is a no-op context manager.</p>
 <dl class="py function">
 <dt class="sig sig-object py" id="quadrants.lang.graph_parallel.graph_parallel">
 <span class="sig-prename descclassname"><span class="pre">quadrants.lang.graph_parallel.</span></span><span class="sig-name descname"><span class="pre">graph_parallel</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/graph_parallel.html#graph_parallel"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.graph_parallel.graph_parallel" title="Link to this definition">#</a></dt>
-<dd><p>Declares one <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel</span></code> section of an enclosing <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel_context()</span></code> region.</p>
-<p>Used as <code class="docutils literal notranslate"><span class="pre">with</span> <span class="pre">qd.graph_parallel():</span></code> directly inside a <code class="docutils literal notranslate"><span class="pre">with</span> <span class="pre">qd.graph_parallel_context():</span></code> block.
-The <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel</span></code> section’s body is an independent sequence of work that may run concurrently
-with the region’s other <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel</span></code> sections.</p>
-<p>See <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel_context()</span></code> for the full contract and backend behavior.</p>
+<dd><p>Declares one <code class="docutils literal notranslate"><span class="pre">qd.graph.parallel</span></code> section of an enclosing <code class="docutils literal notranslate"><span class="pre">qd.graph.parallel_context()</span></code> region.</p>
+<p>Used as <code class="docutils literal notranslate"><span class="pre">with</span> <span class="pre">qd.graph.parallel():</span></code> directly inside a <code class="docutils literal notranslate"><span class="pre">with</span> <span class="pre">qd.graph.parallel_context():</span></code> block.
+The <code class="docutils literal notranslate"><span class="pre">qd.graph.parallel</span></code> section’s body is an independent sequence of work that may run concurrently
+with the region’s other <code class="docutils literal notranslate"><span class="pre">qd.graph.parallel</span></code> sections.</p>
+<p>See <code class="docutils literal notranslate"><span class="pre">qd.graph.parallel_context()</span></code> for the full contract and backend behavior.</p>
 </dd></dl>
 
 </section>
@@ -444,12 +445,12 @@ with the region’s other <code class="docutils literal notranslate"><span class
                   
 <div class="prev-next-area">
     <a class="left-prev"
-       href="../func/index.html"
+       href="../graph/index.html"
        title="previous page">
       <i class="fa-solid fa-angle-left"></i>
       <div class="prev-next-info">
         <p class="prev-next-subtitle">previous</p>
-        <p class="prev-next-title">quadrants.lang.func</p>
+        <p class="prev-next-title">quadrants.lang.graph</p>
       </div>
     </a>
     <a class="right-next"

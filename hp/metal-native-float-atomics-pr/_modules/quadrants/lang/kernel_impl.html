@@ -384,7 +384,7 @@
 <span class="sd">        fn (Callable): The Python function to be decorated</span>
 <span class="sd">        is_real_function (bool): Whether the function is a real function</span>
 <span class="sd">        requires_top_level (bool): **Experimental** (behaviour/API may change). If True, the func may only</span>
-<span class="sd">            be called at the **top level** of a kernel (or directly inside a ``while qd.graph_do_while(...)``</span>
+<span class="sd">            be called at the **top level** of a kernel (or directly inside a ``while qd.graph.do_while(...)``</span>
 <span class="sd">            body). Calling it nested inside ordinary runtime ``for`` / ``if`` / ``while`` control flow raises a</span>
 <span class="sd">            :class:`QuadrantsSyntaxError` at compile time. Intended for multi-phase device ops whose per-phase</span>
 <span class="sd">            top-level ``for`` loops must each lower to their own offloaded launch (e.g. the ``qd.algorithms``</span>
@@ -667,7 +667,7 @@
 
 <div class="viewcode-block" id="data_oriented">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/kernel_impl/index.html#quadrants.lang.kernel_impl.data_oriented">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">data_oriented</span><span class="p">(</span><span class="bp">cls</span><span class="p">):</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">data_oriented</span><span class="p">(</span><span class="bp">cls</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">template_primitives</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Marks a class as Quadrants compatible.</span>
 
 <span class="sd">    To allow for modularized code, Quadrants provides this decorator so that</span>
@@ -692,41 +692,58 @@
 
 <span class="sd">    Args:</span>
 <span class="sd">        cls (Class): the class to be decorated</span>
+<span class="sd">        template_primitives (bool): controls how the primitive (``int`` / ``float`` / ``bool``)</span>
+<span class="sd">            members of instances of this class are treated when an instance is passed into a kernel</span>
+<span class="sd">            as a ``qd.template()`` argument (including as the implicit ``self`` of a member kernel).</span>
+<span class="sd">            When ``True`` (the default, and the historical behaviour) each primitive member is baked</span>
+<span class="sd">            into the compiled kernel as a compile-time constant: mutating it afterwards does not take</span>
+<span class="sd">            effect until the kernel is re-specialised. When ``False`` every primitive member accessed</span>
+<span class="sd">            by the kernel is instead lifted into a runtime scalar kernel argument, so its value is</span>
+<span class="sd">            read fresh on every launch and may be mutated without recompiling. A primitive lifted</span>
+<span class="sd">            this way may not be used inside ``qd.static(...)`` (doing so raises</span>
+<span class="sd">            ``QuadrantsSyntaxError``), since that context requires a compile-time constant.</span>
 
 <span class="sd">    Returns:</span>
 <span class="sd">        The decorated class.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
-    <span class="k">def</span><span class="w"> </span><span class="nf">make_kernel_indirect</span><span class="p">(</span><span class="n">fun</span><span class="p">,</span> <span class="n">is_property</span><span class="p">):</span>
-        <span class="nd">@wraps</span><span class="p">(</span><span class="n">fun</span><span class="p">)</span>
-        <span class="k">def</span><span class="w"> </span><span class="nf">_kernel_indirect</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
-            <span class="k">nonlocal</span> <span class="n">fun</span>
-            <span class="n">ret</span> <span class="o">=</span> <span class="n">_BoundedDifferentiableMethod</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">fun</span><span class="p">)</span>
-            <span class="n">ret</span><span class="o">.</span><span class="vm">__name__</span> <span class="o">=</span> <span class="n">fun</span><span class="o">.</span><span class="vm">__name__</span>  <span class="c1"># type: ignore</span>
-            <span class="k">return</span> <span class="n">ret</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">decorate</span><span class="p">(</span><span class="bp">cls</span><span class="p">):</span>
+        <span class="k">def</span><span class="w"> </span><span class="nf">make_kernel_indirect</span><span class="p">(</span><span class="n">fun</span><span class="p">,</span> <span class="n">is_property</span><span class="p">):</span>
+            <span class="nd">@wraps</span><span class="p">(</span><span class="n">fun</span><span class="p">)</span>
+            <span class="k">def</span><span class="w"> </span><span class="nf">_kernel_indirect</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+                <span class="k">nonlocal</span> <span class="n">fun</span>
+                <span class="n">ret</span> <span class="o">=</span> <span class="n">_BoundedDifferentiableMethod</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">fun</span><span class="p">)</span>
+                <span class="n">ret</span><span class="o">.</span><span class="vm">__name__</span> <span class="o">=</span> <span class="n">fun</span><span class="o">.</span><span class="vm">__name__</span>  <span class="c1"># type: ignore</span>
+                <span class="k">return</span> <span class="n">ret</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
 
-        <span class="n">ret</span> <span class="o">=</span> <span class="n">QuadrantsCallable</span><span class="p">(</span><span class="n">fun</span><span class="p">,</span> <span class="n">_kernel_indirect</span><span class="p">)</span>
-        <span class="k">if</span> <span class="n">is_property</span><span class="p">:</span>
-            <span class="n">ret</span> <span class="o">=</span> <span class="nb">property</span><span class="p">(</span><span class="n">ret</span><span class="p">)</span>
-        <span class="k">return</span> <span class="n">ret</span>
+            <span class="n">ret</span> <span class="o">=</span> <span class="n">QuadrantsCallable</span><span class="p">(</span><span class="n">fun</span><span class="p">,</span> <span class="n">_kernel_indirect</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">is_property</span><span class="p">:</span>
+                <span class="n">ret</span> <span class="o">=</span> <span class="nb">property</span><span class="p">(</span><span class="n">ret</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">ret</span>
 
-    <span class="c1"># Iterate over all the attributes of the class to wrap member kernels in a way to ensure that they will be called</span>
-    <span class="c1"># through _BoundedDifferentiableMethod. This extra layer of indirection is necessary to transparently forward the</span>
-    <span class="c1"># owning instance to the primal function and its adjoint for auto-differentiation gradient computation.</span>
-    <span class="c1"># There is a special treatment for properties, as they may actually hide kernels under the hood. In such a case,</span>
-    <span class="c1"># the underlying function is extracted, wrapped as any member function, then wrapped again as a new property.</span>
-    <span class="c1"># Note that all the other attributes can be left untouched.</span>
-    <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">attr</span> <span class="ow">in</span> <span class="bp">cls</span><span class="o">.</span><span class="vm">__dict__</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
-        <span class="n">attr_type</span> <span class="o">=</span> <span class="nb">type</span><span class="p">(</span><span class="n">attr</span><span class="p">)</span>
-        <span class="n">is_property</span> <span class="o">=</span> <span class="n">attr_type</span> <span class="ow">is</span> <span class="nb">property</span>
-        <span class="n">fun</span> <span class="o">=</span> <span class="n">attr</span><span class="o">.</span><span class="n">fget</span> <span class="k">if</span> <span class="n">is_property</span> <span class="k">else</span> <span class="n">attr</span>
-        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">fun</span><span class="p">,</span> <span class="p">(</span><span class="n">BoundQuadrantsCallable</span><span class="p">,</span> <span class="n">QuadrantsCallable</span><span class="p">)):</span>
-            <span class="k">if</span> <span class="n">fun</span><span class="o">.</span><span class="n">_is_wrapped_kernel</span><span class="p">:</span>
-                <span class="k">if</span> <span class="n">fun</span><span class="o">.</span><span class="n">_is_classkernel</span> <span class="ow">and</span> <span class="n">attr_type</span> <span class="ow">is</span> <span class="ow">not</span> <span class="nb">staticmethod</span><span class="p">:</span>
-                    <span class="nb">setattr</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">make_kernel_indirect</span><span class="p">(</span><span class="n">fun</span><span class="p">,</span> <span class="n">is_property</span><span class="p">))</span>
-    <span class="bp">cls</span><span class="o">.</span><span class="n">_data_oriented</span> <span class="o">=</span> <span class="kc">True</span>
+        <span class="c1"># Iterate over all the attributes of the class to wrap member kernels in a way to ensure that they will be</span>
+        <span class="c1"># called through _BoundedDifferentiableMethod. This extra layer of indirection is necessary to transparently</span>
+        <span class="c1"># forward the owning instance to the primal function and its adjoint for auto-differentiation gradient</span>
+        <span class="c1"># computation. There is a special treatment for properties, as they may actually hide kernels under the hood.</span>
+        <span class="c1"># In such a case, the underlying function is extracted, wrapped as any member function, then wrapped again as a</span>
+        <span class="c1"># new property. Note that all the other attributes can be left untouched.</span>
+        <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">attr</span> <span class="ow">in</span> <span class="bp">cls</span><span class="o">.</span><span class="vm">__dict__</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="n">attr_type</span> <span class="o">=</span> <span class="nb">type</span><span class="p">(</span><span class="n">attr</span><span class="p">)</span>
+            <span class="n">is_property</span> <span class="o">=</span> <span class="n">attr_type</span> <span class="ow">is</span> <span class="nb">property</span>
+            <span class="n">fun</span> <span class="o">=</span> <span class="n">attr</span><span class="o">.</span><span class="n">fget</span> <span class="k">if</span> <span class="n">is_property</span> <span class="k">else</span> <span class="n">attr</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">fun</span><span class="p">,</span> <span class="p">(</span><span class="n">BoundQuadrantsCallable</span><span class="p">,</span> <span class="n">QuadrantsCallable</span><span class="p">)):</span>
+                <span class="k">if</span> <span class="n">fun</span><span class="o">.</span><span class="n">_is_wrapped_kernel</span><span class="p">:</span>
+                    <span class="k">if</span> <span class="n">fun</span><span class="o">.</span><span class="n">_is_classkernel</span> <span class="ow">and</span> <span class="n">attr_type</span> <span class="ow">is</span> <span class="ow">not</span> <span class="nb">staticmethod</span><span class="p">:</span>
+                        <span class="nb">setattr</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">make_kernel_indirect</span><span class="p">(</span><span class="n">fun</span><span class="p">,</span> <span class="n">is_property</span><span class="p">))</span>
+        <span class="bp">cls</span><span class="o">.</span><span class="n">_data_oriented</span> <span class="o">=</span> <span class="kc">True</span>
+        <span class="bp">cls</span><span class="o">.</span><span class="n">_qd_template_primitives</span> <span class="o">=</span> <span class="n">template_primitives</span>
 
-    <span class="k">return</span> <span class="bp">cls</span></div>
+        <span class="k">return</span> <span class="bp">cls</span>
+
+    <span class="c1"># Support both the bare ``@qd.data_oriented`` form and the called ``@qd.data_oriented(...)`` form.</span>
+    <span class="k">if</span> <span class="bp">cls</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">decorate</span>
+    <span class="k">return</span> <span class="n">decorate</span><span class="p">(</span><span class="bp">cls</span><span class="p">)</span></div>
 
 
 

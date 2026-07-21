@@ -34,7 +34,7 @@ Module Contents
    :param is_real_function: Whether the function is a real function
    :type is_real_function: bool
    :param requires_top_level: **Experimental** (behaviour/API may change). If True, the func may only
-                              be called at the **top level** of a kernel (or directly inside a ``while qd.graph_do_while(...)``
+                              be called at the **top level** of a kernel (or directly inside a ``while qd.graph.do_while(...)``
                               body). Calling it nested inside ordinary runtime ``for`` / ``if`` / ``while`` control flow raises a
                               :class:`QuadrantsSyntaxError` at compile time. Intended for multi-phase device ops whose per-phase
                               top-level ``for`` loops must each lower to their own offloaded launch (e.g. the ``qd.algorithms``
@@ -108,7 +108,7 @@ Module Contents
        >>>         x[i] = i
 
 
-.. py:function:: data_oriented(cls)
+.. py:function:: data_oriented(cls=None, *, template_primitives: bool = True)
 
    Marks a class as Quadrants compatible.
 
@@ -134,6 +134,17 @@ Module Contents
 
    :param cls: the class to be decorated
    :type cls: Class
+   :param template_primitives: controls how the primitive (``int`` / ``float`` / ``bool``)
+                               members of instances of this class are treated when an instance is passed into a kernel
+                               as a ``qd.template()`` argument (including as the implicit ``self`` of a member kernel).
+                               When ``True`` (the default, and the historical behaviour) each primitive member is baked
+                               into the compiled kernel as a compile-time constant: mutating it afterwards does not take
+                               effect until the kernel is re-specialised. When ``False`` every primitive member accessed
+                               by the kernel is instead lifted into a runtime scalar kernel argument, so its value is
+                               read fresh on every launch and may be mutated without recompiling. A primitive lifted
+                               this way may not be used inside ``qd.static(...)`` (doing so raises
+                               ``QuadrantsSyntaxError``), since that context requires a compile-time constant.
+   :type template_primitives: bool
 
    :returns: The decorated class.
 

@@ -39,6 +39,7 @@ Functions
 .. autoapisummary::
 
    quadrants.lang.ast.ast_transformer_utils.get_decorator
+   quadrants.lang.ast.ast_transformer_utils.maybe_lifted_primitive
 
 
 Module Contents
@@ -191,6 +192,20 @@ Module Contents
 
 
    .. py:attribute:: struct_ndarray_launch_info
+      :type:  list[tuple]
+      :value: []
+
+
+
+   .. py:attribute:: struct_primitive_provenance
+      :type:  dict[tuple[int, str], tuple]
+
+
+   .. py:attribute:: struct_primitive_to_expr
+      :type:  dict[tuple[int, str], Any]
+
+
+   .. py:attribute:: struct_primitive_launch_info
       :type:  list[tuple]
       :value: []
 
@@ -411,4 +426,19 @@ Module Contents
 
 
 .. py:function:: get_decorator(ctx: ASTTransformerFuncContext, node) -> str
+
+.. py:function:: maybe_lifted_primitive(ctx: ASTTransformerFuncContext, parent: Any, attr: str)
+
+   Handle access to a primitive member that ``@qd.data_oriented(template_primitives=False)`` lifted into a
+   runtime scalar kernel arg (see ``predeclare_struct_primitives``).
+
+   Returns the arg-load ``Expr`` to substitute for the baked value in the enforcing pass; returns ``None`` when
+   the attribute is not a lifted primitive, or during the non-enforcing discovery pass (where the access is
+   instead recorded via ``mark_used`` and the caller falls back to baking the throw-away discovery-pass IR).
+
+   Raises ``QuadrantsSyntaxError`` if the lifted primitive is used inside ``qd.static(...)``: that context
+   requires a compile-time constant, which a runtime-lifted primitive is not. Under this flag there is no
+   per-attribute baked escape hatch, so a ``qd.static`` use is unambiguously a mistake and we surface it loudly
+   rather than silently baking a value that will not track mutations.
+
 

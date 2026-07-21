@@ -434,7 +434,7 @@
 <section id="what-s-available">
 <h2>What’s available<a class="headerlink" href="#what-s-available" title="Link to this heading">#</a></h2>
 <p>All atomic ops follow the same shape: <code class="docutils literal notranslate"><span class="pre">qd.atomic_op(x,</span> <span class="pre">y)</span></code> performs <code class="docutils literal notranslate"><span class="pre">x</span> <span class="pre">=</span> <span class="pre">op(x,</span> <span class="pre">y)</span></code> atomically and returns the <strong>old</strong> value of <code class="docutils literal notranslate"><span class="pre">x</span></code>. <code class="docutils literal notranslate"><span class="pre">x</span></code> must be a writable memory target (a field element, ndarray element, or matrix slot); scalars and constant expressions are not allowed.</p>
-<p>“int” below means any of <code class="docutils literal notranslate"><span class="pre">i32</span></code> / <code class="docutils literal notranslate"><span class="pre">u32</span></code> / <code class="docutils literal notranslate"><span class="pre">i64</span></code> / <code class="docutils literal notranslate"><span class="pre">u64</span></code>. “Floats” means any of <code class="docutils literal notranslate"><span class="pre">f16</span></code> / <code class="docutils literal notranslate"><span class="pre">f32</span></code> / <code class="docutils literal notranslate"><span class="pre">f64</span></code>. Unless otherwise noted, “native” means the op lowers to a single hardware atomic instruction (or its SPIR-V / LLVM-IR equivalent), and “CAS” means a software compare-and-swap loop emitted around a non-atomic compute.</p>
+<p>“int” below means any of <code class="docutils literal notranslate"><span class="pre">i32</span></code> / <code class="docutils literal notranslate"><span class="pre">u32</span></code> / <code class="docutils literal notranslate"><span class="pre">i64</span></code> / <code class="docutils literal notranslate"><span class="pre">u64</span></code>. “Floats” means any of <code class="docutils literal notranslate"><span class="pre">f16</span></code> / <code class="docutils literal notranslate"><span class="pre">f32</span></code> / <code class="docutils literal notranslate"><span class="pre">f64</span></code>. Unless otherwise noted, “native” means the op lowers to a single hardware atomic instruction (or the backend’s direct equivalent), and “CAS” means a software compare-and-swap loop the compiler emits around a non-atomic computation.</p>
 <div class="pst-scrollable-table-container"><table class="table">
 <thead>
 <tr class="row-odd"><th class="head"><p>Op</p></th>
@@ -448,14 +448,14 @@
 <tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">atomic_add</span></code></p></td>
 <td><p>int / f32 native; f64 native (sm_60+)</p></td>
 <td><p>int / f32 native; f64 hardware-dependent</p></td>
-<td><p>int native; Metal global f32 native (Apple7+/Mac2+); Vulkan f16 / f32 / f64 capability-gated, else CAS; Metal f16 / f64 / shared float via CAS</p></td>
+<td><p>int native; f16 / f32 / f64 capability-gated, else CAS</p></td>
 <td><p>int / f32 / f64 native; f16 via CAS</p></td>
 </tr>
 <tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">atomic_sub</span></code></p></td>
-<td><p>rewritten to <code class="docutils literal notranslate"><span class="pre">atomic_add(x,</span> <span class="pre">-y)</span></code> at IR-construction time - see note below</p></td>
-<td><p>(same as <code class="docutils literal notranslate"><span class="pre">atomic_add</span></code>)</p></td>
-<td><p>(same as <code class="docutils literal notranslate"><span class="pre">atomic_add</span></code>)</p></td>
-<td><p>(same as <code class="docutils literal notranslate"><span class="pre">atomic_add</span></code>)</p></td>
+<td><p>behaves as <code class="docutils literal notranslate"><span class="pre">atomic_add(x,</span> <span class="pre">-y)</span></code>; see note below</p></td>
+<td><p>(same)</p></td>
+<td><p>(same)</p></td>
+<td><p>(same)</p></td>
 </tr>
 <tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">atomic_mul</span></code></p></td>
 <td><p>CAS on every dtype</p></td>
@@ -478,13 +478,13 @@
 <tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">atomic_exchange</span></code></p></td>
 <td><p>int / float native (<code class="docutils literal notranslate"><span class="pre">atomicExch</span></code>)</p></td>
 <td><p>int / float native (<code class="docutils literal notranslate"><span class="pre">*_atomic_swap</span></code>)</p></td>
-<td><p>int native; f32 / f64 global via uint-bitcast <code class="docutils literal notranslate"><span class="pre">OpAtomicExchange</span></code>; f16, shared float, workgroup f64 deferred‡</p></td>
+<td><p>int native; f32 / f64 global supported (<code class="docutils literal notranslate"><span class="pre">OpAtomicExchange</span></code>); f16, shared float, workgroup f64 deferred[2]</p></td>
 <td><p>int / float native (<code class="docutils literal notranslate"><span class="pre">xchg</span></code>)</p></td>
 </tr>
 <tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">atomic_cas</span></code></p></td>
 <td><p>int native (<code class="docutils literal notranslate"><span class="pre">atomicCAS</span></code>)</p></td>
 <td><p>int native (<code class="docutils literal notranslate"><span class="pre">*_atomic_cmpswap</span></code>)</p></td>
-<td><p>int native (<code class="docutils literal notranslate"><span class="pre">OpAtomicCompareExchange</span></code>); f32 / f64 rejected at compile time§</p></td>
+<td><p>int native (<code class="docutils literal notranslate"><span class="pre">OpAtomicCompareExchange</span></code>); f32 / f64 rejected at compile time[3]</p></td>
 <td><p>int native (<code class="docutils literal notranslate"><span class="pre">cmpxchg</span></code>)</p></td>
 </tr>
 </tbody>
@@ -492,17 +492,16 @@
 </div>
 <p>A few cross-cutting notes that the cells above abbreviate:</p>
 <ul class="simple">
-<li><p><strong><code class="docutils literal notranslate"><span class="pre">atomic_sub</span></code> is not a separate op in the IR.</strong> <code class="docutils literal notranslate"><span class="pre">quadrants/ir/frontend_ir.cpp::AtomicOpExpression::flatten</span></code> rewrites every <code class="docutils literal notranslate"><span class="pre">atomic_sub(x,</span> <span class="pre">y)</span></code> into <code class="docutils literal notranslate"><span class="pre">atomic_add(x,</span> <span class="pre">-y)</span></code> before codegen sees it, so per-backend support and per-dtype behavior are exactly those of <code class="docutils literal notranslate"><span class="pre">atomic_add</span></code>.</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">atomic_sub</span></code> behaves exactly like <code class="docutils literal notranslate"><span class="pre">atomic_add</span></code>.</strong> Every <code class="docutils literal notranslate"><span class="pre">atomic_sub(x,</span> <span class="pre">y)</span></code> is treated as <code class="docutils literal notranslate"><span class="pre">atomic_add(x,</span> <span class="pre">-y)</span></code>, so its per-backend support and per-dtype behavior are exactly those of <code class="docutils literal notranslate"><span class="pre">atomic_add</span></code>.</p></li>
 <li><p><strong>CAS-loop ops are noticeably slower than native atomics</strong>, especially under contention — every contending thread retries the load + compare-exchange until it wins. Prefer pre-aggregating into a register or shared array and issuing a single atomic at the end of the block where possible.</p></li>
 <li><p><strong>f16 floats always use a CAS loop</strong> (no native f16 atomic on any backend except SPIR-V with the right capability bit).</p></li>
-<li><p><strong>On CPU, “native” does not guarantee a single machine instruction.</strong> On x86 and other architectures without hardware float atomics, the compiler backend lowers native float <code class="docutils literal notranslate"><span class="pre">atomic_add</span></code> (and integer <code class="docutils literal notranslate"><span class="pre">min</span></code> / <code class="docutils literal notranslate"><span class="pre">max</span></code>) to a CAS loop in machine code. Under high contention the performance is similar to the explicit “CAS” entries; the difference is that “native” ops benefit from hardware acceleration where available.</p></li>
-<li><p><strong>SPIR-V capability bits</strong> (<code class="docutils literal notranslate"><span class="pre">spirv_has_atomic_float_add</span></code>, <code class="docutils literal notranslate"><span class="pre">spirv_has_atomic_float64_add</span></code>, <code class="docutils literal notranslate"><span class="pre">spirv_has_atomic_float16_add</span></code>, plus the matching <code class="docutils literal notranslate"><span class="pre">spirv_has_shared_atomic_float*_add</span></code> bits for workgroup memory) decide whether <code class="docutils literal notranslate"><span class="pre">atomic_add</span></code> lowers to native <code class="docutils literal notranslate"><span class="pre">OpAtomicFAddEXT</span></code> or a uint-backed CAS - the dispatch happens per-call inside <code class="docutils literal notranslate"><span class="pre">quadrants/codegen/spirv/spirv_codegen.cpp</span></code>.</p></li>
-<li><p><strong>Metal float <code class="docutils literal notranslate"><span class="pre">atomic_add</span></code>.</strong> On Apple7+ / Mac2+ the Metal RHI advertises <code class="docutils literal notranslate"><span class="pre">spirv_has_atomic_float</span></code> / <code class="docutils literal notranslate"><span class="pre">spirv_has_atomic_float_add</span></code>, so global / device-buffer <code class="docutils literal notranslate"><span class="pre">f32</span></code> <code class="docutils literal notranslate"><span class="pre">atomic_add</span></code> (and <code class="docutils literal notranslate"><span class="pre">atomic_sub</span></code>, rewritten to add) lowers to <code class="docutils literal notranslate"><span class="pre">OpAtomicFAddEXT</span></code> -&gt; MSL <code class="docutils literal notranslate"><span class="pre">atomic_fetch_add</span></code> on <code class="docutils literal notranslate"><span class="pre">device</span> <span class="pre">atomic_float</span></code>. That path requires MSL 3.0 (<code class="docutils literal notranslate"><span class="pre">MTLLanguageVersion3_0</span></code> + SPIRV-Cross <code class="docutils literal notranslate"><span class="pre">set_msl_version(3,0,0)</span></code>). Metal does <strong>not</strong> support threadgroup <code class="docutils literal notranslate"><span class="pre">atomic_float</span></code>, and has no native float min/max / f16 / f64 atomics, so shared float atomics and those dtypes stay on the uint CAS path. Vulkan still reads the same capability bits from <code class="docutils literal notranslate"><span class="pre">VK_EXT_shader_atomic_float*</span></code>.</p></li>
-<li><p><strong><code class="docutils literal notranslate"><span class="pre">i64</span></code> / <code class="docutils literal notranslate"><span class="pre">u64</span></code> atomic RMW is not portable to Metal.</strong> Metal Shading Language only exposes 64-bit atomics as <code class="docutils literal notranslate"><span class="pre">atomic_fetch_min</span></code> / <code class="docutils literal notranslate"><span class="pre">atomic_fetch_max</span></code> on <code class="docutils literal notranslate"><span class="pre">uint64</span></code> (Apple GPU family 9+, M3 / A17); <code class="docutils literal notranslate"><span class="pre">atomic_add</span></code> / <code class="docutils literal notranslate"><span class="pre">sub</span></code> / <code class="docutils literal notranslate"><span class="pre">mul</span></code> and the bitwise family are unavailable on every Apple GPU. The Metal RHI today over-advertises <code class="docutils literal notranslate"><span class="pre">spirv_has_atomic_int64</span></code> (gated on Apple7 / Mac2 in <code class="docutils literal notranslate"><span class="pre">quadrants/rhi/metal/metal_device.mm</span></code>), so 64-bit integer atomics under Metal fail at pipeline create time with <code class="docutils literal notranslate"><span class="pre">RhiResult=-1</span></code>. Use <code class="docutils literal notranslate"><span class="pre">i32</span></code> / <code class="docutils literal notranslate"><span class="pre">u32</span></code> for Metal portability. CUDA, AMDGPU, and Vulkan with <code class="docutils literal notranslate"><span class="pre">VK_KHR_shader_atomic_int64</span></code> are unaffected.</p></li>
+<li><p><strong>On CPU, “native” does not guarantee a single machine instruction.</strong> On x86 and other architectures without hardware float atomics, native float <code class="docutils literal notranslate"><span class="pre">atomic_add</span></code> (and integer <code class="docutils literal notranslate"><span class="pre">min</span></code> / <code class="docutils literal notranslate"><span class="pre">max</span></code>) runs as a CAS loop in machine code. Under high contention the performance is similar to the explicit “CAS” entries; the difference is that “native” ops benefit from hardware acceleration where available.</p></li>
+<li><p><strong>On Vulkan / Metal, whether float <code class="docutils literal notranslate"><span class="pre">atomic_add</span></code> is native depends on the device.</strong> If the device reports the matching float-atomic capability, <code class="docutils literal notranslate"><span class="pre">atomic_add</span></code> uses a native float atomic; otherwise it falls back to a CAS loop.</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">i64</span></code> / <code class="docutils literal notranslate"><span class="pre">u64</span></code> atomic read-modify-write is not portable to Metal.</strong> Metal only exposes 64-bit atomics as <code class="docutils literal notranslate"><span class="pre">atomic_min</span></code> / <code class="docutils literal notranslate"><span class="pre">atomic_max</span></code> on unsigned 64-bit values (Apple GPU family 9+, i.e. M3 / A17 and newer); <code class="docutils literal notranslate"><span class="pre">atomic_add</span></code> / <code class="docutils literal notranslate"><span class="pre">sub</span></code> / <code class="docutils literal notranslate"><span class="pre">mul</span></code> and the bitwise family are unavailable on every Apple GPU. Attempting a 64-bit integer atomic under Metal currently fails when the shader is built. Use <code class="docutils literal notranslate"><span class="pre">i32</span></code> / <code class="docutils literal notranslate"><span class="pre">u32</span></code> for Metal portability. CUDA, AMDGPU, and Vulkan with the <code class="docutils literal notranslate"><span class="pre">VK_KHR_shader_atomic_int64</span></code> extension are unaffected.</p></li>
 </ul>
-<p>† <code class="docutils literal notranslate"><span class="pre">i64</span></code> / <code class="docutils literal notranslate"><span class="pre">u64</span></code> atomic RMW is <strong>not portable to Metal</strong>. Metal Shading Language only exposes 64-bit atomics as <code class="docutils literal notranslate"><span class="pre">atomic_fetch_min</span></code> / <code class="docutils literal notranslate"><span class="pre">atomic_fetch_max</span></code> on <code class="docutils literal notranslate"><span class="pre">uint64</span></code>, starting at Apple GPU family 9 (M3 / A17 and newer); <code class="docutils literal notranslate"><span class="pre">atomic_add</span></code> / <code class="docutils literal notranslate"><span class="pre">sub</span></code> / <code class="docutils literal notranslate"><span class="pre">mul</span></code> and the bitwise family are unavailable on every Apple GPU. The Metal RHI today over-advertises <code class="docutils literal notranslate"><span class="pre">spirv_has_atomic_int64</span></code> (gated on Apple7 / Mac2 in <code class="docutils literal notranslate"><span class="pre">quadrants/rhi/metal/metal_device.mm</span></code>), so trying to use 64-bit integer atomics under Metal currently fails at pipeline create time with <code class="docutils literal notranslate"><span class="pre">RhiResult=-1</span></code> (“SPIR-V shader was rejected by the backend”). Use <code class="docutils literal notranslate"><span class="pre">i32</span></code> / <code class="docutils literal notranslate"><span class="pre">u32</span></code> if you need cross-Metal portability. CUDA, AMDGPU, and Vulkan with <code class="docutils literal notranslate"><span class="pre">VK_KHR_shader_atomic_int64</span></code> are unaffected.</p>
-<p>‡ <code class="docutils literal notranslate"><span class="pre">atomic_exchange</span></code> on <code class="docutils literal notranslate"><span class="pre">f16</span></code>, on shared (<code class="docutils literal notranslate"><span class="pre">qd.simt.block.SharedArray</span></code>) float arrays, and on f64 in workgroup memory is not yet wired up. Global-memory <code class="docutils literal notranslate"><span class="pre">atomic_exchange</span></code> on every other dtype/backend combination listed above is supported; the SPIR-V path bitcasts through the corresponding uint type so no <code class="docutils literal notranslate"><span class="pre">spirv_has_atomic_float_*</span></code> capability is required.</p>
-<p>§ <code class="docutils literal notranslate"><span class="pre">atomic_cas</span></code> on <code class="docutils literal notranslate"><span class="pre">f32</span></code> / <code class="docutils literal notranslate"><span class="pre">f64</span></code> is rejected at compile time (raises <code class="docutils literal notranslate"><span class="pre">QuadrantsTypeError</span></code>). Integer CAS (<code class="docutils literal notranslate"><span class="pre">i32</span></code> / <code class="docutils literal notranslate"><span class="pre">u32</span></code> / <code class="docutils literal notranslate"><span class="pre">i64</span></code> / <code class="docutils literal notranslate"><span class="pre">u64</span></code>) is supported on every backend listed in the table above, with the same Metal caveat for <code class="docutils literal notranslate"><span class="pre">i64</span></code> / <code class="docutils literal notranslate"><span class="pre">u64</span></code> (†) as the rest of the 64-bit integer atomic family.</p>
+<p>[1] <code class="docutils literal notranslate"><span class="pre">i64</span></code> / <code class="docutils literal notranslate"><span class="pre">u64</span></code> atomic read-modify-write is <strong>not portable to Metal</strong>. Metal only exposes 64-bit atomics as <code class="docutils literal notranslate"><span class="pre">atomic_min</span></code> / <code class="docutils literal notranslate"><span class="pre">atomic_max</span></code> on unsigned 64-bit values, starting at Apple GPU family 9 (M3 / A17 and newer); <code class="docutils literal notranslate"><span class="pre">atomic_add</span></code> / <code class="docutils literal notranslate"><span class="pre">sub</span></code> / <code class="docutils literal notranslate"><span class="pre">mul</span></code> and the bitwise family are unavailable on every Apple GPU. Trying to use a 64-bit integer atomic under Metal currently fails when the shader is built. Use <code class="docutils literal notranslate"><span class="pre">i32</span></code> / <code class="docutils literal notranslate"><span class="pre">u32</span></code> if you need cross-Metal portability. CUDA, AMDGPU, and Vulkan with the <code class="docutils literal notranslate"><span class="pre">VK_KHR_shader_atomic_int64</span></code> extension are unaffected.</p>
+<p>[2] <code class="docutils literal notranslate"><span class="pre">atomic_exchange</span></code> on <code class="docutils literal notranslate"><span class="pre">f16</span></code>, on shared (<code class="docutils literal notranslate"><span class="pre">qd.simt.block.SharedArray</span></code>) float arrays, and on f64 in shared (workgroup) memory is not yet supported. Global-memory <code class="docutils literal notranslate"><span class="pre">atomic_exchange</span></code> on every other dtype/backend combination listed above is supported; on Vulkan / Metal it works for float types without needing any special device capability.</p>
+<p>[3] <code class="docutils literal notranslate"><span class="pre">atomic_cas</span></code> on <code class="docutils literal notranslate"><span class="pre">f32</span></code> / <code class="docutils literal notranslate"><span class="pre">f64</span></code> is rejected at compile time (raises <code class="docutils literal notranslate"><span class="pre">QuadrantsTypeError</span></code>). Integer CAS (<code class="docutils literal notranslate"><span class="pre">i32</span></code> / <code class="docutils literal notranslate"><span class="pre">u32</span></code> / <code class="docutils literal notranslate"><span class="pre">i64</span></code> / <code class="docutils literal notranslate"><span class="pre">u64</span></code>) is supported on every backend listed in the table above, with the same Metal caveat for <code class="docutils literal notranslate"><span class="pre">i64</span></code> / <code class="docutils literal notranslate"><span class="pre">u64</span></code> ([1]) as the rest of the 64-bit integer atomic family.</p>
 <p>All atomic ops can be called on either global memory (fields, ndarrays) or block-shared memory (<code class="docutils literal notranslate"><span class="pre">qd.simt.block.SharedArray</span></code>). They are sequentially consistent on the location they touch; they are <strong>not</strong> memory fences for the rest of the address space - to publish other writes alongside an atomic, pair the atomic with <code class="docutils literal notranslate"><span class="pre">qd.simt.block.mem_fence()</span></code> (block scope) or <code class="docutils literal notranslate"><span class="pre">qd.simt.grid.mem_fence()</span></code> (device scope).</p>
 </section>
 <section id="semantics">
@@ -530,20 +529,17 @@
 <div class="pst-scrollable-table-container"><table class="table">
 <thead>
 <tr class="row-odd"><th class="head"><p>Backends</p></th>
-<th class="head"><p><code class="docutils literal notranslate"><span class="pre">f16</span></code></p></th>
-<th class="head"><p><code class="docutils literal notranslate"><span class="pre">f32</span></code>, <code class="docutils literal notranslate"><span class="pre">f64</span></code></p></th>
+<th class="head"><p><code class="docutils literal notranslate"><span class="pre">f16</span></code> min/max</p></th>
 <th class="head"><p>Both inputs <code class="docutils literal notranslate"><span class="pre">NaN</span></code></p></th>
 </tr>
 </thead>
 <tbody>
-<tr class="row-even"><td><p>CPU, CUDA, AMDGPU (LLVM)</p></td>
-<td><p>CAS over <code class="docutils literal notranslate"><span class="pre">llvm.minnum</span></code> / <code class="docutils literal notranslate"><span class="pre">llvm.maxnum</span></code></p></td>
-<td><p>LLVM <code class="docutils literal notranslate"><span class="pre">atomicrmw</span> <span class="pre">fmin</span></code> / <code class="docutils literal notranslate"><span class="pre">fmax</span></code></p></td>
-<td><p><code class="docutils literal notranslate"><span class="pre">NaN</span></code> (per LLVM <code class="docutils literal notranslate"><span class="pre">minnum</span></code> / <code class="docutils literal notranslate"><span class="pre">maxnum</span></code> spec)</p></td>
+<tr class="row-even"><td><p>CPU, CUDA, AMDGPU</p></td>
+<td><p>CAS loop</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">NaN</span></code></p></td>
 </tr>
 <tr class="row-odd"><td><p>Vulkan, Metal (SPIR-V)</p></td>
 <td><p>capability-gated, usually unsupported</p></td>
-<td><p>CAS loop with GLSL <code class="docutils literal notranslate"><span class="pre">FMin</span></code> / <code class="docutils literal notranslate"><span class="pre">FMax</span></code></p></td>
 <td><p>undefined per spec; <code class="docutils literal notranslate"><span class="pre">NaN</span></code> in practice</p></td>
 </tr>
 </tbody>
@@ -556,7 +552,7 @@
 </section>
 <section id="qd-atomic-sub-x-y-qd-atomic-mul-x-y">
 <h3><code class="docutils literal notranslate"><span class="pre">qd.atomic_sub(x,</span> <span class="pre">y)</span></code> / <code class="docutils literal notranslate"><span class="pre">qd.atomic_mul(x,</span> <span class="pre">y)</span></code><a class="headerlink" href="#qd-atomic-sub-x-y-qd-atomic-mul-x-y" title="Link to this heading">#</a></h3>
-<p>Atomic subtract and atomic multiply. <code class="docutils literal notranslate"><span class="pre">atomic_sub</span></code> is rewritten to <code class="docutils literal notranslate"><span class="pre">atomic_add(x,</span> <span class="pre">-y)</span></code> at IR-construction time (<code class="docutils literal notranslate"><span class="pre">quadrants/ir/frontend_ir.cpp::AtomicOpExpression::flatten</span></code>), so its per-backend behavior is identical to <code class="docutils literal notranslate"><span class="pre">atomic_add</span></code>. <code class="docutils literal notranslate"><span class="pre">atomic_mul</span></code> always lowers to a CAS loop - no LLVM AtomicRMW or SPIR-V <code class="docutils literal notranslate"><span class="pre">OpAtomic*</span></code> op corresponds to multiply - and is intentionally not heavily optimized; prefer reducing to a different scheme on hot paths.</p>
+<p>Atomic subtract and atomic multiply. <code class="docutils literal notranslate"><span class="pre">atomic_sub</span></code> behaves exactly like <code class="docutils literal notranslate"><span class="pre">atomic_add(x,</span> <span class="pre">-y)</span></code>, so its per-backend behavior is identical to <code class="docutils literal notranslate"><span class="pre">atomic_add</span></code>. <code class="docutils literal notranslate"><span class="pre">atomic_mul</span></code> always uses a CAS loop - no backend has a native atomic-multiply instruction - and is intentionally not heavily optimized; prefer reducing to a different scheme on hot paths.</p>
 </section>
 <section id="qd-atomic-exchange-x-y">
 <h3><code class="docutils literal notranslate"><span class="pre">qd.atomic_exchange(x,</span> <span class="pre">y)</span></code><a class="headerlink" href="#qd-atomic-exchange-x-y" title="Link to this heading">#</a></h3>
@@ -611,42 +607,15 @@
 </section>
 <section id="qd-volatile-load-target">
 <h3><code class="docutils literal notranslate"><span class="pre">qd.volatile_load(target)</span></code><a class="headerlink" href="#qd-volatile-load-target" title="Link to this heading">#</a></h3>
-<p>Read <code class="docutils literal notranslate"><span class="pre">target</span></code> from memory with <strong>volatile</strong> semantics: the compiler is forbidden from caching, hoisting, or merging the load with prior reads of the same address. Strictly speaking this is not an atomic op (it does not modify the cell, and per-thread it is no more atomic than an ordinary load) — it lives on this page because it is the read-side counterpart to <code class="docutils literal notranslate"><span class="pre">qd.atomic_*</span></code> in producer / consumer patterns. Without it, a spin-wait loop reading the location written by another thread or block is undefined at the LLVM-IR / SPIR-V level.</p>
+<p>Read <code class="docutils literal notranslate"><span class="pre">target</span></code> from memory with <strong>volatile</strong> semantics: the compiler is forbidden from caching, hoisting, or merging the load with prior reads of the same address. Strictly speaking this is not an atomic op (it does not modify the cell, and per-thread it is no more atomic than an ordinary load) - it lives on this page because it is the read-side counterpart to <code class="docutils literal notranslate"><span class="pre">qd.atomic_*</span></code> in producer / consumer patterns. Without it, a spin-wait loop reading a location written by another thread or block has undefined behavior.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">val</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">volatile_load</span><span class="p">(</span><span class="n">target</span><span class="p">)</span>
 <span class="c1"># Effect:</span>
 <span class="c1">#   load(target) — but the load is guaranteed to actually go to memory on every call,</span>
 <span class="c1">#   not be reused from a register or hoisted out of an enclosing loop.</span>
 </pre></div>
 </div>
-<p><code class="docutils literal notranslate"><span class="pre">target</span></code> must be a global lvalue (a field or ndarray subscript); function-scope local arrays are rejected because a local cannot be observed by another thread. Bit-packed quant snodes are also rejected (per-field volatile semantics on a shared physical word are not meaningful).</p>
-<div class="pst-scrollable-table-container"><table class="table">
-<thead>
-<tr class="row-odd"><th class="head"><p>Backend</p></th>
-<th class="head"><p>Lowering</p></th>
-</tr>
-</thead>
-<tbody>
-<tr class="row-even"><td><p>CUDA</p></td>
-<td><p>LLVM <code class="docutils literal notranslate"><span class="pre">load</span> <span class="pre">volatile</span></code> → PTX <code class="docutils literal notranslate"><span class="pre">ld.volatile.global</span></code>.</p></td>
-</tr>
-<tr class="row-odd"><td><p>AMDGPU</p></td>
-<td><p>LLVM <code class="docutils literal notranslate"><span class="pre">load</span> <span class="pre">volatile</span></code> → unhoistable <code class="docutils literal notranslate"><span class="pre">global_load_*</span></code> (the optimizer is inhibited from forwarding / merging).</p></td>
-</tr>
-<tr class="row-even"><td><p>Vulkan / Metal</p></td>
-<td><p>SPIR-V <code class="docutils literal notranslate"><span class="pre">OpLoad</span></code> with the <code class="docutils literal notranslate"><span class="pre">Volatile</span></code> <code class="docutils literal notranslate"><span class="pre">MemoryAccess</span></code> mask, propagated through SPIRV-Cross to a re-read on every use in the generated MSL / GLSL.</p></td>
-</tr>
-<tr class="row-odd"><td><p>CPU (x86_64)</p></td>
-<td><p>LLVM <code class="docutils literal notranslate"><span class="pre">load</span> <span class="pre">volatile</span></code> (the optimizer cannot hoist or merge it; the runtime cost is identical to an ordinary load on x86).</p></td>
-</tr>
-</tbody>
-</table>
-</div>
-<p>Quadrants additionally suppresses the optimizations that would otherwise let an aliased rewrite slip past codegen:</p>
-<ul class="simple">
-<li><p><code class="docutils literal notranslate"><span class="pre">cache_loop_invariant_global_vars</span></code> does not hoist a volatile load out of an enclosing loop.</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">simplify</span></code> does not replace a volatile load with the value of an earlier load of the same address.</p></li>
-<li><p>On CUDA, the <code class="docutils literal notranslate"><span class="pre">__ldg</span></code> / <code class="docutils literal notranslate"><span class="pre">!invariant.load</span></code> read-only-cache fast path is suppressed for volatile loads (the two attributes are contradictory).</p></li>
-</ul>
+<p><code class="docutils literal notranslate"><span class="pre">target</span></code> must be a global lvalue (a field or ndarray subscript); function-scope local arrays are rejected because a local cannot be observed by another thread. Bit-packed / quantized fields (where several logical values share one physical memory word) are also rejected, because volatile semantics on one packed value inside a shared word are not meaningful.</p>
+<p>The volatile guarantee holds even inside loops and across repeated reads of the same address: the compiler will not hoist the load out of an enclosing loop, reuse the value of an earlier read, or serve it from a read-only cache. Per-backend lowering details are in the advanced section below.</p>
 <section id="spin-wait-pattern-the-canonical-use-case">
 <h4>Spin-wait pattern (the canonical use case)<a class="headerlink" href="#spin-wait-pattern-the-canonical-use-case" title="Link to this heading">#</a></h4>
 <p>The naive approach</p>
@@ -681,6 +650,10 @@
 <li><p><strong><code class="docutils literal notranslate"><span class="pre">f64</span></code> atomics fall off the fast path</strong> on most backends; if you only need monotonic accumulation, consider Kahan summation in registers and a single atomic-add at the end of the block.</p></li>
 <li><p><strong><code class="docutils literal notranslate"><span class="pre">atomic_mul</span></code> is generally a CAS loop</strong> under the hood; don’t put it on the hot path.</p></li>
 </ul>
+</section>
+<section id="under-the-hood-advanced">
+<h2>Under the hood (advanced)<a class="headerlink" href="#under-the-hood-advanced" title="Link to this heading">#</a></h2>
+<p>The rest of this page describes backend and compiler internals. You do not need any of it to use the atomic ops above; it is here for readers debugging performance or backend-specific behavior.</p>
 <section id="atomic-visibility-scope-across-backends">
 <h3>Atomic visibility scope across backends<a class="headerlink" href="#atomic-visibility-scope-across-backends" title="Link to this heading">#</a></h3>
 <p>Every <code class="docutils literal notranslate"><span class="pre">qd.atomic_*</span></code> is emitted at <strong>device-wide scope</strong>: visible to all threads on the GPU executing the kernel, but not required to be coherent with the host CPU mid-kernel. The host only observes results once the kernel completes, at which point the launcher’s stream-sync flushes everything regardless. Choosing device scope (rather than the strongest “system” scope) lets every backend lower the op to a single hardware atomic instruction instead of a software CAS retry loop, which matters for correctness as much as for speed: under heavy contention, a CAS loop on a non-converging op like <code class="docutils literal notranslate"><span class="pre">atomic_xor</span></code> can livelock.</p>
@@ -794,9 +767,32 @@
 <li><p><code class="docutils literal notranslate"><span class="pre">gfx942</span></code> (CDNA3 / MI300X, Quadrants’ default AMDGPU target): <code class="docutils literal notranslate"><span class="pre">atomic_add</span></code> f32 / f64 are native (<code class="docutils literal notranslate"><span class="pre">flat_atomic_add_f32</span></code> / <code class="docutils literal notranslate"><span class="pre">_f64</span></code>), <code class="docutils literal notranslate"><span class="pre">atomic_min</span></code> / <code class="docutils literal notranslate"><span class="pre">max</span></code> f64 are native (<code class="docutils literal notranslate"><span class="pre">flat_atomic_min_f64</span></code> / <code class="docutils literal notranslate"><span class="pre">max_f64</span></code>); f32 min/max still expand to CAS.</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">gfx906</span></code>, <code class="docutils literal notranslate"><span class="pre">gfx90a</span></code>, <code class="docutils literal notranslate"><span class="pre">gfx1030</span></code>, <code class="docutils literal notranslate"><span class="pre">gfx1100</span></code>: all f32 / f64 float atomics expand to CAS.</p></li>
 </ul>
-<ol class="arabic simple" start="3">
-<li><p>SPIR-V float <code class="docutils literal notranslate"><span class="pre">atomic_add</span></code> lowers to <code class="docutils literal notranslate"><span class="pre">OpAtomicFAddEXT</span></code> when the matching <code class="docutils literal notranslate"><span class="pre">spirv_has_atomic_float{,64,16}_add</span></code> capability is present on the device, and to a CAS loop with a GLSL.std.450 payload otherwise. Metal always advertises global f32 add on Apple7+/Mac2+ (see bullet above); Vulkan is capability-gated per <code class="docutils literal notranslate"><span class="pre">VK_EXT_shader_atomic_float*</span></code>. Shared float add needs <code class="docutils literal notranslate"><span class="pre">spirv_has_shared_atomic_float*_add</span></code>, which Metal never sets. Quadrants does not currently emit <code class="docutils literal notranslate"><span class="pre">OpAtomicFMinEXT</span></code> / <code class="docutils literal notranslate"><span class="pre">OpAtomicFMaxEXT</span></code>, so float min/max is always CAS on SPIR-V backends.</p></li>
-</ol>
+<p>³ SPIR-V float <code class="docutils literal notranslate"><span class="pre">atomic_add</span></code> lowers to <code class="docutils literal notranslate"><span class="pre">OpAtomicFAddEXT</span></code> when the matching <code class="docutils literal notranslate"><span class="pre">spirv_has_atomic_float{32,64}_add</span></code> capability is present on the device, and to a CAS loop with a GLSL.std.450 payload otherwise. Quadrants does not currently emit <code class="docutils literal notranslate"><span class="pre">OpAtomicFMinEXT</span></code> / <code class="docutils literal notranslate"><span class="pre">OpAtomicFMaxEXT</span></code>, so float min/max is always CAS on SPIR-V backends.</p>
+</section>
+<section id="qd-volatile-load-lowering">
+<h3><code class="docutils literal notranslate"><span class="pre">qd.volatile_load</span></code> lowering<a class="headerlink" href="#qd-volatile-load-lowering" title="Link to this heading">#</a></h3>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>Backend</p></th>
+<th class="head"><p>Lowering</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>CUDA</p></td>
+<td><p>LLVM <code class="docutils literal notranslate"><span class="pre">load</span> <span class="pre">volatile</span></code> -&gt; PTX <code class="docutils literal notranslate"><span class="pre">ld.volatile.global</span></code>.</p></td>
+</tr>
+<tr class="row-odd"><td><p>AMDGPU</p></td>
+<td><p>LLVM <code class="docutils literal notranslate"><span class="pre">load</span> <span class="pre">volatile</span></code> -&gt; unhoistable <code class="docutils literal notranslate"><span class="pre">global_load_*</span></code> (the optimizer is inhibited from forwarding / merging).</p></td>
+</tr>
+<tr class="row-even"><td><p>Vulkan / Metal</p></td>
+<td><p>SPIR-V <code class="docutils literal notranslate"><span class="pre">OpLoad</span></code> with the <code class="docutils literal notranslate"><span class="pre">Volatile</span></code> <code class="docutils literal notranslate"><span class="pre">MemoryAccess</span></code> mask, propagated through SPIRV-Cross to a re-read on every use in the generated MSL / GLSL.</p></td>
+</tr>
+<tr class="row-odd"><td><p>CPU (x86_64)</p></td>
+<td><p>LLVM <code class="docutils literal notranslate"><span class="pre">load</span> <span class="pre">volatile</span></code> (the optimizer cannot hoist or merge it; the runtime cost is identical to an ordinary load on x86).</p></td>
+</tr>
+</tbody>
+</table>
+</div>
 </section>
 </section>
 <section id="related">
@@ -873,9 +869,11 @@
 </li>
 </ul>
 </li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#performance-and-portability-notes">Performance and portability notes</a><ul class="nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#performance-and-portability-notes">Performance and portability notes</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#under-the-hood-advanced">Under the hood (advanced)</a><ul class="nav section-nav flex-column">
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#atomic-visibility-scope-across-backends">Atomic visibility scope across backends</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#native-instruction-vs-cas-fallback">Native instruction vs CAS fallback</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#qd-volatile-load-lowering"><code class="docutils literal notranslate"><span class="pre">qd.volatile_load</span></code> lowering</a></li>
 </ul>
 </li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#related">Related</a></li>

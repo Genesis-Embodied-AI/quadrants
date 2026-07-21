@@ -633,7 +633,7 @@
             <span class="n">func_name</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">func</span><span class="p">,</span> <span class="s2">&quot;__name__&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;this @qd.func&quot;</span>
             <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span>
                 <span class="sa">f</span><span class="s2">&quot;`</span><span class="si">{</span><span class="n">func_name</span><span class="si">}</span><span class="s2">` is decorated with requires_top_level=True and must be called at the top &quot;</span>
-                <span class="sa">f</span><span class="s2">&quot;level of a @qd.kernel (or directly inside a `while qd.graph_do_while(...)` body). It &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;level of a @qd.kernel (or directly inside a `while qd.graph.do_while(...)` body). It &quot;</span>
                 <span class="sa">f</span><span class="s2">&quot;cannot be nested inside a runtime for / if / while: that demotes its phase loops out of &quot;</span>
                 <span class="sa">f</span><span class="s2">&quot;top-level position, collapsing the per-phase grid-wide barriers and corrupting the result.&quot;</span>
             <span class="p">)</span>

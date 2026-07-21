@@ -648,6 +648,36 @@ my_struct.b[37] 5
 <span class="n">Simulation</span><span class="p">(</span><span class="mi">200</span><span class="p">)</span><span class="o">.</span><span class="n">step</span><span class="p">()</span>   <span class="c1"># compiles kernel #2 with n=200 baked in</span>
 </pre></div>
 </div>
+<section id="runtime-primitives-template-primitives-false">
+<h4>Runtime primitives: <code class="docutils literal notranslate"><span class="pre">template_primitives=False</span></code><a class="headerlink" href="#runtime-primitives-template-primitives-false" title="Link to this heading">#</a></h4>
+<p>If you want to change a primitive member’s value <strong>from Python between launches without triggering a recompile</strong>, decorate the class with <code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented(template_primitives=False)</span></code>. Every primitive member the kernel actually accesses (<code class="docutils literal notranslate"><span class="pre">int</span></code>, <code class="docutils literal notranslate"><span class="pre">float</span></code>, <code class="docutils literal notranslate"><span class="pre">bool</span></code>, including those reached through nested <code class="docutils literal notranslate"><span class="pre">dataclasses.dataclass</span></code> / <code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code> members) is then lifted into a runtime scalar kernel argument and read fresh on every launch, instead of being compiled into the kernel as a constant. The member stays read-only inside the kernel (it is a kernel argument, not a writable variable): you mutate it in Python, and the kernel sees the new value on the next launch.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">data_oriented</span><span class="p">(</span><span class="n">template_primitives</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">Simulation</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">n</span> <span class="o">=</span> <span class="mi">100</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">x</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">256</span><span class="p">,))</span>
+
+    <span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">step</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">n</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">x</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">+=</span> <span class="mf">1.0</span>
+
+<span class="n">sim</span> <span class="o">=</span> <span class="n">Simulation</span><span class="p">()</span>
+<span class="n">sim</span><span class="o">.</span><span class="n">step</span><span class="p">()</span>        <span class="c1"># compiles once; n is a runtime kernel argument</span>
+<span class="n">sim</span><span class="o">.</span><span class="n">n</span> <span class="o">=</span> <span class="mi">200</span>       <span class="c1"># no recompilation</span>
+<span class="n">sim</span><span class="o">.</span><span class="n">step</span><span class="p">()</span>        <span class="c1"># the new value of n takes effect immediately</span>
+</pre></div>
+</div>
+<p>Notes and restrictions:</p>
+<ul class="simple">
+<li><p><strong>dtype</strong> follows the runtime defaults - an <code class="docutils literal notranslate"><span class="pre">int</span></code> / <code class="docutils literal notranslate"><span class="pre">bool</span></code> member becomes the default integer type (<code class="docutils literal notranslate"><span class="pre">qd.i32</span></code>, unless you override the runtime default integer type in <code class="docutils literal notranslate"><span class="pre">qd.init()</span></code>) and a <code class="docutils literal notranslate"><span class="pre">float</span></code> member becomes the default float type (<code class="docutils literal notranslate"><span class="pre">qd.f32</span></code>, unless you override the runtime default float type in <code class="docutils literal notranslate"><span class="pre">qd.init()</span></code>). A member whose value falls outside the default integer range will overflow where a baked literal would not; if you need exact wide-integer constants, keep the default (baked) behaviour.</p></li>
+<li><p><strong>dtype is fixed at first compile</strong>: the kernel-argument dtype is chosen from the member’s Python type the first time the kernel compiles, and is <em>not</em> re-specialised if you later reassign the member to a different type. The live value is coerced to that dtype on every launch, so binding a <code class="docutils literal notranslate"><span class="pre">float</span></code> to a member that was first seen as an <code class="docutils literal notranslate"><span class="pre">int</span></code> truncates it (exactly as passing a <code class="docutils literal notranslate"><span class="pre">float</span></code> to an <code class="docutils literal notranslate"><span class="pre">int</span></code>-typed kernel argument would). Keep a lifted member’s type stable across launches; if the type itself must vary, use the default (baked) behaviour, which re-specialises the kernel per type.</p></li>
+<li><p><strong>Pruning</strong>: only the primitives the kernel actually reads are turned into kernel arguments, so a class with many primitive members does not blow up the kernel argument count.</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">qd.static</span></code> is an error</strong>: a lifted primitive cannot be used inside <a class="reference internal" href="static.html"><span class="std std-doc"><code class="docutils literal notranslate"><span class="pre">qd.static(...)</span></code></span></a>, because that context requires a compile-time constant. Doing so raises <code class="docutils literal notranslate"><span class="pre">QuadrantsSyntaxError</span></code>. Use the default <code class="docutils literal notranslate"><span class="pre">template_primitives=True</span></code> for values that must be baked (e.g. unrolled loop bounds).</p></li>
+<li><p><strong>No re-specialisation on value change</strong>: because the value is a runtime argument, mutating it never triggers a recompile. Distinct instances of the class still compile separately (the kernel is keyed per instance), exactly as with the default.</p></li>
+<li><p>This is <strong>opt-in</strong>: the default <code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code> continues to bake primitive members as shown above.</p></li>
+</ul>
+</section>
 </section>
 <section id="tensor-members">
 <h3>Tensor members<a class="headerlink" href="#tensor-members" title="Link to this heading">#</a></h3>
@@ -678,7 +708,7 @@ my_struct.b[37] 5
 </section>
 <section id="id1">
 <h3>Under the hood<a class="headerlink" href="#id1" title="Link to this heading">#</a></h3>
-<p>Like <code class="docutils literal notranslate"><span class="pre">dataclasses.dataclass</span></code>, a <code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code> object is Python-only — the compiler flattens it into individual kernel parameters and the object itself has no kernel-side representation. Unlike <code class="docutils literal notranslate"><span class="pre">dataclasses.dataclass</span></code> it needs no member annotations: the compiler reads the live instance’s attributes directly. Primitive members are baked into the kernel as constants, so each distinct primitive value compiles a new specialized kernel.</p>
+<p>Like <code class="docutils literal notranslate"><span class="pre">dataclasses.dataclass</span></code>, a <code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented</span></code> object is Python-only - the compiler flattens it into individual kernel parameters and the object itself has no kernel-side representation. Unlike <code class="docutils literal notranslate"><span class="pre">dataclasses.dataclass</span></code> it needs no member annotations: the compiler reads the live instance’s attributes directly. Primitive members are baked into the kernel as constants by default, so each distinct primitive value compiles a new specialized kernel - unless the class is decorated <code class="docutils literal notranslate"><span class="pre">&#64;qd.data_oriented(template_primitives=False)</span></code>, in which case the accessed primitives become runtime kernel arguments (see <a class="reference internal" href="#runtime-primitives-template-primitives-false">Runtime primitives</a> above).</p>
 </section>
 </section>
 <section id="qd-dataclass-qd-types-struct">
@@ -882,7 +912,10 @@ my_struct.b[37] 5
 </ul>
 </li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#qd-data-oriented">qd.data_oriented</a><ul class="nav section-nav flex-column">
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#primitive-members">Primitive members</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#primitive-members">Primitive members</a><ul class="nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#runtime-primitives-template-primitives-false">Runtime primitives: <code class="docutils literal notranslate"><span class="pre">template_primitives=False</span></code></a></li>
+</ul>
+</li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#tensor-members">Tensor members</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#fastcache">Fastcache</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id1">Under the hood</a></li>

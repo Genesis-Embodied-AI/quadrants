@@ -577,7 +577,7 @@
         <span class="k">if</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="s2">&quot;_in_checkpoint&quot;</span><span class="p">,</span> <span class="kc">False</span><span class="p">):</span>
             <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span>
                 <span class="s2">&quot;qd.checkpoint() cannot be nested inside another qd.checkpoint(); checkpoints in the &quot;</span>
-                <span class="s2">&quot;same kernel must be flat siblings (a checkpoint inside qd.graph_do_while is fine)&quot;</span>
+                <span class="s2">&quot;same kernel must be flat siblings (a checkpoint inside qd.graph.do_while is fine)&quot;</span>
             <span class="p">)</span>
 
         <span class="n">yield_on_label</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
