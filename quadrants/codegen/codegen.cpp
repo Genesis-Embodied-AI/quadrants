@@ -14,8 +14,14 @@
 #endif
 #include "quadrants/system/timer.h"
 #include "quadrants/ir/analysis.h"
+#include "quadrants/ir/offloaded_task_type.h"
+#include "quadrants/ir/statements.h"
 #include "quadrants/ir/transforms.h"
 #include "quadrants/analysis/offline_cache_util.h"
+#include "quadrants/rhi/device_capability.h"
+
+#include <cstdlib>
+#include <string>
 
 namespace quadrants::lang {
 
@@ -60,13 +66,33 @@ LLVMCompiledKernel KernelCodeGen::compile_kernel_to_module() {
   auto &worker = get_llvm_program(kernel->program)->compilation_workers;
   QD_ASSERT(block);
 
+  // Prototype (A1) per-task cache key: with QD_PERTASK_KEY_LOG=1, compute and log each task's key. Compute-and-log
+  // only -- it does not gate caching yet (see perso_hugh/doc/quadrants_per_task_ir_key_design_2026jul22.md). Keys are
+  // built in the worker threads into an indexed vector and printed in order after flush() to avoid log interleaving.
+  static const bool log_pertask_key = []() {
+    const char *e = std::getenv("QD_PERTASK_KEY_LOG");
+    return e != nullptr && std::string(e) == "1";
+  }();
+
   auto &offloads = block->statements;
   std::vector<std::unique_ptr<LLVMCompiledTask>> data(offloads.size());
+  std::vector<std::string> pertask_keys;
+  DeviceCapabilityConfig pertask_caps;
+  if (log_pertask_key) {
+    pertask_keys.resize(offloads.size());
+    pertask_caps = prog->get_device_caps();
+  }
   for (int i = 0; i < offloads.size(); i++) {
     auto compile_func = [&, i] {
       tlctx_.fetch_this_thread_struct_module();
       auto offload = irpass::analysis::clone(offloads[i].get());
       irpass::re_id(offload.get());
+
+      if (log_pertask_key) {
+        pertask_keys[i] =
+            get_hashed_per_task_cache_key(compile_config_, pertask_caps, offload->as<OffloadedStmt>(),
+                                          kernel->autodiff_mode);
+      }
 
       Block blk;
       blk.insert(std::move(offload));
@@ -76,6 +102,13 @@ LLVMCompiledKernel KernelCodeGen::compile_kernel_to_module() {
     worker.enqueue(compile_func);
   }
   worker.flush();
+
+  if (log_pertask_key) {
+    for (int i = 0; i < (int)pertask_keys.size(); i++) {
+      QD_INFO("[pertask-key] kernel={} task={} type={} key={}", kernel->get_name(), i,
+              offloaded_task_type_name(offloads[i]->as<OffloadedStmt>()->task_type), pertask_keys[i]);
+    }
+  }
 
   auto llvm_compiled_kernel = tlctx_.link_compiled_tasks(std::move(data));
   optimize_module(llvm_compiled_kernel.module.get());
