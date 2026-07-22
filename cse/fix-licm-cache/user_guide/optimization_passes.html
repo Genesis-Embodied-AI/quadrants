@@ -445,19 +445,19 @@
 <section id="the-compile-pipeline-at-a-glance">
 <h2>The compile pipeline at a glance<a class="headerlink" href="#the-compile-pipeline-at-a-glance" title="Link to this heading">#</a></h2>
 <p>Compilation runs as a fixed sequence of stages. Optimization passes are interleaved with the lowering steps that gradually turn high-level IR into device code:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>Python (AST)
-   │  lower to IR, type-check
-   ▼
-high-level IR  ──► simplify ──► (autodiff — automatic differentiation — if requested) ──► simplify
-   │
-   ▼
-offload  (split the kernel into offloaded tasks)
-   │
-   ▼
-per-task IR  ──► simplify ──► lower memory access ──► simplify
-   │
-   ▼
-backend codegen  (translate IR into device machine code, e.g. PTX/SASS via LLVM, or SPIR-V)
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">Python</span> <span class="p">(</span><span class="n">AST</span><span class="p">)</span>
+   <span class="o">|</span>  <span class="n">lower</span> <span class="n">to</span> <span class="n">IR</span><span class="p">,</span> <span class="nb">type</span><span class="o">-</span><span class="n">check</span>
+   <span class="n">v</span>
+<span class="n">high</span><span class="o">-</span><span class="n">level</span> <span class="n">IR</span>  <span class="o">--&gt;</span> <span class="n">simplify</span> <span class="o">--&gt;</span> <span class="p">(</span><span class="n">autodiff</span> <span class="o">=</span> <span class="n">automatic</span> <span class="n">differentiation</span><span class="p">,</span> <span class="k">if</span> <span class="n">requested</span><span class="p">)</span> <span class="o">--&gt;</span> <span class="n">simplify</span>
+   <span class="o">|</span>
+   <span class="n">v</span>
+<span class="n">offload</span>  <span class="p">(</span><span class="n">split</span> <span class="n">the</span> <span class="n">kernel</span> <span class="n">into</span> <span class="n">offloaded</span> <span class="n">tasks</span><span class="p">)</span>
+   <span class="o">|</span>
+   <span class="n">v</span>
+<span class="n">per</span><span class="o">-</span><span class="n">task</span> <span class="n">IR</span>  <span class="o">--&gt;</span> <span class="n">simplify</span> <span class="o">--&gt;</span> <span class="n">lower</span> <span class="n">memory</span> <span class="n">access</span> <span class="o">--&gt;</span> <span class="n">simplify</span>
+   <span class="o">|</span>
+   <span class="n">v</span>
+<span class="n">backend</span> <span class="n">codegen</span>  <span class="p">(</span><span class="n">translate</span> <span class="n">IR</span> <span class="n">into</span> <span class="n">device</span> <span class="n">machine</span> <span class="n">code</span><span class="p">,</span> <span class="n">e</span><span class="o">.</span><span class="n">g</span><span class="o">.</span> <span class="n">PTX</span><span class="o">/</span><span class="n">SASS</span> <span class="n">via</span> <span class="n">LLVM</span><span class="p">,</span> <span class="ow">or</span> <span class="n">SPIR</span><span class="o">-</span><span class="n">V</span><span class="p">)</span>
 </pre></div>
 </div>
 <p>The “simplify” boxes are all the same routine (internally <code class="docutils literal notranslate"><span class="pre">full_simplify</span></code>), invoked at several points. Most of the interesting optimization work happens inside it. The optional autodiff step, run only when you ask Quadrants for gradients, is covered in <a class="reference internal" href="autodiff.html"><span class="std std-doc">Automatic differentiation</span></a>.</p>
