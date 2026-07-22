@@ -719,6 +719,15 @@ class Scalarize : public BasicStmtVisitor {
         auto scalar_ad_stack = std::make_unique<AdStackAllocaStmt>(element_type, stmt->max_size);
         scalar_ad_stack->ret_type = element_type;
         scalar_ad_stack->ret_type.set_is_pointer(true);
+        // Carry the per-launch size bound onto each scalar component. `determine_ad_stack_size` runs before this
+        // pass and, for an adaptive tensor-typed stack, records a `size_expr` while leaving `max_size` at the seed
+        // value of 1 for the runtime to overwrite. Every component is pushed and popped in lockstep with the tensor
+        // stack, so they share its depth exactly; without cloning `size_expr` the component keeps only the seed
+        // `max_size`, the launcher finds no symbolic tree and sizes the heap to that seed, and a scalar stack pushed
+        // inside a runtime-bounded loop overflows once the loop runs more than once.
+        if (stmt->size_expr) {
+          scalar_ad_stack->size_expr = stmt->size_expr->clone();
+        }
 
         scalarized_ad_stack.push_back(scalar_ad_stack.get());
         delayed_modifier_.insert_before(stmt, std::move(scalar_ad_stack));

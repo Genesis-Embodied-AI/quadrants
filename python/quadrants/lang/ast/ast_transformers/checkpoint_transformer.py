@@ -222,7 +222,7 @@ class CheckpointTransformer:
         if getattr(ctx, "_in_checkpoint", False):
             raise QuadrantsSyntaxError(
                 "qd.checkpoint() cannot be nested inside another qd.checkpoint(); checkpoints in the "
-                "same kernel must be flat siblings (a checkpoint inside qd.graph_do_while is fine)"
+                "same kernel must be flat siblings (a checkpoint inside qd.graph.do_while is fine)"
             )
 
         yield_on_label: str | None = None

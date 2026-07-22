@@ -1,13 +1,13 @@
-"""Tests for qd.graph_parallel_context / qd.graph_parallel -- concurrent fork/join sections in graph
+"""Tests for qd.graph.parallel_context / qd.graph.parallel -- concurrent fork/join sections in graph
 kernels.
 
-`with qd.graph_parallel_context():` opens a fork/join region whose `with qd.graph_parallel():` members are
-independent sequences of work. On the graph path the qd.graph_parallel sections become independent graph
+`with qd.graph.parallel_context():` opens a fork/join region whose `with qd.graph.parallel():` members are
+independent sequences of work. On the graph path the qd.graph.parallel sections become independent graph
 chains joined by a single empty node, so the runtime schedules them on parallel streams; on other backends
 (CPU / AMDGPU / Vulkan / Metal) they run serially but produce identical results.
 
 The behavioral assertions (disjoint-array correctness) hold on every backend. The graph-structure
-assertions (node counts: one kernel node per qd.graph_parallel section task + one empty join node) only
+assertions (node counts: one kernel node per qd.graph.parallel section task + one empty join node) only
 apply where the builder forks/joins (CUDA today), so they are guarded by `_on_cuda()`.
 """
 
@@ -39,21 +39,21 @@ def _num_offloaded_tasks():
 
 @test_utils.test()
 def test_graph_parallel_is_no_op_outside_kernels():
-    """At Python runtime (outside kernels) qd.graph_parallel_context / qd.graph_parallel must be usable no-op context
+    """At Python runtime (outside kernels) qd.graph.parallel_context / qd.graph.parallel must be usable no-op context
     managers, so helpers that are sometimes called from Python and sometimes from kernels still import
     and run. Mirrors qd.stream_parallel / qd.checkpoint."""
     sentinel = []
-    with qd.graph_parallel_context():
-        with qd.graph_parallel():
+    with qd.graph.parallel_context():
+        with qd.graph.parallel():
             sentinel.append("a")
-        with qd.graph_parallel():
+        with qd.graph.parallel():
             sentinel.append("b")
     assert sentinel == ["a", "b"]
 
 
 @test_utils.test()
 def test_graph_parallel_two_sections():
-    """Two qd.graph_parallel sections write disjoint arrays; a serial loop after the region reads both (so
+    """Two qd.graph.parallel sections write disjoint arrays; a serial loop after the region reads both (so
     it depends on the join). Results must match the serial reference on every backend; on CUDA the graph
     has one node per task plus one empty join node."""
     n = 1024
@@ -64,11 +64,11 @@ def test_graph_parallel_two_sections():
         y: qd.types.ndarray(qd.f32, ndim=1),
         z: qd.types.ndarray(qd.f32, ndim=1),
     ):
-        with qd.graph_parallel_context():
-            with qd.graph_parallel():
+        with qd.graph.parallel_context():
+            with qd.graph.parallel():
                 for i in range(x.shape[0]):
                     x[i] = x[i] + 1.0
-            with qd.graph_parallel():
+            with qd.graph.parallel():
                 for i in range(y.shape[0]):
                     y[i] = y[i] + 2.0
         for i in range(z.shape[0]):
@@ -86,7 +86,7 @@ def test_graph_parallel_two_sections():
     num_tasks = _num_offloaded_tasks()
     if _on_cuda():
         # One graph node per offloaded task (each dynamic-bound loop is a bound-compute serial + a
-        # range_for, both in the qd.graph_parallel section) plus exactly one empty join node for the region.
+        # range_for, both in the qd.graph.parallel section) plus exactly one empty join node for the region.
         assert _graph_num_nodes() == num_tasks + 1
 
     np.testing.assert_allclose(x.to_numpy(), 1.0)
@@ -102,7 +102,7 @@ def test_graph_parallel_two_sections():
 
 @test_utils.test()
 def test_graph_parallel_back_to_back_regions_keep_join():
-    """Two qd.graph_parallel_context() regions written back-to-back (no serial work between them) must each get
+    """Two qd.graph.parallel_context() regions written back-to-back (no serial work between them) must each get
     their own fork/join. Region B reads what region A wrote, so if the two regions were merged into one fork/join
     (dropping A's join) B's sections would fork alongside -- and race -- A's. On CUDA we assert the graph has one
     empty join node per region (two total); on every backend the post-join values must be correct. Regression test
@@ -116,21 +116,21 @@ def test_graph_parallel_back_to_back_regions_keep_join():
     @qd.kernel(graph=True)
     def k(x: qd.types.ndarray(qd.f32, ndim=1), y: qd.types.ndarray(qd.f32, ndim=1)):
         # Region A: write x and y in two independent sections.
-        with qd.graph_parallel_context():
-            with qd.graph_parallel():
+        with qd.graph.parallel_context():
+            with qd.graph.parallel():
                 for i in range(x.shape[0]):
                     x[i] = 1.0
-            with qd.graph_parallel():
+            with qd.graph.parallel():
                 for i in range(y.shape[0]):
                     y[i] = 2.0
         # Region B, immediately after A (no serial statement between the regions). Each section reads the region-A
         # section that wrote the same array, so B must wait for A's join. B's sections remain disjoint from each
         # other (x-only vs y-only).
-        with qd.graph_parallel_context():
-            with qd.graph_parallel():
+        with qd.graph.parallel_context():
+            with qd.graph.parallel():
                 for i in range(x.shape[0]):
                     x[i] = x[i] * 10.0
-            with qd.graph_parallel():
+            with qd.graph.parallel():
                 for i in range(y.shape[0]):
                     y[i] = y[i] * 10.0
 
@@ -160,7 +160,7 @@ def test_graph_parallel_back_to_back_regions_keep_join():
 
 @test_utils.test()
 def test_graph_parallel_back_to_back_regions_serial_sections_keep_join():
-    """Same back-to-back-region guard as above, but each qd.graph_parallel section's body is a bare serial store
+    """Same back-to-back-region guard as above, but each qd.graph.parallel section's body is a bare serial store
     (a side-effecting statement, not a for-loop). Such statements are tagged by ASTBuilder::insert with the
     section's stream_parallel_group_id; the region id must be stamped there too, otherwise every serial-only
     section lands in region 0 and the graph builder merges the two contexts into one fork/join -- dropping A's
@@ -178,17 +178,17 @@ def test_graph_parallel_back_to_back_regions_serial_sections_keep_join():
         b: qd.types.ndarray(qd.f32, ndim=1),
     ):
         # Context A: two serial-only sections writing disjoint scalars.
-        with qd.graph_parallel_context():
-            with qd.graph_parallel():
+        with qd.graph.parallel_context():
+            with qd.graph.parallel():
                 x[0] = 1.0
-            with qd.graph_parallel():
+            with qd.graph.parallel():
                 y[0] = 2.0
         # Context B immediately after A (no serial statement between them). Each section reads the context-A
         # section that wrote the array it consumes, so B must wait for A's join.
-        with qd.graph_parallel_context():
-            with qd.graph_parallel():
+        with qd.graph.parallel_context():
+            with qd.graph.parallel():
                 a[0] = x[0] * 10.0
-            with qd.graph_parallel():
+            with qd.graph.parallel():
                 b[0] = y[0] * 10.0
 
     x = qd.ndarray(qd.f32, shape=(1,))
@@ -219,7 +219,7 @@ def test_graph_parallel_back_to_back_regions_serial_sections_keep_join():
 
 @test_utils.test()
 def test_graph_parallel_three_sections():
-    """Fan-out of three independent qd.graph_parallel sections; one empty join node."""
+    """Fan-out of three independent qd.graph.parallel sections; one empty join node."""
     n = 256
 
     @qd.kernel(graph=True)
@@ -228,14 +228,14 @@ def test_graph_parallel_three_sections():
         b: qd.types.ndarray(qd.f32, ndim=1),
         c: qd.types.ndarray(qd.f32, ndim=1),
     ):
-        with qd.graph_parallel_context():
-            with qd.graph_parallel():
+        with qd.graph.parallel_context():
+            with qd.graph.parallel():
                 for i in range(a.shape[0]):
                     a[i] = a[i] + 1.0
-            with qd.graph_parallel():
+            with qd.graph.parallel():
                 for i in range(b.shape[0]):
                     b[i] = b[i] + 2.0
-            with qd.graph_parallel():
+            with qd.graph.parallel():
                 for i in range(c.shape[0]):
                     c[i] = c[i] + 3.0
 
@@ -248,7 +248,7 @@ def test_graph_parallel_three_sections():
     k(a, b, c)
     num_tasks = _num_offloaded_tasks()
     if _on_cuda():
-        assert _graph_num_nodes() == num_tasks + 1  # three qd.graph_parallel sections + one join
+        assert _graph_num_nodes() == num_tasks + 1  # three qd.graph.parallel sections + one join
 
     np.testing.assert_allclose(a.to_numpy(), 1.0)
     np.testing.assert_allclose(b.to_numpy(), 2.0)
@@ -257,20 +257,20 @@ def test_graph_parallel_three_sections():
 
 @test_utils.test()
 def test_graph_parallel_multi_loop_sections():
-    """Each qd.graph_parallel section contains several loops; they must chain in order inside the
-    qd.graph_parallel section while the two qd.graph_parallel sections run independently. qd.graph_parallel
+    """Each qd.graph.parallel section contains several loops; they must chain in order inside the
+    qd.graph.parallel section while the two qd.graph.parallel sections run independently. qd.graph.parallel
     section tasks = 4, plus one join node on CUDA."""
     n = 128
 
     @qd.kernel(graph=True)
     def k(x: qd.types.ndarray(qd.f32, ndim=1), y: qd.types.ndarray(qd.f32, ndim=1)):
-        with qd.graph_parallel_context():
-            with qd.graph_parallel():
+        with qd.graph.parallel_context():
+            with qd.graph.parallel():
                 for i in range(x.shape[0]):
                     x[i] = x[i] + 1.0
                 for i in range(x.shape[0]):
                     x[i] = x[i] * 2.0
-            with qd.graph_parallel():
+            with qd.graph.parallel():
                 for i in range(y.shape[0]):
                     y[i] = y[i] + 3.0
                 for i in range(y.shape[0]):
@@ -284,7 +284,7 @@ def test_graph_parallel_multi_loop_sections():
     k(x, y)
     num_tasks = _num_offloaded_tasks()
     if _on_cuda():
-        assert _graph_num_nodes() == num_tasks + 1  # all qd.graph_parallel section tasks + one join
+        assert _graph_num_nodes() == num_tasks + 1  # all qd.graph.parallel section tasks + one join
 
     np.testing.assert_allclose(x.to_numpy(), 2.0)  # (0+1)*2
     np.testing.assert_allclose(y.to_numpy(), 12.0)  # (0+3)*4
@@ -292,15 +292,15 @@ def test_graph_parallel_multi_loop_sections():
 
 @test_utils.test()
 def test_graph_parallel_single_section_no_join():
-    """A region with a single qd.graph_parallel section (e.g. an optional qd.graph_parallel section compiled
+    """A region with a single qd.graph.parallel section (e.g. an optional qd.graph.parallel section compiled
     out) needs no join: it degenerates to a plain chain, so the node count equals the number of
-    qd.graph_parallel section tasks (no extra empty node)."""
+    qd.graph.parallel section tasks (no extra empty node)."""
     n = 256
 
     @qd.kernel(graph=True)
     def k(x: qd.types.ndarray(qd.f32, ndim=1)):
-        with qd.graph_parallel_context():
-            with qd.graph_parallel():
+        with qd.graph.parallel_context():
+            with qd.graph.parallel():
                 for i in range(x.shape[0]):
                     x[i] = x[i] + 5.0
 
@@ -310,37 +310,37 @@ def test_graph_parallel_single_section_no_join():
     k(x)
     num_tasks = _num_offloaded_tasks()
     if _on_cuda():
-        assert _graph_num_nodes() == num_tasks  # single qd.graph_parallel section -> plain chain, no join
+        assert _graph_num_nodes() == num_tasks  # single qd.graph.parallel section -> plain chain, no join
 
     np.testing.assert_allclose(x.to_numpy(), 5.0)
 
 
 @test_utils.test()
 def test_graph_parallel_optional_section_static_if():
-    """The qipc ENABLE_EE pattern: a qd.graph_parallel section wrapped in `if qd.static(...)`. When the flag
-    is False the qd.graph_parallel section is compiled out (region has one qd.graph_parallel section -> no
-    join); when True both qd.graph_parallel sections run."""
+    """The qipc ENABLE_EE pattern: a qd.graph.parallel section wrapped in `if qd.static(...)`. When the flag
+    is False the qd.graph.parallel section is compiled out (region has one qd.graph.parallel section -> no
+    join); when True both qd.graph.parallel sections run."""
     n = 128
 
     @qd.kernel(graph=True)
     def k_off(x: qd.types.ndarray(qd.f32, ndim=1), y: qd.types.ndarray(qd.f32, ndim=1)):
-        with qd.graph_parallel_context():
-            with qd.graph_parallel():
+        with qd.graph.parallel_context():
+            with qd.graph.parallel():
                 for i in range(x.shape[0]):
                     x[i] = x[i] + 1.0
             if qd.static(False):
-                with qd.graph_parallel():
+                with qd.graph.parallel():
                     for i in range(y.shape[0]):
                         y[i] = y[i] + 1.0
 
     @qd.kernel(graph=True)
     def k_on(x: qd.types.ndarray(qd.f32, ndim=1), y: qd.types.ndarray(qd.f32, ndim=1)):
-        with qd.graph_parallel_context():
-            with qd.graph_parallel():
+        with qd.graph.parallel_context():
+            with qd.graph.parallel():
                 for i in range(x.shape[0]):
                     x[i] = x[i] + 1.0
             if qd.static(True):
-                with qd.graph_parallel():
+                with qd.graph.parallel():
                     for i in range(y.shape[0]):
                         y[i] = y[i] + 1.0
 
@@ -350,23 +350,23 @@ def test_graph_parallel_optional_section_static_if():
     y.from_numpy(np.zeros(n, dtype=np.float32))
     k_off(x, y)
     if _on_cuda():
-        assert _graph_num_nodes() == _num_offloaded_tasks()  # single qd.graph_parallel section -> no join
+        assert _graph_num_nodes() == _num_offloaded_tasks()  # single qd.graph.parallel section -> no join
     np.testing.assert_allclose(x.to_numpy(), 1.0)
-    np.testing.assert_allclose(y.to_numpy(), 0.0)  # EE qd.graph_parallel section compiled out
+    np.testing.assert_allclose(y.to_numpy(), 0.0)  # EE qd.graph.parallel section compiled out
 
     x.from_numpy(np.zeros(n, dtype=np.float32))
     y.from_numpy(np.zeros(n, dtype=np.float32))
     k_on(x, y)
     if _on_cuda():
-        assert _graph_num_nodes() == _num_offloaded_tasks() + 1  # two qd.graph_parallel sections + join
+        assert _graph_num_nodes() == _num_offloaded_tasks() + 1  # two qd.graph.parallel sections + join
     np.testing.assert_allclose(x.to_numpy(), 1.0)
     np.testing.assert_allclose(y.to_numpy(), 1.0)
 
 
 @test_utils.test()
 def test_graph_parallel_inside_graph_do_while():
-    """A fork/join region inside a qd.graph_do_while loop body must be correct across iterations: each
-    iteration runs both qd.graph_parallel sections, then decrements the counter."""
+    """A fork/join region inside a qd.graph.do_while loop body must be correct across iterations: each
+    iteration runs both qd.graph.parallel sections, then decrements the counter."""
     n = 64
     iters = 5
 
@@ -376,12 +376,12 @@ def test_graph_parallel_inside_graph_do_while():
         y: qd.types.ndarray(qd.i32, ndim=1),
         counter: qd.types.ndarray(qd.i32, ndim=0),
     ):
-        while qd.graph_do_while(counter):
-            with qd.graph_parallel_context():
-                with qd.graph_parallel():
+        while qd.graph.do_while(counter):
+            with qd.graph.parallel_context():
+                with qd.graph.parallel():
                     for i in range(x.shape[0]):
                         x[i] = x[i] + 1
-                with qd.graph_parallel():
+                with qd.graph.parallel():
                     for i in range(y.shape[0]):
                         y[i] = y[i] + 2
             for _ in range(1):
@@ -403,8 +403,8 @@ def test_graph_parallel_inside_graph_do_while():
 
 @test_utils.test()
 def test_graph_parallel_back_to_back_regions_in_do_while_keep_join():
-    """Two back-to-back qd.graph_parallel_context() regions inside a qd.graph_do_while body must each keep their own
-    fork/join on the STREAMING launcher path, not only the CUDA-graph path. A qd.graph_do_while forces the streaming
+    """Two back-to-back qd.graph.parallel_context() regions inside a qd.graph.do_while body must each keep their own
+    fork/join on the STREAMING launcher path, not only the CUDA-graph path. A qd.graph.do_while forces the streaming
     launcher on AMDGPU (always) and on pre-Hopper CUDA (SM < 9.0); there, launch_offloaded_tasks batches a maximal run
     of stream_parallel_group_id != 0 tasks into one fork/join. Without a graph_parallel_region_id boundary the two
     regions merge into a single batch: region B's sections fork alongside -- and race -- region A's, so B reads x/y
@@ -425,22 +425,22 @@ def test_graph_parallel_back_to_back_regions_in_do_while_keep_join():
         b: qd.types.ndarray(qd.i32, ndim=1),
         counter: qd.types.ndarray(qd.i32, ndim=0),
     ):
-        while qd.graph_do_while(counter):
+        while qd.graph.do_while(counter):
             # Region A: bump x and y in two independent sections.
-            with qd.graph_parallel_context():
-                with qd.graph_parallel():
+            with qd.graph.parallel_context():
+                with qd.graph.parallel():
                     for i in range(x.shape[0]):
                         x[i] = x[i] + 1
-                with qd.graph_parallel():
+                with qd.graph.parallel():
                     for i in range(y.shape[0]):
                         y[i] = y[i] + 2
             # Region B, immediately after A (no serial statement between the regions): copy A's just-written values.
             # Each section reads the array region A wrote, so B must wait for A's join or it races A's writes.
-            with qd.graph_parallel_context():
-                with qd.graph_parallel():
+            with qd.graph.parallel_context():
+                with qd.graph.parallel():
                     for i in range(x.shape[0]):
                         a[i] = x[i] * 10
-                with qd.graph_parallel():
+                with qd.graph.parallel():
                     for i in range(y.shape[0]):
                         b[i] = y[i] * 10
             counter[()] = counter[()] - 1
@@ -470,13 +470,13 @@ def test_graph_parallel_back_to_back_regions_in_do_while_keep_join():
 def test_graph_parallel_outside_context_raises():
     @qd.kernel(graph=True)
     def k(x: qd.types.ndarray(qd.f32, ndim=1)):
-        with qd.graph_parallel():
+        with qd.graph.parallel():
             for i in range(x.shape[0]):
                 x[i] = x[i] + 1.0
 
     x = qd.ndarray(qd.f32, shape=(16,))
     with pytest.raises(
-        qd.QuadrantsSyntaxError, match="qd.graph_parallel.. can only be used .* inside a qd.graph_parallel_context"
+        qd.QuadrantsSyntaxError, match="qd.graph.parallel.. can only be used .* inside a qd.graph.parallel_context"
     ):
         k(x)
 
@@ -485,8 +485,8 @@ def test_graph_parallel_outside_context_raises():
 def test_graph_parallel_requires_graph_kernel():
     @qd.kernel
     def k(x: qd.types.ndarray(qd.f32, ndim=1)):
-        with qd.graph_parallel_context():
-            with qd.graph_parallel():
+        with qd.graph.parallel_context():
+            with qd.graph.parallel():
                 for i in range(x.shape[0]):
                     x[i] = x[i] + 1.0
 
@@ -499,12 +499,12 @@ def test_graph_parallel_requires_graph_kernel():
 def test_graph_parallel_context_non_graph_parallel_raises():
     @qd.kernel(graph=True)
     def k(x: qd.types.ndarray(qd.f32, ndim=1)):
-        with qd.graph_parallel_context():
+        with qd.graph.parallel_context():
             for i in range(x.shape[0]):
                 x[i] = x[i] + 1.0
 
     x = qd.ndarray(qd.f32, shape=(16,))
-    with pytest.raises(qd.QuadrantsSyntaxError, match="may contain only .with qd.graph_parallel"):
+    with pytest.raises(qd.QuadrantsSyntaxError, match="may contain only .with qd.graph.parallel"):
         k(x)
 
 
@@ -512,10 +512,10 @@ def test_graph_parallel_context_non_graph_parallel_raises():
 def test_graph_parallel_nested_region_raises():
     @qd.kernel(graph=True)
     def k(x: qd.types.ndarray(qd.f32, ndim=1)):
-        with qd.graph_parallel_context():
-            with qd.graph_parallel():
-                with qd.graph_parallel_context():
-                    with qd.graph_parallel():
+        with qd.graph.parallel_context():
+            with qd.graph.parallel():
+                with qd.graph.parallel_context():
+                    with qd.graph.parallel():
                         for i in range(x.shape[0]):
                             x[i] = x[i] + 1.0
 
@@ -526,16 +526,16 @@ def test_graph_parallel_nested_region_raises():
 
 @test_utils.test()
 def test_graph_parallel_static_loop_two_sections():
-    """`for b in qd.static(range(NB))` unrolls into NB literal qd.graph_parallel sections, each writing a
+    """`for b in qd.static(range(NB))` unrolls into NB literal qd.graph.parallel sections, each writing a
     disjoint row."""
     nb = 2
     n = 256
 
     @qd.kernel(graph=True)
     def k(x: qd.types.ndarray(qd.f32, ndim=2)):
-        with qd.graph_parallel_context():
+        with qd.graph.parallel_context():
             for b in qd.static(range(nb)):
-                with qd.graph_parallel():
+                with qd.graph.parallel():
                     for i in range(x.shape[1]):
                         x[b, i] = x[b, i] + (b + 1)
 
@@ -545,7 +545,7 @@ def test_graph_parallel_static_loop_two_sections():
     k(x)
     num_tasks = _num_offloaded_tasks()
     if _on_cuda():
-        assert _graph_num_nodes() == num_tasks + 1  # nb qd.graph_parallel sections + one join
+        assert _graph_num_nodes() == num_tasks + 1  # nb qd.graph.parallel sections + one join
 
     out = x.to_numpy()
     np.testing.assert_allclose(out[0], 1.0)
@@ -555,7 +555,7 @@ def test_graph_parallel_static_loop_two_sections():
 @test_utils.test()
 def test_graph_parallel_static_loop_over_funcs():
     """The motivating pattern: a @qd.data_oriented class iterates a static list of @qd.func members, one
-    qd.graph_parallel section each (mirrors qipc's per-contact-type assembly funcs)."""
+    qd.graph.parallel section each (mirrors qipc's per-contact-type assembly funcs)."""
     n = 4
 
     @qd.data_oriented
@@ -577,9 +577,9 @@ def test_graph_parallel_static_loop_over_funcs():
 
         @qd.kernel(graph=True)
         def step(self):
-            with qd.graph_parallel_context():
+            with qd.graph.parallel_context():
                 for i in qd.static(range(len(self.funcs))):
-                    with qd.graph_parallel():
+                    with qd.graph.parallel():
                         self.funcs[i]()
 
     d = Demo()
@@ -597,9 +597,9 @@ def test_graph_parallel_static_loop_single_section():
 
     @qd.kernel(graph=True)
     def k(x: qd.types.ndarray(qd.f32, ndim=1)):
-        with qd.graph_parallel_context():
+        with qd.graph.parallel_context():
             for _b in qd.static(range(1)):
-                with qd.graph_parallel():
+                with qd.graph.parallel():
                     for i in range(x.shape[0]):
                         x[i] = x[i] + 5.0
 
@@ -616,15 +616,15 @@ def test_graph_parallel_static_loop_single_section():
 
 @test_utils.test()
 def test_graph_parallel_static_loop_empty_range():
-    """An empty static range produces zero qd.graph_parallel sections: the region is a no-op (consistent
+    """An empty static range produces zero qd.graph.parallel sections: the region is a no-op (consistent
     with wrapping the only section in `if qd.static(False)`). Serial work after it still runs."""
     n = 128
 
     @qd.kernel(graph=True)
     def k(x: qd.types.ndarray(qd.f32, ndim=1)):
-        with qd.graph_parallel_context():
+        with qd.graph.parallel_context():
             for _b in qd.static(range(0)):
-                with qd.graph_parallel():
+                with qd.graph.parallel():
                     for i in range(x.shape[0]):
                         x[i] = x[i] + 1.0
         for i in range(x.shape[0]):
@@ -639,17 +639,17 @@ def test_graph_parallel_static_loop_empty_range():
 
 @test_utils.test()
 def test_graph_parallel_static_loop_nested():
-    """Nested static loops fan out to N*M qd.graph_parallel sections, each writing a disjoint row."""
+    """Nested static loops fan out to N*M qd.graph.parallel sections, each writing a disjoint row."""
     ni, nj = 2, 2
     nrows = ni * nj
     n = 64
 
     @qd.kernel(graph=True)
     def k(x: qd.types.ndarray(qd.f32, ndim=2)):
-        with qd.graph_parallel_context():
+        with qd.graph.parallel_context():
             for i in qd.static(range(ni)):
                 for j in qd.static(range(nj)):
-                    with qd.graph_parallel():
+                    with qd.graph.parallel():
                         for c in range(x.shape[1]):
                             x[i * nj + j, c] = x[i * nj + j, c] + (i * nj + j + 1)
 
@@ -659,7 +659,7 @@ def test_graph_parallel_static_loop_nested():
     k(x)
     num_tasks = _num_offloaded_tasks()
     if _on_cuda():
-        assert _graph_num_nodes() == num_tasks + 1  # nrows qd.graph_parallel sections + one join
+        assert _graph_num_nodes() == num_tasks + 1  # nrows qd.graph.parallel sections + one join
 
     out = x.to_numpy()
     for r in range(nrows):
@@ -668,20 +668,20 @@ def test_graph_parallel_static_loop_nested():
 
 @test_utils.test()
 def test_graph_parallel_static_loop_mixed_with_static_if():
-    """A static section loop and an `if qd.static(...)` optional qd.graph_parallel section coexist in one
+    """A static section loop and an `if qd.static(...)` optional qd.graph.parallel section coexist in one
     region."""
     nb = 2
     n = 64
 
     @qd.kernel(graph=True)
     def k(x: qd.types.ndarray(qd.f32, ndim=2), y: qd.types.ndarray(qd.f32, ndim=1)):
-        with qd.graph_parallel_context():
+        with qd.graph.parallel_context():
             for b in qd.static(range(nb)):
-                with qd.graph_parallel():
+                with qd.graph.parallel():
                     for i in range(x.shape[1]):
                         x[b, i] = x[b, i] + (b + 1)
             if qd.static(True):
-                with qd.graph_parallel():
+                with qd.graph.parallel():
                     for i in range(y.shape[0]):
                         y[i] = y[i] + 7.0
 
@@ -693,7 +693,7 @@ def test_graph_parallel_static_loop_mixed_with_static_if():
     k(x, y)
     num_tasks = _num_offloaded_tasks()
     if _on_cuda():
-        assert _graph_num_nodes() == num_tasks + 1  # nb + 1 qd.graph_parallel sections + one join
+        assert _graph_num_nodes() == num_tasks + 1  # nb + 1 qd.graph.parallel sections + one join
 
     out = x.to_numpy()
     np.testing.assert_allclose(out[0], 1.0)
@@ -704,145 +704,145 @@ def test_graph_parallel_static_loop_mixed_with_static_if():
 @test_utils.test()
 def test_graph_parallel_runtime_loop_raises():
     """A *runtime* for-loop in a region body stays rejected: only `qd.static(...)` loops unroll to literal
-    qd.graph_parallel sections; a runtime range would nest the section tagging inside a parallel range_for
+    qd.graph.parallel sections; a runtime range would nest the section tagging inside a parallel range_for
     (malformed)."""
 
     @qd.kernel(graph=True)
     def k(x: qd.types.ndarray(qd.f32, ndim=2), nb: qd.i32):
-        with qd.graph_parallel_context():
+        with qd.graph.parallel_context():
             for b in range(nb):
-                with qd.graph_parallel():
+                with qd.graph.parallel():
                     for i in range(x.shape[1]):
                         x[b, i] = x[b, i] + 1.0
 
     x = qd.ndarray(qd.f32, shape=(2, 16))
-    with pytest.raises(qd.QuadrantsSyntaxError, match="may contain only .with qd.graph_parallel"):
+    with pytest.raises(qd.QuadrantsSyntaxError, match="may contain only .with qd.graph.parallel"):
         k(x, 2)
 
 
 @test_utils.test()
 def test_graph_parallel_takes_no_arguments():
-    """qd.graph_parallel() (the section) takes no arguments. Any argument raises."""
+    """qd.graph.parallel() (the section) takes no arguments. Any argument raises."""
 
     @qd.kernel(graph=True)
     def k(x: qd.types.ndarray(qd.f32, ndim=1)):
-        with qd.graph_parallel_context():
-            with qd.graph_parallel(name="bx"):
+        with qd.graph.parallel_context():
+            with qd.graph.parallel(name="bx"):
                 for i in range(x.shape[0]):
                     x[i] = x[i] + 1.0
 
     x = qd.ndarray(qd.f32, shape=(16,))
-    with pytest.raises(qd.QuadrantsSyntaxError, match="qd.graph_parallel.. takes no arguments"):
+    with pytest.raises(qd.QuadrantsSyntaxError, match=r"qd\.graph\.parallel\(\) takes no arguments"):
         k(x)
 
 
 @test_utils.test()
 def test_graph_parallel_static_loop_body_non_section_raises():
     """A static loop body must still be section-only: serial work inside the loop (outside any
-    qd.graph_parallel section) would silently fall outside a section, so it is rejected (the validator
+    qd.graph.parallel section) would silently fall outside a section, so it is rejected (the validator
     recurses into the loop body)."""
 
     @qd.kernel(graph=True)
     def k(x: qd.types.ndarray(qd.f32, ndim=2)):
-        with qd.graph_parallel_context():
+        with qd.graph.parallel_context():
             for b in qd.static(range(2)):
-                x[b, 0] = 1.0  # serial work outside any qd.graph_parallel section
-                with qd.graph_parallel():
+                x[b, 0] = 1.0  # serial work outside any qd.graph.parallel section
+                with qd.graph.parallel():
                     for i in range(x.shape[1]):
                         x[b, i] = x[b, i] + 1.0
 
     x = qd.ndarray(qd.f32, shape=(2, 16))
-    with pytest.raises(qd.QuadrantsSyntaxError, match="may contain only .with qd.graph_parallel"):
+    with pytest.raises(qd.QuadrantsSyntaxError, match="may contain only .with qd.graph.parallel"):
         k(x)
 
 
 @test_utils.test()
 def test_graph_parallel_static_loop_runtime_inner_loop_raises():
     """Staticness is re-checked at every nesting level: a *runtime* loop nested inside a static loop and
-    wrapping a qd.graph_parallel section is still rejected (only the static unroll yields independent
+    wrapping a qd.graph.parallel section is still rejected (only the static unroll yields independent
     sections)."""
 
     @qd.kernel(graph=True)
     def k(x: qd.types.ndarray(qd.f32, ndim=2), m: qd.i32):
-        with qd.graph_parallel_context():
+        with qd.graph.parallel_context():
             for b in qd.static(range(2)):
                 for _j in range(m):  # runtime loop around a section -> rejected
-                    with qd.graph_parallel():
+                    with qd.graph.parallel():
                         for i in range(x.shape[1]):
                             x[b, i] = x[b, i] + 1.0
 
     x = qd.ndarray(qd.f32, shape=(2, 16))
-    with pytest.raises(qd.QuadrantsSyntaxError, match="may contain only .with qd.graph_parallel"):
+    with pytest.raises(qd.QuadrantsSyntaxError, match="may contain only .with qd.graph.parallel"):
         k(x, 2)
 
 
 @test_utils.test()
 def test_graph_parallel_runtime_if_raises():
     """A *runtime* `if` in a region body is rejected: only `if qd.static(...)` unrolls at trace time into sibling
-    qd.graph_parallel sections. A runtime `if` traces to a FrontendIfStmt that swallows the section work into a serial
+    qd.graph.parallel sections. A runtime `if` traces to a FrontendIfStmt that swallows the section work into a serial
     task and silently drops the fork/join, so reject it (mirrors the runtime for-loop rejection)."""
 
     @qd.kernel(graph=True)
     def k(x: qd.types.ndarray(qd.f32, ndim=1), y: qd.types.ndarray(qd.f32, ndim=1), flag: qd.i32):
-        with qd.graph_parallel_context():
-            with qd.graph_parallel():
+        with qd.graph.parallel_context():
+            with qd.graph.parallel():
                 for i in range(x.shape[0]):
                     x[i] = x[i] + 1.0
             if flag:  # runtime if around a section -> rejected (only if qd.static(...) is allowed)
-                with qd.graph_parallel():
+                with qd.graph.parallel():
                     for i in range(y.shape[0]):
                         y[i] = y[i] + 1.0
 
     x = qd.ndarray(qd.f32, shape=(16,))
     y = qd.ndarray(qd.f32, shape=(16,))
-    with pytest.raises(qd.QuadrantsSyntaxError, match="may contain only .with qd.graph_parallel"):
+    with pytest.raises(qd.QuadrantsSyntaxError, match="may contain only .with qd.graph.parallel"):
         k(x, y, 1)
 
 
 @test_utils.test()
 def test_graph_parallel_static_loop_runtime_if_raises():
     """Staticness is re-checked at every nesting level for `if` too: a *runtime* `if` nested inside a static loop and
-    wrapping a qd.graph_parallel section is still rejected (only a static condition yields independent sections)."""
+    wrapping a qd.graph.parallel section is still rejected (only a static condition yields independent sections)."""
 
     @qd.kernel(graph=True)
     def k(x: qd.types.ndarray(qd.f32, ndim=2), flag: qd.i32):
-        with qd.graph_parallel_context():
+        with qd.graph.parallel_context():
             for b in qd.static(range(2)):
                 if flag:  # runtime if around a section -> rejected
-                    with qd.graph_parallel():
+                    with qd.graph.parallel():
                         for i in range(x.shape[1]):
                             x[b, i] = x[b, i] + 1.0
 
     x = qd.ndarray(qd.f32, shape=(2, 16))
-    with pytest.raises(qd.QuadrantsSyntaxError, match="may contain only .with qd.graph_parallel"):
+    with pytest.raises(qd.QuadrantsSyntaxError, match="may contain only .with qd.graph.parallel"):
         k(x, 1)
 
 
 @test_utils.test()
 def test_graph_parallel_section_graph_do_while_raises():
-    """A qd.graph_parallel() section body must be straight-line task work: a qd.graph_do_while nested inside a section is
+    """A qd.graph.parallel() section body must be straight-line task work: a qd.graph.do_while nested inside a section is
     rejected. Its body tasks carry a child graph_do_while_level_id, so the CUDA fork/join path would not group them into
     the section's contiguous run -- the section would be silently serialized instead of failing at compile time. (The
-    supported composition is the reverse: a qd.graph_parallel_context region may sit inside a qd.graph_do_while loop.)
+    supported composition is the reverse: a qd.graph.parallel_context region may sit inside a qd.graph.do_while loop.)
     """
 
     @qd.kernel(graph=True)
     def k(x: qd.types.ndarray(qd.i32, ndim=1), counter: qd.types.ndarray(qd.i32, ndim=0)):
-        with qd.graph_parallel_context():
-            with qd.graph_parallel():
-                while qd.graph_do_while(counter):
+        with qd.graph.parallel_context():
+            with qd.graph.parallel():
+                while qd.graph.do_while(counter):
                     for i in range(x.shape[0]):
                         x[i] = x[i] + 1
 
     x = qd.ndarray(qd.i32, shape=(16,))
     counter = qd.ndarray(qd.i32, shape=())
-    with pytest.raises(qd.QuadrantsSyntaxError, match="qd.graph_do_while.. cannot appear inside a qd.graph_parallel"):
+    with pytest.raises(qd.QuadrantsSyntaxError, match="qd.graph.do_while.. cannot appear inside a qd.graph.parallel"):
         k(x, counter)
 
 
 @test_utils.test()
 def test_graph_parallel_section_checkpoint_raises():
-    """A qd.graph_parallel() section body must be straight-line task work: a qd.checkpoint nested inside a section is
+    """A qd.graph.parallel() section body must be straight-line task work: a qd.checkpoint nested inside a section is
     rejected. Its tasks carry checkpoint_id >= 0, which the CUDA fork/join path excludes from the section's run,
     silently serializing the section instead of failing at compile time. This section-body rule is a structural AST
     check (`_validate_parallel_section_body`), independent of the kernel's `checkpoints=` mode, so a plain graph kernel
@@ -851,21 +851,21 @@ def test_graph_parallel_section_checkpoint_raises():
 
     @qd.kernel(graph=True)
     def k(x: qd.types.ndarray(qd.i32, ndim=1), flag: qd.types.ndarray(qd.i32, ndim=0)):
-        with qd.graph_parallel_context():
-            with qd.graph_parallel():
+        with qd.graph.parallel_context():
+            with qd.graph.parallel():
                 with qd.checkpoint(0, yield_on=flag):
                     for i in range(x.shape[0]):
                         x[i] = x[i] + 1
 
     x = qd.ndarray(qd.i32, shape=(16,))
     flag = qd.ndarray(qd.i32, shape=())
-    with pytest.raises(qd.QuadrantsSyntaxError, match="qd.checkpoint.. cannot appear inside a qd.graph_parallel"):
+    with pytest.raises(qd.QuadrantsSyntaxError, match="qd.checkpoint.. cannot appear inside a qd.graph.parallel"):
         k(x, flag)
 
 
 @test_utils.test()
 def test_graph_parallel_context_in_checkpoints_kernel_raises():
-    """A qd.graph_parallel_context() region is not supported in a @qd.kernel(graph=True, checkpoints=True) kernel and
+    """A qd.graph.parallel_context() region is not supported in a @qd.kernel(graph=True, checkpoints=True) kernel and
     must be rejected at compile time. A region's section for-loops escape the checkpoint net two ways, both wrong:
     CheckpointTransformer.auto_wrap_for_loops does not recurse into the region's `with` block, so the sections are not
     auto-wrapped into implicit checkpoints; and an explicit qd.checkpoint inside a section is itself rejected. Either
@@ -877,8 +877,8 @@ def test_graph_parallel_context_in_checkpoints_kernel_raises():
 
     @qd.kernel(graph=True, checkpoints=True)
     def k(x: qd.types.ndarray(qd.i32, ndim=1)):
-        with qd.graph_parallel_context():
-            with qd.graph_parallel():
+        with qd.graph.parallel_context():
+            with qd.graph.parallel():
                 for i in range(x.shape[0]):
                     x[i] = x[i] + 1
 
@@ -889,13 +889,13 @@ def test_graph_parallel_context_in_checkpoints_kernel_raises():
 
 @test_utils.test()
 def test_graph_parallel_section_nested_section_raises():
-    """A qd.graph_parallel() section cannot contain another qd.graph_parallel() section (sections do not nest)."""
+    """A qd.graph.parallel() section cannot contain another qd.graph.parallel() section (sections do not nest)."""
 
     @qd.kernel(graph=True)
     def k(x: qd.types.ndarray(qd.i32, ndim=1)):
-        with qd.graph_parallel_context():
-            with qd.graph_parallel():
-                with qd.graph_parallel():
+        with qd.graph.parallel_context():
+            with qd.graph.parallel():
+                with qd.graph.parallel():
                     for i in range(x.shape[0]):
                         x[i] = x[i] + 1
 
@@ -906,38 +906,38 @@ def test_graph_parallel_section_nested_section_raises():
 
 @test_utils.test()
 def test_graph_parallel_section_nested_graph_do_while_deep_raises():
-    """The section-body check recurses (ast.walk): a qd.graph_do_while buried inside an inner static for-loop of a
+    """The section-body check recurses (ast.walk): a qd.graph.do_while buried inside an inner static for-loop of a
     section is still rejected, not just one written directly at the section top level."""
 
     @qd.kernel(graph=True)
     def k(x: qd.types.ndarray(qd.i32, ndim=2), counter: qd.types.ndarray(qd.i32, ndim=0)):
-        with qd.graph_parallel_context():
-            with qd.graph_parallel():
+        with qd.graph.parallel_context():
+            with qd.graph.parallel():
                 for b in qd.static(range(2)):
-                    while qd.graph_do_while(counter):
+                    while qd.graph.do_while(counter):
                         for i in range(x.shape[1]):
                             x[b, i] = x[b, i] + 1
 
     x = qd.ndarray(qd.i32, shape=(2, 16))
     counter = qd.ndarray(qd.i32, shape=())
-    with pytest.raises(qd.QuadrantsSyntaxError, match="qd.graph_do_while.. cannot appear inside a qd.graph_parallel"):
+    with pytest.raises(qd.QuadrantsSyntaxError, match="qd.graph.do_while.. cannot appear inside a qd.graph.parallel"):
         k(x, counter)
 
 
 @test_utils.test()
 def test_graph_parallel_static_loop_inside_graph_do_while():
-    """A static section loop composes with qd.graph_do_while: each iteration runs all unrolled
-    qd.graph_parallel sections, then decrements the counter."""
+    """A static section loop composes with qd.graph.do_while: each iteration runs all unrolled
+    qd.graph.parallel sections, then decrements the counter."""
     nb = 2
     n = 64
     iters = 4
 
     @qd.kernel(graph=True)
     def k(x: qd.types.ndarray(qd.i32, ndim=2), counter: qd.types.ndarray(qd.i32, ndim=0)):
-        while qd.graph_do_while(counter):
-            with qd.graph_parallel_context():
+        while qd.graph.do_while(counter):
+            with qd.graph.parallel_context():
                 for b in qd.static(range(nb)):
-                    with qd.graph_parallel():
+                    with qd.graph.parallel():
                         for i in range(x.shape[1]):
                             x[b, i] = x[b, i] + (b + 1)
             for _ in range(1):

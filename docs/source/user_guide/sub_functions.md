@@ -58,7 +58,7 @@ What counts as **top level** (allowed):
 
 - Directly in the kernel body.
 - Inside a `qd.static(...)` loop — these are unrolled at compile time, so the calls land at top level (see [static](static.md)).
-- Directly inside a `while qd.graph_do_while(...):` body (see [graphs](graph.md)).
+- Directly inside a `while qd.graph.do_while(...):` body (see [graphs](graph.md)).
 
 What is **rejected**: nesting the call inside a runtime `for`, `if`, or `while`.
 

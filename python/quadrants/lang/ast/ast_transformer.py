@@ -24,7 +24,9 @@ from quadrants.lang.ast.ast_transformer_utils import (
     LoopStatus,
     ReturnStatus,
     get_decorator,
+    maybe_lifted_primitive,
 )
+from quadrants.lang.ast.ast_transformers import graph_api
 from quadrants.lang.ast.ast_transformers.call_transformer import CallTransformer
 from quadrants.lang.ast.ast_transformers.checkpoint_transformer import (
     CheckpointTransformer,
@@ -100,11 +102,18 @@ class ASTTransformer(Builder):
         if isinstance(node, (ast.stmt, ast.expr)) and isinstance(node.ptr, Expr):
             node.ptr.dbg_info = _qd_core.DebugInfo(ctx.get_pos_info(node))
             node.ptr.ptr.set_dbg_info(node.ptr.dbg_info)
-        if ctx.is_pure and node.violates_pure and not ctx.static_scope_status.is_in_static_scope:
-            if isinstance(node.ptr, (float, int, Field)):
+        # ``qd.static`` is intentionally NOT a purity escape hatch: a captured module global is still flagged inside
+        # a static scope, since its value never enters the fastcache key regardless of static wrapping.
+        if ctx.is_pure and node.violates_pure:
+            # ``str`` is included alongside the numeric/``Field`` types: a captured string only affects a kernel through
+            # compile-time ``qd.static`` branches, and its value never enters the fastcache key, so it is cache-unsafe
+            # in exactly the same way as a captured int/float.
+            if isinstance(node.ptr, (float, int, str, Field)):
                 if not _is_quadrants_internal_file(ctx.file):
                     message = f"[PURE.VIOLATION] WARNING: Accessing global variable {node.id} {type(node.ptr)} {node.violates_pure_reason}"
-                    if node.id.upper() == node.id:
+                    # Transition period: violations inside a ``qd.static`` scope only warn instead of raising, giving
+                    # downstream code time to migrate such constants to kernel params. ``UPPERCASE`` names also warn.
+                    if node.id.upper() == node.id or ctx.is_in_static_scope():
                         warnings.warn(message)
                     else:
                         raise exception.QuadrantsCompilationError(message)
@@ -750,6 +759,10 @@ class ASTTransformer(Builder):
                 node.ptr = getattr(tensor_ops, node.attr)
                 setattr(node, "caller", node.value.ptr)
         elif dataclasses.is_dataclass(node.value.ptr):
+            lifted = maybe_lifted_primitive(ctx, node.value.ptr, node.attr)
+            if lifted is not None:
+                node.ptr = lifted
+                return node.ptr
             node.ptr = getattr(node.value.ptr, node.attr)
             from quadrants._tensor_wrapper import (  # pylint: disable=C0415
                 Tensor as _TensorClass,
@@ -769,6 +782,10 @@ class ASTTransformer(Builder):
                 count, dtype, naming_fn = groups[node.attr]
                 node.ptr = _UnpackedVectorRef(node.value.ptr, node.attr, count, dtype, naming_fn)
                 return node.ptr
+            lifted = maybe_lifted_primitive(ctx, node.value.ptr, node.attr)
+            if lifted is not None:
+                node.ptr = lifted
+                return node.ptr
             node.ptr = getattr(node.value.ptr, node.attr)
             # ``qd.Tensor`` wrappers reached via attribute access on a ``@qd.data_oriented`` struct field at AST-build
             # time. The IR layer downstream (``build_Subscript`` -> ``impl.subscript``) only knows about ``Ndarray`` /
@@ -785,8 +802,10 @@ class ASTTransformer(Builder):
             node.violates_pure = node.value.violates_pure
             if node.violates_pure:
                 node.violates_pure_reason = node.value.violates_pure_reason
-            if ctx.is_pure and node.violates_pure and not ctx.static_scope_status.is_in_static_scope:
-                if isinstance(node.ptr, (int, float, Field)):
+            # ``qd.static`` is intentionally NOT a purity escape hatch (see ``build_Name``).
+            if ctx.is_pure and node.violates_pure:
+                # ``str`` included for the same reason as in ``build_Name``: a captured string is cache-unsafe.
+                if isinstance(node.ptr, (int, float, str, Field)):
                     violation = True
                     if violation and isinstance(node.ptr, enum.Enum):
                         violation = False
@@ -796,7 +815,8 @@ class ASTTransformer(Builder):
                         violation = False
                     if violation:
                         message = f"[PURE.VIOLATION] WARNING: Accessing global var {node.attr} from outside function scope within pure kernel {node.value.violates_pure_reason}"
-                        if node.attr.upper() == node.attr:
+                        # Transition period (see ``build_Name``): ``qd.static`` scope downgrades this to a warning.
+                        if node.attr.upper() == node.attr or ctx.is_in_static_scope():
                             warnings.warn(message)
                         else:
                             raise exception.QuadrantsCompilationError(message)
@@ -1356,7 +1376,8 @@ class ASTTransformer(Builder):
 
     @staticmethod
     def _is_graph_do_while_call(node: ast.expr) -> ast.expr | None:
-        """If *node* is ``qd.graph_do_while(arg)`` return the arg AST node, else None.
+        """If *node* is ``qd.graph.do_while(arg)`` (or the deprecated ``qd.graph_do_while(arg)``) return the arg AST
+        node, else None.
 
         ``arg`` may be an ``ast.Name`` (a bare kernel parameter, e.g. ``counter``) or an ``ast.Attribute`` chain (a
         ``@qd.data_oriented`` member ndarray such as ``self.counter`` or a ``@dataclasses.dataclass`` parameter member
@@ -1365,11 +1386,7 @@ class ASTTransformer(Builder):
         """
         if not isinstance(node, ast.Call):
             return None
-        func = node.func
-        is_gdw = (isinstance(func, ast.Attribute) and func.attr == "graph_do_while") or (
-            isinstance(func, ast.Name) and func.id == "graph_do_while"
-        )
-        if not is_gdw:
+        if not graph_api.matches(node.func, "do_while"):
             return None
         if len(node.args) == 1 and isinstance(node.args[0], (ast.Name, ast.Attribute)):
             return node.args[0]
@@ -1407,25 +1424,26 @@ class ASTTransformer(Builder):
 
         graph_do_while_node = ASTTransformer._is_graph_do_while_call(node.test)
         if graph_do_while_node is not None:
+            graph_api.warn_if_deprecated(node.test.func, "do_while")
             from quadrants.lang.kernel import GraphDoWhileLevel  # pylint: disable=C0415
 
             kernel = ctx.global_context.current_kernel
             if not kernel.use_graph:
-                raise QuadrantsSyntaxError("qd.graph_do_while() requires @qd.kernel(graph=True)")
+                raise QuadrantsSyntaxError("qd.graph.do_while() requires @qd.kernel(graph=True)")
             # graph_do_while emits no loop IR; its body's for-loops must be top-level (offloaded) tasks. So it may only
             # appear at the kernel top level or directly inside another graph_do_while (both at loop_depth 0), never
             # inside a real for-loop.
             if ctx.loop_depth != 0:
                 raise QuadrantsSyntaxError(
-                    "qd.graph_do_while() must be at the kernel top level or directly nested inside "
-                    "another qd.graph_do_while(); it cannot appear inside a for-loop."
+                    "qd.graph.do_while() must be at the kernel top level or directly nested inside "
+                    "another qd.graph.do_while(); it cannot appear inside a for-loop."
                 )
             # Resolve the condition ndarray (bare parameter or @qd.data_oriented member) to its flat C++ arg-id at AST-
             # build time -- the same id the runtime needs -- so the launch path forwards it directly with no per-launch
             # name matching. ``cond_arg_name`` keeps the readable label (e.g. "counter" or "self.counter") for
             # introspection and for the legacy ``graph_do_while_arg`` alias surfaced on Kernel.
             cond_label, cond_cpp_arg_id = ASTTransformer._resolve_ndarray_kernel_arg_id(
-                ctx, kernel, graph_do_while_node, "qd.graph_do_while(...)"
+                ctx, kernel, graph_do_while_node, "qd.graph.do_while(...)"
             )
             # Register this loop as a new nesting level (the body restriction is validated up-front in
             # FunctionDefTransformer). Outer loops get lower ids than the inner loops they contain.
@@ -1652,7 +1670,7 @@ class ASTTransformer(Builder):
         if not FunctionDefTransformer._is_stream_parallel_with(node, ctx.global_vars):
             raise QuadrantsSyntaxError(
                 "'with' in Quadrants kernels only supports qd.stream_parallel(), qd.checkpoint(), "
-                "qd.graph_parallel_context(), or qd.graph_parallel()"
+                "qd.graph.parallel_context(), or qd.graph.parallel()"
             )
         if not ctx.is_kernel:
             raise QuadrantsSyntaxError("qd.stream_parallel() can only be used inside @qd.kernel, not @qd.func")

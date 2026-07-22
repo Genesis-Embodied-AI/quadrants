@@ -84,6 +84,39 @@ class BackupSSA : public BasicStmtVisitor {
           }
         } else if (op->is<ArgLoadStmt>()) {
           stmt->set_operand(i, stmt->insert_before_me(op->clone()));
+        } else if (Stmt *top_val =
+                       op->is<LocalLoadStmt>() ? ad_stack_materialization_source(op->as<LocalLoadStmt>()) : nullptr) {
+          // `op` reads one component of a stack-backed tensor's top through a fresh materialization alloca (see
+          // `ad_stack_materialization_source`). The plain alloca is not recomputable, so the generic `load(op)` spill
+          // below would back it with a single overwrite-each-iteration slot and every reverse iteration would read the
+          // last forward iteration's component. Reconstruct the read instead: clone the recomputable full-tensor top at
+          // the reverse cursor (per-iteration correct under the same pop-ordering the AdStackLoadTopStmt clone relies
+          // on), re-materialize it into a fresh alloca, and re-subscript at the same constant offset.
+          auto *ll = op->as<LocalLoadStmt>();
+          auto *mp = ll->src->as<MatrixPtrStmt>();
+          if (RecomputableChainAnalyzer::is_recomputable(top_val, recomputable_cache_, mutated_snodes_) &&
+              is_chain_clone_safe(top_val, stmt)) {
+            std::unordered_map<Stmt *, Stmt *> clone_cache;
+            Stmt *cloned_top = RecomputableChainCloner::clone_at(top_val, stmt, clone_cache);
+            auto tensor_type = mp->origin->ret_type.ptr_removed();
+            auto fresh_alloca = Stmt::make<AllocaStmt>(tensor_type);
+            auto *fresh_alloca_ptr = fresh_alloca.get();
+            fresh_alloca->ret_type = tensor_type;
+            fresh_alloca->ret_type.set_is_pointer(true);
+            auto cloned_offset = stmt->insert_before_me(mp->offset->clone());
+            stmt->insert_before_me(std::move(fresh_alloca));
+            stmt->insert_before_me(Stmt::make<LocalStoreStmt>(fresh_alloca_ptr, cloned_top));
+            auto new_mp = Stmt::make<MatrixPtrStmt>(fresh_alloca_ptr, cloned_offset);
+            new_mp->ret_type = ll->ret_type;
+            auto *new_mp_ptr = new_mp.get();
+            stmt->insert_before_me(std::move(new_mp));
+            auto new_load = Stmt::make<LocalLoadStmt>(new_mp_ptr);
+            new_load->ret_type = ll->ret_type;
+            stmt->set_operand(i, stmt->insert_before_me(std::move(new_load)));
+          } else {
+            auto alloca = load(op);
+            stmt->set_operand(i, stmt->insert_before_me(Stmt::make<LocalLoadStmt>(alloca)));
+          }
         } else {
           // Recomputable-chain fallback before the last-iter `load(op)` spill: when the cross-block SSA op is rooted in
           // a DAG of side-effect-free arithmetic over already-stack-backed allocas, kernel-args, constants, and loop
