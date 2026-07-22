@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>Sub-functions &#8212; Quadrants 1.1.3 documentation</title>
+    <title>Sub-functions &#8212; Quadrants 1.1.4 documentation</title>
   
   
   
@@ -43,7 +43,7 @@
   <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5" />
 <link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5" />
 
-    <script src="../_static/documentation_options.js?v=cb7bf70b"></script>
+    <script src="../_static/documentation_options.js?v=00f267c6"></script>
     <script src="../_static/doctools.js?v=9bcbadda"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -63,7 +63,7 @@
     <link rel="prev" title="qd.static" href="static.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="1.1.3" />
+  <meta name="docsearch:version" content="1.1.4" />
   
     
     <script src="../_static/searchtools.js"></script>
@@ -131,7 +131,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 1.1.3 documentation</p>
+    <p class="title logo__title">Quadrants 1.1.4 documentation</p>
   
 </a></div>
     
@@ -480,7 +480,7 @@
 <ul class="simple">
 <li><p>Directly in the kernel body.</p></li>
 <li><p>Inside a <code class="docutils literal notranslate"><span class="pre">qd.static(...)</span></code> loop — these are unrolled at compile time, so the calls land at top level (see <a class="reference internal" href="static.html"><span class="std std-doc">static</span></a>).</p></li>
-<li><p>Directly inside a <code class="docutils literal notranslate"><span class="pre">while</span> <span class="pre">qd.graph_do_while(...):</span></code> body (see <a class="reference internal" href="graph.html"><span class="std std-doc">graphs</span></a>).</p></li>
+<li><p>Directly inside a <code class="docutils literal notranslate"><span class="pre">while</span> <span class="pre">qd.graph.do_while(...):</span></code> body (see <a class="reference internal" href="graph.html"><span class="std std-doc">graphs</span></a>).</p></li>
 </ul>
 <p>What is <strong>rejected</strong>: nesting the call inside a runtime <code class="docutils literal notranslate"><span class="pre">for</span></code>, <code class="docutils literal notranslate"><span class="pre">if</span></code>, or <code class="docutils literal notranslate"><span class="pre">while</span></code>.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>

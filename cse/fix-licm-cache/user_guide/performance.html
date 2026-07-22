@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>Performance &#8212; Quadrants 1.1.3 documentation</title>
+    <title>Performance &#8212; Quadrants 1.1.4 documentation</title>
   
   
   
@@ -43,7 +43,7 @@
   <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5" />
 <link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5" />
 
-    <script src="../_static/documentation_options.js?v=cb7bf70b"></script>
+    <script src="../_static/documentation_options.js?v=00f267c6"></script>
     <script src="../_static/doctools.js?v=9bcbadda"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -63,7 +63,7 @@
     <link rel="prev" title="Algorithms" href="algorithms.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="1.1.3" />
+  <meta name="docsearch:version" content="1.1.4" />
   
     
     <script src="../_static/searchtools.js"></script>
@@ -131,7 +131,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 1.1.3 documentation</p>
+    <p class="title logo__title">Quadrants 1.1.4 documentation</p>
   
 </a></div>
     
@@ -452,7 +452,7 @@
 </section>
 <section id="reducing-launch-latency">
 <h2>Reducing launch latency<a class="headerlink" href="#reducing-launch-latency" title="Link to this heading">#</a></h2>
-<p><a class="reference internal" href="graph.html"><span class="std std-doc">Graphs</span></a> are the main tool for reducing launch latency. On backends with hardware graph support, the kernel’s whole sequence of GPU tasks is issued as a single graph launch rather than one launch per task, collapsing the per-task C++ and GPU/driver launch overhead. The per-call Python overhead is still paid on every call; to cut that too, move the loop itself into the graph with <code class="docutils literal notranslate"><span class="pre">graph_do_while</span></code> so that many iterations become a single call.</p>
+<p><a class="reference internal" href="graph.html"><span class="std std-doc">Graphs</span></a> are the main tool for reducing launch latency. On backends with hardware graph support, the kernel’s whole sequence of GPU tasks is issued as a single graph launch rather than one launch per task, collapsing the per-task C++ and GPU/driver launch overhead. The per-call Python overhead is still paid on every call; to cut that too, move the loop itself into the graph with <code class="docutils literal notranslate"><span class="pre">qd.graph.do_while</span></code> so that many iterations become a single call.</p>
 <p>Independently of graphs, you can also shrink the launch latency itself by reducing the number and complexity of kernel parameters - field arguments are cheaper than ndarray arguments, and global fields incur no parameter-related launch latency. See <a class="reference internal" href="parallelization.html#does-gpu-kernel-launch-latency-matter"><span class="std std-ref">Parallelization</span></a> for these launch-tuning guidelines.</p>
 </section>
 <section id="other-performance-tools">

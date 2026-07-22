@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>Streams &#8212; Quadrants 1.1.3 documentation</title>
+    <title>Streams &#8212; Quadrants 1.1.4 documentation</title>
   
   
   
@@ -43,7 +43,7 @@
   <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5" />
 <link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5" />
 
-    <script src="../_static/documentation_options.js?v=cb7bf70b"></script>
+    <script src="../_static/documentation_options.js?v=00f267c6"></script>
     <script src="../_static/doctools.js?v=9bcbadda"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -63,7 +63,7 @@
     <link rel="prev" title="Graph" href="graph.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="1.1.3" />
+  <meta name="docsearch:version" content="1.1.4" />
   
     
     <script src="../_static/searchtools.js"></script>
@@ -131,7 +131,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 1.1.3 documentation</p>
+    <p class="title logo__title">Quadrants 1.1.4 documentation</p>
   
 </a></div>
     
@@ -491,7 +491,7 @@
 </div>
 <p>Consecutive <code class="docutils literal notranslate"><span class="pre">with</span> <span class="pre">qd.stream_parallel():</span></code> blocks run concurrently. Multiple for loops within a single block share a stream and run serially on it. All streams are synchronized before the kernel returns.</p>
 <blockquote>
-<div><p><strong>For <code class="docutils literal notranslate"><span class="pre">graph=True</span></code> kernels</strong>, use <a class="reference internal" href="graph.html#qd-graph-parallel-sections-with-qd-graph-parallel-context-experimental"><span class="std std-ref"><code class="docutils literal notranslate"><span class="pre">qd.graph_parallel_context</span></code> / <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel</span></code></span></a> instead - <code class="docutils literal notranslate"><span class="pre">stream_parallel</span></code> is not compatible with graphs (see <a class="reference internal" href="#limitations">Limitations</a>). <code class="docutils literal notranslate"><span class="pre">qd.graph_parallel_context</span></code> expresses the same “run these independent sequences concurrently” idea but is honored by the graph builder.</p>
+<div><p><strong>For <code class="docutils literal notranslate"><span class="pre">graph=True</span></code> kernels</strong>, use <a class="reference internal" href="graph.html#qd-graph-parallel-sections-with-qd-graph-parallel-context-experimental"><span class="std std-ref"><code class="docutils literal notranslate"><span class="pre">qd.graph.parallel_context</span></code> / <code class="docutils literal notranslate"><span class="pre">qd.graph.parallel</span></code></span></a> instead - <code class="docutils literal notranslate"><span class="pre">stream_parallel</span></code> is not compatible with graphs (see <a class="reference internal" href="#limitations">Limitations</a>). <code class="docutils literal notranslate"><span class="pre">qd.graph.parallel_context</span></code> expresses the same “run these independent sequences concurrently” idea but is honored by the graph builder.</p>
 </div></blockquote>
 <section id="restrictions">
 <h3>Restrictions<a class="headerlink" href="#restrictions" title="Link to this heading">#</a></h3>

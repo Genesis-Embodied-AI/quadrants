@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>Optimization passes &#8212; Quadrants 1.1.3 documentation</title>
+    <title>Optimization passes &#8212; Quadrants 1.1.4 documentation</title>
   
   
   
@@ -43,7 +43,7 @@
   <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5" />
 <link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5" />
 
-    <script src="../_static/documentation_options.js?v=cb7bf70b"></script>
+    <script src="../_static/documentation_options.js?v=00f267c6"></script>
     <script src="../_static/doctools.js?v=9bcbadda"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -63,7 +63,7 @@
     <link rel="prev" title="Troubleshooting" href="troubleshooting.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="1.1.3" />
+  <meta name="docsearch:version" content="1.1.4" />
   
     
     <script src="../_static/searchtools.js"></script>
@@ -131,7 +131,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 1.1.3 documentation</p>
+    <p class="title logo__title">Quadrants 1.1.4 documentation</p>
   
 </a></div>
     
@@ -448,7 +448,7 @@
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span>Python (AST)
    │  lower to IR, type-check
    ▼
-high-level IR  ──► simplify ──► (autodiff, if requested) ──► simplify
+high-level IR  ──► simplify ──► (autodiff — automatic differentiation — if requested) ──► simplify
    │
    ▼
 offload  (split the kernel into offloaded tasks)
@@ -457,10 +457,10 @@ offload  (split the kernel into offloaded tasks)
 per-task IR  ──► simplify ──► lower memory access ──► simplify
    │
    ▼
-backend codegen  (LLVM → PTX/SASS, or SPIR-V, …)
+backend codegen  (translate IR into device machine code, e.g. PTX/SASS via LLVM, or SPIR-V)
 </pre></div>
 </div>
-<p>The “simplify” boxes are all the same routine (internally <code class="docutils literal notranslate"><span class="pre">full_simplify</span></code>), invoked at several points. Most of the interesting optimization work happens inside it.</p>
+<p>The “simplify” boxes are all the same routine (internally <code class="docutils literal notranslate"><span class="pre">full_simplify</span></code>), invoked at several points. Most of the interesting optimization work happens inside it. The optional autodiff step, run only when you ask Quadrants for gradients, is covered in <a class="reference internal" href="autodiff.html"><span class="std std-doc">Automatic differentiation</span></a>.</p>
 </section>
 <section id="the-simplify-loop">
 <h2>The simplify loop<a class="headerlink" href="#the-simplify-loop" title="Link to this heading">#</a></h2>
@@ -485,7 +485,7 @@ backend codegen  (LLVM → PTX/SASS, or SPIR-V, …)
 <tr class="row-odd"><td><p>Constant folding</p></td>
 <td><p>Pre-computes expressions whose inputs are all known at compile time: <code class="docutils literal notranslate"><span class="pre">2</span> <span class="pre">*</span> <span class="pre">3</span> <span class="pre">→</span> <span class="pre">6</span></code>.</p></td>
 </tr>
-<tr class="row-even"><td><p>Dead-code elimination (<strong>DIE</strong>)</p></td>
+<tr class="row-even"><td><p>Dead-instruction elimination (<strong>DIE</strong>)</p></td>
 <td><p>Drops instructions whose results are never used. Runs several times per round, after passes that tend to create newly-dead instructions.</p></td>
 </tr>
 <tr class="row-odd"><td><p>Loop-invariant code motion (<strong>LICM</strong>)</p></td>
@@ -504,6 +504,7 @@ backend codegen  (LLVM → PTX/SASS, or SPIR-V, …)
 </table>
 </div>
 <p>Two of these - CSE and CFG optimization - run only when <code class="docutils literal notranslate"><span class="pre">opt_level</span> <span class="pre">&gt;</span> <span class="pre">0</span></code> (the default is <code class="docutils literal notranslate"><span class="pre">1</span></code>).</p>
+<p><strong>CSE is scoped per offloaded task.</strong> Once the kernel has been split, common-subexpression elimination runs over one offloaded task’s IR at a time rather than the whole kernel at once - the same per-task scoping described for <a class="reference internal" href="#control-flow-graph-cfg-optimization">CFG optimization</a> below, and for the same reason: each task is a separate device launch, so there is nothing to deduplicate across a task boundary. Scoping it this way keeps each run cheap and lets the per-task simplify stages run in parallel across the compiler’s worker threads. One per-task CSE also runs once immediately after the offload split, before memory access is lowered, so that the memory-focused optimizations that follow see each global’s reads and writes through a single shared access.</p>
 </section>
 <section id="control-flow-graph-cfg-optimization">
 <h2>Control-flow-graph (CFG) optimization<a class="headerlink" href="#control-flow-graph-cfg-optimization" title="Link to this heading">#</a></h2>
@@ -549,7 +550,7 @@ backend codegen  (LLVM → PTX/SASS, or SPIR-V, …)
 </tbody>
 </table>
 </div>
-<p>For everyday use, leave them at their defaults. The most common deliberate change is <code class="docutils literal notranslate"><span class="pre">cfg_optimization=False</span></code> when iterating on a kernel whose compile time is in your way. Note that, in general, changing these options is relatively fragile since the Quadrants tests run assuming the default values.</p>
+<p>For everyday use, leave them at their defaults - they are the best-supported and most reliable configuration. The most common deliberate change is <code class="docutils literal notranslate"><span class="pre">cfg_optimization=False</span></code> when iterating on a kernel whose compile time is in your way.</p>
 </section>
 <section id="inspecting-what-the-compiler-did">
 <h2>Inspecting what the compiler did<a class="headerlink" href="#inspecting-what-the-compiler-did" title="Link to this heading">#</a></h2>

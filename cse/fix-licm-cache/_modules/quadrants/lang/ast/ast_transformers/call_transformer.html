@@ -7,7 +7,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>quadrants.lang.ast.ast_transformers.call_transformer &#8212; Quadrants 1.1.3 documentation</title>
+    <title>quadrants.lang.ast.ast_transformers.call_transformer &#8212; Quadrants 1.1.4 documentation</title>
   
   
   
@@ -42,7 +42,7 @@
   <link rel="preload" as="script" href="../../../../../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5" />
 <link rel="preload" as="script" href="../../../../../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5" />
 
-    <script src="../../../../../_static/documentation_options.js?v=cb7bf70b"></script>
+    <script src="../../../../../_static/documentation_options.js?v=00f267c6"></script>
     <script src="../../../../../_static/doctools.js?v=9bcbadda"></script>
     <script src="../../../../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../../../../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -60,7 +60,7 @@
     <link rel="search" title="Search" href="../../../../../search.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="1.1.3" />
+  <meta name="docsearch:version" content="1.1.4" />
   
     
     <script src="../../../../../_static/searchtools.js"></script>
@@ -128,7 +128,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 1.1.3 documentation</p>
+    <p class="title logo__title">Quadrants 1.1.4 documentation</p>
   
 </a></div>
     
@@ -633,7 +633,7 @@
             <span class="n">func_name</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">func</span><span class="p">,</span> <span class="s2">&quot;__name__&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;this @qd.func&quot;</span>
             <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span>
                 <span class="sa">f</span><span class="s2">&quot;`</span><span class="si">{</span><span class="n">func_name</span><span class="si">}</span><span class="s2">` is decorated with requires_top_level=True and must be called at the top &quot;</span>
-                <span class="sa">f</span><span class="s2">&quot;level of a @qd.kernel (or directly inside a `while qd.graph_do_while(...)` body). It &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;level of a @qd.kernel (or directly inside a `while qd.graph.do_while(...)` body). It &quot;</span>
                 <span class="sa">f</span><span class="s2">&quot;cannot be nested inside a runtime for / if / while: that demotes its phase loops out of &quot;</span>
                 <span class="sa">f</span><span class="s2">&quot;top-level position, collapsing the per-phase grid-wide barriers and corrupting the result.&quot;</span>
             <span class="p">)</span>

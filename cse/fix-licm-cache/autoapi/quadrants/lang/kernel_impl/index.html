@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>quadrants.lang.kernel_impl &#8212; Quadrants 1.1.3 documentation</title>
+    <title>quadrants.lang.kernel_impl &#8212; Quadrants 1.1.4 documentation</title>
   
   
   
@@ -43,7 +43,7 @@
   <link rel="preload" as="script" href="../../../../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5" />
 <link rel="preload" as="script" href="../../../../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5" />
 
-    <script src="../../../../_static/documentation_options.js?v=cb7bf70b"></script>
+    <script src="../../../../_static/documentation_options.js?v=00f267c6"></script>
     <script src="../../../../_static/doctools.js?v=9bcbadda"></script>
     <script src="../../../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../../../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -63,7 +63,7 @@
     <link rel="prev" title="quadrants.lang.kernel_checkpoint" href="../kernel_checkpoint/index.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="1.1.3" />
+  <meta name="docsearch:version" content="1.1.4" />
   
     
     <script src="../../../../_static/searchtools.js"></script>
@@ -131,7 +131,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 1.1.3 documentation</p>
+    <p class="title logo__title">Quadrants 1.1.4 documentation</p>
   
 </a></div>
     
@@ -378,7 +378,7 @@
 <tr class="row-even"><td><p><a class="reference internal" href="#quadrants.lang.kernel_impl.kernel" title="quadrants.lang.kernel_impl.kernel"><code class="xref py py-obj docutils literal notranslate"><span class="pre">kernel</span></code></a>(…)</p></td>
 <td><p>Marks a function as a Quadrants kernel.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.kernel_impl.data_oriented" title="quadrants.lang.kernel_impl.data_oriented"><code class="xref py py-obj docutils literal notranslate"><span class="pre">data_oriented</span></code></a>(cls)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#quadrants.lang.kernel_impl.data_oriented" title="quadrants.lang.kernel_impl.data_oriented"><code class="xref py py-obj docutils literal notranslate"><span class="pre">data_oriented</span></code></a>([cls, template_primitives])</p></td>
 <td><p>Marks a class as Quadrants compatible.</p></td>
 </tr>
 </tbody>
@@ -402,7 +402,7 @@ will JIT compile it into native instructions.</p>
 <li><p><strong>fn</strong> (<em>Callable</em>) – The Python function to be decorated</p></li>
 <li><p><strong>is_real_function</strong> (<em>bool</em>) – Whether the function is a real function</p></li>
 <li><p><strong>requires_top_level</strong> (<em>bool</em>) – <strong>Experimental</strong> (behaviour/API may change). If True, the func may only
-be called at the <strong>top level</strong> of a kernel (or directly inside a <code class="docutils literal notranslate"><span class="pre">while</span> <span class="pre">qd.graph_do_while(...)</span></code>
+be called at the <strong>top level</strong> of a kernel (or directly inside a <code class="docutils literal notranslate"><span class="pre">while</span> <span class="pre">qd.graph.do_while(...)</span></code>
 body). Calling it nested inside ordinary runtime <code class="docutils literal notranslate"><span class="pre">for</span></code> / <code class="docutils literal notranslate"><span class="pre">if</span></code> / <code class="docutils literal notranslate"><span class="pre">while</span></code> control flow raises a
 <code class="xref py py-class docutils literal notranslate"><span class="pre">QuadrantsSyntaxError</span></code> at compile time. Intended for multi-phase device ops whose per-phase
 top-level <code class="docutils literal notranslate"><span class="pre">for</span></code> loops must each lower to their own offloaded launch (e.g. the <code class="docutils literal notranslate"><span class="pre">qd.algorithms</span></code>
@@ -495,7 +495,7 @@ resume from via <code class="docutils literal notranslate"><span class="pre">ker
 
 <dl class="py function">
 <dt class="sig sig-object py" id="quadrants.lang.kernel_impl.data_oriented">
-<span class="sig-prename descclassname"><span class="pre">quadrants.lang.kernel_impl.</span></span><span class="sig-name descname"><span class="pre">data_oriented</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">cls</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/kernel_impl.html#data_oriented"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.kernel_impl.data_oriented" title="Link to this definition">#</a></dt>
+<span class="sig-prename descclassname"><span class="pre">quadrants.lang.kernel_impl.</span></span><span class="sig-name descname"><span class="pre">data_oriented</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">cls</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">template_primitives</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../../_modules/quadrants/lang/kernel_impl.html#data_oriented"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#quadrants.lang.kernel_impl.data_oriented" title="Link to this definition">#</a></dt>
 <dd><p>Marks a class as Quadrants compatible.</p>
 <p>To allow for modularized code, Quadrants provides this decorator so that
 Quadrants kernels can be defined inside a class.</p>
@@ -517,7 +517,19 @@ Quadrants kernels can be defined inside a class.</p>
 </div>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>cls</strong> (<em>Class</em>) – the class to be decorated</p>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>cls</strong> (<em>Class</em>) – the class to be decorated</p></li>
+<li><p><strong>template_primitives</strong> (<em>bool</em>) – controls how the primitive (<code class="docutils literal notranslate"><span class="pre">int</span></code> / <code class="docutils literal notranslate"><span class="pre">float</span></code> / <code class="docutils literal notranslate"><span class="pre">bool</span></code>)
+members of instances of this class are treated when an instance is passed into a kernel
+as a <code class="docutils literal notranslate"><span class="pre">qd.template()</span></code> argument (including as the implicit <code class="docutils literal notranslate"><span class="pre">self</span></code> of a member kernel).
+When <code class="docutils literal notranslate"><span class="pre">True</span></code> (the default, and the historical behaviour) each primitive member is baked
+into the compiled kernel as a compile-time constant: mutating it afterwards does not take
+effect until the kernel is re-specialised. When <code class="docutils literal notranslate"><span class="pre">False</span></code> every primitive member accessed
+by the kernel is instead lifted into a runtime scalar kernel argument, so its value is
+read fresh on every launch and may be mutated without recompiling. A primitive lifted
+this way may not be used inside <code class="docutils literal notranslate"><span class="pre">qd.static(...)</span></code> (doing so raises
+<code class="docutils literal notranslate"><span class="pre">QuadrantsSyntaxError</span></code>), since that context requires a compile-time constant.</p></li>
+</ul>
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
 <dd class="field-even"><p>The decorated class.</p>
