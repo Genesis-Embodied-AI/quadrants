@@ -20,17 +20,17 @@ Compilation runs as a fixed sequence of stages. Optimization passes are interlea
 
 ```
 Python (AST)
-   │  lower to IR, type-check
-   ▼
-high-level IR  ──► simplify ──► (autodiff — automatic differentiation — if requested) ──► simplify
-   │
-   ▼
+   |  lower to IR, type-check
+   v
+high-level IR  --> simplify --> (autodiff = automatic differentiation, if requested) --> simplify
+   |
+   v
 offload  (split the kernel into offloaded tasks)
-   │
-   ▼
-per-task IR  ──► simplify ──► lower memory access ──► simplify
-   │
-   ▼
+   |
+   v
+per-task IR  --> simplify --> lower memory access --> simplify
+   |
+   v
 backend codegen  (translate IR into device machine code, e.g. PTX/SASS via LLVM, or SPIR-V)
 ```
 
