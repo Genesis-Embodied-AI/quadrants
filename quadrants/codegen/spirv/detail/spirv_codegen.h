@@ -353,10 +353,13 @@ class TaskCodegen : public IRVisitor {
   spirv::Value get_ad_stack_heap_buffer_int();
   spirv::Value get_ad_stack_heap_thread_base_int();
   spirv::Value ad_stack_heap_int_ptr(spirv::Value slot_offset, spirv::Value count);
-  // Metadata buffer accessors. Each emits one OpLoad on first use and caches the SSA id.
+  // Metadata buffer accessors. Each emits one OpLoad on first use and caches the SSA id. The two stride loads are
+  // seeded by `preload_ad_stack_metadata_strides` at the task entry block so the cached ids dominate every heap
+  // access site; see the comment on that function for why lazy first emission at a heap access site is unsound.
   spirv::Value get_ad_stack_metadata_buffer();
   spirv::Value get_ad_stack_metadata_stride_float();
   spirv::Value get_ad_stack_metadata_stride_int();
+  void preload_ad_stack_metadata_strides();
   void ensure_ad_stack_metadata_loaded(AdStackSpirv &info);
   // Lazy-allocate the per-task overflow-signal accumulator at the function entry block. See the member
   // doc on `any_overflow_signal_var_` for the design rationale.

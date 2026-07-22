@@ -5324,3 +5324,48 @@ def test_adstack_offset_array_difference_loop_trip_grad_correct():
     for j in range(total):
         for e in range(n_env):
             assert grad[j, e] == pytest.approx(2.0 * x_np[j, e], rel=1e-5)
+
+
+@test_utils.test(require=qd.extension.adstack, ad_stack_experimental_enabled=True)
+def test_adstack_stride_load_dominates_sibling_branch_grad_distinct_per_thread():
+    # The reverse pass of a kernel whose first f32 adstack heap access sits inside one arm of a runtime `if` while
+    # the sibling arm also hits the heap must keep per-thread gradients distinct. The memoized per-thread stride
+    # load from the AdStackMetadata buffer is emitted at the task entry block so its SSA id dominates both arms;
+    # emitting it lazily at the first heap access would define it inside the first arm and reuse it from the
+    # sibling arm, which violates SPIR-V dominance and lands on Metal as an uninitialized stride register: every
+    # thread then computes the same heap row base and the whole dispatch races on one row, collapsing the per-env
+    # adjoints to a single value. The taken `else` arm below runs a field-bounded loop whose multiply spills the
+    # operand on the f32 heap; the compiled-but-untaken `if` arm reads both a reduction and a component of a
+    # vector, which is what places the first f32 heap access of the module inside that arm.
+    n_env = 2
+    dt = 0.01
+
+    jtype = qd.field(qd.i32, shape=())
+    q_end = qd.field(qd.i32, shape=())
+    qpos = qd.field(qd.f32, shape=(2, n_env), needs_grad=True)
+    vel = qd.field(qd.f32, shape=(2, n_env), needs_grad=True)
+
+    @qd.kernel
+    def compute():
+        for i_env in range(n_env):
+            if jtype[None] == 3:
+                rv = qd.Vector([vel[0, i_env], vel[1, i_env]], dt=qd.f32)
+                qpos[0, i_env] = rv.norm_sqr()
+                qpos[1, i_env] = rv[0]
+            else:
+                for j in range(q_end[None]):
+                    qpos[j, i_env] = vel[j, i_env] * dt
+
+    jtype[None] = 2
+    q_end[None] = 1
+    qpos.fill(0.0)
+    vel.fill(0.0)
+    vel.grad.fill(0.0)
+    seed = np.zeros((2, n_env), dtype=np.float32)
+    seed[0, :] = np.arange(1, n_env + 1, dtype=np.float32)
+    qpos.grad.from_numpy(seed)
+    compute.grad()
+
+    grad = vel.grad.to_numpy()[0]
+    for i in range(n_env):
+        assert grad[i] == pytest.approx((i + 1) * dt, rel=1e-6)
