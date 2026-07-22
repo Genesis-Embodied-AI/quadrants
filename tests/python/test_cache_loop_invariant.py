@@ -66,17 +66,16 @@ def test_atomic_dest_not_cached(use_ndarray: bool) -> None:
 def test_conditional_store_to_loop_invariant_global(use_ndarray: bool) -> None:
     """Regression: a loop-invariant global written *conditionally* inside an ``if`` must not read stale.
 
-    ``flag[i]`` is invariant w.r.t. the inner ``j`` loop, so its load is a candidate for
-    cache_loop_invariant_global_vars.  It is written conditionally (``if j >= threshold``) inside that
-    loop, and the read must observe the store.  Caching is only sound when the read and write pointers to
-    the same address are the same statement; otherwise ``flag_access`` stamps the hoisted read
-    ``activate=false``, the caching pass serves the pre-loop value, and the store is lost -- ``acc`` then
-    sums the stale ``0`` instead of the stored ``1`` (this broke the rigid solver's convergence break-flag,
-    an ~88% runtime regression / non-terminating loop).
+    ``flag[i]`` is invariant w.r.t. the inner ``j`` loop, so the cache_loop_invariant_global_vars pass may hoist its
+    load out of the loop.  It is written conditionally (``if j >= threshold``) inside that loop, and the read must
+    observe the store.  Caching is only sound when the read and write pointers to the same address are the same
+    statement; otherwise ``flag_access`` stamps the hoisted read ``activate=false``, the caching pass serves the
+    pre-loop value, and the store is lost -- ``acc`` then sums the stale ``0`` instead of the stored ``1`` (this broke
+    the rigid solver's convergence break-flag, an ~88% runtime regression / non-terminating loop).
 
-    Whole-kernel CSE unifies those pointers on upstream; per-task CSE restores the same precondition via
-    ``merge_global_ptrs`` for the field path (pre-offload ``GlobalPtrStmt``s) and ``cse_offloaded_tasks``
-    for the ndarray path (``ExternalPtrStmt``s, which only exist post-offload).  Both are exercised here.
+    Whole-kernel CSE unifies those pointers on upstream.  Per-task CSE restores the same precondition via the
+    ``merge_global_ptrs`` pass for the field path (pre-offload ``GlobalPtrStmt``s) and ``cse_offloaded_tasks`` for the
+    ndarray path (``ExternalPtrStmt``s, which only exist post-offload).  Both are exercised here.
     """
     n = 4
     m = 8
