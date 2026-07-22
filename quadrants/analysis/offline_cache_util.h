@@ -2,6 +2,7 @@
 
 #include <string>
 
+#include "quadrants/inc/constants.h"  // AutodiffMode
 #include "quadrants/rhi/arch.h"
 
 namespace quadrants::lang {
@@ -13,7 +14,6 @@ class IRNode;
 class SNode;
 class Kernel;
 class OffloadedStmt;
-enum class AutodiffMode : int;
 
 std::string get_hashed_offline_cache_key_of_snode(const SNode *snode);
 std::string get_hashed_offline_cache_key(const CompileConfig &config,
