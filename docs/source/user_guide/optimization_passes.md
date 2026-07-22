@@ -22,7 +22,7 @@ Compilation runs as a fixed sequence of stages. Optimization passes are interlea
 Python (AST)
    │  lower to IR, type-check
    ▼
-high-level IR  ──► simplify ──► (autodiff, if requested) ──► simplify
+high-level IR  ──► simplify ──► (autodiff — automatic differentiation — if requested) ──► simplify
    │
    ▼
 offload  (split the kernel into offloaded tasks)
@@ -31,10 +31,10 @@ offload  (split the kernel into offloaded tasks)
 per-task IR  ──► simplify ──► lower memory access ──► simplify
    │
    ▼
-backend codegen  (LLVM → PTX/SASS, or SPIR-V, …)
+backend codegen  (translate IR into device machine code, e.g. PTX/SASS via LLVM, or SPIR-V)
 ```
 
-The "simplify" boxes are all the same routine (internally `full_simplify`), invoked at several points. Most of the interesting optimization work happens inside it.
+The "simplify" boxes are all the same routine (internally `full_simplify`), invoked at several points. Most of the interesting optimization work happens inside it. The optional autodiff step, run only when you ask Quadrants for gradients, is covered in [Automatic differentiation](./autodiff.md).
 
 ## The simplify loop
 
@@ -48,7 +48,7 @@ In the order they run each round:
 | Unreachable-code elimination | Removes branches that can never be taken (e.g. the body of an `if` whose condition is always false). |
 | Binary-op / algebraic simplification | Applies arithmetic identities: `x * 1 → x`, `x + 0 → x`, `x * 2 → x + x`, and similar peephole rewrites. |
 | Constant folding | Pre-computes expressions whose inputs are all known at compile time: `2 * 3 → 6`. |
-| Dead-code elimination (**DIE**) | Drops instructions whose results are never used. Runs several times per round, after passes that tend to create newly-dead instructions. |
+| Dead-instruction elimination (**DIE**) | Drops instructions whose results are never used. Runs several times per round, after passes that tend to create newly-dead instructions. |
 | Loop-invariant code motion (**LICM**) | Hoists a computation that produces the same value on every iteration out of the loop, so it runs once instead of N times. |
 | Local simplify | Peephole cleanups within a block. |
 | Common-subexpression elimination (**CSE**) | Finds an identical expression computed more than once and computes it a single time, reusing the result. |
@@ -81,7 +81,7 @@ All of these are fields of `CompileConfig`, so you set them at `qd.init(...)` (o
 | `constant_folding` | `True` | Enables the constant-folding pass. |
 | `fast_math` | `True` | Allows IEEE-relaxed floating-point rewrites (e.g. fusing a multiply and add). Covered in [qd.init options](./init_options.md#fast_math). |
 
-For everyday use, leave them at their defaults. The most common deliberate change is `cfg_optimization=False` when iterating on a kernel whose compile time is in your way. Note that, in general, changing these options is relatively fragile since the Quadrants tests run assuming the default values.
+For everyday use, leave them at their defaults - they are the best-supported and most reliable configuration. The most common deliberate change is `cfg_optimization=False` when iterating on a kernel whose compile time is in your way.
 
 ## Inspecting what the compiler did
 
