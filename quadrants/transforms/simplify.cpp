@@ -570,10 +570,15 @@ void full_simplify(IRNode *root, const CompileConfig &config, const FullSimplify
         modified = true;
       if (should_dump)
         dump_step("10_die", iteration);
-      if (config.opt_level > 0 && whole_kernel_cse(root))
+      if (config.opt_level > 0 && per_task_cse(root))
         modified = true;
       if (should_dump)
-        dump_step("11_whole_kernel_cse", iteration);
+        dump_step("11_per_task_cse", iteration);
+      // NOTE: the pre-offload same-address pointer merge (merge_global_ptrs) used to run here, in the fixpoint. It only
+      // needs to happen ONCE before the first flag_access (compile_to_offloads), to unify a global's read/write
+      // pointers before flag_access stamps the read-only copy activate=false. Running a whole-kernel pointer CSE in
+      // every fixpoint iteration of every pre-offload phase was a +12-22s compile regression (measured on
+      // franka/duck/box_pyramid) for zero extra benefit, so it is now a single call in compile_to_offloads.
       // Don't do this time-consuming optimization pass again if the IR is
       // not modified.
       if (config.opt_level > 0 && first_iteration && config.cfg_optimization &&
