@@ -504,6 +504,7 @@ backend codegen  (LLVM → PTX/SASS, or SPIR-V, …)
 </table>
 </div>
 <p>Two of these - CSE and CFG optimization - run only when <code class="docutils literal notranslate"><span class="pre">opt_level</span> <span class="pre">&gt;</span> <span class="pre">0</span></code> (the default is <code class="docutils literal notranslate"><span class="pre">1</span></code>).</p>
+<p><strong>CSE is scoped per offloaded task.</strong> Once the kernel has been split, common-subexpression elimination runs over one offloaded task’s IR at a time rather than the whole kernel at once - the same per-task scoping described for <a class="reference internal" href="#control-flow-graph-cfg-optimization">CFG optimization</a> below, and for the same reason: each task is a separate device launch, so there is nothing to deduplicate across a task boundary. Scoping it this way keeps each run cheap and lets the per-task simplify stages run in parallel across the compiler’s worker threads. One per-task CSE also runs once immediately after the offload split, before memory access is lowered, so that the memory-focused optimizations that follow see each global’s reads and writes through a single shared access.</p>
 </section>
 <section id="control-flow-graph-cfg-optimization">
 <h2>Control-flow-graph (CFG) optimization<a class="headerlink" href="#control-flow-graph-cfg-optimization" title="Link to this heading">#</a></h2>
