@@ -158,7 +158,11 @@ void compile_to_offloads(IRNode *ir,
   // gets from whole_kernel_cse running inside the post-offload full_simplify (per-task CSE otherwise defers to the
   // codegen workers, which run after cache_loop_invariant_global_vars). Needed for ndarrays, which only become
   // ExternalPtrStmts during offload and so cannot be reached by the pre-offload merge_global_ptrs. See the pass.
-  irpass::cse_offloaded_tasks(ir);
+  // Gated on opt_level like all other CSE (per_task_cse / upstream whole_kernel_cse): at opt_level 0 there is no CSE
+  // to require pointer unification, matching upstream behaviour.
+  if (config.opt_level > 0) {
+    irpass::cse_offloaded_tasks(ir);
+  }
 
   // NOTE: There was an additional CFG pass here, removed in
   // https://github.com/taichi-dev/taichi/pull/8691
