@@ -83,6 +83,20 @@ _ARG_EMPTY = inspect.Parameter.empty
 _arch_cuda = _qd_core.Arch.cuda
 _is_cpython = sys.implementation.name == "cpython"
 
+# The ndarray ExternalPtrStmt linear index is accumulated in int64 in the LLVM codegen backends
+# (see TaskCodeGenLLVM::visit(ExternalPtrStmt)) and, on the SPIR-V backends (Vulkan/Metal/...), whenever the
+# device advertises 64-bit integers (DeviceCapability.spirv_has_int64 -> TaskCodegen::visit widens to i64).
+# Only a SPIR-V device without shaderInt64 still flattens the offset in int32 and can overflow, so the
+# product-of-dimensions warning below is gated on both the arch and the device capability.
+_ARCHS_WITH_I64_LINEAR_INDEX = frozenset(
+    {
+        _qd_core.Arch.x64,
+        _qd_core.Arch.arm64,
+        _qd_core.Arch.cuda,
+        _qd_core.Arch.amdgpu,
+    }
+)
+
 # PERF: Frozen-dataclass dispatch caching.
 #
 # When a frozen dataclass (e.g. Genesis's StructConstraintState with ~43 fields) is passed to a kernel, the per-launch
@@ -727,14 +741,28 @@ class FuncBase:
             # array shapes.
             is_soa = needed_arg_type.layout == Layout.SOA
             array_shape = v.shape
-            if math.prod(array_shape) > np.iinfo(np.int32).max:
-                warnings.warn("Ndarray index might be out of int32 boundary but int64 indexing is not supported yet.")
             needed_arg_dtype = needed_arg_type.dtype
             if needed_arg_dtype is None or id(needed_arg_dtype) in primitive_types.type_ids:
                 element_dim = 0
             else:
                 element_dim = needed_arg_dtype.ndim
                 array_shape = v.shape[element_dim:] if is_soa else v.shape[:-element_dim]
+            if any(dim > np.iinfo(np.int32).max for dim in array_shape):
+                warnings.warn("Ndarray dimensions above int32 are not supported yet.")
+            elif (
+                impl.current_cfg().arch not in _ARCHS_WITH_I64_LINEAR_INDEX
+                and math.prod(v.shape) > np.iinfo(np.int32).max
+                and not impl.get_runtime().prog.get_device_caps().get(_qd_core.DeviceCapability.spirv_has_int64)
+            ):
+                # No single dimension overflows int32, but the flattened element count does. The LLVM backends
+                # accumulate the linear index in int64, and the SPIR-V backends do too when the device advertises
+                # shaderInt64. Only a SPIR-V device without shaderInt64 still flattens in int32 and would overflow,
+                # so warn (this is a cold path -- only huge ndarrays on a non-i64 device reach here).
+                warnings.warn(
+                    "Ndarray total element count exceeds the int32 boundary; this device lacks 64-bit integer "
+                    "support (shaderInt64), so the linear index is computed in int32 and may overflow. int64 "
+                    "linear indexing requires the LLVM backends (CPU/CUDA/AMDGPU) or a SPIR-V device with shaderInt64."
+                )
             if isinstance(v, np.ndarray):
                 # Check ndarray flags is expensive (~250ns), so it is important to order branches according to hit stats
                 if v.flags.c_contiguous:
