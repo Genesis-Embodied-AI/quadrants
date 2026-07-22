@@ -23,7 +23,7 @@ import quadrants as qd
 
 from tests import test_utils
 
-archs_support_ndarray_ad = [qd.cpu, qd.cuda, qd.amdgpu]
+archs_support_ndarray_ad = [qd.cpu, qd.cuda, qd.amdgpu, qd.metal]
 
 
 # ----------------------------------------------------------------------------
@@ -31,25 +31,25 @@ archs_support_ndarray_ad = [qd.cpu, qd.cuda, qd.amdgpu]
 # ----------------------------------------------------------------------------
 
 
-@test_utils.test(arch=archs_support_ndarray_ad, default_fp=qd.f64, require=qd.extension.adstack)
+@test_utils.test(arch=archs_support_ndarray_ad, require=qd.extension.adstack)
 def test_ad_dataclass_ndarray_typed_annotation():
     """dataclass holding qd.ndarrays, passed via typed-dataclass kernel-arg annotation."""
     N = 5
 
     @dataclasses.dataclass(frozen=True)
     class State:
-        a: qd.types.NDArray[qd.f64, 1]
-        b: qd.types.NDArray[qd.f64, 1]
-        p: qd.types.NDArray[qd.f64, 1]
+        a: qd.types.NDArray[qd.f32, 1]
+        b: qd.types.NDArray[qd.f32, 1]
+        p: qd.types.NDArray[qd.f32, 1]
 
     @qd.kernel
     def compute(s: State):
         for i in range(N):
             s.p[i] = s.a[i] * s.b[i] + 1.0
 
-    a = qd.ndarray(qd.f64, shape=N, needs_grad=True)
-    b = qd.ndarray(qd.f64, shape=N)
-    p = qd.ndarray(qd.f64, shape=N, needs_grad=True)
+    a = qd.ndarray(qd.f32, shape=N, needs_grad=True)
+    b = qd.ndarray(qd.f32, shape=N)
+    p = qd.ndarray(qd.f32, shape=N, needs_grad=True)
     for i in range(N):
         a[i] = 3.0
         b[i] = float(i + 1)
@@ -65,25 +65,25 @@ def test_ad_dataclass_ndarray_typed_annotation():
     np.testing.assert_allclose(a.grad.to_numpy(), b.to_numpy())
 
 
-@test_utils.test(arch=archs_support_ndarray_ad, default_fp=qd.f64, require=qd.extension.adstack)
+@test_utils.test(arch=archs_support_ndarray_ad, require=qd.extension.adstack)
 def test_ad_dataclass_ndarray_template():
     """dataclass holding qd.ndarrays, passed via qd.template()."""
     N = 5
 
     @dataclasses.dataclass(frozen=True)
     class State:
-        a: qd.types.NDArray[qd.f64, 1]
-        b: qd.types.NDArray[qd.f64, 1]
-        p: qd.types.NDArray[qd.f64, 1]
+        a: qd.types.NDArray[qd.f32, 1]
+        b: qd.types.NDArray[qd.f32, 1]
+        p: qd.types.NDArray[qd.f32, 1]
 
     @qd.kernel
     def compute(s: qd.template()):
         for i in range(N):
             s.p[i] = s.a[i] * s.b[i] + 1.0
 
-    a = qd.ndarray(qd.f64, shape=N, needs_grad=True)
-    b = qd.ndarray(qd.f64, shape=N)
-    p = qd.ndarray(qd.f64, shape=N, needs_grad=True)
+    a = qd.ndarray(qd.f32, shape=N, needs_grad=True)
+    b = qd.ndarray(qd.f32, shape=N)
+    p = qd.ndarray(qd.f32, shape=N, needs_grad=True)
     for i in range(N):
         a[i] = 3.0
         b[i] = float(i + 1)
@@ -143,25 +143,25 @@ def test_ad_dataclass_field_template_tape():
 # ----------------------------------------------------------------------------
 
 
-@test_utils.test(arch=archs_support_ndarray_ad, default_fp=qd.f64, require=qd.extension.adstack)
+@test_utils.test(arch=archs_support_ndarray_ad, require=qd.extension.adstack)
 def test_ad_dataclass_tensor_ndarray_backend():
     """dataclass holding qd.tensor(..., backend=NDARRAY) members; ndarray-AD via kernel.grad()."""
     N = 5
 
     @dataclasses.dataclass(frozen=True)
     class State:
-        a: qd.types.NDArray[qd.f64, 1]
-        b: qd.types.NDArray[qd.f64, 1]
-        p: qd.types.NDArray[qd.f64, 1]
+        a: qd.types.NDArray[qd.f32, 1]
+        b: qd.types.NDArray[qd.f32, 1]
+        p: qd.types.NDArray[qd.f32, 1]
 
     @qd.kernel
     def compute(s: State):
         for i in range(N):
             s.p[i] = s.a[i] * s.b[i] + 1.0
 
-    a = qd.tensor(qd.f64, shape=(N,), backend=qd.Backend.NDARRAY, needs_grad=True)
-    b = qd.tensor(qd.f64, shape=(N,), backend=qd.Backend.NDARRAY)
-    p = qd.tensor(qd.f64, shape=(N,), backend=qd.Backend.NDARRAY, needs_grad=True)
+    a = qd.tensor(qd.f32, shape=(N,), backend=qd.Backend.NDARRAY, needs_grad=True)
+    b = qd.tensor(qd.f32, shape=(N,), backend=qd.Backend.NDARRAY)
+    p = qd.tensor(qd.f32, shape=(N,), backend=qd.Backend.NDARRAY, needs_grad=True)
     for i in range(N):
         a[i] = 3.0
         b[i] = float(i + 1)
@@ -219,7 +219,7 @@ def test_ad_dataclass_tensor_field_backend_tape():
 # ----------------------------------------------------------------------------
 
 
-@test_utils.test(arch=archs_support_ndarray_ad, default_fp=qd.f64, require=qd.extension.adstack)
+@test_utils.test(arch=archs_support_ndarray_ad, require=qd.extension.adstack)
 def test_ad_dataclass_mixed_ndarray_and_tensor_ndarray_backend():
     """Single dataclass holds one qd.ndarray member and one qd.tensor(NDARRAY) member; verify the kernel can read/write
     both and that gradients flow through both."""
@@ -227,20 +227,20 @@ def test_ad_dataclass_mixed_ndarray_and_tensor_ndarray_backend():
 
     @dataclasses.dataclass(frozen=True)
     class State:
-        a_nd: qd.types.NDArray[qd.f64, 1]
-        a_tens: qd.types.NDArray[qd.f64, 1]
-        b: qd.types.NDArray[qd.f64, 1]
-        p: qd.types.NDArray[qd.f64, 1]
+        a_nd: qd.types.NDArray[qd.f32, 1]
+        a_tens: qd.types.NDArray[qd.f32, 1]
+        b: qd.types.NDArray[qd.f32, 1]
+        p: qd.types.NDArray[qd.f32, 1]
 
     @qd.kernel
     def compute(s: State):
         for i in range(N):
             s.p[i] = (s.a_nd[i] + s.a_tens[i]) * s.b[i]
 
-    a_nd = qd.ndarray(qd.f64, shape=N, needs_grad=True)
-    a_tens = qd.tensor(qd.f64, shape=(N,), backend=qd.Backend.NDARRAY, needs_grad=True)
-    b = qd.ndarray(qd.f64, shape=N)
-    p = qd.ndarray(qd.f64, shape=N, needs_grad=True)
+    a_nd = qd.ndarray(qd.f32, shape=N, needs_grad=True)
+    a_tens = qd.tensor(qd.f32, shape=(N,), backend=qd.Backend.NDARRAY, needs_grad=True)
+    b = qd.ndarray(qd.f32, shape=N)
+    p = qd.ndarray(qd.f32, shape=N, needs_grad=True)
     for i in range(N):
         a_nd[i] = 2.0
         a_tens[i] = 5.0
@@ -259,7 +259,7 @@ def test_ad_dataclass_mixed_ndarray_and_tensor_ndarray_backend():
     np.testing.assert_allclose(a_tens.grad.to_numpy(), b.to_numpy())
 
 
-@test_utils.test(arch=archs_support_ndarray_ad, default_fp=qd.f64, require=qd.extension.adstack)
+@test_utils.test(arch=archs_support_ndarray_ad, require=qd.extension.adstack)
 def test_ad_dataclass_mixed_ndarray_and_field_in_same_class():
     """Single dataclass holds both a qd.ndarray member and a qd.field member. The kernel reads and writes both;
     differentiation is checked through the ndarray path via ``kernel.grad()`` (the field is along for the ride; its
@@ -268,10 +268,10 @@ def test_ad_dataclass_mixed_ndarray_and_field_in_same_class():
 
     @dataclasses.dataclass(frozen=True)
     class State:
-        a_nd: qd.types.NDArray[qd.f64, 1]
+        a_nd: qd.types.NDArray[qd.f32, 1]
         out_field: object
-        b: qd.types.NDArray[qd.f64, 1]
-        p: qd.types.NDArray[qd.f64, 1]
+        b: qd.types.NDArray[qd.f32, 1]
+        p: qd.types.NDArray[qd.f32, 1]
 
     @qd.kernel
     def compute(s: qd.template()):
@@ -279,10 +279,10 @@ def test_ad_dataclass_mixed_ndarray_and_field_in_same_class():
             s.p[i] = s.a_nd[i] * s.b[i]
             s.out_field[i] = s.a_nd[i] + s.b[i]
 
-    a_nd = qd.ndarray(qd.f64, shape=N, needs_grad=True)
-    out_field = qd.field(qd.f64, shape=(N,))
-    b = qd.ndarray(qd.f64, shape=N)
-    p = qd.ndarray(qd.f64, shape=N, needs_grad=True)
+    a_nd = qd.ndarray(qd.f32, shape=N, needs_grad=True)
+    out_field = qd.field(qd.f32, shape=(N,))
+    b = qd.ndarray(qd.f32, shape=N)
+    p = qd.ndarray(qd.f32, shape=N, needs_grad=True)
     for i in range(N):
         a_nd[i] = 3.0
         b[i] = float(i + 1)
