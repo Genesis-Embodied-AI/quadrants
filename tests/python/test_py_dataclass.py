@@ -1840,6 +1840,42 @@ def test_prune_used_parameters_fastcache_forward_same_name_swapped_slots(tmp_pat
 
 
 @test_utils.test()
+def test_prune_used_parameters_fastcache_forward_same_name_swapped_slots_same_caller(tmp_path: Path):
+    # Same swapped-slot forwarding as the cross-caller case, but both call sites live in a single caller: md
+    # binds inner's used slot a on the first line and its unused slot b on the second. The forwarding map is
+    # keyed per call site (source position), so the two calls stay independent; a map shared for the whole
+    # (caller, callee) pair would let the second line overwrite the first and prune the field the first needs.
+    arch_name = qd.lang.impl.current_cfg().arch.name
+    for _it in range(3):
+        qd.init(arch=getattr(qd, arch_name), offline_cache_file_path=str(tmp_path), offline_cache=True)
+
+        @dataclasses.dataclass
+        class MyDataclass:
+            x: qd.types.NDArray[qd.i32, 1]
+
+        @qd.func
+        def inner(a: MyDataclass, b: MyDataclass) -> None:
+            a.x[0] = 42
+
+        @qd.func
+        def caller(md: MyDataclass, other: MyDataclass) -> None:
+            inner(md, other)
+            inner(other, md)
+
+        @qd.kernel(fastcache=True)
+        def k1(p: MyDataclass, q: MyDataclass) -> None:
+            caller(p, q)
+
+        p_x = qd.ndarray(qd.i32, (4,))
+        q_x = qd.ndarray(qd.i32, (4,))
+        k1(MyDataclass(x=p_x), MyDataclass(x=q_x))
+        assert p_x[0] == 42
+        assert q_x[0] == 42
+        kernel_args_count_by_type = k1._primal.launch_stats.kernel_args_count_by_type
+        assert kernel_args_count_by_type[KernelBatchedArgType.QD_ARRAY] == 2
+
+
+@test_utils.test()
 def test_pruning_with_keyword_rename() -> None:
     @dataclasses.dataclass
     class MyStruct:
