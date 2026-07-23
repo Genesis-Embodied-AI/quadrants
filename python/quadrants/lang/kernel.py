@@ -35,7 +35,7 @@ from quadrants._lib.core.quadrants_python import (
     KernelLaunchContext,
 )
 from quadrants._tensor_wrapper import _TENSOR_WRAPPER_TYPES
-from quadrants.lang import _kernel_impl_dataclass, impl, runtime_ops
+from quadrants.lang import _kernel_impl_dataclass, _prune_profile as _pp, impl, runtime_ops
 
 # `qd.checkpoint` pause / resume model helpers. See `kernel_checkpoint.py` for the full extracted surface; `Kernel`
 # delegates the resume-cookie validation, label translation, per-launch yield_on= arg-id table build, and GraphStatus
@@ -514,6 +514,7 @@ class Kernel(FuncBase):
             for _pass in range(range_begin, 2):
                 if _pass >= 1:
                     pruning.enforce()
+                _pp_t0 = time.perf_counter()
                 tree, ctx = self.get_tree_and_ctx(
                     pass_idx=_pass,
                     py_args=py_args,
@@ -523,6 +524,7 @@ class Kernel(FuncBase):
                     pruning=pruning,
                     currently_compiling_materialize_key=key,
                 )
+                _pp.add("discovery_s" if _pass == 0 else "enforce_s", time.perf_counter() - _pp_t0)
                 runtime._current_global_context = ctx.global_context
 
                 if self.autodiff_mode != _NONE:
@@ -536,9 +538,11 @@ class Kernel(FuncBase):
                     tree=tree,
                     dump_ast=os.environ.get("QD_DUMP_AST", "") == "1" and _pass == 1,
                 )
+                _pp_tb = time.perf_counter()
                 quadrants_kernel = impl.get_runtime().prog.create_kernel(
                     quadrants_ast_generator, kernel_name, self.autodiff_mode
                 )
+                _pp.add("backend_s", time.perf_counter() - _pp_tb)
                 if _pass == 1:
                     assert key not in self.materialized_kernels
                     self.materialized_kernels[key] = quadrants_kernel
@@ -554,6 +558,8 @@ class Kernel(FuncBase):
                     if struct_primitive_launch_info:
                         self._struct_primitive_launch_info_by_key[key] = struct_primitive_launch_info
                 else:
+                    if _pp.enabled:
+                        _pp.add("n_kernels", 1)
                     for used_parameters in pruning.used_vars_by_func_id.values():
                         new_used_parameters = set()
                         for param in used_parameters:
@@ -565,6 +571,8 @@ class Kernel(FuncBase):
                                 new_used_parameters.add(joined)
                         used_parameters.clear()
                         used_parameters.update(new_used_parameters)
+                    if _pp.enabled:
+                        _pp.add("params_kept", sum(len(s) for s in pruning.used_vars_by_func_id.values()))
                     self.used_py_dataclass_parameters_by_key_enforcing[key] = pruning.used_vars_by_func_id[
                         Pruning.KERNEL_FUNC_ID
                     ]
