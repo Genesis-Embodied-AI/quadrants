@@ -111,7 +111,9 @@ class Pruning:
         # This is not an issue because, for keywords, we don't need to look at the child's metas.
         # We can get the child's name directly from our own keyword node.
         for kwarg in node_keywords:
-            if type(kwarg.value) in {Name}:
+            # kwarg.arg is None for ``**d`` unpacking, which names no single callee parameter; only named
+            # keywords contribute a concrete caller -> callee edge.
+            if type(kwarg.value) in {Name} and kwarg.arg is not None:
                 caller_arg_name = kwarg.value.id  # type: ignore
                 callee_param_name = kwarg.arg
                 name_pairs.append((caller_arg_name, callee_param_name))
