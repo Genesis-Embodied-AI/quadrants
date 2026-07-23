@@ -1694,131 +1694,147 @@ def test_prune_used_parameters_fastcache_no_used(tmp_path: Path):
         k1(envs_idx, md1, md2=md2)
 
 
-@pytest.mark.parametrize("scenario", ["dead_static", "nested", "swapped_slots"])
 @test_utils.test()
-def test_prune_used_parameters_fastcache_forwarding(scenario, tmp_path: Path):
-    # fastcache must forward a dataclass field through every caller path, including a path whose own call site
-    # does not show the field used, or the enforcing pass emits a forward the caller never bound. Scenarios:
-    #   dead_static   - inner reads md.deep only inside a dead qd.static branch, so md.deep is marked used under
-    #                   the func id inner shares across its qd.static instantiations, via the live branch alone.
-    #                   path_dead is walked before path_live, so the used set copied at path_dead's call misses
-    #                   md.deep; the fixpoint pass forwards it from path_dead too.
-    #   nested        - same forwarding, but the field lives three dataclass levels deep (top.mid.leaf.deep).
-    #   swapped_slots - two callers forward the same flat name into swapped inner slots (used in one, unused in
-    #                   the other); a mapping keyed by callee alone would clobber and prune the field the first
-    #                   caller needs, so the mapping is keyed per caller.
+def test_prune_used_parameters_fastcache_dead_static_branch(tmp_path: Path):
+    # inner() reads md.deep only inside a dead qd.static branch, so md.deep is marked used under inner's
+    # (instantiation-shared) func id via the qd.static(True) instantiation alone. Two separate caller paths
+    # forward md to inner: path_dead (qd.static(False)) is walked before path_live (qd.static(True)), so the
+    # single-shot used-set copy at path_dead's call misses md.deep. Without cross-call fixpoint propagation
+    # the enforcing pass still forwards md.deep from path_dead, which never bound it -> compile failure.
     arch_name = qd.lang.impl.current_cfg().arch.name
     for _it in range(3):
         qd.init(arch=getattr(qd, arch_name), offline_cache_file_path=str(tmp_path), offline_cache=True)
 
-        if scenario == "swapped_slots":
+        @dataclasses.dataclass
+        class MyDataclass:
+            base: qd.types.NDArray[qd.i32, 1]
+            deep: qd.types.NDArray[qd.i32, 1]
+            not_used: qd.types.NDArray[qd.i32, 1]
 
-            @dataclasses.dataclass
-            class MyDataclass:
-                x: qd.types.NDArray[qd.i32, 1]
+        @qd.func
+        def inner(md: MyDataclass, use_deep: qd.template()) -> None:
+            md.base[0] = 1
+            if qd.static(use_deep):
+                md.deep[0] = 99
 
-            @qd.func
-            def inner(a: MyDataclass, b: MyDataclass) -> None:
-                a.x[0] = 42
+        @qd.func
+        def path_dead(md: MyDataclass) -> None:
+            inner(md, False)
 
-            @qd.func
-            def caller1(md: MyDataclass, other: MyDataclass) -> None:
-                inner(md, other)
+        @qd.func
+        def path_live(md: MyDataclass) -> None:
+            inner(md, True)
 
-            @qd.func
-            def caller2(md: MyDataclass, other: MyDataclass) -> None:
-                inner(other, md)
+        @qd.kernel(fastcache=True)
+        def k1(md: MyDataclass) -> None:
+            path_dead(md)
+            path_live(md)
 
-            @qd.kernel(fastcache=True)
-            def k1(p: MyDataclass, q: MyDataclass) -> None:
-                caller1(p, q)
-                caller2(p, q)
+        base = qd.ndarray(qd.i32, (4,))
+        deep = qd.ndarray(qd.i32, (4,))
+        not_used = qd.ndarray(qd.i32, (4,))
+        md = MyDataclass(base=base, deep=deep, not_used=not_used)
 
-            p_x = qd.ndarray(qd.i32, (4,))
-            q_x = qd.ndarray(qd.i32, (4,))
-            k1(MyDataclass(x=p_x), MyDataclass(x=q_x))
-            assert p_x[0] == 42
-            assert q_x[0] == 42
+        k1(md)
+        assert base[0] == 1
+        assert deep[0] == 99
+        kernel_args_count_by_type = k1._primal.launch_stats.kernel_args_count_by_type
+        assert kernel_args_count_by_type[KernelBatchedArgType.QD_ARRAY] == 2
 
-        elif scenario == "nested":
 
-            @dataclasses.dataclass
-            class Leaf:
-                deep: qd.types.NDArray[qd.i32, 1]
-                not_used: qd.types.NDArray[qd.i32, 1]
+@test_utils.test()
+def test_prune_used_parameters_fastcache_dead_static_branch_nested(tmp_path: Path):
+    # Same dead-static-branch forwarding bug as the flat case, but the forwarded field lives three dataclass
+    # levels deep (top.mid.leaf.deep), confirming the fix closes the used set across arbitrary nesting depth.
+    arch_name = qd.lang.impl.current_cfg().arch.name
+    for _it in range(3):
+        qd.init(arch=getattr(qd, arch_name), offline_cache_file_path=str(tmp_path), offline_cache=True)
 
-            @dataclasses.dataclass
-            class Mid:
-                not_used: qd.types.NDArray[qd.i32, 1]
-                leaf: Leaf
+        @dataclasses.dataclass
+        class Leaf:
+            deep: qd.types.NDArray[qd.i32, 1]
+            not_used: qd.types.NDArray[qd.i32, 1]
 
-            @dataclasses.dataclass
-            class Top:
-                base: qd.types.NDArray[qd.i32, 1]
-                mid: Mid
+        @dataclasses.dataclass
+        class Mid:
+            not_used: qd.types.NDArray[qd.i32, 1]
+            leaf: Leaf
 
-            @qd.func
-            def inner(top: Top, use_deep: qd.template()) -> None:
-                top.base[0] = 1
-                if qd.static(use_deep):
-                    top.mid.leaf.deep[0] = 99
+        @dataclasses.dataclass
+        class Top:
+            base: qd.types.NDArray[qd.i32, 1]
+            mid: Mid
 
-            @qd.func
-            def path_dead(top: Top) -> None:
-                inner(top, False)
+        @qd.func
+        def inner(top: Top, use_deep: qd.template()) -> None:
+            top.base[0] = 1
+            if qd.static(use_deep):
+                top.mid.leaf.deep[0] = 99
 
-            @qd.func
-            def path_live(top: Top) -> None:
-                inner(top, True)
+        @qd.func
+        def path_dead(top: Top) -> None:
+            inner(top, False)
 
-            @qd.kernel(fastcache=True)
-            def k1(top: Top) -> None:
-                path_dead(top)
-                path_live(top)
+        @qd.func
+        def path_live(top: Top) -> None:
+            inner(top, True)
 
-            base = qd.ndarray(qd.i32, (4,))
-            deep = qd.ndarray(qd.i32, (4,))
-            mid_not_used = qd.ndarray(qd.i32, (4,))
-            leaf_not_used = qd.ndarray(qd.i32, (4,))
-            k1(Top(base=base, mid=Mid(not_used=mid_not_used, leaf=Leaf(deep=deep, not_used=leaf_not_used))))
-            assert base[0] == 1
-            assert deep[0] == 99
+        @qd.kernel(fastcache=True)
+        def k1(top: Top) -> None:
+            path_dead(top)
+            path_live(top)
 
-        else:  # dead_static
+        base = qd.ndarray(qd.i32, (4,))
+        deep = qd.ndarray(qd.i32, (4,))
+        mid_not_used = qd.ndarray(qd.i32, (4,))
+        leaf_not_used = qd.ndarray(qd.i32, (4,))
+        top = Top(base=base, mid=Mid(not_used=mid_not_used, leaf=Leaf(deep=deep, not_used=leaf_not_used)))
 
-            @dataclasses.dataclass
-            class MyDataclass:
-                base: qd.types.NDArray[qd.i32, 1]
-                deep: qd.types.NDArray[qd.i32, 1]
-                not_used: qd.types.NDArray[qd.i32, 1]
+        k1(top)
+        assert base[0] == 1
+        assert deep[0] == 99
+        kernel_args_count_by_type = k1._primal.launch_stats.kernel_args_count_by_type
+        assert kernel_args_count_by_type[KernelBatchedArgType.QD_ARRAY] == 2
 
-            @qd.func
-            def inner(md: MyDataclass, use_deep: qd.template()) -> None:
-                md.base[0] = 1
-                if qd.static(use_deep):
-                    md.deep[0] = 99
 
-            @qd.func
-            def path_dead(md: MyDataclass) -> None:
-                inner(md, False)
+@test_utils.test()
+def test_prune_used_parameters_fastcache_forward_same_name_swapped_slots(tmp_path: Path):
+    # inner() reads only its first struct (a); b is entirely unused. caller1 and caller2 declare identically
+    # named parameters and forward them into swapped inner slots, so the flat name __qd_md__qd_x binds inner's
+    # used slot a in one caller and its unused slot b in the other. Keyed by callee alone, the mapping from a
+    # caller argument name to its callee parameter lets the second caller overwrite the first, so the enforcing
+    # pass prunes the field the first caller needs -> a Missing argument failure and a write to the wrong struct.
+    # Keying the mapping by (caller, callee) keeps the two call sites independent.
+    arch_name = qd.lang.impl.current_cfg().arch.name
+    for _it in range(3):
+        qd.init(arch=getattr(qd, arch_name), offline_cache_file_path=str(tmp_path), offline_cache=True)
 
-            @qd.func
-            def path_live(md: MyDataclass) -> None:
-                inner(md, True)
+        @dataclasses.dataclass
+        class MyDataclass:
+            x: qd.types.NDArray[qd.i32, 1]
 
-            @qd.kernel(fastcache=True)
-            def k1(md: MyDataclass) -> None:
-                path_dead(md)
-                path_live(md)
+        @qd.func
+        def inner(a: MyDataclass, b: MyDataclass) -> None:
+            a.x[0] = 42
 
-            base = qd.ndarray(qd.i32, (4,))
-            deep = qd.ndarray(qd.i32, (4,))
-            not_used = qd.ndarray(qd.i32, (4,))
-            k1(MyDataclass(base=base, deep=deep, not_used=not_used))
-            assert base[0] == 1
-            assert deep[0] == 99
+        @qd.func
+        def caller1(md: MyDataclass, other: MyDataclass) -> None:
+            inner(md, other)
 
-        # Each scenario keeps exactly two arrays live (the used pair); every not_used field is pruned away.
+        @qd.func
+        def caller2(md: MyDataclass, other: MyDataclass) -> None:
+            inner(other, md)
+
+        @qd.kernel(fastcache=True)
+        def k1(p: MyDataclass, q: MyDataclass) -> None:
+            caller1(p, q)
+            caller2(p, q)
+
+        p_x = qd.ndarray(qd.i32, (4,))
+        q_x = qd.ndarray(qd.i32, (4,))
+        k1(MyDataclass(x=p_x), MyDataclass(x=q_x))
+        assert p_x[0] == 42
+        assert q_x[0] == 42
         kernel_args_count_by_type = k1._primal.launch_stats.kernel_args_count_by_type
         assert kernel_args_count_by_type[KernelBatchedArgType.QD_ARRAY] == 2
 
