@@ -39,6 +39,13 @@ class Pruning:
             self.used_vars_by_func_id[Pruning.KERNEL_FUNC_ID].update(kernel_used_parameters)
         # only needed for args, not kwargs
         self.callee_param_by_caller_arg_name_by_func_id: dict[int, dict[str, str]] = defaultdict(dict)
+        # Every caller -> callee forwarding recorded in pass 0, as (caller_func_id, callee_func_id, name_pairs)
+        # where each name_pair is (caller_arg_name, callee_param_name) for a by-name forwarded argument. The
+        # single-shot copy in ``record_after_call`` only reflects what the callee had marked used at the instant of
+        # that call; a callee's used set keeps growing as its later call sites (and its other qd.static template
+        # instantiations, which share the func id) are discovered. ``propagate_used_to_fixpoint`` replays these
+        # edges against the finalized callee sets so a caller's used set is a superset of everything it will forward.
+        self.call_edges: list[tuple[int, int, list[tuple[str, str]]]] = []
 
     def mark_used(self, func_id: int, parameter_flat_name: str) -> None:
         assert not self.enforcing
@@ -82,10 +89,12 @@ class Pruning:
         callee_func: Func = node.func.ptr.wrapper  # type: ignore
         has_self = type(func) is BoundQuadrantsCallable
         self_offset = 1 if has_self else 0
+        name_pairs: list[tuple[str, str]] = []
         for i, arg in enumerate(node_args):
             if type(arg) in {Name}:
                 caller_arg_name = arg.id  # type: ignore
                 callee_param_name = callee_func.arg_metas_expanded[arg_id + self_offset].name  # type: ignore
+                name_pairs.append((caller_arg_name, callee_param_name))
                 if callee_param_name in callee_used_vars:
                     vars_to_unprune.add(caller_arg_name)
             arg_id += 1
@@ -99,12 +108,13 @@ class Pruning:
             if type(kwarg.value) in {Name}:
                 caller_arg_name = kwarg.value.id  # type: ignore
                 callee_param_name = kwarg.arg
+                name_pairs.append((caller_arg_name, callee_param_name))
                 if callee_param_name in callee_used_vars:
                     vars_to_unprune.add(caller_arg_name)
             arg_id += 1
         self.used_vars_by_func_id[my_func_id].update(vars_to_unprune)
+        self.call_edges.append((my_func_id, callee_func_id, name_pairs))
 
-        used_callee_vars = self.used_vars_by_func_id[callee_func_id]
         child_arg_id = 0
         child_metas: list[ArgMetadata] = node.func.ptr.wrapper.arg_metas_expanded  # type: ignore
         callee_param_by_called_arg_name = self.callee_param_by_caller_arg_name_by_func_id[callee_func_id]
@@ -112,11 +122,36 @@ class Pruning:
             if type(arg) in {Name}:
                 caller_arg_name = arg.id  # type: ignore
                 if caller_arg_name.startswith("__qd_"):
+                    # Record the caller-arg -> callee-param mapping unconditionally: whether the callee actually
+                    # needs the field is decided in filter_call_args against the finalized used set, so gating the
+                    # mapping on the callee's used set here (which is not yet complete when the callee's live-branch
+                    # instantiation is discovered later) would drop a forwarded field the enforcing pass still emits.
                     callee_param_name = child_metas[child_arg_id + self_offset].name
-                    if callee_param_name in used_callee_vars or not callee_param_name.startswith("__qd_"):
-                        callee_param_by_called_arg_name[caller_arg_name] = callee_param_name
+                    callee_param_by_called_arg_name[caller_arg_name] = callee_param_name
             child_arg_id += 1
         self.callee_param_by_caller_arg_name_by_func_id[callee_func_id] = callee_param_by_called_arg_name
+
+    def propagate_used_to_fixpoint(self) -> None:
+        """Close the recorded caller -> callee forwarding edges so that every caller's used set contains each
+        by-name argument the enforcing pass will forward to a callee. Must run once after pass 0 (discovery) and
+        before the parent-prefix reduction, so the reduction sees the completed leaf sets.
+
+        A field a callee reads only inside a compile-time-dead ``qd.static`` branch of one template instantiation is
+        still marked used under the callee's (instantiation-shared) func id via its live-branch instantiation. The
+        enforcing pass forwards that field from every caller regardless of which instantiation a given call reaches,
+        so every such caller must bind it - which requires it in the caller's own used set. The single-shot copy at
+        call time misses it whenever the live-branch instantiation is discovered only after that caller was walked;
+        replaying to a fixpoint against the finalized callee sets repairs the omission along the whole call chain."""
+        changed = True
+        while changed:
+            changed = False
+            for caller_func_id, callee_func_id, name_pairs in self.call_edges:
+                callee_used = self.used_vars_by_func_id[callee_func_id]
+                caller_used = self.used_vars_by_func_id[caller_func_id]
+                for caller_arg_name, callee_param_name in name_pairs:
+                    if callee_param_name in callee_used and caller_arg_name not in caller_used:
+                        caller_used.add(caller_arg_name)
+                        changed = True
 
     def filter_call_args(
         self,

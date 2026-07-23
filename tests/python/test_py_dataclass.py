@@ -1695,6 +1695,109 @@ def test_prune_used_parameters_fastcache_no_used(tmp_path: Path):
 
 
 @test_utils.test()
+def test_prune_used_parameters_fastcache_dead_static_branch(tmp_path: Path):
+    # inner() reads md.deep only inside a dead qd.static branch, so md.deep is marked used under inner's
+    # (instantiation-shared) func id via the qd.static(True) instantiation alone. Two separate caller paths
+    # forward md to inner: path_dead (qd.static(False)) is walked before path_live (qd.static(True)), so the
+    # single-shot used-set copy at path_dead's call misses md.deep. Without cross-call fixpoint propagation
+    # the enforcing pass still forwards md.deep from path_dead, which never bound it -> compile failure.
+    arch_name = qd.lang.impl.current_cfg().arch.name
+    for _it in range(3):
+        qd.init(arch=getattr(qd, arch_name), offline_cache_file_path=str(tmp_path), offline_cache=True)
+
+        @dataclasses.dataclass
+        class MyDataclass:
+            base: qd.types.NDArray[qd.i32, 1]
+            deep: qd.types.NDArray[qd.i32, 1]
+            not_used: qd.types.NDArray[qd.i32, 1]
+
+        @qd.func
+        def inner(md: MyDataclass, use_deep: qd.template()) -> None:
+            md.base[0] = 1
+            if qd.static(use_deep):
+                md.deep[0] = 99
+
+        @qd.func
+        def path_dead(md: MyDataclass) -> None:
+            inner(md, False)
+
+        @qd.func
+        def path_live(md: MyDataclass) -> None:
+            inner(md, True)
+
+        @qd.kernel(fastcache=True)
+        def k1(md: MyDataclass) -> None:
+            path_dead(md)
+            path_live(md)
+
+        base = qd.ndarray(qd.i32, (4,))
+        deep = qd.ndarray(qd.i32, (4,))
+        not_used = qd.ndarray(qd.i32, (4,))
+        md = MyDataclass(base=base, deep=deep, not_used=not_used)
+
+        k1(md)
+        assert base[0] == 1
+        assert deep[0] == 99
+        kernel_args_count_by_type = k1._primal.launch_stats.kernel_args_count_by_type
+        assert kernel_args_count_by_type[KernelBatchedArgType.QD_ARRAY] == 2
+
+
+@test_utils.test()
+def test_prune_used_parameters_fastcache_dead_static_branch_nested(tmp_path: Path):
+    # Same dead-static-branch forwarding bug as the flat case, but the forwarded field lives three dataclass
+    # levels deep (top.mid.leaf.deep), confirming the fix closes the used set across arbitrary nesting depth.
+    arch_name = qd.lang.impl.current_cfg().arch.name
+    for _it in range(3):
+        qd.init(arch=getattr(qd, arch_name), offline_cache_file_path=str(tmp_path), offline_cache=True)
+
+        @dataclasses.dataclass
+        class Leaf:
+            deep: qd.types.NDArray[qd.i32, 1]
+            not_used: qd.types.NDArray[qd.i32, 1]
+
+        @dataclasses.dataclass
+        class Mid:
+            not_used: qd.types.NDArray[qd.i32, 1]
+            leaf: Leaf
+
+        @dataclasses.dataclass
+        class Top:
+            base: qd.types.NDArray[qd.i32, 1]
+            mid: Mid
+
+        @qd.func
+        def inner(top: Top, use_deep: qd.template()) -> None:
+            top.base[0] = 1
+            if qd.static(use_deep):
+                top.mid.leaf.deep[0] = 99
+
+        @qd.func
+        def path_dead(top: Top) -> None:
+            inner(top, False)
+
+        @qd.func
+        def path_live(top: Top) -> None:
+            inner(top, True)
+
+        @qd.kernel(fastcache=True)
+        def k1(top: Top) -> None:
+            path_dead(top)
+            path_live(top)
+
+        base = qd.ndarray(qd.i32, (4,))
+        deep = qd.ndarray(qd.i32, (4,))
+        mid_not_used = qd.ndarray(qd.i32, (4,))
+        leaf_not_used = qd.ndarray(qd.i32, (4,))
+        top = Top(base=base, mid=Mid(not_used=mid_not_used, leaf=Leaf(deep=deep, not_used=leaf_not_used)))
+
+        k1(top)
+        assert base[0] == 1
+        assert deep[0] == 99
+        kernel_args_count_by_type = k1._primal.launch_stats.kernel_args_count_by_type
+        assert kernel_args_count_by_type[KernelBatchedArgType.QD_ARRAY] == 2
+
+
+@test_utils.test()
 def test_pruning_with_keyword_rename() -> None:
     @dataclasses.dataclass
     class MyStruct:

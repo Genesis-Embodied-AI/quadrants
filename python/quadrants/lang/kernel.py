@@ -554,6 +554,11 @@ class Kernel(FuncBase):
                     if struct_primitive_launch_info:
                         self._struct_primitive_launch_info_by_key[key] = struct_primitive_launch_info
                 else:
+                    # Complete the cross-call used-var propagation before collapsing to parent prefixes: a callee's
+                    # used set (shared across its qd.static template instantiations) is only final now, so every
+                    # caller's set must be re-closed over it, or a field forwarded from a dead-branch call site would
+                    # be unbound in the enforcing pass. See ``Pruning.propagate_used_to_fixpoint``.
+                    pruning.propagate_used_to_fixpoint()
                     for used_parameters in pruning.used_vars_by_func_id.values():
                         new_used_parameters = set()
                         for param in used_parameters:
