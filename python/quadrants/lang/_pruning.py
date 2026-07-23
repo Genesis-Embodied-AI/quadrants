@@ -37,8 +37,10 @@ class Pruning:
         self.used_vars_by_func_id: dict[int, set[str]] = defaultdict(set)
         if kernel_used_parameters is not None:
             self.used_vars_by_func_id[Pruning.KERNEL_FUNC_ID].update(kernel_used_parameters)
-        # only needed for args, not kwargs
-        self.callee_param_by_caller_arg_name_by_func_id: dict[int, dict[str, str]] = defaultdict(dict)
+        # By-name arg forwarding recorded per (caller_func_id, callee_func_id) edge, mapping caller argument names
+        # to the callee parameter each binds. Keyed by the caller too, not the callee alone, so two callers that
+        # forward the same flat name into different callee slots do not clobber each other. Only args, not kwargs.
+        self.callee_param_by_caller_arg_name_by_edge: dict[tuple[int, int], dict[str, str]] = defaultdict(dict)
         # Every caller -> callee forwarding recorded in pass 0, as (caller_func_id, callee_func_id, name_pairs)
         # where each name_pair is (caller_arg_name, callee_param_name) for a by-name forwarded argument. The
         # single-shot copy in ``record_after_call`` only reflects what the callee had marked used at the instant of
@@ -117,7 +119,7 @@ class Pruning:
 
         child_arg_id = 0
         child_metas: list[ArgMetadata] = node.func.ptr.wrapper.arg_metas_expanded  # type: ignore
-        callee_param_by_called_arg_name = self.callee_param_by_caller_arg_name_by_func_id[callee_func_id]
+        callee_param_by_called_arg_name = self.callee_param_by_caller_arg_name_by_edge[(my_func_id, callee_func_id)]
         for i, arg in enumerate(node_args):
             if type(arg) in {Name}:
                 caller_arg_name = arg.id  # type: ignore
@@ -129,7 +131,7 @@ class Pruning:
                     callee_param_name = child_metas[child_arg_id + self_offset].name
                     callee_param_by_called_arg_name[caller_arg_name] = callee_param_name
             child_arg_id += 1
-        self.callee_param_by_caller_arg_name_by_func_id[callee_func_id] = callee_param_by_called_arg_name
+        self.callee_param_by_caller_arg_name_by_edge[(my_func_id, callee_func_id)] = callee_param_by_called_arg_name
 
     def propagate_used_to_fixpoint(self) -> None:
         """Close the recorded caller -> callee forwarding edges so that every caller's used set contains each
@@ -155,6 +157,7 @@ class Pruning:
 
     def filter_call_args(
         self,
+        ctx: "ASTTransformerFuncContext",
         quadrants_callable: "QuadrantsCallable",
         node: "ast.Call",
         node_args: list[expr],
@@ -174,6 +177,7 @@ class Pruning:
             return py_args
         func: Func = quadrants_callable.wrapper  # type: ignore
         callee_func_id = func.func_id
+        caller_func_id = ctx.func.func_id
         caller_used_args = self.used_vars_by_func_id[callee_func_id]
         new_args = []
         callee_param_id = 0
@@ -203,9 +207,9 @@ class Pruning:
             if type(arg) in {Name}:
                 caller_arg_name = arg.id  # type: ignore
                 if caller_arg_name.startswith("__qd_"):
-                    callee_param_name = self.callee_param_by_caller_arg_name_by_func_id[callee_func_id].get(
-                        caller_arg_name
-                    )
+                    callee_param_name = self.callee_param_by_caller_arg_name_by_edge[
+                        (caller_func_id, callee_func_id)
+                    ].get(caller_arg_name)
                     if callee_param_name is None or (
                         callee_param_name not in caller_used_args and callee_param_name.startswith("__qd_")
                     ):
