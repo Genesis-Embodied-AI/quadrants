@@ -1971,6 +1971,40 @@ def test_prune_used_parameters_fastcache_forward_same_name_swapped_slots_same_ca
 
 
 @test_utils.test()
+def test_prune_used_parameters_fastcache_forward_same_name_same_call_two_slots(tmp_path: Path):
+    # A single call site forwards the SAME dataclass into two positional slots: inner(md, md). inner reads
+    # only its first struct (a); b is entirely unused, so the expanded call carries the same flat name in both
+    # slots. A positional map keyed by the caller flat name lets slot b overwrite slot a, so the enforcing pass
+    # prunes the field slot a needs -> a Missing argument failure. Keying the map by slot index keeps the two
+    # occurrences independent.
+    arch_name = qd.lang.impl.current_cfg().arch.name
+    for _it in range(3):
+        qd.init(arch=getattr(qd, arch_name), offline_cache_file_path=str(tmp_path), offline_cache=True)
+
+        @dataclasses.dataclass
+        class MyDataclass:
+            x: qd.types.NDArray[qd.i32, 1]
+
+        @qd.func
+        def inner(a: MyDataclass, b: MyDataclass) -> None:
+            a.x[0] = 42
+
+        @qd.func
+        def caller(md: MyDataclass) -> None:
+            inner(md, md)
+
+        @qd.kernel(fastcache=True)
+        def k1(p: MyDataclass) -> None:
+            caller(p)
+
+        p_x = qd.ndarray(qd.i32, (4,))
+        k1(MyDataclass(x=p_x))
+        assert p_x[0] == 42
+        kernel_args_count_by_type = k1._primal.launch_stats.kernel_args_count_by_type
+        assert kernel_args_count_by_type[KernelBatchedArgType.QD_ARRAY] == 1
+
+
+@test_utils.test()
 def test_pruning_with_keyword_rename() -> None:
     @dataclasses.dataclass
     class MyStruct:
