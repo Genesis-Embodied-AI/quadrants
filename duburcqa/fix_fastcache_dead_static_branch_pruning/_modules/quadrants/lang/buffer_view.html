@@ -1,0 +1,670 @@
+
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="../../../" >
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>quadrants.lang.buffer_view &#8212; Quadrants 1.1.4 documentation</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "";
+  </script>
+  <!--
+    this give us a css class that will be invisible only if js is disabled
+  -->
+  <noscript>
+    <style>
+      .pst-js-only { display: none !important; }
+
+    </style>
+  </noscript>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="../../../_static/styles/theme.css?digest=a95f357e85573c9b56d5" rel="stylesheet" />
+<link href="../../../_static/styles/pydata-sphinx-theme.css?digest=a95f357e85573c9b56d5" rel="stylesheet" />
+
+    <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=8f2a1f02" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/togglebutton.css?v=9c3e77be" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/graphviz.css?v=4ae1632d" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/sphinx-design.min.css?v=95c83b7e" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/css/custom.css" />
+  
+  <!-- So that users can add custom icons -->
+  <script defer src="../../../_static/scripts/fontawesome.js?digest=a95f357e85573c9b56d5"></script>
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="../../../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5" />
+<link rel="preload" as="script" href="../../../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5" />
+
+    <script src="../../../_static/documentation_options.js?v=00f267c6"></script>
+    <script src="../../../_static/doctools.js?v=9bcbadda"></script>
+    <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../../../_static/copybutton.js?v=f281be69"></script>
+    <script>let toggleHintShow = 'Click to show';</script>
+    <script>let toggleHintHide = 'Click to hide';</script>
+    <script>let toggleOpenOnPrint = 'true';</script>
+    <script src="../../../_static/togglebutton.js?v=b8b12719"></script>
+    <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
+    <script src="../../../_static/design-tabs.js?v=f930bc37"></script>
+    <script>var togglebuttonSelector = '.toggle, .admonition.dropdown';</script>
+    <script>DOCUMENTATION_OPTIONS.pagename = '_modules/quadrants/lang/buffer_view';</script>
+    <script>DOCUMENTATION_OPTIONS.search_as_you_type = false;</script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="docsearch:language" content="en"/>
+  <meta name="docsearch:version" content="1.1.4" />
+  
+    
+    <script src="../../../_static/searchtools.js"></script>
+    <script src="../../../_static/language_data.js"></script>
+    <script src="../../../searchindex.js"></script>
+  
+  </head>
+  <body data-default-mode="">
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+  
+  
+  
+  
+  <dialog id="pst-search-dialog">
+    
+<form class="bd-search d-flex align-items-center"
+      action="../../../search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         placeholder="Search the docs ..."
+         aria-label="Search the docs ..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form>
+  </dialog>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header id="pst-header" class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+<div class="bd-header__inner bd-page-width">
+  <button class="pst-navbar-icon sidebar-toggle primary-toggle" aria-label="Site navigation">
+    <span class="fa-solid fa-bars"></span>
+  </button>
+  
+  
+  <div class="col-lg-3 navbar-header-items__start">
+    
+      <div class="navbar-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="../../../index.html">
+  
+  
+  
+  
+  
+  
+    <p class="title logo__title">Quadrants 1.1.4 documentation</p>
+  
+</a></div>
+    
+  </div>
+  
+  <div class="col-lg-9 navbar-header-items">
+    
+    <div class="me-auto navbar-header-items__center">
+      
+        <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../user_guide/index.html">
+    User guide
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../autoapi/index.html">
+    API Reference
+  </a>
+</li>
+
+  </ul>
+</nav></div>
+      
+    </div>
+    
+    
+    <div class="navbar-header-items__end">
+      
+        <div class="navbar-item navbar-persistent--container">
+          
+
+<button class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+        </div>
+      
+      
+        <div class="navbar-item">
+
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg fa-fw" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg fa-fw" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg fa-fw" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg fa-fw me-1"></i>System Settings</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg fa-fw me-1"></i>Light</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg fa-fw me-1"></i>Dark</button></li>
+  </ul>
+</div></div>
+      
+    </div>
+    
+  </div>
+  
+  
+    <div class="navbar-persistent--mobile">
+
+<button class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+    </div>
+  
+
+  
+</div>
+
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+        
+      
+      <dialog id="pst-primary-sidebar-modal"></dialog>
+      <div id="pst-primary-sidebar" class="bd-sidebar-primary bd-sidebar hide-on-wide">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+      <div class="sidebar-header-items__center">
+        
+          
+          
+            <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../user_guide/index.html">
+    User guide
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../autoapi/index.html">
+    API Reference
+  </a>
+</li>
+
+  </ul>
+</nav></div>
+          
+        
+      </div>
+    
+    
+    
+      <div class="sidebar-header-items__end">
+        
+          <div class="navbar-item">
+
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg fa-fw" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg fa-fw" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg fa-fw" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg fa-fw me-1"></i>System Settings</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg fa-fw me-1"></i>Light</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg fa-fw me-1"></i>Dark</button></li>
+  </ul>
+</div></div>
+        
+      </div>
+    
+  </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+      <div class="sidebar-primary-item">
+<div id="ethical-ad-placement"
+      class="flat"
+      data-ea-publisher="readthedocs"
+      data-ea-type="readthedocs-sidebar"
+      data-ea-manual="true">
+</div></div>
+  </div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item">
+
+<nav aria-label="Breadcrumb" class="d-print-none">
+  <ul class="bd-breadcrumbs">
+    
+    <li class="breadcrumb-item breadcrumb-home">
+      <a href="../../../index.html" class="nav-link" aria-label="Home">
+        <i class="fa-solid fa-home"></i>
+      </a>
+    </li>
+    
+    <li class="breadcrumb-item"><a href="../../index.html" class="nav-link">Module code</a></li>
+    
+    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">quadrants.lang.buffer_view</span></li>
+  </ul>
+</nav>
+</div>
+      
+    </div>
+  
+  
+</div>
+</div>
+              
+              
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <h1>Source code for quadrants.lang.buffer_view</h1><div class="highlight"><pre>
+<span></span><span class="c1"># type: ignore</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">re</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants</span><span class="w"> </span><span class="kn">import</span> <span class="n">_logging</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._lib</span><span class="w"> </span><span class="kn">import</span> <span class="n">core</span> <span class="k">as</span> <span class="n">_qd_core</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">impl</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.expr</span><span class="w"> </span><span class="kn">import</span> <span class="n">Expr</span><span class="p">,</span> <span class="n">make_expr_group</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.util</span><span class="w"> </span><span class="kn">import</span> <span class="n">quadrants_scope</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.types.buffer_view_type</span><span class="w"> </span><span class="kn">import</span> <span class="n">BufferViewType</span>
+
+<span class="n">_LOC_RE</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="sa">r</span><span class="s1">&#39;File &quot;(.+?)&quot;, line (\d+), in (\w+)&#39;</span><span class="p">)</span>
+
+<span class="n">_CALLSTACK_WARNING_BYTE</span> <span class="o">=</span> <span class="mi">1024</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_build_callstack</span><span class="p">():</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Walk src_info_stack and extract deduplicated (file, line, func) frames.</span>
+
+<span class="sd">    Returns (kernel_name, callstack_str).</span>
+<span class="sd">    Warns if the callstack exceeds _CALLSTACK_WARNING_BYTE (large strings increase compiled binary size).</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">stack</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">src_info_stack</span>
+    <span class="n">frames</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">prev_key</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="k">for</span> <span class="n">info</span> <span class="ow">in</span> <span class="n">stack</span><span class="p">:</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">info</span><span class="p">:</span>
+            <span class="k">continue</span>
+        <span class="n">m</span> <span class="o">=</span> <span class="n">_LOC_RE</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="n">info</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">m</span><span class="p">:</span>
+            <span class="k">continue</span>
+        <span class="n">filepath</span><span class="p">,</span> <span class="n">lineno</span><span class="p">,</span> <span class="n">funcname</span> <span class="o">=</span> <span class="n">m</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">1</span><span class="p">),</span> <span class="n">m</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">2</span><span class="p">),</span> <span class="n">m</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span>
+        <span class="n">key</span> <span class="o">=</span> <span class="p">(</span><span class="n">filepath</span><span class="p">,</span> <span class="n">funcname</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">key</span> <span class="o">!=</span> <span class="n">prev_key</span><span class="p">:</span>
+            <span class="n">frames</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">filepath</span><span class="p">,</span> <span class="n">lineno</span><span class="p">,</span> <span class="n">funcname</span><span class="p">))</span>
+            <span class="n">prev_key</span> <span class="o">=</span> <span class="n">key</span>
+
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">frames</span><span class="p">:</span>
+        <span class="k">return</span> <span class="s2">&quot;&lt;unknown&gt;&quot;</span><span class="p">,</span> <span class="s2">&quot;&lt;unknown&gt;&quot;</span>
+
+    <span class="n">kernel_name</span> <span class="o">=</span> <span class="n">frames</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="mi">2</span><span class="p">]</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_format_frame</span><span class="p">(</span><span class="n">fp</span><span class="p">,</span> <span class="n">ln</span><span class="p">,</span> <span class="n">fn</span><span class="p">,</span> <span class="n">depth</span><span class="p">):</span>
+        <span class="k">return</span> <span class="s2">&quot;  &quot;</span> <span class="o">*</span> <span class="n">depth</span> <span class="o">+</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">fn</span><span class="si">}</span><span class="s2"> (</span><span class="si">{</span><span class="n">fp</span><span class="si">}</span><span class="s2">:</span><span class="si">{</span><span class="n">ln</span><span class="si">}</span><span class="s2">)&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_format_chain</span><span class="p">(</span><span class="n">frame_list</span><span class="p">,</span> <span class="n">start_depth</span><span class="o">=</span><span class="mi">0</span><span class="p">):</span>
+        <span class="k">return</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">_format_frame</span><span class="p">(</span><span class="n">fp</span><span class="p">,</span> <span class="n">ln</span><span class="p">,</span> <span class="n">fn</span><span class="p">,</span> <span class="n">start_depth</span> <span class="o">+</span> <span class="n">i</span><span class="p">)</span> <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="p">(</span><span class="n">fp</span><span class="p">,</span> <span class="n">ln</span><span class="p">,</span> <span class="n">fn</span><span class="p">)</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">frame_list</span><span class="p">))</span>
+
+    <span class="n">callstack</span> <span class="o">=</span> <span class="n">_format_chain</span><span class="p">(</span><span class="n">frames</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">callstack</span><span class="p">)</span> <span class="o">&gt;</span> <span class="n">_CALLSTACK_WARNING_BYTE</span><span class="p">:</span>
+        <span class="n">_logging</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;BufferView debug callstack is </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">callstack</span><span class="p">)</span><span class="si">}</span><span class="s2"> bytes (limit </span><span class="si">{</span><span class="n">_CALLSTACK_WARNING_BYTE</span><span class="si">}</span><span class="s2">). &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;Large callstack strings increase compiled binary size.&quot;</span>
+        <span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">kernel_name</span><span class="p">,</span> <span class="n">callstack</span>
+
+
+<div class="viewcode-block" id="BufferView">
+<a class="viewcode-back" href="../../../autoapi/quadrants/lang/buffer_view/index.html#quadrants.lang.buffer_view.BufferView">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">BufferView</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;A view into a sub-range [offset, offset+size) of an ndarray.</span>
+
+<span class="sd">    Create via slice syntax::</span>
+
+<span class="sd">        view = data[:16]           # offset=0, size=16</span>
+<span class="sd">        view = data[8:24]          # offset=8, size=16</span>
+
+<span class="sd">    Or construct directly::</span>
+
+<span class="sd">        view = qd.BufferView(data, offset=16, size=32)</span>
+
+<span class="sd">    Subviews can be created from an existing view::</span>
+
+<span class="sd">        sub = view.subview(offset=4, size=8)</span>
+
+<span class="sd">    Annotate kernel/func parameters with ``BufferView[dtype]`` or plain ``BufferView``::</span>
+
+<span class="sd">        @qd.kernel</span>
+<span class="sd">        def k(v: BufferView[qd.f32]):</span>
+<span class="sd">            for i in range(v.size):</span>
+<span class="sd">                v[i] *= 2.0</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">_is_quadrants_class</span> <span class="o">=</span> <span class="kc">True</span>
+
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">__class_getitem__</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">dtype</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Enable ``BufferView[qd.f32]`` as a kernel/func type annotation.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">dtype</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">BufferViewType</span><span class="p">(</span><span class="o">*</span><span class="n">dtype</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">BufferViewType</span><span class="p">(</span><span class="n">dtype</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">arr</span><span class="p">,</span> <span class="n">offset</span><span class="p">,</span> <span class="n">size</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">impl</span><span class="o">.</span><span class="n">inside_kernel</span><span class="p">():</span>
+            <span class="c1"># Kernel-compilation path: insert debug bounds assertion against the backing ndarray.</span>
+            <span class="n">cfg</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">prog</span><span class="o">.</span><span class="n">config</span><span class="p">()</span>
+            <span class="k">if</span> <span class="n">cfg</span><span class="o">.</span><span class="n">debug</span><span class="p">:</span>
+                <span class="n">ast_builder</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">compiling_callable</span><span class="o">.</span><span class="n">ast_builder</span><span class="p">()</span>
+                <span class="n">src_info</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">get_current_src_info</span><span class="p">()</span>
+                <span class="n">dbg_info</span> <span class="o">=</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">DebugInfo</span><span class="p">(</span><span class="n">src_info</span><span class="p">)</span>
+                <span class="n">arr_len</span> <span class="o">=</span> <span class="n">Expr</span><span class="p">(</span><span class="n">_qd_core</span><span class="o">.</span><span class="n">get_external_tensor_shape_along_axis</span><span class="p">(</span><span class="n">arr</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="n">dbg_info</span><span class="p">))</span>
+                <span class="n">offset_expr</span><span class="p">,</span> <span class="n">size_expr</span> <span class="o">=</span> <span class="n">Expr</span><span class="p">(</span><span class="n">offset</span><span class="p">),</span> <span class="n">Expr</span><span class="p">(</span><span class="n">size</span><span class="p">)</span>
+                <span class="n">msg</span> <span class="o">=</span> <span class="s2">&quot;BufferView construction out of range: offset=</span><span class="si">%d</span><span class="s2">, size=</span><span class="si">%d</span><span class="s2">, ndarray length=</span><span class="si">%d</span><span class="s2">.&quot;</span>
+                <span class="n">args</span> <span class="o">=</span> <span class="p">[</span><span class="n">offset_expr</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">size_expr</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">arr_len</span><span class="o">.</span><span class="n">ptr</span><span class="p">]</span>
+                <span class="n">impl</span><span class="o">.</span><span class="n">qd_assert</span><span class="p">((</span><span class="n">offset_expr</span> <span class="o">&gt;=</span> <span class="n">Expr</span><span class="p">(</span><span class="mi">0</span><span class="p">))</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">msg</span><span class="p">,</span> <span class="n">args</span><span class="p">,</span> <span class="n">dbg_info</span><span class="p">)</span>
+                <span class="n">impl</span><span class="o">.</span><span class="n">qd_assert</span><span class="p">((</span><span class="n">size_expr</span> <span class="o">&gt;=</span> <span class="n">Expr</span><span class="p">(</span><span class="mi">0</span><span class="p">))</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">msg</span><span class="p">,</span> <span class="n">args</span><span class="p">,</span> <span class="n">dbg_info</span><span class="p">)</span>
+                <span class="n">impl</span><span class="o">.</span><span class="n">qd_assert</span><span class="p">(((</span><span class="n">offset_expr</span> <span class="o">+</span> <span class="n">size_expr</span><span class="p">)</span> <span class="o">&lt;=</span> <span class="n">arr_len</span><span class="p">)</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">msg</span><span class="p">,</span> <span class="n">args</span><span class="p">,</span> <span class="n">dbg_info</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="c1"># Host-side path: coerce to int and validate bounds.</span>
+            <span class="n">offset</span><span class="p">,</span> <span class="n">size</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">offset</span><span class="p">),</span> <span class="nb">int</span><span class="p">(</span><span class="n">size</span><span class="p">)</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">arr</span><span class="p">,</span> <span class="n">BufferView</span><span class="p">):</span>
+                <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">&quot;Cannot nest BufferView(view, ...); use view.subview(offset, size) instead&quot;</span><span class="p">)</span>
+            <span class="k">if</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">arr</span><span class="p">,</span> <span class="s2">&quot;grad&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">&quot;BufferView does not support ndarrays with gradients (needs_grad=True)&quot;</span><span class="p">)</span>
+            <span class="n">arr_shape</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">arr</span><span class="p">,</span> <span class="s2">&quot;shape&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">arr_shape</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">arr_shape</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">1</span><span class="p">:</span>
+                    <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;BufferView requires a 1D ndarray, got shape </span><span class="si">{</span><span class="n">arr_shape</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">offset</span> <span class="o">&lt;</span> <span class="mi">0</span> <span class="ow">or</span> <span class="n">size</span> <span class="o">&lt;</span> <span class="mi">0</span> <span class="ow">or</span> <span class="n">offset</span> <span class="o">+</span> <span class="n">size</span> <span class="o">&gt;</span> <span class="n">arr_shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]:</span>
+                    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                        <span class="sa">f</span><span class="s2">&quot;BufferView out of range: offset=</span><span class="si">{</span><span class="n">offset</span><span class="si">}</span><span class="s2">, size=</span><span class="si">{</span><span class="n">size</span><span class="si">}</span><span class="s2">, ndarray length=</span><span class="si">{</span><span class="n">arr_shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span>
+                    <span class="p">)</span>
+<div class="viewcode-block" id="BufferView.arr">
+<a class="viewcode-back" href="../../../autoapi/quadrants/lang/buffer_view/index.html#quadrants.lang.buffer_view.BufferView.arr">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">arr</span> <span class="o">=</span> <span class="n">arr</span></div>
+
+<div class="viewcode-block" id="BufferView.offset">
+<a class="viewcode-back" href="../../../autoapi/quadrants/lang/buffer_view/index.html#quadrants.lang.buffer_view.BufferView.offset">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">offset</span> <span class="o">=</span> <span class="n">offset</span></div>
+
+<div class="viewcode-block" id="BufferView.size">
+<a class="viewcode-back" href="../../../autoapi/quadrants/lang/buffer_view/index.html#quadrants.lang.buffer_view.BufferView.size">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">size</span> <span class="o">=</span> <span class="n">size</span></div>
+
+
+    <span class="nd">@property</span>
+<div class="viewcode-block" id="BufferView.shape">
+<a class="viewcode-back" href="../../../autoapi/quadrants/lang/buffer_view/index.html#quadrants.lang.buffer_view.BufferView.shape">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">shape</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Returns the shape of this view as a tuple, e.g. ``(16,)``.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">size</span><span class="p">,)</span></div>
+
+
+<div class="viewcode-block" id="BufferView.subview">
+<a class="viewcode-back" href="../../../autoapi/quadrants/lang/buffer_view/index.html#quadrants.lang.buffer_view.BufferView.subview">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">subview</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">offset</span><span class="p">,</span> <span class="n">size</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Create a sub-range view within this view, with bounds checking.</span>
+
+<span class="sd">        Offsets are relative to this view&#39;s start, not the ndarray&#39;s::</span>
+
+<span class="sd">            a = data[8:24]          # offset=8, size=16 into data</span>
+<span class="sd">            b = a.subview(4, 8)     # offset=12, size=8 into data</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">impl</span><span class="o">.</span><span class="n">inside_kernel</span><span class="p">():</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_subview_expr</span><span class="p">(</span><span class="n">Expr</span><span class="p">(</span><span class="n">offset</span><span class="p">),</span> <span class="n">Expr</span><span class="p">(</span><span class="n">size</span><span class="p">))</span>
+        <span class="n">offset</span><span class="p">,</span> <span class="n">size</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">offset</span><span class="p">),</span> <span class="nb">int</span><span class="p">(</span><span class="n">size</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">offset</span> <span class="o">&lt;</span> <span class="mi">0</span> <span class="ow">or</span> <span class="n">size</span> <span class="o">&lt;</span> <span class="mi">0</span> <span class="ow">or</span> <span class="n">offset</span> <span class="o">+</span> <span class="n">size</span> <span class="o">&gt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">size</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;subview out of range: offset=</span><span class="si">{</span><span class="n">offset</span><span class="si">}</span><span class="s2">, size=</span><span class="si">{</span><span class="n">size</span><span class="si">}</span><span class="s2">, parent size=</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">size</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">BufferView</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">arr</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">offset</span> <span class="o">+</span> <span class="n">offset</span><span class="p">,</span> <span class="n">size</span><span class="p">)</span></div>
+
+
+    <span class="nd">@quadrants_scope</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_subview_expr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">offset</span><span class="p">,</span> <span class="n">size</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Kernel-compilation path for subview: insert debug bounds assertions.&quot;&quot;&quot;</span>
+        <span class="n">offset_expr</span> <span class="o">=</span> <span class="n">Expr</span><span class="p">(</span><span class="n">offset</span><span class="p">)</span>
+        <span class="n">size_expr</span> <span class="o">=</span> <span class="n">Expr</span><span class="p">(</span><span class="n">size</span><span class="p">)</span>
+        <span class="n">parent_size_expr</span> <span class="o">=</span> <span class="n">Expr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">size</span><span class="p">)</span>
+
+        <span class="n">cfg</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">prog</span><span class="o">.</span><span class="n">config</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">cfg</span><span class="o">.</span><span class="n">debug</span><span class="p">:</span>
+            <span class="n">ast_builder</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">compiling_callable</span><span class="o">.</span><span class="n">ast_builder</span><span class="p">()</span>
+            <span class="n">src_info</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">get_current_src_info</span><span class="p">()</span>
+            <span class="n">dbg_info</span> <span class="o">=</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">DebugInfo</span><span class="p">(</span><span class="n">src_info</span><span class="p">)</span>
+            <span class="n">tid_expr</span> <span class="o">=</span> <span class="n">Expr</span><span class="p">(</span><span class="n">ast_builder</span><span class="o">.</span><span class="n">insert_thread_idx_expr</span><span class="p">())</span>
+
+            <span class="n">kernel_name</span><span class="p">,</span> <span class="n">callstack</span> <span class="o">=</span> <span class="n">_build_callstack</span><span class="p">()</span>
+            <span class="n">msg</span> <span class="o">=</span> <span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;BufferView subview Out Of Range: kernel[</span><span class="si">{</span><span class="n">kernel_name</span><span class="si">}</span><span class="s2">]&quot;</span>
+                <span class="s2">&quot; tid=</span><span class="si">%d</span><span class="s2">, subview offset=</span><span class="si">%d</span><span class="s2">, subview size=</span><span class="si">%d</span><span class="s2">, parent size=</span><span class="si">%d</span><span class="s2">.</span><span class="se">\n</span><span class="s2">&quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;Callstack:</span><span class="se">\n</span><span class="s2">&quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">callstack</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="p">)</span>
+            <span class="n">args</span> <span class="o">=</span> <span class="p">[</span><span class="n">tid_expr</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">offset_expr</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">size_expr</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">parent_size_expr</span><span class="o">.</span><span class="n">ptr</span><span class="p">]</span>
+
+            <span class="n">impl</span><span class="o">.</span><span class="n">qd_assert</span><span class="p">((</span><span class="n">offset_expr</span> <span class="o">&gt;=</span> <span class="n">Expr</span><span class="p">(</span><span class="mi">0</span><span class="p">))</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">msg</span><span class="p">,</span> <span class="n">args</span><span class="p">,</span> <span class="n">dbg_info</span><span class="p">)</span>
+            <span class="n">impl</span><span class="o">.</span><span class="n">qd_assert</span><span class="p">((</span><span class="n">size_expr</span> <span class="o">&gt;=</span> <span class="n">Expr</span><span class="p">(</span><span class="mi">0</span><span class="p">))</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">msg</span><span class="p">,</span> <span class="n">args</span><span class="p">,</span> <span class="n">dbg_info</span><span class="p">)</span>
+            <span class="n">impl</span><span class="o">.</span><span class="n">qd_assert</span><span class="p">(((</span><span class="n">offset_expr</span> <span class="o">+</span> <span class="n">size_expr</span><span class="p">)</span> <span class="o">&lt;=</span> <span class="n">parent_size_expr</span><span class="p">)</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">msg</span><span class="p">,</span> <span class="n">args</span><span class="p">,</span> <span class="n">dbg_info</span><span class="p">)</span>
+
+        <span class="n">new_offset</span> <span class="o">=</span> <span class="n">Expr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">offset</span><span class="p">)</span> <span class="o">+</span> <span class="n">offset_expr</span>
+        <span class="k">return</span> <span class="n">BufferView</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">arr</span><span class="p">,</span> <span class="n">new_offset</span><span class="p">,</span> <span class="n">size_expr</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__getitem__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Slice a view to create a subview (host-side only): ``view[2:6]``.</span>
+
+<span class="sd">        In kernels, slicing goes through impl.subscript() -&gt; subview() instead.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">assert</span> <span class="p">(</span>
+            <span class="ow">not</span> <span class="n">impl</span><span class="o">.</span><span class="n">inside_kernel</span><span class="p">()</span>
+        <span class="p">),</span> <span class="s2">&quot;BufferView.__getitem__ is not reachable in kernel scope; subscripts are dispatched via impl.subscript()&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="nb">slice</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;BufferView host-side indexing requires a slice, got </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">key</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="n">start</span><span class="p">,</span> <span class="n">stop</span><span class="p">,</span> <span class="n">step</span> <span class="o">=</span> <span class="n">key</span><span class="o">.</span><span class="n">indices</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">size</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">step</span> <span class="o">!=</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;BufferView slice requires step=1, got step=</span><span class="si">{</span><span class="n">step</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">subview</span><span class="p">(</span><span class="n">start</span><span class="p">,</span> <span class="nb">max</span><span class="p">(</span><span class="n">stop</span> <span class="o">-</span> <span class="n">start</span><span class="p">,</span> <span class="mi">0</span><span class="p">))</span>
+
+    <span class="nd">@quadrants_scope</span>
+<div class="viewcode-block" id="BufferView.subscript">
+<a class="viewcode-back" href="../../../autoapi/quadrants/lang/buffer_view/index.html#quadrants.lang.buffer_view.BufferView.subscript">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">subscript</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">indices</span><span class="p">):</span>
+        <span class="n">ast_builder</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">compiling_callable</span><span class="o">.</span><span class="n">ast_builder</span><span class="p">()</span>
+        <span class="n">src_info</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">get_current_src_info</span><span class="p">()</span>
+        <span class="n">dbg_info</span> <span class="o">=</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">DebugInfo</span><span class="p">(</span><span class="n">src_info</span><span class="p">)</span>
+
+        <span class="n">cfg</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">prog</span><span class="o">.</span><span class="n">config</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">cfg</span><span class="o">.</span><span class="n">debug</span><span class="p">:</span>
+            <span class="n">i_expr</span> <span class="o">=</span> <span class="n">Expr</span><span class="p">(</span><span class="n">indices</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+            <span class="n">offset_expr</span> <span class="o">=</span> <span class="n">Expr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">offset</span><span class="p">)</span>
+            <span class="n">size_expr</span> <span class="o">=</span> <span class="n">Expr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">size</span><span class="p">)</span>
+
+            <span class="n">tid_expr</span> <span class="o">=</span> <span class="n">Expr</span><span class="p">(</span><span class="n">ast_builder</span><span class="o">.</span><span class="n">insert_thread_idx_expr</span><span class="p">())</span>
+
+            <span class="n">kernel_name</span><span class="p">,</span> <span class="n">callstack</span> <span class="o">=</span> <span class="n">_build_callstack</span><span class="p">()</span>
+
+            <span class="n">msg</span> <span class="o">=</span> <span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;BufferView Out Of Range: kernel[</span><span class="si">{</span><span class="n">kernel_name</span><span class="si">}</span><span class="s2">]&quot;</span>
+                <span class="s2">&quot; tid=</span><span class="si">%d</span><span class="s2">, got index </span><span class="si">%d</span><span class="s2"> (offset=</span><span class="si">%d</span><span class="s2">, size=</span><span class="si">%d</span><span class="s2">).</span><span class="se">\n</span><span class="s2">&quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;Callstack:</span><span class="se">\n</span><span class="s2">&quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">callstack</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="p">)</span>
+
+            <span class="n">impl</span><span class="o">.</span><span class="n">qd_assert</span><span class="p">(</span>
+                <span class="p">(</span><span class="n">i_expr</span> <span class="o">&gt;=</span> <span class="n">Expr</span><span class="p">(</span><span class="mi">0</span><span class="p">))</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span>
+                <span class="n">msg</span><span class="p">,</span>
+                <span class="p">[</span><span class="n">tid_expr</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">i_expr</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">offset_expr</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">size_expr</span><span class="o">.</span><span class="n">ptr</span><span class="p">],</span>
+                <span class="n">dbg_info</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="n">impl</span><span class="o">.</span><span class="n">qd_assert</span><span class="p">(</span>
+                <span class="p">(</span><span class="n">i_expr</span> <span class="o">&lt;</span> <span class="n">size_expr</span><span class="p">)</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span>
+                <span class="n">msg</span><span class="p">,</span>
+                <span class="p">[</span><span class="n">tid_expr</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">i_expr</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">offset_expr</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">size_expr</span><span class="o">.</span><span class="n">ptr</span><span class="p">],</span>
+                <span class="n">dbg_info</span><span class="p">,</span>
+            <span class="p">)</span>
+
+        <span class="n">new_first</span> <span class="o">=</span> <span class="n">Expr</span><span class="p">(</span><span class="n">indices</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span> <span class="o">+</span> <span class="n">Expr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">offset</span><span class="p">)</span>
+        <span class="n">new_indices</span> <span class="o">=</span> <span class="p">[</span><span class="n">new_first</span><span class="p">,</span> <span class="o">*</span><span class="n">indices</span><span class="p">[</span><span class="mi">1</span><span class="p">:]]</span>
+
+        <span class="n">indices_expr_group</span> <span class="o">=</span> <span class="n">make_expr_group</span><span class="p">(</span><span class="o">*</span><span class="n">new_indices</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">Expr</span><span class="p">(</span><span class="n">ast_builder</span><span class="o">.</span><span class="n">expr_subscript</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">arr</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">indices_expr_group</span><span class="p">,</span> <span class="n">dbg_info</span><span class="p">))</span></div>
+
+
+<div class="viewcode-block" id="BufferView.get_ndarray">
+<a class="viewcode-back" href="../../../autoapi/quadrants/lang/buffer_view/index.html#quadrants.lang.buffer_view.BufferView.get_ndarray">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_ndarray</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Returns the underlying ndarray (host-side only).&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">arr</span></div>
+</div>
+
+
+
+<span class="n">__all__</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;BufferView&quot;</span><span class="p">]</span>
+</pre></div>
+
+                </article>
+              
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+          </footer>
+        
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script defer src="../../../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5"></script>
+<script defer src="../../../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5"></script>
+
+  <footer class="bd-footer">
+<div class="bd-footer__inner bd-page-width">
+  
+    <div class="footer-items__start">
+      
+        <div class="footer-item">
+
+  <p class="copyright">
+    
+      © Copyright 2025 Genesis AI Inc.
+      <br/>
+    
+  </p>
+</div>
+      
+        <div class="footer-item">
+
+  <p class="sphinx-version">
+    Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 8.1.3.
+    <br/>
+  </p>
+</div>
+      
+    </div>
+  
+  
+  
+    <div class="footer-items__end">
+      
+        <div class="footer-item">
+<p class="theme-version">
+  <!-- # L10n: Setting the PST URL as an argument as this does not need to be localized -->
+  Built with the <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a> 0.19.0.
+</p></div>
+      
+    </div>
+  
+</div>
+
+  </footer>
+  </body>
+</html>
