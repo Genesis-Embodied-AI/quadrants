@@ -730,7 +730,7 @@
             <span class="k">try</span><span class="p">:</span>
                 <span class="n">pruning</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">global_context</span><span class="o">.</span><span class="n">pruning</span>
                 <span class="k">if</span> <span class="n">pruning</span><span class="o">.</span><span class="n">enforcing</span><span class="p">:</span>
-                    <span class="n">py_args</span> <span class="o">=</span> <span class="n">pruning</span><span class="o">.</span><span class="n">filter_call_args</span><span class="p">(</span><span class="n">func</span><span class="p">,</span> <span class="n">node</span><span class="p">,</span> <span class="n">node_args</span><span class="p">,</span> <span class="n">node_keywords</span><span class="p">,</span> <span class="n">py_args</span><span class="p">)</span>
+                    <span class="n">py_args</span> <span class="o">=</span> <span class="n">pruning</span><span class="o">.</span><span class="n">filter_call_args</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">func</span><span class="p">,</span> <span class="n">node</span><span class="p">,</span> <span class="n">node_args</span><span class="p">,</span> <span class="n">node_keywords</span><span class="p">,</span> <span class="n">py_args</span><span class="p">)</span>
 
                 <span class="n">node</span><span class="o">.</span><span class="n">ptr</span> <span class="o">=</span> <span class="n">func</span><span class="p">(</span><span class="o">*</span><span class="n">py_args</span><span class="p">,</span> <span class="o">**</span><span class="n">py_kwargs</span><span class="p">)</span>
 
