@@ -1790,6 +1790,54 @@ def test_prune_used_parameters_fastcache_dead_static_branch_reversed_order(tmp_p
 
 
 @test_utils.test()
+def test_prune_used_parameters_fastcache_dead_static_branch_kwargs(tmp_path: Path):
+    # Same dead-static-branch bug as the flat case, but md is forwarded by keyword (md=md) at every call site
+    # instead of positionally. Keyword-forwarded dataclasses are pruned in _expand_Call_dataclass_kwargs (gated
+    # on the callee used-set), a different path from the positional filter_call_args, so this confirms the used-
+    # set fixpoint also closes over keyword-forwarded edges. use_deep stays positional so the template value is
+    # not passed by keyword (an unrelated concern).
+    arch_name = qd.lang.impl.current_cfg().arch.name
+    for _it in range(3):
+        qd.init(arch=getattr(qd, arch_name), offline_cache_file_path=str(tmp_path), offline_cache=True)
+
+        @dataclasses.dataclass
+        class MyDataclass:
+            base: qd.types.NDArray[qd.i32, 1]
+            deep: qd.types.NDArray[qd.i32, 1]
+            not_used: qd.types.NDArray[qd.i32, 1]
+
+        @qd.func
+        def inner(use_deep: qd.template(), md: MyDataclass) -> None:
+            md.base[0] = 1
+            if qd.static(use_deep):
+                md.deep[0] = 99
+
+        @qd.func
+        def path_dead(md: MyDataclass) -> None:
+            inner(False, md=md)
+
+        @qd.func
+        def path_live(md: MyDataclass) -> None:
+            inner(True, md=md)
+
+        @qd.kernel(fastcache=True)
+        def k1(md: MyDataclass) -> None:
+            path_dead(md=md)
+            path_live(md=md)
+
+        base = qd.ndarray(qd.i32, (4,))
+        deep = qd.ndarray(qd.i32, (4,))
+        not_used = qd.ndarray(qd.i32, (4,))
+        md = MyDataclass(base=base, deep=deep, not_used=not_used)
+
+        k1(md)
+        assert base[0] == 1
+        assert deep[0] == 99
+        kernel_args_count_by_type = k1._primal.launch_stats.kernel_args_count_by_type
+        assert kernel_args_count_by_type[KernelBatchedArgType.QD_ARRAY] == 2
+
+
+@test_utils.test()
 def test_prune_used_parameters_fastcache_dead_static_branch_nested(tmp_path: Path):
     # Same dead-static-branch forwarding bug as the flat case, but the forwarded field lives three dataclass
     # levels deep (top.mid.leaf.deep), confirming the fix closes the used set across arbitrary nesting depth.
