@@ -27,7 +27,13 @@ class CallEdge:
     ``pairs`` holds every ``(caller_arg_flat_name, callee_param_flat_name)`` correspondence, for both
     positional args and kwargs; it drives the used-set fixpoint (a caller needs every argument it
     forwards into a callee parameter the callee needs). ``positional_map`` holds only the positional
-    ``__qd_`` Name args (keyed by caller arg name) and drives ``filter_call_args``.
+    ``__qd_`` Name args and drives ``filter_call_args``. It maps each caller arg flat name to the list of
+    callee param flat names it feeds, in call-site (left-to-right) order - a list rather than a single
+    value because the same flat name can be forwarded into several slots of one call (e.g.
+    ``inner(md, md)``); a plain name->name map would let a later slot overwrite an earlier one and prune
+    an argument the callee still needs. We key by name (not by slot index) so the mapping survives the
+    positional shift that happens when an upstream caller prunes fields out of a forwarded dataclass,
+    which shortens this call's expanded ``node_args`` between the discovery and enforcing passes.
 
     Edges are keyed per call site (source position), not per callee, so two call sites that forward the
     same flat name into different callee slots (swapped-slot forwarding) stay independent.
@@ -39,7 +45,7 @@ class CallEdge:
         self.caller_func_id = caller_func_id
         self.callee_func_id = callee_func_id
         self.pairs: list[tuple[str, str]] = []
-        self.positional_map: dict[str, str] = {}
+        self.positional_map: dict[str, list[str]] = {}
 
 
 class Pruning:
@@ -128,7 +134,7 @@ class Pruning:
                 callee_param_name = callee_func.arg_metas_expanded[arg_id + self_offset].name  # type: ignore
                 edge.pairs.append((caller_arg_name, callee_param_name))
                 if caller_arg_name.startswith("__qd_"):
-                    edge.positional_map[caller_arg_name] = callee_param_name
+                    edge.positional_map.setdefault(caller_arg_name, []).append(callee_param_name)
         # For keywords we don't need the callee metas (whose ordering need not match ours): the
         # callee's parameter name is available directly from our own keyword node.
         for kwarg in node_keywords:
@@ -183,8 +189,10 @@ class Pruning:
         used in build_Call, before making the call, in the enforcing pass (pass 1)
 
         Prunes positional args the callee does not need. Keyed per call site (via caller_func_id +
-        the call node position) so swapped-slot forwarding stays independent. Note that this ONLY
-        handles args, not kwargs (kwargs are pruned in _expand_Call_dataclass_kwargs).
+        the call node position) so swapped-slot forwarding stays independent. When the same flat name is
+        forwarded into several slots (e.g. ``inner(md, md)``), the recorded callee params are consumed in
+        left-to-right order (one per occurrence) so each slot is decided against its own callee param.
+        Note that this ONLY handles args, not kwargs (kwargs are pruned in _expand_Call_dataclass_kwargs).
         """
         # We can be called with callables other than qd.func, so filter those out:
         if (
@@ -197,6 +205,10 @@ class Pruning:
         callee_used_args = self.used_vars_by_func_id[callee_func_id]
         edge = self.edges_by_call_site.get(self._call_site_key(caller_func_id, callee_func_id, node))
         positional_map = edge.positional_map if edge is not None else {}
+        # Per-name cursor: the k-th occurrence of a caller arg name consumes the k-th recorded callee
+        # param for that name. node_args is walked in the same left-to-right order as when the edge was
+        # recorded, so occurrences line up even if an upstream prune dropped some fields in between.
+        occurrence_by_name: dict[str, int] = {}
 
         new_args = []
         for i, arg in enumerate(node_args):
@@ -215,7 +227,10 @@ class Pruning:
             if type(arg) in {Name}:
                 caller_arg_name = arg.id  # type: ignore
                 if caller_arg_name.startswith("__qd_"):
-                    callee_param_name = positional_map.get(caller_arg_name)
+                    mapped = positional_map.get(caller_arg_name)
+                    occurrence = occurrence_by_name.get(caller_arg_name, 0)
+                    occurrence_by_name[caller_arg_name] = occurrence + 1
+                    callee_param_name = mapped[occurrence] if mapped is not None and occurrence < len(mapped) else None
                     if callee_param_name is None or (
                         callee_param_name not in callee_used_args and callee_param_name.startswith("__qd_")
                     ):
