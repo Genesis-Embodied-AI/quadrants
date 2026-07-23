@@ -1011,6 +1011,9 @@
                     <span class="k">if</span> <span class="n">struct_primitive_launch_info</span><span class="p">:</span>
                         <span class="bp">self</span><span class="o">.</span><span class="n">_struct_primitive_launch_info_by_key</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">struct_primitive_launch_info</span>
                 <span class="k">else</span><span class="p">:</span>
+                    <span class="c1"># Propagate used-sets across call edges to a fixpoint (order-independent) before</span>
+                    <span class="c1"># collapsing flat names to their used prefixes below.</span>
+                    <span class="n">pruning</span><span class="o">.</span><span class="n">propagate_fixpoint</span><span class="p">()</span>
                     <span class="k">for</span> <span class="n">used_parameters</span> <span class="ow">in</span> <span class="n">pruning</span><span class="o">.</span><span class="n">used_vars_by_func_id</span><span class="o">.</span><span class="n">values</span><span class="p">():</span>
                         <span class="n">new_used_parameters</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
                         <span class="k">for</span> <span class="n">param</span> <span class="ow">in</span> <span class="n">used_parameters</span><span class="p">:</span>

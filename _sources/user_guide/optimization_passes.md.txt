@@ -56,8 +56,6 @@ In the order they run each round:
 
 Two of these - CSE and CFG optimization - run only when `opt_level > 0` (the default is `1`).
 
-**CSE is scoped per offloaded task.** Once the kernel has been split, common-subexpression elimination runs over one offloaded task's IR at a time rather than the whole kernel at once - the same per-task scoping described for [CFG optimization](#control-flow-graph-cfg-optimization) below, and for the same reason: each task is a separate device launch, so there is nothing to deduplicate across a task boundary. Scoping it this way keeps each run cheap and lets the per-task simplify stages run in parallel across the compiler's worker threads. One per-task CSE also runs once immediately after the offload split, before memory access is lowered, so that the memory-focused optimizations that follow see each global's reads and writes through a single shared access.
-
 ## Control-flow-graph (CFG) optimization
 
 A **control-flow graph** is a map of your kernel's basic blocks together with the branches connecting them. It lets the compiler answer questions of the form "if execution reaches *here*, what must already have happened?" - which is exactly what is needed to optimize reads and writes to memory. Two such optimizations run on the CFG:
