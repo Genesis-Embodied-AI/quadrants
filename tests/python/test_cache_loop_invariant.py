@@ -133,16 +133,20 @@ def test_loop_index_load_not_cached_over_aliasing_store(use_ndarray: bool) -> No
 
 @pytest.mark.parametrize("use_ndarray", [False, True])
 @test_utils.test()
-def test_vector_element_literal_index_load_not_cached_over_aliasing_store(use_ndarray: bool) -> None:
-    """Regression for issue #810 through vector/matrix *elements* (TensorType), the case raised in the
-    PR #811 review.
+def test_vector_element_aliasing_store_no_miscompile(use_ndarray: bool) -> None:
+    """Guard test for the vector/matrix *element* variant of issue #810, raised in the PR #811 review.
 
-    Here both aliasing accesses reach the caching pass as MatrixPtrStmts over ExternalPtr/GlobalPtr
-    origins (a[i_c][0] store vs guarded a[0][0] read).  alias_analysis() returns 'different' (not
-    'uncertain') for two MatrixPtrStmts whose origins are only 'uncertain' aliases, so a guard that
-    queries alias_analysis on the loaded/stored MatrixPtr pointers directly misses the hazard.  The fix
-    keys on the ExternalPtr/GlobalPtr origins (where alias_analysis is 'uncertain') and the cache pass
-    resolves each MatrixPtr to that origin, so the element accesses stay out of the caching pass.
+    The concern: when the aliasing accesses are vector/matrix elements they reach the caching pass as
+    MatrixPtrStmts over ExternalPtr/GlobalPtr origins (a[i_c][0] store vs guarded a[0][0] read), and
+    alias_analysis() returns 'different' (not 'uncertain') for two MatrixPtrStmts whose origins are only
+    'uncertain' aliases -- so a guard keyed on the loaded/stored MatrixPtr pointers could miss the
+    hazard.
+
+    Empirically (x64) this pattern is NOT miscompiled on either baseline main or the fix: across
+    ndarray-vector, field-vector, matrix-field, and two-loop-index variants the matrix-element caching
+    path never defers the write-back the way the scalar path does, so no stale read occurs regardless of
+    the may-alias guard.  This test does not distinguish the fix; it guards against a future change that
+    would start hoisting matrix-element accesses and reintroduce the hazard.
     """
     n = 2
     k = 2
@@ -168,5 +172,5 @@ def test_vector_element_literal_index_load_not_cached_over_aliasing_store(use_nd
 
     kern(a, out)
     res = out.to_numpy()
-    assert res[0][0] == 1, f"stale literal-index vector-element read: out[0][0] = {res[0][0]}, expected 1"
+    assert res[0][0] == 1, f"vector-element stale read: out[0][0] = {res[0][0]}, expected 1"
     assert res[1][0] == 1, f"out[1][0] = {res[1][0]}, expected 1"
