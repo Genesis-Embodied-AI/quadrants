@@ -43,6 +43,42 @@ class DynamicIndexingAnalyzer : public BasicStmtVisitor {
     }
   }
 
+  // A pointer that may alias (alias_analysis == uncertain) another access to the same buffer within
+  // this offload must not be cached: the loop-invariant caching pass can buffer one access into a
+  // local slot and defer its write-back past the loop, while the aliasing access reads/writes global
+  // memory directly, so when the two addresses coincide at runtime the direct access observes a stale
+  // value (issue #810). A serialized loop bypasses the parallel-loop uniqueness analysis that would
+  // otherwise reject such a pair, so both accesses are flagged here to keep them out of the caching
+  // pass. Accesses that are all definitely-same or all definitely-different are left cacheable, so
+  // read-modify-write accumulators (same address) and disjoint accesses (different address, e.g. a
+  // literal row a[0, i] and a[1, i]) remain cacheable.
+  void record_may_alias_ptr(ExternalPtrStmt *extern_ptr) {
+    if (!extern_ptr->base_ptr->is<ArgLoadStmt>()) {
+      return;
+    }
+    for (auto *other_extern_ptr : extern_ptrs_) {
+      if (other_extern_ptr == extern_ptr || !other_extern_ptr->base_ptr->is<ArgLoadStmt>()) {
+        continue;
+      }
+      if (irpass::analysis::alias_analysis(extern_ptr, other_extern_ptr) == AliasResult::uncertain) {
+        record_dynamic_indexed_ptr(extern_ptr);
+        return;
+      }
+    }
+  }
+
+  void record_may_alias_ptr(GlobalPtrStmt *global_ptr) {
+    for (auto *other_global_ptr : global_ptrs_) {
+      if (other_global_ptr == global_ptr) {
+        continue;
+      }
+      if (irpass::analysis::alias_analysis(global_ptr, other_global_ptr) == AliasResult::uncertain) {
+        record_dynamic_indexed_ptr(global_ptr);
+        return;
+      }
+    }
+  }
+
  public:
   explicit DynamicIndexingAnalyzer(IRNode *node) {
   }
@@ -53,6 +89,7 @@ class DynamicIndexingAnalyzer : public BasicStmtVisitor {
         record_dynamic_indexed_ptr(stmt);
       }
     }
+    record_may_alias_ptr(stmt);
 
     global_ptrs_.insert(stmt);
   }
@@ -63,6 +100,7 @@ class DynamicIndexingAnalyzer : public BasicStmtVisitor {
         record_dynamic_indexed_ptr(stmt);
       }
     }
+    record_may_alias_ptr(stmt);
 
     extern_ptrs_.insert(stmt);
   }
