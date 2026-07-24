@@ -129,3 +129,44 @@ def test_loop_index_load_not_cached_over_aliasing_store(use_ndarray: bool) -> No
     k(a, out)
     assert out[0] == 1, f"stale loop-index read: out[0] = {out[0]}, expected 1"
     assert out[1] == 1, f"stale loop-index read: out[1] = {out[1]}, expected 1"
+
+
+@pytest.mark.parametrize("use_ndarray", [False, True])
+@test_utils.test()
+def test_vector_element_literal_index_load_not_cached_over_aliasing_store(use_ndarray: bool) -> None:
+    """Regression for issue #810 through vector/matrix *elements* (TensorType), the case raised in the
+    PR #811 review.
+
+    Here both aliasing accesses reach the caching pass as MatrixPtrStmts over ExternalPtr/GlobalPtr
+    origins (a[i_c][0] store vs guarded a[0][0] read).  alias_analysis() returns 'different' (not
+    'uncertain') for two MatrixPtrStmts whose origins are only 'uncertain' aliases, so a guard that
+    queries alias_analysis on the loaded/stored MatrixPtr pointers directly misses the hazard.  The fix
+    keys on the ExternalPtr/GlobalPtr origins (where alias_analysis is 'uncertain') and the cache pass
+    resolves each MatrixPtr to that origin, so the element accesses stay out of the caching pass.
+    """
+    n = 2
+    k = 2
+
+    if use_ndarray:
+        a = qd.Vector.ndarray(k, qd.i32, shape=(n,))
+        out = qd.Vector.ndarray(k, qd.i32, shape=(n,))
+        AnnotationType = qd.types.ndarray(ndim=1)
+    else:
+        a = qd.Vector.field(k, qd.i32, shape=(n,))
+        out = qd.Vector.field(k, qd.i32, shape=(n,))
+        AnnotationType = qd.template()
+
+    @qd.kernel
+    def kern(a: AnnotationType, out: AnnotationType):
+        qd.loop_config(serialize=True)
+        for i_c in range(n):
+            for i_iter in range(1):
+                a[i_c][0] = 1
+                if i_c == 0:
+                    out[0][0] = a[0][0]
+                    out[1][0] = a[i_c][0]
+
+    kern(a, out)
+    res = out.to_numpy()
+    assert res[0][0] == 1, f"stale literal-index vector-element read: out[0][0] = {res[0][0]}, expected 1"
+    assert res[1][0] == 1, f"out[1][0] = {res[1][0]}, expected 1"
