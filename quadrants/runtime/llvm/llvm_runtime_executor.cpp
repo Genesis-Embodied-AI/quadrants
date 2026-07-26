@@ -191,7 +191,7 @@ void LlvmRuntimeExecutor::print_list_manager_info(void *list_manager, uint64 *re
 
   auto size_MB = 1e-6f * num_active_chunks * elements_per_chunk * element_size;
 
-  fmt::print(" length={:n}     {:n} chunks x [{:n} x {:n} B]  total={:.4f} MB\n", list_manager_len, num_active_chunks,
+  fmt::print(" length={:L}     {:L} chunks x [{:L} x {:L} B]  total={:.4f} MB\n", list_manager_len, num_active_chunks,
              elements_per_chunk, element_size, size_MB);
 }
 
@@ -291,7 +291,7 @@ void LlvmRuntimeExecutor::print_memory_profiler_info(std::vector<std::unique_ptr
   fmt::print("\n[Memory Profiler]\n");
 
   std::locale::global(std::locale("en_US.UTF-8"));
-  // So that thousand separators are added to "{:n}" slots in fmtlib.
+  // So that thousand separators are added to "{:L}" slots in fmtlib.
   // E.g., 10000 is printed as "10,000".
   // TODO: is there a way to set locale only locally in this function?
 
@@ -323,8 +323,8 @@ void LlvmRuntimeExecutor::print_memory_profiler_info(std::vector<std::unique_ptr
           print_list_manager_info(data_list, result_buffer);
 
           fmt::print(
-              "  Allocated elements={:n}; free list length={:n}; recycled list "
-              "length={:n}\n",
+              "  Allocated elements={:L}; free list length={:L}; recycled list "
+              "length={:L}\n",
               free_list_used, free_list_len, recycled_list_len);
         }
       }
@@ -341,7 +341,7 @@ void LlvmRuntimeExecutor::print_memory_profiler_info(std::vector<std::unique_ptr
   auto total_requested_memory =
       runtime_query<std::size_t>("LLVMRuntime_get_total_requested_memory", result_buffer, llvm_runtime_);
 
-  fmt::print("Total requested dynamic memory (excluding alignment padding): {:n} B\n", total_requested_memory);
+  fmt::print("Total requested dynamic memory (excluding alignment padding): {:L} B\n", total_requested_memory);
 }
 
 DevicePtr LlvmRuntimeExecutor::get_snode_tree_device_ptr(int tree_id) {
