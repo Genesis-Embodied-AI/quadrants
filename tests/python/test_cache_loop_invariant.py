@@ -174,3 +174,46 @@ def test_vector_element_aliasing_store_no_miscompile(use_ndarray: bool) -> None:
     res = out.to_numpy()
     assert res[0][0] == 1, f"vector-element stale read: out[0][0] = {res[0][0]}, expected 1"
     assert res[1][0] == 1, f"out[1][0] = {res[1][0]}, expected 1"
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="#812 review: cross-parameter ndarray aliasing is not yet handled. When the same ndarray is "
+    "bound to two kernel parameters, the two ExternalPtrStmts have distinct ArgLoadStmt arg_ids, so "
+    "alias_analysis() returns 'different' (not 'uncertain') and the may-alias caching guard never fires "
+    "across the parameters. Deciding this needs launch-time aliasing knowledge (kernels are compiled "
+    "per-signature, not per-pointer), so it is out of scope for the same-parameter #810 fix.",
+)
+@test_utils.test(arch=qd.cpu)
+def test_cross_parameter_ndarray_aliasing_store_stale_read() -> None:
+    """Known gap (issue #810 / PR #812 review): the #810 hazard split across two ndarray parameters that
+    the caller binds to the SAME ndarray at launch.  The loop-variable-index store goes through one
+    parameter (a[i_c]) and the guarded literal-index load through the other (b[0]); both are the same
+    ndarray, so b[0] aliases a[i_c] when i_c == 0.
+
+    Because the two parameters have distinct arg_ids, alias_analysis(a[i_c], b[0]) is 'different' rather
+    than 'uncertain', the guard is skipped, and b[0] returns a stale pre-write-back value.  The
+    field/template variant of this (same field bound to two params) IS fixed, because both handles
+    resolve to the same SNode and alias_analysis() then reports 'uncertain'.
+
+    Marked xfail(strict): if a later change closes the ndarray gap this will XPASS and flag that the
+    guard and this test should be promoted to a real regression assertion.
+    """
+    n = 2
+
+    @qd.kernel
+    def k(a: qd.types.ndarray(), b: qd.types.ndarray(), out: qd.types.ndarray()):
+        qd.loop_config(serialize=True)
+        for i_c in range(n):
+            for i_iter in range(1):
+                a[i_c] = 1
+                if i_c == 0:
+                    out[0] = b[0]
+                    out[1] = a[i_c]
+
+    a = qd.ndarray(dtype=qd.i32, shape=(n,))
+    out = qd.ndarray(dtype=qd.i32, shape=(n,))
+
+    k(a, a, out)  # same ndarray bound to both parameters -> b aliases a at launch
+    assert out[0] == 1, f"stale cross-parameter read: out[0] = {out[0]}, expected 1"
+    assert out[1] == 1, f"out[1] = {out[1]}, expected 1"
