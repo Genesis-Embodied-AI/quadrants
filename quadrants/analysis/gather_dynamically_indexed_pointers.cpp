@@ -3,7 +3,10 @@
 #include "quadrants/ir/analysis.h"
 #include "quadrants/ir/statements.h"
 #include "quadrants/ir/visitors.h"
+#include "quadrants/util/hash.h"
 #include <algorithm>
+#include <unordered_map>
+#include <vector>
 
 namespace quadrants::lang {
 
@@ -56,8 +59,16 @@ class DynamicIndexingAnalyzer : public BasicStmtVisitor {
     if (!extern_ptr->base_ptr->is<ArgLoadStmt>()) {
       return;
     }
-    for (auto *other_extern_ptr : extern_ptrs_) {
-      if (other_extern_ptr == extern_ptr || !other_extern_ptr->base_ptr->is<ArgLoadStmt>()) {
+    // Only external pointers sharing the same arg_id can alias -- alias_analysis() returns 'different'
+    // for distinct arg_ids -- so consult just that bucket instead of scanning every external pointer.
+    // This keeps the guard identical while avoiding O(n^2) compile-time work on kernels with many
+    // disjoint accesses (e.g. statically unrolled kernels).
+    auto it = extern_ptrs_by_arg_.find(extern_ptr->base_ptr->as<ArgLoadStmt>()->arg_id);
+    if (it == extern_ptrs_by_arg_.end()) {
+      return;
+    }
+    for (auto *other_extern_ptr : it->second) {
+      if (other_extern_ptr == extern_ptr) {
         continue;
       }
       if (irpass::analysis::alias_analysis(extern_ptr, other_extern_ptr) == AliasResult::uncertain) {
@@ -68,7 +79,15 @@ class DynamicIndexingAnalyzer : public BasicStmtVisitor {
   }
 
   void record_may_alias_ptr(GlobalPtrStmt *global_ptr) {
-    for (auto *other_global_ptr : global_ptrs_) {
+    // Only global pointers on the same SNode can alias -- alias_analysis() returns 'different' for
+    // distinct SNodes -- so consult just that bucket instead of scanning every global pointer. This
+    // keeps the guard identical while avoiding O(n^2) compile-time work on kernels with many disjoint
+    // accesses (e.g. statically unrolled kernels).
+    auto it = global_ptrs_by_snode_.find(global_ptr->snode);
+    if (it == global_ptrs_by_snode_.end()) {
+      return;
+    }
+    for (auto *other_global_ptr : it->second) {
       if (other_global_ptr == global_ptr) {
         continue;
       }
@@ -91,7 +110,9 @@ class DynamicIndexingAnalyzer : public BasicStmtVisitor {
     }
     record_may_alias_ptr(stmt);
 
-    global_ptrs_.insert(stmt);
+    if (global_ptrs_.insert(stmt).second) {
+      global_ptrs_by_snode_[stmt->snode].push_back(stmt);
+    }
   }
 
   void visit(ExternalPtrStmt *stmt) override {
@@ -102,7 +123,9 @@ class DynamicIndexingAnalyzer : public BasicStmtVisitor {
     }
     record_may_alias_ptr(stmt);
 
-    extern_ptrs_.insert(stmt);
+    if (extern_ptrs_.insert(stmt).second && stmt->base_ptr->is<ArgLoadStmt>()) {
+      extern_ptrs_by_arg_[stmt->base_ptr->as<ArgLoadStmt>()->arg_id].push_back(stmt);
+    }
   }
 
   void visit(MatrixPtrStmt *stmt) override {
@@ -140,6 +163,12 @@ class DynamicIndexingAnalyzer : public BasicStmtVisitor {
   std::unordered_set<Stmt *> dynamically_indexed_ptrs_;
   std::unordered_set<GlobalPtrStmt *> global_ptrs_;
   std::unordered_set<ExternalPtrStmt *> extern_ptrs_;
+  // Buckets keyed by buffer for the may-alias comparison: only pointers to the same buffer (same
+  // external arg_id / same global SNode) can be 'uncertain' aliases, so record_may_alias_ptr()
+  // consults just its own bucket instead of every previously seen pointer.
+  std::unordered_map<std::vector<int>, std::vector<ExternalPtrStmt *>, hashing::Hasher<std::vector<int>>>
+      extern_ptrs_by_arg_;
+  std::unordered_map<SNode *, std::vector<GlobalPtrStmt *>> global_ptrs_by_snode_;
 };
 
 namespace irpass::analysis {
