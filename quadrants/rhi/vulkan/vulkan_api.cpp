@@ -87,6 +87,12 @@ DeviceObjVkPipelineCache::~DeviceObjVkPipelineCache() {
 DeviceObjVkBuffer::~DeviceObjVkBuffer() {
   if (allocation) {
     vmaDestroyBuffer(allocator, buffer, allocation);
+  } else if (device_memory != VK_NULL_HANDLE) {
+    // Unpooled path: we own both the VkBuffer and its dedicated VkDeviceMemory.
+    if (buffer != VK_NULL_HANDLE) {
+      vkDestroyBuffer(device, buffer, nullptr);
+    }
+    vkFreeMemory(device, device_memory, nullptr);
   }
 }
 
@@ -529,6 +535,91 @@ IVkBuffer create_buffer(VkDevice device,
   BAIL_ON_VK_BAD_RESULT_NO_RETURN(res, "failed to create buffer");
 
   return buffer;
+}
+
+IVkBuffer create_buffer_unpooled(VkDevice device,
+                                 VkPhysicalDevice physical_device,
+                                 VkBufferCreateInfo *buffer_info,
+                                 VkMemoryPropertyFlags required_flags,
+                                 VkMemoryPropertyFlags preferred_flags,
+                                 VmaAllocationInfo *out_alloc_info) {
+  IVkBuffer obj = std::make_shared<DeviceObjVkBuffer>();
+  obj->device = device;
+  obj->usage = buffer_info->usage;
+
+  VkResult res = vkCreateBuffer(device, buffer_info, nullptr, &obj->buffer);
+  if (res == VK_ERROR_OUT_OF_DEVICE_MEMORY || res == VK_ERROR_OUT_OF_HOST_MEMORY) {
+    return nullptr;
+  }
+  BAIL_ON_VK_BAD_RESULT_NO_RETURN(res, "failed to create unpooled buffer");
+
+  VkMemoryRequirements mr{};
+  vkGetBufferMemoryRequirements(device, obj->buffer, &mr);
+
+  VkPhysicalDeviceMemoryProperties mp{};
+  vkGetPhysicalDeviceMemoryProperties(physical_device, &mp);
+
+  auto pick_type = [&](VkMemoryPropertyFlags want) -> uint32_t {
+    for (uint32_t i = 0; i < mp.memoryTypeCount; ++i) {
+      if ((mr.memoryTypeBits & (1u << i)) == 0) {
+        continue;
+      }
+      if ((mp.memoryTypes[i].propertyFlags & want) == want) {
+        return i;
+      }
+    }
+    return UINT32_MAX;
+  };
+
+  uint32_t type_index = UINT32_MAX;
+  if (preferred_flags != 0) {
+    // Prefer the intersection of required+preferred when possible (e.g. DEVICE_LOCAL and not
+    // merely the first type that matches required alone).
+    type_index = pick_type(required_flags | preferred_flags);
+  }
+  if (type_index == UINT32_MAX) {
+    type_index = pick_type(required_flags);
+  }
+  if (type_index == UINT32_MAX) {
+    vkDestroyBuffer(device, obj->buffer, nullptr);
+    obj->buffer = VK_NULL_HANDLE;
+    return nullptr;
+  }
+
+  VkMemoryAllocateInfo mai{};
+  mai.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+  mai.allocationSize = mr.size;
+  mai.memoryTypeIndex = type_index;
+
+  // Buffers created with SHADER_DEVICE_ADDRESS need the matching allocate-info flag on drivers
+  // that enforce bufferDeviceAddress capture/replay rules; MoltenVK tolerates either, but keep
+  // the Vulkan-correct path.
+  VkMemoryAllocateFlagsInfo flags_info{};
+  if (buffer_info->usage & VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT_KHR) {
+    flags_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_FLAGS_INFO;
+    flags_info.flags = VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT_KHR;
+    mai.pNext = &flags_info;
+  }
+
+  res = vkAllocateMemory(device, &mai, nullptr, &obj->device_memory);
+  if (res == VK_ERROR_OUT_OF_DEVICE_MEMORY || res == VK_ERROR_OUT_OF_HOST_MEMORY) {
+    vkDestroyBuffer(device, obj->buffer, nullptr);
+    obj->buffer = VK_NULL_HANDLE;
+    return nullptr;
+  }
+  BAIL_ON_VK_BAD_RESULT_NO_RETURN(res, "failed to allocate unpooled device memory");
+
+  res = vkBindBufferMemory(device, obj->buffer, obj->device_memory, 0);
+  BAIL_ON_VK_BAD_RESULT_NO_RETURN(res, "failed to bind unpooled buffer memory");
+
+  if (out_alloc_info) {
+    *out_alloc_info = {};
+    out_alloc_info->deviceMemory = obj->device_memory;
+    out_alloc_info->offset = 0;
+    out_alloc_info->size = mr.size;
+  }
+
+  return obj;
 }
 
 IVkBuffer create_buffer(VkDevice device, VkBuffer buffer, VkBufferUsageFlags usage) {
