@@ -613,9 +613,9 @@ class RHI_DLL_EXPORT Device {
     bool host_read{false};
     bool export_sharing{false};
     AllocUsage usage{AllocUsage::Storage};
-    // When true, backends that use a pooled allocator (Vulkan/VMA) allocate a dedicated
-    // VkDeviceMemory via vkAllocateMemory instead. On Darwin this is set for gtmp/listgen to
-    // avoid a MoltenVK GPU hang from VMA's pooled path for those two DEVICE_LOCAL sizes.
+    // When true, backends that use a pooled allocator (Vulkan/VMA) allocate a dedicated VkDeviceMemory via
+    // vkAllocateMemory instead. On Darwin this is set for gtmp/listgen to avoid a MoltenVK GPU hang from VMA's pooled
+    // path for those two DEVICE_LOCAL sizes.
     bool bypass_pooled_allocator{false};
   };
 

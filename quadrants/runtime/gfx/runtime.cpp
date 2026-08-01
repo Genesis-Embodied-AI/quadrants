@@ -1240,8 +1240,8 @@ void GfxRuntime::init_nonroot_buffers() {
                                /*host_write=*/false, /*host_read=*/false,
                                /*export_sharing=*/false, AllocUsage::Storage};
 #ifdef __APPLE__
-    // MoltenVK hang: VMA-backed 1MB+32MB DEVICE_LOCAL STORAGE+BDA churn under per-cycle device
-    // recreate; plain vkAllocateMemory of the same sizes does not hang (standalone repro).
+    // MoltenVK hang: VMA-backed 1MB+32MB DEVICE_LOCAL STORAGE+BDA churn under per-cycle device recreate; plain
+    // vkAllocateMemory of the same sizes does not hang (standalone repro).
     params.bypass_pooled_allocator = true;
 #endif
     auto [buf, res] = device_->allocate_memory_unique(params);

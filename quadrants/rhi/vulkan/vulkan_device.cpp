@@ -1642,9 +1642,8 @@ RhiResult VulkanDevice::allocate_memory(const AllocParams &params, DeviceAllocat
   }
 
   if (params.bypass_pooled_allocator) {
-    // Dedicated vkAllocateMemory path (no VMA). Used on Darwin for gtmp/listgen: the standalone
-    // MoltenVK repro hangs when those two DEVICE_LOCAL sizes go through VMA, but not when the same
-    // sizes use plain vkAllocateMemory.
+    // Dedicated vkAllocateMemory path (no VMA). Used on Darwin for gtmp/listgen: the standalone MoltenVK repro hangs
+    // when those two DEVICE_LOCAL sizes go through VMA, but not when the same sizes use plain vkAllocateMemory.
     alloc.buffer = vkapi::create_buffer_unpooled(device_, physical_device_, &buffer_info, alloc_info.requiredFlags,
                                                  alloc_info.preferredFlags, &alloc.alloc_info);
     if (alloc.buffer == nullptr) {

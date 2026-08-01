@@ -573,8 +573,8 @@ IVkBuffer create_buffer_unpooled(VkDevice device,
 
   uint32_t type_index = UINT32_MAX;
   if (preferred_flags != 0) {
-    // Prefer the intersection of required+preferred when possible (e.g. DEVICE_LOCAL and not
-    // merely the first type that matches required alone).
+    // Prefer the intersection of required+preferred when possible (e.g. DEVICE_LOCAL and not merely the first type
+    // that matches required alone).
     type_index = pick_type(required_flags | preferred_flags);
   }
   if (type_index == UINT32_MAX) {
@@ -591,9 +591,8 @@ IVkBuffer create_buffer_unpooled(VkDevice device,
   mai.allocationSize = mr.size;
   mai.memoryTypeIndex = type_index;
 
-  // Buffers created with SHADER_DEVICE_ADDRESS need the matching allocate-info flag on drivers
-  // that enforce bufferDeviceAddress capture/replay rules; MoltenVK tolerates either, but keep
-  // the Vulkan-correct path.
+  // Buffers created with SHADER_DEVICE_ADDRESS need the matching allocate-info flag on drivers that enforce
+  // bufferDeviceAddress capture/replay rules; MoltenVK tolerates either, but keep the Vulkan-correct path.
   VkMemoryAllocateFlagsInfo flags_info{};
   if (buffer_info->usage & VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT_KHR) {
     flags_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_FLAGS_INFO;
