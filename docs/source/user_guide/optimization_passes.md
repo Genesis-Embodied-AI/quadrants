@@ -34,7 +34,7 @@ per-task IR  --> simplify --> lower memory access --> simplify
 backend codegen  (translate IR into the device machine code your GPU runs)
 ```
 
-The "simplify" boxes are all the same routine (internally `full_simplify`), invoked at several points. Most of the interesting optimization work happens inside it. The optional autodiff step, run only when you ask Quadrants for gradients, is covered in [Automatic differentiation](./autodiff.md).
+The "simplify" boxes are all the same routine, invoked at several points. Most of the interesting optimization work happens inside it. The optional autodiff step, run only when you ask Quadrants for gradients, is covered in [Automatic differentiation](./autodiff.md).
 
 ## The simplify loop
 
@@ -85,7 +85,7 @@ For everyday use, leave them at their defaults - they are the best-supported and
 
 ## Inspecting what the compiler did
 
-These environment variables dump the IR so you can see the effect of each pass. Files are written to `debug_dump_path` (default `/tmp/ir/`):
+These environment variables dump the IR so you can see the effect of each pass. Files are written to the directory set by the `debug_dump_path` option in `qd.init(...)` (default `/tmp/ir/`):
 
 - `QD_DUMP_IR=1` - writes an IR snapshot at each major pipeline stage (after lowering, before/after each simplify, after offload).
 - `QD_DUMP_SIMPLIFY=1` - writes an IR snapshot after every individual pass on every iteration of the simplify loop. Verbose, but it shows exactly which pass changed what.
