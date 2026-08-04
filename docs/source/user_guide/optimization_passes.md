@@ -56,8 +56,6 @@ In the order they run each round:
 
 Two of these - CSE and CFG optimization - run only when `opt_level > 0` (the default is `1`).
 
-**CSE is scoped per offloaded task.** Once the kernel has been split, common-subexpression elimination runs over one offloaded task's IR at a time rather than the whole kernel at once - the same per-task scoping described for [CFG optimization](#control-flow-graph-cfg-optimization) below, and for the same reason: each task is a separate device launch, so there is nothing to deduplicate across a task boundary.
-
 ## Control-flow-graph (CFG) optimization
 
 A **control-flow graph** is a map of your kernel's basic blocks together with the branches connecting them. It lets the compiler answer questions of the form "if execution reaches *here*, what must already have happened?" - which is exactly what is needed to optimize reads and writes to memory. Two such optimizations run on the CFG:
@@ -66,8 +64,6 @@ A **control-flow graph** is a map of your kernel's basic blocks together with th
 - **Dead-store elimination** - if a write is overwritten before anyone reads it, the write is removed.
 
 Building and analyzing the CFG is the most expensive optimization in the pipeline, which is why it runs at most once per simplify stage rather than every round.
-
-**One CFG per offloaded task.** The CFG optimization is built and run separately for each offloaded task, over that task's IR alone - never over the whole `qd.kernel` at once. This is both faster to analyze and safe: because each task is a separate device launch, a value held in a register in one task cannot survive into the next one, so there is never anything to forward across a task boundary anyway. Anything written to global memory is treated as potentially read by a later task, so no store another task might need is dropped.
 
 ## Controlling the passes
 
@@ -92,3 +88,7 @@ These environment variables dump the IR so you can see the effect of each pass. 
 - `QD_DUMP_CFG=1` - writes the control-flow graph itself. (This also forces the CFG pass back onto the whole-kernel path so the complete graph can be dumped.)
 
 Setting `qd.init(print_ir=True)` prints the IR to the console at pipeline stages instead of writing files.
+
+## Under the hood: per-task scoping
+
+Once the kernel has been split into offloaded tasks, both CSE and the CFG optimization run over **one offloaded task's IR at a time**, never over the whole `qd.kernel` at once. This is both faster to analyze and safe: because each task is a separate device launch, a value held in a register in one task cannot survive into the next one, so there is never anything to deduplicate or forward across a task boundary. Anything written to global memory is treated as potentially read by a later task, so no store another task might need is dropped.
