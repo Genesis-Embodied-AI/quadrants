@@ -554,6 +554,9 @@ class Kernel(FuncBase):
                     if struct_primitive_launch_info:
                         self._struct_primitive_launch_info_by_key[key] = struct_primitive_launch_info
                 else:
+                    # Propagate used-sets across call edges to a fixpoint (order-independent) before
+                    # collapsing flat names to their used prefixes below.
+                    pruning.propagate_fixpoint()
                     for used_parameters in pruning.used_vars_by_func_id.values():
                         new_used_parameters = set()
                         for param in used_parameters:

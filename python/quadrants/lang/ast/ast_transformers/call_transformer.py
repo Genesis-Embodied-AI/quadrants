@@ -393,7 +393,7 @@ class CallTransformer:
             try:
                 pruning = ctx.global_context.pruning
                 if pruning.enforcing:
-                    py_args = pruning.filter_call_args(func, node, node_args, node_keywords, py_args)
+                    py_args = pruning.filter_call_args(ctx.func.func_id, func, node, node_args, node_keywords, py_args)
 
                 node.ptr = func(*py_args, **py_kwargs)
 
