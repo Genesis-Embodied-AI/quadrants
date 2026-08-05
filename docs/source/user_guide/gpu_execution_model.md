@@ -1,6 +1,6 @@
 # GPU execution model
 
-This page defines the core GPU execution-model terms used across the Quadrants user guide: kernel, thread, block, subgroup, lane, and shared memory. Other pages link here the first time they use one of these words. If you already know them from CUDA, HIP, or another GPU framework you can skip this page; the only Quadrants-specific content is the API name attached to each concept.
+This page defines the core GPU execution-model terms used across the Quadrants user guide: kernel, thread, subgroup, block, lane, and shared memory. Other pages link here the first time they use one of these words. If you already know them from CUDA, HIP, or another GPU framework you can skip this page; the only Quadrants-specific content is the API name attached to each concept.
 
 Quadrants compiles the same Python kernel to several GPU backends (CUDA, AMD, Vulkan, and Metal), and each vendor uses a different word for the same piece of hardware. This page picks one name per concept and lists the vendor synonyms, so the rest of the guide can stay vendor-neutral.
 
@@ -15,15 +15,15 @@ The two are not one-to-one: Quadrants splits each `@qd.kernel` into one or more 
 
 ## Thread
 
-When the device launches a [hardware kernel](#kernel) it spawns one or more threads; a thread is one such execution of the kernel's code, with its own registers and its own local variables. The hardware schedules and runs these threads independently and does not necessarily run them all at the same time: GPUs time-slice and interleave groups of threads, and CPU threads are commonly interleaved too. Each thread reads an index identifying it so it can decide which data to work on. This is the ordinary "thread" you already use; the terms below just describe how threads are grouped and how they cooperate.
-
-## Block
-
-A block (also called a thread block, a CUDA cooperative thread array or CTA, or a workgroup on AMD, Vulkan, and Metal) is a set of threads that launch together and can cooperate closely: they can wait for each other at a barrier (a point every thread in the block must reach before any thread moves past it) and share fast on-chip [shared memory](#shared-memory). You set how many threads a block has with `qd.loop_config(block_dim=N)`. A block's shared memory and its block barrier only reach the threads of that one block; coordinating across blocks needs coarser tools such as a device-scope memory fence or a separate kernel launch (see [grid](grid.md)).
+When the device launches a [hardware kernel](#kernel) it spawns one or more threads; a thread is one such execution of the kernel's code, with its own registers and its own local variables. The hardware schedules and runs these threads. Each thread reads an index identifying it so it can decide which data to work on. This is the ordinary "thread" you already use; the terms below just describe how threads are grouped and how they cooperate.
 
 ## Subgroup
 
-A subgroup (a warp on NVIDIA, a wavefront or wave on AMD, and a subgroup on Vulkan and Metal) is a group of threads inside a block that the hardware runs together, advancing through the same instruction at close to the same time. Its size is fixed by the hardware and backend, not something you choose: it is typically 32 threads (NVIDIA, and AMD in wave32 mode) or 64 threads (AMD in wave64 mode). Because the threads of a subgroup run together like this, they can exchange values held in registers directly, without going through shared memory, using [subgroup operations](subgroup.md). Quadrants' register-resident [tiles](tile.md) are built on this.
+A subgroup (a warp on NVIDIA, a wavefront or wave on AMD, and a subgroup on Vulkan and Metal) is a fixed-size group of threads that the hardware runs together, advancing through the same instruction at the same time. Its size is fixed by the hardware and backend, not something you choose: it is typically 32 threads (NVIDIA, and AMD in wave32 mode) or 64 threads (AMD in wave64 mode). Because the threads of a subgroup run together like this, they can exchange values held in registers directly, without going through [shared memory](#shared-memory), using [subgroup operations](subgroup.md).
+
+## Block
+
+A block (also called a thread block, a CUDA cooperative thread array or CTA, or a workgroup on AMD, Vulkan, and Metal) is a set of threads that launch together and can cooperate closely: they can wait for each other at a barrier (a point every thread in the block must reach before any thread moves past it) and share fast on-chip [shared memory](#shared-memory). The threads of a block are divided into [subgroups](#subgroup). You set how many threads a block has with `qd.loop_config(block_dim=N)`. A block's shared memory and its block barrier only reach the threads of that one block; coordinating across blocks needs coarser tools such as a device-scope memory fence or a separate kernel launch (see [grid](grid.md)).
 
 ## Lane
 
