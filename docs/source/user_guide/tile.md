@@ -128,7 +128,7 @@ rhs[0:N, 0:N] = B
 
 ## SharedArray support
 
-Tiles can load from and store to `qd.simt.block.SharedArray` using the same slice syntax as device arrays:
+Tiles can load from and store to `qd.simt.block.SharedArray` (block-scoped shared memory; see the [block execution guide](block.md)) using the same slice syntax as device arrays:
 
 ```python
 sh = qd.simt.block.SharedArray((qd.simt.Tile16x16.SIZE, qd.simt.Tile16x16.SIZE), qd.f32)
@@ -146,7 +146,7 @@ Column clamping applies the same way as for device arrays — columns beyond the
 
 ### Block size
 
-Set `block_dim=qd.simt.Tile16x16.SIZE` so that each thread block contains exactly 16 threads — one per tile row:
+Call `qd.loop_config(block_dim=N)` at the top of the kernel to set the number of GPU threads per block (the block dimension) to `N`; see the [block execution guide](block.md). Set `N = qd.simt.Tile16x16.SIZE` so each block has exactly 16 threads, one per tile row:
 
 ```python
 @qd.kernel
