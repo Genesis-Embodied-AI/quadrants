@@ -194,7 +194,7 @@ def my_blocked_op(A, row0, col0, eps):
 
 | Size  | Threads per block | Registers per thread | Best for |
 |-------|------------------:|---------------------:|----------|
-| 16x16 | 16                | 16                   | Small problems where occupancy from many narrow blocks matters; very small N (e.g. N≤16 or N≈48) where the 32-tile would waste lanes |
+| 16x16 | 16                | 16                   | Small problems where many narrow blocks keep the GPU busy; very small N (e.g. N <= 16, or N around 48) where the 32-tile would waste lanes |
 | 32x32 | 32                | 32                   | Larger problems (roughly N >= 32) where bigger tiles cut the number of blocked passes and the fused multiply-add (FMA) chain inside `cholesky_` amortizes the larger register file |
 
 ## Method reference
@@ -216,12 +216,12 @@ def my_blocked_op(A, row0, col0, eps):
 
 ## Example: blocked Cholesky
 
-See [`misc/demos/cholesky_blocked.py`](../../../misc/demos/cholesky_blocked.py) for a complete blocked Cholesky factorization using Tile16x16, benchmarked against scalar-Crout baselines (shared memory with 64 threads, and blocked shared memory with 16 threads).
+See [`misc/demos/cholesky_blocked.py`](../../../misc/demos/cholesky_blocked.py) for a complete blocked Cholesky factorization using Tile16x16, benchmarked against scalar (non-tile) baselines (shared memory with 64 threads, and blocked shared memory with 16 threads).
 
 Results on RTX PRO 6000 Blackwell, 4096 environments, N=92, f32:
 
 | Kernel | Threads | Time (us) | vs baseline |
 |--------|--------:|----------:|------------:|
-| baseline (scalar Crout, shared mem) | 64 | 2766 | 1.00x |
-| blocked (scalar Crout, shared mem) | 16 | 2556 | 1.08x |
+| baseline (scalar, shared mem) | 64 | 2766 | 1.00x |
+| blocked (scalar, shared mem) | 16 | 2556 | 1.08x |
 | **tile16 (Tile16x16, no shared memory)** | 16 | 533 | **5.19x** |
