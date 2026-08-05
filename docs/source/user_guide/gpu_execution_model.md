@@ -23,7 +23,7 @@ A subgroup (a warp on NVIDIA, a wavefront or wave on AMD, and a subgroup on Vulk
 
 ## Block
 
-A block comprises one or more whole [subgroups](#subgroup), so its thread count is a multiple of the subgroup size (a requested size that is not a multiple is rounded up, with the extra lanes left idle). It (also called a thread block, a CUDA cooperative thread array or CTA, or a workgroup on AMD, Vulkan, and Metal) is a set of threads that launch together and can cooperate closely: they can wait for each other at a barrier (a point every thread in the block must reach before any thread moves past it) and share fast on-chip [shared memory](#shared-memory). You set how many threads a block has with `qd.loop_config(block_dim=N)`. A block's shared memory and its block barrier only reach the threads of that one block; coordinating across blocks needs coarser tools such as a device-scope memory fence or a separate kernel launch (see [grid](grid.md)).
+A block comprises one or more [subgroups](#subgroup). A block can also be referred to as a thread block, a CUDA cooperative thread array or CTA, or a workgroup on AMD, Vulkan, and Metal. It is a set of threads that launch together and can cooperate closely: they can wait for each other at a barrier (a point every thread in the block must reach before any thread moves past it) and share fast on-chip [shared memory](#shared-memory). You set how many threads a block has with `qd.loop_config(block_dim=N)`. A block's shared memory and its block barrier only reach the threads of that one block; coordinating across blocks needs coarser tools such as a device-scope memory fence or a separate kernel launch (see [grid](grid.md)).
 
 ## Lane
 
