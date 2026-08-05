@@ -9,13 +9,13 @@ Quadrants compiles the same Python kernel to several GPU backends (CUDA, AMD, Vu
 "Kernel" means two related but distinct things, and this guide keeps them apart:
 
 - A Quadrants kernel is the Python function you write and decorate with `@qd.kernel`. It is the program, expressed in Python, that describes the work to do. This guide writes it as `@qd.kernel` whenever the distinction matters.
-- A hardware kernel is the compiled device program that Quadrants generates from your `@qd.kernel` for a specific backend (CUDA, AMD, Vulkan, Metal, or CPU). Launching it is what actually runs work on the device.
+- A hardware kernel is a compiled device program that Quadrants generates for a specific backend (CUDA, AMD, Vulkan, Metal, or CPU) and launches on the device.
 
-A `@qd.kernel` does not run anything or create threads by itself; Quadrants compiles it into a hardware kernel, and it is that hardware kernel, once launched, that the device runs as one or more [threads](#thread) in parallel (this holds on GPU and CPU backends alike).
+The two are not one-to-one: Quadrants splits each `@qd.kernel` into one or more hardware kernels. Every top-level `for` loop becomes its own hardware kernel whose iterations run in parallel across [threads](#thread), and every contiguous run of serial statements outside any top-level `for` loop becomes its own hardware kernel as well. Running a `@qd.kernel` launches these hardware kernels in order; the `@qd.kernel` itself does not run on the device (this compilation model holds on GPU and CPU backends alike).
 
 ## Thread
 
-A thread is a single execution of a [hardware kernel](#kernel) on the device, with its own registers and its own local variables. When a `@qd.kernel` runs, the device executes its hardware kernel as one or more threads in parallel, and each thread reads an index identifying it so it can decide which data to work on. This is the ordinary "thread" you already use; the terms below just describe how threads are grouped and how they cooperate.
+A thread is a single execution of a [hardware kernel](#kernel) on the device, with its own registers and its own local variables. When a `@qd.kernel` runs, the device executes each of its hardware kernels as one or more threads in parallel, and each thread reads an index identifying it so it can decide which data to work on. This is the ordinary "thread" you already use; the terms below just describe how threads are grouped and how they cooperate.
 
 ## Block
 
