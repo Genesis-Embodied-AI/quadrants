@@ -15,7 +15,7 @@ The two are not one-to-one: Quadrants splits each `@qd.kernel` into one or more 
 
 ## Thread
 
-A thread is a single execution of a [hardware kernel](#kernel) on the device, with its own registers and its own local variables. When a `@qd.kernel` runs, the device executes each of its hardware kernels as one or more threads in parallel, and each thread reads an index identifying it so it can decide which data to work on. This is the ordinary "thread" you already use; the terms below just describe how threads are grouped and how they cooperate.
+A thread is one of the parallel executions the device spawns when it launches a [hardware kernel](#kernel): each thread runs the kernel's code with its own registers and its own local variables. A single launch of a hardware kernel spawns one or more threads that run at the same time, and each thread reads an index identifying it so it can decide which data to work on. This is the ordinary "thread" you already use; the terms below just describe how threads are grouped and how they cooperate.
 
 ## Block
 
