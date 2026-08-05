@@ -104,6 +104,14 @@ t.cholesky_(eps)
 
 Factorizes the tile in-place: replaces the lower triangle with `L` such that `L @ L^T ≈ A`. The `eps` parameter clamps the diagonal to avoid numerical issues with near-singular matrices. After this call, the lower triangle of `t` contains `L`.
 
+`eps` may be a single uniform value (the common case) or a per-lane value: it is read only on the lane that owns each pivot, so lane `k` supplies the floor for pivot `k`. Use a per-lane `eps` when you want the floor to be *relative* to each row rather than one absolute value for the whole tile: pass `eps_rel * A_orig[k]`, where `A_orig[k]` is row `k`'s original diagonal, for a scale-invariant floor. Note that in a blocked factorization the tile handed to `cholesky_` is the Schur complement of the diagonal block, so its in-register diagonal is *not* the original `A[k][k]`; a relative floor must therefore use the original diagonal you supply, not the tile's current contents.
+
+```python
+# Per-lane (relative) floor: lane k floors pivot k using its own row's original diagonal.
+tid = qd.simt.subgroup.invocation_id()
+t.cholesky_(eps_rel * a_orig_diag[tid])
+```
+
 ## Triangular solve
 
 ```python
