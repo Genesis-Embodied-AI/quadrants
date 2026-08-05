@@ -123,10 +123,10 @@ Guidelines for `get_geometry_hash`:
 |---|---|---|
 | `warmup` | 3 | Number of untimed warmup calls per implementation before measuring. |
 | `active` | 1 | Number of timed calls per implementation. |
-| `repeat_after_count` | `None` | Re-run benchmarking after this many additional calls. `0` (or less) disables; `None` means unset. |
-| `repeat_after_seconds` | `None` | Re-run benchmarking after this many seconds have elapsed. `0` (or less) disables; `None` means unset. |
+| `repeat_after_count` | `None` | Re-run benchmarking after this many additional calls. `0` (or less) disables; `None` lets `perf_dispatch` choose. |
+| `repeat_after_seconds` | `None` | Re-run benchmarking after this many seconds have elapsed. `0` (or less) disables; `None` lets `perf_dispatch` choose. |
 
-`repeat_after_count` and `repeat_after_seconds` are OR'd — whichever fires first restarts benchmarking. When **both** are left unset (`None`), `perf_dispatch` picks an internal default of `repeat_after_count=300` with no time-based trigger. Passing only one of them leaves the other unset, so exactly the requested trigger is used (e.g. `repeat_after_count=300` re-benchmarks purely by call count, with no hidden per-second re-evaluation).
+`repeat_after_count` and `repeat_after_seconds` are OR'd — whichever fires first restarts benchmarking. A `None` trigger means "choose a suitable value for me": if you give the other trigger an explicit value, the `None` one is left off; if you leave **both** as `None`, `perf_dispatch` re-benchmarks every 300 calls with no time-based trigger (so, e.g., `repeat_after_count=300` re-benchmarks purely by call count, with no hidden per-second re-evaluation).
 
 Example with custom tuning:
 

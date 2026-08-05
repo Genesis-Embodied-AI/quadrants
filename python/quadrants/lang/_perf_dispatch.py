@@ -82,9 +82,9 @@ class PerformanceDispatcher(Generic[P, R]):
         self.num_first_warmup = num_first_warmup if num_first_warmup is not None else NUM_FIRST_WARMUP
         self.num_warmup = num_warmup if num_warmup is not None else NUM_WARMUP
         self.num_active = num_active if num_active is not None else NUM_ACTIVE
-        # repeat_after_count and repeat_after_seconds are OR'd re-benchmarking triggers, where None means "unset"
-        # and a value <= 0 means "explicitly disabled". When BOTH are left unset we fall back to a count-based
-        # default, so the two triggers never silently combine.
+        # repeat_after_count and repeat_after_seconds are OR'd re-benchmarking triggers. None means "choose a
+        # suitable value for me" and a value <= 0 means "explicitly disabled". When BOTH are left as None we
+        # pick a count-based default, so the two triggers never silently combine.
         if repeat_after_count is None and repeat_after_seconds is None:
             repeat_after_count = DEFAULT_REPEAT_AFTER_COUNT
         self.repeat_after_count: int | None = repeat_after_count
@@ -371,15 +371,15 @@ def perf_dispatch(
         active: Number of active (timed) iterations to run for each implementation. Default 1.
         repeat_after_count: Re-run the warmup + active benchmarking cycle from scratch after this many
             additional calls (counted per geometry hash). A value <= 0 disables count-based re-evaluation;
-            None means "unset".
+            None lets perf_dispatch choose a suitable value (see note below).
         repeat_after_seconds: Re-run the warmup + active benchmarking cycle from scratch after this many
             seconds have elapsed (per geometry hash). A value <= 0 disables time-based re-evaluation;
-            None means "unset".
+            None lets perf_dispatch choose a suitable value (see note below).
 
         repeat_after_count and repeat_after_seconds are OR'd: whichever fires first restarts benchmarking.
-        When BOTH are left as None (the default), perf_dispatch picks an internal default of
-        repeat_after_count=300 with no time-based trigger. Passing only one of them leaves the other unset,
-        so exactly the requested trigger is used.
+        A None trigger means "choose a suitable value for me": if the other trigger is given an explicit
+        value, the None one is left off; if both are None, perf_dispatch re-benchmarks every 300 calls
+        with no time-based trigger.
 
     Example usage:
 
