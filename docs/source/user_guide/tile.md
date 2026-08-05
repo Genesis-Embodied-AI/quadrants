@@ -1,11 +1,11 @@
 # Register-resident tiles: `Tile16x16` and `Tile32x32`
 
-Quadrants provides two register-resident matrix tile types, each spread across the threads of one [subgroup](subgroup.md) (warp / wavefront):
+Quadrants provides two register-resident matrix tile types, each spread across the threads of one [subgroup](gpu_execution_model.md#subgroup) (warp / wavefront):
 
 - `qd.simt.Tile16x16` — a 16x16 tile distributed across 16 threads in a subgroup (one row per thread, 16 scalar registers per thread).
 - `qd.simt.Tile32x32` — a 32x32 tile distributed across 32 threads in a subgroup (one row per thread, 32 scalar registers per thread).
 
-Both have identical APIs (creation, slice-syntax load/store, `qd.outer` rank-1 updates, `cholesky_`, `solve_triangular_`, SharedArray interop) and use subgroup shuffles for cross-thread communication — no shared memory needed. The rest of this page documents the API in terms of `Tile16x16`; everything carries over to `Tile32x32` by swapping the class name and using `SIZE == 32` / `block_dim=32`. The [`Tile32x32` section](#tile32x32) below has guidance on when to pick 32x32 vs 16x16 and a short example.
+Both have identical APIs (creation, slice-syntax load/store, `qd.outer` rank-1 updates, `cholesky_`, `solve_triangular_`, SharedArray interop) and use subgroup shuffles for cross-thread communication - no [shared memory](gpu_execution_model.md#shared-memory) needed. The rest of this page documents the API in terms of `Tile16x16`; everything carries over to `Tile32x32` by swapping the class name and using `SIZE == 32` / `block_dim=32`. The [`Tile32x32` section](#tile32x32) below has guidance on when to pick 32x32 vs 16x16 and a short example.
 
 Tiles are useful for implementing blocked linear algebra kernels (Cholesky, triangular solve, etc.) where you want to keep working data in registers for maximum throughput.
 
@@ -128,7 +128,7 @@ rhs[0:N, 0:N] = B
 
 ## SharedArray support
 
-Tiles can load from and store to `qd.simt.block.SharedArray` (block-scoped shared memory; see the [block execution guide](block.md)) using the same slice syntax as device arrays:
+Tiles can load from and store to `qd.simt.block.SharedArray`, a [shared-memory](gpu_execution_model.md#shared-memory) array scoped to one block, using the same slice syntax as device arrays:
 
 ```python
 sh = qd.simt.block.SharedArray((qd.simt.Tile16x16.SIZE, qd.simt.Tile16x16.SIZE), qd.f32)
@@ -146,7 +146,7 @@ Column clamping applies the same way as for device arrays — columns beyond the
 
 ### Block size
 
-Call `qd.loop_config(block_dim=N)` at the top of the kernel to set the number of GPU threads per block (the block dimension) to `N`; see the [block execution guide](block.md). Set `N = qd.simt.Tile16x16.SIZE` so each block has exactly 16 threads, one per tile row:
+Call `qd.loop_config(block_dim=N)` at the top of the kernel to set the number of GPU threads per [block](gpu_execution_model.md#block) (the block dimension) to `N`. Set `N = qd.simt.Tile16x16.SIZE` so each block has exactly 16 threads, one per tile row:
 
 ```python
 @qd.kernel

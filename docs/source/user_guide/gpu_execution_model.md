@@ -1,0 +1,25 @@
+# GPU execution model
+
+This page defines the core GPU execution-model terms used across the Quadrants user guide: thread, block, subgroup, lane, and shared memory. Other pages link here the first time they use one of these words. If you already know them from CUDA, HIP, or another GPU framework you can skip this page; the only Quadrants-specific content is the API name attached to each concept.
+
+Quadrants compiles the same Python kernel to several GPU backends (CUDA, AMD, Vulkan, and Metal), and each vendor uses a different word for the same piece of hardware. This page picks one name per concept and lists the vendor synonyms, so the rest of the guide can stay vendor-neutral.
+
+## Thread
+
+A thread is a single instance of your kernel body, with its own registers and its own local variables. Launching a kernel starts many threads that run in parallel, each with an index it can read to decide which data to work on. This is the ordinary GPU "thread" you already use; the terms below just describe how threads are grouped and how they cooperate.
+
+## Block
+
+A block (also called a thread block, a CUDA cooperative thread array or CTA, or a workgroup on AMD, Vulkan, and Metal) is a set of threads that launch together, can wait for each other at a barrier (a point every thread in the block must reach before any thread moves past it), and can cooperate through [shared memory](#shared-memory). You set how many threads a block has with `qd.loop_config(block_dim=N)`. Threads in different blocks cannot share shared memory or synchronize with one another.
+
+## Subgroup
+
+A subgroup (a warp on NVIDIA, a wavefront or wave on AMD, and a subgroup on Vulkan and Metal) is a fixed-size group of threads inside a block that the hardware runs in lockstep, meaning they advance through the same instruction at the same time. Common sizes are 32 threads (NVIDIA, and AMD in wave32 mode) and 64 threads (AMD in wave64 mode). Because a subgroup runs in lockstep, its threads can exchange values held in registers directly, without going through shared memory, using [subgroup operations](subgroup.md). Quadrants' register-resident [tiles](tile.md) are built on this.
+
+## Lane
+
+A lane is the position of a thread within its subgroup, numbered from 0 to the subgroup size minus 1. A global thread index tells you which thread you are among all the launched threads; the lane index tells you where you sit inside your own subgroup. Subgroup operations that move a value from one thread to another (a shuffle, for example) name the source or destination thread by its lane. In Quadrants you read the calling thread's lane with `qd.simt.subgroup.invocation_id()`.
+
+## Shared memory
+
+Shared memory is fast on-chip memory that every thread in one [block](#block) can read and write, used to pass data between threads that would otherwise only see their own registers and the slower global memory. It is much faster than global memory but small in size, private to a single block, and gone once the block finishes. Vendors call it shared memory (CUDA), local data share or LDS (AMD), or threadgroup memory (Metal). In Quadrants you allocate it with `qd.simt.block.SharedArray(shape, dtype)` and coordinate access to it with the block barrier `qd.simt.block.sync()`; see [block primitives](block.md).
