@@ -126,7 +126,7 @@ Guidelines for `get_geometry_hash`:
 | `repeat_after_count` | `None` | Re-run benchmarking after this many additional calls. `0` (or less) disables; `None` lets `perf_dispatch` choose. |
 | `repeat_after_seconds` | `None` | Re-run benchmarking after this many seconds have elapsed. `0` (or less) disables; `None` lets `perf_dispatch` choose. |
 
-`repeat_after_count` and `repeat_after_seconds` are OR'd — whichever fires first restarts benchmarking. A `None` trigger means "choose a suitable value for me": if you give the other trigger an explicit value, the `None` one is left off; if you leave **both** as `None`, `perf_dispatch` re-benchmarks every 300 calls with no time-based trigger (so, e.g., `repeat_after_count=300` re-benchmarks purely by call count, with no hidden per-second re-evaluation).
+`repeat_after_count` and `repeat_after_seconds` are OR'd - whichever fires first restarts benchmarking. A `None` trigger means "choose a suitable value for me": if you give the other trigger an explicit value, the `None` one is left off; if you leave **both** as `None`, `perf_dispatch` re-benchmarks every 300 calls with no time-based trigger (so, e.g., `repeat_after_count=300` re-benchmarks purely by call count, with no hidden per-second re-evaluation).
 
 Example with custom tuning:
 
