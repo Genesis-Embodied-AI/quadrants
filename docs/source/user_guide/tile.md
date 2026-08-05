@@ -104,7 +104,7 @@ t.cholesky_(eps)
 
 Factorizes the tile in-place: replaces the lower triangle with `L` such that `L @ L^T ≈ A`. The `eps` parameter clamps the diagonal to avoid numerical issues with near-singular matrices. After this call, the lower triangle of `t` contains `L`.
 
-`eps` may be a single uniform value (the common case) or a per-lane value: it is read only on the lane that owns each pivot, so lane `k` supplies the floor for pivot `k`.
+`eps` may be a single uniform value or a per-lane value: it is read only on the lane that owns each pivot, so lane `k` supplies the floor for pivot `k`.
 
 ```python
 # Per-lane (relative) floor: lane k floors pivot k using its own row's original diagonal.
