@@ -1,6 +1,6 @@
 # Register-resident tiles: `Tile16x16` and `Tile32x32`
 
-Quadrants provides two register-resident matrix tile types:
+Quadrants provides two register-resident matrix tile types, each spread across the threads of one [subgroup](subgroup.md) (warp / wavefront):
 
 - `qd.simt.Tile16x16` — a 16x16 tile distributed across 16 threads in a subgroup (one row per thread, 16 scalar registers per thread).
 - `qd.simt.Tile32x32` — a 32x32 tile distributed across 32 threads in a subgroup (one row per thread, 32 scalar registers per thread).
@@ -188,14 +188,14 @@ def my_blocked_op(A, row0, col0, eps):
     A[row0:row0+N, col0:col0+N] = t
 ```
 
-`Tile16x16` and `Tile32x32` can be mixed within the same kernel — their slice-dispatch caches are independent.
+`Tile16x16` and `Tile32x32` can be mixed within the same kernel.
 
 ### When to pick 32x32 vs 16x16
 
 | Size  | Threads per block | Registers per thread | Best for |
 |-------|------------------:|---------------------:|----------|
 | 16x16 | 16                | 16                   | Small problems where occupancy from many narrow blocks matters; very small N (e.g. N≤16 or N≈48) where the 32-tile would waste lanes |
-| 32x32 | 32                | 32                   | Larger problems (N ≳ 32) where bigger tiles cut the number of blocked passes and the FMA chain inside `cholesky_` amortizes the larger register file |
+| 32x32 | 32                | 32                   | Larger problems (roughly N >= 32) where bigger tiles cut the number of blocked passes and the fused multiply-add (FMA) chain inside `cholesky_` amortizes the larger register file |
 
 ## Method reference
 
