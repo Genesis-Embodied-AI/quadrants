@@ -1,12 +1,21 @@
 # GPU execution model
 
-This page defines the core GPU execution-model terms used across the Quadrants user guide: thread, block, subgroup, lane, and shared memory. Other pages link here the first time they use one of these words. If you already know them from CUDA, HIP, or another GPU framework you can skip this page; the only Quadrants-specific content is the API name attached to each concept.
+This page defines the core GPU execution-model terms used across the Quadrants user guide: kernel, thread, block, subgroup, lane, and shared memory. Other pages link here the first time they use one of these words. If you already know them from CUDA, HIP, or another GPU framework you can skip this page; the only Quadrants-specific content is the API name attached to each concept.
 
 Quadrants compiles the same Python kernel to several GPU backends (CUDA, AMD, Vulkan, and Metal), and each vendor uses a different word for the same piece of hardware. This page picks one name per concept and lists the vendor synonyms, so the rest of the guide can stay vendor-neutral.
 
+## Kernel
+
+"Kernel" means two related but distinct things, and this guide keeps them apart:
+
+- A Quadrants kernel is the Python function you write and decorate with `@qd.kernel`. It is the program, expressed in Python, that describes the work to do. This guide writes it as `@qd.kernel` whenever the distinction matters.
+- A hardware kernel is the compiled device program that Quadrants generates from your `@qd.kernel` for a specific backend (CUDA, AMD, Vulkan, Metal, or CPU). Launching it is what actually runs work on the device.
+
+A `@qd.kernel` does not run anything or create threads by itself; Quadrants compiles it into a hardware kernel, and it is that hardware kernel, once launched, that the device runs as one or more [threads](#thread) in parallel (this holds on GPU and CPU backends alike).
+
 ## Thread
 
-A thread is a single execution of the kernel body on the device, with its own registers and its own local variables. The `@qd.kernel` you write is a Python program; Quadrants compiles it into a hardware kernel, which the device then runs as one or more threads in parallel (this holds on GPU and CPU backends alike). Each thread reads an index identifying it, so it can decide which data to work on. This is the ordinary "thread" you already use; the terms below just describe how threads are grouped and how they cooperate.
+A thread is a single execution of a [hardware kernel](#kernel) on the device, with its own registers and its own local variables. When a `@qd.kernel` runs, the device executes its hardware kernel as one or more threads in parallel, and each thread reads an index identifying it so it can decide which data to work on. This is the ordinary "thread" you already use; the terms below just describe how threads are grouped and how they cooperate.
 
 ## Block
 
