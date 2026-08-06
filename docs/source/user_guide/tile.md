@@ -1,11 +1,11 @@
 # Register-resident tiles: `Tile16x16` and `Tile32x32`
 
-Quadrants provides two register-resident matrix tile types:
+Quadrants provides two register-resident matrix tile types, each spread across the threads of one [subgroup](gpu_execution_model.md#subgroup) (warp / wavefront):
 
 - `qd.simt.Tile16x16` — a 16x16 tile distributed across 16 threads in a subgroup (one row per thread, 16 scalar registers per thread).
 - `qd.simt.Tile32x32` — a 32x32 tile distributed across 32 threads in a subgroup (one row per thread, 32 scalar registers per thread).
 
-Both have identical APIs (creation, slice-syntax load/store, `qd.outer` rank-1 updates, `cholesky_`, `solve_triangular_`, SharedArray interop) and use subgroup shuffles for cross-thread communication — no shared memory needed. The rest of this page documents the API in terms of `Tile16x16`; everything carries over to `Tile32x32` by swapping the class name and using `SIZE == 32` / `block_dim=32`. The [`Tile32x32` section](#tile32x32) below has guidance on when to pick 32x32 vs 16x16 and a short example.
+Both have identical APIs (creation, slice-syntax load/store, `qd.outer` rank-1 updates, `cholesky_`, `solve_triangular_`, SharedArray interop) and use subgroup shuffles for cross-thread communication - no [shared memory](gpu_execution_model.md#shared-memory) needed. The rest of this page documents the API in terms of `Tile16x16`; everything carries over to `Tile32x32` by swapping the class name and using `SIZE == 32` / `block_dim=32`. The [`Tile32x32` section](#tile32x32) below has guidance on when to pick 32x32 vs 16x16 and a short example.
 
 Tiles are useful for implementing blocked linear algebra kernels (Cholesky, triangular solve, etc.) where you want to keep working data in registers for maximum throughput.
 
@@ -136,7 +136,7 @@ rhs[0:N, 0:N] = B
 
 ## SharedArray support
 
-Tiles can load from and store to `qd.simt.block.SharedArray` using the same slice syntax as device arrays:
+Tiles can load from and store to `qd.simt.block.SharedArray`, a [shared-memory](gpu_execution_model.md#shared-memory) array scoped to one block, using the same slice syntax as device arrays:
 
 ```python
 sh = qd.simt.block.SharedArray((qd.simt.Tile16x16.SIZE, qd.simt.Tile16x16.SIZE), qd.f32)
@@ -154,7 +154,7 @@ Column clamping applies the same way as for device arrays — columns beyond the
 
 ### Block size
 
-Set `block_dim=qd.simt.Tile16x16.SIZE` so that each thread block contains exactly 16 threads — one per tile row:
+Call `qd.loop_config(block_dim=N)` at the top of the kernel to set the number of GPU threads per [block](gpu_execution_model.md#block) (the block dimension) to `N`. Set `N = qd.simt.Tile16x16.SIZE` so each block has exactly 16 threads, one per tile row:
 
 ```python
 @qd.kernel
@@ -196,14 +196,14 @@ def my_blocked_op(A, row0, col0, eps):
     A[row0:row0+N, col0:col0+N] = t
 ```
 
-`Tile16x16` and `Tile32x32` can be mixed within the same kernel — their slice-dispatch caches are independent.
+`Tile16x16` and `Tile32x32` can be mixed within the same kernel.
 
 ### When to pick 32x32 vs 16x16
 
 | Size  | Threads per block | Registers per thread | Best for |
 |-------|------------------:|---------------------:|----------|
-| 16x16 | 16                | 16                   | Small problems where occupancy from many narrow blocks matters; very small N (e.g. N≤16 or N≈48) where the 32-tile would waste lanes |
-| 32x32 | 32                | 32                   | Larger problems (N ≳ 32) where bigger tiles cut the number of blocked passes and the FMA chain inside `cholesky_` amortizes the larger register file |
+| 16x16 | 16                | 16                   | Small problems where many narrow blocks keep the GPU busy; very small N (e.g. N <= 16, or N around 48) where the 32-tile would waste lanes |
+| 32x32 | 32                | 32                   | Larger problems (roughly N >= 32) where bigger tiles cut the number of blocked passes and the fused multiply-add (FMA) chain inside `cholesky_` amortizes the larger register file |
 
 ## Method reference
 
@@ -224,12 +224,12 @@ def my_blocked_op(A, row0, col0, eps):
 
 ## Example: blocked Cholesky
 
-See [`misc/demos/cholesky_blocked.py`](../../../misc/demos/cholesky_blocked.py) for a complete blocked Cholesky factorization using Tile16x16, benchmarked against scalar-Crout baselines (shared memory with 64 threads, and blocked shared memory with 16 threads).
+See [`misc/demos/cholesky_blocked.py`](../../../misc/demos/cholesky_blocked.py) for a complete blocked Cholesky factorization using Tile16x16, benchmarked against scalar (non-tile) baselines (shared memory with 64 threads, and blocked shared memory with 16 threads).
 
 Results on RTX PRO 6000 Blackwell, 4096 environments, N=92, f32:
 
 | Kernel | Threads | Time (us) | vs baseline |
 |--------|--------:|----------:|------------:|
-| baseline (scalar Crout, shared mem) | 64 | 2766 | 1.00x |
-| blocked (scalar Crout, shared mem) | 16 | 2556 | 1.08x |
+| baseline (scalar, shared mem) | 64 | 2766 | 1.00x |
+| blocked (scalar, shared mem) | 16 | 2556 | 1.08x |
 | **tile16 (Tile16x16, no shared memory)** | 16 | 533 | **5.19x** |
