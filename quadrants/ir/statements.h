@@ -990,6 +990,10 @@ class RangeForStmt : public Stmt {
   // runtime can reconstruct nested graph_do_while loops. See graph_do_while docs.
   int graph_do_while_level_id{-1};
   std::string loop_name;
+  // Tri-state AMDGPU codegen hint from qd.loop_config(force_inline=...): 0 = size heuristic,
+  // 1 = force-inline the body, -1 = force no-inline. Propagated FrontendForStmt -> RangeForStmt
+  // (lower_ast.cpp) -> OffloadedStmt (offload.cpp), consumed in codegen_amdgpu.cpp. AMDGPU-only.
+  int force_inline{0};
 
   RangeForStmt(Stmt *begin,
                Stmt *end,
@@ -1413,6 +1417,8 @@ class OffloadedStmt : public Stmt {
   std::size_t tls_size{1};  // avoid allocating dynamic memory with 0 byte
   std::size_t bls_size{0};
   MemoryAccessOptions mem_access_opt;
+  // See RangeForStmt::force_inline. Set from the source RangeForStmt in offload.cpp; AMDGPU-only.
+  int force_inline{0};
   int stream_parallel_group_id{0};
   // Per-kernel `qd.graph_parallel_context()` region id (0 outside any region). Set by `offload.cpp` from the source
   // `RangeForStmt` / `StructForStmt`. The CUDA LLVM codegen copies it into `OffloadedTask::graph_parallel_region_id`

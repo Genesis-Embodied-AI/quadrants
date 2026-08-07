@@ -673,6 +673,13 @@ def _bit_vectorize():
     get_runtime().compiling_callable.ast_builder().bit_vectorize()
 
 
+def _force_inline(v):
+    """Tri-state hint to the AMDGPU codegen force-inline heuristic for the body
+    of the next parallel-range-for. Ignored on non-AMDGPU backends.
+    """
+    get_runtime().compiling_callable.ast_builder().force_inline(int(v))
+
+
 def loop_config(
     *,
     block_dim=None,
@@ -681,6 +688,7 @@ def loop_config(
     block_dim_adaptive=True,
     bit_vectorize=False,
     name=None,
+    force_inline=None,
 ):
     """Sets directives for the next loop
 
@@ -691,6 +699,10 @@ def loop_config(
         block_dim_adaptive (bool): Whether to allow backends set block_dim adaptively, enabled by default
         bit_vectorize (bool): Whether to enable bit vectorization of struct fors on quant_arrays.
         name (str): Optional name for this loop, used in GPU kernel names for profiling and debugging.
+        force_inline (Optional[bool]): AMDGPU-only hint for the parallel-range-for body inlining heuristic.
+            ``True`` forces the body to be inlined into the launcher trampoline (good for call-heavy bodies),
+            ``False`` forces it NOT to be inlined (good for register-pressure-sensitive bodies like large
+            arithmetic kernels), ``None`` (default) uses the size-based heuristic. Ignored on non-AMDGPU.
 
     Examples::
 
@@ -748,6 +760,9 @@ def loop_config(
 
     if name is not None:
         get_runtime().compiling_callable.ast_builder().set_loop_name(name)
+
+    if force_inline is not None:
+        _force_inline(1 if force_inline else -1)
 
 
 def graph_do_while(condition) -> bool:

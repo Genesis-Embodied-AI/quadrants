@@ -194,6 +194,7 @@ class Offloader {
           offloaded->body->insert(std::move(s->body->statements[j]));
         }
         offloaded->range_hint = s->range_hint;
+        offloaded->force_inline = s->force_inline;
         offloaded->stream_parallel_group_id = s->stream_parallel_group_id;
         offloaded->graph_parallel_region_id = s->graph_parallel_region_id;
         offloaded->graph_do_while_level_id = s->graph_do_while_level_id;

@@ -23,6 +23,7 @@ struct ForLoopConfig {
   MemoryAccessOptions mem_access_opt;
   int block_dim{0};
   bool uniform{false};
+  int force_inline{0};
   int stream_parallel_group_id{0};
   // Per-kernel id of the enclosing `qd.graph_parallel_context()` region (0 outside any region). Assigned by the AST
   // builder's `current_graph_parallel_region_id_` at `begin_frontend_*_for` time and threaded alongside
@@ -212,6 +213,7 @@ class FrontendForStmt : public Stmt {
   bool strictly_serialized;
   MemoryAccessOptions mem_access_opt;
   int block_dim;
+  int force_inline{0};
   int stream_parallel_group_id{0};
   int graph_parallel_region_id{0};
   int graph_do_while_level_id{-1};
@@ -934,6 +936,7 @@ class ASTBuilder {
       config.mem_access_opt.clear();
       config.block_dim = 0;
       config.strictly_serialized = false;
+      config.force_inline = 0;
       config.stream_parallel_group_id = 0;
       config.graph_parallel_region_id = 0;
       config.graph_do_while_level_id = -1;
@@ -1084,6 +1087,11 @@ class ASTBuilder {
       QD_ASSERT(bit::is_power_of_two(v));
     }
     for_loop_dec_.config.block_dim = v;
+  }
+
+  void force_inline(int v) {
+    QD_ASSERT(v == -1 || v == 0 || v == 1);
+    for_loop_dec_.config.force_inline = v;
   }
 
   void set_loop_name(const std::string &loop_name) {

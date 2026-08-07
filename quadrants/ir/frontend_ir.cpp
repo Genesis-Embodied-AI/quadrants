@@ -110,6 +110,7 @@ FrontendForStmt::FrontendForStmt(const FrontendForStmt &o)
       strictly_serialized(o.strictly_serialized),
       mem_access_opt(o.mem_access_opt),
       block_dim(o.block_dim),
+      force_inline(o.force_inline),
       stream_parallel_group_id(o.stream_parallel_group_id),
       graph_parallel_region_id(o.graph_parallel_region_id),
       graph_do_while_level_id(o.graph_do_while_level_id),
@@ -122,6 +123,7 @@ void FrontendForStmt::init_config(Arch arch, const ForLoopConfig &config) {
   strictly_serialized = config.strictly_serialized;
   mem_access_opt = config.mem_access_opt;
   block_dim = config.block_dim;
+  force_inline = config.force_inline;
   stream_parallel_group_id = config.stream_parallel_group_id;
   graph_parallel_region_id = config.graph_parallel_region_id;
   graph_do_while_level_id = config.graph_do_while_level_id;

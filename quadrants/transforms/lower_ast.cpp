@@ -273,6 +273,7 @@ class LowerAST : public IRVisitor {
       new_for->graph_parallel_region_id = stmt->graph_parallel_region_id;
       new_for->checkpoint_id = stmt->checkpoint_id;
       new_for->graph_do_while_level_id = stmt->graph_do_while_level_id;
+      new_for->force_inline = stmt->force_inline;
       VecStatement new_statements;
       Stmt *loop_index = new_statements.push_back<LoopIndexStmt>(new_for.get(), 0);
       for (int i = (int)shape.size() - 1; i >= 0; i--) {
@@ -287,6 +288,8 @@ class LowerAST : public IRVisitor {
     } else if (stmt->mesh) {
       auto &&new_for = std::make_unique<MeshForStmt>(stmt->mesh, stmt->element_type, std::move(stmt->body),
                                                      stmt->is_bit_vectorized, stmt->num_cpu_threads, stmt->block_dim);
+      // MeshForStmt does not carry the force_inline hint, so a mesh-for body never gets AlwaysInline on
+      // AMDGPU. If a mesh-for ever needs to opt in, plumb force_inline through MeshForStmt/FrontendForStmt.
       new_for->graph_do_while_level_id = stmt->graph_do_while_level_id;
       new_for->body->insert(std::make_unique<LoopIndexStmt>(new_for.get(), 0), 0);
       new_for->body->local_var_to_stmt[stmt->loop_var_ids[0]] = new_for->body->statements[0].get();
@@ -311,6 +314,7 @@ class LowerAST : public IRVisitor {
         new_for->graph_parallel_region_id = stmt->graph_parallel_region_id;
         new_for->checkpoint_id = stmt->checkpoint_id;
         new_for->graph_do_while_level_id = stmt->graph_do_while_level_id;
+        new_for->force_inline = stmt->force_inline;
         new_for->body->insert(std::make_unique<LoopIndexStmt>(new_for.get(), 0), 0);
         new_for->body->local_var_to_stmt[stmt->loop_var_ids[0]] = new_for->body->statements[0].get();
         fctx.push_back(std::move(new_for));

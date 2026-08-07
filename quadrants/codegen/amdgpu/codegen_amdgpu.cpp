@@ -272,6 +272,21 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
       body = guard.body;
     }
 
+    // ``stmt->force_inline`` comes from ``qd.loop_config(force_inline=...)``:
+    //   +1 -> force-inline the loop body into the launcher trampoline (removes a
+    //         per-thread call boundary in hot loops whose small bodies the AMDGPU
+    //         cost model otherwise declines to inline).
+    //   -1 -> force the body to stay a separate (NoInline) call, e.g. for
+    //         register-pressure-sensitive bodies where inlining hurts occupancy.
+    //    0 (default) -> leave it to LLVM's inliner cost model.
+    if (body) {
+      if (stmt->force_inline > 0) {
+        tlctx->mark_inline(body);
+      } else if (stmt->force_inline < 0) {
+        body->addFnAttr(llvm::Attribute::NoInline);
+      }
+    }
+
     auto epilogue = create_xlogue(stmt->tls_epilogue);
 
     auto [begin, end] = get_range_for_bounds(stmt);
