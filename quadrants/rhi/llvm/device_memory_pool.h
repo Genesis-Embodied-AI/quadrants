@@ -45,8 +45,8 @@ class QD_DLL_EXPORT DeviceMemoryPool {
     std::size_t size = 0;
   };
 
-  // All the raw memory allocated from OS/Driver, keyed by the aligned pointer handed to callers.
-  // We need to keep track of them to guarantee that they are freed
+  // All the raw memory allocated from OS/Driver, keyed by the aligned pointer handed to callers. We need to keep
+  // track of them to guarantee that they are freed
   std::map<void *, RawMemoryChunk> raw_memory_chunks_;
 
   std::mutex mut_allocation_;

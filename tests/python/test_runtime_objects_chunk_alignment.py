@@ -30,8 +30,8 @@ def fragmented_heap_child(args: list[str]) -> None:
     device = ctypes.c_int()
     assert cuda.cuDeviceGet(ctypes.byref(device), 0) == 0
 
-    # Quadrants retains the primary context as well, so these allocations fragment the very heap that its
-    # runtime-objects chunk is later carved out of.
+    # Quadrants retains the primary context as well, so these allocations fragment the very heap its runtime-objects
+    # chunk is later carved out of.
     context = ctypes.c_void_p()
     assert cuda.cuDevicePrimaryCtxRetain(ctypes.byref(context), device) == 0
     assert cuda.cuCtxSetCurrent(context) == 0
@@ -71,7 +71,7 @@ def test_init_survives_fragmented_driver_heap():
     assert proc.returncode == RET_SUCCESS
 
 
-# The following lines are critical for the tests to work. If they are missing, the test will
-# incorrectly pass, without doing anything.
+# The following lines are critical for the tests to work. If they are missing, the test will incorrectly pass, without
+# doing anything.
 if __name__ == "__main__":
     globals()[sys.argv[1]](sys.argv[2:])
