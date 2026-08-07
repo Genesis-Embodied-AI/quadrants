@@ -37,8 +37,8 @@ class DriftingDriverPool : public DeviceMemoryPool {
     if (raw == nullptr) {
       return nullptr;
     }
-    char *base = reinterpret_cast<char *>(iroundup(reinterpret_cast<std::uintptr_t>(raw), DeviceMemoryPool::page_size)) +
-                 driver_offset_;
+    const std::uintptr_t page = iroundup(reinterpret_cast<std::uintptr_t>(raw), DeviceMemoryPool::page_size);
+    char *base = reinterpret_cast<char *>(page) + driver_offset_;
     malloc_bases_[base] = raw;
     return base;
   }
