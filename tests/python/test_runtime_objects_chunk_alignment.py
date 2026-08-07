@@ -14,8 +14,13 @@ RET_SUCCESS = 42
 # cuMemAlloc only guarantees an alignment suitable for any built-in type (256 bytes in practice), so a handful of
 # sub-page allocations walks the driver heap onto a sub-page-aligned base for the next allocation. This reproduces the
 # state a third-party CUDA library leaves behind when it initialises before quadrants in the same process.
-NUM_FRAGMENTING_ALLOCS = 8
+#
+# Their total must not be a whole number of pages: the driver appears to service these out of one page at a time, so
+# 4096 bytes' worth lands the next allocation back on a page boundary and the bug is not exercised at all. 3 * 512
+# leaves the heap 1536 bytes into a page, which is what the original report used.
+NUM_FRAGMENTING_ALLOCS = 3
 FRAGMENTING_ALLOC_BYTES = 512
+assert (NUM_FRAGMENTING_ALLOCS * FRAGMENTING_ALLOC_BYTES) % 4096 != 0
 
 
 def fragmented_heap_child(args: list[str]) -> None:
