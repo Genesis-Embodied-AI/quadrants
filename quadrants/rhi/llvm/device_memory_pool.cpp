@@ -1,6 +1,9 @@
 #include "quadrants/rhi/llvm/device_memory_pool.h"
 
+#include <cstdint>
 #include <memory>
+
+#include "quadrants/math/arithmetic.h"
 
 #ifdef QD_WITH_AMDGPU
 #include "quadrants/rhi/amdgpu/amdgpu_driver.h"
@@ -33,7 +36,7 @@ void *DeviceMemoryPool::allocate_with_cache(LlvmDevice *device, const LlvmDevice
 void *DeviceMemoryPool::allocate(std::size_t size, std::size_t alignment, bool managed) {
   std::lock_guard<std::mutex> _(mut_allocation_);
 
-  return allocate_raw_memory(size, managed);
+  return allocate_raw_memory(size, alignment, managed);
 }
 
 void DeviceMemoryPool::release(std::size_t size, void *ptr, bool release_raw) {
@@ -46,7 +49,7 @@ void DeviceMemoryPool::release(std::size_t size, void *ptr, bool release_raw) {
   }
 }
 
-void *DeviceMemoryPool::allocate_raw_memory(std::size_t size, bool managed) {
+void *DeviceMemoryPool::allocate_raw_memory(std::size_t size, std::size_t alignment, bool managed) {
   /*
     Be aware that this methods is not protected by the mutex.
 
@@ -56,14 +59,22 @@ void *DeviceMemoryPool::allocate_raw_memory(std::size_t size, bool managed) {
     The caller ensures that no other thread is accessing the memory pool
     when calling this method.
   */
+  QD_ASSERT(alignment > 0);
+
+  // cuMemAlloc/hipMalloc only promise an alignment suitable for any built-in type (256 bytes in practice), and on a
+  // driver heap fragmented by sub-page allocations they do return sub-page-aligned bases. Callers depend on the
+  // alignment they ask for: materialize_runtime sizes the runtime-objects chunk as an exact sum of page-rounded
+  // blocks, while the device-side bump allocator in runtime_initialize charges alignment padding against that same
+  // budget, so a misaligned base overruns the chunk. Over-allocate and align up instead of trusting the driver.
+  const std::size_t raw_size = size + alignment - 1;
   void *ptr = nullptr;
 
   if (arch_ == Arch::cuda) {
 #if QD_WITH_CUDA
     if (!managed) {
-      CUDADriver::get_instance().malloc(&ptr, size);
+      CUDADriver::get_instance().malloc(&ptr, raw_size);
     } else {
-      CUDADriver::get_instance().malloc_managed(&ptr, size, CU_MEM_ATTACH_GLOBAL);
+      CUDADriver::get_instance().malloc_managed(&ptr, raw_size, CU_MEM_ATTACH_GLOBAL);
     }
 #else
     QD_NOT_IMPLEMENTED;
@@ -71,9 +82,9 @@ void *DeviceMemoryPool::allocate_raw_memory(std::size_t size, bool managed) {
   } else if (arch_ == Arch::amdgpu) {
 #if QD_WITH_AMDGPU
     if (!managed) {
-      AMDGPUDriver::get_instance().malloc(&ptr, size);
+      AMDGPUDriver::get_instance().malloc(&ptr, raw_size);
     } else {
-      AMDGPUDriver::get_instance().malloc_managed(&ptr, size, HIP_MEM_ATTACH_GLOBAL);
+      AMDGPUDriver::get_instance().malloc_managed(&ptr, raw_size, HIP_MEM_ATTACH_GLOBAL);
     }
 #else
     QD_NOT_IMPLEMENTED;
@@ -83,15 +94,16 @@ void *DeviceMemoryPool::allocate_raw_memory(std::size_t size, bool managed) {
   }
 
   if (ptr == nullptr) {
-    QD_ERROR("Device memory allocation ({} B) failed.", size);
+    QD_ERROR("Device memory allocation ({} B) failed.", raw_size);
   }
 
-  if (raw_memory_chunks_.count(ptr)) {
-    QD_ERROR("Memory address ({:}) is already allocated", ptr);
+  void *aligned_ptr = reinterpret_cast<void *>(quadrants::iroundup(reinterpret_cast<std::uintptr_t>(ptr), alignment));
+  if (raw_memory_chunks_.count(aligned_ptr)) {
+    QD_ERROR("Memory address ({:}) is already allocated", aligned_ptr);
   }
 
-  raw_memory_chunks_[ptr] = size;
-  return ptr;
+  raw_memory_chunks_[aligned_ptr] = RawMemoryChunk{ptr, raw_size};
+  return aligned_ptr;
 }
 
 void DeviceMemoryPool::deallocate_raw_memory(void *ptr) {
@@ -104,21 +116,24 @@ void DeviceMemoryPool::deallocate_raw_memory(void *ptr) {
     The caller ensures that no other thread is accessing the memory pool
     when calling this method.
   */
-  if (!raw_memory_chunks_.count(ptr)) {
+  auto chunk = raw_memory_chunks_.find(ptr);
+  if (chunk == raw_memory_chunks_.end()) {
     QD_ERROR("Memory address ({:}) is not allocated", ptr);
   }
 
+  // Only the driver's own base is valid to free; `ptr` may sit inside the block to satisfy the requested alignment.
+  void *base = chunk->second.base;
   if (arch_ == Arch::cuda) {
 #if QD_WITH_CUDA
-    CUDADriver::get_instance().mem_free(ptr);
-    raw_memory_chunks_.erase(ptr);
+    CUDADriver::get_instance().mem_free(base);
+    raw_memory_chunks_.erase(chunk);
 #else
     QD_NOT_IMPLEMENTED;
 #endif
   } else if (arch_ == Arch::amdgpu) {
 #if QD_WITH_AMDGPU
-    AMDGPUDriver::get_instance().mem_free(ptr);
-    raw_memory_chunks_.erase(ptr);
+    AMDGPUDriver::get_instance().mem_free(base);
+    raw_memory_chunks_.erase(chunk);
 #else
     QD_NOT_IMPLEMENTED;
 #endif

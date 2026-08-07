@@ -28,12 +28,20 @@ class QD_DLL_EXPORT DeviceMemoryPool {
   ~DeviceMemoryPool();
 
  protected:
-  void *allocate_raw_memory(std::size_t size, bool managed = false);
+  void *allocate_raw_memory(std::size_t size, std::size_t alignment, bool managed = false);
   void deallocate_raw_memory(void *ptr);
 
-  // All the raw memory allocated from OS/Driver
+  // The driver only guarantees an alignment suitable for any built-in type, so satisfying a larger requested
+  // alignment means handing out a pointer inside the driver's block rather than its base. `base` is the only address
+  // the driver will accept back, so it has to be kept alongside.
+  struct RawMemoryChunk {
+    void *base = nullptr;
+    std::size_t size = 0;
+  };
+
+  // All the raw memory allocated from OS/Driver, keyed by the aligned pointer handed to callers.
   // We need to keep track of them to guarantee that they are freed
-  std::map<void *, std::size_t> raw_memory_chunks_;
+  std::map<void *, RawMemoryChunk> raw_memory_chunks_;
 
   std::mutex mut_allocation_;
   bool merge_upon_release_ = true;
