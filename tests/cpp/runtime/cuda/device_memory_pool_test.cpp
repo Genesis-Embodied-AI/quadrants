@@ -48,8 +48,8 @@ TEST(DeviceMemoryPool, AllocateHonorsRequestedAlignment) {
       void *ptr = pool.allocate(kChunkBytes, alignment);
       ASSERT_NE(ptr, nullptr);
       EXPECT_TRUE(is_aligned(ptr, alignment))
-          << "allocation " << i << " returned " << ptr << ", which is not aligned to " << alignment
-          << " bytes (offset " << reinterpret_cast<std::uintptr_t>(ptr) % alignment << ")";
+          << "allocation " << i << " returned " << ptr << ", which is not aligned to " << alignment << " bytes (offset "
+          << reinterpret_cast<std::uintptr_t>(ptr) % alignment << ")";
     }
   }
 
