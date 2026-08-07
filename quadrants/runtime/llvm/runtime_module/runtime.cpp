@@ -759,12 +759,21 @@ Ptr LLVMRuntime::allocate_from_reserved_memory(PreallocatedMemoryChunk &memory_c
     // Here unfortunately we have to rely on a native CUDA assert failure to
     // halt the whole grid. Using a quadrants_assert_runtime will not finish the
     // whole kernel execution immediately.
-    __assertfail(
-        "Out of CUDA pre-allocated memory.\n"
-        "Consider using qd.init(device_memory_fraction=0.9) or "
-        "qd.init(device_memory_GB=4) to allocate more"
-        " GPU memory",
-        "Quadrants JIT", 0, "allocate_from_reserved_memory", 1);
+    if (memory_chunk.sized_by_device_memory_config) {
+      __assertfail(
+          "Out of CUDA pre-allocated memory.\n"
+          "Consider using qd.init(device_memory_fraction=0.9) or "
+          "qd.init(device_memory_GB=4) to allocate more"
+          " GPU memory",
+          "Quadrants JIT", 0, "allocate_from_reserved_memory", 1);
+    } else {
+      __assertfail(
+          "Out of CUDA pre-allocated memory for runtime objects.\n"
+          "This chunk is sized from the runtime's own requirements: "
+          "qd.init(device_memory_fraction=...) and qd.init(device_memory_GB=...) "
+          "size a different chunk and will not help",
+          "Quadrants JIT", 0, "allocate_from_reserved_memory", 1);
+    }
 #endif
   }
   quadrants_assert_runtime(this, success, "Out of pre-allocated memory");
@@ -882,6 +891,7 @@ void runtime_initialize_memory(LLVMRuntime *runtime, std::size_t preallocated_si
     runtime->runtime_memory_chunk.preallocated_size = preallocated_size;
     runtime->runtime_memory_chunk.preallocated_head = preallocated_buffer;
     runtime->runtime_memory_chunk.preallocated_tail = preallocated_buffer + preallocated_size;
+    runtime->runtime_memory_chunk.sized_by_device_memory_config = true;
   }
 }
 
