@@ -75,9 +75,9 @@ TEST(DeviceMemoryPool, AllocateHonorsRequestedAlignmentWhenDriverDoesNot) {
       void *ptr = pool.allocate(kChunkBytes, alignment);
       ASSERT_NE(ptr, nullptr);
       EXPECT_TRUE(is_aligned(ptr, alignment))
-          << "driver base offset " << driver_offset << " leaked into the pointer handed out: " << ptr
-          << " is off by " << reinterpret_cast<std::uintptr_t>(ptr) % alignment << " bytes of the requested "
-          << alignment << "-byte alignment";
+          << "driver base offset " << driver_offset << " leaked into the pointer handed out: " << ptr << " is off by "
+          << reinterpret_cast<std::uintptr_t>(ptr) % alignment << " bytes of the requested " << alignment
+          << "-byte alignment";
     }
   }
 }
