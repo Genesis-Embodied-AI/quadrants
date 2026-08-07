@@ -25,9 +25,15 @@ class QD_DLL_EXPORT DeviceMemoryPool {
   void release(std::size_t size, void *ptr, bool release_raw = false);
   void reset();
   explicit DeviceMemoryPool(Arch arch, bool merge_upon_release);
-  ~DeviceMemoryPool();
+  virtual ~DeviceMemoryPool();
 
  protected:
+  // The raw driver allocation, isolated behind a virtual so tests can substitute a base with a chosen misalignment.
+  // Whatever these return is only as aligned as the driver guarantees; honouring the caller's requested alignment is
+  // allocate_raw_memory's job.
+  virtual void *allocate_driver_memory(std::size_t size, bool managed);
+  virtual void deallocate_driver_memory(void *ptr);
+
   void *allocate_raw_memory(std::size_t size, std::size_t alignment, bool managed = false);
   void deallocate_raw_memory(void *ptr);
 

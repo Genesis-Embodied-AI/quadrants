@@ -49,6 +49,54 @@ void DeviceMemoryPool::release(std::size_t size, void *ptr, bool release_raw) {
   }
 }
 
+void *DeviceMemoryPool::allocate_driver_memory(std::size_t size, bool managed) {
+  void *ptr = nullptr;
+
+  if (arch_ == Arch::cuda) {
+#if QD_WITH_CUDA
+    if (!managed) {
+      CUDADriver::get_instance().malloc(&ptr, size);
+    } else {
+      CUDADriver::get_instance().malloc_managed(&ptr, size, CU_MEM_ATTACH_GLOBAL);
+    }
+#else
+    QD_NOT_IMPLEMENTED;
+#endif
+  } else if (arch_ == Arch::amdgpu) {
+#if QD_WITH_AMDGPU
+    if (!managed) {
+      AMDGPUDriver::get_instance().malloc(&ptr, size);
+    } else {
+      AMDGPUDriver::get_instance().malloc_managed(&ptr, size, HIP_MEM_ATTACH_GLOBAL);
+    }
+#else
+    QD_NOT_IMPLEMENTED;
+#endif
+  } else {
+    QD_NOT_IMPLEMENTED;
+  }
+
+  return ptr;
+}
+
+void DeviceMemoryPool::deallocate_driver_memory(void *ptr) {
+  if (arch_ == Arch::cuda) {
+#if QD_WITH_CUDA
+    CUDADriver::get_instance().mem_free(ptr);
+#else
+    QD_NOT_IMPLEMENTED;
+#endif
+  } else if (arch_ == Arch::amdgpu) {
+#if QD_WITH_AMDGPU
+    AMDGPUDriver::get_instance().mem_free(ptr);
+#else
+    QD_NOT_IMPLEMENTED;
+#endif
+  } else {
+    QD_NOT_IMPLEMENTED;
+  }
+}
+
 void *DeviceMemoryPool::allocate_raw_memory(std::size_t size, std::size_t alignment, bool managed) {
   /*
     Be aware that this methods is not protected by the mutex.
@@ -67,31 +115,7 @@ void *DeviceMemoryPool::allocate_raw_memory(std::size_t size, std::size_t alignm
   // blocks, while the device-side bump allocator in runtime_initialize charges alignment padding against that same
   // budget, so a misaligned base overruns the chunk. Over-allocate and align up instead of trusting the driver.
   const std::size_t raw_size = size + alignment - 1;
-  void *ptr = nullptr;
-
-  if (arch_ == Arch::cuda) {
-#if QD_WITH_CUDA
-    if (!managed) {
-      CUDADriver::get_instance().malloc(&ptr, raw_size);
-    } else {
-      CUDADriver::get_instance().malloc_managed(&ptr, raw_size, CU_MEM_ATTACH_GLOBAL);
-    }
-#else
-    QD_NOT_IMPLEMENTED;
-#endif
-  } else if (arch_ == Arch::amdgpu) {
-#if QD_WITH_AMDGPU
-    if (!managed) {
-      AMDGPUDriver::get_instance().malloc(&ptr, raw_size);
-    } else {
-      AMDGPUDriver::get_instance().malloc_managed(&ptr, raw_size, HIP_MEM_ATTACH_GLOBAL);
-    }
-#else
-    QD_NOT_IMPLEMENTED;
-#endif
-  } else {
-    QD_NOT_IMPLEMENTED;
-  }
+  void *ptr = allocate_driver_memory(raw_size, managed);
 
   if (ptr == nullptr) {
     QD_ERROR("Device memory allocation ({} B) failed.", raw_size);
@@ -122,24 +146,8 @@ void DeviceMemoryPool::deallocate_raw_memory(void *ptr) {
   }
 
   // Only the driver's own base is valid to free; `ptr` may sit inside the block to satisfy the requested alignment.
-  void *base = chunk->second.base;
-  if (arch_ == Arch::cuda) {
-#if QD_WITH_CUDA
-    CUDADriver::get_instance().mem_free(base);
-    raw_memory_chunks_.erase(chunk);
-#else
-    QD_NOT_IMPLEMENTED;
-#endif
-  } else if (arch_ == Arch::amdgpu) {
-#if QD_WITH_AMDGPU
-    AMDGPUDriver::get_instance().mem_free(base);
-    raw_memory_chunks_.erase(chunk);
-#else
-    QD_NOT_IMPLEMENTED;
-#endif
-  } else {
-    QD_NOT_IMPLEMENTED;
-  }
+  deallocate_driver_memory(chunk->second.base);
+  raw_memory_chunks_.erase(chunk);
 }
 
 void DeviceMemoryPool::reset() {
