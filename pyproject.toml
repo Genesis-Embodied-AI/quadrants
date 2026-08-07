@@ -53,7 +53,7 @@ dev = [
     "Pillow",
     # C++ <-> Python bindings (replaced pybind11); ships its own stubgen. 2.14.0 requires __index__ for implicit
     # conversion to int arguments, which numpy.bool no longer provides, so `field[i] = np_bool` stops working.
-    # FIXME: lift the upper bound once lang/field.py coerces numpy scalars before handing them to write_uint.
+    # FIXME: coerce numpy scalars to int in lang/field.py before handing them to write_uint, then drop this bound.
     "nanobind>=2.0.0,<2.14.0",
     "pydantic",
     "GitPython",
@@ -107,7 +107,7 @@ Homepage = "https://github.com/Genesis-Embodied-AI/quadrants"
 requires = [
     "scikit-build-core>=0.10",
     # nanobind bindings (headers + CMake config + nanobind_add_stub).
-    # FIXME: upper bound, see the dev extra above; lift both together.
+    # FIXME: drop this bound together with the one in the dev extra above.
     "nanobind>=2.0.0,<2.14.0",
     "numpy>=2.0.0",        # NumPy headers for the extension
     "setuptools_scm>=6.0", # version from git tags (metadata provider below)
