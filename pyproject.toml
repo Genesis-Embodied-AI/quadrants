@@ -106,7 +106,6 @@ Homepage = "https://github.com/Genesis-Embodied-AI/quadrants"
 [build-system]
 requires = [
     "scikit-build-core>=0.10",
-    # nanobind bindings (headers + CMake config + nanobind_add_stub).
     # FIXME: drop this bound together with the one in the dev extra above.
     "nanobind>=2.0.0,<2.14.0",
     "numpy>=2.0.0",        # NumPy headers for the extension
