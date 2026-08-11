@@ -101,10 +101,6 @@ struct PreallocatedMemoryChunk {
   Ptr preallocated_head = nullptr;
   Ptr preallocated_tail = nullptr;
   std::size_t preallocated_size = 0;
-  // Only the runtime-memory chunk is sized by qd.init(device_memory_fraction=...) / qd.init(device_memory_GB=...).
-  // The runtime-objects chunk is sized from the runtime's own fixed requirements, so recommending those options when
-  // it overflows sends users after a knob that cannot affect the failure.
-  bool sized_by_device_memory_config = false;
 };
 
 struct LLVMRuntime {
