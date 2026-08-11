@@ -1236,17 +1236,27 @@ void GfxRuntime::submit_current_cmdlist_if_timeout() {
 
 void GfxRuntime::init_nonroot_buffers() {
   {
-    auto [buf, res] = device_->allocate_memory_unique({kGtmpBufferSize,
-                                                       /*host_write=*/false, /*host_read=*/false,
-                                                       /*export_sharing=*/false, AllocUsage::Storage});
+    Device::AllocParams params{kGtmpBufferSize,
+                               /*host_write=*/false, /*host_read=*/false,
+                               /*export_sharing=*/false, AllocUsage::Storage};
+#ifdef __APPLE__
+    // MoltenVK hang: VMA-backed 1MB+32MB DEVICE_LOCAL STORAGE+BDA churn under per-cycle device recreate; plain
+    // vkAllocateMemory of the same sizes does not hang (standalone repro).
+    params.bypass_pooled_allocator = true;
+#endif
+    auto [buf, res] = device_->allocate_memory_unique(params);
     QD_ASSERT_INFO(res == RhiResult::success, "gtmp allocation failed");
     global_tmps_buffer_ = std::move(buf);
   }
 
   {
-    auto [buf, res] = device_->allocate_memory_unique({kListGenBufferSize,
-                                                       /*host_write=*/false, /*host_read=*/false,
-                                                       /*export_sharing=*/false, AllocUsage::Storage});
+    Device::AllocParams params{kListGenBufferSize,
+                               /*host_write=*/false, /*host_read=*/false,
+                               /*export_sharing=*/false, AllocUsage::Storage};
+#ifdef __APPLE__
+    params.bypass_pooled_allocator = true;
+#endif
+    auto [buf, res] = device_->allocate_memory_unique(params);
     QD_ASSERT_INFO(res == RhiResult::success, "listgen allocation failed");
     listgen_buffer_ = std::move(buf);
   }
