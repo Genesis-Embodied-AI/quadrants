@@ -2,7 +2,9 @@
 
 #include "quadrants/common/core.h"
 #include "quadrants/common/serialization.h"
+#include "quadrants/ir/analysis.h"
 #include "quadrants/ir/snode.h"
+#include "quadrants/ir/statements.h"
 #include "quadrants/ir/transforms.h"
 #include "quadrants/program/compile_config.h"
 #include "quadrants/program/kernel.h"
@@ -10,6 +12,7 @@
 
 #include "picosha2.h"
 
+#include <map>
 #include <vector>
 
 namespace quadrants::lang {
@@ -196,6 +199,108 @@ std::string get_hashed_offline_cache_key(const CompileConfig &config,
 
   auto res = picosha2::get_hash_hex_string(hasher);
   res.insert(res.begin(), 'T');  // The key must start with a letter
+  return res;
+}
+
+namespace {
+
+// SEAM (prototype v0): serialize one offloaded task's body by hashing its CHI-IR *text*. The IR printer already
+// renders every statement's opcode, operands (by SSA name), result type, immediate fields, and the offload header,
+// so this covers the "task IR + launch metadata" soundness items with no per-type code to write. Determinism holds
+// because `re_id` has just renumbered the task (SSA names are order-derived), `print_ir_dbg_info=false` suppresses
+// tracebacks, and `print_kernel_wrapper=false` drops the kernel-name wrapper so the result is per-*task*.
+//
+// This is the single function to replace with a deterministic binary per-type serializer (analogous to the frontend
+// ASTSerializer) for production. Known v0 caveat: `FrontendExternalFuncStmt`/external-func printing emits `so_func`
+// as a raw pointer -- non-deterministic; the production serializer must key so/asm/bc contents instead.
+std::string serialize_task_body(OffloadedStmt *task) {
+  std::string s;
+  irpass::print(task, &s, /*print_ir_dbg_info=*/false, /*print_kernel_wrapper=*/false);
+  return s;
+}
+
+// Collect the SNode tree roots this task touches, for the layout signature. Over-approximating (extra trees) only
+// costs dedup precision, never soundness, so the covered statement set can stay conservative. Deterministic order:
+// keyed by snode-tree id.
+std::vector<const SNode *> gather_task_snode_roots(OffloadedStmt *task) {
+  std::map<int, const SNode *> roots;  // tree_id -> root (sorted, dedup)
+  auto add = [&roots](const SNode *sn) {
+    if (sn == nullptr) {
+      return;
+    }
+    const SNode *root = sn->get_root();
+    roots[root->get_snode_tree_id()] = root;
+  };
+  irpass::analysis::gather_statements(task, [&add](Stmt *stmt) {
+    if (auto *s = stmt->cast<GlobalPtrStmt>()) {
+      add(s->snode);
+    } else if (auto *s = stmt->cast<SNodeOpStmt>()) {
+      add(s->snode);
+    } else if (auto *s = stmt->cast<SNodeLookupStmt>()) {
+      add(s->snode);
+    } else if (auto *s = stmt->cast<GetChStmt>()) {
+      add(s->input_snode);
+      add(s->output_snode);
+    }
+    return false;
+  });
+  // `listgen` and `gc` carry their target on the offload header and have all but empty bodies, so the printed IR
+  // distinguishes them only by the SNode's auto-generated *name* -- and those names are a function of the tree's
+  // shape, not its extents or axes. Two different layouts that happen to nest the same node types (say
+  // root->pointer->dense over `i` vs over `ij`) therefore print identically and, without this, hash identically,
+  // while their compiled struct-access arithmetic differs. Fold the header SNode for every task type that has one;
+  // over-approximating costs only dedup precision.
+  add(task->snode);
+  std::vector<const SNode *> out;
+  out.reserve(roots.size());
+  for (const auto &[tree_id, root] : roots) {
+    out.push_back(root);
+  }
+  return out;
+}
+
+}  // namespace
+
+std::string get_hashed_per_task_cache_key(const CompileConfig &config,
+                                          const DeviceCapabilityConfig &caps,
+                                          OffloadedStmt *task,
+                                          const Kernel *kernel) {
+  QD_ASSERT(task);
+  QD_ASSERT(kernel);
+  auto compile_config_key = get_offline_cache_key_of_compile_config(config);
+  auto device_caps_key = get_offline_cache_key_of_device_caps(caps);
+  // The compiled task reads its arguments and writes its returns through the kernel's context struct, whose layout is
+  // fixed by the kernel's parameter/return ABI (arg count, dtypes, ndarray element shapes, ret struct), NOT by the
+  // task body. Two byte-identical task bodies in kernels with different ABIs -- e.g. the fill loop over a
+  // `Vector.ndarray` vs a `Matrix.ndarray` -- must not share a compiled module, or the reuse reads/writes the wrong
+  // context offsets.
+  auto kernel_params_key = get_offline_cache_key_of_parameter_list(kernel->parameter_list);
+  auto kernel_rets_key = get_offline_cache_key_of_rets(kernel->rets);
+  std::string task_body_string = serialize_task_body(task);
+  std::string autodiff_mode_string = std::to_string(static_cast<std::size_t>(kernel->autodiff_mode));
+
+  picosha2::hash256_one_by_one hasher;
+  hasher.process(compile_config_key.begin(), compile_config_key.end());
+  hasher.process(device_caps_key.begin(), device_caps_key.end());
+  hasher.process(kernel_params_key.begin(), kernel_params_key.end());
+  hasher.process(kernel_rets_key.begin(), kernel_rets_key.end());
+  // Layout signature of every SNode tree the task touches: struct-access code is inlined per task, so the tree
+  // *layout* (not just its name, which is all the printed IR carries) is part of the compiled code. Also fold in the
+  // tree id: the compiled module references that tree's struct-access functions by id, so a cached module is only
+  // reusable for the same tree instance -- two identical-layout trees with different ids must not alias (the
+  // in-memory cache is program-scoped, so tree ids are stable within it).
+  for (const SNode *root : gather_task_snode_roots(task)) {
+    std::string snode_key = get_hashed_offline_cache_key_of_snode(root);
+    hasher.process(snode_key.begin(), snode_key.end());
+    std::string tree_id_key = std::to_string(root->get_snode_tree_id());
+    hasher.process(tree_id_key.begin(), tree_id_key.end());
+  }
+  hasher.process(task_body_string.begin(), task_body_string.end());
+  hasher.process(autodiff_mode_string.begin(), autodiff_mode_string.end());
+  hasher.finish();
+
+  auto res = picosha2::get_hash_hex_string(hasher);
+  res.insert(res.begin(), 'K');  // task-key prefix; must start with a letter, and distinct from the 'T' kernel key
   return res;
 }
 

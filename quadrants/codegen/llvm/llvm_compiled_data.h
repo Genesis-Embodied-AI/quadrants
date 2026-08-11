@@ -5,6 +5,7 @@
 #include <unordered_set>
 
 #include "llvm/IR/Module.h"
+#include "quadrants/codegen/compiled_kernel_data.h"
 #include "quadrants/common/serialization.h"
 #include "quadrants/ir/adstack_size_expr.h"
 #include "quadrants/transforms/static_adstack_analysis.h"
@@ -204,6 +205,9 @@ struct LLVMCompiledTask {
 struct LLVMCompiledKernel {
   std::vector<OffloadedTask> tasks;
   std::unique_ptr<llvm::Module> module{nullptr};
+  // Per-task compile-cache stats for the compile that produced this kernel (transient, not serialized). Set by the
+  // codegen driver; surfaced host-side via `LLVM::CompiledKernelData::get_per_task_cache_stats`.
+  PerTaskCacheStats per_task_cache_stats;
   LLVMCompiledKernel() = default;
   LLVMCompiledKernel(LLVMCompiledKernel &&) = default;
   LLVMCompiledKernel &operator=(LLVMCompiledKernel &&) = default;
