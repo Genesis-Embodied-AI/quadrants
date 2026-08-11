@@ -402,6 +402,24 @@ class ASTTransformerFuncContext:
             raise QuadrantsNameError(f'Name "{name}" is not defined')
 
     def get_pos_info(self, node: ast.AST) -> str:
+        # Runs for every stmt/expr node of every transform (see ASTTransformerBase.__call__), and the TextWrapper
+        # formatting below dominates the Python side of a kernel build. The same function is transformed once per
+        # inlined call site -- tens of times over -- and each transform re-formats the identical positions, so
+        # memoise on the function rather than on this context, which exists for a single transform.
+        #
+        # The cache lives on the FuncBase because that is what fixes everything the result depends on beyond the
+        # node: `file`, `src`, `indent`, `lineno_offset` and the function name all derive from it and are identical
+        # across its transforms. Scoping it there also keeps it bounded by the function's lifetime and correct
+        # across a module reload, which hands out new FuncBase objects and so a new cache.
+        key = (node.lineno, node.col_offset, node.end_lineno, node.end_col_offset, node.__class__.__name__)
+        cached = self.func.pos_info_cache.get(key)
+        if cached is not None:
+            return cached
+        msg = self._build_pos_info(node)
+        self.func.pos_info_cache[key] = msg
+        return msg
+
+    def _build_pos_info(self, node: ast.AST) -> str:
         msg = f'File "{self.file}", line {node.lineno + self.lineno_offset}, in {self.func.func.__name__}:\n'
         col_offset = self.indent + node.col_offset
         end_col_offset = self.indent + node.end_col_offset
