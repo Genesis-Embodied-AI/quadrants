@@ -1,6 +1,7 @@
 #include "quadrants/codegen/llvm/codegen_llvm.h"
 
 #include <algorithm>
+#include <cstdlib>
 
 #ifdef QD_WITH_LLVM
 #include "llvm/Bitcode/BitcodeReader.h"
@@ -1364,7 +1365,11 @@ llvm::Value *TaskCodeGenLLVM::atomic_op_using_cas(llvm::Value *dest,
 
   {
     int bits = data_type_bits(type);
-    llvm::PointerType *typeIntPtr = llvm::PointerType::getUnqual(*llvm_context);
+    // Preserve dest's address space; with AMDGPU address-space-at-source
+    // tagging, dests can arrive in addrspace(1) and a cross-addrspace bitcast
+    // to generic is invalid IR. addrspace is 0 for CPU/CUDA, so no-op there.
+    unsigned dest_as = dest->getType()->isPointerTy() ? dest->getType()->getPointerAddressSpace() : 0;
+    llvm::PointerType *typeIntPtr = llvm::PointerType::get(*llvm_context, dest_as);
     llvm::IntegerType *typeIntTy = get_integer_type(bits);
 
     old_val = builder->CreateLoad(val->getType(), dest);
@@ -1750,7 +1755,12 @@ void TaskCodeGenLLVM::visit(ExternalPtrStmt *stmt) {
       tlctx->get_data_type(TypeFactory::get_instance().get_ndarray_struct_type(arg_type, stmt->ndim, needs_grad));
   auto *gep = builder->CreateGEP(struct_type, llvm_val.at(stmt->base_ptr),
                                  {tlctx->get_constant(0), tlctx->get_constant(int(stmt->is_grad) + 1)});
-  auto *ptr_val = builder->CreateLoad(tlctx->get_data_type(ptr_type), gep);
+  llvm::Value *ptr_val = builder->CreateLoad(tlctx->get_data_type(ptr_type), gep);
+  // field -> data level: tag the loaded ndarray data pointer. Downstream
+  // element bitcasts follow ptr_val's address space (ptr_val_as) so CPU/CUDA
+  // stay in addrspace(0) while AMDGPU stays in addrspace(1).
+  ptr_val = maybe_tag_amdgpu_global_ptr(ptr_val);
+  unsigned ptr_val_as = ptr_val->getType()->getPointerAddressSpace();
 
   int num_indices = stmt->indices.size();
   std::vector<llvm::Value *> sizes(num_indices);
@@ -1824,11 +1834,11 @@ void TaskCodeGenLLVM::visit(ExternalPtrStmt *stmt) {
     }
 
     auto ret_ptr = builder->CreateGEP(tlctx->get_data_type(arg_type), ptr_val, address_offset);
-    llvm_val[stmt] = builder->CreateBitCast(ret_ptr, llvm::PointerType::get(tlctx->get_data_type(dt), 0));
+    llvm_val[stmt] = builder->CreateBitCast(ret_ptr, llvm::PointerType::get(tlctx->get_data_type(dt), ptr_val_as));
 
   } else {
     auto base_ty = tlctx->get_data_type(dt);
-    auto base = builder->CreateBitCast(ptr_val, llvm::PointerType::get(base_ty, 0));
+    auto base = builder->CreateBitCast(ptr_val, llvm::PointerType::get(base_ty, ptr_val_as));
 
     llvm_val[stmt] = builder->CreateGEP(base_ty, base, linear_index);
   }
@@ -3420,6 +3430,18 @@ void TaskCodeGenLLVM::set_struct_to_buffer(const StructType *struct_type,
   set_struct_to_buffer(buffer, buffer_type, elements, struct_type, current_element, current_index);
 }
 
+llvm::Value *TaskCodeGenLLVM::maybe_tag_amdgpu_global_ptr(llvm::Value *ptr) {
+  // Single choke point for AMDGPU address-space-at-source tagging. Off unless
+  // QD_AMDGPU_GLOBAL_AS is set; a no-op on CPU/CUDA and on values that are not
+  // non-addrspace(1) pointers, so those backends emit byte-identical IR.
+  static const bool gate = std::getenv("QD_AMDGPU_GLOBAL_AS") != nullptr;
+  if (!gate || current_arch() != Arch::amdgpu || ptr == nullptr || !ptr->getType()->isPointerTy() ||
+      ptr->getType()->getPointerAddressSpace() == 1) {
+    return ptr;
+  }
+  return builder->CreateAddrSpaceCast(ptr, llvm::PointerType::get(*llvm_context, 1));
+}
+
 llvm::Value *TaskCodeGenLLVM::get_struct_arg(const std::vector<int> &index, bool create_load) {
   auto *args_ptr = get_args_ptr(current_callable, get_context());
   auto *args_type = current_callable->args_type;
@@ -3434,7 +3456,8 @@ llvm::Value *TaskCodeGenLLVM::get_struct_arg(const std::vector<int> &index, bool
   if (!create_load) {
     return gep;
   }
-  return builder->CreateLoad(tlctx->get_data_type(arg_type), gep);
+  // args -> field level: tag the loaded ndarray struct base pointer.
+  return maybe_tag_amdgpu_global_ptr(builder->CreateLoad(tlctx->get_data_type(arg_type), gep));
 }
 
 llvm::Value *TaskCodeGenLLVM::get_args_ptr(const Callable *callable, llvm::Value *context) {
@@ -3447,7 +3470,8 @@ llvm::Value *TaskCodeGenLLVM::get_args_ptr(const Callable *callable, llvm::Value
   args_ptr = builder->CreatePointerCast(args_ptr, llvm::PointerType::get(llvm::PointerType::get(args_type, 0), 0));
   // loading the address of the arg buffer (args_type *)
   args_ptr = builder->CreateLoad(llvm::PointerType::get(args_type, 0), args_ptr);
-  return args_ptr;
+  // context -> args record level: tag the loaded args-buffer pointer.
+  return maybe_tag_amdgpu_global_ptr(args_ptr);
 }
 void TaskCodeGenLLVM::set_args_ptr(Callable *callable, llvm::Value *context, llvm::Value *ptr) {
   auto *runtime_context_type = get_runtime_type("RuntimeContext");
