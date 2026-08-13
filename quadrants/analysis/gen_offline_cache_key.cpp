@@ -382,6 +382,7 @@ class ASTSerializer : public IRVisitor, public ExpressionVisitor {
     emit(stmt->strictly_serialized);
     emit(stmt->mem_access_opt);
     emit(stmt->block_dim);
+    emit(stmt->force_inline);
     // This for-loop's graph-region tags (see emit_graph_region_key): graph_do_while / graph_parallel_context emit no
     // loop IR of their own, so these loose ints are the only record in the key of which loop level / stream_parallel
     // group / region / checkpoint the loop belongs to. Wrap them in a temporary tag so they route through the same

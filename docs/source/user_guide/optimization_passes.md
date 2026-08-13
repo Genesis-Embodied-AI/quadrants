@@ -79,6 +79,28 @@ All of these are fields of `CompileConfig`, so you set them at `qd.init(...)` (o
 
 For everyday use, leave them at their defaults - they are the best-supported and most reliable configuration. The most common deliberate change is `cfg_optimization=False` when iterating on a kernel whose compile time is in your way.
 
+## Forcing (or preventing) inlining of a parallel range-for body (`qd.amdgpu` only)
+
+On the `qd.amdgpu` backend, the body of a parallel range-for is generated as its own function that the per-thread launcher calls, and LLVM's inliner then decides whether to inline that call into the launcher. Its cost model does not always make the choice you want: a small, hot body carries a different `amdgpu-flat-work-group-size` than the kernel, which skews the estimate and can leave a per-thread call boundary in place; conversely a large body can be inlined in a way that raises register pressure and hurts occupancy.
+
+`qd.loop_config(force_inline=...)` is a per-loop hint that overrides that decision for the **next** parallel range-for:
+
+| Value | Effect |
+|-------|--------|
+| `True` | Force the body to be inlined into the launcher (removes the per-thread call boundary; good for small, call-heavy bodies). |
+| `False` | Force the body to stay a separate call (keeps register pressure down; good for large arithmetic bodies where inlining hurts occupancy). |
+| `None` (default) | Leave the decision to LLVM's inliner cost model. |
+
+```python
+@qd.kernel
+def saxpy(x: qd.types.ndarray(ndim=1), y: qd.types.ndarray(ndim=1), a: qd.f32):
+    qd.loop_config(force_inline=True)
+    for i in range(x.shape[0]):
+        y[i] = a * x[i] + y[i]
+```
+
+This hint is **`qd.amdgpu`-only and a no-op on every other backend**; it applies only to parallel range-for loops (not mesh-for), and does not change results - only the generated call structure. Whether inlining helps is workload-dependent, so treat it as a tuning knob to try both ways under a profiler rather than a guaranteed speedup.
+
 ## Inspecting what the compiler did
 
 These environment variables dump the IR so you can see the effect of each pass. Files are written to the directory set by the `debug_dump_path` option in `qd.init(...)` (default `/tmp/ir/`):
