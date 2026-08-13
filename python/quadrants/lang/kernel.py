@@ -929,15 +929,16 @@ class Kernel(FuncBase):
                     if type(a) in _TENSOR_WRAPPER_TYPES or m.annotation is _TensorClass
                 )
                 self._tensor_unwrap_indices = _indices
-            py_args_l = None
-            for i in _indices:
-                _arg = py_args[i]
-                if type(_arg) in _TENSOR_WRAPPER_TYPES:
-                    if py_args_l is None:
-                        py_args_l = list(py_args)
-                    py_args_l[i] = _arg._impl
-            if py_args_l is not None:
-                py_args = tuple(py_args_l)
+            if _indices:
+                py_args_l = None
+                for i in _indices:
+                    _arg = py_args[i]
+                    if type(_arg) in _TENSOR_WRAPPER_TYPES:
+                        if py_args_l is None:
+                            py_args_l = list(py_args)
+                        py_args_l[i] = _arg._impl
+                if py_args_l is not None:
+                    py_args = tuple(py_args_l)
 
         # Transform the primal kernel to forward mode grad kernel
         # then recover to primal when exiting the forward mode manager
