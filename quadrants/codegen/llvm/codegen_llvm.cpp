@@ -14,6 +14,7 @@
 #include "quadrants/ir/transforms.h"
 #include "quadrants/program/adstack_size_expr_eval.h"
 #include "quadrants/program/extension.h"
+#include "quadrants/program/function.h"
 #include "quadrants/runtime/program_impls/llvm/llvm_program.h"
 #include "quadrants/codegen/llvm/struct_llvm.h"
 #include "quadrants/util/file_sequence_writer.h"
@@ -3470,8 +3471,16 @@ llvm::Value *TaskCodeGenLLVM::get_args_ptr(const Callable *callable, llvm::Value
   args_ptr = builder->CreatePointerCast(args_ptr, llvm::PointerType::get(llvm::PointerType::get(args_type, 0), 0));
   // loading the address of the arg buffer (args_type *)
   args_ptr = builder->CreateLoad(llvm::PointerType::get(args_type, 0), args_ptr);
-  // context -> args record level: tag the loaded args-buffer pointer.
-  return maybe_tag_amdgpu_global_ptr(args_ptr);
+  // context -> args record level: tag the loaded args-buffer pointer, but only
+  // for the top-level kernel. Its arg buffer is device-staged in global memory,
+  // whereas a Function (@qd.real_func) callee receives a caller-local alloca
+  // buffer (see visit(FuncCallStmt)); tagging that as addrspace(1) would make
+  // the callee read its scalar parameters through global memory pointing at
+  // private storage.
+  if (dynamic_cast<const Function *>(callable) == nullptr) {
+    args_ptr = maybe_tag_amdgpu_global_ptr(args_ptr);
+  }
+  return args_ptr;
 }
 void TaskCodeGenLLVM::set_args_ptr(Callable *callable, llvm::Value *context, llvm::Value *ptr) {
   auto *runtime_context_type = get_runtime_type("RuntimeContext");
