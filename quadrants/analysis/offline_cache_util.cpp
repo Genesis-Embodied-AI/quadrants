@@ -10,6 +10,7 @@
 
 #include "picosha2.h"
 
+#include <algorithm>
 #include <vector>
 
 namespace quadrants::lang {
@@ -184,7 +185,36 @@ std::string get_hashed_offline_cache_key(const CompileConfig &config,
 
   auto compile_config_key = get_offline_cache_key_of_compile_config(config);
   auto device_caps_key = get_offline_cache_key_of_device_caps(caps);
-  std::string autodiff_mode = std::to_string(static_cast<std::size_t>(kernel->autodiff_mode));
+  std::string autodiff_mode =
+      std::to_string(static_cast<std::size_t>(kernel->autodiff_mode));
+  // fn_attrs (set via @qd.kernel(fn_attrs=...)) affect codegen and must
+  // participate in the cache key, otherwise two kernels with identical IR
+  // but different attribute values collide. Iterate in sorted order so the
+  // hash is deterministic across unordered_map rehashes.
+  std::string fn_attrs_string;
+  {
+    std::vector<std::string> backends;
+    backends.reserve(kernel->fn_attrs.size());
+    for (const auto &kv : kernel->fn_attrs)
+      backends.push_back(kv.first);
+    std::sort(backends.begin(), backends.end());
+    for (const auto &backend : backends) {
+      fn_attrs_string += backend;
+      fn_attrs_string += '\0';
+      const auto &attrs = kernel->fn_attrs.at(backend);
+      std::vector<std::string> keys;
+      keys.reserve(attrs.size());
+      for (const auto &kv : attrs)
+        keys.push_back(kv.first);
+      std::sort(keys.begin(), keys.end());
+      for (const auto &k : keys) {
+        fn_attrs_string += k;
+        fn_attrs_string += '\0';
+        fn_attrs_string += attrs.at(k);
+        fn_attrs_string += '\0';
+      }
+    }
+  }
   picosha2::hash256_one_by_one hasher;
   hasher.process(compile_config_key.begin(), compile_config_key.end());
   hasher.process(device_caps_key.begin(), device_caps_key.end());
@@ -192,6 +222,7 @@ std::string get_hashed_offline_cache_key(const CompileConfig &config,
   hasher.process(kernel_rets_string.begin(), kernel_rets_string.end());
   hasher.process(kernel_body_string.begin(), kernel_body_string.end());
   hasher.process(autodiff_mode.begin(), autodiff_mode.end());
+  hasher.process(fn_attrs_string.begin(), fn_attrs_string.end());
   hasher.finish();
 
   auto res = picosha2::get_hash_hex_string(hasher);

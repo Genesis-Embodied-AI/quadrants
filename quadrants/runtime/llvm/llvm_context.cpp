@@ -1040,8 +1040,16 @@ void QuadrantsLLVMContext::mark_function_as_cuda_kernel(llvm::Function *func, in
   }
 }
 
-void QuadrantsLLVMContext::mark_function_as_amdgpu_kernel(llvm::Function *func) {
+void QuadrantsLLVMContext::mark_function_as_amdgpu_kernel(llvm::Function *func, int block_dim) {
   func->setCallingConv(llvm::CallingConv::AMDGPU_KERNEL);
+  if (block_dim > 0) {
+    // Record the actual dispatch size as the flat work-group-size range.
+    // Use block_dim as-is: advertising a larger range than what the launcher
+    // dispatches gives the backend false headroom to assume wider warps and
+    // can produce incorrect occupancy or wrong codegen for small block sizes.
+    std::string size_str = std::to_string(block_dim) + "," + std::to_string(block_dim);
+    func->addFnAttr("amdgpu-flat-work-group-size", size_str);
+  }
 }
 
 void QuadrantsLLVMContext::eliminate_unused_functions(llvm::Module *module,

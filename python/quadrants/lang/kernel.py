@@ -336,6 +336,7 @@ class Kernel(FuncBase):
         self.use_checkpoints: bool = False
         # Legacy single-loop arg name, kept for reporting/back-compat; equals the outermost level's condition arg for
         # nested kernels. The authoritative data is `graph_do_while_levels`.
+        self.fn_attrs: dict[str, dict[str, str]] | None = None
         self.graph_do_while_arg: str | None = None
         # Nested graph_do_while level table, indexed by level id (outer before inner). Rebuilt each compilation pass by
         # the AST transformer; serialized to the launch context at launch.
@@ -408,7 +409,7 @@ class Kernel(FuncBase):
         if self.runtime.src_ll_cache and self.quadrants_callable and self.quadrants_callable.is_pure:
             kernel_source_info, _src = get_source_info_and_src(self.func)
             self.fast_checksum = src_hasher.create_cache_key(
-                self.raise_on_templated_floats, kernel_source_info, args, self.arg_metas
+                self.raise_on_templated_floats, kernel_source_info, args, self.arg_metas, self.fn_attrs
             )
             cache_value = None
             if self.fast_checksum:
@@ -539,6 +540,8 @@ class Kernel(FuncBase):
                 quadrants_kernel = impl.get_runtime().prog.create_kernel(
                     quadrants_ast_generator, kernel_name, self.autodiff_mode
                 )
+                if self.fn_attrs:
+                    quadrants_kernel.set_fn_attrs(self.fn_attrs)
                 if _pass == 1:
                     assert key not in self.materialized_kernels
                     self.materialized_kernels[key] = quadrants_kernel
