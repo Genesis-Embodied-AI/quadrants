@@ -742,6 +742,31 @@
     <span class="n">DataTypeCxx</span><span class="o">.</span><span class="fm">__call__</span> <span class="o">=</span> <span class="n">_dtype_call</span>  <span class="c1"># type: ignore[assignment]</span>
 
 
+<span class="k">def</span><span class="w"> </span><span class="nf">_check_ir_load_envs_against_caching</span><span class="p">(</span><span class="n">cfg</span><span class="p">,</span> <span class="n">src_ll_cache</span><span class="p">:</span> <span class="nb">bool</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Reject QD_LOAD_IR / QUADRANTS_LOAD_PTX when caching could stop codegen from ever reading the files.</span>
+
+<span class="sd">    A cached kernel skips codegen, so edited IR / PTX in ``debug_dump_path`` is silently ignored. Call after arch</span>
+<span class="sd">    selection: each variable is read by only some backends, and ``adaptive_arch_select`` may not have picked the</span>
+<span class="sd">    requested arch.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">active</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="c1"># codegen_llvm.cpp reads QD_LOAD_IR via get_environ_config, which parses the value as an int, so &quot;0&quot; leaves it off.</span>
+    <span class="c1"># It lives in the LLVM codegen, so the SPIR-V backends (Vulkan, Metal) never read it.</span>
+    <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">getenv</span><span class="p">(</span><span class="s2">&quot;QD_LOAD_IR&quot;</span><span class="p">,</span> <span class="s2">&quot;0&quot;</span><span class="p">)</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="s2">&quot;0&quot;</span><span class="p">)</span> <span class="ow">and</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">arch_uses_llvm</span><span class="p">(</span><span class="n">cfg</span><span class="o">.</span><span class="n">arch</span><span class="p">):</span>
+        <span class="n">active</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;QD_LOAD_IR&quot;</span><span class="p">)</span>
+    <span class="c1"># jit_cuda.cpp reads QUADRANTS_LOAD_PTX the same way, but it lives in the CUDA JIT, so only CUDA reads it.</span>
+    <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">getenv</span><span class="p">(</span><span class="s2">&quot;QUADRANTS_LOAD_PTX&quot;</span><span class="p">,</span> <span class="s2">&quot;0&quot;</span><span class="p">)</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="s2">&quot;0&quot;</span><span class="p">)</span> <span class="ow">and</span> <span class="n">cfg</span><span class="o">.</span><span class="n">arch</span> <span class="o">==</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">cuda</span><span class="p">:</span>
+        <span class="n">active</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;QUADRANTS_LOAD_PTX&quot;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">active</span> <span class="ow">or</span> <span class="ow">not</span> <span class="p">(</span><span class="n">cfg</span><span class="o">.</span><span class="n">offline_cache</span> <span class="ow">or</span> <span class="n">src_ll_cache</span><span class="p">):</span>
+        <span class="k">return</span>
+    <span class="n">names</span> <span class="o">=</span> <span class="s2">&quot; and &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">active</span><span class="p">)</span>
+    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+        <span class="sa">f</span><span class="s2">&quot;Caching must be disabled when using </span><span class="si">{</span><span class="n">names</span><span class="si">}</span><span class="s2">: replacement IR/PTX is read from debug_dump_path only for a &quot;</span>
+        <span class="s2">&quot;kernel that is actually compiled, and cached kernels are returned without running codegen, so the files would &quot;</span>
+        <span class="sa">f</span><span class="s2">&quot;be silently ignored. Pass offline_cache=False and src_ll_cache=False to qd.init, or unset </span><span class="si">{</span><span class="n">names</span><span class="si">}</span><span class="s2">.&quot;</span>
+    <span class="p">)</span>
+
+
 <div class="viewcode-block" id="init">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/misc/index.html#quadrants.lang.misc.init">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">init</span><span class="p">(</span>
@@ -780,7 +805,8 @@
 <span class="sd">            * ``print_ir`` (bool): Prints the CHI IR of the Quadrants kernels.</span>
 <span class="sd">            *``offline_cache`` (bool): Enables offline cache of the compiled kernels. Default to True. When this is enabled Quadrants will cache compiled kernel on your local disk to accelerate future calls.</span>
 <span class="sd">            *``random_seed`` (int): Sets the seed of the random generator. The default is 0.</span>
-<span class="sd">            *``debug_dump_path`` (str): used as the base path for QD_DUMP_IR and similar</span>
+<span class="sd">            *``debug_dump_path`` (str): base path for QD_DUMP_IR and similar. QD_LOAD_IR and QUADRANTS_LOAD_PTX read</span>
+<span class="sd">              replacement IR / PTX from this directory, and require ``offline_cache=False`` and ``src_ll_cache=False``.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="c1"># FIXME(https://github.com/taichi-dev/taichi/issues/4811): save the current working directory since it may be</span>
     <span class="c1"># changed by the Vulkan backend initialization on OS X.</span>
@@ -889,6 +915,8 @@
 
     <span class="k">if</span> <span class="n">cfg</span><span class="o">.</span><span class="n">arch</span> <span class="o">==</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">amdgpu</span> <span class="ow">and</span> <span class="n">get_os_name</span><span class="p">()</span> <span class="o">==</span> <span class="s2">&quot;win&quot;</span><span class="p">:</span>
         <span class="n">_logging</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="s2">&quot;AMDGPU support on Windows is experimental and may not work as expected.&quot;</span><span class="p">)</span>
+
+    <span class="n">_check_ir_load_envs_against_caching</span><span class="p">(</span><span class="n">cfg</span><span class="p">,</span> <span class="n">src_ll_cache</span><span class="p">)</span>
 
     <span class="k">if</span> <span class="n">_test_mode</span><span class="p">:</span>
         <span class="k">return</span> <span class="n">spec_cfg</span>
