@@ -1,6 +1,6 @@
 # qd.init options
 
-`qd.init(...)` accepts every field of the underlying `CompileConfig` struct as a keyword argument; the same fields are also reachable as environment variables of the form `QD_<UPPERCASE_NAME>` (e.g. `QD_OFFLINE_CACHE=0`). This page covers some of the knobs that are commonly tuned in practice. The underlying source of truth is [`quadrants/program/compile_config.h`](https://github.com/Genesis-Embodied-AI/quadrants/blob/main/quadrants/program/compile_config.h).
+`qd.init(...)` accepts a range of keyword options that tune how Quadrants compiles and runs your kernels; each option is also settable as an environment variable of the form `QD_<UPPERCASE_NAME>` (e.g. `QD_OFFLINE_CACHE=0`). This page covers the options that are most commonly tuned in practice.
 
 ## Caching
 
@@ -37,7 +37,7 @@ Setting `offline_cache=False` (or `QD_OFFLINE_CACHE=0`) disables every disk-pers
 
 ### `cfg_optimization`
 
-Whether to run the control-flow-graph optimization pass. Default `True`. Setting it to `False` makes compilation up to 6x faster while costing 1-5% of runtime speed; consider disabling it if compile time is the bottleneck and the runtime delta is acceptable.
+Whether to run the control-flow-graph optimization (an internal compile-time optimization of your kernel's branches and loops). Default `True`. Setting it to `False` makes compilation up to 6x faster while costing 1-5% of runtime speed; consider disabling it if compile time is the bottleneck and the runtime delta is acceptable.
 
 ### `fast_math`
 
@@ -53,7 +53,7 @@ See [Autodiff](./autodiff.md) for the reverse-mode pipeline overview.
 
 ### `ad_stack_experimental_enabled`
 
-Enables the dynamic-loop reverse-mode pipeline (the *adstack*). Default `False`. Required when a reverse-mode kernel has a runtime-bounded loop carrying a non-linear primal; without it, such kernels either compile-error or produce silently-wrong gradients depending on the loop shape. See [Autodiff with dynamic loops](./autodiff.md#autodiff-with-dynamic-loops) for the rules. Adstack-on is safe even when not strictly needed, but it does come with a few drawbacks:
+Enables the dynamic-loop reverse-mode pipeline (the *adstack*). Default `False`. Required when a reverse-mode kernel has a runtime-bounded loop carrying a non-linear primal (a value computed on the forward pass that then feeds a non-linear operation); without it, such kernels either compile-error or produce silently-wrong gradients depending on the loop shape. See [Autodiff with dynamic loops](./autodiff.md#autodiff-with-dynamic-loops) for the rules. Adstack-on is safe even when not strictly needed, but it does come with a few drawbacks:
 
 - **Memory.** The reverse pass replays each iteration of the dynamic loop, so the adstack stores per-iteration intermediate values for every thread. See [Memory footprint](./autodiff.md#memory-footprint) for the exact formula and the knobs that shrink it (`ad_stack_size`, `ad_stack_sparse_threshold_bytes`).
 - **Per-launch overhead.** Every backward kernel launch incurs a small fixed CPU-to-GPU data transfer. Kernels whose dynamic loop is gated by a sparse predicate (e.g. `for i in range(n): if active[i] > 0: ...`) additionally run a fast GPU pre-step that counts how many threads pass the gate so that the adstack can be tightly sized instead of upper-bounded by worst case.
@@ -94,7 +94,7 @@ Enables:
 - integer-overflow guards on arithmetic;
 - extra internal consistency checks throughout compilation.
 
-The adstack-overflow check on reverse-mode autodiff runs unconditionally on every backend regardless of `debug`; see [Autodiff -> What can go wrong](autodiff.md) for the contract.
+The adstack-overflow check on reverse-mode autodiff runs unconditionally on every backend regardless of `debug`; see [Autodiff -> What can go wrong](./autodiff.md#what-can-go-wrong) for the contract.
 
 **Cost.** Significant on both compile time (extra checks are inserted and validated throughout compilation; e.g. ~21s of added compile time observed on adstack-heavy kernels) and runtime. For just the field-bounds check in a release build without the rest, use [`check_out_of_bound`](#check_out_of_bound) below.
 
