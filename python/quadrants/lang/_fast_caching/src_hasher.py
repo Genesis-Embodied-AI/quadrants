@@ -105,6 +105,7 @@ def create_cache_key(
     - cache value arg values
     - kernel function (but not sub functions)
     - compilation config (which includes arch, and debug)
+    - device capabilities (so a cached entry is not reused on a device whose caps change codegen)
     """
     args_hash = args_hasher.hash_args(raise_on_templated_floats, args, arg_metas)
     if isinstance(args_hash, FastcacheSkip):
@@ -118,12 +119,14 @@ def create_cache_key(
         return None
     kernel_hash = function_hasher.hash_kernel(kernel_source_info)
     config_hash = config_hasher.hash_compile_config()
+    device_caps_hash = config_hasher.hash_device_caps()
     cache_key = hash_iterable_strings(
         (
             quadrants.__version_str__,
             kernel_hash,
             args_hash,
             config_hash,
+            device_caps_hash,
             kernel_source_info.filepath,
             str(kernel_source_info.start_lineno),
             "pruned",

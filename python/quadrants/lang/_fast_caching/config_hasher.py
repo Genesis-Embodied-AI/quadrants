@@ -45,3 +45,15 @@ def hash_compile_config() -> str:
         config_l.append(f"{k}={v}")
     config_hash = hash_iterable_strings(config_l, separator="\n")
     return config_hash
+
+
+def hash_device_caps() -> str:
+    """Stable fingerprint of the current device's capabilities.
+
+    The compiler config alone does not identify the target device, but SPIR-V (Vulkan / Metal) and other backends
+    branch codegen on device capabilities (int64 / atomics / subgroup families, wave size, ...). The native offline
+    cache already folds these into its key via get_offline_cache_key_of_device_caps; mixing the same fingerprint into
+    the fast-cache checksum keeps a fast-cache entry written on one device from being reused on another with different
+    caps (e.g. a cache dir shared across machines).
+    """
+    return impl.get_runtime().prog.get_device_caps().hashed_key()
