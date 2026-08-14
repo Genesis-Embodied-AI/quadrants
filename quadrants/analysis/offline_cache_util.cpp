@@ -278,6 +278,17 @@ std::string get_hashed_per_task_cache_key(const CompileConfig &config,
   auto kernel_rets_key = get_offline_cache_key_of_rets(kernel->rets);
   std::string task_body_string = serialize_task_body(task);
   std::string autodiff_mode_string = std::to_string(static_cast<std::size_t>(kernel->autodiff_mode));
+  // Graph-region tag. The compiled task metadata (`OffloadedTask`) carries the task's
+  // `stream_parallel_group_id` / `graph_parallel_region_id` / `checkpoint_id`, and the runtime fork/join
+  // builders group tasks by those ids to place inter-region joins. But the IR printer emits none of them
+  // (only `graph_do_while_level_id`, folded here too for completeness), so `serialize_task_body` cannot see
+  // them. Without this, two graph kernels whose tasks are byte-identical at the same index but grouped into
+  // different regions would alias: a warm per-task hit hands the second kernel the first's region ids,
+  // merging its regions and dropping an inter-region join -- so the sections race. Fold the tag in so a task
+  // is only reused within the same region grouping.
+  std::string region_tag_string =
+      std::to_string(task->stream_parallel_group_id) + ":" + std::to_string(task->graph_parallel_region_id) + ":" +
+      std::to_string(task->checkpoint_id) + ":" + std::to_string(task->graph_do_while_level_id);
 
   picosha2::hash256_one_by_one hasher;
   hasher.process(compile_config_key.begin(), compile_config_key.end());
@@ -297,6 +308,7 @@ std::string get_hashed_per_task_cache_key(const CompileConfig &config,
   }
   hasher.process(task_body_string.begin(), task_body_string.end());
   hasher.process(autodiff_mode_string.begin(), autodiff_mode_string.end());
+  hasher.process(region_tag_string.begin(), region_tag_string.end());
   hasher.finish();
 
   auto res = picosha2::get_hash_hex_string(hasher);
