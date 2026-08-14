@@ -328,49 +328,6 @@ def _install_python_backend_dtype_call():
     DataTypeCxx.__call__ = _dtype_call  # type: ignore[assignment]
 
 
-_CODEGEN_OUTPUT_CONFIG_KEYS = (
-    "print_preprocessed_ir",
-    "print_ir",
-    "print_accessor_ir",
-    "print_ir_dbg_info",
-    "print_struct_llvm_ir",
-    "print_kernel_llvm_ir",
-    "print_kernel_llvm_ir_optimized",
-    "print_kernel_asm",
-    "print_kernel_amdgcn",
-)
-_CODEGEN_OUTPUT_ENV_VARS = ("QD_DUMP_IR", "QD_DUMP_CFG", "QD_DUMP_SIMPLIFY")
-
-
-def _active_codegen_output_requests(cfg) -> list[str]:
-    """Names of the enabled options that only produce output while a kernel is being compiled."""
-    active = [key for key in _CODEGEN_OUTPUT_CONFIG_KEYS if getattr(cfg, key)]
-    # The C++ side reads these with get_environ_config, which parses the value as an int, so "0" leaves them off.
-    active += [name for name in _CODEGEN_OUTPUT_ENV_VARS if os.getenv(name, "0") not in ("", "0")]
-    return active
-
-
-def _disable_caching_for_codegen_output(cfg, src_ll_cache: bool) -> bool:
-    """Turn both caches off when an option that only produces output during codegen is on. Returns src_ll_cache.
-
-    Overrides caching even when it was asked for explicitly, rather than warning and leaving it on: the request for
-    output is the more specific intent, and keeping both means output that goes missing for precisely the kernels that
-    are already cached.
-    """
-    requested = _active_codegen_output_requests(cfg)
-    enabled = [name for name, on in (("offline_cache", cfg.offline_cache), ("src_ll_cache", src_ll_cache)) if on]
-    if not requested or not enabled:
-        return src_ll_cache
-    cfg.offline_cache = False
-    util.warning(
-        f"Disabling {' and '.join(enabled)} because {', '.join(requested)} "
-        f"{'is' if len(requested) == 1 else 'are'} enabled: a cached kernel is returned without running codegen, so "
-        "nothing would be printed or dumped for any kernel that is already cached. "
-        "[warning_code=DUMP_IR_CACHE_MISMATCH]"
-    )
-    return False
-
-
 def _check_ir_load_envs_against_caching(cfg, src_ll_cache: bool) -> None:
     """Reject QD_LOAD_IR / QUADRANTS_LOAD_PTX when caching could stop codegen from ever reading the files.
 
@@ -430,10 +387,7 @@ def init(
             * ``cpu_max_num_threads`` (int): Sets the number of threads used by the CPU thread pool.
             * ``debug`` (bool): Enables the debug mode, under which Quadrants does a few more things like boundary checks.
             * ``print_ir`` (bool): Prints the CHI IR of the Quadrants kernels.
-            *``offline_cache`` (bool): Enables offline cache of the compiled kernels. Default to True. When this is
-              enabled Quadrants will cache compiled kernel on your local disk to accelerate future calls. Forced off,
-              along with ``src_ll_cache``, by any option that only produces output while a kernel is compiled, such as
-              ``print_ir`` or QD_DUMP_IR.
+            *``offline_cache`` (bool): Enables offline cache of the compiled kernels. Default to True. When this is enabled Quadrants will cache compiled kernel on your local disk to accelerate future calls.
             *``random_seed`` (int): Sets the seed of the random generator. The default is 0.
             *``debug_dump_path`` (str): base path for QD_DUMP_IR and similar. QD_LOAD_IR and QUADRANTS_LOAD_PTX read
               replacement IR / PTX from this directory, and require ``offline_cache=False`` and ``src_ll_cache=False``.
@@ -517,7 +471,12 @@ def init(
     if len(unexpected_keys):
         raise KeyError(f'Unrecognized keyword argument(s) for qd.init: {", ".join(unexpected_keys)}')
 
-    src_ll_cache = _disable_caching_for_codegen_output(cfg, src_ll_cache)
+    if (cfg.print_ir or os.getenv("QD_DUMP_IR") == "1") and cfg.offline_cache:
+        util.warning(
+            "Even with print_ir/QD_DUMP_IR enabled, already cached kernels won't get their IRs shown. "
+            "You might want to disable caching with offline_cache=False. "
+            "[warning_code=DUMP_IR_CACHE_MISMATCH]"
+        )
 
     # dispatch configurations that are not in qd.cfg:
     runtime = impl.get_runtime()
