@@ -327,12 +327,11 @@ void export_lang(nb::module_ &m) {
       .def("begin_checkpoint", &ASTBuilder::begin_checkpoint)
       .def("end_checkpoint", &ASTBuilder::end_checkpoint);
 
-  auto device_capability_config =
-      nb::class_<DeviceCapabilityConfig>(m, "DeviceCapabilityConfig")
-          .def("get", &DeviceCapabilityConfig::get)
-          .def("hashed_key", [](const DeviceCapabilityConfig &caps) {
-            return get_hashed_offline_cache_key_of_device_caps(caps);
-          });
+  auto device_capability_config = nb::class_<DeviceCapabilityConfig>(m, "DeviceCapabilityConfig")
+                                      .def("get", &DeviceCapabilityConfig::get)
+                                      .def("hashed_key", [](const DeviceCapabilityConfig &caps) {
+                                        return get_hashed_offline_cache_key_of_device_caps(caps);
+                                      });
 
   auto compiled_kernel_data = nb::class_<CompiledKernelData>(m, "CompiledKernelData")
                                   .def("_debug_dump_to_string", &CompiledKernelData::debug_dump_to_string);
