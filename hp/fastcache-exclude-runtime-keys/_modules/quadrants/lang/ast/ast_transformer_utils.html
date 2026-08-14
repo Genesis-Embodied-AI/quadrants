@@ -7,7 +7,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>quadrants.lang.ast.ast_transformer_utils &#8212; Quadrants 1.2.1 documentation</title>
+    <title>quadrants.lang.ast.ast_transformer_utils &#8212; Quadrants 1.3.1 documentation</title>
   
   
   
@@ -42,7 +42,7 @@
   <link rel="preload" as="script" href="../../../../_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5" />
 <link rel="preload" as="script" href="../../../../_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5" />
 
-    <script src="../../../../_static/documentation_options.js?v=ca842793"></script>
+    <script src="../../../../_static/documentation_options.js?v=bb516dca"></script>
     <script src="../../../../_static/doctools.js?v=9bcbadda"></script>
     <script src="../../../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../../../_static/clipboard.min.js?v=a7894cd8"></script>
@@ -60,7 +60,7 @@
     <link rel="search" title="Search" href="../../../../search.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
-  <meta name="docsearch:version" content="1.2.1" />
+  <meta name="docsearch:version" content="1.3.1" />
   
     
     <script src="../../../../_static/searchtools.js"></script>
@@ -128,7 +128,7 @@
   
   
   
-    <p class="title logo__title">Quadrants 1.2.1 documentation</p>
+    <p class="title logo__title">Quadrants 1.3.1 documentation</p>
   
 </a></div>
     
@@ -1027,6 +1027,25 @@
 <div class="viewcode-block" id="ASTTransformerFuncContext.get_pos_info">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer_utils/index.html#quadrants.lang.ast.ast_transformer_utils.ASTTransformerFuncContext.get_pos_info">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">get_pos_info</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">AST</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="c1"># Runs for every stmt/expr node of every transform (see ASTTransformerBase.__call__), and the TextWrapper</span>
+        <span class="c1"># formatting below dominates the Python side of a kernel build. The same function is transformed once per</span>
+        <span class="c1"># inlined call site -- tens of times over -- and each transform re-formats the identical positions, so</span>
+        <span class="c1"># memoise on the function rather than on this context, which exists for a single transform.</span>
+        <span class="c1">#</span>
+        <span class="c1"># The cache lives on the FuncBase because that is what fixes everything the result depends on beyond the</span>
+        <span class="c1"># node: `file`, `src`, `indent`, `lineno_offset` and the function name all derive from it and are identical</span>
+        <span class="c1"># across its transforms. Scoping it there also keeps it bounded by the function&#39;s lifetime and correct</span>
+        <span class="c1"># across a module reload, which hands out new FuncBase objects and so a new cache.</span>
+        <span class="n">key</span> <span class="o">=</span> <span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">lineno</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">col_offset</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">end_lineno</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">end_col_offset</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="vm">__class__</span><span class="o">.</span><span class="vm">__name__</span><span class="p">)</span>
+        <span class="n">cached</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">func</span><span class="o">.</span><span class="n">pos_info_cache</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">key</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">cached</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">cached</span>
+        <span class="n">msg</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_build_pos_info</span><span class="p">(</span><span class="n">node</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">func</span><span class="o">.</span><span class="n">pos_info_cache</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">msg</span>
+        <span class="k">return</span> <span class="n">msg</span></div>
+
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_build_pos_info</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">AST</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
         <span class="n">msg</span> <span class="o">=</span> <span class="sa">f</span><span class="s1">&#39;File &quot;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">file</span><span class="si">}</span><span class="s1">&quot;, line </span><span class="si">{</span><span class="n">node</span><span class="o">.</span><span class="n">lineno</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="bp">self</span><span class="o">.</span><span class="n">lineno_offset</span><span class="si">}</span><span class="s1">, in </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">func</span><span class="o">.</span><span class="n">func</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s1">:</span><span class="se">\n</span><span class="s1">&#39;</span>
         <span class="n">col_offset</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">indent</span> <span class="o">+</span> <span class="n">node</span><span class="o">.</span><span class="n">col_offset</span>
         <span class="n">end_col_offset</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">indent</span> <span class="o">+</span> <span class="n">node</span><span class="o">.</span><span class="n">end_col_offset</span>
@@ -1072,7 +1091,6 @@
                     <span class="n">hint</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
                 <span class="n">msg</span> <span class="o">+=</span> <span class="n">gen_line</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">src</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="n">hint</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">msg</span></div>
-</div>
 
 
 
