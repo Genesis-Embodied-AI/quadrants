@@ -742,49 +742,6 @@
     <span class="n">DataTypeCxx</span><span class="o">.</span><span class="fm">__call__</span> <span class="o">=</span> <span class="n">_dtype_call</span>  <span class="c1"># type: ignore[assignment]</span>
 
 
-<span class="n">_CODEGEN_OUTPUT_CONFIG_KEYS</span> <span class="o">=</span> <span class="p">(</span>
-    <span class="s2">&quot;print_preprocessed_ir&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;print_ir&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;print_accessor_ir&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;print_ir_dbg_info&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;print_struct_llvm_ir&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;print_kernel_llvm_ir&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;print_kernel_llvm_ir_optimized&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;print_kernel_asm&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;print_kernel_amdgcn&quot;</span><span class="p">,</span>
-<span class="p">)</span>
-<span class="n">_CODEGEN_OUTPUT_ENV_VARS</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;QD_DUMP_IR&quot;</span><span class="p">,</span> <span class="s2">&quot;QD_DUMP_CFG&quot;</span><span class="p">,</span> <span class="s2">&quot;QD_DUMP_SIMPLIFY&quot;</span><span class="p">)</span>
-
-
-<span class="k">def</span><span class="w"> </span><span class="nf">_active_codegen_output_requests</span><span class="p">(</span><span class="n">cfg</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Names of the enabled options that only produce output while a kernel is being compiled.&quot;&quot;&quot;</span>
-    <span class="n">active</span> <span class="o">=</span> <span class="p">[</span><span class="n">key</span> <span class="k">for</span> <span class="n">key</span> <span class="ow">in</span> <span class="n">_CODEGEN_OUTPUT_CONFIG_KEYS</span> <span class="k">if</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">cfg</span><span class="p">,</span> <span class="n">key</span><span class="p">)]</span>
-    <span class="c1"># The C++ side reads these with get_environ_config, which parses the value as an int, so &quot;0&quot; leaves them off.</span>
-    <span class="n">active</span> <span class="o">+=</span> <span class="p">[</span><span class="n">name</span> <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">_CODEGEN_OUTPUT_ENV_VARS</span> <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">getenv</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="s2">&quot;0&quot;</span><span class="p">)</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">&quot;&quot;</span><span class="p">,</span> <span class="s2">&quot;0&quot;</span><span class="p">)]</span>
-    <span class="k">return</span> <span class="n">active</span>
-
-
-<span class="k">def</span><span class="w"> </span><span class="nf">_disable_caching_for_codegen_output</span><span class="p">(</span><span class="n">cfg</span><span class="p">,</span> <span class="n">src_ll_cache</span><span class="p">:</span> <span class="nb">bool</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Turn both caches off when an option that only produces output during codegen is on. Returns src_ll_cache.</span>
-
-<span class="sd">    Overrides caching even when it was asked for explicitly, rather than warning and leaving it on: the request for</span>
-<span class="sd">    output is the more specific intent, and keeping both means output that goes missing for precisely the kernels that</span>
-<span class="sd">    are already cached.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
-    <span class="n">requested</span> <span class="o">=</span> <span class="n">_active_codegen_output_requests</span><span class="p">(</span><span class="n">cfg</span><span class="p">)</span>
-    <span class="n">enabled</span> <span class="o">=</span> <span class="p">[</span><span class="n">name</span> <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">on</span> <span class="ow">in</span> <span class="p">((</span><span class="s2">&quot;offline_cache&quot;</span><span class="p">,</span> <span class="n">cfg</span><span class="o">.</span><span class="n">offline_cache</span><span class="p">),</span> <span class="p">(</span><span class="s2">&quot;src_ll_cache&quot;</span><span class="p">,</span> <span class="n">src_ll_cache</span><span class="p">))</span> <span class="k">if</span> <span class="n">on</span><span class="p">]</span>
-    <span class="k">if</span> <span class="ow">not</span> <span class="n">requested</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">enabled</span><span class="p">:</span>
-        <span class="k">return</span> <span class="n">src_ll_cache</span>
-    <span class="n">cfg</span><span class="o">.</span><span class="n">offline_cache</span> <span class="o">=</span> <span class="kc">False</span>
-    <span class="n">util</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
-        <span class="sa">f</span><span class="s2">&quot;Disabling </span><span class="si">{</span><span class="s1">&#39; and &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">enabled</span><span class="p">)</span><span class="si">}</span><span class="s2"> because </span><span class="si">{</span><span class="s1">&#39;, &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">requested</span><span class="p">)</span><span class="si">}</span><span class="s2"> &quot;</span>
-        <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="s1">&#39;is&#39;</span><span class="w"> </span><span class="k">if</span><span class="w"> </span><span class="nb">len</span><span class="p">(</span><span class="n">requested</span><span class="p">)</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">1</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="s1">&#39;are&#39;</span><span class="si">}</span><span class="s2"> enabled: a cached kernel is returned without running codegen, so &quot;</span>
-        <span class="s2">&quot;nothing would be printed or dumped for any kernel that is already cached. &quot;</span>
-        <span class="s2">&quot;[warning_code=DUMP_IR_CACHE_MISMATCH]&quot;</span>
-    <span class="p">)</span>
-    <span class="k">return</span> <span class="kc">False</span>
-
-
 <span class="k">def</span><span class="w"> </span><span class="nf">_check_ir_load_envs_against_caching</span><span class="p">(</span><span class="n">cfg</span><span class="p">,</span> <span class="n">src_ll_cache</span><span class="p">:</span> <span class="nb">bool</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Reject QD_LOAD_IR / QUADRANTS_LOAD_PTX when caching could stop codegen from ever reading the files.</span>
 
@@ -846,10 +803,7 @@
 <span class="sd">            * ``cpu_max_num_threads`` (int): Sets the number of threads used by the CPU thread pool.</span>
 <span class="sd">            * ``debug`` (bool): Enables the debug mode, under which Quadrants does a few more things like boundary checks.</span>
 <span class="sd">            * ``print_ir`` (bool): Prints the CHI IR of the Quadrants kernels.</span>
-<span class="sd">            *``offline_cache`` (bool): Enables offline cache of the compiled kernels. Default to True. When this is</span>
-<span class="sd">              enabled Quadrants will cache compiled kernel on your local disk to accelerate future calls. Forced off,</span>
-<span class="sd">              along with ``src_ll_cache``, by any option that only produces output while a kernel is compiled, such as</span>
-<span class="sd">              ``print_ir`` or QD_DUMP_IR.</span>
+<span class="sd">            *``offline_cache`` (bool): Enables offline cache of the compiled kernels. Default to True. When this is enabled Quadrants will cache compiled kernel on your local disk to accelerate future calls.</span>
 <span class="sd">            *``random_seed`` (int): Sets the seed of the random generator. The default is 0.</span>
 <span class="sd">            *``debug_dump_path`` (str): base path for QD_DUMP_IR and similar. QD_LOAD_IR and QUADRANTS_LOAD_PTX read</span>
 <span class="sd">              replacement IR / PTX from this directory, and require ``offline_cache=False`` and ``src_ll_cache=False``.</span>
@@ -933,7 +887,12 @@
     <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">unexpected_keys</span><span class="p">):</span>
         <span class="k">raise</span> <span class="ne">KeyError</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;Unrecognized keyword argument(s) for qd.init: </span><span class="si">{</span><span class="s2">&quot;, &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">unexpected_keys</span><span class="p">)</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
 
-    <span class="n">src_ll_cache</span> <span class="o">=</span> <span class="n">_disable_caching_for_codegen_output</span><span class="p">(</span><span class="n">cfg</span><span class="p">,</span> <span class="n">src_ll_cache</span><span class="p">)</span>
+    <span class="k">if</span> <span class="p">(</span><span class="n">cfg</span><span class="o">.</span><span class="n">print_ir</span> <span class="ow">or</span> <span class="n">os</span><span class="o">.</span><span class="n">getenv</span><span class="p">(</span><span class="s2">&quot;QD_DUMP_IR&quot;</span><span class="p">)</span> <span class="o">==</span> <span class="s2">&quot;1&quot;</span><span class="p">)</span> <span class="ow">and</span> <span class="n">cfg</span><span class="o">.</span><span class="n">offline_cache</span><span class="p">:</span>
+        <span class="n">util</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+            <span class="s2">&quot;Even with print_ir/QD_DUMP_IR enabled, already cached kernels won&#39;t get their IRs shown. &quot;</span>
+            <span class="s2">&quot;You might want to disable caching with offline_cache=False. &quot;</span>
+            <span class="s2">&quot;[warning_code=DUMP_IR_CACHE_MISMATCH]&quot;</span>
+        <span class="p">)</span>
 
     <span class="c1"># dispatch configurations that are not in qd.cfg:</span>
     <span class="n">runtime</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span>

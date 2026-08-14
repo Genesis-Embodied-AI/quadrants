@@ -218,10 +218,7 @@ Module Contents
                       * ``cpu_max_num_threads`` (int): Sets the number of threads used by the CPU thread pool.
                       * ``debug`` (bool): Enables the debug mode, under which Quadrants does a few more things like boundary checks.
                       * ``print_ir`` (bool): Prints the CHI IR of the Quadrants kernels.
-                      *``offline_cache`` (bool): Enables offline cache of the compiled kernels. Default to True. When this is
-                        enabled Quadrants will cache compiled kernel on your local disk to accelerate future calls. Forced off,
-                        along with ``src_ll_cache``, by any option that only produces output while a kernel is compiled, such as
-                        ``print_ir`` or QD_DUMP_IR.
+                      *``offline_cache`` (bool): Enables offline cache of the compiled kernels. Default to True. When this is enabled Quadrants will cache compiled kernel on your local disk to accelerate future calls.
                       *``random_seed`` (int): Sets the seed of the random generator. The default is 0.
                       *``debug_dump_path`` (str): base path for QD_DUMP_IR and similar. QD_LOAD_IR and QUADRANTS_LOAD_PTX read
                         replacement IR / PTX from this directory, and require ``offline_cache=False`` and ``src_ll_cache=False``.

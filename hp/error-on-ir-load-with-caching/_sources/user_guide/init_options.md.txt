@@ -29,8 +29,6 @@ When to set it to `False`:
 
 For normal use, leave it at `True`; the cache layers are the dominant source of fast warm-up.
 
-Quadrants forces it off, along with `src_ll_cache`, when you enable an option that only produces output while a kernel is being compiled: any of the `print_*` options, or `QD_DUMP_IR` / `QD_DUMP_CFG` / `QD_DUMP_SIMPLIFY`. A cached kernel is returned without being compiled, so leaving the caches on would drop the output for exactly the kernels that are already cached. This overrides `offline_cache=True` even when you pass it explicitly, and `qd.init` warns when it happens, since every kernel then recompiles.
-
 ## Compile-time tuning
 
 ### `cfg_optimization`

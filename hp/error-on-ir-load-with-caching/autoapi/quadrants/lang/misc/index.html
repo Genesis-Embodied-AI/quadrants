@@ -707,13 +707,8 @@ complete list, please check out
 <li><p><code class="docutils literal notranslate"><span class="pre">debug</span></code> (bool): Enables the debug mode, under which Quadrants does a few more things like boundary checks.</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">print_ir</span></code> (bool): Prints the CHI IR of the Quadrants kernels.</p></li>
 </ul>
-<dl class="simple">
-<dt><a href="#id1"><span class="problematic" id="id2">*</span></a><code class="docutils literal notranslate"><span class="pre">offline_cache</span></code> (bool): Enables offline cache of the compiled kernels. Default to True. When this is</dt><dd><p>enabled Quadrants will cache compiled kernel on your local disk to accelerate future calls. Forced off,
-along with <code class="docutils literal notranslate"><span class="pre">src_ll_cache</span></code>, by any option that only produces output while a kernel is compiled, such as
-<code class="docutils literal notranslate"><span class="pre">print_ir</span></code> or QD_DUMP_IR.</p>
-</dd>
-</dl>
-<p><a href="#id3"><span class="problematic" id="id4">*</span></a><code class="docutils literal notranslate"><span class="pre">random_seed</span></code> (int): Sets the seed of the random generator. The default is 0.
+<p><a href="#id1"><span class="problematic" id="id2">*</span></a><code class="docutils literal notranslate"><span class="pre">offline_cache</span></code> (bool): Enables offline cache of the compiled kernels. Default to True. When this is enabled Quadrants will cache compiled kernel on your local disk to accelerate future calls.
+<a href="#id3"><span class="problematic" id="id4">*</span></a><code class="docutils literal notranslate"><span class="pre">random_seed</span></code> (int): Sets the seed of the random generator. The default is 0.
 <a href="#id5"><span class="problematic" id="id6">*</span></a><code class="docutils literal notranslate"><span class="pre">debug_dump_path</span></code> (str): base path for QD_DUMP_IR and similar. QD_LOAD_IR and QUADRANTS_LOAD_PTX read</p>
 <blockquote>
 <div><p>replacement IR / PTX from this directory, and require <code class="docutils literal notranslate"><span class="pre">offline_cache=False</span></code> and <code class="docutils literal notranslate"><span class="pre">src_ll_cache=False</span></code>.</p>

@@ -456,7 +456,6 @@
 <li><p>Reproducing first-run behavior in CI matrix runs that would otherwise warm the caches across iterations.</p></li>
 </ul>
 <p>For normal use, leave it at <code class="docutils literal notranslate"><span class="pre">True</span></code>; the cache layers are the dominant source of fast warm-up.</p>
-<p>Quadrants forces it off, along with <code class="docutils literal notranslate"><span class="pre">src_ll_cache</span></code>, when you enable an option that only produces output while a kernel is being compiled: any of the <code class="docutils literal notranslate"><span class="pre">print_*</span></code> options, or <code class="docutils literal notranslate"><span class="pre">QD_DUMP_IR</span></code> / <code class="docutils literal notranslate"><span class="pre">QD_DUMP_CFG</span></code> / <code class="docutils literal notranslate"><span class="pre">QD_DUMP_SIMPLIFY</span></code>. A cached kernel is returned without being compiled, so leaving the caches on would drop the output for exactly the kernels that are already cached. This overrides <code class="docutils literal notranslate"><span class="pre">offline_cache=True</span></code> even when you pass it explicitly, and <code class="docutils literal notranslate"><span class="pre">qd.init</span></code> warns when it happens, since every kernel then recompiles.</p>
 </section>
 </section>
 <section id="compile-time-tuning">
