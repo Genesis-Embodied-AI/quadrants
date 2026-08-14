@@ -122,6 +122,7 @@ Each compiled artifact is stored under a key derived from all of the following:
 - The **source code** of the kernel function or any `@qd.func` it calls.
 - The **argument types** (e.g. switching from `f32` to `f64`, or changing ndarray dimensionality).
 - The **compilation-relevant parts of the compiler configuration** (e.g. `arch`, `debug`, `opt_level`, `fast_math`).
+- The **device capabilities** of the target GPU (e.g. whether Vulkan/Metal expose 64-bit integers, atomics, or a given subgroup family), since codegen branches on them. This keeps an entry compiled for one device from being reused on another with different capabilities, for example when a cache directory is shared across machines.
 - **Template parameter values** (since they are baked into the compiled kernel).
 
 When any of these change, the resulting key is different, so a new compilation occurs and a new entry is stored. Previous entries remain on disk - multiple cached versions coexist. You do not need to manually clear the cache when making code changes - the hash mismatch causes a transparent recompilation.
