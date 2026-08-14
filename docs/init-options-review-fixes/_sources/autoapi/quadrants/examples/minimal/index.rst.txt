@@ -1,0 +1,25 @@
+quadrants.examples.minimal
+==========================
+
+.. py:module:: quadrants.examples.minimal
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   quadrants.examples.minimal.lcg_ti
+   quadrants.examples.minimal.main
+
+
+Module Contents
+---------------
+
+.. py:function:: lcg_ti(B: int, lcg_its: int, a: quadrants.types.NDArray[quadrants.i32, 1]) -> None
+
+   Linear congruential generator https://en.wikipedia.org/wiki/Linear_congruential_generator
+
+
+.. py:function:: main() -> None
+
