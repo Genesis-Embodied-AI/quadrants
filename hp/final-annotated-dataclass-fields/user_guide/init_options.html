@@ -472,6 +472,10 @@
 <h3><code class="docutils literal notranslate"><span class="pre">num_compile_threads</span></code><a class="headerlink" href="#num-compile-threads" title="Link to this heading">#</a></h3>
 <p>Number of host threads used when compiling kernels. Default <code class="docutils literal notranslate"><span class="pre">4</span></code>. Raise on machines with many idle cores compiling many kernels back-to-back; lower (or set to <code class="docutils literal notranslate"><span class="pre">1</span></code>) on memory-pressure-bound systems where concurrent LLVM compilations thrash.</p>
 </section>
+<section id="raise-on-templated-floats">
+<h3><code class="docutils literal notranslate"><span class="pre">raise_on_templated_floats</span></code><a class="headerlink" href="#raise-on-templated-floats" title="Link to this heading">#</a></h3>
+<p>Default <code class="docutils literal notranslate"><span class="pre">False</span></code>. Some kernel arguments make Quadrants compile a separate, specialized copy of the kernel for each distinct <em>value</em> it sees (rather than one copy per distinct <em>type</em>) - notably a plain Python <code class="docutils literal notranslate"><span class="pre">float</span></code> passed as a <code class="docutils literal notranslate"><span class="pre">qd.Template</span></code> argument, or a <a class="reference internal" href="compound_types.html#compile-time-constant-fields-typing-final"><span class="std std-ref"><code class="docutils literal notranslate"><span class="pre">Final[float]</span></code></span></a> field on a dataclass argument. Because two floats are rarely exactly equal, letting a <code class="docutils literal notranslate"><span class="pre">float</span></code> drive this per-value specialization can quietly recompile the kernel on almost every launch and inflate both compile time and on-disk cache size. Set <code class="docutils literal notranslate"><span class="pre">raise_on_templated_floats=True</span></code> to make Quadrants raise an error whenever a <code class="docutils literal notranslate"><span class="pre">float</span></code> value would be used this way, turning that silent trap into an explicit failure; leave it at the default <code class="docutils literal notranslate"><span class="pre">False</span></code> to allow float-valued templates.</p>
+</section>
 </section>
 <section id="reverse-mode-autodiff">
 <h2>Reverse-mode autodiff<a class="headerlink" href="#reverse-mode-autodiff" title="Link to this heading">#</a></h2>
@@ -639,6 +643,7 @@
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#cfg-optimization"><code class="docutils literal notranslate"><span class="pre">cfg_optimization</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#fast-math"><code class="docutils literal notranslate"><span class="pre">fast_math</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#num-compile-threads"><code class="docutils literal notranslate"><span class="pre">num_compile_threads</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#raise-on-templated-floats"><code class="docutils literal notranslate"><span class="pre">raise_on_templated_floats</span></code></a></li>
 </ul>
 </li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#reverse-mode-autodiff">Reverse-mode autodiff</a><ul class="nav section-nav flex-column">

@@ -43,6 +43,10 @@ Whether to enable IEEE-relaxed floating-point optimizations (FMA fusion, no NaN 
 
 Number of host threads used when compiling kernels. Default `4`. Raise on machines with many idle cores compiling many kernels back-to-back; lower (or set to `1`) on memory-pressure-bound systems where concurrent LLVM compilations thrash.
 
+### `raise_on_templated_floats`
+
+Default `False`. Some kernel arguments make Quadrants compile a separate, specialized copy of the kernel for each distinct *value* it sees (rather than one copy per distinct *type*) - notably a plain Python `float` passed as a `qd.Template` argument, or a [`Final[float]`](./compound_types.md#compile-time-constant-fields-typingfinal) field on a dataclass argument. Because two floats are rarely exactly equal, letting a `float` drive this per-value specialization can quietly recompile the kernel on almost every launch and inflate both compile time and on-disk cache size. Set `raise_on_templated_floats=True` to make Quadrants raise an error whenever a `float` value would be used this way, turning that silent trap into an explicit failure; leave it at the default `False` to allow float-valued templates.
+
 ## Reverse-mode autodiff
 
 See [Autodiff](./autodiff.md) for the reverse-mode pipeline overview.
