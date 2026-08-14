@@ -734,6 +734,10 @@ Ptr LLVMRuntime::allocate_aligned(PreallocatedMemoryChunk &memory_chunk,
   return (Ptr)host_allocator(memory_pool, size, alignment);
 }
 
+bool LLVMRuntime::sized_by_device_memory_config(const PreallocatedMemoryChunk &memory_chunk) const {
+  return &memory_chunk == &runtime_memory_chunk;
+}
+
 // [ONLY ON DEVICE] CUDA/AMDGPU backend
 Ptr LLVMRuntime::allocate_from_reserved_memory(PreallocatedMemoryChunk &memory_chunk,
                                                std::size_t size,
@@ -759,12 +763,21 @@ Ptr LLVMRuntime::allocate_from_reserved_memory(PreallocatedMemoryChunk &memory_c
     // Here unfortunately we have to rely on a native CUDA assert failure to
     // halt the whole grid. Using a quadrants_assert_runtime will not finish the
     // whole kernel execution immediately.
-    __assertfail(
-        "Out of CUDA pre-allocated memory.\n"
-        "Consider using qd.init(device_memory_fraction=0.9) or "
-        "qd.init(device_memory_GB=4) to allocate more"
-        " GPU memory",
-        "Quadrants JIT", 0, "allocate_from_reserved_memory", 1);
+    if (sized_by_device_memory_config(memory_chunk)) {
+      __assertfail(
+          "Out of CUDA pre-allocated memory.\n"
+          "Consider using qd.init(device_memory_fraction=0.9) or "
+          "qd.init(device_memory_GB=4) to allocate more"
+          " GPU memory",
+          "Quadrants JIT", 0, "allocate_from_reserved_memory", 1);
+    } else {
+      __assertfail(
+          "Out of CUDA pre-allocated memory for runtime objects.\n"
+          "This chunk is sized from the runtime's own requirements: "
+          "qd.init(device_memory_fraction=...) and qd.init(device_memory_GB=...) "
+          "size a different chunk and will not help",
+          "Quadrants JIT", 0, "allocate_from_reserved_memory", 1);
+    }
 #endif
   }
   quadrants_assert_runtime(this, success, "Out of pre-allocated memory");
