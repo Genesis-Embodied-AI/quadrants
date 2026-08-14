@@ -1,6 +1,6 @@
 # qd.init options
 
-`qd.init(...)` accepts every field of the underlying `CompileConfig` struct as a keyword argument; the same fields are also reachable as environment variables of the form `QD_<UPPERCASE_NAME>` (e.g. `QD_OFFLINE_CACHE=0`). This page covers some of the knobs that are commonly tuned in practice. The underlying source of truth is [`quadrants/program/compile_config.h`](https://github.com/Genesis-Embodied-AI/quadrants/blob/main/quadrants/program/compile_config.h).
+`qd.init(...)` accepts a range of keyword options that tune how Quadrants compiles and runs your kernels; each option is also settable as an environment variable of the form `QD_<UPPERCASE_NAME>` (e.g. `QD_OFFLINE_CACHE=0`). This page covers the options that are most commonly tuned in practice.
 
 ## Caching
 
@@ -8,9 +8,20 @@
 
 Whether the compilation caches **persist on disk across Python invocations**. Default `True`. The "offline" in the name refers to the fact that this cache outlives the process: it is what makes the *second* time you start a Python interpreter and run a kernel cheap, by reusing artifacts from the first run.
 
-Setting `offline_cache=False` is intended to emulate cold-start, i.e. a fresh Python process with no prior on-disk artifacts available. In-process caches operate independently of this flag: within a single Python session, identical kernels are never recompiled. The flag therefore controls only whether the next Python invocation observes a warm or a cold disk.
+Setting `offline_cache=False` is intended to emulate cold-start, i.e. a fresh Python process with no prior on-disk artifacts available. Caching within a single Python session is unaffected by this flag: identical kernels are never recompiled within one process regardless of its value. The flag controls only whether the *next* Python invocation observes a warm or a cold disk. The on-disk cache lives in the directory set by `offline_cache_file_path` (default `~/.cache/quadrants/qdcache`).
 
-When `offline_cache=True`, three persistent layers cooperate. The first two share the cache directory configured by `offline_cache_file_path` (default `~/.cache/quadrants/qdcache`); the third is owned by libcuda and lives outside that path.
+When to set it to `False`:
+- Taking compile-time profiles where a cached kernel would mask the real cost.
+- Investigating a stale-cache bug or suspected cache corruption.
+- Reproducing first-run behavior in CI matrix runs that would otherwise warm the caches across iterations.
+
+For normal use, leave it at `True`; the cache is the dominant source of fast warm-up.
+
+#### Under the hood: cache layers (advanced)
+
+*You do not need this section to use `offline_cache`; it explains what the flag turns on and off internally.*
+
+When `offline_cache=True`, three persistent layers cooperate. The first two share the cache directory configured by `offline_cache_file_path`; the third is owned by libcuda and lives outside that path.
 
 1. The cross-backend kernel-IR / compiled-kernel cache (driven by `KernelCompilationManager`). When the IR-and-config hash hits, the previously compiled kernel data is loaded from disk and the entire compile pipeline is skipped. Active for every backend (CPU, CUDA, AMDGPU, Metal, Vulkan).
 2. The CUDA per-arch PTX cache, written under `<offline_cache_file_path>/ptx_cache_sm_*` (driven by `PtxCache`). When the LLVM-IR hash hits, the previously emitted PTX is loaded from disk and the LLVM-to-PTX compilation pipeline (LLVM optimization passes plus the NVPTX backend's PTX emission) is skipped. `ptxas` itself runs later inside `cuModuleLoadDataEx` and is governed by Layer 3.
@@ -22,18 +33,11 @@ Setting `offline_cache=False` (or `QD_OFFLINE_CACHE=0`) disables every disk-pers
 - Layer 2 falls back to memory-only. PTX is still cached within one process so kernels with identical LLVM IR share PTX output, but nothing is read from or written to disk.
 - Layer 3 cannot be controlled by the libcuda environment variable `CUDA_CACHE_DISABLE` from inside Python because the variable is captured by libcuda at process start. Quadrants instead appends a per-process nonce comment to the PTX it submits to `cuModuleLoadDataEx`. The nonce is constant within one process - kernels with identical PTX still share a cubin in the same run - and changes between processes so cross-run hits cannot quietly serve stale SASS.
 
-When to set it to `False`:
-- Taking compile-time profiles where any cached SASS would mask the real cost.
-- Investigating a stale-cache bug or suspected cache corruption.
-- Reproducing first-run behavior in CI matrix runs that would otherwise warm the caches across iterations.
-
-For normal use, leave it at `True`; the cache layers are the dominant source of fast warm-up.
-
 ## Compile-time tuning
 
 ### `cfg_optimization`
 
-Whether to run the control-flow-graph optimization pass. Default `True`. Setting it to `False` makes compilation up to 6x faster while costing 1-5% of runtime speed; consider disabling it if compile time is the bottleneck and the runtime delta is acceptable.
+Whether to run the control-flow-graph optimization (an internal compile-time optimization of your kernel's branches and loops). Default `True`. Setting it to `False` makes compilation up to 6x faster while costing 1-5% of runtime speed; consider disabling it if compile time is the bottleneck and the runtime delta is acceptable.
 
 ### `fast_math`
 
@@ -49,7 +53,7 @@ See [Autodiff](./autodiff.md) for the reverse-mode pipeline overview.
 
 ### `ad_stack_experimental_enabled`
 
-Enables the dynamic-loop reverse-mode pipeline (the *adstack*). Default `False`. Required when a reverse-mode kernel has a runtime-bounded loop carrying a non-linear primal; without it, such kernels either compile-error or produce silently-wrong gradients depending on the loop shape. See [Autodiff with dynamic loops](./autodiff.md#autodiff-with-dynamic-loops) for the rules. Adstack-on is safe even when not strictly needed, but it does come with a few drawbacks:
+Enables the dynamic-loop reverse-mode pipeline (the *adstack*). Default `False`. Required when a reverse-mode kernel has a runtime-bounded loop carrying a non-linear primal (a value computed on the forward pass that then feeds a non-linear operation); without it, such kernels either compile-error or produce silently-wrong gradients depending on the loop shape. See [Autodiff with dynamic loops](./autodiff.md#autodiff-with-dynamic-loops) for the rules. Adstack-on is safe even when not strictly needed, but it does come with a few drawbacks:
 
 - **Memory.** The reverse pass replays each iteration of the dynamic loop, so the adstack stores per-iteration intermediate values for every thread. See [Memory footprint](./autodiff.md#memory-footprint) for the exact formula and the knobs that shrink it (`ad_stack_size`, `ad_stack_sparse_threshold_bytes`).
 - **Per-launch overhead.** Every backward kernel launch incurs a small fixed CPU-to-GPU data transfer. Kernels whose dynamic loop is gated by a sparse predicate (e.g. `for i in range(n): if active[i] > 0: ...`) additionally run a fast GPU pre-step that counts how many threads pass the gate so that the adstack can be tightly sized instead of upper-bounded by worst case.
@@ -82,17 +86,17 @@ See [Debug mode](./debug.md) for runnable examples and a typical develop / bench
 
 ### `debug`
 
-Default `False`. Turns on every available correctness check. Use while iterating on a kernel that produces wrong numerics or while developing a new compiler pass; turn off for benchmarks and production.
+Default `False`. Turns on every available correctness check. Use while iterating on a kernel that produces wrong numerics; turn off for benchmarks and production.
 
 Enables:
 - field-bounds check on tensor indexing (out-of-range index raises `RuntimeError`);
 - kernel `assert` statements;
 - integer-overflow guards on arithmetic;
-- IR verification after every compiler pass.
+- extra internal consistency checks throughout compilation.
 
-The adstack-overflow check on reverse-mode autodiff runs unconditionally on every backend regardless of `debug`; see [Autodiff -> What can go wrong](autodiff.md) for the contract.
+The adstack-overflow check on reverse-mode autodiff runs unconditionally on every backend regardless of `debug`; see [Autodiff -> What can go wrong](./autodiff.md#what-can-go-wrong) for the contract.
 
-**Cost.** Significant on both compile time (verifier walks the IR after every transform; extra runtime checks expand the emitted code; ~21s extra observed on adstack-heavy kernels) and runtime. For just the field-bounds check in a release build without the rest, use [`check_out_of_bound`](#check_out_of_bound) below.
+**Cost.** Significant on both compile time (extra checks are inserted and validated throughout compilation; e.g. ~21s of added compile time observed on adstack-heavy kernels) and runtime. For just the field-bounds check in a release build without the rest, use [`check_out_of_bound`](#check_out_of_bound) below.
 
 ### `check_out_of_bound`
 
