@@ -572,6 +572,16 @@ void TaskCodeGenLLVM::visit(BinaryOpStmt *stmt) {
     }
   } else if (op == BinaryOpType::div) {
     if (is_real(stmt->ret_type.get_element_type())) {
+      // Under fast_math the builder carries `afn` (ApproxFunc). On AMDGPU that
+      // makes fdiv lower to an approximate v_rcp_f32 (~2.5 ULP), so exact cases
+      // like 180.0/180.0 return 0.99999994 and silently break floor(a/b) and the
+      // `a - floor(a/b)*b` modulo expansion (quadrants#749). Emit the division
+      // with afn cleared so it stays correctly rounded; `afn` is meant for
+      // transcendentals, not basic arithmetic. No-op on CPU/CUDA.
+      llvm::IRBuilderBase::FastMathFlagGuard fmf_guard(*builder);
+      auto fmf = builder->getFastMathFlags();
+      fmf.setApproxFunc(false);
+      builder->setFastMathFlags(fmf);
       llvm_val[stmt] = builder->CreateFDiv(llvm_val[stmt->lhs], llvm_val[stmt->rhs]);
     } else if (is_signed(stmt->ret_type.get_element_type())) {
       llvm_val[stmt] = builder->CreateSDiv(llvm_val[stmt->lhs], llvm_val[stmt->rhs]);
