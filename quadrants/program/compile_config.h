@@ -7,9 +7,6 @@ namespace quadrants::lang {
 
 struct CompileConfig {
   Arch arch;
-  bool debug;
-  bool cfg_optimization;
-  bool check_out_of_bound;
   bool validate_autodiff;
   int simd_width;
   int opt_level;
@@ -38,7 +35,6 @@ struct CompileConfig {
   bool kernel_profiler;
   bool timeline{false};
   bool verbose;
-  bool fast_math;
   bool flatten_if;
   bool make_thread_local;
   bool make_block_local;
@@ -54,16 +50,6 @@ struct CompileConfig {
   bool cpu_block_dim_adaptive;
   int default_gpu_block_dim;
   int gpu_max_reg;
-  bool ad_stack_experimental_enabled{false};
-  int ad_stack_size{0};  // 0 = adaptive
-  // Conservative-heap threshold (in bytes) below which a kernel keeps the eager `linear_thread_idx * stride` adstack
-  // heap addressing instead of paying the per-launch reducer dispatch + per-task DtoH the `bound_expr`-driven sparse
-  // heap sizing costs. Above the threshold the static analyser captures the gating predicate and routes the task
-  // through the lazy LCA-block atomic-rmw row claim, sizing the float adstack heap from the runtime-counted gate-
-  // passing-thread count rather than `dispatched_threads * stride * sizeof(float)`. Default 100 MiB; set to 0 to
-  // always capture (force the sparse path - useful for tests that pin the reducer-backed sizing) or to a very large
-  // value to always disable it.
-  std::size_t ad_stack_sparse_threshold_bytes{100u * 1024u * 1024u};
 
   int saturating_grid_dim;
   int max_block_dim;
@@ -97,24 +83,19 @@ struct CompileConfig {
   int auto_mesh_local_default_occupacy{4};
 
   // Offline cache options
-  bool offline_cache{false};
-  std::string offline_cache_file_path{get_repo_dir() + "qdcache"};
   std::string offline_cache_cleaning_policy{"lru"};        // "never"|"version"|"lru"|"fifo"
   int offline_cache_max_size_of_files{100 * 1024 * 1024};  // bytes, default: 100MB
   double offline_cache_cleaning_factor{0.25};              // [0.f, 1.f]
 
-  int num_compile_threads{4};
   std::string vk_api_version;
 
   size_t cuda_stack_limit{0};
 
-  // Metal backend: if non-zero, use this as an externally-owned MTLCommandQueue* instead of creating a new one.
-  // The queue is borrowed (not retained) — the caller must keep it alive for the lifetime of the Quadrants runtime.
-  uint64_t external_metal_command_queue{0};
-
-  // When true, the external_metal_command_queue is PyTorch MPS's queue, so Quadrants can skip explicit cross-framework
-  // synchronisation at interop points (to_torch / from_torch).
-  bool external_metal_command_queue_is_torch_queue{false};
+  // Fields below are generated from tools/config_codegen/schema.py (the single
+  // source of truth for their names, types, defaults, and user docs). Run
+  // tools/config_codegen/generate.py to regenerate; CMake does this at configure
+  // time. DO NOT add hand-written fields here that also exist in the schema.
+#include "quadrants/program/compile_config.fields.generated.inc"
 
   CompileConfig();
 

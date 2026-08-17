@@ -19,9 +19,6 @@ CompileConfig::CompileConfig() {
   advanced_optimization = true;
   constant_folding = true;
   max_vector_width = 8;
-  debug = false;
-  cfg_optimization = true;
-  check_out_of_bound = false;
   serial_schedule = false;
   simplify_before_lower_access = true;
   lower_access = true;
@@ -37,7 +34,6 @@ CompileConfig::CompileConfig() {
   default_gpu_block_dim = 128;
   gpu_max_reg = 0;  // 0 means using the default value from the CUDA driver.
   verbose = true;
-  fast_math = true;
   flatten_if = false;
   make_thread_local = true;
   make_block_local = true;

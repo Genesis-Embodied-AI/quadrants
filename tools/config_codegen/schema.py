@@ -89,14 +89,28 @@ class Options:
     launch-time sizer choose automatically."""
     ad_stack_size: int = 0
 
+    # Maintainer note: below this conservative-heap threshold a kernel keeps the
+    # eager `linear_thread_idx * stride` adstack heap addressing instead of paying
+    # the per-launch reducer dispatch + per-task DtoH for the `bound_expr`-driven
+    # sparse heap sizing. Above it, the static analyser captures the gating
+    # predicate and routes the task through the lazy LCA-block atomic-rmw row
+    # claim, sizing the float adstack heap from the runtime-counted
+    # gate-passing-thread count rather than `dispatched_threads * stride *
+    # sizeof(float)`. Set to 0 to always capture (force the sparse path - useful
+    # for tests that pin the reducer-backed sizing) or a very large value to
+    # disable it.
     """Byte cutoff below which the sparse adstack sizing path is skipped in favor
     of eager heap allocation."""
     ad_stack_sparse_threshold_bytes: Annotated[int, Cpp("std::size_t")] = 100 * 1024 * 1024
 
+    # Maintainer note: the queue is borrowed (not retained) - the caller must keep
+    # it alive for the lifetime of the Quadrants runtime.
     """An MTLCommandQueue pointer (as an integer) to dispatch on instead of
     creating a new Metal queue. 0 means create a new queue."""
     external_metal_command_queue: Annotated[int, Cpp("uint64_t")] = 0
 
+    # Maintainer note: lets Quadrants skip explicit cross-framework sync at interop
+    # points (to_torch / from_torch).
     """Set True when external_metal_command_queue is PyTorch MPS's own queue, to
     skip redundant interop synchronization."""
     external_metal_command_queue_is_torch_queue: bool = False

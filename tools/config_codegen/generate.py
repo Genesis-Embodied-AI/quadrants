@@ -6,8 +6,12 @@ perso_hugh/doc/config_self_documenting_design.md, for the CMake wiring). It
 loads ``schema.py`` and emits:
 
   * compile_config.fields.generated.inc   - struct members + in-class defaults
-  * compile_config.ctor.generated.inc     - ctor assignments for Computed defaults
   * compile_config.bindings.generated.inc - nanobind .def_rw(...) chain
+
+Computed (non-literal) defaults are emitted as in-class initializers too (e.g.
+``std::string offline_cache_file_path{get_repo_dir() + "qdcache"};``), matching
+how the hand-written struct already does it, so no separate ctor fragment is
+needed.
 
 It can also print a markdown reference table (used for eyeballing / as a docs
 fallback) so the exact same schema drives code and docs.
@@ -145,19 +149,9 @@ def emit_fields() -> str:
     out = [BANNER, ""]
     for opt in get_options():
         out.append(f"  /// {opt.doc}")
-        if opt.is_computed:
-            out.append(f"  {opt.cpp_type} {opt.name};  // default: {opt.computed_doc}")
-        else:
-            out.append(f"  {opt.cpp_type} {opt.name}{{{cpp_literal(opt.literal_default)}}};")
+        initializer = opt.computed_expr if opt.is_computed else cpp_literal(opt.literal_default)
+        out.append(f"  {opt.cpp_type} {opt.name}{{{initializer}}};")
         out.append("")
-    return "\n".join(out).rstrip() + "\n"
-
-
-def emit_ctor() -> str:
-    out = [BANNER, "", "// Computed (non-literal) defaults, assigned in CompileConfig::CompileConfig()."]
-    for opt in get_options():
-        if opt.is_computed:
-            out.append(f"  {opt.name} = {opt.computed_expr};")
     return "\n".join(out).rstrip() + "\n"
 
 
@@ -198,13 +192,11 @@ def emit_json() -> str:
 # Where each generated file lands, relative to the repo root (--out-dir).
 OUTPUTS = {
     "quadrants/program/compile_config.fields.generated.inc": emit_fields,
-    "quadrants/program/compile_config.ctor.generated.inc": emit_ctor,
     "quadrants/python/compile_config.bindings.generated.inc": emit_bindings,
 }
 
 EMITTERS = {
     "fields": emit_fields,
-    "ctor": emit_ctor,
     "bindings": emit_bindings,
     "markdown": emit_markdown,
     "json": emit_json,

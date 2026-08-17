@@ -411,7 +411,6 @@ def init(
     reset()
 
     cfg = impl.default_cfg()
-    cfg.offline_cache = True  # Enable offline cache in frontend instead of C++ side
 
     spec_cfg = _SpecialConfig()
     env_comp = _EnvironmentConfigurator(kwargs, cfg)

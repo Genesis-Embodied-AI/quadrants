@@ -171,9 +171,6 @@ void export_lang(nb::module_ &m) {
       .def_rw("print_ir", &CompileConfig::print_ir)
       .def_rw("print_preprocessed_ir", &CompileConfig::print_preprocessed_ir)
       .def_rw("print_ir_dbg_info", &CompileConfig::print_ir_dbg_info)
-      .def_rw("debug", &CompileConfig::debug)
-      .def_rw("cfg_optimization", &CompileConfig::cfg_optimization)
-      .def_rw("check_out_of_bound", &CompileConfig::check_out_of_bound)
       .def_rw("print_accessor_ir", &CompileConfig::print_accessor_ir)
       .def_rw("use_llvm", &CompileConfig::use_llvm)
       .def_rw("print_struct_llvm_ir", &CompileConfig::print_struct_llvm_ir)
@@ -205,11 +202,7 @@ void export_lang(nb::module_ &m) {
       .def_rw("default_up", &CompileConfig::default_up)
       .def_rw("device_memory_GB", &CompileConfig::device_memory_GB)
       .def_rw("device_memory_fraction", &CompileConfig::device_memory_fraction)
-      .def_rw("fast_math", &CompileConfig::fast_math)
       .def_rw("advanced_optimization", &CompileConfig::advanced_optimization)
-      .def_rw("ad_stack_experimental_enabled", &CompileConfig::ad_stack_experimental_enabled)
-      .def_rw("ad_stack_size", &CompileConfig::ad_stack_size)
-      .def_rw("ad_stack_sparse_threshold_bytes", &CompileConfig::ad_stack_sparse_threshold_bytes)
       .def_rw("flatten_if", &CompileConfig::flatten_if)
       .def_rw("make_thread_local", &CompileConfig::make_thread_local)
       .def_rw("make_block_local", &CompileConfig::make_block_local)
@@ -228,17 +221,14 @@ void export_lang(nb::module_ &m) {
       .def_rw("demote_no_access_mesh_fors", &CompileConfig::demote_no_access_mesh_fors)
       .def_rw("experimental_auto_mesh_local", &CompileConfig::experimental_auto_mesh_local)
       .def_rw("auto_mesh_local_default_occupacy", &CompileConfig::auto_mesh_local_default_occupacy)
-      .def_rw("offline_cache", &CompileConfig::offline_cache)
-      .def_rw("offline_cache_file_path", &CompileConfig::offline_cache_file_path)
       .def_rw("offline_cache_cleaning_policy", &CompileConfig::offline_cache_cleaning_policy)
       .def_rw("offline_cache_max_size_of_files", &CompileConfig::offline_cache_max_size_of_files)
       .def_rw("offline_cache_cleaning_factor", &CompileConfig::offline_cache_cleaning_factor)
-      .def_rw("num_compile_threads", &CompileConfig::num_compile_threads)
       .def_rw("vk_api_version", &CompileConfig::vk_api_version)
       .def_rw("cuda_stack_limit", &CompileConfig::cuda_stack_limit)
-      .def_rw("external_metal_command_queue", &CompileConfig::external_metal_command_queue)
-      .def_rw("external_metal_command_queue_is_torch_queue",
-              &CompileConfig::external_metal_command_queue_is_torch_queue);
+      // Bindings below are generated from tools/config_codegen/schema.py:
+#include "quadrants/python/compile_config.bindings.generated.inc"
+      ;
 
   m.def("reset_default_compile_config", [&]() { default_compile_config = CompileConfig(); });
 

@@ -236,6 +236,22 @@ endif()
 configure_file(quadrants/common/version.h.in ${CMAKE_SOURCE_DIR}/quadrants/common/version.h)
 configure_file(quadrants/common/commit_hash.h.in ${CMAKE_SOURCE_DIR}/quadrants/common/commit_hash.h)
 
+# Generate CompileConfig option fields + nanobind bindings from the single source
+# of truth in tools/config_codegen/schema.py, so their names, types, defaults, and
+# docs cannot drift. Runs at configure time (like version.h above) and re-runs
+# whenever the schema or generator changes.
+find_package(Python COMPONENTS Interpreter REQUIRED)
+execute_process(
+  COMMAND ${Python_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/config_codegen/generate.py
+          --out-dir ${CMAKE_SOURCE_DIR}
+  RESULT_VARIABLE _QD_CONFIG_CODEGEN_RESULT)
+if (NOT _QD_CONFIG_CODEGEN_RESULT EQUAL 0)
+  message(FATAL_ERROR "config_codegen (tools/config_codegen/generate.py) failed")
+endif()
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+  ${CMAKE_SOURCE_DIR}/tools/config_codegen/schema.py
+  ${CMAKE_SOURCE_DIR}/tools/config_codegen/generate.py)
+
 option(QD_WITH_GRAPHVIZ "generate dependency graphs between targets" OFF)  # wheel-tag: viz
 if (QD_WITH_GRAPHVIZ)
   set(GRAPHVIZ_GRAPH_NAME "qd_targets")
