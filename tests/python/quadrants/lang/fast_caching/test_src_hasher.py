@@ -47,6 +47,31 @@ def test_src_hasher_create_cache_key_vary_config() -> None:
 
 
 @test_utils.test()
+def test_src_hasher_create_cache_key_varies_with_device_caps(monkeypatch) -> None:
+    # The device-caps fingerprint is plumbed in from config_hasher; stub it so we can exercise the keying without a
+    # second physical device. Same source / args / config but different caps must yield a different cache key, so a
+    # cache dir shared across devices (or machines) cannot serve an artifact compiled for the wrong capabilities.
+    from quadrants.lang._fast_caching import config_hasher
+
+    @qd.kernel
+    def f1() -> None:
+        pass
+
+    qd_init_same_arch(print_ir_dbg_info=False)
+    kernel_info, _src = get_source_info_and_src(f1.fn)
+
+    monkeypatch.setattr(config_hasher, "hash_device_caps", lambda: "caps-A")
+    key_caps_a = src_hasher.create_cache_key(False, kernel_info, [], [])
+    key_caps_a_again = src_hasher.create_cache_key(False, kernel_info, [], [])
+
+    monkeypatch.setattr(config_hasher, "hash_device_caps", lambda: "caps-B")
+    key_caps_b = src_hasher.create_cache_key(False, kernel_info, [], [])
+
+    assert key_caps_a == key_caps_a_again
+    assert key_caps_a != key_caps_b
+
+
+@test_utils.test()
 def test_src_hasher_validate_hashed_function_infos(monkeypatch, tmp_path: pathlib.Path, temporary_module) -> None:
     test_files_path = pathlib.Path("tests/python/quadrants/lang/fast_caching/test_files")
     monkeypatch.syspath_prepend(tmp_path)

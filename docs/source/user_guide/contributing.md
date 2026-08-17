@@ -228,6 +228,21 @@ Quadrants comprises at least three important parts:
 2. `quadrants` device runtime (bitcode): C++ code compiled using `clang++` from the distribution/OS. Using `clang++` is required as it has to support the same targets as `LLVM`.
 3. `LLVM` libraries used by host runtime: statically or dynamically linked, used to lower the kernel's final IR to machine code on the host. The CI uses an LLVM version compiled from source.
 
+### Running hand-edited IR or PTX
+
+A dump written by `QD_DUMP_IR` (see [Dumping compiled IR](./debug.md#dumping-compiled-ir)) can be edited and fed back in, which is a quick way to try an instruction sequence by hand before changing codegen. `QD_LOAD_IR=1` makes the LLVM backends reparse `<debug_dump_path>/<task>_llvm.ll` instead of using the module they just built, and `QUADRANTS_LOAD_PTX=1` makes the CUDA backend read `<debug_dump_path>/<name>.ptx` instead of the PTX it just compiled. Both are read as integers, so `0` leaves them off.
+
+Both caches have to be off in the script under test, since the replacement files are only read while a kernel is being compiled and a cached kernel is handed back without compiling. `qd.init` raises a `ValueError` rather than let an already-cached kernel keep silently running its old code. `offline_cache` has an environment variable, `src_ll_cache` does not, so the latter has to be passed to `qd.init`:
+
+```python
+qd.init(arch=qd.cuda, offline_cache=False, src_ll_cache=False)
+```
+
+```bash
+QD_DUMP_IR=1 QD_DEBUG_DUMP_PATH=/tmp/ir python my_script.py  # dump, then edit the files under /tmp/ir
+QD_LOAD_IR=1 QD_DEBUG_DUMP_PATH=/tmp/ir python my_script.py  # run what you edited
+```
+
 ### Building LLVM for debugging it
 
 Sometimes, it could be useful to have a `LLVM` version that allows to print intermediate passes or with debug symbols to find out where and why LLVM fails (for example, when Instruction Selection fails). To do so you would have to build LLVM by yourself. If so, you should take some inspiration from our [CI pipeline to build LLVM](https://github.com/Genesis-Embodied-AI/quadrants-sdk-builds/blob/main/.github/workflows/llvm-ci.yml) to tweak a little bit to your liking (and not enable/disable options that would create discrepancies).
