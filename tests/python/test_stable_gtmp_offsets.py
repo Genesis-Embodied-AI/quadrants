@@ -12,6 +12,11 @@ _GTMP_RE = re.compile(r"<\*(\w+)> .* = global tmp var \(offset = (\d+) B\)")
 _OFFSET_RE = re.compile(r"global tmp var \(offset = (\d+) B\)")
 _CONST_RE = re.compile(r"= const (\d+)")
 _OFFLOAD_RE = re.compile(r"\$\d+ = offloaded")
+# A promoted intermediate is a binary op whose result is stored into a fresh global temp:
+#   $35 = add $32 $34   /   $36 = global tmp var (offset = 8 B)   /   $37 : global store [$36 <- $35]
+_GTMP_DEF_RE = re.compile(r"\$(\d+) = global tmp var \(offset = (\d+) B\)")
+_BINOP_RE = re.compile(r"\$(\d+) = (add|sub|mul|div|mod|bit_and|bit_or|bit_xor|min|max) ")
+_GSTORE_RE = re.compile(r"global store \[\$(\d+) <- \$(\d+)\]")
 
 
 def _gtmp_offsets_by_type(dump_dir: pathlib.Path, kernel_name: str):
@@ -65,6 +70,36 @@ def _gtmp_offset_by_producer_const(dump_dir: pathlib.Path, kernel_name: str, mar
                 cur_offsets.add(int(om.group(1)))
         flush()
     return mapping
+
+
+def _promoted_binop_offset_by_op(dump_dir: pathlib.Path, kernel_name: str):
+    """Map a binary op kind (e.g. "add") to the global-temp offset its promoted result is stored into.
+
+    A cross-offload SSA intermediate (not a local) is promoted by writing the op's result straight into a global
+    temp via a ``global store``. Following that store's stored value back to the defining op lets us pin a
+    *specific op* to its slot offset, so we can tell whether two same-operand ops (add vs sub) keep their slots
+    when their source order swaps. Ops whose result feeds an atomic accumulation or an external-pointer store
+    (rather than a global-temp store) are ignored.
+    """
+    files = sorted(dump_dir.glob(f"*{kernel_name}*after_offload*"))
+    assert files, f"no after_offload IR dump for {kernel_name} in {dump_dir}"
+    result: dict[str, int] = {}
+    for f in files:
+        gtmp_offset: dict[str, int] = {}
+        op_of: dict[str, str] = {}
+        for line in f.read_text().splitlines():
+            dm = _GTMP_DEF_RE.search(line)
+            if dm:
+                gtmp_offset[dm.group(1)] = int(dm.group(2))
+            bm = _BINOP_RE.search(line)
+            if bm:
+                op_of[bm.group(1)] = bm.group(2)
+            sm = _GSTORE_RE.search(line)
+            if sm:
+                dest, val = sm.group(1), sm.group(2)
+                if val in op_of and dest in gtmp_offset:
+                    result[op_of[val]] = gtmp_offset[dest]
+    return result
 
 
 @test_utils.test(arch=[qd.cpu], offline_cache=False)
@@ -191,6 +226,72 @@ def test_stable_gtmp_offsets_same_typed_locals_are_content_keyed(
     # The value->offset mapping is invariant to the source order of the two same-typed producers -- which only
     # holds because the ordering key incorporates each local's def/update chain.
     assert map_ac == map_ca, (map_ac, map_ca)
+
+
+@test_utils.test(arch=[qd.cpu], offline_cache=False)
+def test_stable_gtmp_offsets_distinguish_op_type(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch):
+    """Cross-offload intermediates that differ only in their op get distinct, traversal-order-stable slots.
+
+    p = x + y and q = x - y share operands and return type, so unless the content key includes the op these two
+    promoted intermediates hash equal. Cross-offload values are collected in traversal (consumer-use) order and
+    then stable_sort'd by their key, so for colliding keys the slot follows traversal order: an unrelated edit
+    that reorders the consumer (p + q vs q + p) then swaps the two producer-side global-temp offsets and re-keys a
+    producer task that itself did not change (PR #864 review r3776549281). Mixing op_type into the key pins each
+    op to its slot regardless of consumer order. Here p and q are plain SSA values (not locals), so this exercises
+    the op_type contribution directly rather than the alloca def-chain signature.
+    """
+    monkeypatch.setenv("QD_DUMP_IR", "1")
+    qd.lang.impl.current_cfg().debug_dump_path = str(tmp_path)
+
+    n = 64
+
+    @qd.kernel
+    def op_pq(out: qd.types.ndarray(dtype=qd.i32, ndim=1)):
+        x = 0  # two shared operands, tagged so they stay distinct cross-offload values
+        for i in range(3):
+            x += i + 700
+        y = 0
+        for i in range(5):
+            y += i + 900
+        p = x + y  # add intermediate
+        q = x - y  # sub intermediate
+        for i in range(n):
+            out[i] = p + q + i  # consumer references the add intermediate first
+
+    @qd.kernel
+    def op_qp(out: qd.types.ndarray(dtype=qd.i32, ndim=1)):
+        x = 0  # identical producer: p and q are defined in the same order...
+        for i in range(3):
+            x += i + 700
+        y = 0
+        for i in range(5):
+            y += i + 900
+        p = x + y
+        q = x - y
+        for i in range(n):
+            out[i] = q + p + i  # ...only the (unrelated) consumer use order is swapped
+
+    out = qd.ndarray(qd.i32, shape=(n,))
+    op_pq(out)
+    qd.sync()
+    res_pq = out.to_numpy().copy()
+
+    op_qp(out)
+    qd.sync()
+    res_qp = out.to_numpy().copy()
+
+    # Both consumer orderings compute the same result.
+    assert (res_pq == res_qp).all()
+
+    map_pq = _promoted_binop_offset_by_op(tmp_path, "op_pq")
+    map_qp = _promoted_binop_offset_by_op(tmp_path, "op_qp")
+
+    # Both the add and the sub intermediate were promoted, to disjoint slots.
+    assert set(map_pq) == {"add", "sub"}, map_pq
+    assert map_pq["add"] != map_pq["sub"], map_pq
+    # Each op keeps its producer-side slot even though the consumer traversal order changed -- only true because
+    # op_type is part of the ordering key. Without it the add/sub slots swap with the consumer order.
+    assert map_pq == map_qp, (map_pq, map_qp)
 
 
 @pytest.mark.xfail(
