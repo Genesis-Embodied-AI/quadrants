@@ -9,7 +9,9 @@ default value, and end-user description in exactly one place. Everything else
 reference table) is generated from this list.
 
 SPIKE SCOPE: only the commonly-tuned options are listed here. Phase 1 of the
-migration (see DESIGN.md) extends this to every current CompileConfig field.
+migration (see the B1 design doc,
+perso_hugh/doc/config_self_documenting_design.md) extends this to every current
+CompileConfig field.
 """
 
 from __future__ import annotations

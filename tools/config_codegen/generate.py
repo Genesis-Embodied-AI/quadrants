@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Generate C++ and docs artifacts from the option schema.
 
-This runs at C++ build time (see DESIGN.md for the CMake wiring). It reads
-``schema.py`` and emits:
+This runs at C++ build time (see the B1 design doc,
+perso_hugh/doc/config_self_documenting_design.md, for the CMake wiring). It
+reads ``schema.py`` and emits:
 
   * compile_config.fields.generated.inc   - struct members + in-class defaults
   * compile_config.ctor.generated.inc     - ctor assignments for Computed defaults
