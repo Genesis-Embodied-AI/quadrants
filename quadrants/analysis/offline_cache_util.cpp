@@ -289,6 +289,12 @@ std::string get_hashed_per_task_cache_key(const CompileConfig &config,
   std::string region_tag_string =
       std::to_string(task->stream_parallel_group_id) + ":" + std::to_string(task->graph_parallel_region_id) + ":" +
       std::to_string(task->checkpoint_id) + ":" + std::to_string(task->graph_do_while_level_id);
+  // CPU worker count. `TaskCodeGenCPU::create_offload_range_for` bakes `OffloadedStmt::num_cpu_threads` into the
+  // `cpu_parallel_range_for` call -- the number of workers, and thus the `cpu_thread_id` range a task observes via
+  // `qd.global_thread_idx()`. But the IR printer emits only `grid_dim`/`block_dim`, not `num_cpu_threads`, so two
+  // otherwise-identical CPU tasks differing only in `qd.loop_config(parallelize=...)` print identically; without this
+  // a warm per-task hit would reuse a module baked with the wrong worker count. Fold it in.
+  std::string cpu_threads_string = std::to_string(task->num_cpu_threads);
 
   picosha2::hash256_one_by_one hasher;
   hasher.process(compile_config_key.begin(), compile_config_key.end());
@@ -309,6 +315,7 @@ std::string get_hashed_per_task_cache_key(const CompileConfig &config,
   hasher.process(task_body_string.begin(), task_body_string.end());
   hasher.process(autodiff_mode_string.begin(), autodiff_mode_string.end());
   hasher.process(region_tag_string.begin(), region_tag_string.end());
+  hasher.process(cpu_threads_string.begin(), cpu_threads_string.end());
   hasher.finish();
 
   auto res = picosha2::get_hash_hex_string(hasher);
