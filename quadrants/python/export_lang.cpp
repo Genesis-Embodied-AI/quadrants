@@ -168,7 +168,9 @@ void export_lang(nb::module_ &m) {
       .def_rw("arch", &CompileConfig::arch,
               "Target backend the kernels run on (e.g. qd.cpu, qd.cuda, qd.vulkan, qd.metal). "
               "Defaults to the best backend available on this machine.")
-      .def_rw("opt_level", &CompileConfig::opt_level, "LLVM optimization level applied to generated kernels.")
+      .def_rw("opt_level", &CompileConfig::opt_level,
+              "Quadrants IR optimization level. At 0, IR-level optimizations such as common-subexpression "
+              "elimination are disabled; any value above 0 enables them. This is not an LLVM -O level.")
       .def_rw("raise_on_templated_floats", &CompileConfig::raise_on_templated_floats,
               "Raise an error instead of silently specializing a kernel on a Python float "
               "argument passed by value.")
@@ -179,8 +181,8 @@ void export_lang(nb::module_ &m) {
       .def_rw("print_ir_dbg_info", &CompileConfig::print_ir_dbg_info,
               "Include source-line debug info when printing IR.")
       .def_rw("debug", &CompileConfig::debug,
-              "Turn on the full suite of correctness checks (field bounds, assertions, adstack "
-              "overflow). Considerably slower; intended for development.")
+              "Turn on the full suite of correctness checks: field out-of-bounds (implies "
+              "check_out_of_bound) and runtime assertions. Considerably slower; intended for development.")
       .def_rw("cfg_optimization", &CompileConfig::cfg_optimization,
               "Run the control-flow-graph optimization pass that simplifies kernel branches and "
               "loops. Disabling it speeds up compilation at a small runtime cost.")
@@ -201,7 +203,8 @@ void export_lang(nb::module_ &m) {
       .def_rw("print_kernel_amdgcn", &CompileConfig::print_kernel_amdgcn,
               "Print the AMDGCN assembly generated for each kernel (AMD backend).")
       .def_rw("debug_dump_path", &CompileConfig::debug_dump_path,
-              "Directory to write IR/asm dumps to when the print_* options are on.")
+              "Directory for IR dumps written and read via the QD_DUMP_IR, QD_DUMP_CFG, and QD_LOAD_IR "
+              "environment variables. The print_* options instead write to the current working directory.")
       .def_rw("simplify_before_lower_access", &CompileConfig::simplify_before_lower_access,
               "Run the simplify pass before the lower-access pass.")
       .def_rw("simplify_after_lower_access", &CompileConfig::simplify_after_lower_access,

@@ -124,9 +124,17 @@ Metal and Vulkan lack the assertion extension that the field-bounds check relies
 
 ## All options
 
-Every `qd.init` keyword, with its type and a short description:
+Most `qd.init` keywords set a compiler-configuration option. Each is listed below with its type and a short description. (`default_up` is omitted because it is always derived from `default_ip` and cannot be set directly.)
 
 ```{eval-rst}
 .. autoclass:: quadrants._lib.core.quadrants_python.CompileConfig
    :members:
+   :exclude-members: default_up
 ```
+
+`qd.init` also accepts a few options that are handled on the Python side and so do not appear above, including:
+
+- `enable_fallback` (`bool`, default `True`): fall back to the CPU backend when the requested `arch` is unavailable, instead of raising an error.
+- `src_ll_cache` (`bool`, default `True`): use an additional on-disk cache layer that speeds up loading previously compiled kernels.
+- `log_level` (`str`, default `"info"`): logging verbosity; one of `"trace"`, `"debug"`, `"info"`, `"warn"`, `"error"`, `"critical"`.
+- `require_version` (`str`): raise an error unless the installed Quadrants version matches the given `major.minor.patch` string.
