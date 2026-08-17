@@ -79,6 +79,12 @@ LLVMCompiledKernel KernelCodeGen::compile_kernel_to_module() {
   auto &task_cache = get_llvm_program(kernel->program)->per_task_module_cache();
   std::atomic<int> n_cache_hit{0}, n_recompiled{0}, n_artifact_hit{0};
 
+  // EXPERIMENT (no-inmem variation): bypass the in-memory per-task LLVM-module cache to measure the cost of relying on
+  // the on-disk artifact/cubin tiers alone. The cross-process artifact probe above and the relocatable-cubin disk
+  // cache below are deliberately left untouched -- only the in-process LLVM-module reuse is disabled. Flip to `true`
+  // to restore the baseline behaviour.
+  constexpr bool kUseInMemoryTaskCache = false;
+
   // Cross-process per-task artifact cache. On a hit we skip this task's ENTIRE compilation -- CHI->LLVM codegen,
   // link, optimize, PTX and ptxas -- and carry the cached cubin straight to the cuLink assembly, using the record's
   // `OffloadedTask` metadata for launch and graph construction.
@@ -168,7 +174,8 @@ LLVMCompiledKernel KernelCodeGen::compile_kernel_to_module() {
       });
       const bool cacheable = !has_adstack;
 
-      if (cacheable) {  // Cache hit: reuse the cached task module by cloning it into this worker's LLVM context.
+      if (kUseInMemoryTaskCache && cacheable) {  // Cache hit: reuse the cached task module by cloning it into this
+                                                 // worker's LLVM context.
         std::lock_guard<std::mutex> g(task_cache.mu);
         auto it = task_cache.entries.find(cache_key);
         if (it != task_cache.entries.end()) {
@@ -184,7 +191,7 @@ LLVMCompiledKernel KernelCodeGen::compile_kernel_to_module() {
       Block blk;
       blk.insert(std::move(offload));
       auto new_data = this->compile_task(i, compile_config_, nullptr, &blk);
-      if (cacheable) {
+      if (kUseInMemoryTaskCache && cacheable) {
         std::lock_guard<std::mutex> g(task_cache.mu);
         if (task_cache.entries.find(cache_key) == task_cache.entries.end()) {
           PerTaskModuleCache::Entry e;
