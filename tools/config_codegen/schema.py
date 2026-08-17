@@ -3,8 +3,8 @@
 Read this as a declarative table: every attribute of :class:`Options` is one
 option. The attribute *name* is the option name (and the qd.init keyword, and
 the ``QD_<UPPER>`` environment variable); the *annotation* is its type; the
-assigned *value* is the default; and the *docstring* directly beneath it is the
-end-user documentation. Nothing here imports ``quadrants`` or anything
+assigned *value* is the default; and the string literal *directly above it* is
+the end-user documentation. Nothing here imports ``quadrants`` or anything
 third-party, so it is safe to import both at C++ build time (before the
 extension exists) and at docs build time.
 
@@ -51,52 +51,52 @@ class Computed:
 class Options:
     """User-facing qd.init / CompileConfig options (see the module docstring)."""
 
-    offline_cache: bool = True
     """Whether compiled-kernel caches persist on disk and are reused across
     separate Python processes."""
+    offline_cache: bool = True
 
+    """Directory that holds the on-disk compilation cache."""
     offline_cache_file_path: str = Computed(
         'get_repo_dir() + "qdcache"',
         "<cache dir>/qdcache (e.g. ~/.cache/quadrants/qdcache)",
     )
-    """Directory that holds the on-disk compilation cache."""
 
-    cfg_optimization: bool = True
     """Run the control-flow-graph optimization, an internal compile-time pass
     that simplifies your kernel's branches and loops. Disabling it makes
     compilation much faster at a small runtime cost."""
+    cfg_optimization: bool = True
 
-    fast_math: bool = True
     """Allow IEEE-relaxed floating-point optimizations (e.g. fused
     multiply-add). Faster, but drops strict NaN/inf/signed-zero guarantees."""
+    fast_math: bool = True
 
-    num_compile_threads: int = 4
     """Number of host threads used to compile kernels."""
+    num_compile_threads: int = 4
 
-    debug: bool = False
     """Turn on the full suite of correctness checks (field bounds, assertions,
     adstack overflow). Considerably slower; intended for development."""
+    debug: bool = False
 
-    check_out_of_bound: bool = False
     """Enable the field out-of-bounds check on tensor indexing without turning
     on the rest of debug mode."""
+    check_out_of_bound: bool = False
 
-    ad_stack_experimental_enabled: bool = False
     """Enable the reverse-mode autodiff pipeline for kernels with
     runtime-bounded loops (the adstack)."""
+    ad_stack_experimental_enabled: bool = False
 
-    ad_stack_size: int = 0
     """Force every autodiff stack to exactly this many slots. 0 lets the
     launch-time sizer choose automatically."""
+    ad_stack_size: int = 0
 
-    ad_stack_sparse_threshold_bytes: Annotated[int, Cpp("std::size_t")] = 100 * 1024 * 1024
     """Byte cutoff below which the sparse adstack sizing path is skipped in favor
     of eager heap allocation."""
+    ad_stack_sparse_threshold_bytes: Annotated[int, Cpp("std::size_t")] = 100 * 1024 * 1024
 
-    external_metal_command_queue: Annotated[int, Cpp("uint64_t")] = 0
     """An MTLCommandQueue pointer (as an integer) to dispatch on instead of
     creating a new Metal queue. 0 means create a new queue."""
+    external_metal_command_queue: Annotated[int, Cpp("uint64_t")] = 0
 
-    external_metal_command_queue_is_torch_queue: bool = False
     """Set True when external_metal_command_queue is PyTorch MPS's own queue, to
     skip redundant interop synchronization."""
+    external_metal_command_queue_is_torch_queue: bool = False

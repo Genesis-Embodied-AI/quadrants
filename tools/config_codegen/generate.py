@@ -72,7 +72,7 @@ def _import_schema():
 
 
 def _attr_docstrings(path: Path) -> dict[str, str]:
-    """Map each Options attribute to the docstring literal beneath it."""
+    """Map each Options attribute to the string literal directly above it."""
     tree = ast.parse(path.read_text())
     cls = next(n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == "Options")
     docs: dict[str, str] = {}
@@ -80,13 +80,13 @@ def _attr_docstrings(path: Path) -> dict[str, str]:
     for i, stmt in enumerate(body):
         if isinstance(stmt, ast.AnnAssign) and isinstance(stmt.target, ast.Name):
             doc = ""
-            nxt = body[i + 1] if i + 1 < len(body) else None
+            prev = body[i - 1] if i >= 1 else None
             if (
-                isinstance(nxt, ast.Expr)
-                and isinstance(nxt.value, ast.Constant)
-                and isinstance(nxt.value.value, str)
+                isinstance(prev, ast.Expr)
+                and isinstance(prev.value, ast.Constant)
+                and isinstance(prev.value.value, str)
             ):
-                doc = " ".join(nxt.value.value.split())  # collapse newlines/indent
+                doc = " ".join(prev.value.value.split())  # collapse newlines/indent
             docs[stmt.target.id] = doc
     return docs
 
