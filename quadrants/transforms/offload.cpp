@@ -492,6 +492,25 @@ class IdentifyValuesUsedInOtherOffloads : public BasicStmtVisitor {
         h = mix(h, (std::uint64_t)(unsigned)id);
       h = mix(h, (std::uint64_t)a->is_ptr);
     }
+    // Semantic discriminant fields: statements of the same class, return type, and operands can still differ in
+    // an op_type (or cast target / bit-vectorization flag). Without these, e.g. a + b and a - b hash equal and
+    // stable_sort falls back to traversal order for them, reintroducing exactly the offset instability this
+    // content-keyed ordering exists to remove (PR #864 review r3776549281).
+    if (auto *u = s->cast<UnaryOpStmt>()) {
+      h = mix(h, (std::uint64_t)u->op_type);
+      if (u->is_cast())
+        h = mix(h, hstr(u->cast_type.to_string()));
+    }
+    if (auto *b = s->cast<BinaryOpStmt>()) {
+      h = mix(h, (std::uint64_t)b->op_type);
+      h = mix(h, (std::uint64_t)b->is_bit_vectorized);
+    }
+    if (auto *t = s->cast<TernaryOpStmt>())
+      h = mix(h, (std::uint64_t)t->op_type);
+    if (auto *a = s->cast<AtomicOpStmt>())
+      h = mix(h, (std::uint64_t)a->op_type);
+    if (auto *sn = s->cast<SNodeOpStmt>())
+      h = mix(h, (std::uint64_t)sn->op_type);
     return h;
   }
 
