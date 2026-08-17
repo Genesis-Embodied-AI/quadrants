@@ -65,3 +65,6 @@ autodoc_typehints_description_target = "all"
 autodoc_default_flags = ["members", "show-inheritance", "undoc-members"]
 autodoc_member_order = "bysource"
 autosummary_generate = True
+# Render documented objects by their short name (e.g. "CompileConfig" instead of
+# the full "quadrants._lib.core.quadrants_python.CompileConfig" internal path).
+add_module_names = False

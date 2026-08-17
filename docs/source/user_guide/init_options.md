@@ -1,6 +1,6 @@
 # qd.init options
 
-`qd.init(...)` accepts every field of the underlying `CompileConfig` struct as a keyword argument; the same fields are also reachable as environment variables of the form `QD_<UPPERCASE_NAME>` (e.g. `QD_OFFLINE_CACHE=0`). This page covers some of the knobs that are commonly tuned in practice. The underlying source of truth is [`quadrants/program/compile_config.h`](https://github.com/Genesis-Embodied-AI/quadrants/blob/main/quadrants/program/compile_config.h).
+`qd.init(...)` accepts a wide set of configuration options as keyword arguments; each is also reachable as an environment variable of the form `QD_<UPPERCASE_NAME>` (e.g. `QD_OFFLINE_CACHE=0`). This page walks through the knobs that are commonly tuned in practice; the [full list of options](#all-options) at the bottom is generated automatically from the installed build, so it always matches the version you have.
 
 ## Caching
 
@@ -121,3 +121,12 @@ Per-backend support:
 | Vulkan | never (no in-kernel assertion mechanism) |
 
 Metal and Vulkan lack the assertion extension that the field-bounds check relies on; `check_out_of_bound=True` is silently reset to `False` on those backends at `qd.init` time and a warning is logged.
+
+## All options
+
+Every `qd.init` keyword, with its type and a short description. This list is generated automatically from the installed build, so it always matches the version you have:
+
+```{eval-rst}
+.. autoclass:: quadrants._lib.core.quadrants_python.CompileConfig
+   :members:
+```
