@@ -1,6 +1,6 @@
 # qd.init options
 
-`qd.init(...)` accepts a wide set of configuration options as keyword arguments; each is also reachable as an environment variable of the form `QD_<UPPERCASE_NAME>` (e.g. `QD_OFFLINE_CACHE=0`). This page walks through the knobs that are commonly tuned in practice; the [full list of options](#all-options) at the bottom is generated automatically from the installed build, so it always matches the version you have.
+`qd.init(...)` accepts a wide set of configuration options as keyword arguments; each is also reachable as an environment variable of the form `QD_<UPPERCASE_NAME>` (e.g. `QD_OFFLINE_CACHE=0`). This page walks through the knobs that are commonly tuned in practice; the [full list of options](#all-options) is at the bottom.
 
 ## Caching
 
@@ -124,7 +124,7 @@ Metal and Vulkan lack the assertion extension that the field-bounds check relies
 
 ## All options
 
-Every `qd.init` keyword, with its type and a short description. This list is generated automatically from the installed build, so it always matches the version you have:
+Every `qd.init` keyword, with its type and a short description:
 
 ```{eval-rst}
 .. autoclass:: quadrants._lib.core.quadrants_python.CompileConfig
