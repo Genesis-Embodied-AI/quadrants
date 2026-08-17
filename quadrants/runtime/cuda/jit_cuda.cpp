@@ -194,7 +194,13 @@ static std::vector<char> ptx_to_relocatable_cubin(const std::string &ptx, const 
   auto cubin_path = fs::temp_directory_path() / (stem + ".cubin");
   {
     std::ofstream o(ptx_path, std::ios::binary);
-    o.write(ptx.data(), (std::streamsize)ptx.size());
+    // CUDA 13's `ptxas` rejects a trailing NUL in the PTX (err 255, "Unexpected EOF"); `compile_module_to_ptx` emits
+    // one. Strip any trailing NULs before writing. Harmless on older toolkits that tolerated it.
+    std::size_t n = ptx.size();
+    while (n > 0 && ptx[n - 1] == '\0') {
+      --n;
+    }
+    o.write(ptx.data(), (std::streamsize)n);
   }
   auto cmd = fmt::format("ptxas -c -arch={} {} -o {} 2>/dev/null", arch, ptx_path.string(), cubin_path.string());
   int rc = std::system(cmd.c_str());
