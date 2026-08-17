@@ -337,13 +337,13 @@
 <div class="viewcode-block" id="BufferViewType">
 <a class="viewcode-back" href="../../../autoapi/quadrants/types/buffer_view_type/index.html#quadrants.types.buffer_view_type.BufferViewType">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">BufferViewType</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Type annotation for BufferView kernel parameters.</span>
+<span class="w">    </span><span class="sd">"""Type annotation for BufferView kernel parameters.</span>
 
 <span class="sd">    A BufferView is decomposed into three kernel arguments (ndarray, offset, size) and reassembled at compile time.</span>
 
 <span class="sd">    Args:</span>
 <span class="sd">        dtype: Element data type (e.g. qd.f32).</span>
-<span class="sd">        boundary: Boundary mode for the underlying ndarray (&quot;unsafe&quot;, &quot;clamp&quot;).</span>
+<span class="sd">        boundary: Boundary mode for the underlying ndarray ("unsafe", "clamp").</span>
 
 <span class="sd">    Prefer using the ``BufferView[dtype]`` square-bracket syntax::</span>
 
@@ -353,9 +353,9 @@
 <span class="sd">        def k(v: BufferView[qd.f32]):</span>
 <span class="sd">            for i in range(v.size):</span>
 <span class="sd">                v[i] *= 2.0</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
 
-    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">boundary</span><span class="o">=</span><span class="s2">&quot;unsafe&quot;</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">boundary</span><span class="o">=</span><span class="s2">"unsafe"</span><span class="p">):</span>
 <div class="viewcode-block" id="BufferViewType.dtype">
 <a class="viewcode-back" href="../../../autoapi/quadrants/types/buffer_view_type/index.html#quadrants.types.buffer_view_type.BufferViewType.dtype">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">dtype</span> <span class="o">=</span> <span class="n">dtype</span></div>
@@ -366,11 +366,11 @@
 
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-        <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;BufferViewType(dtype=</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">dtype</span><span class="si">}</span><span class="s2">, boundary=</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">ndarray_type</span><span class="o">.</span><span class="n">boundary</span><span class="si">}</span><span class="s2">)&quot;</span></div>
+        <span class="k">return</span> <span class="sa">f</span><span class="s2">"BufferViewType(dtype=</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">dtype</span><span class="si">}</span><span class="s2">, boundary=</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">ndarray_type</span><span class="o">.</span><span class="n">boundary</span><span class="si">}</span><span class="s2">)"</span></div>
 
 
 
-<span class="n">__all__</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;BufferViewType&quot;</span><span class="p">]</span>
+<span class="n">__all__</span> <span class="o">=</span> <span class="p">[</span><span class="s2">"BufferViewType"</span><span class="p">]</span>
 </pre></div>
 
                 </article>

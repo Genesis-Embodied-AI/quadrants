@@ -601,12 +601,12 @@
 </pre></div>
 </div>
 <p>This will produce output like:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">perf_dispatch</span> <span class="s1">&#39;my_op&#39;</span><span class="p">:</span> <span class="n">registered</span> <span class="s1">&#39;my_op_v1&#39;</span>
-<span class="n">perf_dispatch</span> <span class="s1">&#39;my_op&#39;</span><span class="p">:</span> <span class="n">registered</span> <span class="s1">&#39;my_op_v2&#39;</span>
-<span class="n">perf_dispatch</span> <span class="s1">&#39;my_op&#39;</span><span class="p">:</span> <span class="n">available</span> <span class="n">implementations</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;my_op_v1&#39;</span><span class="p">,</span> <span class="s1">&#39;my_op_v2&#39;</span><span class="p">]</span>
-<span class="n">perf_dispatch</span> <span class="s1">&#39;transform&#39;</span><span class="p">:</span> <span class="n">registered</span> <span class="s1">&#39;transform_v1&#39;</span>
-<span class="n">perf_dispatch</span> <span class="s1">&#39;transform&#39;</span><span class="p">:</span> <span class="n">registered</span> <span class="s1">&#39;transform_v2&#39;</span>
-<span class="n">perf_dispatch</span> <span class="s1">&#39;transform&#39;</span><span class="p">:</span> <span class="n">available</span> <span class="n">implementations</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;transform_v1&#39;</span><span class="p">,</span> <span class="s1">&#39;transform_v2&#39;</span><span class="p">]</span>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">perf_dispatch</span> <span class="s1">'my_op'</span><span class="p">:</span> <span class="n">registered</span> <span class="s1">'my_op_v1'</span>
+<span class="n">perf_dispatch</span> <span class="s1">'my_op'</span><span class="p">:</span> <span class="n">registered</span> <span class="s1">'my_op_v2'</span>
+<span class="n">perf_dispatch</span> <span class="s1">'my_op'</span><span class="p">:</span> <span class="n">available</span> <span class="n">implementations</span><span class="p">:</span> <span class="p">[</span><span class="s1">'my_op_v1'</span><span class="p">,</span> <span class="s1">'my_op_v2'</span><span class="p">]</span>
+<span class="n">perf_dispatch</span> <span class="s1">'transform'</span><span class="p">:</span> <span class="n">registered</span> <span class="s1">'transform_v1'</span>
+<span class="n">perf_dispatch</span> <span class="s1">'transform'</span><span class="p">:</span> <span class="n">registered</span> <span class="s1">'transform_v2'</span>
+<span class="n">perf_dispatch</span> <span class="s1">'transform'</span><span class="p">:</span> <span class="n">available</span> <span class="n">implementations</span><span class="p">:</span> <span class="p">[</span><span class="s1">'transform_v1'</span><span class="p">,</span> <span class="s1">'transform_v2'</span><span class="p">]</span>
 </pre></div>
 </div>
 <p>If the requested implementation name doesn’t match any registered function, a warning is printed and the dispatcher falls back to normal benchmarking.</p>

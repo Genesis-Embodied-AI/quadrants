@@ -539,8 +539,8 @@ Passing a <code class="docutils literal notranslate"><span class="pre">&#64;data
 
 <span class="n">my_struct</span> <span class="o">=</span> <span class="n">MyStruct</span><span class="p">(</span><span class="n">a</span><span class="o">=</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="o">=</span><span class="n">b</span><span class="p">)</span>
 <span class="n">k1</span><span class="p">(</span><span class="n">my_struct</span><span class="p">)</span>
-<span class="nb">print</span><span class="p">(</span><span class="s2">&quot;my_struct.a[35]&quot;</span><span class="p">,</span> <span class="n">my_struct</span><span class="o">.</span><span class="n">a</span><span class="p">[</span><span class="mi">35</span><span class="p">])</span>
-<span class="nb">print</span><span class="p">(</span><span class="s2">&quot;my_struct.b[37]&quot;</span><span class="p">,</span> <span class="n">my_struct</span><span class="o">.</span><span class="n">b</span><span class="p">[</span><span class="mi">37</span><span class="p">])</span>
+<span class="nb">print</span><span class="p">(</span><span class="s2">"my_struct.a[35]"</span><span class="p">,</span> <span class="n">my_struct</span><span class="o">.</span><span class="n">a</span><span class="p">[</span><span class="mi">35</span><span class="p">])</span>
+<span class="nb">print</span><span class="p">(</span><span class="s2">"my_struct.b[37]"</span><span class="p">,</span> <span class="n">my_struct</span><span class="o">.</span><span class="n">b</span><span class="p">[</span><span class="mi">37</span><span class="p">])</span>
 </pre></div>
 </div>
 <p>Output:</p>
@@ -737,7 +737,7 @@ my_struct.b[37] 5
 
 <span class="c1"># AOS layout: each element of `particles` is a (pos, vel, mass) cell contiguous in memory.</span>
 <span class="c1"># Only possible because Particle is a `@qd.dataclass`. `@qd.data_oriented` and</span>
-<span class="c1"># `dataclasses.dataclass` containers can&#39;t be the element type of a tensor.</span>
+<span class="c1"># `dataclasses.dataclass` containers can't be the element type of a tensor.</span>
 <span class="n">particles</span> <span class="o">=</span> <span class="n">Particle</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="n">N</span><span class="p">,),</span> <span class="n">layout</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">Layout</span><span class="o">.</span><span class="n">AOS</span><span class="p">)</span>
 </pre></div>
 </div>
