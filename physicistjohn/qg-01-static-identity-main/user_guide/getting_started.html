@@ -448,7 +448,7 @@
 </section>
 <section id="sanity-checking-the-installation">
 <h3>Sanity checking the installation<a class="headerlink" href="#sanity-checking-the-installation" title="Link to this heading">#</a></h3>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>python<span class="w"> </span>-c<span class="w"> </span><span class="s1">&#39;import quadrants as qd; qd.init(arch=qd.gpu)&#39;</span>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>python<span class="w"> </span>-c<span class="w"> </span><span class="s1">'import quadrants as qd; qd.init(arch=qd.gpu)'</span>
 </pre></div>
 </div>
 <p>(should not show any error messages)</p>
@@ -485,7 +485,7 @@
 <span class="n">start</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
 <span class="n">lcg_np</span><span class="p">(</span><span class="n">B</span><span class="p">,</span> <span class="mi">1000</span><span class="p">,</span> <span class="n">a</span><span class="p">)</span>
 <span class="n">end</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
-<span class="nb">print</span><span class="p">(</span><span class="s2">&quot;elapsed&quot;</span><span class="p">,</span> <span class="n">end</span> <span class="o">-</span> <span class="n">start</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="s2">"elapsed"</span><span class="p">,</span> <span class="n">end</span> <span class="o">-</span> <span class="n">start</span><span class="p">)</span>
 </pre></div>
 </div>
 <p>You can find the full code also at <a class="reference download internal" download="" href="../_downloads/726bb7f3e2cc231d78100cf388670fca/lcg_python.py"><span class="xref download myst">lcg_python.py</span></a></p>
@@ -568,7 +568,7 @@
 
 <span class="n">qd</span><span class="o">.</span><span class="n">sync</span><span class="p">()</span>
 <span class="n">end</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
-<span class="nb">print</span><span class="p">(</span><span class="s2">&quot;elapsed&quot;</span><span class="p">,</span> <span class="n">end</span> <span class="o">-</span> <span class="n">start</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="s2">"elapsed"</span><span class="p">,</span> <span class="n">end</span> <span class="o">-</span> <span class="n">start</span><span class="p">)</span>
 </pre></div>
 </div>
 <p>When run on a Macbook Air M4, the output is something like:</p>
@@ -607,7 +607,7 @@
 <span class="n">qd</span><span class="o">.</span><span class="n">init</span><span class="p">(</span><span class="n">arch</span><span class="o">=</span><span class="n">qd</span><span class="o">.</span><span class="n">gpu</span><span class="p">)</span>
 
 <span class="n">parser</span> <span class="o">=</span> <span class="n">argparse</span><span class="o">.</span><span class="n">ArgumentParser</span><span class="p">()</span>
-<span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">&quot;--use-field&quot;</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s2">&quot;store_true&quot;</span><span class="p">)</span>
+<span class="n">parser</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span><span class="s2">"--use-field"</span><span class="p">,</span> <span class="n">action</span><span class="o">=</span><span class="s2">"store_true"</span><span class="p">)</span>
 <span class="n">args</span> <span class="o">=</span> <span class="n">parser</span><span class="o">.</span><span class="n">parse_args</span><span class="p">()</span>
 
 <span class="n">use_field</span> <span class="o">=</span> <span class="n">args</span><span class="o">.</span><span class="n">use_field</span>
@@ -639,7 +639,7 @@
 <span class="n">qd</span><span class="o">.</span><span class="n">sync</span><span class="p">()</span>
 <span class="n">end</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
 <span class="n">iteration_time</span> <span class="o">=</span> <span class="p">(</span><span class="n">end</span> <span class="o">-</span> <span class="n">start</span><span class="p">)</span> <span class="o">/</span> <span class="n">num_its</span> <span class="o">*</span> <span class="mi">1_000_000</span>
-<span class="nb">print</span><span class="p">(</span><span class="s2">&quot;iteration time&quot;</span><span class="p">,</span> <span class="n">iteration_time</span><span class="p">,</span> <span class="s2">&quot;us&quot;</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="s2">"iteration time"</span><span class="p">,</span> <span class="n">iteration_time</span><span class="p">,</span> <span class="s2">"us"</span><span class="p">)</span>
 </pre></div>
 </div>
 <p>Here are the outputs, using a 5090 gpu, on ubuntu:</p>

@@ -331,14 +331,14 @@
                 <article class="bd-article">
                   
   <h1>Source code for quadrants.lang.checkpoint</h1><div class="highlight"><pre>
-<span></span><span class="sd">&quot;&quot;&quot;User-facing ``qd.checkpoint`` context-manager and its no-op Python-runtime stub.</span>
+<span></span><span class="sd">"""User-facing ``qd.checkpoint`` context-manager and its no-op Python-runtime stub.</span>
 
 <span class="sd">Mirrors ``graph_status.py``, which holds the other half of the same feature surface (``GraphStatus``). Kept in its own</span>
 <span class="sd">module to keep ``lang/misc.py`` from growing further -- the AST transformer and the C++ runtime are doing all the actual</span>
 <span class="sd">implementation work; this file is just the public API entry point.</span>
 
 <span class="sd">Re-exported via ``qd.lang.misc`` (and therefore as ``qd.checkpoint``) for the user-facing canonical import path.</span>
-<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">"""</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
 
@@ -349,7 +349,7 @@
 <div class="viewcode-block" id="checkpoint">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/checkpoint/index.html#quadrants.lang.checkpoint.checkpoint">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">checkpoint</span><span class="p">(</span><span class="n">cp_id</span><span class="p">,</span> <span class="n">yield_on</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Marks a section of a graph kernel as a pause / resume point.</span>
+<span class="w">    </span><span class="sd">"""Marks a section of a graph kernel as a pause / resume point.</span>
 
 <span class="sd">    .. warning::</span>
 
@@ -369,7 +369,7 @@
 <span class="sd">            ``Stage.SIM`` (an ``IntEnum`` member), ``status.checkpoint`` round-trips back as ``Stage.SIM`` rather than</span>
 <span class="sd">            the raw int.</span>
 <span class="sd">        yield_on: Name of a kernel parameter that is a 0-d ``qd.types.ndarray(qd.i32, ndim=0)``. The body may write a</span>
-<span class="sd">            non-zero value into it to signal &quot;pause here, host needs to handle something&quot;. The framework never writes</span>
+<span class="sd">            non-zero value into it to signal "pause here, host needs to handle something". The framework never writes</span>
 <span class="sd">            into this buffer -- the host owns it end-to-end and must initialise it to ``0`` before the first launch</span>
 <span class="sd">            (``qd.ndarray`` is not zero-initialised) AND reset it to ``0`` before each ``kernel.resume(...)`` call</span>
 <span class="sd">            (otherwise the same checkpoint sees the stale non-zero value and yields again).</span>
@@ -388,7 +388,7 @@
 <span class="sd">    symbol freely.</span>
 
 <span class="sd">    See ``docs/source/user_guide/graph.md`` for the host-side yield/resume loop and cross-backend semantics.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
     <span class="k">del</span> <span class="n">cp_id</span><span class="p">,</span> <span class="n">yield_on</span>
     <span class="k">yield</span></div>
 

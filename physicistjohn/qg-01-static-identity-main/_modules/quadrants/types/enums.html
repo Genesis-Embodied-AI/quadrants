@@ -356,11 +356,11 @@
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">to_boundary_enum</span><span class="p">(</span><span class="n">boundary</span><span class="p">):</span>
-    <span class="k">if</span> <span class="n">boundary</span> <span class="o">==</span> <span class="s2">&quot;clamp&quot;</span><span class="p">:</span>
+    <span class="k">if</span> <span class="n">boundary</span> <span class="o">==</span> <span class="s2">"clamp"</span><span class="p">:</span>
         <span class="k">return</span> <span class="n">BoundaryMode</span><span class="o">.</span><span class="n">CLAMP</span>
-    <span class="k">if</span> <span class="n">boundary</span> <span class="o">==</span> <span class="s2">&quot;unsafe&quot;</span><span class="p">:</span>
+    <span class="k">if</span> <span class="n">boundary</span> <span class="o">==</span> <span class="s2">"unsafe"</span><span class="p">:</span>
         <span class="k">return</span> <span class="n">BoundaryMode</span><span class="o">.</span><span class="n">UNSAFE</span>
-    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Invalid boundary argument: </span><span class="si">{</span><span class="n">boundary</span><span class="si">}</span><span class="s2">. Valid options: &#39;unsafe&#39;, &#39;clamp&#39;&quot;</span><span class="p">)</span>
+    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Invalid boundary argument: </span><span class="si">{</span><span class="n">boundary</span><span class="si">}</span><span class="s2">. Valid options: 'unsafe', 'clamp'"</span><span class="p">)</span>
 
 
 <div class="viewcode-block" id="DeviceCapability">
@@ -368,112 +368,112 @@
 <span class="k">class</span><span class="w"> </span><span class="nc">DeviceCapability</span><span class="p">:</span>
 <div class="viewcode-block" id="DeviceCapability.spirv_version_1_3">
 <a class="viewcode-back" href="../../../autoapi/quadrants/types/enums/index.html#quadrants.types.enums.DeviceCapability.spirv_version_1_3">[docs]</a>
-    <span class="n">spirv_version_1_3</span> <span class="o">=</span> <span class="s2">&quot;spirv_version=66304&quot;</span></div>
+    <span class="n">spirv_version_1_3</span> <span class="o">=</span> <span class="s2">"spirv_version=66304"</span></div>
 
 <div class="viewcode-block" id="DeviceCapability.spirv_version_1_4">
 <a class="viewcode-back" href="../../../autoapi/quadrants/types/enums/index.html#quadrants.types.enums.DeviceCapability.spirv_version_1_4">[docs]</a>
-    <span class="n">spirv_version_1_4</span> <span class="o">=</span> <span class="s2">&quot;spirv_version=66560&quot;</span></div>
+    <span class="n">spirv_version_1_4</span> <span class="o">=</span> <span class="s2">"spirv_version=66560"</span></div>
 
 <div class="viewcode-block" id="DeviceCapability.spirv_version_1_5">
 <a class="viewcode-back" href="../../../autoapi/quadrants/types/enums/index.html#quadrants.types.enums.DeviceCapability.spirv_version_1_5">[docs]</a>
-    <span class="n">spirv_version_1_5</span> <span class="o">=</span> <span class="s2">&quot;spirv_version=66816&quot;</span></div>
+    <span class="n">spirv_version_1_5</span> <span class="o">=</span> <span class="s2">"spirv_version=66816"</span></div>
 
 <div class="viewcode-block" id="DeviceCapability.spirv_has_int8">
 <a class="viewcode-back" href="../../../autoapi/quadrants/types/enums/index.html#quadrants.types.enums.DeviceCapability.spirv_has_int8">[docs]</a>
-    <span class="n">spirv_has_int8</span> <span class="o">=</span> <span class="s2">&quot;spirv_has_int8&quot;</span></div>
+    <span class="n">spirv_has_int8</span> <span class="o">=</span> <span class="s2">"spirv_has_int8"</span></div>
 
 <div class="viewcode-block" id="DeviceCapability.spirv_has_int16">
 <a class="viewcode-back" href="../../../autoapi/quadrants/types/enums/index.html#quadrants.types.enums.DeviceCapability.spirv_has_int16">[docs]</a>
-    <span class="n">spirv_has_int16</span> <span class="o">=</span> <span class="s2">&quot;spirv_has_int16&quot;</span></div>
+    <span class="n">spirv_has_int16</span> <span class="o">=</span> <span class="s2">"spirv_has_int16"</span></div>
 
 <div class="viewcode-block" id="DeviceCapability.spirv_has_int64">
 <a class="viewcode-back" href="../../../autoapi/quadrants/types/enums/index.html#quadrants.types.enums.DeviceCapability.spirv_has_int64">[docs]</a>
-    <span class="n">spirv_has_int64</span> <span class="o">=</span> <span class="s2">&quot;spirv_has_int64&quot;</span></div>
+    <span class="n">spirv_has_int64</span> <span class="o">=</span> <span class="s2">"spirv_has_int64"</span></div>
 
 <div class="viewcode-block" id="DeviceCapability.spirv_has_float16">
 <a class="viewcode-back" href="../../../autoapi/quadrants/types/enums/index.html#quadrants.types.enums.DeviceCapability.spirv_has_float16">[docs]</a>
-    <span class="n">spirv_has_float16</span> <span class="o">=</span> <span class="s2">&quot;spirv_has_float16&quot;</span></div>
+    <span class="n">spirv_has_float16</span> <span class="o">=</span> <span class="s2">"spirv_has_float16"</span></div>
 
 <div class="viewcode-block" id="DeviceCapability.spirv_has_float64">
 <a class="viewcode-back" href="../../../autoapi/quadrants/types/enums/index.html#quadrants.types.enums.DeviceCapability.spirv_has_float64">[docs]</a>
-    <span class="n">spirv_has_float64</span> <span class="o">=</span> <span class="s2">&quot;spirv_has_float64&quot;</span></div>
+    <span class="n">spirv_has_float64</span> <span class="o">=</span> <span class="s2">"spirv_has_float64"</span></div>
 
 <div class="viewcode-block" id="DeviceCapability.spirv_has_atomic_int64">
 <a class="viewcode-back" href="../../../autoapi/quadrants/types/enums/index.html#quadrants.types.enums.DeviceCapability.spirv_has_atomic_int64">[docs]</a>
-    <span class="n">spirv_has_atomic_int64</span> <span class="o">=</span> <span class="s2">&quot;spirv_has_atomic_int64&quot;</span></div>
+    <span class="n">spirv_has_atomic_int64</span> <span class="o">=</span> <span class="s2">"spirv_has_atomic_int64"</span></div>
 
 <div class="viewcode-block" id="DeviceCapability.spirv_has_atomic_float16">
 <a class="viewcode-back" href="../../../autoapi/quadrants/types/enums/index.html#quadrants.types.enums.DeviceCapability.spirv_has_atomic_float16">[docs]</a>
-    <span class="n">spirv_has_atomic_float16</span> <span class="o">=</span> <span class="s2">&quot;spirv_has_atomic_float16&quot;</span></div>
+    <span class="n">spirv_has_atomic_float16</span> <span class="o">=</span> <span class="s2">"spirv_has_atomic_float16"</span></div>
 
 <div class="viewcode-block" id="DeviceCapability.spirv_has_atomic_float16_add">
 <a class="viewcode-back" href="../../../autoapi/quadrants/types/enums/index.html#quadrants.types.enums.DeviceCapability.spirv_has_atomic_float16_add">[docs]</a>
-    <span class="n">spirv_has_atomic_float16_add</span> <span class="o">=</span> <span class="s2">&quot;spirv_has_atomic_float16_add&quot;</span></div>
+    <span class="n">spirv_has_atomic_float16_add</span> <span class="o">=</span> <span class="s2">"spirv_has_atomic_float16_add"</span></div>
 
 <div class="viewcode-block" id="DeviceCapability.spirv_has_atomic_float16_minmax">
 <a class="viewcode-back" href="../../../autoapi/quadrants/types/enums/index.html#quadrants.types.enums.DeviceCapability.spirv_has_atomic_float16_minmax">[docs]</a>
-    <span class="n">spirv_has_atomic_float16_minmax</span> <span class="o">=</span> <span class="s2">&quot;spirv_has_atomic_float16_minmax&quot;</span></div>
+    <span class="n">spirv_has_atomic_float16_minmax</span> <span class="o">=</span> <span class="s2">"spirv_has_atomic_float16_minmax"</span></div>
 
 <div class="viewcode-block" id="DeviceCapability.spirv_has_atomic_float">
 <a class="viewcode-back" href="../../../autoapi/quadrants/types/enums/index.html#quadrants.types.enums.DeviceCapability.spirv_has_atomic_float">[docs]</a>
-    <span class="n">spirv_has_atomic_float</span> <span class="o">=</span> <span class="s2">&quot;spirv_has_atomic_float&quot;</span></div>
+    <span class="n">spirv_has_atomic_float</span> <span class="o">=</span> <span class="s2">"spirv_has_atomic_float"</span></div>
 
 <div class="viewcode-block" id="DeviceCapability.spirv_has_atomic_float_add">
 <a class="viewcode-back" href="../../../autoapi/quadrants/types/enums/index.html#quadrants.types.enums.DeviceCapability.spirv_has_atomic_float_add">[docs]</a>
-    <span class="n">spirv_has_atomic_float_add</span> <span class="o">=</span> <span class="s2">&quot;spirv_has_atomic_float_add&quot;</span></div>
+    <span class="n">spirv_has_atomic_float_add</span> <span class="o">=</span> <span class="s2">"spirv_has_atomic_float_add"</span></div>
 
 <div class="viewcode-block" id="DeviceCapability.spirv_has_atomic_float_minmax">
 <a class="viewcode-back" href="../../../autoapi/quadrants/types/enums/index.html#quadrants.types.enums.DeviceCapability.spirv_has_atomic_float_minmax">[docs]</a>
-    <span class="n">spirv_has_atomic_float_minmax</span> <span class="o">=</span> <span class="s2">&quot;spirv_has_atomic_float_minmax&quot;</span></div>
+    <span class="n">spirv_has_atomic_float_minmax</span> <span class="o">=</span> <span class="s2">"spirv_has_atomic_float_minmax"</span></div>
 
 <div class="viewcode-block" id="DeviceCapability.spirv_has_atomic_float64">
 <a class="viewcode-back" href="../../../autoapi/quadrants/types/enums/index.html#quadrants.types.enums.DeviceCapability.spirv_has_atomic_float64">[docs]</a>
-    <span class="n">spirv_has_atomic_float64</span> <span class="o">=</span> <span class="s2">&quot;spirv_has_atomic_float64&quot;</span></div>
+    <span class="n">spirv_has_atomic_float64</span> <span class="o">=</span> <span class="s2">"spirv_has_atomic_float64"</span></div>
 
 <div class="viewcode-block" id="DeviceCapability.spirv_has_atomic_float64_add">
 <a class="viewcode-back" href="../../../autoapi/quadrants/types/enums/index.html#quadrants.types.enums.DeviceCapability.spirv_has_atomic_float64_add">[docs]</a>
-    <span class="n">spirv_has_atomic_float64_add</span> <span class="o">=</span> <span class="s2">&quot;spirv_has_atomic_float64_add&quot;</span></div>
+    <span class="n">spirv_has_atomic_float64_add</span> <span class="o">=</span> <span class="s2">"spirv_has_atomic_float64_add"</span></div>
 
 <div class="viewcode-block" id="DeviceCapability.spirv_has_atomic_float64_minmax">
 <a class="viewcode-back" href="../../../autoapi/quadrants/types/enums/index.html#quadrants.types.enums.DeviceCapability.spirv_has_atomic_float64_minmax">[docs]</a>
-    <span class="n">spirv_has_atomic_float64_minmax</span> <span class="o">=</span> <span class="s2">&quot;spirv_has_atomic_float64_minmax&quot;</span></div>
+    <span class="n">spirv_has_atomic_float64_minmax</span> <span class="o">=</span> <span class="s2">"spirv_has_atomic_float64_minmax"</span></div>
 
 <div class="viewcode-block" id="DeviceCapability.spirv_has_variable_ptr">
 <a class="viewcode-back" href="../../../autoapi/quadrants/types/enums/index.html#quadrants.types.enums.DeviceCapability.spirv_has_variable_ptr">[docs]</a>
-    <span class="n">spirv_has_variable_ptr</span> <span class="o">=</span> <span class="s2">&quot;spirv_has_variable_ptr&quot;</span></div>
+    <span class="n">spirv_has_variable_ptr</span> <span class="o">=</span> <span class="s2">"spirv_has_variable_ptr"</span></div>
 
 <div class="viewcode-block" id="DeviceCapability.spirv_has_physical_storage_buffer">
 <a class="viewcode-back" href="../../../autoapi/quadrants/types/enums/index.html#quadrants.types.enums.DeviceCapability.spirv_has_physical_storage_buffer">[docs]</a>
-    <span class="n">spirv_has_physical_storage_buffer</span> <span class="o">=</span> <span class="s2">&quot;spirv_has_physical_storage_buffer&quot;</span></div>
+    <span class="n">spirv_has_physical_storage_buffer</span> <span class="o">=</span> <span class="s2">"spirv_has_physical_storage_buffer"</span></div>
 
 <div class="viewcode-block" id="DeviceCapability.spirv_has_subgroup_basic">
 <a class="viewcode-back" href="../../../autoapi/quadrants/types/enums/index.html#quadrants.types.enums.DeviceCapability.spirv_has_subgroup_basic">[docs]</a>
-    <span class="n">spirv_has_subgroup_basic</span> <span class="o">=</span> <span class="s2">&quot;spirv_has_subgroup_basic&quot;</span></div>
+    <span class="n">spirv_has_subgroup_basic</span> <span class="o">=</span> <span class="s2">"spirv_has_subgroup_basic"</span></div>
 
 <div class="viewcode-block" id="DeviceCapability.spirv_has_subgroup_vote">
 <a class="viewcode-back" href="../../../autoapi/quadrants/types/enums/index.html#quadrants.types.enums.DeviceCapability.spirv_has_subgroup_vote">[docs]</a>
-    <span class="n">spirv_has_subgroup_vote</span> <span class="o">=</span> <span class="s2">&quot;spirv_has_subgroup_vote&quot;</span></div>
+    <span class="n">spirv_has_subgroup_vote</span> <span class="o">=</span> <span class="s2">"spirv_has_subgroup_vote"</span></div>
 
 <div class="viewcode-block" id="DeviceCapability.spirv_has_subgroup_arithmetic">
 <a class="viewcode-back" href="../../../autoapi/quadrants/types/enums/index.html#quadrants.types.enums.DeviceCapability.spirv_has_subgroup_arithmetic">[docs]</a>
-    <span class="n">spirv_has_subgroup_arithmetic</span> <span class="o">=</span> <span class="s2">&quot;spirv_has_subgroup_arithmetic&quot;</span></div>
+    <span class="n">spirv_has_subgroup_arithmetic</span> <span class="o">=</span> <span class="s2">"spirv_has_subgroup_arithmetic"</span></div>
 
 <div class="viewcode-block" id="DeviceCapability.spirv_has_subgroup_ballot">
 <a class="viewcode-back" href="../../../autoapi/quadrants/types/enums/index.html#quadrants.types.enums.DeviceCapability.spirv_has_subgroup_ballot">[docs]</a>
-    <span class="n">spirv_has_subgroup_ballot</span> <span class="o">=</span> <span class="s2">&quot;spirv_has_subgroup_ballot&quot;</span></div>
+    <span class="n">spirv_has_subgroup_ballot</span> <span class="o">=</span> <span class="s2">"spirv_has_subgroup_ballot"</span></div>
 
 <div class="viewcode-block" id="DeviceCapability.spirv_has_non_semantic_info">
 <a class="viewcode-back" href="../../../autoapi/quadrants/types/enums/index.html#quadrants.types.enums.DeviceCapability.spirv_has_non_semantic_info">[docs]</a>
-    <span class="n">spirv_has_non_semantic_info</span> <span class="o">=</span> <span class="s2">&quot;spirv_has_non_semantic_info&quot;</span></div>
+    <span class="n">spirv_has_non_semantic_info</span> <span class="o">=</span> <span class="s2">"spirv_has_non_semantic_info"</span></div>
 
 <div class="viewcode-block" id="DeviceCapability.spirv_has_no_integer_wrap_decoration">
 <a class="viewcode-back" href="../../../autoapi/quadrants/types/enums/index.html#quadrants.types.enums.DeviceCapability.spirv_has_no_integer_wrap_decoration">[docs]</a>
-    <span class="n">spirv_has_no_integer_wrap_decoration</span> <span class="o">=</span> <span class="s2">&quot;spirv_has_no_integer_wrap_decoration&quot;</span></div>
+    <span class="n">spirv_has_no_integer_wrap_decoration</span> <span class="o">=</span> <span class="s2">"spirv_has_no_integer_wrap_decoration"</span></div>
 </div>
 
 
 
-<span class="n">__all__</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;Layout&quot;</span><span class="p">,</span> <span class="s2">&quot;AutodiffMode&quot;</span><span class="p">,</span> <span class="s2">&quot;SNodeGradType&quot;</span><span class="p">,</span> <span class="s2">&quot;Format&quot;</span><span class="p">,</span> <span class="s2">&quot;BoundaryMode&quot;</span><span class="p">,</span> <span class="s2">&quot;DeviceCapability&quot;</span><span class="p">]</span>
+<span class="n">__all__</span> <span class="o">=</span> <span class="p">[</span><span class="s2">"Layout"</span><span class="p">,</span> <span class="s2">"AutodiffMode"</span><span class="p">,</span> <span class="s2">"SNodeGradType"</span><span class="p">,</span> <span class="s2">"Format"</span><span class="p">,</span> <span class="s2">"BoundaryMode"</span><span class="p">,</span> <span class="s2">"DeviceCapability"</span><span class="p">]</span>
 </pre></div>
 
                 </article>

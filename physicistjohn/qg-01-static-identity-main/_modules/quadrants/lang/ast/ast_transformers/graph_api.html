@@ -332,7 +332,7 @@
                   
   <h1>Source code for quadrants.lang.ast.ast_transformers.graph_api</h1><div class="highlight"><pre>
 <span></span><span class="c1"># type: ignore</span>
-<span class="sd">&quot;&quot;&quot;Shared syntactic recognition of the graph-structuring kernel constructs, covering both the canonical</span>
+<span class="sd">"""Shared syntactic recognition of the graph-structuring kernel constructs, covering both the canonical</span>
 <span class="sd">``qd.graph.&lt;name&gt;`` namespace spelling and the deprecated flat ``qd.graph_&lt;name&gt;`` spelling.</span>
 
 <span class="sd">These constructs (``do_while``, ``parallel_context``, ``parallel``) are lowered at compile time and never actually</span>
@@ -341,7 +341,7 @@
 <span class="sd">``function_def_transformer.py``) stay in sync. Using the deprecated flat spelling emits a ``DeprecationWarning`` at</span>
 <span class="sd">compile time (see ``warn_if_deprecated``), which is the only place a warning can fire: the flat functions are recognized</span>
 <span class="sd">by the AST transformer and never executed inside a kernel.</span>
-<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">"""</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
 
@@ -350,27 +350,27 @@
 
 <span class="c1"># Canonical attribute name under ``qd.graph`` -&gt; deprecated flat ``qd.&lt;name&gt;`` spelling.</span>
 <span class="n">_FLAT_NAME</span> <span class="o">=</span> <span class="p">{</span>
-    <span class="s2">&quot;do_while&quot;</span><span class="p">:</span> <span class="s2">&quot;graph_do_while&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;parallel_context&quot;</span><span class="p">:</span> <span class="s2">&quot;graph_parallel_context&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;parallel&quot;</span><span class="p">:</span> <span class="s2">&quot;graph_parallel&quot;</span><span class="p">,</span>
+    <span class="s2">"do_while"</span><span class="p">:</span> <span class="s2">"graph_do_while"</span><span class="p">,</span>
+    <span class="s2">"parallel_context"</span><span class="p">:</span> <span class="s2">"graph_parallel_context"</span><span class="p">,</span>
+    <span class="s2">"parallel"</span><span class="p">:</span> <span class="s2">"graph_parallel"</span><span class="p">,</span>
 <span class="p">}</span>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_value_is_graph</span><span class="p">(</span><span class="n">value</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">expr</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;True if *value* is the ``graph`` of a ``&lt;...&gt;.graph.&lt;attr&gt;`` chain (e.g. the ``graph`` in ``qd.graph.do_while``)</span>
-<span class="sd">    or a bare ``graph`` name (``from quadrants import graph; graph.do_while(...)``).&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""True if *value* is the ``graph`` of a ``&lt;...&gt;.graph.&lt;attr&gt;`` chain (e.g. the ``graph`` in ``qd.graph.do_while``)</span>
+<span class="sd">    or a bare ``graph`` name (``from quadrants import graph; graph.do_while(...)``)."""</span>
     <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Attribute</span><span class="p">):</span>
-        <span class="k">return</span> <span class="n">value</span><span class="o">.</span><span class="n">attr</span> <span class="o">==</span> <span class="s2">&quot;graph&quot;</span>
+        <span class="k">return</span> <span class="n">value</span><span class="o">.</span><span class="n">attr</span> <span class="o">==</span> <span class="s2">"graph"</span>
     <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Name</span><span class="p">):</span>
-        <span class="k">return</span> <span class="n">value</span><span class="o">.</span><span class="n">id</span> <span class="o">==</span> <span class="s2">&quot;graph&quot;</span>
+        <span class="k">return</span> <span class="n">value</span><span class="o">.</span><span class="n">id</span> <span class="o">==</span> <span class="s2">"graph"</span>
     <span class="k">return</span> <span class="kc">False</span>
 
 
 <div class="viewcode-block" id="is_deprecated_spelling">
 <a class="viewcode-back" href="../../../../../autoapi/quadrants/lang/ast/ast_transformers/graph_api/index.html#quadrants.lang.ast.ast_transformers.graph_api.is_deprecated_spelling">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">is_deprecated_spelling</span><span class="p">(</span><span class="n">func</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">expr</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;True if *func* uses the deprecated flat ``qd.graph_&lt;name&gt;`` spelling (attribute ``x.graph_&lt;name&gt;`` or bare name</span>
-<span class="sd">    ``graph_&lt;name&gt;``).&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""True if *func* uses the deprecated flat ``qd.graph_&lt;name&gt;`` spelling (attribute ``x.graph_&lt;name&gt;`` or bare name</span>
+<span class="sd">    ``graph_&lt;name&gt;``)."""</span>
     <span class="n">flat</span> <span class="o">=</span> <span class="n">_FLAT_NAME</span><span class="p">[</span><span class="n">name</span><span class="p">]</span>
     <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">func</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Attribute</span><span class="p">)</span> <span class="ow">and</span> <span class="n">func</span><span class="o">.</span><span class="n">attr</span> <span class="o">==</span> <span class="n">flat</span><span class="p">:</span>
         <span class="k">return</span> <span class="kc">True</span>
@@ -383,9 +383,9 @@
 <div class="viewcode-block" id="matches">
 <a class="viewcode-back" href="../../../../../autoapi/quadrants/lang/ast/ast_transformers/graph_api/index.html#quadrants.lang.ast.ast_transformers.graph_api.matches">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">matches</span><span class="p">(</span><span class="n">func</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">expr</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;True if *func* refers to the construct *name*, in either the canonical ``qd.graph.&lt;name&gt;`` spelling or the</span>
+<span class="w">    </span><span class="sd">"""True if *func* refers to the construct *name*, in either the canonical ``qd.graph.&lt;name&gt;`` spelling or the</span>
 <span class="sd">    deprecated flat ``qd.graph_&lt;name&gt;`` spelling. ``name`` is one of ``do_while`` / ``parallel_context`` / ``parallel``.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
     <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">func</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Attribute</span><span class="p">)</span> <span class="ow">and</span> <span class="n">func</span><span class="o">.</span><span class="n">attr</span> <span class="o">==</span> <span class="n">name</span> <span class="ow">and</span> <span class="n">_value_is_graph</span><span class="p">(</span><span class="n">func</span><span class="o">.</span><span class="n">value</span><span class="p">):</span>
         <span class="k">return</span> <span class="kc">True</span>
     <span class="k">return</span> <span class="n">is_deprecated_spelling</span><span class="p">(</span><span class="n">func</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span></div>
@@ -395,14 +395,14 @@
 <div class="viewcode-block" id="warn_if_deprecated">
 <a class="viewcode-back" href="../../../../../autoapi/quadrants/lang/ast/ast_transformers/graph_api/index.html#quadrants.lang.ast.ast_transformers.graph_api.warn_if_deprecated">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">warn_if_deprecated</span><span class="p">(</span><span class="n">func</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">expr</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;If *func* uses the deprecated flat ``qd.graph_&lt;name&gt;`` spelling, emit a ``DeprecationWarning`` pointing at the</span>
-<span class="sd">    canonical ``qd.graph.&lt;name&gt;`` spelling. Called once from each construct&#39;s lowering entry point so the warning fires</span>
-<span class="sd">    per use-site (deduplicated to once per message by the ``filterwarnings(&#39;once&#39;, ...)`` set up in ``lang/misc.py``).</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""If *func* uses the deprecated flat ``qd.graph_&lt;name&gt;`` spelling, emit a ``DeprecationWarning`` pointing at the</span>
+<span class="sd">    canonical ``qd.graph.&lt;name&gt;`` spelling. Called once from each construct's lowering entry point so the warning fires</span>
+<span class="sd">    per use-site (deduplicated to once per message by the ``filterwarnings('once', ...)`` set up in ``lang/misc.py``).</span>
+<span class="sd">    """</span>
     <span class="k">if</span> <span class="n">is_deprecated_spelling</span><span class="p">(</span><span class="n">func</span><span class="p">,</span> <span class="n">name</span><span class="p">):</span>
         <span class="n">flat</span> <span class="o">=</span> <span class="n">_FLAT_NAME</span><span class="p">[</span><span class="n">name</span><span class="p">]</span>
         <span class="n">warnings</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span>
-            <span class="sa">f</span><span class="s2">&quot;qd.</span><span class="si">{</span><span class="n">flat</span><span class="si">}</span><span class="s2">() is deprecated and will be removed in a future release; use qd.graph.</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">() instead.&quot;</span><span class="p">,</span>
+            <span class="sa">f</span><span class="s2">"qd.</span><span class="si">{</span><span class="n">flat</span><span class="si">}</span><span class="s2">() is deprecated and will be removed in a future release; use qd.graph.</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">() instead."</span><span class="p">,</span>
             <span class="ne">DeprecationWarning</span><span class="p">,</span>
         <span class="p">)</span></div>
 
