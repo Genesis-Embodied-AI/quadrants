@@ -22,8 +22,9 @@ _C = (61001.0, 61002.0, 61003.0, 61004.0)
 _C_EDIT = 69999.0
 _N = 8
 
-# Separate constant for the parallelize probe below, for the same anti-collision reason.
+# Separate constants for the parallelize / whole-kernel-hit probes below, for the same anti-collision reason.
 _C_PAR = 71001.0
+_C_WK = 62001.0
 _N_PAR = 64
 
 
@@ -116,3 +117,34 @@ def test_per_offload_cache_parallelize_not_aliased() -> None:
     obs8 = kernel_par8._primal.per_offload_cache_observations
     assert obs8.constructs_recompiled >= 1, obs8
     assert obs8.constructs_cache_hit == obs8.constructs_total - obs8.constructs_recompiled, obs8
+
+
+# A byte-identical kernel hits the whole-kernel in-memory cache and never runs per-task codegen, so all per-offload
+# counts must be zero (the stats cached on the reused kernel data must not leak through as this compile's counts).
+@test_utils.test(arch=[qd.cuda], offline_cache=False)
+def test_per_offload_cache_whole_kernel_hit_reports_zero() -> None:
+    @qd.kernel
+    def kernel_first(x: qd.types.ndarray()) -> None:
+        for i in range(_N):
+            x[i] += _C_WK
+
+    @qd.kernel
+    def kernel_same(x: qd.types.ndarray()) -> None:
+        for i in range(_N):
+            x[i] += _C_WK
+
+    arr = qd.ndarray(qd.f32, shape=(_N,))
+
+    # Cold compile of the first kernel: per-task codegen runs, so counts are non-zero.
+    kernel_first(arr)
+    obs_first = kernel_first._primal.per_offload_cache_observations
+    assert obs_first.constructs_total >= 1, obs_first
+    assert obs_first.constructs_recompiled == obs_first.constructs_total, obs_first
+
+    # The second, byte-identical kernel warm-hits the whole-kernel in-memory cache: no per-task codegen runs, so every
+    # per-offload count is zero regardless of what the reused kernel data recorded when it was first compiled.
+    kernel_same(arr)
+    obs_same = kernel_same._primal.per_offload_cache_observations
+    assert obs_same.constructs_total == 0, obs_same
+    assert obs_same.constructs_cache_hit == 0, obs_same
+    assert obs_same.constructs_recompiled == 0, obs_same
