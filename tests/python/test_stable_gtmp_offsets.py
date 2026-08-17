@@ -89,10 +89,13 @@ def test_stable_gtmp_offsets_are_content_keyed(tmp_path: pathlib.Path, monkeypat
     reason="Known limitation flagged in PR #864 review (r3776617702): global-temp slots are bump-allocated in "
     "stable_key order, so a slot's offset is the cumulative size of every lower-keyed value rather than a function "
     "of the value alone. Inserting an unrelated cross-offload value whose key sorts earlier therefore still shifts "
-    "an unchanged value's offset (here i64: 0 -> 8), re-keying tasks that were not edited. This costs some per-task "
-    "cache reuse but never correctness (within a build all tasks agree on the layout). Remove this xfail when "
-    "offsets are made fully content-addressed.",
-    strict=True,
+    "an unchanged value's offset, re-keying tasks that were not edited. This costs some per-task cache reuse but "
+    "never correctness (within a build all tasks agree on the layout). Remove this xfail when offsets are made "
+    "fully content-addressed. Non-strict: stable_key incorporates typeid(*s).name(), whose ordering is "
+    "implementation-defined, so whether the inserted i32 sorts before the i64 (and thus whether this property "
+    "happens to hold on a given toolchain) is not portable -- a strict xfail would flip to a suite failure as an "
+    "XPASS on a toolchain that orders them the other way, even though the limitation still exists.",
+    strict=False,
 )
 @test_utils.test(arch=[qd.cpu], offline_cache=False)
 def test_gtmp_offset_stable_under_unrelated_insertion(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch):
@@ -100,8 +103,12 @@ def test_gtmp_offset_stable_under_unrelated_insertion(tmp_path: pathlib.Path, mo
 
     Adding an *unrelated* cross-offload value elsewhere in the kernel should not move an existing
     value's offset (otherwise the untouched value's task re-keys and misses the per-task cache).
-    Today it does move: the inserted i32 value sorts before the i64 value by stable_key, and the
-    dense bump allocator pushes the i64 slot from offset 0 to offset 8.
+    Today it can still move: when the inserted i32 value sorts before the i64 value by stable_key,
+    the dense bump allocator pushes the i64 slot to a higher offset. Whether that ordering happens
+    is toolchain-dependent (stable_key uses typeid(*s).name()), so this is a non-strict xfail: on
+    toolchains where the i32 sorts after the i64 the offset is unchanged and the test XPASSes, which
+    is fine -- the limitation is that the offset is *not guaranteed* to be stable, not that it always
+    moves.
     """
     monkeypatch.setenv("QD_DUMP_IR", "1")
     qd.lang.impl.current_cfg().debug_dump_path = str(tmp_path)
@@ -140,5 +147,6 @@ def test_gtmp_offset_stable_under_unrelated_insertion(tmp_path: pathlib.Path, mo
     assert "i64" in off_only and "i64" in off_both, (off_only, off_both)
     assert "i32" in off_both, off_both
     # The desired (not-yet-achieved) property: the i64 value's offset is unaffected by the unrelated
-    # i32 value. This currently fails (0 vs 8), which is why the test is marked xfail.
+    # i32 value. This is not guaranteed today (the i32 may sort before the i64 and bump its offset),
+    # which is why the test is a non-strict xfail rather than a hard assertion.
     assert off_only["i64"] == off_both["i64"], (off_only, off_both)
