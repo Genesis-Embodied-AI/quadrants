@@ -584,7 +584,7 @@
 </section>
 <section id="all-options">
 <h2>All options<a class="headerlink" href="#all-options" title="Link to this heading">#</a></h2>
-<p>Most <code class="docutils literal notranslate"><span class="pre">qd.init</span></code> keywords set a compiler-configuration option. Each is listed below with its type and a short description. (<code class="docutils literal notranslate"><span class="pre">default_up</span></code> is omitted because it is always derived from <code class="docutils literal notranslate"><span class="pre">default_ip</span></code> and cannot be set directly.)</p>
+<p>Most <code class="docutils literal notranslate"><span class="pre">qd.init</span></code> keywords set a compiler-configuration option. Each option below can be passed as a keyword argument to <code class="docutils literal notranslate"><span class="pre">qd.init(...)</span></code>, and after initialization is also readable and writable as an attribute on the configuration object <code class="docutils literal notranslate"><span class="pre">qd.cfg</span></code> (e.g. <code class="docutils literal notranslate"><span class="pre">qd.cfg.opt_level</span></code>). That dual nature is why each is listed below as a <em>property</em> of <code class="docutils literal notranslate"><span class="pre">qd.cfg</span></code>, with its type and a short description. (<code class="docutils literal notranslate"><span class="pre">default_up</span></code> is omitted because it is always derived from <code class="docutils literal notranslate"><span class="pre">default_ip</span></code> and cannot be set directly.)</p>
 <dl class="py class">
 <dt class="sig sig-object py" id="quadrants._lib.core.quadrants_python.CompileConfig">
 <em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">CompileConfig</span></span><a class="headerlink" href="#quadrants._lib.core.quadrants_python.CompileConfig" title="Link to this definition">#</a></dt>
@@ -1022,7 +1022,7 @@
 <dl class="py property">
 <dt class="sig sig-object py" id="quadrants._lib.core.quadrants_python.CompileConfig.vk_api_version">
 <em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">vk_api_version</span></span><a class="headerlink" href="#quadrants._lib.core.quadrants_python.CompileConfig.vk_api_version" title="Link to this definition">#</a></dt>
-<dd><p>Vulkan API version string to request (empty selects the default).</p>
+<dd><p>Vulkan API version to request, as a “major.minor.patch” string (e.g. “1.3.0”). Empty lets Quadrants select a usable version automatically.</p>
 </dd></dl>
 
 </dd></dl>
