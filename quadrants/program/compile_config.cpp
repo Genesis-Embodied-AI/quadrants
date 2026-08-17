@@ -7,57 +7,11 @@
 namespace quadrants::lang {
 
 CompileConfig::CompileConfig() {
-  arch = host_arch();
-  simd_width = default_simd_width(arch);
-  opt_level = 1;
-  external_optimization_level = 3;
-  print_ir = false;
-  print_preprocessed_ir = false;
-  print_accessor_ir = false;
-  use_llvm = true;
-  demote_dense_struct_fors = true;
-  advanced_optimization = true;
-  constant_folding = true;
-  max_vector_width = 8;
-  serial_schedule = false;
-  simplify_before_lower_access = true;
-  lower_access = true;
-  simplify_after_lower_access = true;
-  move_loop_invariant_outside_if = false;
-  default_fp = PrimitiveType::f32;
-  default_ip = PrimitiveType::i32;
-  default_up = PrimitiveType::u32;
-  verbose_kernel_launches = false;
-  kernel_profiler = false;
-  default_cpu_block_dim = 32;
-  cpu_block_dim_adaptive = true;
-  default_gpu_block_dim = 128;
-  gpu_max_reg = 0;  // 0 means using the default value from the CUDA driver.
-  verbose = true;
-  flatten_if = false;
-  make_thread_local = true;
-  make_block_local = true;
-  detect_read_only = true;
-  real_matrix_scalarize = true;
-  force_scalarize_matrix = false;
-  half2_vectorization = false;
-  make_cpu_multithreading_loop = true;
-
-  saturating_grid_dim = 0;
-  max_block_dim = 0;
-  cpu_max_num_threads = std::thread::hardware_concurrency();
-  random_seed = 0;
-
-  // LLVM backend options:
-  print_struct_llvm_ir = false;
-  print_kernel_llvm_ir = false;
-  print_kernel_asm = false;
-  print_kernel_amdgcn = false;
-  print_kernel_llvm_ir_optimized = false;
-
-  // CUDA/AMDGPU backend options:
-  device_memory_GB = 1;  // by default, preallocate 1 GB GPU memory
-  device_memory_fraction = 0.0;
+  // Assignments for the computed (non-literal) defaults are generated from
+  // tools/config_codegen/schema.py; literal defaults live as in-class member
+  // initializers in compile_config.h. Emitted in schema order so a computed
+  // default may reference an earlier one (e.g. simd_width uses arch).
+#include "quadrants/program/compile_config.ctor.generated.inc"
 }
 
 void CompileConfig::fit() {

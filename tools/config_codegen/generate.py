@@ -6,12 +6,13 @@ perso_hugh/doc/config_self_documenting_design.md, for the CMake wiring). It
 loads ``schema.py`` and emits:
 
   * compile_config.fields.generated.inc   - struct members + in-class defaults
+  * compile_config.ctor.generated.inc     - constructor assignments for the
+                                            non-literal (computed) defaults
   * compile_config.bindings.generated.inc - nanobind .def_rw(...) chain
 
-Computed (non-literal) defaults are emitted as in-class initializers too (e.g.
-``std::string offline_cache_file_path{get_repo_dir() + "qdcache"};``), matching
-how the hand-written struct already does it, so no separate ctor fragment is
-needed.
+Literal defaults become in-class member initializers; computed defaults are
+declared without one and assigned in the constructor fragment, mirroring how the
+hand-written struct split them before the migration.
 
 It can also print a markdown reference table (used for eyeballing / as a docs
 fallback) so the exact same schema drives code and docs.
@@ -53,6 +54,7 @@ class Option:
     py_type: str
     doc: str
     is_computed: bool
+    bind: bool = True  # exposed to Python via nanobind def_rw
     literal_default: object = None  # set when not computed
     computed_expr: str = ""  # set when computed
     computed_doc: str = ""  # set when computed
@@ -96,14 +98,24 @@ def _attr_docstrings(path: Path) -> dict[str, str]:
 
 
 def _resolve_types(mod, annotation) -> tuple[str, str]:
-    """(cpp_type, py_type) for an annotation, honoring Annotated[int, Cpp(...)]."""
+    """(cpp_type, py_type) for an annotation.
+
+    Handles a bare ``Cpp("Arch")`` (non-primitive frontend type), an
+    ``Annotated[int, Cpp("std::size_t")]`` width override, and plain Python
+    types (``bool``/``int``/``float``/``str``).
+    """
+    if isinstance(annotation, mod.Cpp):  # bare marker, e.g. Cpp("Arch")
+        return annotation.cpp_type, (annotation.py or annotation.cpp_type)
     if hasattr(annotation, "__metadata__"):  # typing.Annotated[...]
         base = typing.get_args(annotation)[0]
         override = next((m.cpp_type for m in annotation.__metadata__ if isinstance(m, mod.Cpp)), None)
-    else:
-        base = annotation
-        override = None
-    return override or _DEFAULT_CPP[base], _PY_NAME[base]
+        return override or _DEFAULT_CPP[base], _PY_NAME[base]
+    return _DEFAULT_CPP[annotation], _PY_NAME[annotation]
+
+
+def _is_bound(mod, annotation) -> bool:
+    """False when the annotation carries the NoBind marker."""
+    return not any(m is mod.NoBind for m in getattr(annotation, "__metadata__", ()))
 
 
 def load_options() -> list[Option]:
@@ -112,15 +124,16 @@ def load_options() -> list[Option]:
     options: list[Option] = []
     for name, annotation in mod.Options.__annotations__.items():
         cpp_type, py_type = _resolve_types(mod, annotation)
+        bind = _is_bound(mod, annotation)
         default = getattr(mod.Options, name)
         if isinstance(default, mod.Computed):
             options.append(
-                Option(name, cpp_type, py_type, docs.get(name, ""), True,
+                Option(name, cpp_type, py_type, docs.get(name, ""), True, bind,
                        computed_expr=default.cpp_expr, computed_doc=default.doc)
             )
         else:
             options.append(
-                Option(name, cpp_type, py_type, docs.get(name, ""), False, literal_default=default)
+                Option(name, cpp_type, py_type, docs.get(name, ""), False, bind, literal_default=default)
             )
     return options
 
@@ -140,6 +153,8 @@ def cpp_literal(value) -> str:
         return "true" if value else "false"
     if isinstance(value, int):
         return str(value)
+    if isinstance(value, float):
+        return repr(value)  # e.g. 1.0, 0.0, 0.25
     if isinstance(value, str):
         return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
     raise TypeError(f"unsupported literal type for {value!r}")
@@ -149,22 +164,40 @@ def emit_fields() -> str:
     out = [BANNER, ""]
     for opt in get_options():
         out.append(f"  /// {opt.doc}")
-        initializer = opt.computed_expr if opt.is_computed else cpp_literal(opt.literal_default)
-        out.append(f"  {opt.cpp_type} {opt.name}{{{initializer}}};")
+        if opt.is_computed:
+            # Assigned in the generated constructor fragment (emit_ctor).
+            out.append(f"  {opt.cpp_type} {opt.name};")
+        else:
+            out.append(f"  {opt.cpp_type} {opt.name}{{{cpp_literal(opt.literal_default)}}};")
         out.append("")
+    return "\n".join(out).rstrip() + "\n"
+
+
+def emit_ctor() -> str:
+    """Constructor-body assignments for the computed (non-literal) defaults.
+
+    Emitted in schema order, so a computed default may reference an earlier one
+    (e.g. simd_width uses arch)."""
+    out = [BANNER, ""]
+    for opt in get_options():
+        if opt.is_computed:
+            out.append(f"  {opt.name} = {opt.computed_expr};")
     return "\n".join(out).rstrip() + "\n"
 
 
 def emit_bindings() -> str:
     out = [BANNER, ""]
     for opt in get_options():
-        out.append(f'      .def_rw("{opt.name}", &CompileConfig::{opt.name})')
+        if opt.bind:
+            out.append(f'      .def_rw("{opt.name}", &CompileConfig::{opt.name})')
     return "\n".join(out).rstrip() + "\n"
 
 
 def to_rows() -> list[tuple[str, str, str, str]]:
-    """(name, py_type, default_display, doc) rows shared with the Sphinx directive."""
-    return [(o.name, o.py_type, o.default_display(), o.doc) for o in get_options()]
+    """(name, py_type, default_display, doc) rows for the docs.
+
+    Only the Python-settable (bound) options are user-facing."""
+    return [(o.name, o.py_type, o.default_display(), o.doc) for o in get_options() if o.bind]
 
 
 def emit_markdown() -> str:
@@ -185,6 +218,7 @@ def emit_json() -> str:
             "doc": o.doc,
         }
         for o in get_options()
+        if o.bind
     ]
     return json.dumps(payload, indent=2) + "\n"
 
@@ -192,11 +226,13 @@ def emit_json() -> str:
 # Where each generated file lands, relative to the repo root (--out-dir).
 OUTPUTS = {
     "quadrants/program/compile_config.fields.generated.inc": emit_fields,
+    "quadrants/program/compile_config.ctor.generated.inc": emit_ctor,
     "quadrants/python/compile_config.bindings.generated.inc": emit_bindings,
 }
 
 EMITTERS = {
     "fields": emit_fields,
+    "ctor": emit_ctor,
     "bindings": emit_bindings,
     "markdown": emit_markdown,
     "json": emit_json,
