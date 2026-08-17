@@ -1,4 +1,12 @@
+import os
+import sys
+
 import quadrants as qd
+
+# Make the option-schema Sphinx extension (tools/config_codegen/sphinx_ext.py)
+# importable so the qd-config-options directive can render the qd.init options
+# from the same schema that generates the C++ defaults.
+sys.path.insert(0, os.path.abspath("../../tools/config_codegen"))
 
 __version__ = ".".join([str(v) for v in qd.__version__])
 # Configuration file for the Sphinx documentation builder.
@@ -36,6 +44,7 @@ extensions = [
     "sphinx_togglebutton",
     "sphinx_design",
     "autoapi.extension",
+    "sphinx_ext",
 ]
 
 # https://myst-parser.readthedocs.io/en/latest/syntax/optional.html
