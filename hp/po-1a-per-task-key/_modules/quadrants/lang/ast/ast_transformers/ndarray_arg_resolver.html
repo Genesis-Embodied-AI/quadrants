@@ -332,10 +332,10 @@
                   
   <h1>Source code for quadrants.lang.ast.ast_transformers.ndarray_arg_resolver</h1><div class="highlight"><pre>
 <span></span><span class="c1"># type: ignore</span>
-<span class="sd">&quot;&quot;&quot;Resolve an ndarray-referencing AST expression to its flat C++ kernel arg-id at AST-build time.</span>
+<span class="sd">"""Resolve an ndarray-referencing AST expression to its flat C++ kernel arg-id at AST-build time.</span>
 
 <span class="sd">Lives alongside ``checkpoint_transformer.py`` / ``call_transformer.py`` so the central ``ast_transformer.py`` file</span>
-<span class="sd">doesn&#39;t have to grow per-feature. Both ``qd.checkpoint(yield_on=...)`` (via</span>
+<span class="sd">doesn't have to grow per-feature. Both ``qd.checkpoint(yield_on=...)`` (via</span>
 <span class="sd">``CheckpointTransformer.build_checkpoint_with``) and ``qd.graph_do_while(...)`` (via ``ASTTransformer.build_While``)</span>
 <span class="sd">share this helper: each form takes a control-flag / counter ndarray argument that may be a bare kernel parameter</span>
 <span class="sd">(e.g. ``flag``), a ``@qd.data_oriented`` member ndarray (e.g. ``self.flag``), or a ``@dataclasses.dataclass``</span>
@@ -346,7 +346,7 @@
 
 <span class="sd">See ``docs/source/user_guide/graph.md`` for the user-facing surface and ``perso_hugh/doc/qipc/reentrant.md`` for the</span>
 <span class="sd">design.</span>
-<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">"""</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
 
@@ -364,7 +364,7 @@
     <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">expr</span><span class="p">,</span>
     <span class="n">usage</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">int</span><span class="p">]:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Resolve ``node`` to ``(label, flat_cpp_arg_id)`` at AST-build time.</span>
+<span class="w">    </span><span class="sd">"""Resolve ``node`` to ``(label, flat_cpp_arg_id)`` at AST-build time.</span>
 
 <span class="sd">    Shared between ``qd.checkpoint(yield_on=...)`` and ``qd.graph_do_while(...)`` to turn the control-flag argument into</span>
 <span class="sd">    the flat C++ arg-id the runtime matches against. ``node`` is an ``ast.Name`` (a bare kernel parameter, e.g.</span>
@@ -374,12 +374,12 @@
 <span class="sd">    member-ndarray cases, since both flatten to a real ndarray kernel argument carrying its arg-id on the</span>
 <span class="sd">    ``ExternalTensorExpression``.</span>
 
-<span class="sd">    ``usage`` is the call form (e.g. ``&quot;qd.checkpoint(yield_on=...)&quot;``) used in the error message. Raises</span>
+<span class="sd">    ``usage`` is the call form (e.g. ``"qd.checkpoint(yield_on=...)"``) used in the error message. Raises</span>
 <span class="sd">    ``QuadrantsSyntaxError`` if the expression does not resolve to an ndarray kernel argument.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
     <span class="c1"># Local imports to avoid an ast_transformers -&gt; ast_transformer / any_array import cycle at module load:</span>
     <span class="c1"># ``ast_transformer`` is the central transformer module that imports ``checkpoint_transformer`` (sibling of this</span>
-    <span class="c1"># file), and ``any_array`` pulls in core ndarray bindings that aren&#39;t needed for module import.</span>
+    <span class="c1"># file), and ``any_array`` pulls in core ndarray bindings that aren't needed for module import.</span>
     <span class="c1"># pylint: disable=import-outside-toplevel</span>
     <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.any_array</span><span class="w"> </span><span class="kn">import</span> <span class="n">AnyArray</span>
     <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.ast.ast_transformer</span><span class="w"> </span><span class="kn">import</span> <span class="n">_qd_core</span><span class="p">,</span> <span class="n">build_stmt</span>
@@ -388,17 +388,17 @@
 
     <span class="n">label</span> <span class="o">=</span> <span class="n">ast</span><span class="o">.</span><span class="n">unparse</span><span class="p">(</span><span class="n">node</span><span class="p">)</span>
     <span class="n">bad</span> <span class="o">=</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span>
-        <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">usage</span><span class="si">}</span><span class="s2"> got </span><span class="si">{</span><span class="n">label</span><span class="si">!r}</span><span class="s2"> which does not resolve to an ndarray kernel parameter of &quot;</span>
-        <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">kernel</span><span class="o">.</span><span class="n">func</span><span class="o">.</span><span class="vm">__name__</span><span class="si">!r}</span><span class="s2">. The argument must reference an ndarray kernel parameter (e.g. &quot;</span>
-        <span class="sa">f</span><span class="s2">&quot;`flag`) or a @qd.data_oriented member ndarray (e.g. `self.flag`); other expressions are not &quot;</span>
-        <span class="sa">f</span><span class="s2">&quot;supported.&quot;</span>
+        <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">usage</span><span class="si">}</span><span class="s2"> got </span><span class="si">{</span><span class="n">label</span><span class="si">!r}</span><span class="s2"> which does not resolve to an ndarray kernel parameter of "</span>
+        <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">kernel</span><span class="o">.</span><span class="n">func</span><span class="o">.</span><span class="vm">__name__</span><span class="si">!r}</span><span class="s2">. The argument must reference an ndarray kernel parameter (e.g. "</span>
+        <span class="sa">f</span><span class="s2">"`flag`) or a @qd.data_oriented member ndarray (e.g. `self.flag`); other expressions are not "</span>
+        <span class="sa">f</span><span class="s2">"supported."</span>
     <span class="p">)</span>
     <span class="k">try</span><span class="p">:</span>
         <span class="n">built</span> <span class="o">=</span> <span class="n">build_stmt</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="p">)</span>
     <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>  <span class="c1"># noqa: BLE001 - any resolution failure is a user-facing misuse</span>
         <span class="k">raise</span> <span class="n">bad</span> <span class="kn">from</span><span class="w"> </span><span class="nn">e</span>
     <span class="n">resolved_expr</span> <span class="o">=</span> <span class="n">built</span><span class="o">.</span><span class="n">ptr</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">built</span><span class="p">,</span> <span class="n">AnyArray</span><span class="p">)</span> <span class="k">else</span> <span class="n">built</span>
-    <span class="k">if</span> <span class="ow">not</span> <span class="p">(</span><span class="nb">hasattr</span><span class="p">(</span><span class="n">resolved_expr</span><span class="p">,</span> <span class="s2">&quot;is_external_tensor_expr&quot;</span><span class="p">)</span> <span class="ow">and</span> <span class="n">resolved_expr</span><span class="o">.</span><span class="n">is_external_tensor_expr</span><span class="p">()):</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="p">(</span><span class="nb">hasattr</span><span class="p">(</span><span class="n">resolved_expr</span><span class="p">,</span> <span class="s2">"is_external_tensor_expr"</span><span class="p">)</span> <span class="ow">and</span> <span class="n">resolved_expr</span><span class="o">.</span><span class="n">is_external_tensor_expr</span><span class="p">()):</span>
         <span class="k">raise</span> <span class="n">bad</span>
     <span class="n">arg_id</span> <span class="o">=</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">get_external_tensor_arg_id</span><span class="p">(</span><span class="n">resolved_expr</span><span class="p">)</span>
     <span class="k">if</span> <span class="ow">not</span> <span class="n">arg_id</span><span class="p">:</span>

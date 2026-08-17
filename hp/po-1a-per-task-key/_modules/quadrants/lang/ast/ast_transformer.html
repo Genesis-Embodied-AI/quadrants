@@ -424,7 +424,7 @@
         <span class="n">primitive_types</span><span class="o">.</span><span class="n">u32</span><span class="p">,</span>
     <span class="p">]:</span>
         <span class="n">warnings</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span>
-            <span class="sa">f</span><span class="s2">&quot;Casting range_for boundary values from </span><span class="si">{</span><span class="n">expr_dtype</span><span class="si">}</span><span class="s2"> to i32, which may cause numerical issues&quot;</span><span class="p">,</span>
+            <span class="sa">f</span><span class="s2">"Casting range_for boundary values from </span><span class="si">{</span><span class="n">expr_dtype</span><span class="si">}</span><span class="s2"> to i32, which may cause numerical issues"</span><span class="p">,</span>
             <span class="ne">Warning</span><span class="p">,</span>
         <span class="p">)</span></div>
 
@@ -438,7 +438,7 @@
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer/index.html#quadrants.lang.ast.ast_transformer.ASTTransformer.build_Name">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">build_Name</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">ASTTransformerFuncContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">Name</span><span class="p">):</span>
         <span class="n">pruning</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">global_context</span><span class="o">.</span><span class="n">pruning</span>
-        <span class="k">if</span> <span class="ow">not</span> <span class="n">pruning</span><span class="o">.</span><span class="n">enforcing</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">ctx</span><span class="o">.</span><span class="n">expanding_dataclass_call_parameters</span> <span class="ow">and</span> <span class="n">node</span><span class="o">.</span><span class="n">id</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;__qd_&quot;</span><span class="p">):</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">pruning</span><span class="o">.</span><span class="n">enforcing</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">ctx</span><span class="o">.</span><span class="n">expanding_dataclass_call_parameters</span> <span class="ow">and</span> <span class="n">node</span><span class="o">.</span><span class="n">id</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">"__qd_"</span><span class="p">):</span>
             <span class="n">ctx</span><span class="o">.</span><span class="n">global_context</span><span class="o">.</span><span class="n">pruning</span><span class="o">.</span><span class="n">mark_used</span><span class="p">(</span><span class="n">ctx</span><span class="o">.</span><span class="n">func</span><span class="o">.</span><span class="n">func_id</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">id</span><span class="p">)</span>
         <span class="n">node</span><span class="o">.</span><span class="n">violates_pure</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">violates_pure_reason</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">get_var_by_name</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">id</span><span class="p">)</span>
         <span class="c1"># Flattened struct fields (``__qd_foo__qd_bar``) injected by ``populate_global_vars_from_dataclass`` are raw</span>
@@ -456,7 +456,7 @@
             <span class="c1"># in exactly the same way as a captured int/float.</span>
             <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="p">(</span><span class="nb">float</span><span class="p">,</span> <span class="nb">int</span><span class="p">,</span> <span class="nb">str</span><span class="p">,</span> <span class="n">Field</span><span class="p">)):</span>
                 <span class="k">if</span> <span class="ow">not</span> <span class="n">_is_quadrants_internal_file</span><span class="p">(</span><span class="n">ctx</span><span class="o">.</span><span class="n">file</span><span class="p">):</span>
-                    <span class="n">message</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;[PURE.VIOLATION] WARNING: Accessing global variable </span><span class="si">{</span><span class="n">node</span><span class="o">.</span><span class="n">id</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">ptr</span><span class="p">)</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">node</span><span class="o">.</span><span class="n">violates_pure_reason</span><span class="si">}</span><span class="s2">&quot;</span>
+                    <span class="n">message</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"[PURE.VIOLATION] WARNING: Accessing global variable </span><span class="si">{</span><span class="n">node</span><span class="o">.</span><span class="n">id</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">ptr</span><span class="p">)</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">node</span><span class="o">.</span><span class="n">violates_pure_reason</span><span class="si">}</span><span class="s2">"</span>
                     <span class="c1"># Transition period: violations inside a ``qd.static`` scope only warn instead of raising, giving</span>
                     <span class="c1"># downstream code time to migrate such constants to kernel params. ``UPPERCASE`` names also warn.</span>
                     <span class="k">if</span> <span class="n">node</span><span class="o">.</span><span class="n">id</span><span class="o">.</span><span class="n">upper</span><span class="p">()</span> <span class="o">==</span> <span class="n">node</span><span class="o">.</span><span class="n">id</span> <span class="ow">or</span> <span class="n">ctx</span><span class="o">.</span><span class="n">is_in_static_scope</span><span class="p">():</span>
@@ -464,7 +464,7 @@
                     <span class="k">else</span><span class="p">:</span>
                         <span class="k">raise</span> <span class="n">exception</span><span class="o">.</span><span class="n">QuadrantsCompilationError</span><span class="p">(</span><span class="n">message</span><span class="p">)</span>
         <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">Generator</span><span class="p">):</span>
-            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Cannot store generators in variables, inside kernels or functions&quot;</span><span class="p">)</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"Cannot store generators in variables, inside kernels or functions"</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">node</span><span class="o">.</span><span class="n">ptr</span></div>
 
 
@@ -493,7 +493,7 @@
         <span class="n">is_static_assign</span><span class="p">:</span> <span class="nb">bool</span><span class="p">,</span>
         <span class="n">annotation</span><span class="p">:</span> <span class="n">Type</span><span class="p">,</span>
     <span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Build an annotated assignment like this: target: annotation = value.</span>
+<span class="w">        </span><span class="sd">"""Build an annotated assignment like this: target: annotation = value.</span>
 
 <span class="sd">        Args:</span>
 <span class="sd">           ctx (ast_builder_utils.BuilderContext): The builder context.</span>
@@ -501,16 +501,16 @@
 <span class="sd">           annotation: A type we hope to assign to the target</span>
 <span class="sd">           value: A node representing the value.</span>
 <span class="sd">           is_static_assign: A boolean value indicating whether this is a static assignment</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="n">is_local</span> <span class="o">=</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">target</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Name</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">is_local</span> <span class="ow">and</span> <span class="n">target</span><span class="o">.</span><span class="n">id</span> <span class="ow">in</span> <span class="n">ctx</span><span class="o">.</span><span class="n">kernel_args</span><span class="p">:</span>
             <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span>
-                <span class="sa">f</span><span class="s1">&#39;Kernel argument &quot;</span><span class="si">{</span><span class="n">target</span><span class="o">.</span><span class="n">id</span><span class="si">}</span><span class="s1">&quot; is immutable in the kernel. &#39;</span>
-                <span class="sa">f</span><span class="s2">&quot;If you want to change its value, please create a new variable.&quot;</span>
+                <span class="sa">f</span><span class="s1">'Kernel argument "</span><span class="si">{</span><span class="n">target</span><span class="o">.</span><span class="n">id</span><span class="si">}</span><span class="s1">" is immutable in the kernel. '</span>
+                <span class="sa">f</span><span class="s2">"If you want to change its value, please create a new variable."</span>
             <span class="p">)</span>
         <span class="n">anno</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">expr_init</span><span class="p">(</span><span class="n">annotation</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">is_static_assign</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">&quot;Static assign cannot be used on annotated assignment&quot;</span><span class="p">)</span>
+            <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">"Static assign cannot be used on annotated assignment"</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">is_local</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">ctx</span><span class="o">.</span><span class="n">is_var_declared</span><span class="p">(</span><span class="n">target</span><span class="o">.</span><span class="n">id</span><span class="p">):</span>
             <span class="n">var</span> <span class="o">=</span> <span class="n">qd_ops</span><span class="o">.</span><span class="n">cast</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">anno</span><span class="p">)</span>
             <span class="n">var</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">expr_init</span><span class="p">(</span><span class="n">var</span><span class="p">)</span>
@@ -518,7 +518,7 @@
         <span class="k">else</span><span class="p">:</span>
             <span class="n">var</span> <span class="o">=</span> <span class="n">build_stmt</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">target</span><span class="p">)</span>
             <span class="k">if</span> <span class="n">var</span><span class="o">.</span><span class="n">ptr</span><span class="o">.</span><span class="n">get_rvalue_type</span><span class="p">()</span> <span class="o">!=</span> <span class="n">anno</span><span class="p">:</span>
-                <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">&quot;Static assign cannot have type overloading&quot;</span><span class="p">)</span>
+                <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">"Static assign cannot have type overloading"</span><span class="p">)</span>
             <span class="n">var</span><span class="o">.</span><span class="n">_assign</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">var</span></div>
 
@@ -548,7 +548,7 @@
         <span class="n">values</span><span class="p">,</span>
         <span class="n">is_static_assign</span><span class="p">:</span> <span class="nb">bool</span><span class="p">,</span>
     <span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Build the unpack assignments like this: (target1, target2) = (value1, value2).</span>
+<span class="w">        </span><span class="sd">"""Build the unpack assignments like this: (target1, target2) = (value1, value2).</span>
 <span class="sd">        The function should be called only if the node target is a tuple.</span>
 
 <span class="sd">        Args:</span>
@@ -557,20 +557,20 @@
 <span class="sd">            list of nodes representing the elements.</span>
 <span class="sd">            values: A node/list representing the values.</span>
 <span class="sd">            is_static_assign: A boolean value indicating whether this is a static assignment</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">node_target</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Tuple</span><span class="p">):</span>
             <span class="k">return</span> <span class="n">ASTTransformer</span><span class="o">.</span><span class="n">build_assign_basic</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node_target</span><span class="p">,</span> <span class="n">values</span><span class="p">,</span> <span class="n">is_static_assign</span><span class="p">)</span>
         <span class="n">targets</span> <span class="o">=</span> <span class="n">node_target</span><span class="o">.</span><span class="n">elts</span>
 
         <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">values</span><span class="p">,</span> <span class="n">matrix</span><span class="o">.</span><span class="n">Matrix</span><span class="p">):</span>
             <span class="k">if</span> <span class="ow">not</span> <span class="n">values</span><span class="o">.</span><span class="n">m</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
-                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Matrices with more than one columns cannot be unpacked&quot;</span><span class="p">)</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"Matrices with more than one columns cannot be unpacked"</span><span class="p">)</span>
             <span class="n">values</span> <span class="o">=</span> <span class="n">values</span><span class="o">.</span><span class="n">entries</span>
 
         <span class="c1"># Unpack: a, b, c = qd.Vector([1., 2., 3.])</span>
         <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">values</span><span class="p">,</span> <span class="n">impl</span><span class="o">.</span><span class="n">Expr</span><span class="p">)</span> <span class="ow">and</span> <span class="n">values</span><span class="o">.</span><span class="n">ptr</span><span class="o">.</span><span class="n">is_tensor</span><span class="p">():</span>
             <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">values</span><span class="o">.</span><span class="n">get_shape</span><span class="p">())</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
-                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Matrices with more than one columns cannot be unpacked&quot;</span><span class="p">)</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"Matrices with more than one columns cannot be unpacked"</span><span class="p">)</span>
 
             <span class="n">values</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">ast_builder</span><span class="o">.</span><span class="n">expand_exprs</span><span class="p">([</span><span class="n">values</span><span class="o">.</span><span class="n">ptr</span><span class="p">])</span>
             <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">values</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
@@ -582,10 +582,10 @@
                 <span class="n">values</span> <span class="o">=</span> <span class="n">values</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
 
         <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">values</span><span class="p">,</span> <span class="n">collections</span><span class="o">.</span><span class="n">abc</span><span class="o">.</span><span class="n">Sequence</span><span class="p">):</span>
-            <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Cannot unpack type: </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">values</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Cannot unpack type: </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">values</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
 
         <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">values</span><span class="p">)</span> <span class="o">!=</span> <span class="nb">len</span><span class="p">(</span><span class="n">targets</span><span class="p">):</span>
-            <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">&quot;The number of targets is not equal to value length&quot;</span><span class="p">)</span>
+            <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">"The number of targets is not equal to value length"</span><span class="p">)</span>
 
         <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">target</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">targets</span><span class="p">):</span>
             <span class="n">ASTTransformer</span><span class="o">.</span><span class="n">build_assign_basic</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">target</span><span class="p">,</span> <span class="n">values</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="n">is_static_assign</span><span class="p">)</span>
@@ -597,7 +597,7 @@
 <div class="viewcode-block" id="ASTTransformer.build_assign_basic">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer/index.html#quadrants.lang.ast.ast_transformer.ASTTransformer.build_assign_basic">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">build_assign_basic</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">ASTTransformerFuncContext</span><span class="p">,</span> <span class="n">target</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">Name</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">is_static_assign</span><span class="p">:</span> <span class="nb">bool</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Build basic assignment like this: target = value.</span>
+<span class="w">        </span><span class="sd">"""Build basic assignment like this: target = value.</span>
 
 <span class="sd">        Args:</span>
 <span class="sd">           ctx (ast_builder_utils.BuilderContext): The builder context.</span>
@@ -605,16 +605,16 @@
 <span class="sd">           a string.</span>
 <span class="sd">           value: A node representing the value.</span>
 <span class="sd">           is_static_assign: A boolean value indicating whether this is a static assignment</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="n">is_local</span> <span class="o">=</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">target</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Name</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">is_local</span> <span class="ow">and</span> <span class="n">target</span><span class="o">.</span><span class="n">id</span> <span class="ow">in</span> <span class="n">ctx</span><span class="o">.</span><span class="n">kernel_args</span><span class="p">:</span>
             <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span>
-                <span class="sa">f</span><span class="s1">&#39;Kernel argument &quot;</span><span class="si">{</span><span class="n">target</span><span class="o">.</span><span class="n">id</span><span class="si">}</span><span class="s1">&quot; is immutable in the kernel. &#39;</span>
-                <span class="sa">f</span><span class="s2">&quot;If you want to change its value, please create a new variable.&quot;</span>
+                <span class="sa">f</span><span class="s1">'Kernel argument "</span><span class="si">{</span><span class="n">target</span><span class="o">.</span><span class="n">id</span><span class="si">}</span><span class="s1">" is immutable in the kernel. '</span>
+                <span class="sa">f</span><span class="s2">"If you want to change its value, please create a new variable."</span>
             <span class="p">)</span>
         <span class="k">if</span> <span class="n">is_static_assign</span><span class="p">:</span>
             <span class="k">if</span> <span class="ow">not</span> <span class="n">is_local</span><span class="p">:</span>
-                <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">&quot;Static assign cannot be used on elements in arrays&quot;</span><span class="p">)</span>
+                <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">"Static assign cannot be used on elements in arrays"</span><span class="p">)</span>
             <span class="n">ctx</span><span class="o">.</span><span class="n">create_variable</span><span class="p">(</span><span class="n">target</span><span class="o">.</span><span class="n">id</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span>
             <span class="n">var</span> <span class="o">=</span> <span class="n">value</span>
         <span class="k">elif</span> <span class="n">is_local</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">ctx</span><span class="o">.</span><span class="n">is_var_declared</span><span class="p">(</span><span class="n">target</span><span class="o">.</span><span class="n">id</span><span class="p">):</span>
@@ -626,7 +626,7 @@
                 <span class="n">var</span><span class="o">.</span><span class="n">_assign</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
             <span class="k">except</span> <span class="ne">AttributeError</span><span class="p">:</span>
                 <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span>
-                    <span class="sa">f</span><span class="s2">&quot;Variable &#39;</span><span class="si">{</span><span class="n">unparse</span><span class="p">(</span><span class="n">target</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span><span class="si">}</span><span class="s2">&#39; cannot be assigned. Maybe it is not a Quadrants object?&quot;</span>
+                    <span class="sa">f</span><span class="s2">"Variable '</span><span class="si">{</span><span class="n">unparse</span><span class="p">(</span><span class="n">target</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span><span class="si">}</span><span class="s2">' cannot be assigned. Maybe it is not a Quadrants object?"</span>
                 <span class="p">)</span>
         <span class="k">return</span> <span class="n">var</span></div>
 
@@ -656,7 +656,7 @@
 
     <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">_unpack_layout_vector_index</span><span class="p">(</span><span class="n">ast_builder</span><span class="p">,</span> <span class="n">index</span><span class="p">,</span> <span class="n">layout_len</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;If ``index`` is a rank-1 Vector of length ``layout_len``, return its component list so the layout permutation</span>
+<span class="w">        </span><span class="sd">"""If ``index`` is a rank-1 Vector of length ``layout_len``, return its component list so the layout permutation</span>
 <span class="sd">        can be applied per-axis. Otherwise return ``[index]`` unchanged.</span>
 
 <span class="sd">        Handles both forms a single subscript can take inside a kernel:</span>
@@ -666,7 +666,7 @@
 <span class="sd">        - ``Expr`` with tensor shape ``(N,)`` — produced by ``matrix.make_matrix(loop_indices, ...)`` in</span>
 <span class="sd">          :func:`build_struct_for` / :func:`build_grouped_ndrange_for`, which is what real kernels see for</span>
 <span class="sd">          ``for I in qd.grouped(...)``.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">index</span><span class="p">,</span> <span class="n">Matrix</span><span class="p">)</span> <span class="ow">and</span> <span class="n">index</span><span class="o">.</span><span class="n">n</span> <span class="o">==</span> <span class="n">layout_len</span> <span class="ow">and</span> <span class="n">index</span><span class="o">.</span><span class="n">m</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
             <span class="k">return</span> <span class="n">index</span><span class="o">.</span><span class="n">to_list</span><span class="p">()</span>
         <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">index</span><span class="p">,</span> <span class="n">expr</span><span class="o">.</span><span class="n">Expr</span><span class="p">)</span> <span class="ow">and</span> <span class="n">index</span><span class="o">.</span><span class="n">is_tensor</span><span class="p">():</span>
@@ -709,7 +709,7 @@
         <span class="c1"># 2. Single-Vector subscript ``x[I]`` where I is a rank-N Matrix coming from ``qd.grouped(...)``: unpack into N</span>
         <span class="c1">#    scalars first, then permute. Without this, ``x[I]`` writes at canonical indices into the smaller physical</span>
         <span class="c1">#    buffer — silently OOB on permuted layouts.</span>
-        <span class="n">layout</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">value</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="s2">&quot;_qd_layout&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="n">layout</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">value</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="s2">"_qd_layout"</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">layout</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
             <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">slice</span><span class="o">.</span><span class="n">ptr</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
                 <span class="n">node</span><span class="o">.</span><span class="n">slice</span><span class="o">.</span><span class="n">ptr</span> <span class="o">=</span> <span class="n">ASTTransformer</span><span class="o">.</span><span class="n">_unpack_layout_vector_index</span><span class="p">(</span>
@@ -770,9 +770,9 @@
         <span class="k">for</span> <span class="n">elt</span> <span class="ow">in</span> <span class="n">node</span><span class="o">.</span><span class="n">elts</span><span class="p">:</span>
             <span class="k">if</span> <span class="n">elt</span><span class="o">.</span><span class="n">violates_pure</span><span class="p">:</span>
                 <span class="n">node</span><span class="o">.</span><span class="n">violates_pure</span> <span class="o">=</span> <span class="kc">True</span>
-                <span class="n">reason</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;list member violates pure &quot;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">elt</span><span class="p">))</span>
+                <span class="n">reason</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">"list member violates pure "</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">elt</span><span class="p">))</span>
         <span class="n">node</span><span class="o">.</span><span class="n">ptr</span> <span class="o">=</span> <span class="p">[</span><span class="n">elt</span><span class="o">.</span><span class="n">ptr</span> <span class="k">for</span> <span class="n">elt</span> <span class="ow">in</span> <span class="n">node</span><span class="o">.</span><span class="n">elts</span><span class="p">]</span>
-        <span class="n">node</span><span class="o">.</span><span class="n">violates_pure_reason</span> <span class="o">=</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">reason</span><span class="p">)</span> <span class="k">if</span> <span class="n">reason</span> <span class="k">else</span> <span class="kc">None</span>
+        <span class="n">node</span><span class="o">.</span><span class="n">violates_pure_reason</span> <span class="o">=</span> <span class="s2">"</span><span class="se">\n</span><span class="s2">"</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">reason</span><span class="p">)</span> <span class="k">if</span> <span class="n">reason</span> <span class="k">else</span> <span class="kc">None</span>
         <span class="k">return</span> <span class="n">node</span><span class="o">.</span><span class="n">ptr</span></div>
 
 
@@ -910,25 +910,25 @@
         <span class="n">format_str</span> <span class="o">=</span> <span class="n">values</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">s</span>
         <span class="k">assert</span> <span class="n">format_str</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
         <span class="c1"># distinguished from normal list</span>
-        <span class="k">return</span> <span class="p">[</span><span class="s2">&quot;__qd_fmt_value__&quot;</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">format_str</span><span class="p">]</span></div>
+        <span class="k">return</span> <span class="p">[</span><span class="s2">"__qd_fmt_value__"</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">format_str</span><span class="p">]</span></div>
 
 
     <span class="nd">@staticmethod</span>
 <div class="viewcode-block" id="ASTTransformer.build_JoinedStr">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer/index.html#quadrants.lang.ast.ast_transformer.ASTTransformer.build_JoinedStr">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">build_JoinedStr</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">ASTTransformerFuncContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">JoinedStr</span><span class="p">):</span>
-        <span class="n">str_spec</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+        <span class="n">str_spec</span> <span class="o">=</span> <span class="s2">""</span>
         <span class="n">args</span> <span class="o">=</span> <span class="p">[]</span>
         <span class="k">for</span> <span class="n">sub_node</span> <span class="ow">in</span> <span class="n">node</span><span class="o">.</span><span class="n">values</span><span class="p">:</span>
             <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">sub_node</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">FormattedValue</span><span class="p">):</span>
-                <span class="n">str_spec</span> <span class="o">+=</span> <span class="s2">&quot;</span><span class="si">{}</span><span class="s2">&quot;</span>
+                <span class="n">str_spec</span> <span class="o">+=</span> <span class="s2">"</span><span class="si">{}</span><span class="s2">"</span>
                 <span class="n">args</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">build_stmt</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">sub_node</span><span class="p">))</span>
             <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">sub_node</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Constant</span><span class="p">):</span>
                 <span class="n">str_spec</span> <span class="o">+=</span> <span class="n">sub_node</span><span class="o">.</span><span class="n">value</span>
             <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">sub_node</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Str</span><span class="p">):</span>
                 <span class="n">str_spec</span> <span class="o">+=</span> <span class="n">sub_node</span><span class="o">.</span><span class="n">s</span>
             <span class="k">else</span><span class="p">:</span>
-                <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">&quot;Invalid value for fstring.&quot;</span><span class="p">)</span>
+                <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">"Invalid value for fstring."</span><span class="p">)</span>
 
         <span class="n">args</span><span class="o">.</span><span class="n">insert</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">str_spec</span><span class="p">)</span>
         <span class="n">node</span><span class="o">.</span><span class="n">ptr</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">qd_format</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">)</span>
@@ -955,7 +955,7 @@
     <span class="k">def</span><span class="w"> </span><span class="nf">build_Return</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">ASTTransformerFuncContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">Return</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">ctx</span><span class="o">.</span><span class="n">is_real_function</span><span class="p">:</span>
             <span class="k">if</span> <span class="n">ctx</span><span class="o">.</span><span class="n">is_in_non_static_control_flow</span><span class="p">():</span>
-                <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">&quot;Return inside non-static if/for is not supported&quot;</span><span class="p">)</span>
+                <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">"Return inside non-static if/for is not supported"</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">node</span><span class="o">.</span><span class="n">value</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
             <span class="n">build_stmt</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">value</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">node</span><span class="o">.</span><span class="n">value</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">node</span><span class="o">.</span><span class="n">value</span><span class="o">.</span><span class="n">ptr</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
@@ -963,12 +963,12 @@
                 <span class="n">ctx</span><span class="o">.</span><span class="n">returned</span> <span class="o">=</span> <span class="n">ReturnStatus</span><span class="o">.</span><span class="n">ReturnedVoid</span>
             <span class="k">return</span> <span class="kc">None</span>
         <span class="k">if</span> <span class="n">ctx</span><span class="o">.</span><span class="n">is_kernel</span> <span class="ow">or</span> <span class="n">ctx</span><span class="o">.</span><span class="n">is_real_function</span><span class="p">:</span>
-            <span class="c1"># TODO: check if it&#39;s at the end of a kernel, throw QuadrantsSyntaxError if not</span>
+            <span class="c1"># TODO: check if it's at the end of a kernel, throw QuadrantsSyntaxError if not</span>
             <span class="k">if</span> <span class="n">ctx</span><span class="o">.</span><span class="n">func</span><span class="o">.</span><span class="n">return_type</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
                 <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span>
-                    <span class="sa">f</span><span class="s1">&#39;A </span><span class="si">{</span><span class="s2">&quot;kernel&quot;</span><span class="w"> </span><span class="k">if</span><span class="w"> </span><span class="n">ctx</span><span class="o">.</span><span class="n">is_kernel</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="s2">&quot;function&quot;</span><span class="si">}</span><span class="s1"> &#39;</span>
-                    <span class="s2">&quot;with a return value must be annotated &quot;</span>
-                    <span class="s2">&quot;with a return type, e.g. def func() -&gt; qd.f32&quot;</span>
+                    <span class="sa">f</span><span class="s1">'A </span><span class="si">{</span><span class="s2">"kernel"</span><span class="w"> </span><span class="k">if</span><span class="w"> </span><span class="n">ctx</span><span class="o">.</span><span class="n">is_kernel</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="s2">"function"</span><span class="si">}</span><span class="s1"> '</span>
+                    <span class="s2">"with a return value must be annotated "</span>
+                    <span class="s2">"with a return type, e.g. def func() -&gt; qd.f32"</span>
                 <span class="p">)</span>
             <span class="n">return_exprs</span> <span class="o">=</span> <span class="p">[]</span>
             <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">ctx</span><span class="o">.</span><span class="n">func</span><span class="o">.</span><span class="n">return_type</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
@@ -987,11 +987,11 @@
                     <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">values</span><span class="p">,</span> <span class="n">Matrix</span><span class="p">):</span>
                         <span class="k">if</span> <span class="n">values</span><span class="o">.</span><span class="n">ndim</span> <span class="o">!=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">func</span><span class="o">.</span><span class="n">return_type</span><span class="o">.</span><span class="n">ndim</span><span class="p">:</span>
                             <span class="k">raise</span> <span class="n">QuadrantsRuntimeTypeError</span><span class="p">(</span>
-                                <span class="sa">f</span><span class="s2">&quot;Return matrix ndim mismatch, expecting=</span><span class="si">{</span><span class="n">return_type</span><span class="o">.</span><span class="n">ndim</span><span class="si">}</span><span class="s2">, got=</span><span class="si">{</span><span class="n">values</span><span class="o">.</span><span class="n">ndim</span><span class="si">}</span><span class="s2">.&quot;</span>
+                                <span class="sa">f</span><span class="s2">"Return matrix ndim mismatch, expecting=</span><span class="si">{</span><span class="n">return_type</span><span class="o">.</span><span class="n">ndim</span><span class="si">}</span><span class="s2">, got=</span><span class="si">{</span><span class="n">values</span><span class="o">.</span><span class="n">ndim</span><span class="si">}</span><span class="s2">."</span>
                             <span class="p">)</span>
                         <span class="k">elif</span> <span class="n">return_type</span><span class="o">.</span><span class="n">get_shape</span><span class="p">()</span> <span class="o">!=</span> <span class="n">values</span><span class="o">.</span><span class="n">get_shape</span><span class="p">():</span>
                             <span class="k">raise</span> <span class="n">QuadrantsRuntimeTypeError</span><span class="p">(</span>
-                                <span class="sa">f</span><span class="s2">&quot;Return matrix shape mismatch, expecting=</span><span class="si">{</span><span class="n">return_type</span><span class="o">.</span><span class="n">get_shape</span><span class="p">()</span><span class="si">}</span><span class="s2">, got=</span><span class="si">{</span><span class="n">values</span><span class="o">.</span><span class="n">get_shape</span><span class="p">()</span><span class="si">}</span><span class="s2">.&quot;</span>
+                                <span class="sa">f</span><span class="s2">"Return matrix shape mismatch, expecting=</span><span class="si">{</span><span class="n">return_type</span><span class="o">.</span><span class="n">get_shape</span><span class="p">()</span><span class="si">}</span><span class="s2">, got=</span><span class="si">{</span><span class="n">values</span><span class="o">.</span><span class="n">get_shape</span><span class="p">()</span><span class="si">}</span><span class="s2">."</span>
                             <span class="p">)</span>
                         <span class="n">values</span> <span class="o">=</span> <span class="p">(</span>
                             <span class="n">itertools</span><span class="o">.</span><span class="n">chain</span><span class="o">.</span><span class="n">from_iterable</span><span class="p">(</span><span class="n">values</span><span class="o">.</span><span class="n">to_list</span><span class="p">())</span>
@@ -1017,11 +1017,11 @@
                             <span class="p">)</span>
                         <span class="k">elif</span> <span class="nb">len</span><span class="p">(</span><span class="n">values</span><span class="o">.</span><span class="n">get_shape</span><span class="p">())</span> <span class="o">!=</span> <span class="n">return_type</span><span class="o">.</span><span class="n">ndim</span><span class="p">:</span>
                             <span class="k">raise</span> <span class="n">QuadrantsRuntimeTypeError</span><span class="p">(</span>
-                                <span class="sa">f</span><span class="s2">&quot;Return matrix ndim mismatch, expecting=</span><span class="si">{</span><span class="n">return_type</span><span class="o">.</span><span class="n">ndim</span><span class="si">}</span><span class="s2">, got=</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">values</span><span class="o">.</span><span class="n">get_shape</span><span class="p">())</span><span class="si">}</span><span class="s2">.&quot;</span>
+                                <span class="sa">f</span><span class="s2">"Return matrix ndim mismatch, expecting=</span><span class="si">{</span><span class="n">return_type</span><span class="o">.</span><span class="n">ndim</span><span class="si">}</span><span class="s2">, got=</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">values</span><span class="o">.</span><span class="n">get_shape</span><span class="p">())</span><span class="si">}</span><span class="s2">."</span>
                             <span class="p">)</span>
                         <span class="k">elif</span> <span class="n">return_type</span><span class="o">.</span><span class="n">get_shape</span><span class="p">()</span> <span class="o">!=</span> <span class="n">values</span><span class="o">.</span><span class="n">get_shape</span><span class="p">():</span>
                             <span class="k">raise</span> <span class="n">QuadrantsRuntimeTypeError</span><span class="p">(</span>
-                                <span class="sa">f</span><span class="s2">&quot;Return matrix shape mismatch, expecting=</span><span class="si">{</span><span class="n">return_type</span><span class="o">.</span><span class="n">get_shape</span><span class="p">()</span><span class="si">}</span><span class="s2">, got=</span><span class="si">{</span><span class="n">values</span><span class="o">.</span><span class="n">get_shape</span><span class="p">()</span><span class="si">}</span><span class="s2">.&quot;</span>
+                                <span class="sa">f</span><span class="s2">"Return matrix shape mismatch, expecting=</span><span class="si">{</span><span class="n">return_type</span><span class="o">.</span><span class="n">get_shape</span><span class="p">()</span><span class="si">}</span><span class="s2">, got=</span><span class="si">{</span><span class="n">values</span><span class="o">.</span><span class="n">get_shape</span><span class="p">()</span><span class="si">}</span><span class="s2">."</span>
                             <span class="p">)</span>
                         <span class="n">values</span> <span class="o">=</span> <span class="p">[</span><span class="n">values</span><span class="p">]</span>
                     <span class="k">else</span><span class="p">:</span>
@@ -1038,11 +1038,11 @@
                             <span class="k">raise</span> <span class="n">QuadrantsRuntimeTypeError</span><span class="o">.</span><span class="n">get_ret</span><span class="p">(</span><span class="n">return_type</span><span class="o">.</span><span class="n">dtype</span><span class="o">.</span><span class="n">to_string</span><span class="p">(),</span> <span class="n">dt</span><span class="p">)</span>
                         <span class="k">elif</span> <span class="n">ndim</span> <span class="o">!=</span> <span class="n">return_type</span><span class="o">.</span><span class="n">ndim</span><span class="p">:</span>
                             <span class="k">raise</span> <span class="n">QuadrantsRuntimeTypeError</span><span class="p">(</span>
-                                <span class="sa">f</span><span class="s2">&quot;Return matrix ndim mismatch, expecting=</span><span class="si">{</span><span class="n">return_type</span><span class="o">.</span><span class="n">ndim</span><span class="si">}</span><span class="s2">, got=</span><span class="si">{</span><span class="n">ndim</span><span class="si">}</span><span class="s2">.&quot;</span>
+                                <span class="sa">f</span><span class="s2">"Return matrix ndim mismatch, expecting=</span><span class="si">{</span><span class="n">return_type</span><span class="o">.</span><span class="n">ndim</span><span class="si">}</span><span class="s2">, got=</span><span class="si">{</span><span class="n">ndim</span><span class="si">}</span><span class="s2">."</span>
                             <span class="p">)</span>
                         <span class="k">elif</span> <span class="n">return_type</span><span class="o">.</span><span class="n">get_shape</span><span class="p">()</span> <span class="o">!=</span> <span class="n">shape</span><span class="p">:</span>
                             <span class="k">raise</span> <span class="n">QuadrantsRuntimeTypeError</span><span class="p">(</span>
-                                <span class="sa">f</span><span class="s2">&quot;Return matrix shape mismatch, expecting=</span><span class="si">{</span><span class="n">return_type</span><span class="o">.</span><span class="n">get_shape</span><span class="p">()</span><span class="si">}</span><span class="s2">, got=</span><span class="si">{</span><span class="n">shape</span><span class="si">}</span><span class="s2">.&quot;</span>
+                                <span class="sa">f</span><span class="s2">"Return matrix shape mismatch, expecting=</span><span class="si">{</span><span class="n">return_type</span><span class="o">.</span><span class="n">get_shape</span><span class="p">()</span><span class="si">}</span><span class="s2">, got=</span><span class="si">{</span><span class="n">shape</span><span class="si">}</span><span class="s2">."</span>
                             <span class="p">)</span>
                         <span class="n">values</span> <span class="o">=</span> <span class="p">[</span><span class="n">values</span><span class="p">]</span>
                     <span class="n">return_exprs</span> <span class="o">+=</span> <span class="p">[</span><span class="n">qd_ops</span><span class="o">.</span><span class="n">cast</span><span class="p">(</span><span class="n">exp</span><span class="p">,</span> <span class="n">return_type</span><span class="o">.</span><span class="n">dtype</span><span class="p">)</span> <span class="k">for</span> <span class="n">exp</span> <span class="ow">in</span> <span class="n">values</span><span class="p">]</span>
@@ -1053,7 +1053,7 @@
                     <span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">values</span><span class="p">,</span> <span class="n">Struct</span><span class="p">)</span>
                     <span class="n">return_exprs</span> <span class="o">+=</span> <span class="n">expr</span><span class="o">.</span><span class="n">_get_flattened_ptrs</span><span class="p">(</span><span class="n">values</span><span class="p">)</span>
                 <span class="k">else</span><span class="p">:</span>
-                    <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">&quot;The return type is not supported now!&quot;</span><span class="p">)</span>
+                    <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">"The return type is not supported now!"</span><span class="p">)</span>
             <span class="n">ctx</span><span class="o">.</span><span class="n">ast_builder</span><span class="o">.</span><span class="n">create_kernel_exprgroup_return</span><span class="p">(</span>
                 <span class="n">expr</span><span class="o">.</span><span class="n">make_expr_group</span><span class="p">(</span><span class="n">return_exprs</span><span class="p">),</span>
                 <span class="n">_qd_core</span><span class="o">.</span><span class="n">DebugInfo</span><span class="p">(</span><span class="n">ctx</span><span class="o">.</span><span class="n">get_pos_info</span><span class="p">(</span><span class="n">node</span><span class="p">)),</span>
@@ -1078,7 +1078,7 @@
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer/index.html#quadrants.lang.ast.ast_transformer.ASTTransformer.build_Module">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">build_Module</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">ASTTransformerFuncContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">Module</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
         <span class="k">with</span> <span class="n">ctx</span><span class="o">.</span><span class="n">variable_scope_guard</span><span class="p">():</span>
-            <span class="c1"># Do NOT use |build_stmts| which inserts &#39;del&#39; statements to the</span>
+            <span class="c1"># Do NOT use |build_stmts| which inserts 'del' statements to the</span>
             <span class="c1"># end and deletes parameters passed into the module</span>
             <span class="k">for</span> <span class="n">stmt</span> <span class="ow">in</span> <span class="n">node</span><span class="o">.</span><span class="n">body</span><span class="p">:</span>
                 <span class="n">build_stmt</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">stmt</span><span class="p">)</span>
@@ -1090,7 +1090,7 @@
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer/index.html#quadrants.lang.ast.ast_transformer.ASTTransformer.build_attribute_if_is_dynamic_snode_method">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">build_attribute_if_is_dynamic_snode_method</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">ASTTransformerFuncContext</span><span class="p">,</span> <span class="n">node</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
         <span class="n">is_subscript</span> <span class="o">=</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">value</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Subscript</span><span class="p">)</span>
-        <span class="n">names</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;append&quot;</span><span class="p">,</span> <span class="s2">&quot;deactivate&quot;</span><span class="p">,</span> <span class="s2">&quot;length&quot;</span><span class="p">)</span>
+        <span class="n">names</span> <span class="o">=</span> <span class="p">(</span><span class="s2">"append"</span><span class="p">,</span> <span class="s2">"deactivate"</span><span class="p">,</span> <span class="s2">"length"</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">node</span><span class="o">.</span><span class="n">attr</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">names</span><span class="p">:</span>
             <span class="k">return</span> <span class="kc">False</span>
         <span class="k">if</span> <span class="n">is_subscript</span><span class="p">:</span>
@@ -1108,9 +1108,9 @@
         <span class="n">index_dim</span> <span class="o">=</span> <span class="n">indices_expr_group</span><span class="o">.</span><span class="n">size</span><span class="p">()</span>
         <span class="k">if</span> <span class="n">field_dim</span> <span class="o">!=</span> <span class="n">index_dim</span> <span class="o">+</span> <span class="mi">1</span><span class="p">:</span>
             <span class="k">return</span> <span class="kc">False</span>
-        <span class="k">if</span> <span class="n">node</span><span class="o">.</span><span class="n">attr</span> <span class="o">==</span> <span class="s2">&quot;append&quot;</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">node</span><span class="o">.</span><span class="n">attr</span> <span class="o">==</span> <span class="s2">"append"</span><span class="p">:</span>
             <span class="n">node</span><span class="o">.</span><span class="n">ptr</span> <span class="o">=</span> <span class="k">lambda</span> <span class="n">val</span><span class="p">:</span> <span class="n">append</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">parent</span><span class="p">(),</span> <span class="n">indices</span><span class="p">,</span> <span class="n">val</span><span class="p">)</span>
-        <span class="k">elif</span> <span class="n">node</span><span class="o">.</span><span class="n">attr</span> <span class="o">==</span> <span class="s2">&quot;deactivate&quot;</span><span class="p">:</span>
+        <span class="k">elif</span> <span class="n">node</span><span class="o">.</span><span class="n">attr</span> <span class="o">==</span> <span class="s2">"deactivate"</span><span class="p">:</span>
             <span class="n">node</span><span class="o">.</span><span class="n">ptr</span> <span class="o">=</span> <span class="k">lambda</span><span class="p">:</span> <span class="n">deactivate</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">parent</span><span class="p">(),</span> <span class="n">indices</span><span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="n">node</span><span class="o">.</span><span class="n">ptr</span> <span class="o">=</span> <span class="k">lambda</span><span class="p">:</span> <span class="n">length</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">parent</span><span class="p">(),</span> <span class="n">indices</span><span class="p">)</span>
@@ -1119,8 +1119,8 @@
 
     <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">_promote_ndarray_if_declared</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">ASTTransformerFuncContext</span><span class="p">,</span> <span class="n">value</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;If *value* is a bare ``Ndarray`` that was pre-declared as a kernel arg (in ``_predeclare_struct_ndarrays``),</span>
-<span class="sd">        return the ``AnyArray`` proxy from the cache. Otherwise return *value* unchanged.&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""If *value* is a bare ``Ndarray`` that was pre-declared as a kernel arg (in ``_predeclare_struct_ndarrays``),</span>
+<span class="sd">        return the ``AnyArray`` proxy from the cache. Otherwise return *value* unchanged."""</span>
         <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._ndarray</span><span class="w"> </span><span class="kn">import</span> <span class="n">Ndarray</span>  <span class="c1"># pylint: disable=C0415</span>
 
         <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">Ndarray</span><span class="p">):</span>
@@ -1141,14 +1141,14 @@
         <span class="c1"># 2. x.append (where the dimension of the field is one, equal to x[()].append)</span>
         <span class="c1">#</span>
         <span class="c1"># For the first case, the AST (simplified) is like node = Attribute(value=Subscript(value=x, slice=[i, j]),</span>
-        <span class="c1"># attr=&quot;append&quot;), when we build_stmt(node.value)(build the expression of the Subscript i.e. x[i, j]),</span>
+        <span class="c1"># attr="append"), when we build_stmt(node.value)(build the expression of the Subscript i.e. x[i, j]),</span>
         <span class="c1"># it should build the expression of node.value.value (i.e. x) and node.value.slice (i.e. [i, j]), and raise a</span>
         <span class="c1"># QuadrantsIndexError because the dimension of the field is not equal to the number of the indices. Therefore,</span>
         <span class="c1"># when we meet the error, we can detect whether it is a method of Dynamic SNode and build the expression if</span>
         <span class="c1"># it is by calling build_attribute_if_is_dynamic_snode_method. If we find that it is not a method of Dynamic</span>
         <span class="c1"># SNode, we raise the error again.</span>
         <span class="c1">#</span>
-        <span class="c1"># For the second case, the AST (simplified) is like node = Attribute(value=x, attr=&quot;append&quot;), and it does not</span>
+        <span class="c1"># For the second case, the AST (simplified) is like node = Attribute(value=x, attr="append"), and it does not</span>
         <span class="c1"># raise error when we build_stmt(node.value). Therefore, when we do not meet the error, we can also detect</span>
         <span class="c1"># whether it is a method of Dynamic SNode and build the expression if it is by calling</span>
         <span class="c1"># build_attribute_if_is_dynamic_snode_method. If we find that it is not a method of Dynamic SNode,</span>
@@ -1196,7 +1196,7 @@
                 <span class="p">)</span>
 
                 <span class="n">node</span><span class="o">.</span><span class="n">ptr</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">tensor_ops</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">attr</span><span class="p">)</span>
-                <span class="nb">setattr</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="s2">&quot;caller&quot;</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">value</span><span class="o">.</span><span class="n">ptr</span><span class="p">)</span>
+                <span class="nb">setattr</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="s2">"caller"</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">value</span><span class="o">.</span><span class="n">ptr</span><span class="p">)</span>
         <span class="k">elif</span> <span class="n">dataclasses</span><span class="o">.</span><span class="n">is_dataclass</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">value</span><span class="o">.</span><span class="n">ptr</span><span class="p">):</span>
             <span class="n">lifted</span> <span class="o">=</span> <span class="n">maybe_lifted_primitive</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">value</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">attr</span><span class="p">)</span>
             <span class="k">if</span> <span class="n">lifted</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
@@ -1216,7 +1216,7 @@
             <span class="c1"># reference. The lookup is by-name on ``_qd_unpacked_groups``, which ``StructType.__call__`` attaches to</span>
             <span class="c1"># every Struct instance whose type declared at least one vector field with ``unpacked=True``. Tested in</span>
             <span class="c1"># ``test_unpacked.py``.</span>
-            <span class="n">groups</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">value</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="s2">&quot;_qd_unpacked_groups&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+            <span class="n">groups</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">value</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="s2">"_qd_unpacked_groups"</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
             <span class="k">if</span> <span class="n">groups</span> <span class="ow">and</span> <span class="n">node</span><span class="o">.</span><span class="n">attr</span> <span class="ow">in</span> <span class="n">groups</span><span class="p">:</span>
                 <span class="n">count</span><span class="p">,</span> <span class="n">dtype</span><span class="p">,</span> <span class="n">naming_fn</span> <span class="o">=</span> <span class="n">groups</span><span class="p">[</span><span class="n">node</span><span class="o">.</span><span class="n">attr</span><span class="p">]</span>
                 <span class="n">node</span><span class="o">.</span><span class="n">ptr</span> <span class="o">=</span> <span class="n">_UnpackedVectorRef</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">value</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">attr</span><span class="p">,</span> <span class="n">count</span><span class="p">,</span> <span class="n">dtype</span><span class="p">,</span> <span class="n">naming_fn</span><span class="p">)</span>
@@ -1253,7 +1253,7 @@
                     <span class="k">if</span> <span class="n">violation</span> <span class="ow">and</span> <span class="n">_is_from_quadrants_module</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">value</span><span class="o">.</span><span class="n">ptr</span><span class="p">):</span>
                         <span class="n">violation</span> <span class="o">=</span> <span class="kc">False</span>
                     <span class="k">if</span> <span class="n">violation</span><span class="p">:</span>
-                        <span class="n">message</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;[PURE.VIOLATION] WARNING: Accessing global var </span><span class="si">{</span><span class="n">node</span><span class="o">.</span><span class="n">attr</span><span class="si">}</span><span class="s2"> from outside function scope within pure kernel </span><span class="si">{</span><span class="n">node</span><span class="o">.</span><span class="n">value</span><span class="o">.</span><span class="n">violates_pure_reason</span><span class="si">}</span><span class="s2">&quot;</span>
+                        <span class="n">message</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"[PURE.VIOLATION] WARNING: Accessing global var </span><span class="si">{</span><span class="n">node</span><span class="o">.</span><span class="n">attr</span><span class="si">}</span><span class="s2"> from outside function scope within pure kernel </span><span class="si">{</span><span class="n">node</span><span class="o">.</span><span class="n">value</span><span class="o">.</span><span class="n">violates_pure_reason</span><span class="si">}</span><span class="s2">"</span>
                         <span class="c1"># Transition period (see ``build_Name``): ``qd.static`` scope downgrades this to a warning.</span>
                         <span class="k">if</span> <span class="n">node</span><span class="o">.</span><span class="n">attr</span><span class="o">.</span><span class="n">upper</span><span class="p">()</span> <span class="o">==</span> <span class="n">node</span><span class="o">.</span><span class="n">attr</span> <span class="ow">or</span> <span class="n">ctx</span><span class="o">.</span><span class="n">is_in_static_scope</span><span class="p">():</span>
                             <span class="n">warnings</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="n">message</span><span class="p">)</span>
@@ -1301,8 +1301,8 @@
         <span class="n">build_stmt</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">value</span><span class="p">)</span>
         <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">target</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Name</span><span class="p">)</span> <span class="ow">and</span> <span class="n">node</span><span class="o">.</span><span class="n">target</span><span class="o">.</span><span class="n">id</span> <span class="ow">in</span> <span class="n">ctx</span><span class="o">.</span><span class="n">kernel_args</span><span class="p">:</span>
             <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span>
-                <span class="sa">f</span><span class="s1">&#39;Kernel argument &quot;</span><span class="si">{</span><span class="n">node</span><span class="o">.</span><span class="n">target</span><span class="o">.</span><span class="n">id</span><span class="si">}</span><span class="s1">&quot; is immutable in the kernel. &#39;</span>
-                <span class="sa">f</span><span class="s2">&quot;If you want to change its value, please create a new variable.&quot;</span>
+                <span class="sa">f</span><span class="s1">'Kernel argument "</span><span class="si">{</span><span class="n">node</span><span class="o">.</span><span class="n">target</span><span class="o">.</span><span class="n">id</span><span class="si">}</span><span class="s1">" is immutable in the kernel. '</span>
+                <span class="sa">f</span><span class="s2">"If you want to change its value, please create a new variable."</span>
             <span class="p">)</span>
         <span class="n">node</span><span class="o">.</span><span class="n">ptr</span> <span class="o">=</span> <span class="n">node</span><span class="o">.</span><span class="n">target</span><span class="o">.</span><span class="n">ptr</span><span class="o">.</span><span class="n">_augassign</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">value</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="nb">type</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">op</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">node</span><span class="o">.</span><span class="n">ptr</span></div>
@@ -1404,17 +1404,17 @@
         <span class="n">val</span> <span class="o">=</span> <span class="kc">True</span>
         <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">node_op</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">ops</span><span class="p">):</span>
             <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">node_op</span><span class="p">,</span> <span class="p">(</span><span class="n">ast</span><span class="o">.</span><span class="n">Is</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">IsNot</span><span class="p">)):</span>
-                <span class="n">name</span> <span class="o">=</span> <span class="s2">&quot;is&quot;</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">node_op</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Is</span><span class="p">)</span> <span class="k">else</span> <span class="s2">&quot;is not&quot;</span>
-                <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;Operator &quot;</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s1">&quot; in Quadrants scope is not supported.&#39;</span><span class="p">)</span>
+                <span class="n">name</span> <span class="o">=</span> <span class="s2">"is"</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">node_op</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Is</span><span class="p">)</span> <span class="k">else</span> <span class="s2">"is not"</span>
+                <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="sa">f</span><span class="s1">'Operator "</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s1">" in Quadrants scope is not supported.'</span><span class="p">)</span>
             <span class="n">l</span> <span class="o">=</span> <span class="n">operands</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
             <span class="n">r</span> <span class="o">=</span> <span class="n">operands</span><span class="p">[</span><span class="n">i</span> <span class="o">+</span> <span class="mi">1</span><span class="p">]</span>
             <span class="n">op</span> <span class="o">=</span> <span class="n">ops</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="nb">type</span><span class="p">(</span><span class="n">node_op</span><span class="p">))</span>
 
             <span class="k">if</span> <span class="n">op</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
                 <span class="k">if</span> <span class="nb">type</span><span class="p">(</span><span class="n">node_op</span><span class="p">)</span> <span class="ow">in</span> <span class="n">ops_static</span><span class="p">:</span>
-                    <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;&quot;</span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">node_op</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s1">&quot; is only supported inside `qd.static`.&#39;</span><span class="p">)</span>
+                    <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="sa">f</span><span class="s1">'"</span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">node_op</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s1">" is only supported inside `qd.static`.'</span><span class="p">)</span>
                 <span class="k">else</span><span class="p">:</span>
-                    <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;&quot;</span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">node_op</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s1">&quot; is not supported in Quadrants kernels.&#39;</span><span class="p">)</span>
+                    <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="sa">f</span><span class="s1">'"</span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">node_op</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s1">" is not supported in Quadrants kernels.'</span><span class="p">)</span>
             <span class="n">val</span> <span class="o">=</span> <span class="n">qd_ops</span><span class="o">.</span><span class="n">logical_and</span><span class="p">(</span><span class="n">val</span><span class="p">,</span> <span class="n">op</span><span class="p">(</span><span class="n">l</span><span class="p">,</span> <span class="n">r</span><span class="p">))</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">val</span><span class="p">,</span> <span class="p">(</span><span class="nb">bool</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">bool_</span><span class="p">)):</span>
             <span class="n">val</span> <span class="o">=</span> <span class="n">qd_ops</span><span class="o">.</span><span class="n">cast</span><span class="p">(</span><span class="n">val</span><span class="p">,</span> <span class="n">primitive_types</span><span class="o">.</span><span class="n">u1</span><span class="p">)</span>
@@ -1426,10 +1426,10 @@
 <div class="viewcode-block" id="ASTTransformer.get_for_loop_targets">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer/index.html#quadrants.lang.ast.ast_transformer.ASTTransformer.get_for_loop_targets">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">get_for_loop_targets</span><span class="p">(</span><span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">Name</span> <span class="o">|</span> <span class="n">ast</span><span class="o">.</span><span class="n">Tuple</span> <span class="o">|</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""</span>
 <span class="sd">        Returns the list of indices of the for loop |node|.</span>
 <span class="sd">        See also: https://docs.python.org/3/library/ast.html#ast.For</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">target</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Name</span><span class="p">):</span>
             <span class="k">return</span> <span class="p">[</span><span class="n">node</span><span class="o">.</span><span class="n">target</span><span class="o">.</span><span class="n">id</span><span class="p">]</span>
         <span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">target</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Tuple</span><span class="p">)</span>
@@ -1445,10 +1445,10 @@
             <span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">iter</span><span class="o">.</span><span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">args</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span>
             <span class="n">ndrange_arg</span> <span class="o">=</span> <span class="n">build_stmt</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">iter</span><span class="o">.</span><span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
             <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">ndrange_arg</span><span class="p">,</span> <span class="n">_Ndrange</span><span class="p">):</span>
-                <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">&quot;Only &#39;qd.ndrange&#39; is allowed in &#39;qd.static(qd.grouped(...))&#39;.&quot;</span><span class="p">)</span>
+                <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">"Only 'qd.ndrange' is allowed in 'qd.static(qd.grouped(...))'."</span><span class="p">)</span>
             <span class="n">targets</span> <span class="o">=</span> <span class="n">ASTTransformer</span><span class="o">.</span><span class="n">get_for_loop_targets</span><span class="p">(</span><span class="n">node</span><span class="p">)</span>
             <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">targets</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">1</span><span class="p">:</span>
-                <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Group for should have 1 loop target, found </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">targets</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Group for should have 1 loop target, found </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">targets</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
             <span class="n">target</span> <span class="o">=</span> <span class="n">targets</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
             <span class="n">iter_time</span> <span class="o">=</span> <span class="mi">0</span>
             <span class="n">alert_already</span> <span class="o">=</span> <span class="kc">False</span>
@@ -1458,14 +1458,14 @@
                 <span class="k">if</span> <span class="ow">not</span> <span class="n">alert_already</span> <span class="ow">and</span> <span class="n">qd_unroll_limit</span> <span class="ow">and</span> <span class="n">iter_time</span> <span class="o">&gt;</span> <span class="n">qd_unroll_limit</span><span class="p">:</span>
                     <span class="n">alert_already</span> <span class="o">=</span> <span class="kc">True</span>
                     <span class="n">warnings</span><span class="o">.</span><span class="n">warn_explicit</span><span class="p">(</span>
-                        <span class="sa">f</span><span class="s2">&quot;&quot;&quot;You are unrolling more than</span>
+                        <span class="sa">f</span><span class="s2">"""You are unrolling more than</span>
 <span class="s2">                        </span><span class="si">{</span><span class="n">qd_unroll_limit</span><span class="si">}</span><span class="s2"> iterations, so the compile time may be extremely long.</span>
 <span class="s2">                        You can use a non-static for loop if you want to decrease the compile time.</span>
-<span class="s2">                        You can disable this warning by setting qd.init(unrolling_limit=0).&quot;&quot;&quot;</span><span class="p">,</span>
+<span class="s2">                        You can disable this warning by setting qd.init(unrolling_limit=0)."""</span><span class="p">,</span>
                         <span class="ne">SyntaxWarning</span><span class="p">,</span>
                         <span class="n">ctx</span><span class="o">.</span><span class="n">file</span><span class="p">,</span>
                         <span class="n">node</span><span class="o">.</span><span class="n">lineno</span> <span class="o">+</span> <span class="n">ctx</span><span class="o">.</span><span class="n">lineno_offset</span><span class="p">,</span>
-                        <span class="n">module</span><span class="o">=</span><span class="s2">&quot;quadrants&quot;</span><span class="p">,</span>
+                        <span class="n">module</span><span class="o">=</span><span class="s2">"quadrants"</span><span class="p">,</span>
                     <span class="p">)</span>
 
                 <span class="k">with</span> <span class="n">ctx</span><span class="o">.</span><span class="n">variable_scope_guard</span><span class="p">():</span>
@@ -1490,14 +1490,14 @@
                 <span class="k">if</span> <span class="ow">not</span> <span class="n">alert_already</span> <span class="ow">and</span> <span class="n">qd_unroll_limit</span> <span class="ow">and</span> <span class="n">iter_time</span> <span class="o">&gt;</span> <span class="n">qd_unroll_limit</span><span class="p">:</span>
                     <span class="n">alert_already</span> <span class="o">=</span> <span class="kc">True</span>
                     <span class="n">warnings</span><span class="o">.</span><span class="n">warn_explicit</span><span class="p">(</span>
-                        <span class="sa">f</span><span class="s2">&quot;&quot;&quot;You are unrolling more than</span>
+                        <span class="sa">f</span><span class="s2">"""You are unrolling more than</span>
 <span class="s2">                        </span><span class="si">{</span><span class="n">qd_unroll_limit</span><span class="si">}</span><span class="s2"> iterations, so the compile time may be extremely long.</span>
 <span class="s2">                        You can use a non-static for loop if you want to decrease the compile time.</span>
-<span class="s2">                        You can disable this warning by setting qd.init(unrolling_limit=0).&quot;&quot;&quot;</span><span class="p">,</span>
+<span class="s2">                        You can disable this warning by setting qd.init(unrolling_limit=0)."""</span><span class="p">,</span>
                         <span class="ne">SyntaxWarning</span><span class="p">,</span>
                         <span class="n">ctx</span><span class="o">.</span><span class="n">file</span><span class="p">,</span>
                         <span class="n">node</span><span class="o">.</span><span class="n">lineno</span> <span class="o">+</span> <span class="n">ctx</span><span class="o">.</span><span class="n">lineno_offset</span><span class="p">,</span>
-                        <span class="n">module</span><span class="o">=</span><span class="s2">&quot;quadrants&quot;</span><span class="p">,</span>
+                        <span class="n">module</span><span class="o">=</span><span class="s2">"quadrants"</span><span class="p">,</span>
                     <span class="p">)</span>
 
                 <span class="k">with</span> <span class="n">ctx</span><span class="o">.</span><span class="n">variable_scope_guard</span><span class="p">():</span>
@@ -1519,10 +1519,10 @@
         <span class="k">with</span> <span class="n">ctx</span><span class="o">.</span><span class="n">variable_scope_guard</span><span class="p">():</span>
             <span class="n">loop_name</span> <span class="o">=</span> <span class="n">node</span><span class="o">.</span><span class="n">target</span><span class="o">.</span><span class="n">id</span>
             <span class="n">ctx</span><span class="o">.</span><span class="n">check_loop_var</span><span class="p">(</span><span class="n">loop_name</span><span class="p">)</span>
-            <span class="n">loop_var</span> <span class="o">=</span> <span class="n">expr</span><span class="o">.</span><span class="n">Expr</span><span class="p">(</span><span class="n">ctx</span><span class="o">.</span><span class="n">ast_builder</span><span class="o">.</span><span class="n">make_id_expr</span><span class="p">(</span><span class="s2">&quot;&quot;</span><span class="p">))</span>
+            <span class="n">loop_var</span> <span class="o">=</span> <span class="n">expr</span><span class="o">.</span><span class="n">Expr</span><span class="p">(</span><span class="n">ctx</span><span class="o">.</span><span class="n">ast_builder</span><span class="o">.</span><span class="n">make_id_expr</span><span class="p">(</span><span class="s2">""</span><span class="p">))</span>
             <span class="n">ctx</span><span class="o">.</span><span class="n">create_variable</span><span class="p">(</span><span class="n">loop_name</span><span class="p">,</span> <span class="n">loop_var</span><span class="p">)</span>
             <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">iter</span><span class="o">.</span><span class="n">args</span><span class="p">)</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">]:</span>
-                <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Range should have 1 or 2 arguments, found </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">iter</span><span class="o">.</span><span class="n">args</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Range should have 1 or 2 arguments, found </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">iter</span><span class="o">.</span><span class="n">args</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
             <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">iter</span><span class="o">.</span><span class="n">args</span><span class="p">)</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
                 <span class="n">begin_expr</span> <span class="o">=</span> <span class="n">expr</span><span class="o">.</span><span class="n">Expr</span><span class="p">(</span><span class="n">build_stmt</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">iter</span><span class="o">.</span><span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">]))</span>
                 <span class="n">end_expr</span> <span class="o">=</span> <span class="n">expr</span><span class="o">.</span><span class="n">Expr</span><span class="p">(</span><span class="n">build_stmt</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">iter</span><span class="o">.</span><span class="n">args</span><span class="p">[</span><span class="mi">1</span><span class="p">]))</span>
@@ -1563,17 +1563,17 @@
                 <span class="n">expr</span><span class="o">.</span><span class="n">Expr</span><span class="p">(</span><span class="n">impl</span><span class="o">.</span><span class="n">subscript</span><span class="p">(</span><span class="n">ctx</span><span class="o">.</span><span class="n">ast_builder</span><span class="p">,</span> <span class="n">ndrange_var</span><span class="o">.</span><span class="n">acc_dimensions</span><span class="p">,</span> <span class="mi">0</span><span class="p">)),</span>
                 <span class="n">primitive_types</span><span class="o">.</span><span class="n">i32</span><span class="p">,</span>
             <span class="p">)</span>
-            <span class="n">ndrange_loop_var</span> <span class="o">=</span> <span class="n">expr</span><span class="o">.</span><span class="n">Expr</span><span class="p">(</span><span class="n">ctx</span><span class="o">.</span><span class="n">ast_builder</span><span class="o">.</span><span class="n">make_id_expr</span><span class="p">(</span><span class="s2">&quot;&quot;</span><span class="p">))</span>
+            <span class="n">ndrange_loop_var</span> <span class="o">=</span> <span class="n">expr</span><span class="o">.</span><span class="n">Expr</span><span class="p">(</span><span class="n">ctx</span><span class="o">.</span><span class="n">ast_builder</span><span class="o">.</span><span class="n">make_id_expr</span><span class="p">(</span><span class="s2">""</span><span class="p">))</span>
             <span class="n">for_di</span> <span class="o">=</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">DebugInfo</span><span class="p">(</span><span class="n">ctx</span><span class="o">.</span><span class="n">get_pos_info</span><span class="p">(</span><span class="n">node</span><span class="p">))</span>
             <span class="n">ctx</span><span class="o">.</span><span class="n">ast_builder</span><span class="o">.</span><span class="n">begin_frontend_range_for</span><span class="p">(</span><span class="n">ndrange_loop_var</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">ndrange_begin</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">ndrange_end</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">for_di</span><span class="p">)</span>
             <span class="n">I</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">expr_init</span><span class="p">(</span><span class="n">ndrange_loop_var</span><span class="p">)</span>
             <span class="n">targets</span> <span class="o">=</span> <span class="n">ASTTransformer</span><span class="o">.</span><span class="n">get_for_loop_targets</span><span class="p">(</span><span class="n">node</span><span class="p">)</span>
             <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">targets</span><span class="p">)</span> <span class="o">!=</span> <span class="nb">len</span><span class="p">(</span><span class="n">ndrange_var</span><span class="o">.</span><span class="n">dimensions</span><span class="p">):</span>
                 <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span>
-                    <span class="s2">&quot;Ndrange for loop with number of the loop variables not equal to &quot;</span>
-                    <span class="s2">&quot;the dimension of the ndrange is not supported. &quot;</span>
-                    <span class="s2">&quot;Please check if the number of arguments of qd.ndrange() is equal to &quot;</span>
-                    <span class="s2">&quot;the number of the loop variables.&quot;</span>
+                    <span class="s2">"Ndrange for loop with number of the loop variables not equal to "</span>
+                    <span class="s2">"the dimension of the ndrange is not supported. "</span>
+                    <span class="s2">"Please check if the number of arguments of qd.ndrange() is equal to "</span>
+                    <span class="s2">"the number of the loop variables."</span>
                 <span class="p">)</span>
             <span class="c1"># ``physical_to_canonical[p]`` is the canonical (user-visible) axis index that receives</span>
             <span class="c1"># the decomposed index for physical nesting level ``p``. For the identity / ``axes=None``</span>
@@ -1619,13 +1619,13 @@
                 <span class="n">expr</span><span class="o">.</span><span class="n">Expr</span><span class="p">(</span><span class="n">impl</span><span class="o">.</span><span class="n">subscript</span><span class="p">(</span><span class="n">ctx</span><span class="o">.</span><span class="n">ast_builder</span><span class="p">,</span> <span class="n">ndrange_var</span><span class="o">.</span><span class="n">acc_dimensions</span><span class="p">,</span> <span class="mi">0</span><span class="p">)),</span>
                 <span class="n">primitive_types</span><span class="o">.</span><span class="n">i32</span><span class="p">,</span>
             <span class="p">)</span>
-            <span class="n">ndrange_loop_var</span> <span class="o">=</span> <span class="n">expr</span><span class="o">.</span><span class="n">Expr</span><span class="p">(</span><span class="n">ctx</span><span class="o">.</span><span class="n">ast_builder</span><span class="o">.</span><span class="n">make_id_expr</span><span class="p">(</span><span class="s2">&quot;&quot;</span><span class="p">))</span>
+            <span class="n">ndrange_loop_var</span> <span class="o">=</span> <span class="n">expr</span><span class="o">.</span><span class="n">Expr</span><span class="p">(</span><span class="n">ctx</span><span class="o">.</span><span class="n">ast_builder</span><span class="o">.</span><span class="n">make_id_expr</span><span class="p">(</span><span class="s2">""</span><span class="p">))</span>
             <span class="n">for_di</span> <span class="o">=</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">DebugInfo</span><span class="p">(</span><span class="n">ctx</span><span class="o">.</span><span class="n">get_pos_info</span><span class="p">(</span><span class="n">node</span><span class="p">))</span>
             <span class="n">ctx</span><span class="o">.</span><span class="n">ast_builder</span><span class="o">.</span><span class="n">begin_frontend_range_for</span><span class="p">(</span><span class="n">ndrange_loop_var</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">ndrange_begin</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">ndrange_end</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">for_di</span><span class="p">)</span>
 
             <span class="n">targets</span> <span class="o">=</span> <span class="n">ASTTransformer</span><span class="o">.</span><span class="n">get_for_loop_targets</span><span class="p">(</span><span class="n">node</span><span class="p">)</span>
             <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">targets</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">1</span><span class="p">:</span>
-                <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Group for should have 1 loop target, found </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">targets</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Group for should have 1 loop target, found </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">targets</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
             <span class="n">target</span> <span class="o">=</span> <span class="n">targets</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
             <span class="n">mat</span> <span class="o">=</span> <span class="n">matrix</span><span class="o">.</span><span class="n">make_matrix</span><span class="p">([</span><span class="mi">0</span><span class="p">]</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="n">ndrange_var</span><span class="o">.</span><span class="n">dimensions</span><span class="p">),</span> <span class="n">dt</span><span class="o">=</span><span class="n">primitive_types</span><span class="o">.</span><span class="n">i32</span><span class="p">)</span>
             <span class="n">target_var</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">expr_init</span><span class="p">(</span><span class="n">mat</span><span class="p">)</span>
@@ -1669,7 +1669,7 @@
         <span class="k">with</span> <span class="n">ctx</span><span class="o">.</span><span class="n">variable_scope_guard</span><span class="p">():</span>
             <span class="k">if</span> <span class="n">is_grouped</span><span class="p">:</span>
                 <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">targets</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">1</span><span class="p">:</span>
-                    <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Group for should have 1 loop target, found </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">targets</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                    <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Group for should have 1 loop target, found </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">targets</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
                 <span class="n">target</span> <span class="o">=</span> <span class="n">targets</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
                 <span class="n">loop_var</span> <span class="o">=</span> <span class="n">build_stmt</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">iter</span><span class="p">)</span>
                 <span class="n">loop_indices</span> <span class="o">=</span> <span class="n">expr</span><span class="o">.</span><span class="n">make_var_list</span><span class="p">(</span><span class="n">size</span><span class="o">=</span><span class="nb">len</span><span class="p">(</span><span class="n">loop_var</span><span class="o">.</span><span class="n">shape</span><span class="p">),</span> <span class="n">ast_builder</span><span class="o">=</span><span class="n">ctx</span><span class="o">.</span><span class="n">ast_builder</span><span class="p">)</span>
@@ -1679,7 +1679,7 @@
                 <span class="c1"># per axis of the underlying buffer), but the user-visible ``I`` must be canonical so that ``x[I]``</span>
                 <span class="c1"># round-trips correctly through the canonical-&gt;physical AST rewrite in :func:`build_Subscript`.</span>
                 <span class="c1"># Reorder the indices so position ``m`` carries the canonical-axis-``m`` value.</span>
-                <span class="n">layout</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">loop_var</span><span class="p">,</span> <span class="s2">&quot;_qd_layout&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+                <span class="n">layout</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">loop_var</span><span class="p">,</span> <span class="s2">"_qd_layout"</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
                 <span class="k">if</span> <span class="n">layout</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">layout</span><span class="p">)</span> <span class="o">==</span> <span class="nb">len</span><span class="p">(</span><span class="n">loop_indices</span><span class="p">):</span>
                     <span class="n">invperm</span> <span class="o">=</span> <span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="n">layout</span><span class="p">)</span>
                     <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">axis</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">layout</span><span class="p">):</span>
@@ -1696,9 +1696,9 @@
                 <span class="c1"># *physical* indices but the user spelled them with canonical names (``for i, j in x`` where ``i``</span>
                 <span class="c1"># is canonical axis 0). Allocate hidden physical slots and rebind each user name to the physical slot</span>
                 <span class="c1"># whose runtime value is the canonical-axis value the user expects.</span>
-                <span class="n">layout</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">loop_var</span><span class="p">,</span> <span class="s2">&quot;_qd_layout&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+                <span class="n">layout</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">loop_var</span><span class="p">,</span> <span class="s2">"_qd_layout"</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
                 <span class="k">if</span> <span class="n">layout</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">layout</span><span class="p">)</span> <span class="o">==</span> <span class="nb">len</span><span class="p">(</span><span class="n">targets</span><span class="p">):</span>
-                    <span class="n">phys_vars</span> <span class="o">=</span> <span class="p">[</span><span class="n">expr</span><span class="o">.</span><span class="n">Expr</span><span class="p">(</span><span class="n">ctx</span><span class="o">.</span><span class="n">ast_builder</span><span class="o">.</span><span class="n">make_id_expr</span><span class="p">(</span><span class="s2">&quot;&quot;</span><span class="p">))</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="n">targets</span><span class="p">]</span>
+                    <span class="n">phys_vars</span> <span class="o">=</span> <span class="p">[</span><span class="n">expr</span><span class="o">.</span><span class="n">Expr</span><span class="p">(</span><span class="n">ctx</span><span class="o">.</span><span class="n">ast_builder</span><span class="o">.</span><span class="n">make_id_expr</span><span class="p">(</span><span class="s2">""</span><span class="p">))</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="n">targets</span><span class="p">]</span>
                     <span class="n">invperm</span> <span class="o">=</span> <span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="n">layout</span><span class="p">)</span>
                     <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">axis</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">layout</span><span class="p">):</span>
                         <span class="n">invperm</span><span class="p">[</span><span class="n">axis</span><span class="p">]</span> <span class="o">=</span> <span class="n">k</span>
@@ -1708,7 +1708,7 @@
                 <span class="k">else</span><span class="p">:</span>
                     <span class="n">_vars</span> <span class="o">=</span> <span class="p">[]</span>
                     <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">targets</span><span class="p">:</span>
-                        <span class="n">var</span> <span class="o">=</span> <span class="n">expr</span><span class="o">.</span><span class="n">Expr</span><span class="p">(</span><span class="n">ctx</span><span class="o">.</span><span class="n">ast_builder</span><span class="o">.</span><span class="n">make_id_expr</span><span class="p">(</span><span class="s2">&quot;&quot;</span><span class="p">))</span>
+                        <span class="n">var</span> <span class="o">=</span> <span class="n">expr</span><span class="o">.</span><span class="n">Expr</span><span class="p">(</span><span class="n">ctx</span><span class="o">.</span><span class="n">ast_builder</span><span class="o">.</span><span class="n">make_id_expr</span><span class="p">(</span><span class="s2">""</span><span class="p">))</span>
                         <span class="n">_vars</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">var</span><span class="p">)</span>
                         <span class="n">ctx</span><span class="o">.</span><span class="n">create_variable</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">var</span><span class="p">)</span>
                     <span class="n">expr_group</span> <span class="o">=</span> <span class="n">expr</span><span class="o">.</span><span class="n">make_expr_group</span><span class="p">(</span><span class="o">*</span><span class="n">_vars</span><span class="p">)</span>
@@ -1726,11 +1726,11 @@
     <span class="k">def</span><span class="w"> </span><span class="nf">build_mesh_for</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">ASTTransformerFuncContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">For</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
         <span class="n">targets</span> <span class="o">=</span> <span class="n">ASTTransformer</span><span class="o">.</span><span class="n">get_for_loop_targets</span><span class="p">(</span><span class="n">node</span><span class="p">)</span>
         <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">targets</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">1</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">&quot;Mesh for should have 1 loop target, found {len(targets)}&quot;</span><span class="p">)</span>
+            <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">"Mesh for should have 1 loop target, found {len(targets)}"</span><span class="p">)</span>
         <span class="n">target</span> <span class="o">=</span> <span class="n">targets</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
 
         <span class="k">with</span> <span class="n">ctx</span><span class="o">.</span><span class="n">variable_scope_guard</span><span class="p">():</span>
-            <span class="n">var</span> <span class="o">=</span> <span class="n">expr</span><span class="o">.</span><span class="n">Expr</span><span class="p">(</span><span class="n">ctx</span><span class="o">.</span><span class="n">ast_builder</span><span class="o">.</span><span class="n">make_id_expr</span><span class="p">(</span><span class="s2">&quot;&quot;</span><span class="p">))</span>
+            <span class="n">var</span> <span class="o">=</span> <span class="n">expr</span><span class="o">.</span><span class="n">Expr</span><span class="p">(</span><span class="n">ctx</span><span class="o">.</span><span class="n">ast_builder</span><span class="o">.</span><span class="n">make_id_expr</span><span class="p">(</span><span class="s2">""</span><span class="p">))</span>
             <span class="n">ctx</span><span class="o">.</span><span class="n">mesh</span> <span class="o">=</span> <span class="n">node</span><span class="o">.</span><span class="n">iter</span><span class="o">.</span><span class="n">ptr</span><span class="o">.</span><span class="n">mesh</span>
             <span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">ctx</span><span class="o">.</span><span class="n">mesh</span><span class="p">,</span> <span class="n">impl</span><span class="o">.</span><span class="n">MeshInstance</span><span class="p">)</span>
             <span class="n">mesh_idx</span> <span class="o">=</span> <span class="n">mesh</span><span class="o">.</span><span class="n">MeshElementFieldProxy</span><span class="p">(</span><span class="n">ctx</span><span class="o">.</span><span class="n">mesh</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">iter</span><span class="o">.</span><span class="n">ptr</span><span class="o">.</span><span class="n">_type</span><span class="p">,</span> <span class="n">var</span><span class="o">.</span><span class="n">ptr</span><span class="p">)</span>
@@ -1755,14 +1755,14 @@
     <span class="k">def</span><span class="w"> </span><span class="nf">build_nested_mesh_for</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">ASTTransformerFuncContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">For</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
         <span class="n">targets</span> <span class="o">=</span> <span class="n">ASTTransformer</span><span class="o">.</span><span class="n">get_for_loop_targets</span><span class="p">(</span><span class="n">node</span><span class="p">)</span>
         <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">targets</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">1</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">&quot;Nested-mesh for should have 1 loop target, found {len(targets)}&quot;</span><span class="p">)</span>
+            <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">"Nested-mesh for should have 1 loop target, found {len(targets)}"</span><span class="p">)</span>
         <span class="n">target</span> <span class="o">=</span> <span class="n">targets</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
 
         <span class="k">with</span> <span class="n">ctx</span><span class="o">.</span><span class="n">variable_scope_guard</span><span class="p">():</span>
             <span class="n">ctx</span><span class="o">.</span><span class="n">mesh</span> <span class="o">=</span> <span class="n">node</span><span class="o">.</span><span class="n">iter</span><span class="o">.</span><span class="n">ptr</span><span class="o">.</span><span class="n">mesh</span>
             <span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">ctx</span><span class="o">.</span><span class="n">mesh</span><span class="p">,</span> <span class="n">impl</span><span class="o">.</span><span class="n">MeshInstance</span><span class="p">)</span>
-            <span class="n">loop_name</span> <span class="o">=</span> <span class="n">node</span><span class="o">.</span><span class="n">target</span><span class="o">.</span><span class="n">id</span> <span class="o">+</span> <span class="s2">&quot;_index__&quot;</span>
-            <span class="n">loop_var</span> <span class="o">=</span> <span class="n">expr</span><span class="o">.</span><span class="n">Expr</span><span class="p">(</span><span class="n">ctx</span><span class="o">.</span><span class="n">ast_builder</span><span class="o">.</span><span class="n">make_id_expr</span><span class="p">(</span><span class="s2">&quot;&quot;</span><span class="p">))</span>
+            <span class="n">loop_name</span> <span class="o">=</span> <span class="n">node</span><span class="o">.</span><span class="n">target</span><span class="o">.</span><span class="n">id</span> <span class="o">+</span> <span class="s2">"_index__"</span>
+            <span class="n">loop_var</span> <span class="o">=</span> <span class="n">expr</span><span class="o">.</span><span class="n">Expr</span><span class="p">(</span><span class="n">ctx</span><span class="o">.</span><span class="n">ast_builder</span><span class="o">.</span><span class="n">make_id_expr</span><span class="p">(</span><span class="s2">""</span><span class="p">))</span>
             <span class="n">ctx</span><span class="o">.</span><span class="n">create_variable</span><span class="p">(</span><span class="n">loop_name</span><span class="p">,</span> <span class="n">loop_var</span><span class="p">)</span>
             <span class="n">begin</span> <span class="o">=</span> <span class="n">expr</span><span class="o">.</span><span class="n">Expr</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
             <span class="n">end</span> <span class="o">=</span> <span class="n">qd_ops</span><span class="o">.</span><span class="n">cast</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">iter</span><span class="o">.</span><span class="n">ptr</span><span class="o">.</span><span class="n">size</span><span class="p">,</span> <span class="n">primitive_types</span><span class="o">.</span><span class="n">i32</span><span class="p">)</span>
@@ -1790,38 +1790,38 @@
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer/index.html#quadrants.lang.ast.ast_transformer.ASTTransformer.build_For">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">build_For</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">ASTTransformerFuncContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">For</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
         <span class="k">if</span> <span class="n">node</span><span class="o">.</span><span class="n">orelse</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">&quot;&#39;else&#39; clause for &#39;for&#39; not supported in Quadrants kernels&quot;</span><span class="p">)</span>
+            <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">"'else' clause for 'for' not supported in Quadrants kernels"</span><span class="p">)</span>
         <span class="n">decorator</span> <span class="o">=</span> <span class="n">get_decorator</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">iter</span><span class="p">)</span>
-        <span class="n">double_decorator</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
-        <span class="k">if</span> <span class="n">decorator</span> <span class="o">!=</span> <span class="s2">&quot;&quot;</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">iter</span><span class="o">.</span><span class="n">args</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+        <span class="n">double_decorator</span> <span class="o">=</span> <span class="s2">""</span>
+        <span class="k">if</span> <span class="n">decorator</span> <span class="o">!=</span> <span class="s2">""</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">iter</span><span class="o">.</span><span class="n">args</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
             <span class="n">double_decorator</span> <span class="o">=</span> <span class="n">get_decorator</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">iter</span><span class="o">.</span><span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
 
-        <span class="k">if</span> <span class="n">decorator</span> <span class="o">==</span> <span class="s2">&quot;static&quot;</span><span class="p">:</span>
-            <span class="k">if</span> <span class="n">double_decorator</span> <span class="o">==</span> <span class="s2">&quot;static&quot;</span><span class="p">:</span>
-                <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">&quot;&#39;qd.static&#39; cannot be nested&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">decorator</span> <span class="o">==</span> <span class="s2">"static"</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">double_decorator</span> <span class="o">==</span> <span class="s2">"static"</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">"'qd.static' cannot be nested"</span><span class="p">)</span>
             <span class="k">with</span> <span class="n">ctx</span><span class="o">.</span><span class="n">loop_scope_guard</span><span class="p">(</span><span class="n">is_static</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
-                <span class="k">return</span> <span class="n">ASTTransformer</span><span class="o">.</span><span class="n">build_static_for</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="p">,</span> <span class="n">double_decorator</span> <span class="o">==</span> <span class="s2">&quot;grouped&quot;</span><span class="p">)</span>
+                <span class="k">return</span> <span class="n">ASTTransformer</span><span class="o">.</span><span class="n">build_static_for</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="p">,</span> <span class="n">double_decorator</span> <span class="o">==</span> <span class="s2">"grouped"</span><span class="p">)</span>
         <span class="k">with</span> <span class="n">ctx</span><span class="o">.</span><span class="n">loop_scope_guard</span><span class="p">():</span>
-            <span class="k">if</span> <span class="n">decorator</span> <span class="o">==</span> <span class="s2">&quot;ndrange&quot;</span><span class="p">:</span>
-                <span class="k">if</span> <span class="n">double_decorator</span> <span class="o">!=</span> <span class="s2">&quot;&quot;</span><span class="p">:</span>
-                    <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">&quot;No decorator is allowed inside &#39;qd.ndrange&quot;</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">decorator</span> <span class="o">==</span> <span class="s2">"ndrange"</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">double_decorator</span> <span class="o">!=</span> <span class="s2">""</span><span class="p">:</span>
+                    <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">"No decorator is allowed inside 'qd.ndrange"</span><span class="p">)</span>
                 <span class="k">return</span> <span class="n">ASTTransformer</span><span class="o">.</span><span class="n">build_ndrange_for</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="p">)</span>
-            <span class="k">if</span> <span class="n">decorator</span> <span class="o">==</span> <span class="s2">&quot;grouped&quot;</span><span class="p">:</span>
-                <span class="k">if</span> <span class="n">double_decorator</span> <span class="o">==</span> <span class="s2">&quot;static&quot;</span><span class="p">:</span>
-                    <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">&quot;&#39;qd.static&#39; is not allowed inside &#39;qd.grouped&#39;&quot;</span><span class="p">)</span>
-                <span class="k">elif</span> <span class="n">double_decorator</span> <span class="o">==</span> <span class="s2">&quot;ndrange&quot;</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">decorator</span> <span class="o">==</span> <span class="s2">"grouped"</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">double_decorator</span> <span class="o">==</span> <span class="s2">"static"</span><span class="p">:</span>
+                    <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">"'qd.static' is not allowed inside 'qd.grouped'"</span><span class="p">)</span>
+                <span class="k">elif</span> <span class="n">double_decorator</span> <span class="o">==</span> <span class="s2">"ndrange"</span><span class="p">:</span>
                     <span class="k">return</span> <span class="n">ASTTransformer</span><span class="o">.</span><span class="n">build_grouped_ndrange_for</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="p">)</span>
-                <span class="k">elif</span> <span class="n">double_decorator</span> <span class="o">==</span> <span class="s2">&quot;grouped&quot;</span><span class="p">:</span>
-                    <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">&quot;&#39;qd.grouped&#39; cannot be nested&quot;</span><span class="p">)</span>
+                <span class="k">elif</span> <span class="n">double_decorator</span> <span class="o">==</span> <span class="s2">"grouped"</span><span class="p">:</span>
+                    <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">"'qd.grouped' cannot be nested"</span><span class="p">)</span>
                 <span class="k">else</span><span class="p">:</span>
                     <span class="k">return</span> <span class="n">ASTTransformer</span><span class="o">.</span><span class="n">build_struct_for</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="p">,</span> <span class="n">is_grouped</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
             <span class="k">elif</span> <span class="p">(</span>
                 <span class="nb">isinstance</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">iter</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Call</span><span class="p">)</span>
                 <span class="ow">and</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">iter</span><span class="o">.</span><span class="n">func</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Name</span><span class="p">)</span>
-                <span class="ow">and</span> <span class="n">node</span><span class="o">.</span><span class="n">iter</span><span class="o">.</span><span class="n">func</span><span class="o">.</span><span class="n">id</span> <span class="o">==</span> <span class="s2">&quot;range&quot;</span>
+                <span class="ow">and</span> <span class="n">node</span><span class="o">.</span><span class="n">iter</span><span class="o">.</span><span class="n">func</span><span class="o">.</span><span class="n">id</span> <span class="o">==</span> <span class="s2">"range"</span>
             <span class="p">):</span>
                 <span class="k">if</span> <span class="n">ctx</span><span class="o">.</span><span class="n">loop_depth</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="ow">and</span> <span class="n">ctx</span><span class="o">.</span><span class="n">autodiff_mode</span> <span class="o">==</span> <span class="n">AutodiffMode</span><span class="o">.</span><span class="n">REVERSE</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">ctx</span><span class="o">.</span><span class="n">adstack_enabled</span><span class="p">:</span>
-                    <span class="k">raise</span> <span class="n">exception</span><span class="o">.</span><span class="n">QuadrantsCompilationError</span><span class="p">(</span><span class="s2">&quot;Cannot use non static range in Backwards mode&quot;</span><span class="p">)</span>
+                    <span class="k">raise</span> <span class="n">exception</span><span class="o">.</span><span class="n">QuadrantsCompilationError</span><span class="p">(</span><span class="s2">"Cannot use non static range in Backwards mode"</span><span class="p">)</span>
                 <span class="k">return</span> <span class="n">ASTTransformer</span><span class="o">.</span><span class="n">build_range_for</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="p">)</span>
             <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">iter</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">IfExp</span><span class="p">):</span>
                 <span class="c1"># Handle inline if expression as the top level iterator expression, e.g.:</span>
@@ -1832,10 +1832,10 @@
                 <span class="c1"># - being an inner loop</span>
                 <span class="c1"># - either side can be static or not, as long as the if expression itself is static</span>
                 <span class="n">_iter</span> <span class="o">=</span> <span class="n">node</span><span class="o">.</span><span class="n">iter</span>
-                <span class="n">is_static_if</span> <span class="o">=</span> <span class="n">get_decorator</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">iter</span><span class="o">.</span><span class="n">test</span><span class="p">)</span> <span class="o">==</span> <span class="s2">&quot;static&quot;</span>
+                <span class="n">is_static_if</span> <span class="o">=</span> <span class="n">get_decorator</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">iter</span><span class="o">.</span><span class="n">test</span><span class="p">)</span> <span class="o">==</span> <span class="s2">"static"</span>
                 <span class="k">if</span> <span class="ow">not</span> <span class="n">is_static_if</span><span class="p">:</span>
                     <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span>
-                        <span class="s2">&quot;Using non static inlined if statement as for-loop iterable is not currently supported.&quot;</span>
+                        <span class="s2">"Using non static inlined if statement as for-loop iterable is not currently supported."</span>
                     <span class="p">)</span>
                 <span class="n">build_stmt</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">_iter</span><span class="o">.</span><span class="n">test</span><span class="p">)</span>
                 <span class="n">next_iter</span> <span class="o">=</span> <span class="n">_iter</span><span class="o">.</span><span class="n">body</span> <span class="k">if</span> <span class="n">_iter</span><span class="o">.</span><span class="n">test</span><span class="o">.</span><span class="n">ptr</span> <span class="k">else</span> <span class="n">_iter</span><span class="o">.</span><span class="n">orelse</span>
@@ -1844,7 +1844,7 @@
                     <span class="nb">iter</span><span class="o">=</span><span class="n">next_iter</span><span class="p">,</span>
                     <span class="n">body</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">body</span><span class="p">,</span>
                     <span class="n">orelse</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
-                    <span class="n">type_comment</span><span class="o">=</span><span class="nb">getattr</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="s2">&quot;type_comment&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">),</span>
+                    <span class="n">type_comment</span><span class="o">=</span><span class="nb">getattr</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="s2">"type_comment"</span><span class="p">,</span> <span class="kc">None</span><span class="p">),</span>
                     <span class="n">lineno</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">lineno</span><span class="p">,</span>
                     <span class="n">end_lineno</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">end_lineno</span><span class="p">,</span>
                     <span class="n">col_offset</span><span class="o">=</span><span class="n">node</span><span class="o">.</span><span class="n">col_offset</span><span class="p">,</span>
@@ -1856,7 +1856,7 @@
                 <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">iter</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">mesh</span><span class="o">.</span><span class="n">MeshElementField</span><span class="p">):</span>
                     <span class="k">if</span> <span class="ow">not</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">is_extension_supported</span><span class="p">(</span><span class="n">impl</span><span class="o">.</span><span class="n">default_cfg</span><span class="p">()</span><span class="o">.</span><span class="n">arch</span><span class="p">,</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">Extension</span><span class="o">.</span><span class="n">mesh</span><span class="p">):</span>
                         <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span>
-                            <span class="s2">&quot;Backend &quot;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">impl</span><span class="o">.</span><span class="n">default_cfg</span><span class="p">()</span><span class="o">.</span><span class="n">arch</span><span class="p">)</span> <span class="o">+</span> <span class="s2">&quot; doesn&#39;t support MeshQuadrants extension&quot;</span>
+                            <span class="s2">"Backend "</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">impl</span><span class="o">.</span><span class="n">default_cfg</span><span class="p">()</span><span class="o">.</span><span class="n">arch</span><span class="p">)</span> <span class="o">+</span> <span class="s2">" doesn't support MeshQuadrants extension"</span>
                         <span class="p">)</span>
                     <span class="k">return</span> <span class="n">ASTTransformer</span><span class="o">.</span><span class="n">build_mesh_for</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="p">)</span>
                 <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">iter</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">mesh</span><span class="o">.</span><span class="n">MeshRelationAccessProxy</span><span class="p">):</span>
@@ -1867,17 +1867,17 @@
 
     <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">_is_graph_do_while_call</span><span class="p">(</span><span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">expr</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ast</span><span class="o">.</span><span class="n">expr</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;If *node* is ``qd.graph.do_while(arg)`` (or the deprecated ``qd.graph_do_while(arg)``) return the arg AST</span>
+<span class="w">        </span><span class="sd">"""If *node* is ``qd.graph.do_while(arg)`` (or the deprecated ``qd.graph_do_while(arg)``) return the arg AST</span>
 <span class="sd">        node, else None.</span>
 
 <span class="sd">        ``arg`` may be an ``ast.Name`` (a bare kernel parameter, e.g. ``counter``) or an ``ast.Attribute`` chain (a</span>
 <span class="sd">        ``@qd.data_oriented`` member ndarray such as ``self.counter`` or a ``@dataclasses.dataclass`` parameter member</span>
 <span class="sd">        such as ``params.counter``). The actual resolution to a kernel ndarray argument happens in ``build_While`` via</span>
 <span class="sd">        ``_resolve_ndarray_kernel_arg_id``.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Call</span><span class="p">):</span>
             <span class="k">return</span> <span class="kc">None</span>
-        <span class="k">if</span> <span class="ow">not</span> <span class="n">graph_api</span><span class="o">.</span><span class="n">matches</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">func</span><span class="p">,</span> <span class="s2">&quot;do_while&quot;</span><span class="p">):</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">graph_api</span><span class="o">.</span><span class="n">matches</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">func</span><span class="p">,</span> <span class="s2">"do_while"</span><span class="p">):</span>
             <span class="k">return</span> <span class="kc">None</span>
         <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">args</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span> <span class="ow">and</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="p">(</span><span class="n">ast</span><span class="o">.</span><span class="n">Name</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Attribute</span><span class="p">)):</span>
             <span class="k">return</span> <span class="n">node</span><span class="o">.</span><span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
@@ -1890,10 +1890,10 @@
         <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">expr</span><span class="p">,</span>
         <span class="n">usage</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">int</span><span class="p">]:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Thin forwarding wrapper around ``ndarray_arg_resolver.resolve_ndarray_kernel_arg_id``; the actual logic lives</span>
+<span class="w">        </span><span class="sd">"""Thin forwarding wrapper around ``ndarray_arg_resolver.resolve_ndarray_kernel_arg_id``; the actual logic lives</span>
 <span class="sd">        in module ``ast_transformers/ndarray_arg_resolver.py`` to keep this file from growing per-feature (same pattern</span>
 <span class="sd">        as ``_is_checkpoint_call`` / ``CheckpointTransformer``). Returns ``(label, flat_cpp_arg_id)`` or raises</span>
-<span class="sd">        ``QuadrantsSyntaxError``.&quot;&quot;&quot;</span>
+<span class="sd">        ``QuadrantsSyntaxError``."""</span>
         <span class="c1"># pylint: disable-next=C0415,import-outside-toplevel</span>
         <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.ast.ast_transformers.ndarray_arg_resolver</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
             <span class="n">resolve_ndarray_kernel_arg_id</span><span class="p">,</span>
@@ -1903,9 +1903,9 @@
 
     <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">_is_checkpoint_call</span><span class="p">(</span><span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">expr</span><span class="p">,</span> <span class="n">global_vars</span><span class="p">:</span> <span class="nb">dict</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Thin forwarding wrapper around ``CheckpointTransformer.is_checkpoint_call``; the actual logic lives in module</span>
+<span class="w">        </span><span class="sd">"""Thin forwarding wrapper around ``CheckpointTransformer.is_checkpoint_call``; the actual logic lives in module</span>
 <span class="sd">        ``ast_transformers/checkpoint_transformer.py`` to keep this file from growing per-feature. Returns a</span>
-<span class="sd">        ``CheckpointCallInfo`` or ``None``.&quot;&quot;&quot;</span>
+<span class="sd">        ``CheckpointCallInfo`` or ``None``."""</span>
         <span class="k">return</span> <span class="n">CheckpointTransformer</span><span class="o">.</span><span class="n">is_checkpoint_call</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">global_vars</span><span class="p">)</span>
 
     <span class="nd">@staticmethod</span>
@@ -1913,30 +1913,30 @@
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer/index.html#quadrants.lang.ast.ast_transformer.ASTTransformer.build_While">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">build_While</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">ASTTransformerFuncContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">While</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
         <span class="k">if</span> <span class="n">node</span><span class="o">.</span><span class="n">orelse</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">&quot;&#39;else&#39; clause for &#39;while&#39; not supported in Quadrants kernels&quot;</span><span class="p">)</span>
+            <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">"'else' clause for 'while' not supported in Quadrants kernels"</span><span class="p">)</span>
 
         <span class="n">graph_do_while_node</span> <span class="o">=</span> <span class="n">ASTTransformer</span><span class="o">.</span><span class="n">_is_graph_do_while_call</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">test</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">graph_do_while_node</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-            <span class="n">graph_api</span><span class="o">.</span><span class="n">warn_if_deprecated</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">test</span><span class="o">.</span><span class="n">func</span><span class="p">,</span> <span class="s2">&quot;do_while&quot;</span><span class="p">)</span>
+            <span class="n">graph_api</span><span class="o">.</span><span class="n">warn_if_deprecated</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">test</span><span class="o">.</span><span class="n">func</span><span class="p">,</span> <span class="s2">"do_while"</span><span class="p">)</span>
             <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.kernel</span><span class="w"> </span><span class="kn">import</span> <span class="n">GraphDoWhileLevel</span>  <span class="c1"># pylint: disable=C0415</span>
 
             <span class="n">kernel</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">global_context</span><span class="o">.</span><span class="n">current_kernel</span>
             <span class="k">if</span> <span class="ow">not</span> <span class="n">kernel</span><span class="o">.</span><span class="n">use_graph</span><span class="p">:</span>
-                <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">&quot;qd.graph.do_while() requires @qd.kernel(graph=True)&quot;</span><span class="p">)</span>
-            <span class="c1"># graph_do_while emits no loop IR; its body&#39;s for-loops must be top-level (offloaded) tasks. So it may only</span>
+                <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">"qd.graph.do_while() requires @qd.kernel(graph=True)"</span><span class="p">)</span>
+            <span class="c1"># graph_do_while emits no loop IR; its body's for-loops must be top-level (offloaded) tasks. So it may only</span>
             <span class="c1"># appear at the kernel top level or directly inside another graph_do_while (both at loop_depth 0), never</span>
             <span class="c1"># inside a real for-loop.</span>
             <span class="k">if</span> <span class="n">ctx</span><span class="o">.</span><span class="n">loop_depth</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">:</span>
                 <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span>
-                    <span class="s2">&quot;qd.graph.do_while() must be at the kernel top level or directly nested inside &quot;</span>
-                    <span class="s2">&quot;another qd.graph.do_while(); it cannot appear inside a for-loop.&quot;</span>
+                    <span class="s2">"qd.graph.do_while() must be at the kernel top level or directly nested inside "</span>
+                    <span class="s2">"another qd.graph.do_while(); it cannot appear inside a for-loop."</span>
                 <span class="p">)</span>
             <span class="c1"># Resolve the condition ndarray (bare parameter or @qd.data_oriented member) to its flat C++ arg-id at AST-</span>
             <span class="c1"># build time -- the same id the runtime needs -- so the launch path forwards it directly with no per-launch</span>
-            <span class="c1"># name matching. ``cond_arg_name`` keeps the readable label (e.g. &quot;counter&quot; or &quot;self.counter&quot;) for</span>
+            <span class="c1"># name matching. ``cond_arg_name`` keeps the readable label (e.g. "counter" or "self.counter") for</span>
             <span class="c1"># introspection and for the legacy ``graph_do_while_arg`` alias surfaced on Kernel.</span>
             <span class="n">cond_label</span><span class="p">,</span> <span class="n">cond_cpp_arg_id</span> <span class="o">=</span> <span class="n">ASTTransformer</span><span class="o">.</span><span class="n">_resolve_ndarray_kernel_arg_id</span><span class="p">(</span>
-                <span class="n">ctx</span><span class="p">,</span> <span class="n">kernel</span><span class="p">,</span> <span class="n">graph_do_while_node</span><span class="p">,</span> <span class="s2">&quot;qd.graph.do_while(...)&quot;</span>
+                <span class="n">ctx</span><span class="p">,</span> <span class="n">kernel</span><span class="p">,</span> <span class="n">graph_do_while_node</span><span class="p">,</span> <span class="s2">"qd.graph.do_while(...)"</span>
             <span class="p">)</span>
             <span class="c1"># Register this loop as a new nesting level (the body restriction is validated up-front in</span>
             <span class="c1"># FunctionDefTransformer). Outer loops get lower ids than the inner loops they contain.</span>
@@ -1977,7 +1977,7 @@
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer/index.html#quadrants.lang.ast.ast_transformer.ASTTransformer.build_If">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">build_If</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">ASTTransformerFuncContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">If</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ast</span><span class="o">.</span><span class="n">If</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
         <span class="n">build_stmt</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">test</span><span class="p">)</span>
-        <span class="n">is_static_if</span> <span class="o">=</span> <span class="n">get_decorator</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">test</span><span class="p">)</span> <span class="o">==</span> <span class="s2">&quot;static&quot;</span>
+        <span class="n">is_static_if</span> <span class="o">=</span> <span class="n">get_decorator</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">test</span><span class="p">)</span> <span class="o">==</span> <span class="s2">"static"</span>
 
         <span class="k">if</span> <span class="n">is_static_if</span><span class="p">:</span>
             <span class="k">if</span> <span class="n">node</span><span class="o">.</span><span class="n">test</span><span class="o">.</span><span class="n">ptr</span><span class="p">:</span>
@@ -2025,14 +2025,14 @@
         <span class="k">if</span> <span class="n">has_tensor_type</span><span class="p">:</span>
             <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">test</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">expr</span><span class="o">.</span><span class="n">Expr</span><span class="p">)</span> <span class="ow">and</span> <span class="n">node</span><span class="o">.</span><span class="n">test</span><span class="o">.</span><span class="n">ptr</span><span class="o">.</span><span class="n">is_tensor</span><span class="p">():</span>
                 <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span>
-                    <span class="s2">&quot;Using conditional expression for element-wise select operation on &quot;</span>
-                    <span class="s2">&quot;Quadrants vectors/matrices is deprecated and removed starting from Quadrants v1.5.0 &quot;</span>
-                    <span class="s1">&#39;Please use &quot;qd.select&quot; instead.&#39;</span>
+                    <span class="s2">"Using conditional expression for element-wise select operation on "</span>
+                    <span class="s2">"Quadrants vectors/matrices is deprecated and removed starting from Quadrants v1.5.0 "</span>
+                    <span class="s1">'Please use "qd.select" instead.'</span>
                 <span class="p">)</span>
             <span class="n">node</span><span class="o">.</span><span class="n">ptr</span> <span class="o">=</span> <span class="n">qd_ops</span><span class="o">.</span><span class="n">select</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">test</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">body</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">orelse</span><span class="o">.</span><span class="n">ptr</span><span class="p">)</span>
             <span class="k">return</span> <span class="n">node</span><span class="o">.</span><span class="n">ptr</span>
 
-        <span class="n">is_static_if</span> <span class="o">=</span> <span class="n">get_decorator</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">test</span><span class="p">)</span> <span class="o">==</span> <span class="s2">&quot;static&quot;</span>
+        <span class="n">is_static_if</span> <span class="o">=</span> <span class="n">get_decorator</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">test</span><span class="p">)</span> <span class="o">==</span> <span class="s2">"static"</span>
 
         <span class="k">if</span> <span class="n">is_static_if</span><span class="p">:</span>
             <span class="k">if</span> <span class="n">node</span><span class="o">.</span><span class="n">test</span><span class="o">.</span><span class="n">ptr</span><span class="p">:</span>
@@ -2075,7 +2075,7 @@
     <span class="k">def</span><span class="w"> </span><span class="nf">qd_format_list_to_assert_msg</span><span class="p">(</span><span class="n">raw</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">list</span><span class="p">]:</span>
         <span class="c1"># TODO: ignore formats here for now</span>
         <span class="n">entries</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">qd_format_list_to_content_entries</span><span class="p">([</span><span class="n">raw</span><span class="p">])</span>
-        <span class="n">msg</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+        <span class="n">msg</span> <span class="o">=</span> <span class="s2">""</span>
         <span class="n">args</span> <span class="o">=</span> <span class="p">[]</span>
         <span class="k">for</span> <span class="n">entry</span> <span class="ow">in</span> <span class="n">entries</span><span class="p">:</span>
             <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">entry</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
@@ -2083,14 +2083,14 @@
             <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">entry</span><span class="p">,</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">ExprCxx</span><span class="p">):</span>
                 <span class="n">ty</span> <span class="o">=</span> <span class="n">entry</span><span class="o">.</span><span class="n">get_rvalue_type</span><span class="p">()</span>
                 <span class="k">if</span> <span class="n">ty</span> <span class="ow">in</span> <span class="n">primitive_types</span><span class="o">.</span><span class="n">real_types</span><span class="p">:</span>
-                    <span class="n">msg</span> <span class="o">+=</span> <span class="s2">&quot;</span><span class="si">%f</span><span class="s2">&quot;</span>
+                    <span class="n">msg</span> <span class="o">+=</span> <span class="s2">"</span><span class="si">%f</span><span class="s2">"</span>
                 <span class="k">elif</span> <span class="n">ty</span> <span class="ow">in</span> <span class="n">primitive_types</span><span class="o">.</span><span class="n">integer_types</span><span class="p">:</span>
-                    <span class="n">msg</span> <span class="o">+=</span> <span class="s2">&quot;</span><span class="si">%d</span><span class="s2">&quot;</span>
+                    <span class="n">msg</span> <span class="o">+=</span> <span class="s2">"</span><span class="si">%d</span><span class="s2">"</span>
                 <span class="k">else</span><span class="p">:</span>
-                    <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Unsupported data type: </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">ty</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                    <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Unsupported data type: </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">ty</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
                 <span class="n">args</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">entry</span><span class="p">)</span>
             <span class="k">else</span><span class="p">:</span>
-                <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Unsupported type: </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">entry</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Unsupported type: </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">entry</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">msg</span><span class="p">,</span> <span class="n">args</span></div>
 
 
@@ -2099,9 +2099,9 @@
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer/index.html#quadrants.lang.ast.ast_transformer.ASTTransformer.build_Assert">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">build_Assert</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">ASTTransformerFuncContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">Assert</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
         <span class="n">u</span> <span class="o">=</span> <span class="n">platform</span><span class="o">.</span><span class="n">uname</span><span class="p">()</span>
-        <span class="k">if</span> <span class="n">u</span><span class="o">.</span><span class="n">system</span> <span class="o">==</span> <span class="s2">&quot;linux&quot;</span> <span class="ow">and</span> <span class="n">u</span><span class="o">.</span><span class="n">machine</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">&quot;arm64&quot;</span><span class="p">,</span> <span class="s2">&quot;aarch64&quot;</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">u</span><span class="o">.</span><span class="n">system</span> <span class="o">==</span> <span class="s2">"linux"</span> <span class="ow">and</span> <span class="n">u</span><span class="o">.</span><span class="n">machine</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">"arm64"</span><span class="p">,</span> <span class="s2">"aarch64"</span><span class="p">):</span>
             <span class="n">build_stmt</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">test</span><span class="p">)</span>
-            <span class="n">warnings</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="s2">&quot;Assert not supported on linux arm64 currently&quot;</span><span class="p">)</span>
+            <span class="n">warnings</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="s2">"Assert not supported on linux arm64 currently"</span><span class="p">)</span>
             <span class="k">return</span> <span class="kc">None</span>
         <span class="n">extra_args</span> <span class="o">=</span> <span class="p">[]</span>
         <span class="k">if</span> <span class="n">node</span><span class="o">.</span><span class="n">msg</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
@@ -2113,10 +2113,10 @@
                     <span class="n">msg</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">msg</span><span class="p">)</span>
                 <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">msg</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Str</span><span class="p">):</span>
                     <span class="k">pass</span>
-                <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">msg</span><span class="p">,</span> <span class="n">collections</span><span class="o">.</span><span class="n">abc</span><span class="o">.</span><span class="n">Sequence</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">msg</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="ow">and</span> <span class="n">msg</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;__qd_format__&quot;</span><span class="p">:</span>
+                <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">msg</span><span class="p">,</span> <span class="n">collections</span><span class="o">.</span><span class="n">abc</span><span class="o">.</span><span class="n">Sequence</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">msg</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="ow">and</span> <span class="n">msg</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="s2">"__qd_format__"</span><span class="p">:</span>
                     <span class="n">msg</span><span class="p">,</span> <span class="n">extra_args</span> <span class="o">=</span> <span class="n">ASTTransformer</span><span class="o">.</span><span class="n">qd_format_list_to_assert_msg</span><span class="p">(</span><span class="n">msg</span><span class="p">)</span>
                 <span class="k">else</span><span class="p">:</span>
-                    <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;assert info must be constant or formatted string, not </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">msg</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                    <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"assert info must be constant or formatted string, not </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">msg</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="n">msg</span> <span class="o">=</span> <span class="n">unparse</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">test</span><span class="p">)</span>
         <span class="n">test</span> <span class="o">=</span> <span class="n">build_stmt</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">test</span><span class="p">)</span>
@@ -2133,8 +2133,8 @@
             <span class="k">if</span> <span class="n">nearest_non_static_if</span><span class="p">:</span>
                 <span class="n">msg</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">get_pos_info</span><span class="p">(</span><span class="n">nearest_non_static_if</span><span class="o">.</span><span class="n">test</span><span class="p">)</span>
                 <span class="n">msg</span> <span class="o">+=</span> <span class="p">(</span>
-                    <span class="s2">&quot;You are trying to `break` a static `for` loop, &quot;</span>
-                    <span class="s2">&quot;but the `break` statement is inside a non-static `if`. &quot;</span>
+                    <span class="s2">"You are trying to `break` a static `for` loop, "</span>
+                    <span class="s2">"but the `break` statement is inside a non-static `if`. "</span>
                 <span class="p">)</span>
                 <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="n">msg</span><span class="p">)</span>
             <span class="n">ctx</span><span class="o">.</span><span class="n">set_loop_status</span><span class="p">(</span><span class="n">LoopStatus</span><span class="o">.</span><span class="n">Break</span><span class="p">)</span>
@@ -2152,8 +2152,8 @@
             <span class="k">if</span> <span class="n">nearest_non_static_if</span><span class="p">:</span>
                 <span class="n">msg</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">get_pos_info</span><span class="p">(</span><span class="n">nearest_non_static_if</span><span class="o">.</span><span class="n">test</span><span class="p">)</span>
                 <span class="n">msg</span> <span class="o">+=</span> <span class="p">(</span>
-                    <span class="s2">&quot;You are trying to `continue` a static `for` loop, &quot;</span>
-                    <span class="s2">&quot;but the `continue` statement is inside a non-static `if`. &quot;</span>
+                    <span class="s2">"You are trying to `continue` a static `for` loop, "</span>
+                    <span class="s2">"but the `continue` statement is inside a non-static `if`. "</span>
                 <span class="p">)</span>
                 <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="n">msg</span><span class="p">)</span>
             <span class="n">ctx</span><span class="o">.</span><span class="n">set_loop_status</span><span class="p">(</span><span class="n">LoopStatus</span><span class="o">.</span><span class="n">Continue</span><span class="p">)</span>
@@ -2167,12 +2167,12 @@
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/ast/ast_transformer/index.html#quadrants.lang.ast.ast_transformer.ASTTransformer.build_With">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">build_With</span><span class="p">(</span><span class="n">ctx</span><span class="p">:</span> <span class="n">ASTTransformerFuncContext</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">With</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
         <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">node</span><span class="o">.</span><span class="n">items</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">1</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">&quot;&#39;with&#39; in Quadrants kernels only supports a single context manager&quot;</span><span class="p">)</span>
+            <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">"'with' in Quadrants kernels only supports a single context manager"</span><span class="p">)</span>
         <span class="n">item</span> <span class="o">=</span> <span class="n">node</span><span class="o">.</span><span class="n">items</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
         <span class="k">if</span> <span class="n">item</span><span class="o">.</span><span class="n">optional_vars</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">&quot;&#39;with ... as ...&#39; is not supported in Quadrants kernels&quot;</span><span class="p">)</span>
+            <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">"'with ... as ...' is not supported in Quadrants kernels"</span><span class="p">)</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">item</span><span class="o">.</span><span class="n">context_expr</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">Call</span><span class="p">):</span>
-            <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">&quot;&#39;with&#39; in Quadrants kernels requires a call expression&quot;</span><span class="p">)</span>
+            <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">"'with' in Quadrants kernels requires a call expression"</span><span class="p">)</span>
 
         <span class="n">checkpoint_info</span> <span class="o">=</span> <span class="n">ASTTransformer</span><span class="o">.</span><span class="n">_is_checkpoint_call</span><span class="p">(</span><span class="n">item</span><span class="o">.</span><span class="n">context_expr</span><span class="p">,</span> <span class="n">ctx</span><span class="o">.</span><span class="n">global_vars</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">checkpoint_info</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
@@ -2186,16 +2186,16 @@
 
         <span class="k">if</span> <span class="ow">not</span> <span class="n">FunctionDefTransformer</span><span class="o">.</span><span class="n">_is_stream_parallel_with</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">ctx</span><span class="o">.</span><span class="n">global_vars</span><span class="p">):</span>
             <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span>
-                <span class="s2">&quot;&#39;with&#39; in Quadrants kernels only supports qd.stream_parallel(), qd.checkpoint(), &quot;</span>
-                <span class="s2">&quot;qd.graph.parallel_context(), or qd.graph.parallel()&quot;</span>
+                <span class="s2">"'with' in Quadrants kernels only supports qd.stream_parallel(), qd.checkpoint(), "</span>
+                <span class="s2">"qd.graph.parallel_context(), or qd.graph.parallel()"</span>
             <span class="p">)</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">ctx</span><span class="o">.</span><span class="n">is_kernel</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">&quot;qd.stream_parallel() can only be used inside @qd.kernel, not @qd.func&quot;</span><span class="p">)</span>
+            <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">"qd.stream_parallel() can only be used inside @qd.kernel, not @qd.func"</span><span class="p">)</span>
         <span class="n">kernel</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">global_context</span><span class="o">.</span><span class="n">current_kernel</span>
         <span class="k">if</span> <span class="n">kernel</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">kernel</span><span class="o">.</span><span class="n">use_graph</span><span class="p">:</span>
             <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span>
-                <span class="s2">&quot;qd.stream_parallel() is not compatible with graph=True kernels. Streams and graphs cannot be &quot;</span>
-                <span class="s2">&quot;combined; remove graph=True or the qd.stream_parallel() block.&quot;</span>
+                <span class="s2">"qd.stream_parallel() is not compatible with graph=True kernels. Streams and graphs cannot be "</span>
+                <span class="s2">"combined; remove graph=True or the qd.stream_parallel() block."</span>
             <span class="p">)</span>
         <span class="n">ctx</span><span class="o">.</span><span class="n">ast_builder</span><span class="o">.</span><span class="n">begin_stream_parallel</span><span class="p">()</span>
         <span class="n">build_stmts</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="o">.</span><span class="n">body</span><span class="p">)</span>
@@ -2209,8 +2209,8 @@
         <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">With</span><span class="p">,</span>
         <span class="n">info</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Thin forwarding wrapper around ``CheckpointTransformer.build_checkpoint_with``; the actual logic lives in</span>
-<span class="sd">        ``ast_transformers/checkpoint_transformer.py``.&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""Thin forwarding wrapper around ``CheckpointTransformer.build_checkpoint_with``; the actual logic lives in</span>
+<span class="sd">        ``ast_transformers/checkpoint_transformer.py``."""</span>
         <span class="k">return</span> <span class="n">CheckpointTransformer</span><span class="o">.</span><span class="n">build_checkpoint_with</span><span class="p">(</span><span class="n">ctx</span><span class="p">,</span> <span class="n">node</span><span class="p">,</span> <span class="n">info</span><span class="p">,</span> <span class="n">build_stmts</span><span class="p">)</span>
 
     <span class="nd">@staticmethod</span>

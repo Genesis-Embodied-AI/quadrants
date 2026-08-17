@@ -339,28 +339,28 @@
 <div class="viewcode-block" id="all_nonzero">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/warp/index.html#quadrants.lang.simt.warp.all_nonzero">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">all_nonzero</span><span class="p">(</span><span class="n">mask</span><span class="p">,</span> <span class="n">predicate</span><span class="p">):</span>
-    <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">call_internal</span><span class="p">(</span><span class="s2">&quot;cuda_all_sync_i32&quot;</span><span class="p">,</span> <span class="n">mask</span><span class="p">,</span> <span class="n">predicate</span><span class="p">,</span> <span class="n">with_runtime_context</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></div>
+    <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">call_internal</span><span class="p">(</span><span class="s2">"cuda_all_sync_i32"</span><span class="p">,</span> <span class="n">mask</span><span class="p">,</span> <span class="n">predicate</span><span class="p">,</span> <span class="n">with_runtime_context</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></div>
 
 
 
 <div class="viewcode-block" id="any_nonzero">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/warp/index.html#quadrants.lang.simt.warp.any_nonzero">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">any_nonzero</span><span class="p">(</span><span class="n">mask</span><span class="p">,</span> <span class="n">predicate</span><span class="p">):</span>
-    <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">call_internal</span><span class="p">(</span><span class="s2">&quot;cuda_any_sync_i32&quot;</span><span class="p">,</span> <span class="n">mask</span><span class="p">,</span> <span class="n">predicate</span><span class="p">,</span> <span class="n">with_runtime_context</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></div>
+    <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">call_internal</span><span class="p">(</span><span class="s2">"cuda_any_sync_i32"</span><span class="p">,</span> <span class="n">mask</span><span class="p">,</span> <span class="n">predicate</span><span class="p">,</span> <span class="n">with_runtime_context</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></div>
 
 
 
 <div class="viewcode-block" id="unique">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/warp/index.html#quadrants.lang.simt.warp.unique">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">unique</span><span class="p">(</span><span class="n">mask</span><span class="p">,</span> <span class="n">predicate</span><span class="p">):</span>
-    <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">call_internal</span><span class="p">(</span><span class="s2">&quot;cuda_uni_sync_i32&quot;</span><span class="p">,</span> <span class="n">mask</span><span class="p">,</span> <span class="n">predicate</span><span class="p">,</span> <span class="n">with_runtime_context</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></div>
+    <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">call_internal</span><span class="p">(</span><span class="s2">"cuda_uni_sync_i32"</span><span class="p">,</span> <span class="n">mask</span><span class="p">,</span> <span class="n">predicate</span><span class="p">,</span> <span class="n">with_runtime_context</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></div>
 
 
 
 <div class="viewcode-block" id="ballot">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/warp/index.html#quadrants.lang.simt.warp.ballot">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">ballot</span><span class="p">(</span><span class="n">predicate</span><span class="p">):</span>
-    <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">call_internal</span><span class="p">(</span><span class="s2">&quot;cuda_ballot_i32&quot;</span><span class="p">,</span> <span class="n">predicate</span><span class="p">,</span> <span class="n">with_runtime_context</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></div>
+    <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">call_internal</span><span class="p">(</span><span class="s2">"cuda_ballot_i32"</span><span class="p">,</span> <span class="n">predicate</span><span class="p">,</span> <span class="n">with_runtime_context</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></div>
 
 
 
@@ -368,7 +368,7 @@
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/warp/index.html#quadrants.lang.simt.warp.shfl_sync_i32">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">shfl_sync_i32</span><span class="p">(</span><span class="n">mask</span><span class="p">,</span> <span class="n">val</span><span class="p">,</span> <span class="n">offset</span><span class="p">):</span>
     <span class="c1"># lane offset is 31 for warp size 32</span>
-    <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">call_internal</span><span class="p">(</span><span class="s2">&quot;cuda_shfl_sync_i32&quot;</span><span class="p">,</span> <span class="n">mask</span><span class="p">,</span> <span class="n">val</span><span class="p">,</span> <span class="n">offset</span><span class="p">,</span> <span class="mi">31</span><span class="p">,</span> <span class="n">with_runtime_context</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></div>
+    <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">call_internal</span><span class="p">(</span><span class="s2">"cuda_shfl_sync_i32"</span><span class="p">,</span> <span class="n">mask</span><span class="p">,</span> <span class="n">val</span><span class="p">,</span> <span class="n">offset</span><span class="p">,</span> <span class="mi">31</span><span class="p">,</span> <span class="n">with_runtime_context</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></div>
 
 
 
@@ -376,7 +376,7 @@
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/warp/index.html#quadrants.lang.simt.warp.shfl_sync_f32">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">shfl_sync_f32</span><span class="p">(</span><span class="n">mask</span><span class="p">,</span> <span class="n">val</span><span class="p">,</span> <span class="n">offset</span><span class="p">):</span>
     <span class="c1"># lane offset is 31 for warp size 32</span>
-    <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">call_internal</span><span class="p">(</span><span class="s2">&quot;cuda_shfl_sync_f32&quot;</span><span class="p">,</span> <span class="n">mask</span><span class="p">,</span> <span class="n">val</span><span class="p">,</span> <span class="n">offset</span><span class="p">,</span> <span class="mi">31</span><span class="p">,</span> <span class="n">with_runtime_context</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></div>
+    <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">call_internal</span><span class="p">(</span><span class="s2">"cuda_shfl_sync_f32"</span><span class="p">,</span> <span class="n">mask</span><span class="p">,</span> <span class="n">val</span><span class="p">,</span> <span class="n">offset</span><span class="p">,</span> <span class="mi">31</span><span class="p">,</span> <span class="n">with_runtime_context</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></div>
 
 
 
@@ -384,7 +384,7 @@
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/warp/index.html#quadrants.lang.simt.warp.shfl_up_i32">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">shfl_up_i32</span><span class="p">(</span><span class="n">mask</span><span class="p">,</span> <span class="n">val</span><span class="p">,</span> <span class="n">offset</span><span class="p">):</span>
     <span class="c1"># lane offset is 0 for warp size 32</span>
-    <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">call_internal</span><span class="p">(</span><span class="s2">&quot;cuda_shfl_up_sync_i32&quot;</span><span class="p">,</span> <span class="n">mask</span><span class="p">,</span> <span class="n">val</span><span class="p">,</span> <span class="n">offset</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="n">with_runtime_context</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></div>
+    <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">call_internal</span><span class="p">(</span><span class="s2">"cuda_shfl_up_sync_i32"</span><span class="p">,</span> <span class="n">mask</span><span class="p">,</span> <span class="n">val</span><span class="p">,</span> <span class="n">offset</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="n">with_runtime_context</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></div>
 
 
 
@@ -392,7 +392,7 @@
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/warp/index.html#quadrants.lang.simt.warp.shfl_up_f32">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">shfl_up_f32</span><span class="p">(</span><span class="n">mask</span><span class="p">,</span> <span class="n">val</span><span class="p">,</span> <span class="n">offset</span><span class="p">):</span>
     <span class="c1"># lane offset is 0 for warp size 32</span>
-    <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">call_internal</span><span class="p">(</span><span class="s2">&quot;cuda_shfl_up_sync_f32&quot;</span><span class="p">,</span> <span class="n">mask</span><span class="p">,</span> <span class="n">val</span><span class="p">,</span> <span class="n">offset</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="n">with_runtime_context</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></div>
+    <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">call_internal</span><span class="p">(</span><span class="s2">"cuda_shfl_up_sync_f32"</span><span class="p">,</span> <span class="n">mask</span><span class="p">,</span> <span class="n">val</span><span class="p">,</span> <span class="n">offset</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="n">with_runtime_context</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></div>
 
 
 
@@ -400,7 +400,7 @@
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/warp/index.html#quadrants.lang.simt.warp.shfl_down_i32">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">shfl_down_i32</span><span class="p">(</span><span class="n">mask</span><span class="p">,</span> <span class="n">val</span><span class="p">,</span> <span class="n">offset</span><span class="p">):</span>
     <span class="c1"># lane offset is 31 for warp size 32</span>
-    <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">call_internal</span><span class="p">(</span><span class="s2">&quot;cuda_shfl_down_sync_i32&quot;</span><span class="p">,</span> <span class="n">mask</span><span class="p">,</span> <span class="n">val</span><span class="p">,</span> <span class="n">offset</span><span class="p">,</span> <span class="mi">31</span><span class="p">,</span> <span class="n">with_runtime_context</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></div>
+    <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">call_internal</span><span class="p">(</span><span class="s2">"cuda_shfl_down_sync_i32"</span><span class="p">,</span> <span class="n">mask</span><span class="p">,</span> <span class="n">val</span><span class="p">,</span> <span class="n">offset</span><span class="p">,</span> <span class="mi">31</span><span class="p">,</span> <span class="n">with_runtime_context</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></div>
 
 
 
@@ -408,14 +408,14 @@
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/warp/index.html#quadrants.lang.simt.warp.shfl_down_f32">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">shfl_down_f32</span><span class="p">(</span><span class="n">mask</span><span class="p">,</span> <span class="n">val</span><span class="p">,</span> <span class="n">offset</span><span class="p">):</span>
     <span class="c1"># lane offset is 31 for warp size 32</span>
-    <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">call_internal</span><span class="p">(</span><span class="s2">&quot;cuda_shfl_down_sync_f32&quot;</span><span class="p">,</span> <span class="n">mask</span><span class="p">,</span> <span class="n">val</span><span class="p">,</span> <span class="n">offset</span><span class="p">,</span> <span class="mi">31</span><span class="p">,</span> <span class="n">with_runtime_context</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></div>
+    <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">call_internal</span><span class="p">(</span><span class="s2">"cuda_shfl_down_sync_f32"</span><span class="p">,</span> <span class="n">mask</span><span class="p">,</span> <span class="n">val</span><span class="p">,</span> <span class="n">offset</span><span class="p">,</span> <span class="mi">31</span><span class="p">,</span> <span class="n">with_runtime_context</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></div>
 
 
 
 <div class="viewcode-block" id="shfl_xor_i32">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/warp/index.html#quadrants.lang.simt.warp.shfl_xor_i32">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">shfl_xor_i32</span><span class="p">(</span><span class="n">mask</span><span class="p">,</span> <span class="n">val</span><span class="p">,</span> <span class="n">offset</span><span class="p">):</span>
-    <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">call_internal</span><span class="p">(</span><span class="s2">&quot;cuda_shfl_xor_sync_i32&quot;</span><span class="p">,</span> <span class="n">mask</span><span class="p">,</span> <span class="n">val</span><span class="p">,</span> <span class="n">offset</span><span class="p">,</span> <span class="mi">31</span><span class="p">,</span> <span class="n">with_runtime_context</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></div>
+    <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">call_internal</span><span class="p">(</span><span class="s2">"cuda_shfl_xor_sync_i32"</span><span class="p">,</span> <span class="n">mask</span><span class="p">,</span> <span class="n">val</span><span class="p">,</span> <span class="n">offset</span><span class="p">,</span> <span class="mi">31</span><span class="p">,</span> <span class="n">with_runtime_context</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></div>
 
 
 
@@ -425,8 +425,8 @@
     <span class="c1"># These intrinsics are only available on compute_70 or higher</span>
     <span class="c1"># https://docs.nvidia.com/cuda/pdf/NVVM_IR_Specification.pdf</span>
     <span class="k">if</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_cuda_compute_capability</span><span class="p">()</span> <span class="o">&lt;</span> <span class="mi">70</span><span class="p">:</span>
-        <span class="k">raise</span> <span class="ne">AssertionError</span><span class="p">(</span><span class="s2">&quot;match_any intrinsic only available on compute_70 or higher&quot;</span><span class="p">)</span>
-    <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">call_internal</span><span class="p">(</span><span class="s2">&quot;cuda_match_any_sync_i32&quot;</span><span class="p">,</span> <span class="n">mask</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">with_runtime_context</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></div>
+        <span class="k">raise</span> <span class="ne">AssertionError</span><span class="p">(</span><span class="s2">"match_any intrinsic only available on compute_70 or higher"</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">call_internal</span><span class="p">(</span><span class="s2">"cuda_match_any_sync_i32"</span><span class="p">,</span> <span class="n">mask</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">with_runtime_context</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></div>
 
 
 
@@ -436,41 +436,41 @@
     <span class="c1"># These intrinsics are only available on compute_70 or higher</span>
     <span class="c1"># https://docs.nvidia.com/cuda/pdf/NVVM_IR_Specification.pdf</span>
     <span class="k">if</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_cuda_compute_capability</span><span class="p">()</span> <span class="o">&lt;</span> <span class="mi">70</span><span class="p">:</span>
-        <span class="k">raise</span> <span class="ne">AssertionError</span><span class="p">(</span><span class="s2">&quot;match_all intrinsic only available on compute_70 or higher&quot;</span><span class="p">)</span>
-    <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">call_internal</span><span class="p">(</span><span class="s2">&quot;cuda_match_all_sync_i32&quot;</span><span class="p">,</span> <span class="n">mask</span><span class="p">,</span> <span class="n">val</span><span class="p">,</span> <span class="n">with_runtime_context</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></div>
+        <span class="k">raise</span> <span class="ne">AssertionError</span><span class="p">(</span><span class="s2">"match_all intrinsic only available on compute_70 or higher"</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">call_internal</span><span class="p">(</span><span class="s2">"cuda_match_all_sync_i32"</span><span class="p">,</span> <span class="n">mask</span><span class="p">,</span> <span class="n">val</span><span class="p">,</span> <span class="n">with_runtime_context</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></div>
 
 
 
 <div class="viewcode-block" id="active_mask">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/warp/index.html#quadrants.lang.simt.warp.active_mask">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">active_mask</span><span class="p">():</span>
-    <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">call_internal</span><span class="p">(</span><span class="s2">&quot;cuda_active_mask&quot;</span><span class="p">,</span> <span class="n">with_runtime_context</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></div>
+    <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">call_internal</span><span class="p">(</span><span class="s2">"cuda_active_mask"</span><span class="p">,</span> <span class="n">with_runtime_context</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></div>
 
 
 
 <div class="viewcode-block" id="sync">
 <a class="viewcode-back" href="../../../../autoapi/quadrants/lang/simt/warp/index.html#quadrants.lang.simt.warp.sync">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">sync</span><span class="p">(</span><span class="n">mask</span><span class="p">):</span>
-    <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">call_internal</span><span class="p">(</span><span class="s2">&quot;warp_barrier&quot;</span><span class="p">,</span> <span class="n">mask</span><span class="p">,</span> <span class="n">with_runtime_context</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></div>
+    <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">call_internal</span><span class="p">(</span><span class="s2">"warp_barrier"</span><span class="p">,</span> <span class="n">mask</span><span class="p">,</span> <span class="n">with_runtime_context</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span></div>
 
 
 
 <span class="n">__all__</span> <span class="o">=</span> <span class="p">[</span>
-    <span class="s2">&quot;all_nonzero&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;any_nonzero&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;unique&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;ballot&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;shfl_sync_i32&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;shfl_sync_f32&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;shfl_up_i32&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;shfl_up_f32&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;shfl_down_i32&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;shfl_down_f32&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;shfl_xor_i32&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;match_any&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;match_all&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;active_mask&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;sync&quot;</span><span class="p">,</span>
+    <span class="s2">"all_nonzero"</span><span class="p">,</span>
+    <span class="s2">"any_nonzero"</span><span class="p">,</span>
+    <span class="s2">"unique"</span><span class="p">,</span>
+    <span class="s2">"ballot"</span><span class="p">,</span>
+    <span class="s2">"shfl_sync_i32"</span><span class="p">,</span>
+    <span class="s2">"shfl_sync_f32"</span><span class="p">,</span>
+    <span class="s2">"shfl_up_i32"</span><span class="p">,</span>
+    <span class="s2">"shfl_up_f32"</span><span class="p">,</span>
+    <span class="s2">"shfl_down_i32"</span><span class="p">,</span>
+    <span class="s2">"shfl_down_f32"</span><span class="p">,</span>
+    <span class="s2">"shfl_xor_i32"</span><span class="p">,</span>
+    <span class="s2">"match_any"</span><span class="p">,</span>
+    <span class="s2">"match_all"</span><span class="p">,</span>
+    <span class="s2">"active_mask"</span><span class="p">,</span>
+    <span class="s2">"sync"</span><span class="p">,</span>
 <span class="p">]</span>
 </pre></div>
 

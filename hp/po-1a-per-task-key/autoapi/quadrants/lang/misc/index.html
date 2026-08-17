@@ -670,11 +670,11 @@ the runtime to its default configuration.</p>
 <p>Example:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">a</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">qd</span><span class="o">.</span><span class="n">i32</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">())</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">a</span><span class="p">[</span><span class="kc">None</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;before reset: &quot;</span><span class="p">,</span> <span class="n">a</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="s2">"before reset: "</span><span class="p">,</span> <span class="n">a</span><span class="p">)</span>
 <span class="go">before rest: 1</span>
 <span class="gp">&gt;&gt;&gt;</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">qd</span><span class="o">.</span><span class="n">reset</span><span class="p">()</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="s2">&quot;after reset: &quot;</span><span class="p">,</span> <span class="n">a</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="s2">"after reset: "</span><span class="p">,</span> <span class="n">a</span><span class="p">)</span>
 <span class="go"># will raise error because a is unavailable after reset.</span>
 </pre></div>
 </div>
@@ -754,8 +754,8 @@ only available for backends supporting <cite>qd.extension.mesh</cite> and to use
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="c1"># instantiate model</span>
 <span class="n">mesh_builder</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">Mesh</span><span class="o">.</span><span class="n">tri</span><span class="p">()</span>
 <span class="n">mesh_builder</span><span class="o">.</span><span class="n">verts</span><span class="o">.</span><span class="n">place</span><span class="p">({</span>
-    <span class="s1">&#39;x&#39;</span> <span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span>
-    <span class="s1">&#39;y&#39;</span> <span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">f32</span>
+    <span class="s1">'x'</span> <span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span>
+    <span class="s1">'y'</span> <span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">f32</span>
 <span class="p">})</span>
 <span class="n">model</span> <span class="o">=</span> <span class="n">mesh_builder</span><span class="o">.</span><span class="n">build</span><span class="p">(</span><span class="n">meta</span><span class="p">)</span>
 

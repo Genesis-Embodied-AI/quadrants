@@ -569,8 +569,8 @@
 <section id="use-qd-static-for-compile-time-python-logic">
 <h3>Use <code class="docutils literal notranslate"><span class="pre">qd.static()</span></code> for compile-time Python logic<a class="headerlink" href="#use-qd-static-for-compile-time-python-logic" title="Link to this heading">#</a></h3>
 <p>If you need Python-level logic (dictionaries, complex conditionals, etc.), wrap it in <code class="docutils literal notranslate"><span class="pre">qd.static()</span></code> so it’s evaluated at compile time:</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">options</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;mode_a&quot;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span> <span class="s2">&quot;mode_b&quot;</span><span class="p">:</span> <span class="mi">2</span><span class="p">}</span>
-<span class="n">selected</span> <span class="o">=</span> <span class="s2">&quot;mode_a&quot;</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">options</span> <span class="o">=</span> <span class="p">{</span><span class="s2">"mode_a"</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span> <span class="s2">"mode_b"</span><span class="p">:</span> <span class="mi">2</span><span class="p">}</span>
+<span class="n">selected</span> <span class="o">=</span> <span class="s2">"mode_a"</span>
 
 <span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">compute</span><span class="p">(</span><span class="n">a</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">Template</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
