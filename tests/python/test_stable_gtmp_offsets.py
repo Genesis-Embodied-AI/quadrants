@@ -9,6 +9,9 @@ from tests import test_utils
 
 # GlobalTemporaryStmt prints as e.g. "<*i64> $7 = global tmp var (offset = 8 B)".
 _GTMP_RE = re.compile(r"<\*(\w+)> .* = global tmp var \(offset = (\d+) B\)")
+_OFFSET_RE = re.compile(r"global tmp var \(offset = (\d+) B\)")
+_CONST_RE = re.compile(r"= const (\d+)")
+_OFFLOAD_RE = re.compile(r"\$\d+ = offloaded")
 
 
 def _gtmp_offsets_by_type(dump_dir: pathlib.Path, kernel_name: str):
@@ -21,6 +24,47 @@ def _gtmp_offsets_by_type(dump_dir: pathlib.Path, kernel_name: str):
             if m:
                 per_type.setdefault(m.group(1), set()).add(int(m.group(2)))
     return per_type
+
+
+def _gtmp_offset_by_producer_const(dump_dir: pathlib.Path, kernel_name: str, marker_consts: set[int]):
+    """Map a marker constant to the global-temp offset of the ``range_for`` task that produces it.
+
+    A cross-offload local is finalized inside a ``range_for`` producer task that both materializes a marker
+    constant (e.g. 101) and writes the accumulated value into a single ``global tmp var (offset = N B)``. That
+    lets us associate a *specific value* with its slot offset -- unlike ``_gtmp_offsets_by_type``, which only sees
+    the type -- so we can tell whether two *same-typed* locals kept their slots when their source order swaps.
+    Serial/init tasks (which hoist several constants and touch several temps) are ignored; only single-const,
+    single-temp ``range_for`` producers are mapped.
+    """
+    files = sorted(dump_dir.glob(f"*{kernel_name}*after_offload*"))
+    assert files, f"no after_offload IR dump for {kernel_name} in {dump_dir}"
+    mapping: dict[int, int] = {}
+    for f in files:
+        cur_consts: set[int] = set()
+        cur_offsets: set[int] = set()
+        in_range_for = False
+
+        def flush():
+            if in_range_for and len(cur_consts) == 1 and len(cur_offsets) == 1:
+                mapping[next(iter(cur_consts))] = next(iter(cur_offsets))
+
+        for line in f.read_text().splitlines():
+            if _OFFLOAD_RE.search(line):
+                flush()
+                cur_consts = set()
+                cur_offsets = set()
+                in_range_for = "range_for" in line
+                continue
+            if not in_range_for:
+                continue
+            cm = _CONST_RE.search(line)
+            if cm and int(cm.group(1)) in marker_consts:
+                cur_consts.add(int(cm.group(1)))
+            om = _OFFSET_RE.search(line)
+            if om:
+                cur_offsets.add(int(om.group(1)))
+        flush()
+    return mapping
 
 
 @test_utils.test(arch=[qd.cpu], offline_cache=False)
@@ -83,6 +127,70 @@ def test_stable_gtmp_offsets_are_content_keyed(tmp_path: pathlib.Path, monkeypat
     assert off_ab["i32"].isdisjoint(off_ab["i64"]), off_ab
     # The value->offset mapping is invariant to the source/traversal order of the producing offloads.
     assert off_ab == off_ba, (off_ab, off_ba)
+
+
+@test_utils.test(arch=[qd.cpu], offline_cache=False)
+def test_stable_gtmp_offsets_same_typed_locals_are_content_keyed(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+):
+    """Two *same-typed* cross-offload locals are ordered by their def/update chain, not by source order.
+
+    This is the case that statement class + return type cannot distinguish: an alloca has no operands, so both
+    locals key identically on kind + type and stable_sort would fall back to traversal order, swapping their
+    slots when the producing loops swap (PR #864 review r3797057477). sort_key() folds a content signature of the
+    values written into each local, so here the local built from constant 101 and the one built from 202 keep
+    their offsets regardless of which loop comes first. Each local is tagged with a distinct marker constant so
+    its slot can be identified in the dump.
+    """
+    monkeypatch.setenv("QD_DUMP_IR", "1")
+    qd.lang.impl.current_cfg().debug_dump_path = str(tmp_path)
+
+    n = 64
+    markers = {101, 202}
+
+    @qd.kernel
+    def local_ac(out: qd.types.ndarray(dtype=qd.i32, ndim=1)):
+        a = 0  # i32 local built from marker 101, produced first
+        for i in range(3):
+            a += i + 101
+        c = 0  # i32 local built from marker 202, produced second
+        for i in range(4):
+            c += i + 202
+        for i in range(n):
+            out[i] = a + c + i
+
+    @qd.kernel
+    def local_ca(out: qd.types.ndarray(dtype=qd.i32, ndim=1)):
+        c = 0  # same two locals, the 202 one produced first
+        for i in range(4):
+            c += i + 202
+        a = 0
+        for i in range(3):
+            a += i + 101
+        for i in range(n):
+            out[i] = a + c + i
+
+    out = qd.ndarray(qd.i32, shape=(n,))
+    local_ac(out)
+    qd.sync()
+    res_ac = out.to_numpy().copy()
+
+    local_ca(out)
+    qd.sync()
+    res_ca = out.to_numpy().copy()
+
+    # Both orderings compute the same result.
+    assert (res_ac == res_ca).all()
+
+    map_ac = _gtmp_offset_by_producer_const(tmp_path, "local_ac", markers)
+    map_ca = _gtmp_offset_by_producer_const(tmp_path, "local_ca", markers)
+
+    # Both same-typed locals were identified via their marker constants and occupy disjoint slots.
+    assert set(map_ac) == markers, map_ac
+    assert len(set(map_ac.values())) == 2, map_ac
+    # The value->offset mapping is invariant to the source order of the two same-typed producers -- which only
+    # holds because the ordering key incorporates each local's def/update chain.
+    assert map_ac == map_ca, (map_ac, map_ca)
 
 
 @pytest.mark.xfail(
