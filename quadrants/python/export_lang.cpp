@@ -167,7 +167,7 @@ void export_lang(nb::module_ &m) {
       .def(nb::init<>())
       .def_rw("arch", &CompileConfig::arch,
               "Target backend the kernels run on (e.g. qd.cpu, qd.cuda, qd.vulkan, qd.metal). "
-              "Defaults to the best backend available on this machine.")
+              "Defaults to qd.cpu when arch is not specified.")
       .def_rw("opt_level", &CompileConfig::opt_level,
               "Quadrants IR optimization level. At 0, IR-level optimizations such as common-subexpression "
               "elimination are disabled; any value above 0 enables them. This is not an LLVM -O level.")
@@ -221,7 +221,8 @@ void export_lang(nb::module_ &m) {
               "Let the CPU backend choose the parallel-for block size adaptively.")
       .def_rw("default_gpu_block_dim", &CompileConfig::default_gpu_block_dim, "Default GPU thread-block size.")
       .def_rw("gpu_max_reg", &CompileConfig::gpu_max_reg,
-              "Maximum registers per GPU thread (0 uses the driver default).")
+              "Intended to cap the number of registers per GPU thread (0 = driver default); currently has "
+              "no effect, as the value is not yet passed to the GPU JIT.")
       .def_rw("saturating_grid_dim", &CompileConfig::saturating_grid_dim,
               "GPU grid size to launch (0 lets Quadrants pick based on occupancy).")
       .def_rw("max_block_dim", &CompileConfig::max_block_dim,
@@ -230,7 +231,7 @@ void export_lang(nb::module_ &m) {
               "Maximum number of CPU threads Quadrants may use.")
       .def_rw("random_seed", &CompileConfig::random_seed, "Seed for Quadrants' random-number generation.")
       .def_rw("verbose_kernel_launches", &CompileConfig::verbose_kernel_launches,
-              "Log a message on every kernel launch.")
+              "Intended to log a message on every kernel launch; currently has no effect.")
       .def_rw("verbose", &CompileConfig::verbose, "Print verbose logging during initialization and compilation.")
       .def_rw("demote_dense_struct_fors", &CompileConfig::demote_dense_struct_fors,
               "Lower dense struct-for loops to ordinary range-for loops.")

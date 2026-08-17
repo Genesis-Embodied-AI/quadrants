@@ -1,6 +1,6 @@
 # qd.init options
 
-`qd.init(...)` accepts a wide set of configuration options as keyword arguments; each is also reachable as an environment variable of the form `QD_<UPPERCASE_NAME>` (e.g. `QD_OFFLINE_CACHE=0`). This page walks through the knobs that are commonly tuned in practice; the [full list of options](#all-options) is at the bottom.
+`qd.init(...)` accepts a wide set of configuration options as keyword arguments; most are also reachable as an environment variable of the form `QD_<UPPERCASE_NAME>` (e.g. `QD_OFFLINE_CACHE=0`). This page walks through the knobs that are commonly tuned in practice; the [full list of options](#all-options) is at the bottom.
 
 ## Caching
 
@@ -132,9 +132,9 @@ Most `qd.init` keywords set a compiler-configuration option. Each is listed belo
    :exclude-members: default_up
 ```
 
-`qd.init` also accepts a few options that are handled on the Python side and so do not appear above, including:
+`qd.init` also accepts a few options that are handled on the Python side and so do not appear above. Unlike the options above, these are keyword-only (they have no `QD_` environment variable), except `log_level`:
 
 - `enable_fallback` (`bool`, default `True`): fall back to the CPU backend when the requested `arch` is unavailable, instead of raising an error.
 - `src_ll_cache` (`bool`, default `True`): use an additional on-disk cache layer that speeds up loading previously compiled kernels.
-- `log_level` (`str`, default `"info"`): logging verbosity; one of `"trace"`, `"debug"`, `"info"`, `"warn"`, `"error"`, `"critical"`.
-- `require_version` (`str`): raise an error unless the installed Quadrants version matches the given `major.minor.patch` string.
+- `log_level` (`str`, default `"info"`): logging verbosity; one of `"trace"`, `"debug"`, `"info"`, `"warn"`, `"error"`, `"critical"` (also settable via `QD_LOG_LEVEL`).
+- `require_version` (`str`): raise an error unless the installed Quadrants version is compatible with the given `major.minor.patch` string (same major version, and at least the given minor and patch).
