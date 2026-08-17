@@ -165,80 +165,157 @@ void export_lang(nb::module_ &m) {
 
   nb::class_<CompileConfig>(m, "CompileConfig")
       .def(nb::init<>())
-      .def_rw("arch", &CompileConfig::arch)
-      .def_rw("opt_level", &CompileConfig::opt_level)
-      .def_rw("raise_on_templated_floats", &CompileConfig::raise_on_templated_floats)
-      .def_rw("print_ir", &CompileConfig::print_ir)
-      .def_rw("print_preprocessed_ir", &CompileConfig::print_preprocessed_ir)
-      .def_rw("print_ir_dbg_info", &CompileConfig::print_ir_dbg_info)
-      .def_rw("debug", &CompileConfig::debug)
-      .def_rw("cfg_optimization", &CompileConfig::cfg_optimization)
-      .def_rw("check_out_of_bound", &CompileConfig::check_out_of_bound)
-      .def_rw("print_accessor_ir", &CompileConfig::print_accessor_ir)
-      .def_rw("use_llvm", &CompileConfig::use_llvm)
-      .def_rw("print_struct_llvm_ir", &CompileConfig::print_struct_llvm_ir)
-      .def_rw("print_kernel_llvm_ir", &CompileConfig::print_kernel_llvm_ir)
-      .def_rw("print_kernel_llvm_ir_optimized", &CompileConfig::print_kernel_llvm_ir_optimized)
-      .def_rw("print_kernel_asm", &CompileConfig::print_kernel_asm)
-      .def_rw("print_kernel_amdgcn", &CompileConfig::print_kernel_amdgcn)
-      .def_rw("debug_dump_path", &CompileConfig::debug_dump_path)
-      .def_rw("simplify_before_lower_access", &CompileConfig::simplify_before_lower_access)
-      .def_rw("simplify_after_lower_access", &CompileConfig::simplify_after_lower_access)
-      .def_rw("lower_access", &CompileConfig::lower_access)
-      .def_rw("move_loop_invariant_outside_if", &CompileConfig::move_loop_invariant_outside_if)
-      .def_rw("cache_loop_invariant_global_vars", &CompileConfig::cache_loop_invariant_global_vars)
-      .def_rw("default_cpu_block_dim", &CompileConfig::default_cpu_block_dim)
-      .def_rw("cpu_block_dim_adaptive", &CompileConfig::cpu_block_dim_adaptive)
-      .def_rw("default_gpu_block_dim", &CompileConfig::default_gpu_block_dim)
-      .def_rw("gpu_max_reg", &CompileConfig::gpu_max_reg)
-      .def_rw("saturating_grid_dim", &CompileConfig::saturating_grid_dim)
-      .def_rw("max_block_dim", &CompileConfig::max_block_dim)
-      .def_rw("cpu_max_num_threads", &CompileConfig::cpu_max_num_threads)
-      .def_rw("random_seed", &CompileConfig::random_seed)
-      .def_rw("verbose_kernel_launches", &CompileConfig::verbose_kernel_launches)
-      .def_rw("verbose", &CompileConfig::verbose)
-      .def_rw("demote_dense_struct_fors", &CompileConfig::demote_dense_struct_fors)
-      .def_rw("kernel_profiler", &CompileConfig::kernel_profiler)
-      .def_rw("timeline", &CompileConfig::timeline)
-      .def_rw("default_fp", &CompileConfig::default_fp)
-      .def_rw("default_ip", &CompileConfig::default_ip)
-      .def_rw("default_up", &CompileConfig::default_up)
-      .def_rw("device_memory_GB", &CompileConfig::device_memory_GB)
-      .def_rw("device_memory_fraction", &CompileConfig::device_memory_fraction)
-      .def_rw("fast_math", &CompileConfig::fast_math)
-      .def_rw("advanced_optimization", &CompileConfig::advanced_optimization)
-      .def_rw("ad_stack_experimental_enabled", &CompileConfig::ad_stack_experimental_enabled)
-      .def_rw("ad_stack_size", &CompileConfig::ad_stack_size)
-      .def_rw("ad_stack_sparse_threshold_bytes", &CompileConfig::ad_stack_sparse_threshold_bytes)
-      .def_rw("flatten_if", &CompileConfig::flatten_if)
-      .def_rw("make_thread_local", &CompileConfig::make_thread_local)
-      .def_rw("make_block_local", &CompileConfig::make_block_local)
-      .def_rw("detect_read_only", &CompileConfig::detect_read_only)
-      .def_rw("real_matrix_scalarize", &CompileConfig::real_matrix_scalarize)
-      .def_rw("force_scalarize_matrix", &CompileConfig::force_scalarize_matrix)
-      .def_rw("half2_vectorization", &CompileConfig::half2_vectorization)
-      .def_rw("make_cpu_multithreading_loop", &CompileConfig::make_cpu_multithreading_loop)
-      .def_rw("quant_opt_store_fusion", &CompileConfig::quant_opt_store_fusion)
-      .def_rw("quant_opt_atomic_demotion", &CompileConfig::quant_opt_atomic_demotion)
-      .def_rw("make_mesh_block_local", &CompileConfig::make_mesh_block_local)
-      .def_rw("mesh_localize_to_end_mapping", &CompileConfig::mesh_localize_to_end_mapping)
-      .def_rw("mesh_localize_from_end_mapping", &CompileConfig::mesh_localize_from_end_mapping)
-      .def_rw("optimize_mesh_reordered_mapping", &CompileConfig::optimize_mesh_reordered_mapping)
-      .def_rw("mesh_localize_all_attr_mappings", &CompileConfig::mesh_localize_all_attr_mappings)
-      .def_rw("demote_no_access_mesh_fors", &CompileConfig::demote_no_access_mesh_fors)
-      .def_rw("experimental_auto_mesh_local", &CompileConfig::experimental_auto_mesh_local)
-      .def_rw("auto_mesh_local_default_occupacy", &CompileConfig::auto_mesh_local_default_occupacy)
-      .def_rw("offline_cache", &CompileConfig::offline_cache)
-      .def_rw("offline_cache_file_path", &CompileConfig::offline_cache_file_path)
-      .def_rw("offline_cache_cleaning_policy", &CompileConfig::offline_cache_cleaning_policy)
-      .def_rw("offline_cache_max_size_of_files", &CompileConfig::offline_cache_max_size_of_files)
-      .def_rw("offline_cache_cleaning_factor", &CompileConfig::offline_cache_cleaning_factor)
-      .def_rw("num_compile_threads", &CompileConfig::num_compile_threads)
-      .def_rw("vk_api_version", &CompileConfig::vk_api_version)
-      .def_rw("cuda_stack_limit", &CompileConfig::cuda_stack_limit)
-      .def_rw("external_metal_command_queue", &CompileConfig::external_metal_command_queue)
+      .def_rw("arch", &CompileConfig::arch,
+              "Target backend the kernels run on (e.g. qd.cpu, qd.cuda, qd.vulkan, qd.metal). "
+              "Defaults to the best backend available on this machine.")
+      .def_rw("opt_level", &CompileConfig::opt_level, "LLVM optimization level applied to generated kernels.")
+      .def_rw("raise_on_templated_floats", &CompileConfig::raise_on_templated_floats,
+              "Raise an error instead of silently specializing a kernel on a Python float "
+              "argument passed by value.")
+      .def_rw("print_ir", &CompileConfig::print_ir,
+              "Print each kernel's IR after compilation (for debugging the compiler).")
+      .def_rw("print_preprocessed_ir", &CompileConfig::print_preprocessed_ir,
+              "Print each kernel's IR right after frontend preprocessing.")
+      .def_rw("print_ir_dbg_info", &CompileConfig::print_ir_dbg_info,
+              "Include source-line debug info when printing IR.")
+      .def_rw("debug", &CompileConfig::debug,
+              "Turn on the full suite of correctness checks (field bounds, assertions, adstack "
+              "overflow). Considerably slower; intended for development.")
+      .def_rw("cfg_optimization", &CompileConfig::cfg_optimization,
+              "Run the control-flow-graph optimization pass that simplifies kernel branches and "
+              "loops. Disabling it speeds up compilation at a small runtime cost.")
+      .def_rw("check_out_of_bound", &CompileConfig::check_out_of_bound,
+              "Enable the field out-of-bounds check on tensor indexing without turning on the "
+              "rest of debug mode.")
+      .def_rw("print_accessor_ir", &CompileConfig::print_accessor_ir,
+              "Print the IR generated for field accessor kernels.")
+      .def_rw("use_llvm", &CompileConfig::use_llvm, "Use the LLVM backend for code generation.")
+      .def_rw("print_struct_llvm_ir", &CompileConfig::print_struct_llvm_ir,
+              "Print the LLVM IR generated for the data-structure (SNode) module.")
+      .def_rw("print_kernel_llvm_ir", &CompileConfig::print_kernel_llvm_ir,
+              "Print the LLVM IR generated for each kernel.")
+      .def_rw("print_kernel_llvm_ir_optimized", &CompileConfig::print_kernel_llvm_ir_optimized,
+              "Print each kernel's LLVM IR after LLVM optimization.")
+      .def_rw("print_kernel_asm", &CompileConfig::print_kernel_asm,
+              "Print the native assembly generated for each kernel.")
+      .def_rw("print_kernel_amdgcn", &CompileConfig::print_kernel_amdgcn,
+              "Print the AMDGCN assembly generated for each kernel (AMD backend).")
+      .def_rw("debug_dump_path", &CompileConfig::debug_dump_path,
+              "Directory to write IR/asm dumps to when the print_* options are on.")
+      .def_rw("simplify_before_lower_access", &CompileConfig::simplify_before_lower_access,
+              "Run the simplify pass before the lower-access pass.")
+      .def_rw("simplify_after_lower_access", &CompileConfig::simplify_after_lower_access,
+              "Run the simplify pass after the lower-access pass.")
+      .def_rw("lower_access", &CompileConfig::lower_access,
+              "Lower high-level field accesses to low-level pointer arithmetic.")
+      .def_rw("move_loop_invariant_outside_if", &CompileConfig::move_loop_invariant_outside_if,
+              "Hoist loop-invariant computations out of conditional branches.")
+      .def_rw("cache_loop_invariant_global_vars", &CompileConfig::cache_loop_invariant_global_vars,
+              "Cache loop-invariant global loads into locals inside loops.")
+      .def_rw("default_cpu_block_dim", &CompileConfig::default_cpu_block_dim,
+              "Number of iterations per CPU parallel-for block.")
+      .def_rw("cpu_block_dim_adaptive", &CompileConfig::cpu_block_dim_adaptive,
+              "Let the CPU backend choose the parallel-for block size adaptively.")
+      .def_rw("default_gpu_block_dim", &CompileConfig::default_gpu_block_dim, "Default GPU thread-block size.")
+      .def_rw("gpu_max_reg", &CompileConfig::gpu_max_reg,
+              "Maximum registers per GPU thread (0 uses the driver default).")
+      .def_rw("saturating_grid_dim", &CompileConfig::saturating_grid_dim,
+              "GPU grid size to launch (0 lets Quadrants pick based on occupancy).")
+      .def_rw("max_block_dim", &CompileConfig::max_block_dim,
+              "Upper bound on GPU block size (0 means no explicit cap).")
+      .def_rw("cpu_max_num_threads", &CompileConfig::cpu_max_num_threads,
+              "Maximum number of CPU threads Quadrants may use.")
+      .def_rw("random_seed", &CompileConfig::random_seed, "Seed for Quadrants' random-number generation.")
+      .def_rw("verbose_kernel_launches", &CompileConfig::verbose_kernel_launches,
+              "Log a message on every kernel launch.")
+      .def_rw("verbose", &CompileConfig::verbose, "Print verbose logging during initialization and compilation.")
+      .def_rw("demote_dense_struct_fors", &CompileConfig::demote_dense_struct_fors,
+              "Lower dense struct-for loops to ordinary range-for loops.")
+      .def_rw("kernel_profiler", &CompileConfig::kernel_profiler,
+              "Enable the on-device kernel profiler to collect per-kernel timings.")
+      .def_rw("timeline", &CompileConfig::timeline, "Record a chrome-tracing timeline of compilation and execution.")
+      .def_rw("default_fp", &CompileConfig::default_fp,
+              "Default floating-point type for fields and kernels (e.g. qd.f32).")
+      .def_rw("default_ip", &CompileConfig::default_ip,
+              "Default signed-integer type for fields and kernels (e.g. qd.i32).")
+      .def_rw("default_up", &CompileConfig::default_up,
+              "Default unsigned-integer type for fields and kernels (e.g. qd.u32).")
+      .def_rw("device_memory_GB", &CompileConfig::device_memory_GB,
+              "Amount of GPU memory, in gigabytes, to preallocate.")
+      .def_rw("device_memory_fraction", &CompileConfig::device_memory_fraction,
+              "Fraction of total GPU memory to preallocate (overrides device_memory_GB when greater than 0).")
+      .def_rw("fast_math", &CompileConfig::fast_math,
+              "Allow IEEE-relaxed floating-point optimizations (e.g. fused multiply-add). "
+              "Faster, but drops strict NaN/inf/signed-zero guarantees.")
+      .def_rw("advanced_optimization", &CompileConfig::advanced_optimization,
+              "Run the full advanced optimization pass pipeline.")
+      .def_rw("ad_stack_experimental_enabled", &CompileConfig::ad_stack_experimental_enabled,
+              "Enable the reverse-mode autodiff pipeline for kernels with runtime-bounded loops (the adstack).")
+      .def_rw("ad_stack_size", &CompileConfig::ad_stack_size,
+              "Force every autodiff stack to exactly this many slots. 0 lets the launch-time "
+              "sizer choose automatically.")
+      .def_rw("ad_stack_sparse_threshold_bytes", &CompileConfig::ad_stack_sparse_threshold_bytes,
+              "Byte cutoff below which the sparse adstack sizing path is skipped in favor of "
+              "eager heap allocation.")
+      .def_rw("flatten_if", &CompileConfig::flatten_if,
+              "Flatten simple if statements into predicated (branchless) form.")
+      .def_rw("make_thread_local", &CompileConfig::make_thread_local,
+              "Enable the thread-local optimization for reductions.")
+      .def_rw("make_block_local", &CompileConfig::make_block_local,
+              "Enable the block-local optimization for GPU/mesh accesses.")
+      .def_rw("detect_read_only", &CompileConfig::detect_read_only,
+              "Detect read-only field accesses to enable further optimization.")
+      .def_rw("real_matrix_scalarize", &CompileConfig::real_matrix_scalarize,
+              "Scalarize matrix/vector operations into per-component scalar ops.")
+      .def_rw("force_scalarize_matrix", &CompileConfig::force_scalarize_matrix,
+              "Always scalarize matrices, even where vectorized code would be legal.")
+      .def_rw("half2_vectorization", &CompileConfig::half2_vectorization,
+              "Vectorize pairs of float16 operations into half2 ops (CUDA).")
+      .def_rw("make_cpu_multithreading_loop", &CompileConfig::make_cpu_multithreading_loop,
+              "Parallelize outer loops across CPU threads.")
+      .def_rw("quant_opt_store_fusion", &CompileConfig::quant_opt_store_fusion,
+              "Fuse consecutive stores to quantized (bit-packed) fields.")
+      .def_rw("quant_opt_atomic_demotion", &CompileConfig::quant_opt_atomic_demotion,
+              "Demote atomics to plain read-modify-write on quantized fields when safe.")
+      .def_rw("make_mesh_block_local", &CompileConfig::make_mesh_block_local,
+              "Enable the block-local optimization for MeshQuadrants attributes.")
+      .def_rw("mesh_localize_to_end_mapping", &CompileConfig::mesh_localize_to_end_mapping,
+              "Cache mesh relation to-end mappings in block-local memory.")
+      .def_rw("mesh_localize_from_end_mapping", &CompileConfig::mesh_localize_from_end_mapping,
+              "Cache mesh relation from-end mappings in block-local memory.")
+      .def_rw("optimize_mesh_reordered_mapping", &CompileConfig::optimize_mesh_reordered_mapping,
+              "Optimize element access through reordered mesh index mappings.")
+      .def_rw("mesh_localize_all_attr_mappings", &CompileConfig::mesh_localize_all_attr_mappings,
+              "Localize all mesh attribute mappings, not just the ones detected as beneficial.")
+      .def_rw("demote_no_access_mesh_fors", &CompileConfig::demote_no_access_mesh_fors,
+              "Demote mesh-for loops that never access mesh attributes to range-fors.")
+      .def_rw("experimental_auto_mesh_local", &CompileConfig::experimental_auto_mesh_local,
+              "Enable the experimental automatic mesh-local optimization.")
+      .def_rw("auto_mesh_local_default_occupacy", &CompileConfig::auto_mesh_local_default_occupacy,
+              "Target occupancy used by the automatic mesh-local optimization.")
+      .def_rw("offline_cache", &CompileConfig::offline_cache,
+              "Whether compiled-kernel caches persist on disk and are reused across separate Python processes.")
+      .def_rw("offline_cache_file_path", &CompileConfig::offline_cache_file_path,
+              "Directory that holds the on-disk compilation cache.")
+      .def_rw("offline_cache_cleaning_policy", &CompileConfig::offline_cache_cleaning_policy,
+              "Eviction policy for the offline cache (\"never\", \"version\", \"lru\", or \"fifo\").")
+      .def_rw("offline_cache_max_size_of_files", &CompileConfig::offline_cache_max_size_of_files,
+              "Maximum total size, in bytes, of the offline cache before cleaning.")
+      .def_rw("offline_cache_cleaning_factor", &CompileConfig::offline_cache_cleaning_factor,
+              "Fraction of the offline cache to evict when it exceeds the size limit.")
+      .def_rw("num_compile_threads", &CompileConfig::num_compile_threads,
+              "Number of host threads used to compile kernels.")
+      .def_rw("vk_api_version", &CompileConfig::vk_api_version,
+              "Vulkan API version string to request (empty selects the default).")
+      .def_rw("cuda_stack_limit", &CompileConfig::cuda_stack_limit,
+              "Per-thread CUDA stack size limit in bytes (0 uses the driver default).")
+      .def_rw("external_metal_command_queue", &CompileConfig::external_metal_command_queue,
+              "An MTLCommandQueue pointer (as an integer) to dispatch on instead of creating a "
+              "new Metal queue. 0 means create a new queue.")
       .def_rw("external_metal_command_queue_is_torch_queue",
-              &CompileConfig::external_metal_command_queue_is_torch_queue);
+              &CompileConfig::external_metal_command_queue_is_torch_queue,
+              "Set True when external_metal_command_queue is PyTorch MPS's own queue, to skip "
+              "redundant interop synchronization.");
 
   m.def("reset_default_compile_config", [&]() { default_compile_config = CompileConfig(); });
 
