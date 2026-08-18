@@ -1,4 +1,7 @@
 #include <memory>
+#include <mutex>
+#include <unordered_map>
+#include <vector>
 
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Support/DynamicLibrary.h"
@@ -39,10 +42,16 @@ namespace quadrants::lang {
 #if defined(QD_WITH_CUDA)
 class JITModuleCUDA : public JITModule {
  private:
-  void *module_;
+  // A kernel may be one whole-module CUmodule (whole-module path) or N self-contained per-task CUmodules (Option-B
+  // per-task path). A task's entry symbol lives in exactly one of them; `func_cache_` memoises the resolved
+  // CUfunction so the launcher / CUDA graph builder does not rescan the N modules on every by-name lookup.
+  std::vector<void *> modules_;
+  std::unordered_map<std::string, void *> func_cache_;
+  std::mutex func_mu_;
 
  public:
   explicit JITModuleCUDA(void *module);
+  explicit JITModuleCUDA(std::vector<void *> modules);
   void *lookup_function(const std::string &name) override;
   void call(const std::string &name,
             const std::vector<void *> &arg_pointers,

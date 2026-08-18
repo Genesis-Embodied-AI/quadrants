@@ -37,22 +37,44 @@ std::string moduleToDumpName(llvm::Module *const M) {
   return M->getName().str();
 }
 
-JITModuleCUDA::JITModuleCUDA(void *module) : module_(module) {
+JITModuleCUDA::JITModuleCUDA(void *module) : modules_{module} {
+}
+
+JITModuleCUDA::JITModuleCUDA(std::vector<void *> modules) : modules_(std::move(modules)) {
 }
 
 void *JITModuleCUDA::lookup_function(const std::string &name) {
   // TODO: figure out why using the guard leads to wrong tests results
   // auto context_guard = CUDAContext::get_instance().get_guard();
   CUDAContext::get_instance().make_current();
+  {
+    std::lock_guard<std::mutex> g(func_mu_);
+    auto it = func_cache_.find(name);
+    if (it != func_cache_.end()) {
+      return it->second;
+    }
+  }
   void *func = nullptr;
   auto t = Time::get_time();
-  auto err = CUDADriver::get_instance().module_get_function.call_with_warning(&func, module_, name.c_str());
-  if (err) {
+  auto &drv = CUDADriver::get_instance();
+  // The symbol lives in exactly one module. Use the non-warning `call` so probing the other modules (which return
+  // CUDA_ERROR_NOT_FOUND) does not spam the log; only a miss across *all* modules is an error.
+  for (void *m : modules_) {
+    void *f = nullptr;
+    if (drv.module_get_function.call(&f, m, name.c_str()) == 0 && f != nullptr) {
+      func = f;
+      break;
+    }
+  }
+  if (func == nullptr) {
     QD_ERROR("Cannot look up function {}", name);
   }
   t = Time::get_time() - t;
   QD_TRACE("CUDA module_get_function {} costs {} ms", name, t * 1000);
-  QD_ASSERT(func != nullptr);
+  {
+    std::lock_guard<std::mutex> g(func_mu_);
+    func_cache_[name] = func;
+  }
   return func;
 }
 
@@ -295,97 +317,61 @@ std::vector<char> JITSessionCUDA::assemble_and_store_cubin(const std::string &pt
 }
 
 JITModule *JITSessionCUDA::add_module_culink(std::vector<PerConstructArtifact> artifacts, int max_reg) {
-  // Emit a cached relocatable cubin per task (`ptxas -c`) and device-link them into one CUmodule, so an unchanged
-  // task skips PTX + ptxas entirely.
-  constexpr uint32 kCuJitInputCubin = 0;
-  constexpr uint32 kCuJitErrorLogBuffer = 5;
-  constexpr uint32 kCuJitErrorLogBufferSizeBytes = 6;
+  // OPTION B EXPERIMENT (toolkit-free): compile each self-contained task module to PTX and load it as its OWN
+  // CUmodule via the driver (cuModuleLoadDataEx); a composite JITModuleCUDA then resolves tasks by name across the N
+  // modules. No `ptxas`, no relocatable cubins, no `cuLink` -- so this path runs on a driver-only machine. Per-task
+  // reuse rides on `PtxCache` (PTX, keyed on LLVM text, consulted inside compile_module_to_ptx) plus the NVIDIA
+  // driver's compute cache (SASS, keyed on PTX hash).
+  //
+  // NOTE (experiment only): the artifact's `cubin` field carries PTX BYTES here rather than a cubin, so the
+  // cross-process per-task artifact cache (ref 6) keeps working unchanged -- a hit hands back this task's PTX and
+  // skips codegen. The field name is a misnomer on this branch.
+  (void)max_reg;  // Applied at link time in the cuLink path; there is no link step here (PTX driver-load only).
   auto &drv = CUDADriver::get_instance();
 
-  // Build the per-task cubins concurrently. This is the cold-path cost: 242 serial `ptxas -c` shell-outs were 9.8 s
-  // of a 13.7 s cubin build on the genesis kernel, while LLVM->PTX was only 1.6 s and stays serialised inside.
-  // Each entry writes only its own slot, so no synchronisation is needed beyond the ptxgen lock.
-  std::vector<std::vector<char>> built(artifacts.size());
-  {
-    std::atomic<std::size_t> next{0};
-    const unsigned nthreads =
-        std::min<unsigned>(std::max(1u, std::thread::hardware_concurrency()), (unsigned)artifacts.size());
-    std::vector<std::thread> pool;
-    for (unsigned t = 0; t < nthreads; t++) {
-      pool.emplace_back([&]() {
-        for (std::size_t i = next.fetch_add(1); i < artifacts.size(); i = next.fetch_add(1)) {
-          if (artifacts[i].cubin.empty()) {
-            built[i] = get_or_build_construct_cubin(artifacts[i].module);
-          }
-        }
-      });
-    }
-    for (auto &th : pool)
-      th.join();
-  }
-
-  std::vector<std::vector<char>> cubins;
-  cubins.reserve(artifacts.size());
-  for (std::size_t ai = 0; ai < artifacts.size(); ai++) {
-    auto &art = artifacts[ai];
+  // Materialise each task's PTX. compile_module_to_ptx renames symbols and may share an LLVMContext across the
+  // per-task modules, so it is not safe to run concurrently -- keep it serial under the ptxgen lock (this is where
+  // the cheap LLVM->PTX cost lives; the expensive PTX->SASS now happens in the driver at load, cached in
+  // ~/.nv/ComputeCache).
+  std::vector<std::string> ptxs(artifacts.size());
+  for (std::size_t i = 0; i < artifacts.size(); i++) {
+    auto &art = artifacts[i];
     if (!art.cubin.empty()) {
-      // Already resolved from the on-disk artifact cache by the codegen driver: no module was ever built for this
-      // task, so there is nothing to compile or store.
-      cubins.push_back(std::move(art.cubin));
+      // Artifact-cache hit: the field holds cached PTX bytes; nothing to compile or re-store.
+      ptxs[i].assign(art.cubin.begin(), art.cubin.end());
       continue;
     }
-    auto cubin = std::move(built[ai]);
-    // Persist the COMPLETE record (code + launch metadata). The JIT is the only component that holds the cubin and
-    // codegen is the only one that holds the metadata, so the metadata is carried down here specifically so this
-    // side can write a record sufficient to launch the task without any recompile.
+    std::string ptx;
+    {
+      std::lock_guard<std::mutex> g(g_ptxgen_mu);
+      ptx = compile_module_to_ptx(art.module);
+    }
+    // Persist the COMPLETE record (PTX + launch metadata) so a later process reuses this task without recompiling.
     if (!art.key.empty()) {
       PerTaskArtifactCache cache(pertask_artifact_dir_for(config_.offline_cache_file_path));
       PerTaskArtifact rec;
       rec.tasks = art.tasks;
       rec.used_tree_ids = art.used_tree_ids;
       rec.struct_for_tls_sizes = art.struct_for_tls_sizes;
-      rec.cubin = cubin;
+      rec.cubin.assign(ptx.begin(), ptx.end());  // PTX bytes in the field (see note above)
       cache.store(art.key, rec);
     }
-    cubins.push_back(std::move(cubin));
+    ptxs[i] = std::move(ptx);
   }
 
   CUDAContext::get_instance().make_current();
   [[maybe_unused]] auto _ = CUDAContext::get_instance().get_lock_guard();
 
-  std::vector<char> err_log(8192, 0);
-  std::size_t err_sz = err_log.size();
-  uint32 link_opts[3];
-  void *link_optvals[3];
-  int n_lopt = 0;
-  if (max_reg != 0) {
-    link_opts[n_lopt] = CU_JIT_MAX_REGISTERS;
-    link_optvals[n_lopt++] = &max_reg;
+  std::vector<void *> mods;
+  mods.reserve(ptxs.size());
+  for (auto &ptx : ptxs) {
+    void *cuda_module = nullptr;
+    // c_str() gives the NUL-terminated C-string image cuModuleLoadDataEx wants, exactly like the whole-module path.
+    QD_ERROR_IF(drv.module_load_data_ex.call(&cuda_module, ptx.c_str(), 0, nullptr, nullptr),
+                "module_load_data_ex (option-B per-task) failed");
+    mods.push_back(cuda_module);
   }
-  link_opts[n_lopt] = kCuJitErrorLogBuffer;
-  link_optvals[n_lopt++] = err_log.data();
-  link_opts[n_lopt] = kCuJitErrorLogBufferSizeBytes;
-  link_optvals[n_lopt++] = (void *)err_sz;
-
-  void *link = nullptr;
-  QD_ERROR_IF(drv.link_create.call(n_lopt, link_opts, link_optvals, &link), "cuLinkCreate (culink-pertask) failed");
-  for (int i = 0; i < (int)cubins.size(); i++) {
-    auto name = fmt::format("construct_{}", i);
-    auto e = drv.link_add_data.call(link, kCuJitInputCubin, (void *)cubins[i].data(), cubins[i].size(), name.c_str(),
-                                    0, nullptr, nullptr);
-    if (e != 0)
-      QD_ERROR("cuLinkAddData construct {} failed err={} log=[{}]", i, e, err_log.data());
-  }
-  void *cubin = nullptr;
-  std::size_t cubin_sz = 0;
-  auto e_cmp = drv.link_complete.call(link, &cubin, &cubin_sz);
-  if (e_cmp != 0)
-    QD_ERROR("cuLinkComplete (culink-pertask) failed err={} log=[{}]", e_cmp, err_log.data());
-  void *cuda_module = nullptr;
-  QD_ERROR_IF(drv.module_load_data.call(&cuda_module, cubin), "module_load_data (culink-pertask) failed");
-  drv.link_destroy.call(link);
-
-  this->modules.push_back(std::make_unique<JITModuleCUDA>(cuda_module));
+  this->modules.push_back(std::make_unique<JITModuleCUDA>(std::move(mods)));
   return this->modules.back().get();
 }
 
