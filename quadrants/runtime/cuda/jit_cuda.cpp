@@ -213,9 +213,9 @@ static std::vector<char> ptx_to_relocatable_cubin(const std::string &ptx, const 
 // LLVM->PTX stays serialised: per-task modules may share an LLVMContext, unsafe for concurrent codegen.
 static std::mutex g_ptxgen_mu;
 
-// Per-task relocatable-cubin disk cache: a warm unchanged task skips PTX + ptxas. Dir <offline_cache>/culink_cubins_<mcpu>,
-// namespaced by SM since ptxas output isn't portable. Keyed on the module's LLVM-IR text (it carries the entry-point
-// symbol names, so distinct kernels can't collide). offline_cache=False -> mem-only build, no disk touched.
+// Per-task relocatable-cubin disk cache under <offline_cache>/culink_cubins_<mcpu> (namespaced by SM, since ptxas
+// output isn't portable). A warm unchanged task skips PTX + ptxas. Keyed on the module's LLVM-IR text, which carries
+// the entry-point symbol names, so distinct kernels can't collide. offline_cache=False -> mem-only, no disk touched.
 std::vector<char> JITSessionCUDA::get_or_build_construct_cubin(std::unique_ptr<llvm::Module> &module) {
   namespace fs = std::filesystem;
   const std::string mcpu = CUDAContext::get_instance().get_mcpu();
@@ -269,9 +269,8 @@ std::vector<char> JITSessionCUDA::assemble_and_store_cubin(const std::string &pt
   auto cubin = ptx_to_relocatable_cubin(ptx, CUDAContext::get_instance().get_mcpu());
   // temp + rename so a concurrent reader never sees a partial cubin
   std::error_code ec;
-  auto tmp = cubin_path + fmt::format(".tmp{}", (unsigned long long)std::chrono::steady_clock::now()
-                                                    .time_since_epoch()
-                                                    .count());
+  auto tmp = cubin_path +
+             fmt::format(".tmp{}", (unsigned long long)std::chrono::steady_clock::now().time_since_epoch().count());
   {
     std::ofstream o(tmp, std::ios::binary);
     o.write(cubin.data(), (std::streamsize)cubin.size());
@@ -316,8 +315,8 @@ JITModule *JITSessionCUDA::add_module_culink(std::vector<PerConstructArtifact> a
   QD_ERROR_IF(drv.link_create.call(n_lopt, link_opts, link_optvals, &link), "cuLinkCreate (culink-pertask) failed");
   for (int i = 0; i < (int)cubins.size(); i++) {
     auto name = fmt::format("construct_{}", i);
-    auto e = drv.link_add_data.call(link, kCuJitInputCubin, (void *)cubins[i].data(), cubins[i].size(), name.c_str(),
-                                    0, nullptr, nullptr);
+    auto e = drv.link_add_data.call(link, kCuJitInputCubin, (void *)cubins[i].data(), cubins[i].size(), name.c_str(), 0,
+                                    nullptr, nullptr);
     if (e != 0)
       QD_ERROR("cuLinkAddData construct {} failed err={} log=[{}]", i, e, err_log.data());
   }

@@ -619,9 +619,9 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
     auto type = llvm::ArrayType::get(llvm::Type::getInt8Ty(*llvm_context), stmt->bls_size);
     // Internal definition, like the static shared scratch above: `.extern .shared` fails cuLink. BLS is always
     // statically sized, so it never needs the runtime-sized `extern __shared__` form.
-    bls_buffer = new GlobalVariable(*module, type, false, llvm::GlobalValue::InternalLinkage,
-                                    llvm::UndefValue::get(type), "bls_buffer", nullptr,
-                                    llvm::GlobalVariable::NotThreadLocal, 3 /*addrspace=shared*/);
+    bls_buffer =
+        new GlobalVariable(*module, type, false, llvm::GlobalValue::InternalLinkage, llvm::UndefValue::get(type),
+                           "bls_buffer", nullptr, llvm::GlobalVariable::NotThreadLocal, 3 /*addrspace=shared*/);
     bls_buffer->setAlignment(llvm::MaybeAlign(8));
   }
 
