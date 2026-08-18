@@ -17,8 +17,6 @@
 #include "quadrants/ir/transforms.h"
 #include "quadrants/analysis/offline_cache_util.h"
 
-#include <algorithm>
-
 namespace quadrants::lang {
 
 KernelCodeGen::KernelCodeGen(const CompileConfig &compile_config,
@@ -79,8 +77,8 @@ LLVMCompiledKernel KernelCodeGen::compile_kernel_to_module() {
   }
   worker.flush();
 
-  // Per-task cuLink path: produce one self-contained artifact per offloaded task -- link its runtime deps and
-  // optimize it -- BEFORE the whole-module link consumes `data`. These flow to the CUDA JIT, which compiles each to a
+  // Per-task cuLink path: produce one self-contained module per offloaded task -- link its runtime deps and optimize
+  // it -- BEFORE the whole-module link consumes `data`. These flow to the CUDA JIT, which compiles each to a
   // relocatable cubin (hitting the on-disk cubin cache when the task is unchanged) and `cuLink`s them into one
   // CUmodule.
   std::vector<PerConstructArtifact> per_construct_artifacts;
@@ -93,13 +91,6 @@ LLVMCompiledKernel KernelCodeGen::compile_kernel_to_module() {
     auto linked_one = tlctx_.link_compiled_tasks(std::move(one));
     optimize_module(linked_one.module.get());
     art.module = std::move(linked_one.module);
-    // Carry the launch/graph metadata down to the JIT: the cubin alone cannot be launched.
-    art.tasks = linked_one.tasks;
-    // Sorted for deterministic on-disk bytes (these are unordered_sets upstream).
-    art.used_tree_ids.assign(data[i]->used_tree_ids.begin(), data[i]->used_tree_ids.end());
-    art.struct_for_tls_sizes.assign(data[i]->struct_for_tls_sizes.begin(), data[i]->struct_for_tls_sizes.end());
-    std::sort(art.used_tree_ids.begin(), art.used_tree_ids.end());
-    std::sort(art.struct_for_tls_sizes.begin(), art.struct_for_tls_sizes.end());
     per_construct_artifacts.push_back(std::move(art));
   }
 
