@@ -189,7 +189,8 @@ void export_lang(nb::module_ &m) {
               "Enable the field out-of-bounds check on tensor indexing without turning on the rest of debug mode.")
       .def_rw("print_accessor_ir", &CompileConfig::print_accessor_ir,
               "Print the IR generated for field accessor kernels.")
-      .def_rw("use_llvm", &CompileConfig::use_llvm, "Use the LLVM backend for code generation.")
+      .def_rw("use_llvm", &CompileConfig::use_llvm,
+              "Intended to select the LLVM backend for code generation; currently has no effect, as nothing reads it.")
       .def_rw("print_struct_llvm_ir", &CompileConfig::print_struct_llvm_ir,
               "Print the LLVM IR generated for the data-structure (SNode) module.")
       .def_rw("print_kernel_llvm_ir", &CompileConfig::print_kernel_llvm_ir,
@@ -197,7 +198,7 @@ void export_lang(nb::module_ &m) {
       .def_rw("print_kernel_llvm_ir_optimized", &CompileConfig::print_kernel_llvm_ir_optimized,
               "Print each kernel's LLVM IR after LLVM optimization.")
       .def_rw("print_kernel_asm", &CompileConfig::print_kernel_asm,
-              "Print the native assembly generated for each kernel.")
+              "Print the assembly generated for each kernel: native assembly on CPU, PTX (not native SASS) on CUDA.")
       .def_rw("print_kernel_amdgcn", &CompileConfig::print_kernel_amdgcn,
               "Print the AMDGCN assembly generated for each kernel (AMD backend).")
       .def_rw("debug_dump_path", &CompileConfig::debug_dump_path,
@@ -230,7 +231,8 @@ void export_lang(nb::module_ &m) {
       .def_rw("random_seed", &CompileConfig::random_seed, "Seed for Quadrants' random-number generation.")
       .def_rw("verbose_kernel_launches", &CompileConfig::verbose_kernel_launches,
               "Intended to log a message on every kernel launch; currently has no effect.")
-      .def_rw("verbose", &CompileConfig::verbose, "Print verbose logging during initialization and compilation.")
+      .def_rw("verbose", &CompileConfig::verbose,
+              "Intended to print verbose logging during initialization and compilation; currently has no effect.")
       .def_rw("demote_dense_struct_fors", &CompileConfig::demote_dense_struct_fors,
               "Lower dense struct-for loops to ordinary range-for loops.")
       .def_rw("kernel_profiler", &CompileConfig::kernel_profiler,

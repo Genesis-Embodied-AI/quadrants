@@ -132,9 +132,14 @@ Most `qd.init` keywords set a compiler-configuration option. Each option below c
    :exclude-members: default_up
 ```
 
-`qd.init` also accepts a few options that are handled on the Python side and so do not appear above. Unlike the options above, these are keyword-only (they have no `QD_` environment variable), except `log_level`:
+`qd.init` also accepts a number of options that are handled on the Python side and so do not appear in the generated list above. Some are keyword-only; others are also reachable through a `QD_` environment variable, as noted per option:
 
-- `enable_fallback` (`bool`, default `True`): fall back to the CPU backend when the requested `arch` is unavailable, instead of raising an error.
-- `src_ll_cache` (`bool`, default `True`): use an additional on-disk cache layer that speeds up loading previously compiled kernels.
+- `enable_fallback` (`bool`, default `True`): fall back to the CPU backend when the requested `arch` is unavailable, instead of raising an error. Keyword-only.
+- `src_ll_cache` (`bool`, default `True`): use an additional on-disk cache layer that speeds up loading previously compiled kernels. Keyword-only.
+- `require_version` (`str`): raise an error unless the installed Quadrants version is compatible with the given `major.minor.patch` string (same major version, and at least the given minor and patch). Keyword-only.
+- `print_non_pure` (`bool`, default `False`): print the name of each executed kernel that is not annotated `@qd.pure`. Keyword-only.
 - `log_level` (`str`, default `"info"`): logging verbosity; one of `"trace"`, `"debug"`, `"info"`, `"warn"`, `"error"`, `"critical"` (also settable via `QD_LOG_LEVEL`).
-- `require_version` (`str`): raise an error unless the installed Quadrants version is compatible with the given `major.minor.patch` string (same major version, and at least the given minor and patch).
+- `gdb_trigger` (`bool`, default `False`): drop into gdb when the native core crashes (also settable via `QD_GDB_TRIGGER`).
+- `short_circuit_operators` (`bool`, default `True`): use short-circuit evaluation for `and`/`or` inside kernels (also settable via `QD_SHORT_CIRCUIT_OPERATORS`).
+- `print_full_traceback` (`bool`, default `False`): print the full Python traceback when an exception propagates out of Quadrants (also settable via `QD_PRINT_FULL_TRACEBACK`).
+- `unrolling_limit` (`int`, default `32`): maximum number of iterations a static loop may be unrolled before a warning is emitted; `0` disables the warning (also settable via `QD_UNROLLING_LIMIT`).
