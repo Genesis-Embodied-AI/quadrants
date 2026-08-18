@@ -4,6 +4,7 @@
 #include "quadrants/ir/analysis.h"
 #include "quadrants/ir/visitors.h"
 #include "quadrants/program/program.h"
+#include "quadrants/transforms/offload_stable_key.h"
 
 #include <set>
 #include <unordered_map>
@@ -445,8 +446,8 @@ class IdentifyValuesUsedInOtherOffloads : public BasicStmtVisitor {
     QD_ASSERT(current_offloaded_);
   }
 
-  // Record the values written into each local (alloca) so assign_offsets() can fold an alloca's def/update chain
-  // into its ordering key. Allocas have no operands, so stable_key() alone keys them on statement kind + type only
+  // Record the values written into each local (alloca) so GlobalTmpOrdering can fold an alloca's def/update chain
+  // into its ordering key. Allocas have no operands, so a content key alone keys them on statement kind + type only
   // and two same-typed cross-offload locals share a key (PR #864 review r3797057477). Recorded during the same
   // traversal that collects cross-offload values; dest is squashed so element stores into local tensors are
   // attributed to their base alloca.
@@ -491,129 +492,12 @@ class IdentifyValuesUsedInOtherOffloads : public BasicStmtVisitor {
     }
   }
 
-  // FNV-1a string hash / mixing step, shared by local_key() and stable_key().
-  static std::uint64_t hstr(const std::string &str) {
-    std::uint64_t h = 1469598103934665603ULL;
-    for (unsigned char c : str)
-      h = (h ^ c) * 1099511628211ULL;
-    return h;
-  }
-  static std::uint64_t mix(std::uint64_t h, std::uint64_t x) {
-    return (h ^ x) * 1099511628211ULL;
-  }
-
-  // Offset-free content hash of a single statement, EXCLUDING its operands: statement kind, type, and
-  // constant/arg identity. Operand keys are folded in by stable_key(); factoring this out lets stable_key()
-  // walk the operand-def DAG iteratively.
-  std::uint64_t local_key(Stmt *s) {
-    std::uint64_t h = hstr(typeid(*s).name());
-    h = mix(h, hstr(s->ret_type.to_string()));
-    if (auto *c = s->cast<ConstStmt>())
-      h = mix(h, hstr(c->val.stringify()));
-    if (auto *a = s->cast<ArgLoadStmt>()) {
-      for (int id : a->arg_id)
-        h = mix(h, (std::uint64_t)(unsigned)id);
-      h = mix(h, (std::uint64_t)a->is_ptr);
-    }
-    // Semantic discriminant fields: statements of the same class, return type, and operands can still differ in
-    // an op_type (or cast target / bit-vectorization flag). Without these, e.g. a + b and a - b hash equal and
-    // stable_sort falls back to traversal order for them, reintroducing exactly the offset instability this
-    // content-keyed ordering exists to remove (PR #864 review r3776549281).
-    if (auto *u = s->cast<UnaryOpStmt>()) {
-      h = mix(h, (std::uint64_t)u->op_type);
-      if (u->is_cast())
-        h = mix(h, hstr(u->cast_type.to_string()));
-    }
-    if (auto *b = s->cast<BinaryOpStmt>()) {
-      h = mix(h, (std::uint64_t)b->op_type);
-      h = mix(h, (std::uint64_t)b->is_bit_vectorized);
-    }
-    if (auto *t = s->cast<TernaryOpStmt>())
-      h = mix(h, (std::uint64_t)t->op_type);
-    if (auto *a = s->cast<AtomicOpStmt>())
-      h = mix(h, (std::uint64_t)a->op_type);
-    if (auto *sn = s->cast<SNodeOpStmt>())
-      h = mix(h, (std::uint64_t)sn->op_type);
-    return h;
-  }
-
-  // Offset-free content hash over the value's operand-def DAG: a value's key depends on WHAT it is (local_key)
-  // plus the keys of its operands, not on offload traversal order. Memoized (also dedups shared subexpressions),
-  // and used to order global-temp slot assignment stably (S2a').
-  //
-  // Computed with an explicit worklist rather than recursion so that native stack depth does NOT grow with the
-  // length of the SSA dependency chain: a deeply unrolled / generated straight-line expression could otherwise
-  // overflow the compiler's stack here (PR #864 review r3796280238). Post-order: a statement is hashed only once
-  // all its operands are memoized. `on_stack_` breaks any back-edge defensively (the SSA def DAG is acyclic, so
-  // this never fires in practice); a back-edge operand contributes key 0.
-  std::uint64_t stable_key(Stmt *s) {
-    if (s == nullptr)
-      return 0;
-    if (auto it = key_memo_.find(s); it != key_memo_.end())
-      return it->second;
-    std::vector<Stmt *> stack{s};
-    while (!stack.empty()) {
-      Stmt *cur = stack.back();
-      if (key_memo_.count(cur)) {
-        stack.pop_back();
-        continue;
-      }
-      bool ready = true;
-      for (auto *op : cur->get_operands()) {
-        if (op != nullptr && !key_memo_.count(op) && !on_stack_.count(op)) {
-          stack.push_back(op);
-          ready = false;
-        }
-      }
-      if (ready) {
-        std::uint64_t h = local_key(cur);
-        for (auto *op : cur->get_operands())
-          h = mix(h, op != nullptr && key_memo_.count(op) ? key_memo_[op] : 0);
-        key_memo_[cur] = h;
-        on_stack_.erase(cur);
-        stack.pop_back();
-      } else {
-        on_stack_.insert(cur);
-      }
-    }
-    return key_memo_[s];
-  }
-
-  // The value written by a local store / atomic (the RHS of the update), or null for anything we don't model.
-  static Stmt *store_value(Stmt *store) {
-    if (auto *s = store->cast<LocalStoreStmt>())
-      return s->val;
-    if (auto *a = store->cast<AtomicOpStmt>())
-      return a->val;
-    return nullptr;
-  }
-
-  // Ordering key for global-temp slot assignment: stable_key(), plus -- for allocas only -- a content signature of
-  // the values written into the local. An alloca has no operands, so stable_key() keys it on statement kind + type
-  // alone; two same-typed cross-offload locals would then share a key and fall back to traversal order, retaining
-  // the offset instability this ordering removes (PR #864 review r3797057477). Fold in local_key(store) (which
-  // carries the store-vs-atomic kind and, for atomics, the op) and the content key of each stored value. Those
-  // stored values reference the alloca only through loads, and a load reaches the alloca via the operand DAG where
-  // the alloca is a childless leaf, so stable_key() stays acyclic and this signature is independent of evaluation
-  // order. Best-effort: two locals with identical types AND identical update chains still collide (harmless -- they
-  // are genuinely interchangeable), and store order (stable for a given local) is significant.
-  std::uint64_t sort_key(Stmt *s) {
-    std::uint64_t h = stable_key(s);
-    if (s->is<AllocaStmt>()) {
-      if (auto it = alloca_stores_.find(s); it != alloca_stores_.end())
-        for (auto *store : it->second)
-          h = mix(mix(h, local_key(store)), stable_key(store_value(store)));
-    }
-    return h;
-  }
-
   // Assign a global-temp offset to every collected cross-offload value, reusing allocate_global's sizing/alignment
-  // verbatim. Values are ordered by sort_key first (stable_sort keeps traversal order among equal keys), so a
-  // slot's offset is a function of its content rather than of traversal order -- which is what keeps a task's IR,
+  // verbatim. GlobalTmpOrdering first reorders the values into a content-keyed order (see offload_stable_key.h), so
+  // a slot's offset is a function of its content rather than of traversal order -- which is what keeps a task's IR,
   // and therefore its cache key, stable across edits elsewhere in the kernel.
   void assign_offsets() {
-    std::stable_sort(ordered_values_.begin(), ordered_values_.end(),
-                     [this](Stmt *a, Stmt *b) { return sort_key(a) < sort_key(b); });
+    GlobalTmpOrdering().sort(ordered_values_, alloca_stores_);
     for (auto *v : ordered_values_)
       local_to_global_[v] = allocate_global(v->ret_type);
   }
@@ -655,12 +539,9 @@ class IdentifyValuesUsedInOtherOffloads : public BasicStmtVisitor {
   // Cross-offload values in first-encounter (traversal) order, offset assignment deferred to assign_offsets().
   std::vector<Stmt *> ordered_values_;
   std::unordered_set<Stmt *> value_seen_;
-  std::unordered_map<Stmt *, std::uint64_t> key_memo_;
-  // Statements currently on stable_key()'s worklist, used to defensively break back-edges.
-  std::unordered_set<Stmt *> on_stack_;
   // Per-alloca list of the local-store / atomic statements that write into it, in traversal order. Consumed by
-  // sort_key() to give same-typed cross-offload locals distinct content-derived ordering keys.
-  std::unordered_map<Stmt *, std::vector<Stmt *>> alloca_stores_;
+  // GlobalTmpOrdering to give same-typed cross-offload locals distinct content-derived ordering keys.
+  GlobalTmpOrdering::AllocaStores alloca_stores_;
 };
 
 // Store intermediate values to globals so that statements in later offloaded
