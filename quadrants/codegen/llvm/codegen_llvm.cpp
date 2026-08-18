@@ -3466,7 +3466,20 @@ LLVMCompiledTask LLVMCompiledTask::clone() const {
 }
 
 LLVMCompiledKernel LLVMCompiledKernel::clone() const {
-  return {tasks, llvm::CloneModule(*module)};
+  LLVMCompiledKernel result{tasks, llvm::CloneModule(*module)};
+  // The launcher consumes a clone, so the per-task artifacts (code + launch metadata) must travel with it: dropping
+  // them would make the cuLink path see no artifacts and silently fall back to the whole-module load.
+  result.per_construct_artifacts.reserve(per_construct_artifacts.size());
+  for (auto &a : per_construct_artifacts) {
+    PerConstructArtifact c;
+    c.module = a.module ? llvm::CloneModule(*a.module) : nullptr;
+    c.cubin = a.cubin;
+    c.tasks = a.tasks;
+    c.used_tree_ids = a.used_tree_ids;
+    c.struct_for_tls_sizes = a.struct_for_tls_sizes;
+    result.per_construct_artifacts.push_back(std::move(c));
+  }
+  return result;
 }
 
 }  // namespace quadrants::lang

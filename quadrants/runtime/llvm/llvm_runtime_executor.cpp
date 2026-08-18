@@ -176,6 +176,10 @@ JITModule *LlvmRuntimeExecutor::create_jit_module(std::unique_ptr<llvm::Module> 
   return jit_session_->add_module(std::move(module));
 }
 
+JITModule *LlvmRuntimeExecutor::create_jit_module_culink(std::vector<PerConstructArtifact> artifacts) {
+  return jit_session_->add_module_culink(std::move(artifacts));
+}
+
 JITModule *LlvmRuntimeExecutor::get_runtime_jit_module() {
   return runtime_jit_module_;
 }
