@@ -172,8 +172,7 @@ void export_lang(nb::module_ &m) {
               "Quadrants IR optimization level. At 0, IR-level optimizations such as common-subexpression "
               "elimination are disabled; any value above 0 enables them. This is not an LLVM -O level.")
       .def_rw("raise_on_templated_floats", &CompileConfig::raise_on_templated_floats,
-              "Raise an error instead of silently specializing a kernel on a Python float "
-              "argument passed by value.")
+              "Raise an error instead of silently specializing a kernel on a Python float argument passed by value.")
       .def_rw("print_ir", &CompileConfig::print_ir,
               "Print each kernel's IR after compilation (for debugging the compiler).")
       .def_rw("print_preprocessed_ir", &CompileConfig::print_preprocessed_ir,
@@ -187,8 +186,7 @@ void export_lang(nb::module_ &m) {
               "Run the control-flow-graph optimization pass that simplifies kernel branches and "
               "loops. Disabling it speeds up compilation at a small runtime cost.")
       .def_rw("check_out_of_bound", &CompileConfig::check_out_of_bound,
-              "Enable the field out-of-bounds check on tensor indexing without turning on the "
-              "rest of debug mode.")
+              "Enable the field out-of-bounds check on tensor indexing without turning on the rest of debug mode.")
       .def_rw("print_accessor_ir", &CompileConfig::print_accessor_ir,
               "Print the IR generated for field accessor kernels.")
       .def_rw("use_llvm", &CompileConfig::use_llvm, "Use the LLVM backend for code generation.")
@@ -259,8 +257,7 @@ void export_lang(nb::module_ &m) {
               "Force every autodiff stack to exactly this many slots. 0 lets the launch-time "
               "sizer choose automatically.")
       .def_rw("ad_stack_sparse_threshold_bytes", &CompileConfig::ad_stack_sparse_threshold_bytes,
-              "Byte cutoff below which the sparse adstack sizing path is skipped in favor of "
-              "eager heap allocation.")
+              "Byte cutoff below which the sparse adstack sizing path is skipped in favor of eager heap allocation.")
       .def_rw("flatten_if", &CompileConfig::flatten_if,
               "Flatten simple if statements into predicated (branchless) form.")
       .def_rw("make_thread_local", &CompileConfig::make_thread_local,

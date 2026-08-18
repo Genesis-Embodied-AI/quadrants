@@ -65,19 +65,16 @@ autodoc_typehints_description_target = "all"
 autodoc_default_flags = ["members", "show-inheritance", "undoc-members"]
 autodoc_member_order = "bysource"
 autosummary_generate = True
-# Render documented objects by their short name (e.g. "CompileConfig" instead of
-# the full "quadrants._lib.core.quadrants_python.CompileConfig" internal path).
+# Show documented objects by their short name (e.g. "CompileConfig") instead of the full internal dotted path.
 add_module_names = False
 
 
 # --- Surface CompileConfig option types and defaults in autodoc --------------
-# nanobind knows each property's type (via __nb_signature__) and writes it into
-# the .pyi stub, but Sphinx's autodoc only reads standard __annotations__, which
-# nanobind leaves empty on its nb_method getters. So autodoc shows neither the
-# type nor a default for CompileConfig's def_rw properties. We bridge that here:
-# the type is read straight from nanobind's own signature metadata, and the
-# default is read from a single default-constructed CompileConfig() (with a small
-# override map for the few defaults that are machine-derived or set Python-side).
+# nanobind knows each property's type (via __nb_signature__) and writes it into the .pyi stub, but Sphinx's autodoc
+# only reads standard __annotations__, which nanobind leaves empty on its nb_method getters. So autodoc shows neither
+# the type nor a default for CompileConfig's def_rw properties. We bridge that here: the type is read straight from
+# nanobind's own signature metadata, and the default is read from a single default-constructed CompileConfig() (with a
+# small override map for the few defaults that are machine-derived or set Python-side).
 import re as _re  # noqa: E402
 
 _QD_MODULE_PREFIXES = (
@@ -85,9 +82,8 @@ _QD_MODULE_PREFIXES = (
     "quadrants._lib.core.",
 )
 
-# Defaults that a default-constructed CompileConfig() reports incorrectly for an
-# end user: machine-derived values, or values the Python frontend overrides.
-# A value of None means "do not emit an auto default" (it is covered in prose).
+# Defaults that a default-constructed CompileConfig() reports incorrectly for an end user: machine-derived values, or
+# values the Python frontend overrides. A value of None means "do not emit an auto default" (it is covered in prose).
 _CONFIG_DEFAULT_OVERRIDES = {
     "offline_cache": "``True``",  # frontend sets this; the C++ default is False
     "arch": None,  # machine-derived; documented in the description
@@ -118,8 +114,8 @@ def _config_default_text(attr):
     if attr in _CONFIG_DEFAULT_OVERRIDES:
         return _CONFIG_DEFAULT_OVERRIDES[attr]
     value = getattr(_default_config(), attr, None)
-    # Only emit literal defaults for plain scalar types; enums/dtypes are covered
-    # either by an override above or by their description.
+    # Only emit literal defaults for plain scalar types; enums/dtypes are covered either by an override above or by
+    # their description.
     if type(value) in (bool, int, float, str):
         return f"``{value!r}``"
     return None
