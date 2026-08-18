@@ -76,7 +76,6 @@ from ._kernel_types import (
     KernelBatchedArgType,
     LaunchObservations,
     LaunchStats,
-    PerOffloadCacheObservations,
     SrcLlCacheObservations,
 )
 from ._pruning import Pruning
@@ -381,7 +380,6 @@ class Kernel(FuncBase):
 
         self.src_ll_cache_observations: SrcLlCacheObservations = SrcLlCacheObservations()
         self.fe_ll_cache_observations: FeLlCacheObservations = FeLlCacheObservations()
-        self.per_offload_cache_observations: PerOffloadCacheObservations = PerOffloadCacheObservations()
         self.launch_observations = LaunchObservations()
 
         self.launch_context_buffer_cache = LaunchContextBufferCache()
@@ -404,7 +402,6 @@ class Kernel(FuncBase):
         self._last_compiled_kernel_data = None
         self.src_ll_cache_observations = SrcLlCacheObservations()
         self.fe_ll_cache_observations = FeLlCacheObservations()
-        self.per_offload_cache_observations = PerOffloadCacheObservations()
 
     def _try_load_fastcache(self, args: tuple[Any, ...], key: "CompiledKernelKeyType") -> set[str] | None:
         frontend_cache_key: str | None = None
@@ -720,11 +717,6 @@ class Kernel(FuncBase):
                 compiled_kernel_data = compile_result.compiled_kernel_data
                 if compile_result.cache_hit:
                     self.fe_ll_cache_observations.cache_hit = True
-                self.per_offload_cache_observations = PerOffloadCacheObservations(
-                    constructs_total=compile_result.per_offload_total,
-                    constructs_cache_hit=compile_result.per_offload_cache_hit,
-                    constructs_recompiled=compile_result.per_offload_recompiled,
-                )
                 if self.fast_checksum:
                     src_hasher.store(
                         compile_result.cache_key,

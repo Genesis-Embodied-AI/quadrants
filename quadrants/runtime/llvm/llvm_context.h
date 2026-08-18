@@ -125,13 +125,9 @@ class QuadrantsLLVMContext {
 
   static llvm::DataLayout get_data_layout(Arch arch);
 
-  // Bitcode-round-trip module clones across LLVM contexts. Public because the per-offloaded-task codegen cache
-  // (PerTaskModuleCache) stashes compiled task modules in its own context and re-clones them into a worker context on
-  // a cache hit; `link_compiled_tasks` above also relies on the cross-context clone internally.
-  std::unique_ptr<llvm::Module> clone_module_to_context(llvm::Module *module, llvm::LLVMContext *target_context);
-  std::unique_ptr<llvm::Module> clone_module_to_this_thread_context(llvm::Module *module);
-
  private:
+  std::unique_ptr<llvm::Module> clone_module_to_context(llvm::Module *module, llvm::LLVMContext *target_context);
+
   void link_module_with_custom_cuda_library(std::unique_ptr<llvm::Module> &module);
 
   void link_module_with_cuda_libdevice(std::unique_ptr<llvm::Module> &module);
@@ -141,6 +137,8 @@ class QuadrantsLLVMContext {
   static int num_instructions(llvm::Function *func);
 
   void insert_nvvm_annotation(llvm::Function *func, std::string key, int val);
+
+  std::unique_ptr<llvm::Module> clone_module_to_this_thread_context(llvm::Module *module);
 
   ThreadLocalData *get_this_thread_data();
 

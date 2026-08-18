@@ -48,12 +48,6 @@ struct CompileResult {
   const CompiledKernelData &compiled_kernel_data;
   bool cache_hit;
   std::string cache_key;
-  // Per-offloaded-task compile-cache stats for this compile. All zero on a whole-kernel `cache_hit` (no per-task work
-  // ran) and on backends without the per-task cache. Surfaced to Python as `PerOffloadCacheObservations` so a warm
-  // one-task edit can be asserted (recompiled==1, cache_hit==total-1).
-  int per_offload_total{0};
-  int per_offload_cache_hit{0};
-  int per_offload_recompiled{0};
 };
 
 namespace tests {

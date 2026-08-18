@@ -10,17 +10,6 @@
 
 namespace quadrants::lang {
 
-// Per-offloaded-task compilation cache stats for one kernel compile. Transient (never serialized): populated by the
-// LLVM codegen driver while it compiles each offloaded task, read back by the compilation manager into
-// `CompileResult`, and surfaced to Python as `PerOffloadCacheObservations`. On a warm compile where only one task
-// changed, the expected result is `recompiled == 1` and `cache_hit == total - 1`. Counts (not wall time) so the
-// behavior can be asserted deterministically in tests. Zero on a whole-kernel cache hit (no per-task work ran).
-struct PerTaskCacheStats {
-  int total{0};
-  int cache_hit{0};
-  int recompiled{0};
-};
-
 class KernelLaunchHandle {
  public:
   void set_launch_id(int id) {
@@ -135,12 +124,6 @@ class CompiledKernelData {
 
   const std::optional<KernelLaunchHandle> &get_handle() const {
     return kernel_launch_handle_;
-  }
-
-  // Per-task compile-cache stats for the compile that produced this data (transient; default zero for backends that
-  // do not implement the per-task cache and for data restored from the offline/fast cache).
-  virtual PerTaskCacheStats get_per_task_cache_stats() const {
-    return {};
   }
 
   static std::unique_ptr<CompiledKernelData> load(std::istream &is, Err *p_err);

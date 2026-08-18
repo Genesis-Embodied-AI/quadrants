@@ -3466,9 +3466,7 @@ LLVMCompiledTask LLVMCompiledTask::clone() const {
 }
 
 LLVMCompiledKernel LLVMCompiledKernel::clone() const {
-  LLVMCompiledKernel result{tasks, llvm::CloneModule(*module)};
-  result.per_task_cache_stats = per_task_cache_stats;
-  return result;
+  return {tasks, llvm::CloneModule(*module)};
 }
 
 }  // namespace quadrants::lang

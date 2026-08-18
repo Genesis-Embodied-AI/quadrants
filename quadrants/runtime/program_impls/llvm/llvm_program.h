@@ -21,7 +21,6 @@ namespace quadrants::lang {
 
 class StructCompiler;
 class Program;
-struct PerTaskModuleCache;
 
 namespace cuda {
 class CudaDevice;
@@ -253,13 +252,17 @@ class LlvmProgramImpl : public ProgramImpl {
   // 2. LlvmProgramImpl
   //
   // Make sure the above mentioned objects are destructed in order.
-  // Defined out-of-line in llvm_program.cpp: the `per_task_module_cache_` member is a `unique_ptr` to an incomplete
-  // type here, so the destructor (which must see the complete type) cannot be inline in this header.
-  ~LlvmProgramImpl() override;
+  ~LlvmProgramImpl() override {
+    // Explicitly enforce "LlvmOfflineCache::CachedKernelData::owned_module"
+    // destructs before
+    // "LlvmRuntimeExecutor::QuadrantsLLVMContext::ThreadSafeContext"
 
-  // Per-`Program` per-offloaded-task codegen cache (lazily created). See PerTaskModuleCache.
-  PerTaskModuleCache &per_task_module_cache();
+    // 1. Destructs cache_data_
+    cache_data_.reset();
 
+    // 2. Destructs runtime_exec_
+    runtime_exec_.reset();
+  }
   ParallelExecutor compilation_workers;  // parallel compilation
 
  protected:
@@ -270,7 +273,6 @@ class LlvmProgramImpl : public ProgramImpl {
   std::size_t num_snode_trees_processed_{0};
   std::unique_ptr<LlvmRuntimeExecutor> runtime_exec_;
   std::unique_ptr<LlvmOfflineCache> cache_data_;
-  std::unique_ptr<PerTaskModuleCache> per_task_module_cache_;
   // Flipped on by `pre_finalize()` (with a defensive re-assignment in `finalize()`) so the `synchronize()`
   // override stops polling the adstack-overflow flag during teardown. `Program::finalize()` invokes
   // `pre_finalize()` before its two teardown syncs, so the flag is already true when those syncs run; moving

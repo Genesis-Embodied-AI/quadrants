@@ -68,13 +68,9 @@ CompileResult KernelCompilationManager::load_or_compile(const CompileConfig &com
   const auto kernel_key = make_kernel_key(compile_config, caps, kernel_def);
   auto cached_kernel = try_load_cached_kernel(kernel_def.get_name(), kernel_key, compile_config.arch, cache_mode);
   bool cache_hit = (cached_kernel != nullptr);
-  const CompiledKernelData &ckd =
-      cached_kernel ? *cached_kernel : compile_and_cache_kernel(kernel_key, compile_config, caps, kernel_def);
-  // On a whole-kernel cache hit no per-task codegen ran, so report zero per-task stats regardless of what the cached
-  // data recorded at its original compile (its `per_task_cache_stats` are preserved across `clone()`). This matches
-  // the documented all-zero-on-whole-kernel-hit contract of `PerOffloadCacheObservations`.
-  auto pt = cache_hit ? PerTaskCacheStats{} : ckd.get_per_task_cache_stats();
-  return CompileResult{ckd, cache_hit, kernel_key, pt.total, pt.cache_hit, pt.recompiled};
+  return CompileResult{
+      cached_kernel ? *cached_kernel : compile_and_cache_kernel(kernel_key, compile_config, caps, kernel_def),
+      cache_hit, kernel_key};
 }
 
 void KernelCompilationManager::dump() {

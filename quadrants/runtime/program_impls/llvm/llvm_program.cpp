@@ -4,7 +4,6 @@
 
 #include "quadrants/codegen/cpu/codegen_cpu.h"
 #include "quadrants/codegen/llvm/llvm_compiled_data.h"
-#include "quadrants/codegen/llvm/per_task_module_cache.h"
 #include "quadrants/program/program.h"
 #include "quadrants/codegen/codegen.h"
 #include "quadrants/codegen/llvm/struct_llvm.h"
@@ -30,27 +29,6 @@ LlvmProgramImpl::LlvmProgramImpl(CompileConfig &config_, KernelProfilerBase *pro
     : ProgramImpl(config_), compilation_workers("compile", config_.print_ir ? 1 : config_.num_compile_threads) {
   runtime_exec_ = std::make_unique<LlvmRuntimeExecutor>(config_, profiler, this);
   cache_data_ = std::make_unique<LlvmOfflineCache>();
-}
-
-LlvmProgramImpl::~LlvmProgramImpl() {
-  // The per-task cache owns its own LLVMContext + modules, so it is self-contained and can go first.
-  per_task_module_cache_.reset();
-
-  // Explicitly enforce "LlvmOfflineCache::CachedKernelData::owned_module" destructs before
-  // "LlvmRuntimeExecutor::QuadrantsLLVMContext::ThreadSafeContext".
-
-  // 1. Destructs cache_data_
-  cache_data_.reset();
-
-  // 2. Destructs runtime_exec_
-  runtime_exec_.reset();
-}
-
-PerTaskModuleCache &LlvmProgramImpl::per_task_module_cache() {
-  if (!per_task_module_cache_) {
-    per_task_module_cache_ = std::make_unique<PerTaskModuleCache>();
-  }
-  return *per_task_module_cache_;
 }
 
 std::unique_ptr<StructCompiler> LlvmProgramImpl::compile_snode_tree_types_impl(SNodeTree *tree) {
