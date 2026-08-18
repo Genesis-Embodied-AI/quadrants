@@ -77,10 +77,7 @@ LLVMCompiledKernel KernelCodeGen::compile_kernel_to_module() {
   }
   worker.flush();
 
-  // Per-task cuLink path: produce one self-contained module per offloaded task -- link its runtime deps and optimize
-  // it -- BEFORE the whole-module link consumes `data`. These flow to the CUDA JIT, which compiles each to a
-  // relocatable cubin (hitting the on-disk cubin cache when the task is unchanged) and `cuLink`s them into one
-  // CUmodule.
+  // Per-task cuLink path: one self-contained module per task, built BEFORE the whole-module link consumes `data`.
   std::vector<PerConstructArtifact> per_construct_artifacts;
   for (int i = 0; i < (int)data.size(); i++) {
     if (!data[i] || !data[i]->module)

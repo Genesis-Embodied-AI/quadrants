@@ -201,9 +201,7 @@ struct LLVMCompiledTask {
   QD_IO_DEF(tasks);
 };
 
-// One self-contained module of the per-task cuLink path: the device code for a single offloaded task. Built per task
-// in `KernelCodeGen::compile_kernel_to_module`; the CUDA JIT assembles each to a relocatable cubin and `cuLink`s them
-// into one CUmodule.
+// One offloaded task's self-contained module, for the per-task cuLink path.
 struct PerConstructArtifact {
   std::unique_ptr<llvm::Module> module{nullptr};
 };
@@ -211,8 +209,7 @@ struct PerConstructArtifact {
 struct LLVMCompiledKernel {
   std::vector<OffloadedTask> tasks;
   std::unique_ptr<llvm::Module> module{nullptr};
-  // Per-task self-contained artifacts for the relocatable-cubin + cuLink path. Empty => the JIT uses the whole-module
-  // `module`. Transient (not part of QD_IO_DEF).
+  // Per-task modules for the cuLink path; empty => JIT uses the whole-module `module`. Transient (not in QD_IO_DEF).
   std::vector<PerConstructArtifact> per_construct_artifacts;
   LLVMCompiledKernel() = default;
   LLVMCompiledKernel(LLVMCompiledKernel &&) = default;

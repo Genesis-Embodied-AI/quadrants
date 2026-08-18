@@ -469,11 +469,8 @@ def test_atomic_float_ops(op, dtype):
         "min": 0.0,
         "max": (block_dim - 1) * SCALE,
     }
-    # add/sub accumulate 128 concurrent atomics in whatever order the hardware interleaves them, and f16 has too few
-    # mantissa bits for that to be order-independent: past 256 the ULP is 0.25, so each of the last ~60 adds can round.
-    # Shuffling these same inputs spans 300.75..303.25 against a true 302.16, i.e. ~1e-2 relative. The old 1e-3 held
-    # only for as long as codegen happened to produce one particular interleaving. A real failure (a dropped block)
-    # would be off by 75, well outside this.
+    # f16 add/sub of 128 concurrent atomics is order-dependent (~1e-2 across interleavings); cuLink changes the order.
+    # A real failure (dropped block) would be off by 75, far outside 1e-2.
     rtol = {qd.f16: 1e-2, qd.f64: 1e-10}.get(dtype, 1e-6)
     assert arr[0] == test_utils.approx(expected[op], rel=rtol)
 

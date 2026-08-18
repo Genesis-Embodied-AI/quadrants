@@ -3467,8 +3467,7 @@ LLVMCompiledTask LLVMCompiledTask::clone() const {
 
 LLVMCompiledKernel LLVMCompiledKernel::clone() const {
   LLVMCompiledKernel result{tasks, llvm::CloneModule(*module)};
-  // The launcher consumes a clone, so the per-task modules must travel with it: dropping them would make the cuLink
-  // path see no artifacts and silently fall back to the whole-module load.
+  // The launcher consumes a clone, so the per-task modules must travel with it.
   result.per_construct_artifacts.reserve(per_construct_artifacts.size());
   for (auto &a : per_construct_artifacts) {
     PerConstructArtifact c;

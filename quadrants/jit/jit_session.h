@@ -28,9 +28,8 @@ class JITSession {
 
   virtual JITModule *add_module(std::unique_ptr<llvm::Module> M, int max_reg = 0) = 0;
 
-  // Per-task cubin path: assemble one JIT module from several self-contained sub-modules by emitting a relocatable
-  // cubin per sub-module and device-linking them (`cuLink`). Only the CUDA backend implements this; the default
-  // errors so other backends are unaffected. Each artifact is one offloaded task, plus its launch metadata.
+  // Per-task cubin path: one relocatable cubin per artifact, device-linked (`cuLink`) into one module. CUDA-only;
+  // the default errors.
   virtual JITModule *add_module_culink(std::vector<PerConstructArtifact> artifacts, int max_reg = 0) {
     QD_NOT_IMPLEMENTED
   }
