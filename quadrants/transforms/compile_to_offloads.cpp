@@ -231,6 +231,13 @@ void split_frontend_per_construct(IRNode *ir, const CompileConfig &config, const
   // so identical constructs across kernels (same ABI/config) share entries.
   PerConstructCache *cc = (kernel->program != nullptr) ? &kernel->program->per_construct_cache() : nullptr;
 
+  // EXPERIMENT (no-construct-cache variation): bypass the in-memory per-construct FRONTEND cache to measure how much
+  // the in-process frontend dedup (identical constructs within one kernel, and warm same-process recompiles) is worth
+  // once the on-disk construct manifest is relied on alone. The cross-process manifest (`try_load`/store), the disk
+  // artifact tier, `last_stats` and the `disk_plans` are all deliberately left intact -- only the in-process
+  // `cc->entries` read/write is disabled. Flip to `true` to restore the baseline behaviour.
+  constexpr bool kUseInMemoryConstructCache = false;
+
   // Cross-process construct manifests, naming the compiled tasks held by the per-task artifact cache.
   std::unique_ptr<ConstructManifestCache> manifest_store;
   std::unique_ptr<PerTaskArtifactCache> artifact_store;
@@ -360,7 +367,7 @@ void split_frontend_per_construct(IRNode *ir, const CompileConfig &config, const
       pending_manifest_key[n_constructs] = dkey;  // record so codegen can write the manifest after keying its tasks
     }
 
-    if (cc != nullptr) {
+    if (kUseInMemoryConstructCache && cc != nullptr) {
       std::lock_guard<std::mutex> g(cc->mu);
       auto it = cc->entries.find(ckey);
       if (it != cc->entries.end()) {
@@ -385,7 +392,7 @@ void split_frontend_per_construct(IRNode *ir, const CompileConfig &config, const
     std::vector<std::unique_ptr<Stmt>> produced;
     while (!cb->statements.empty())
       produced.push_back(cb->extract(0));
-    if (cc != nullptr) {
+    if (kUseInMemoryConstructCache && cc != nullptr) {
       std::vector<std::unique_ptr<Stmt>> stored;
       stored.reserve(produced.size());
       for (auto &t : produced)
