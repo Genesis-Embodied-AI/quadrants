@@ -206,7 +206,9 @@ void export_lang(nb::module_ &m) {
               "Print the AMDGCN assembly generated for each kernel (AMD backend).")
       .def_rw("debug_dump_path", &CompileConfig::debug_dump_path,
               "Directory for IR dumps written and read via the QD_DUMP_IR, QD_DUMP_CFG, and QD_LOAD_IR environment "
-              "variables. The print_* options instead write to the current working directory.")
+              "variables. The print_* options ignore this path: the IR-printing ones (e.g. print_ir) go to stdout, "
+              "while the LLVM-IR and assembly ones (e.g. print_kernel_llvm_ir, print_kernel_asm) write files in the "
+              "current working directory.")
       .def_rw("simplify_before_lower_access", &CompileConfig::simplify_before_lower_access,
               "Run the simplify pass before the lower-access pass.")
       .def_rw("simplify_after_lower_access", &CompileConfig::simplify_after_lower_access,
