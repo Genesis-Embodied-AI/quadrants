@@ -77,18 +77,22 @@ LLVMCompiledKernel KernelCodeGen::compile_kernel_to_module() {
   }
   worker.flush();
 
-  // Per-task path: one self-contained module per task, built BEFORE the whole-module link consumes `data`.
+  // Per-task path (CUDA-only): one self-contained module per task, built BEFORE the whole-module link consumes
+  // `data`. Only the CUDA launcher consumes per_construct_artifacts, so gate on CUDA to avoid paying an extra
+  // per-task link + optimize on CPU / AMDGPU (7 and 8 extend consumption to those backends).
   std::vector<PerConstructArtifact> per_construct_artifacts;
-  for (int i = 0; i < (int)data.size(); i++) {
-    if (!data[i] || !data[i]->module)
-      continue;
-    PerConstructArtifact art;
-    std::vector<std::unique_ptr<LLVMCompiledTask>> one;
-    one.push_back(std::make_unique<LLVMCompiledTask>(data[i]->clone()));
-    auto linked_one = tlctx_.link_compiled_tasks(std::move(one));
-    optimize_module(linked_one.module.get());
-    art.module = std::move(linked_one.module);
-    per_construct_artifacts.push_back(std::move(art));
+  if (compile_config_.arch == Arch::cuda) {
+    for (int i = 0; i < (int)data.size(); i++) {
+      if (!data[i] || !data[i]->module)
+        continue;
+      PerConstructArtifact art;
+      std::vector<std::unique_ptr<LLVMCompiledTask>> one;
+      one.push_back(std::make_unique<LLVMCompiledTask>(data[i]->clone()));
+      auto linked_one = tlctx_.link_compiled_tasks(std::move(one));
+      optimize_module(linked_one.module.get());
+      art.module = std::move(linked_one.module);
+      per_construct_artifacts.push_back(std::move(art));
+    }
   }
 
   auto llvm_compiled_kernel = tlctx_.link_compiled_tasks(std::move(data));
