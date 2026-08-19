@@ -174,7 +174,8 @@ void export_lang(nb::module_ &m) {
       .def_rw("raise_on_templated_floats", &CompileConfig::raise_on_templated_floats,
               "Raise an error instead of silently specializing a kernel on a Python float argument passed by value.")
       .def_rw("print_ir", &CompileConfig::print_ir,
-              "Print each kernel's IR after compilation (for debugging the compiler).")
+              "Print each kernel's IR after every compilation pass (per-pass tracing, for debugging the compiler), "
+              "not a single dump at the end.")
       .def_rw("print_preprocessed_ir", &CompileConfig::print_preprocessed_ir,
               "Print each kernel's IR right after frontend preprocessing.")
       .def_rw("print_ir_dbg_info", &CompileConfig::print_ir_dbg_info,
@@ -188,7 +189,8 @@ void export_lang(nb::module_ &m) {
       .def_rw("check_out_of_bound", &CompileConfig::check_out_of_bound,
               "Enable the field out-of-bounds check on tensor indexing without turning on the rest of debug mode.")
       .def_rw("print_accessor_ir", &CompileConfig::print_accessor_ir,
-              "Print the IR generated for field accessor kernels.")
+              "Also include field accessor kernels in the IR printout. Only has an effect together with print_ir, "
+              "which otherwise suppresses accessor kernels.")
       .def_rw("use_llvm", &CompileConfig::use_llvm,
               "Intended to select the LLVM backend for code generation; currently has no effect, as nothing reads it.")
       .def_rw("print_struct_llvm_ir", &CompileConfig::print_struct_llvm_ir,
@@ -245,9 +247,11 @@ void export_lang(nb::module_ &m) {
       .def_rw("default_up", &CompileConfig::default_up,
               "Default unsigned-integer type for fields and kernels (e.g. qd.u32).")
       .def_rw("device_memory_GB", &CompileConfig::device_memory_GB,
-              "Amount of GPU memory, in gigabytes, to preallocate.")
+              "Amount of GPU memory, in gigabytes, to preallocate. Only used on the fallback allocator path; ignored "
+              "on CUDA/AMDGPU drivers that support memory pools, where allocation is on demand.")
       .def_rw("device_memory_fraction", &CompileConfig::device_memory_fraction,
-              "Fraction of total GPU memory to preallocate (overrides device_memory_GB when greater than 0).")
+              "Fraction of total GPU memory to preallocate (overrides device_memory_GB when greater than 0). Only used "
+              "on the fallback allocator path; ignored on CUDA/AMDGPU drivers that support memory pools.")
       .def_rw("fast_math", &CompileConfig::fast_math,
               "Allow IEEE-relaxed floating-point optimizations (e.g. fused multiply-add). Faster, but drops strict "
               "NaN/inf/signed-zero guarantees.")

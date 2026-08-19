@@ -88,6 +88,8 @@ _CONFIG_DEFAULT_OVERRIDES = {
     "offline_cache": "``True``",  # frontend sets this; the C++ default is False
     "arch": None,  # machine-derived; documented in the description
     "cpu_max_num_threads": "the number of available CPU cores",
+    # machine-derived (built from XDG_CACHE_HOME/HOME, and differs on Windows); avoid leaking the doc builder's path
+    "offline_cache_file_path": "the per-user Quadrants cache directory (``~/.cache/quadrants/qdcache`` on Linux)",
     "default_fp": "``qd.f32``",
     "default_ip": "``qd.i32``",
 }
