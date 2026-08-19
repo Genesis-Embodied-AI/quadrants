@@ -605,8 +605,8 @@ KernelLauncher::Handle KernelLauncher::register_llvm_kernel(const LLVM::Compiled
     auto data = compiled.get_internal_data().compiled_data.clone();
     JITModule *jit_module = nullptr;
     if (!data.per_construct_artifacts.empty()) {
-      // Per-task cubin path: cuLink the per-task modules instead of loading the whole-module PTX.
-      jit_module = executor->create_jit_module_culink(std::move(data.per_construct_artifacts));
+      // Per-task path: load each per-task module separately (composite JITModule) instead of the whole-module PTX.
+      jit_module = executor->create_jit_module_per_task(std::move(data.per_construct_artifacts));
     } else {
       jit_module = executor->create_jit_module(std::move(data.module));
     }

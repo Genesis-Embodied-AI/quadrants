@@ -162,8 +162,9 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
       size_t shared_array_bytes = tensor_type->get_num_elements() * data_type_size(tensor_type->get_element_type());
 
       llvm::Type *shared_array_type;
-      // Static shared scratch: internal definition, not `.extern .shared` (unresolved under `ptxas -c` + cuLink).
-      // Dynamic shared mem (runtime-sized) is inherently `extern __shared__` and stays external.
+      // Emit static shared scratch as an internal *definition* so each per-task module is self-contained, instead of
+      // an `.extern .shared` declaration that only resolves via ptxas's whole-module "ignore extern qualifier"
+      // fallback. Dynamic shared mem (runtime-sized) is inherently `extern __shared__` and stays external.
       llvm::GlobalValue::LinkageTypes shared_linkage = llvm::GlobalValue::InternalLinkage;
       if (shared_array_bytes > cuda_dynamic_shared_array_threshold_bytes) {
         if (dynamic_shared_array_bytes > 0) {
@@ -617,8 +618,9 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
 
   void create_bls_buffer(OffloadedStmt *stmt) {
     auto type = llvm::ArrayType::get(llvm::Type::getInt8Ty(*llvm_context), stmt->bls_size);
-    // Internal definition, like the static shared scratch above: `.extern .shared` fails cuLink. BLS is always
-    // statically sized, so it never needs the runtime-sized `extern __shared__` form.
+    // Internal definition, like the static shared scratch above, so each per-task module self-contains its BLS
+    // storage rather than leaning on the `.extern .shared` fallback. BLS is always statically sized, so it never
+    // needs the runtime-sized `extern __shared__` form.
     bls_buffer =
         new GlobalVariable(*module, type, false, llvm::GlobalValue::InternalLinkage, llvm::UndefValue::get(type),
                            "bls_buffer", nullptr, llvm::GlobalVariable::NotThreadLocal, 3 /*addrspace=shared*/);

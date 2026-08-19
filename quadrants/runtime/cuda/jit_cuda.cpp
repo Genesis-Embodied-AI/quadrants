@@ -1,6 +1,4 @@
-#include <atomic>
 #include <chrono>
-#include <iterator>
 #include <mutex>
 #include <random>
 #include <vector>
@@ -36,22 +34,44 @@ std::string moduleToDumpName(llvm::Module *const M) {
   return M->getName().str();
 }
 
-JITModuleCUDA::JITModuleCUDA(void *module) : module_(module) {
+JITModuleCUDA::JITModuleCUDA(void *module) : modules_{module} {
+}
+
+JITModuleCUDA::JITModuleCUDA(std::vector<void *> modules) : modules_(std::move(modules)) {
 }
 
 void *JITModuleCUDA::lookup_function(const std::string &name) {
   // TODO: figure out why using the guard leads to wrong tests results
   // auto context_guard = CUDAContext::get_instance().get_guard();
   CUDAContext::get_instance().make_current();
+  {
+    std::lock_guard<std::mutex> g(func_mu_);
+    auto it = func_cache_.find(name);
+    if (it != func_cache_.end()) {
+      return it->second;
+    }
+  }
   void *func = nullptr;
   auto t = Time::get_time();
-  auto err = CUDADriver::get_instance().module_get_function.call_with_warning(&func, module_, name.c_str());
-  if (err) {
+  auto &drv = CUDADriver::get_instance();
+  // The symbol lives in exactly one module. Use the non-warning `call` so probing the other modules (which return
+  // CUDA_ERROR_NOT_FOUND) does not spam the log; only a miss across *all* modules is an error.
+  for (void *m : modules_) {
+    void *f = nullptr;
+    if (drv.module_get_function.call(&f, m, name.c_str()) == 0 && f != nullptr) {
+      func = f;
+      break;
+    }
+  }
+  if (func == nullptr) {
     QD_ERROR("Cannot look up function {}", name);
   }
   t = Time::get_time() - t;
   QD_TRACE("CUDA module_get_function {} costs {} ms", name, t * 1000);
-  QD_ASSERT(func != nullptr);
+  {
+    std::lock_guard<std::mutex> g(func_mu_);
+    func_cache_[name] = func;
+  }
   return func;
 }
 
@@ -183,153 +203,37 @@ JITModule *JITSessionCUDA::add_module(std::unique_ptr<llvm::Module> M, int max_r
   return modules.back().get();
 }
 
-// PTX -> *relocatable* cubin via `ptxas -c`. Relocatable is mandatory: cuLink rejects an executable cubin (err 209).
-static std::vector<char> ptx_to_relocatable_cubin(const std::string &ptx, const std::string &arch) {
-  namespace fs = std::filesystem;
-  static std::atomic<uint64_t> ctr{0};
-  auto now = std::chrono::steady_clock::now().time_since_epoch().count();
-  auto stem = fmt::format("qd_culink_{}_{}", (unsigned long long)now, ctr.fetch_add(1));
-  auto ptx_path = fs::temp_directory_path() / (stem + ".ptx");
-  auto cubin_path = fs::temp_directory_path() / (stem + ".cubin");
-  {
-    // ptxas (CUDA 13+) reads the trailing NUL compile_module_to_ptx adds (for the driver) as premature EOF; trim it.
-    std::streamsize ptx_len = (std::streamsize)ptx.size();
-    while (ptx_len > 0 && ptx[ptx_len - 1] == '\0')
-      --ptx_len;
-    std::ofstream o(ptx_path, std::ios::binary);
-    o.write(ptx.data(), ptx_len);
-  }
-  auto cmd = fmt::format("ptxas -c -arch={} {} -o {} 2>/dev/null", arch, ptx_path.string(), cubin_path.string());
-  int rc = std::system(cmd.c_str());
-  QD_ERROR_IF(rc != 0, "ptxas -c failed (rc={}) arch={}", rc, arch);
-  std::ifstream in(cubin_path, std::ios::binary);
-  std::vector<char> bytes((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
-  std::error_code ec;
-  fs::remove(ptx_path, ec);
-  fs::remove(cubin_path, ec);
-  return bytes;
-}
-
 // LLVM->PTX stays serialised: per-task modules may share an LLVMContext, unsafe for concurrent codegen.
 static std::mutex g_ptxgen_mu;
 
-// Per-task relocatable-cubin disk cache under <offline_cache>/culink_cubins_<mcpu> (namespaced by SM, since ptxas
-// output isn't portable). A warm unchanged task skips PTX + ptxas. Keyed on the module's LLVM-IR text, which carries
-// the entry-point symbol names, so distinct kernels can't collide. offline_cache=False -> mem-only, no disk touched.
-std::vector<char> JITSessionCUDA::get_or_build_construct_cubin(std::unique_ptr<llvm::Module> &module) {
-  namespace fs = std::filesystem;
-  const std::string mcpu = CUDAContext::get_instance().get_mcpu();
-  std::error_code ec;
-
-  // Captured before compile_module_to_ptx, which renames functions via convert().
-  const bool dump_ir = get_environ_config(DUMP_IR_ENV.data()) != 0;
-
-  const bool on_disk = config_.offline_cache;
-  std::string cubin_path;
-  if (on_disk) {
-    const std::string leaf = "culink_cubins_" + mcpu;
-    const std::string dir =
-        config_.offline_cache_file_path.empty() ? ("/tmp/qd_" + leaf) : (config_.offline_cache_file_path + "/" + leaf);
-    fs::create_directories(dir, ec);
-
-    std::string llvm_ir_str;
-    llvm::raw_string_ostream os(llvm_ir_str);
-    module->print(os, nullptr);
-    os.flush();
-    const std::string key = ptx_cache_->make_cache_key(llvm_ir_str, config_.fast_math);
-    cubin_path = (fs::path(dir) / (key + ".cubin")).string();
-
-    // A cached cubin skips PTX, so bypass the read under QD_DUMP_IR (this path owns the per-kernel PTX dump).
-    if (!dump_ir && fs::exists(cubin_path)) {
-      std::ifstream in(cubin_path, std::ios::binary);
-      return std::vector<char>((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
-    }
-  }
-
-  const std::string dump_name = dump_ir ? moduleToDumpName(module.get()) : std::string();
-  std::string ptx;
-  {
-    std::lock_guard<std::mutex> g(g_ptxgen_mu);
-    ptx = compile_module_to_ptx(module);
-  }
-  if (dump_ir && !dump_name.empty()) {
-    fs::path ir_dump_dir = config_.debug_dump_path;
-    fs::create_directories(ir_dump_dir, ec);
-    if (std::ofstream out(ir_dump_dir / (dump_name + ".ptx")); out.is_open()) {
-      out << ptx << std::endl;
-    }
-  }
-  if (on_disk)
-    return assemble_and_store_cubin(ptx, cubin_path);
-  return ptx_to_relocatable_cubin(ptx, mcpu);  // mem-only: assemble without persisting
-}
-
-std::vector<char> JITSessionCUDA::assemble_and_store_cubin(const std::string &ptx, const std::string &cubin_path) {
-  namespace fs = std::filesystem;
-  auto cubin = ptx_to_relocatable_cubin(ptx, CUDAContext::get_instance().get_mcpu());
-  // temp + rename so a concurrent reader never sees a partial cubin
-  std::error_code ec;
-  auto tmp = cubin_path +
-             fmt::format(".tmp{}", (unsigned long long)std::chrono::steady_clock::now().time_since_epoch().count());
-  {
-    std::ofstream o(tmp, std::ios::binary);
-    o.write(cubin.data(), (std::streamsize)cubin.size());
-  }
-  fs::rename(tmp, cubin_path, ec);
-  if (ec)
-    fs::remove(tmp, ec);
-  return cubin;
-}
-
-JITModule *JITSessionCUDA::add_module_culink(std::vector<PerConstructArtifact> artifacts, int max_reg) {
-  // A cached relocatable cubin per task, device-linked into one CUmodule.
-  constexpr uint32 kCuJitInputCubin = 0;
-  constexpr uint32 kCuJitErrorLogBuffer = 5;
-  constexpr uint32 kCuJitErrorLogBufferSizeBytes = 6;
+JITModule *JITSessionCUDA::add_module_per_task(std::vector<PerConstructArtifact> artifacts, int max_reg) {
+  // Per-task path (toolkit-free): compile each self-contained task module to PTX and load it as its OWN CUmodule via
+  // the driver (cuModuleLoadDataEx); the composite JITModuleCUDA below resolves tasks by name across the N modules.
+  // No `ptxas`, no relocatable cubins, no `cuLink`, so this runs on a driver-only machine. Per-task reuse rides on
+  // `PtxCache` (PTX, keyed on LLVM text, consulted inside compile_module_to_ptx) plus the driver compute cache (SASS).
+  (void)max_reg;  // No link step here (per-task whole-module driver load), so there is nowhere to apply max-reg.
   auto &drv = CUDADriver::get_instance();
 
-  std::vector<std::vector<char>> cubins;
-  cubins.reserve(artifacts.size());
-  for (auto &art : artifacts) {
-    cubins.push_back(get_or_build_construct_cubin(art.module));
+  // The cheap LLVM->PTX step (the expensive PTX->SASS now happens in the driver at load, cached in ~/.nv/ComputeCache).
+  std::vector<std::string> ptxs(artifacts.size());
+  for (std::size_t i = 0; i < artifacts.size(); i++) {
+    std::lock_guard<std::mutex> g(g_ptxgen_mu);
+    ptxs[i] = compile_module_to_ptx(artifacts[i].module);
   }
 
   CUDAContext::get_instance().make_current();
   [[maybe_unused]] auto _ = CUDAContext::get_instance().get_lock_guard();
 
-  std::vector<char> err_log(8192, 0);
-  std::size_t err_sz = err_log.size();
-  uint32 link_opts[3];
-  void *link_optvals[3];
-  int n_lopt = 0;
-  if (max_reg != 0) {
-    link_opts[n_lopt] = CU_JIT_MAX_REGISTERS;
-    link_optvals[n_lopt++] = &max_reg;
+  std::vector<void *> mods;
+  mods.reserve(ptxs.size());
+  for (auto &ptx : ptxs) {
+    void *cuda_module = nullptr;
+    // c_str() hands over the NUL-terminated image cuModuleLoadDataEx wants, exactly like the whole-module path.
+    QD_ERROR_IF(drv.module_load_data_ex.call(&cuda_module, ptx.c_str(), 0, nullptr, nullptr),
+                "module_load_data_ex (per-task) failed");
+    mods.push_back(cuda_module);
   }
-  link_opts[n_lopt] = kCuJitErrorLogBuffer;
-  link_optvals[n_lopt++] = err_log.data();
-  link_opts[n_lopt] = kCuJitErrorLogBufferSizeBytes;
-  link_optvals[n_lopt++] = (void *)err_sz;
-
-  void *link = nullptr;
-  QD_ERROR_IF(drv.link_create.call(n_lopt, link_opts, link_optvals, &link), "cuLinkCreate (culink-pertask) failed");
-  for (int i = 0; i < (int)cubins.size(); i++) {
-    auto name = fmt::format("construct_{}", i);
-    auto e = drv.link_add_data.call(link, kCuJitInputCubin, (void *)cubins[i].data(), cubins[i].size(), name.c_str(), 0,
-                                    nullptr, nullptr);
-    if (e != 0)
-      QD_ERROR("cuLinkAddData construct {} failed err={} log=[{}]", i, e, err_log.data());
-  }
-  void *cubin = nullptr;
-  std::size_t cubin_sz = 0;
-  auto e_cmp = drv.link_complete.call(link, &cubin, &cubin_sz);
-  if (e_cmp != 0)
-    QD_ERROR("cuLinkComplete (culink-pertask) failed err={} log=[{}]", e_cmp, err_log.data());
-  void *cuda_module = nullptr;
-  QD_ERROR_IF(drv.module_load_data.call(&cuda_module, cubin), "module_load_data (culink-pertask) failed");
-  drv.link_destroy.call(link);
-
-  this->modules.push_back(std::make_unique<JITModuleCUDA>(cuda_module));
+  this->modules.push_back(std::make_unique<JITModuleCUDA>(std::move(mods)));
   return this->modules.back().get();
 }
 

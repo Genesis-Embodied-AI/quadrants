@@ -72,8 +72,8 @@ class LlvmRuntimeExecutor {
   QuadrantsLLVMContext *get_llvm_context();
 
   JITModule *create_jit_module(std::unique_ptr<llvm::Module> module);
-  // Per-task cuLink path: one module per artifact.
-  JITModule *create_jit_module_culink(std::vector<PerConstructArtifact> artifacts);
+  // Per-task path: one loadable module per artifact, behind a composite JITModule.
+  JITModule *create_jit_module_per_task(std::vector<PerConstructArtifact> artifacts);
 
   JITModule *get_runtime_jit_module();
 

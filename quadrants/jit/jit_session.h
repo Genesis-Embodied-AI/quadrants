@@ -6,7 +6,7 @@
 #include "quadrants/runtime/llvm/llvm_fwd.h"
 #include "quadrants/util/lang_util.h"
 #include "quadrants/jit/jit_module.h"
-#include "quadrants/codegen/llvm/llvm_compiled_data.h"  // PerConstructArtifact (per-task cuLink path)
+#include "quadrants/codegen/llvm/llvm_compiled_data.h"  // PerConstructArtifact (per-task module path)
 
 namespace quadrants::lang {
 
@@ -28,9 +28,9 @@ class JITSession {
 
   virtual JITModule *add_module(std::unique_ptr<llvm::Module> M, int max_reg = 0) = 0;
 
-  // Per-task cubin path: one relocatable cubin per artifact, device-linked (`cuLink`) into one module. CUDA-only;
-  // the default errors.
-  virtual JITModule *add_module_culink(std::vector<PerConstructArtifact> artifacts, int max_reg = 0) {
+  // Per-task path: compile each self-contained artifact to a loadable module and expose them behind one composite
+  // JITModule that resolves tasks by name. CUDA-only; the default errors.
+  virtual JITModule *add_module_per_task(std::vector<PerConstructArtifact> artifacts, int max_reg = 0) {
     QD_NOT_IMPLEMENTED
   }
 
