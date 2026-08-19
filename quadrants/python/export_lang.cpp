@@ -306,11 +306,13 @@ void export_lang(nb::module_ &m) {
       .def_rw("offline_cache_file_path", &CompileConfig::offline_cache_file_path,
               "Directory that holds the on-disk compilation cache.")
       .def_rw("offline_cache_cleaning_policy", &CompileConfig::offline_cache_cleaning_policy,
-              "Eviction policy for the offline cache (\"never\", \"version\", \"lru\", or \"fifo\").")
+              "Eviction policy for the compiled-kernel offline cache (\"never\", \"version\", \"lru\", or \"fifo\").")
       .def_rw("offline_cache_max_size_of_files", &CompileConfig::offline_cache_max_size_of_files,
-              "Maximum total size, in bytes, of the offline cache before cleaning.")
+              "Maximum total size, in bytes, of the compiled-kernel offline cache before cleaning. This bounds only "
+              "that cache, not the CUDA PTX cache or the source-level fastcache, so the on-disk cache directory can "
+              "grow beyond it.")
       .def_rw("offline_cache_cleaning_factor", &CompileConfig::offline_cache_cleaning_factor,
-              "Fraction of the offline cache to evict when it exceeds the size limit.")
+              "Fraction of the compiled-kernel offline cache to evict when it exceeds the size limit.")
       .def_rw("num_compile_threads", &CompileConfig::num_compile_threads,
               "Number of host threads used to compile kernels.")
       .def_rw("vk_api_version", &CompileConfig::vk_api_version,
