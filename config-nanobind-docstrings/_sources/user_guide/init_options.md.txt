@@ -141,7 +141,7 @@ Most `qd.init` keywords set a compiler-configuration option. Each option below c
 - `enable_fallback` (`bool`, default `True`): fall back to the CPU backend when the requested `arch` is unavailable, instead of raising an error. Keyword-only.
 - `src_ll_cache` (`bool`, default `True`): use an additional on-disk cache layer that speeds up loading previously compiled kernels. Keyword-only.
 - `require_version` (`str`): raise an error unless the installed Quadrants version is compatible with the given `major.minor.patch` string (same major version, and at least the given minor and patch). Keyword-only.
-- `print_non_pure` (`bool`, default `False`): print the name of each executed kernel that is not annotated `@qd.pure`. Keyword-only.
+- `print_non_pure` (`bool`, default `False`): print the name of each executed kernel that is not declared `@qd.kernel(fastcache=True)`. Such kernels are not *pure* - they read state beyond their explicit parameters - so they cannot use [fastcache](./fastcache.md) to speed up load; use this to find kernels that could opt in. Keyword-only.
 - `log_level` (`str`, default `"info"`): logging verbosity; one of `"trace"`, `"debug"`, `"info"`, `"warn"`, `"error"`, `"critical"` (also settable via `QD_LOG_LEVEL`).
 - `gdb_trigger` (`bool`, default `False`): drop into gdb when the native core crashes (also settable via `QD_GDB_TRIGGER`).
 - `short_circuit_operators` (`bool`, default `True`): use short-circuit evaluation for `and`/`or` inside kernels (also settable via `QD_SHORT_CIRCUIT_OPERATORS`).
