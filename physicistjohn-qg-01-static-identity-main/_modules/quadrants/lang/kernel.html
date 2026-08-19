@@ -368,6 +368,7 @@
     <span class="n">KernelLaunchContext</span><span class="p">,</span>
 <span class="p">)</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._tensor_wrapper</span><span class="w"> </span><span class="kn">import</span> <span class="n">_TENSOR_WRAPPER_TYPES</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._tensor_wrapper</span><span class="w"> </span><span class="kn">import</span> <span class="n">Tensor</span> <span class="k">as</span> <span class="n">_TensorClass</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">_kernel_impl_dataclass</span><span class="p">,</span> <span class="n">impl</span><span class="p">,</span> <span class="n">runtime_ops</span>
 
 <span class="c1"># `qd.checkpoint` pause / resume model helpers. See `kernel_checkpoint.py` for the full extracted surface; `Kernel`</span>
@@ -1376,38 +1377,35 @@
 
         <span class="bp">self</span><span class="o">.</span><span class="n">raise_on_templated_floats</span> <span class="o">=</span> <span class="n">config</span><span class="o">.</span><span class="n">raise_on_templated_floats</span>
         <span class="n">py_args</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">fuse_args</span><span class="p">(</span><span class="n">is_func</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">is_pyfunc</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">py_args</span><span class="o">=</span><span class="n">py_args</span><span class="p">,</span> <span class="n">kwargs</span><span class="o">=</span><span class="n">kwargs</span><span class="p">,</span> <span class="n">global_context</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
-        <span class="c1"># Tensor-wrapper unwrap (stork-17). Substitute each ``qd.Tensor`` instance (including ``VectorTensor`` /</span>
-        <span class="c1"># ``MatrixTensor`` subclasses) with its underlying ``Ndarray`` / ``ScalarField`` impl *before* anything</span>
-        <span class="c1"># downstream observes the arg tuple — including the autograd tape (uses identity), the template mapper</span>
-        <span class="c1"># (cache-keys on ``id(arg)``), ``_extract_arg``, and the AST builder. This guarantees JIT cache stability:</span>
-        <span class="c1"># ``id(Tensor(impl))`` differs across constructions, but ``id(impl)`` is stable, so wrapper-or-not yields</span>
-        <span class="c1"># identical cache keys.</span>
+        <span class="c1"># Tensor-wrapper unwrap (stork-17). Canonicalize ``qd.Tensor`` slots, plus wrapper positions discovered on</span>
+        <span class="c1"># the first launch, before the autograd tape and identity-keyed caches observe the arg tuple.</span>
         <span class="c1">#</span>
-        <span class="c1"># PERF: On first call, record which arg positions are Tensor wrappers. On subsequent calls, skip entirely</span>
-        <span class="c1"># (empty indices) or unwrap only the cached positions (no full-arg scan). For a kernel with 30 args and 1</span>
+        <span class="c1"># PERF: On first call, record the candidate arg positions. On subsequent calls, skip entirely (empty</span>
+        <span class="c1"># candidates) or type-check only the cached positions (no full-arg scan). For a kernel with 30 args and 1</span>
         <span class="c1"># Tensor, this reduces per-call type checks from 30 to 1.</span>
         <span class="c1">#</span>
-        <span class="c1"># Safety of caching: kernel parameter annotations are fixed per position (they come from the function</span>
-        <span class="c1"># signature and are stored in ``self.mapper.arguments``). Whether a given position receives a Tensor wrapper</span>
-        <span class="c1"># or a bare impl is determined by the caller's annotation pattern, which is stable across calls — a user who</span>
-        <span class="c1"># passes ``qd.Tensor(impl)`` at position *i* will do so on every call, because the annotation (``qd.Tensor``,</span>
-        <span class="c1"># ``qd.Template``, ``qd.types.ndarray()``, or a dataclass type) doesn't change. The template mapper</span>
-        <span class="c1"># enforces a fixed arg count (``len(args) == self.num_args``), so cached indices cannot go out of bounds.</span>
+        <span class="c1"># ``qd.Tensor`` slots may alternate wrappers, ``None``, and bare impls, so annotation positions remain</span>
+        <span class="c1"># candidates even when the first value is not wrapped. Other annotations retain first-call discovery. The</span>
+        <span class="c1"># template mapper enforces a fixed arg count, so cached indices cannot go out of bounds.</span>
         <span class="k">if</span> <span class="n">_tensor_wrapper</span><span class="o">.</span><span class="n">_any_tensor_constructed</span><span class="p">:</span>  <span class="c1"># pyright: ignore[reportOptionalMemberAccess]</span>
             <span class="n">_indices</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_tensor_unwrap_indices</span>
             <span class="k">if</span> <span class="n">_indices</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-                <span class="n">_indices</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">i</span> <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">a</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">py_args</span><span class="p">)</span> <span class="k">if</span> <span class="nb">type</span><span class="p">(</span><span class="n">a</span><span class="p">)</span> <span class="ow">in</span> <span class="n">_TENSOR_WRAPPER_TYPES</span><span class="p">)</span>
+                <span class="n">_indices</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span>
+                    <span class="n">i</span>
+                    <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">m</span><span class="p">)</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="nb">zip</span><span class="p">(</span><span class="n">py_args</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">arg_metas</span><span class="p">))</span>
+                    <span class="k">if</span> <span class="nb">type</span><span class="p">(</span><span class="n">a</span><span class="p">)</span> <span class="ow">in</span> <span class="n">_TENSOR_WRAPPER_TYPES</span> <span class="ow">or</span> <span class="n">m</span><span class="o">.</span><span class="n">annotation</span> <span class="ow">is</span> <span class="n">_TensorClass</span>
+                <span class="p">)</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">_tensor_unwrap_indices</span> <span class="o">=</span> <span class="n">_indices</span>
-                <span class="k">if</span> <span class="n">_indices</span><span class="p">:</span>
-                    <span class="n">py_args_l</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">py_args</span><span class="p">)</span>
-                    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">_indices</span><span class="p">:</span>
-                        <span class="n">py_args_l</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">py_args_l</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">_impl</span>  <span class="c1"># pyright: ignore[reportAttributeAccessIssue]</span>
-                    <span class="n">py_args</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">py_args_l</span><span class="p">)</span>
-            <span class="k">elif</span> <span class="n">_indices</span><span class="p">:</span>
-                <span class="n">py_args_l</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">py_args</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">_indices</span><span class="p">:</span>
+                <span class="n">py_args_l</span> <span class="o">=</span> <span class="kc">None</span>
                 <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">_indices</span><span class="p">:</span>
-                    <span class="n">py_args_l</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">py_args_l</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">_impl</span>  <span class="c1"># pyright: ignore[reportAttributeAccessIssue]</span>
-                <span class="n">py_args</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">py_args_l</span><span class="p">)</span>
+                    <span class="n">_arg</span> <span class="o">=</span> <span class="n">py_args</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+                    <span class="k">if</span> <span class="nb">type</span><span class="p">(</span><span class="n">_arg</span><span class="p">)</span> <span class="ow">in</span> <span class="n">_TENSOR_WRAPPER_TYPES</span><span class="p">:</span>
+                        <span class="k">if</span> <span class="n">py_args_l</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                            <span class="n">py_args_l</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">py_args</span><span class="p">)</span>
+                        <span class="n">py_args_l</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">_arg</span><span class="o">.</span><span class="n">_impl</span>
+                <span class="k">if</span> <span class="n">py_args_l</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                    <span class="n">py_args</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">py_args_l</span><span class="p">)</span>
 
         <span class="c1"># Transform the primal kernel to forward mode grad kernel</span>
         <span class="c1"># then recover to primal when exiting the forward mode manager</span>
