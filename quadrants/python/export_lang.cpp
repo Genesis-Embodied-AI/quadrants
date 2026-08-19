@@ -219,7 +219,8 @@ void export_lang(nb::module_ &m) {
       .def_rw("default_cpu_block_dim", &CompileConfig::default_cpu_block_dim,
               "Number of iterations per CPU parallel-for block.")
       .def_rw("cpu_block_dim_adaptive", &CompileConfig::cpu_block_dim_adaptive,
-              "Let the CPU backend choose the parallel-for block size adaptively.")
+              "Intended to let the CPU backend choose the parallel-for block size adaptively; currently has no effect, "
+              "as nothing reads it (the CPU block size is always default_cpu_block_dim).")
       .def_rw("default_gpu_block_dim", &CompileConfig::default_gpu_block_dim, "Default GPU thread-block size.")
       .def_rw("gpu_max_reg", &CompileConfig::gpu_max_reg,
               "Intended to cap the number of registers per GPU thread (0 = driver default); currently has no effect, "
