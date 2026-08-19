@@ -343,8 +343,8 @@
         <span class="kn">from</span><span class="w"> </span><span class="nn">pyevtk.hl</span><span class="w"> </span><span class="kn">import</span> <span class="n">gridToVTK</span>  <span class="c1"># pylint: disable=import-outside-toplevel</span>
     <span class="k">except</span> <span class="ne">ImportError</span><span class="p">:</span>
         <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span>
-            <span class="s2">&quot;Failed to import pyevtk. Please install it via /</span><span class="se">\</span>
-<span class="s2">        `pip install pyevtk` first. &quot;</span>
+            <span class="s2">"Failed to import pyevtk. Please install it via /</span><span class="se">\</span>
+<span class="s2">        `pip install pyevtk` first. "</span>
         <span class="p">)</span>
 
     <span class="n">scalar_field_np</span> <span class="o">=</span> <span class="n">scalar_field</span><span class="o">.</span><span class="n">to_numpy</span><span class="p">()</span>
@@ -352,7 +352,7 @@
     <span class="n">dimensions</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">field_shape</span><span class="p">)</span>
 
     <span class="k">if</span> <span class="n">dimensions</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">):</span>
-        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;The input field must be a 2D or 3D scalar field.&quot;</span><span class="p">)</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"The input field must be a 2D or 3D scalar field."</span><span class="p">)</span>
 
     <span class="k">if</span> <span class="n">dimensions</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
         <span class="n">scalar_field_np</span> <span class="o">=</span> <span class="n">scalar_field_np</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">newaxis</span><span class="p">,</span> <span class="p">:,</span> <span class="p">:]</span>
@@ -360,7 +360,7 @@
     <span class="k">elif</span> <span class="n">dimensions</span> <span class="o">==</span> <span class="mi">3</span><span class="p">:</span>
         <span class="n">zcoords</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">field_shape</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span>
     <span class="k">else</span><span class="p">:</span>
-        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;dimensions should be 2 or 3&quot;</span><span class="p">)</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"dimensions should be 2 or 3"</span><span class="p">)</span>
     <span class="n">gridToVTK</span><span class="p">(</span>
         <span class="n">filename</span><span class="p">,</span>
         <span class="n">x</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">field_shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]),</span>
@@ -371,7 +371,7 @@
 
 
 
-<span class="n">__all__</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;write_vtk&quot;</span><span class="p">]</span>
+<span class="n">__all__</span> <span class="o">=</span> <span class="p">[</span><span class="s2">"write_vtk"</span><span class="p">]</span>
 </pre></div>
 
                 </article>

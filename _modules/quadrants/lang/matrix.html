@@ -380,7 +380,7 @@
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_scalar_tensors_to_items</span><span class="p">(</span><span class="n">arr</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Recursively convert 0-d tensors to Python scalars in a nested list.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""Recursively convert 0-d tensors to Python scalars in a nested list."""</span>
     <span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>  <span class="c1"># pylint: disable=C0415</span>
 
     <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">arr</span><span class="p">,</span> <span class="p">(</span><span class="nb">list</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">)):</span>
@@ -391,7 +391,7 @@
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_generate_swizzle_patterns</span><span class="p">(</span><span class="n">key_group</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">required_length</span><span class="o">=</span><span class="mi">4</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Generate vector swizzle patterns from a given set of characters.</span>
+<span class="w">    </span><span class="sd">"""Generate vector swizzle patterns from a given set of characters.</span>
 
 <span class="sd">    Example:</span>
 
@@ -399,17 +399,17 @@
 <span class="sd">        (no repeats) in characters `x`, `y`, `z`, `w` and of length&lt;=4:</span>
 <span class="sd">        [`x`, `y`, `z`, `w`, `xx`, `xy`, `yx`, ..., `xxxx`, `xxxy`, `xyzw`, ...]</span>
 <span class="sd">        The length of the list will be 4 + 4x4 + 4x4x4 + 4x4x4x4 = 340.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
     <span class="n">result</span> <span class="o">=</span> <span class="p">[]</span>
     <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">required_length</span> <span class="o">+</span> <span class="mi">1</span><span class="p">):</span>
         <span class="n">result</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">product</span><span class="p">(</span><span class="n">key_group</span><span class="p">,</span> <span class="n">repeat</span><span class="o">=</span><span class="n">k</span><span class="p">))</span>
-    <span class="n">result</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">pat</span><span class="p">)</span> <span class="k">for</span> <span class="n">pat</span> <span class="ow">in</span> <span class="n">result</span><span class="p">]</span>
+    <span class="n">result</span> <span class="o">=</span> <span class="p">[</span><span class="s2">""</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">pat</span><span class="p">)</span> <span class="k">for</span> <span class="n">pat</span> <span class="ow">in</span> <span class="n">result</span><span class="p">]</span>
     <span class="k">return</span> <span class="n">result</span>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_gen_swizzles</span><span class="p">(</span><span class="bp">cls</span><span class="p">):</span>
     <span class="c1"># https://www.khronos.org/opengl/wiki/Data_Type_(GLSL)#Swizzling</span>
-    <span class="n">KEYGROUP_SET</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;xyzw&quot;</span><span class="p">,</span> <span class="s2">&quot;rgba&quot;</span><span class="p">,</span> <span class="s2">&quot;stpq&quot;</span><span class="p">]</span>
+    <span class="n">KEYGROUP_SET</span> <span class="o">=</span> <span class="p">[</span><span class="s2">"xyzw"</span><span class="p">,</span> <span class="s2">"rgba"</span><span class="p">,</span> <span class="s2">"stpq"</span><span class="p">]</span>
     <span class="bp">cls</span><span class="o">.</span><span class="n">_swizzle_to_keygroup</span> <span class="o">=</span> <span class="p">{}</span>
     <span class="bp">cls</span><span class="o">.</span><span class="n">_keygroup_to_checker</span> <span class="o">=</span> <span class="p">{}</span>
 
@@ -421,7 +421,7 @@
             <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">diff</span><span class="p">):</span>
                 <span class="n">valid_attribs</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="nb">sorted</span><span class="p">(</span><span class="n">valid_attribs</span><span class="p">))</span>
                 <span class="n">pattern</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">pattern</span><span class="p">)</span>
-                <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;vec</span><span class="si">{</span><span class="n">instance</span><span class="o">.</span><span class="n">n</span><span class="si">}</span><span class="s2"> only has &quot;</span> <span class="sa">f</span><span class="s2">&quot;attributes=</span><span class="si">{</span><span class="n">valid_attribs</span><span class="si">}</span><span class="s2">, got=</span><span class="si">{</span><span class="n">pattern</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"vec</span><span class="si">{</span><span class="n">instance</span><span class="o">.</span><span class="n">n</span><span class="si">}</span><span class="s2"> only has "</span> <span class="sa">f</span><span class="s2">"attributes=</span><span class="si">{</span><span class="n">valid_attribs</span><span class="si">}</span><span class="s2">, got=</span><span class="si">{</span><span class="n">pattern</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
 
         <span class="k">return</span> <span class="n">check</span>
 
@@ -466,7 +466,7 @@
                 <span class="nd">@python_scope</span>
                 <span class="k">def</span><span class="w"> </span><span class="nf">prop_setter</span><span class="p">(</span><span class="n">instance</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
                     <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">pattern</span><span class="p">)</span> <span class="o">!=</span> <span class="nb">len</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
-                        <span class="k">raise</span> <span class="n">QuadrantsRuntimeError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;value len does not match the swizzle pattern=</span><span class="si">{</span><span class="n">pattern</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                        <span class="k">raise</span> <span class="n">QuadrantsRuntimeError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"value len does not match the swizzle pattern=</span><span class="si">{</span><span class="n">pattern</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
                     <span class="n">checker</span><span class="p">(</span><span class="n">instance</span><span class="p">,</span> <span class="n">pattern</span><span class="p">)</span>
                     <span class="k">for</span> <span class="n">ch</span><span class="p">,</span> <span class="n">val</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">pattern</span><span class="p">,</span> <span class="n">value</span><span class="p">):</span>
                         <span class="n">instance</span><span class="p">[</span><span class="n">key_group</span><span class="o">.</span><span class="n">index</span><span class="p">(</span><span class="n">ch</span><span class="p">)]</span> <span class="o">=</span> <span class="n">val</span>
@@ -488,9 +488,9 @@
     <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">entry</span><span class="p">,</span> <span class="n">expr</span><span class="o">.</span><span class="n">Expr</span><span class="p">):</span>
         <span class="n">dt</span> <span class="o">=</span> <span class="n">entry</span><span class="o">.</span><span class="n">ptr</span><span class="o">.</span><span class="n">get_rvalue_type</span><span class="p">()</span>
         <span class="k">if</span> <span class="n">dt</span> <span class="o">==</span> <span class="n">qd_python_core</span><span class="o">.</span><span class="n">DataType_unknown</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="n">QuadrantsTypeError</span><span class="p">(</span><span class="s2">&quot;Element type of the matrix cannot be inferred. Please set dt instead for now.&quot;</span><span class="p">)</span>
+            <span class="k">raise</span> <span class="n">QuadrantsTypeError</span><span class="p">(</span><span class="s2">"Element type of the matrix cannot be inferred. Please set dt instead for now."</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">dt</span>
-    <span class="k">raise</span> <span class="n">QuadrantsTypeError</span><span class="p">(</span><span class="s2">&quot;Element type of the matrix is invalid.&quot;</span><span class="p">)</span>
+    <span class="k">raise</span> <span class="n">QuadrantsTypeError</span><span class="p">(</span><span class="s2">"Element type of the matrix is invalid."</span><span class="p">)</span>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_infer_array_dt</span><span class="p">(</span><span class="n">arr</span><span class="p">):</span>
@@ -557,9 +557,9 @@
 <div class="viewcode-block" id="Matrix">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/matrix/index.html#quadrants.lang.matrix.Matrix">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">Matrix</span><span class="p">(</span><span class="n">QuadrantsOperations</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;The matrix class.</span>
+<span class="w">    </span><span class="sd">"""The matrix class.</span>
 
-<span class="sd">    A matrix is a 2-D rectangular array with scalar entries, it&#39;s row-majored, and is aligned continuously. We</span>
+<span class="sd">    A matrix is a 2-D rectangular array with scalar entries, it's row-majored, and is aligned continuously. We</span>
 <span class="sd">    recommend only use matrix with no more than 32 elements for efficiency considerations.</span>
 
 <span class="sd">    Note: in quadrants a matrix is strictly two-dimensional and only stores scalars.</span>
@@ -594,7 +594,7 @@
 <span class="sd">        2</span>
 <span class="sd">        &gt;&gt;&gt; M.m</span>
 <span class="sd">        0</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
 
     <span class="n">_is_quadrants_class</span> <span class="o">=</span> <span class="kc">True</span>
     <span class="n">_is_matrix_class</span> <span class="o">=</span> <span class="kc">True</span>
@@ -610,14 +610,14 @@
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">arr</span><span class="p">,</span> <span class="n">dt</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">arr</span><span class="p">,</span> <span class="p">(</span><span class="nb">list</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">)):</span>
-            <span class="k">raise</span> <span class="n">QuadrantsTypeError</span><span class="p">(</span><span class="s2">&quot;An Matrix/Vector can only be initialized with an array-like object&quot;</span><span class="p">)</span>
+            <span class="k">raise</span> <span class="n">QuadrantsTypeError</span><span class="p">(</span><span class="s2">"An Matrix/Vector can only be initialized with an array-like object"</span><span class="p">)</span>
         <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">arr</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">ndim</span> <span class="o">=</span> <span class="mi">0</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">n</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">m</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">entries</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([])</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">is_host_access</span> <span class="o">=</span> <span class="kc">False</span>
         <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">arr</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">Matrix</span><span class="p">):</span>
-            <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s2">&quot;cols/rows required when using list of vectors&quot;</span><span class="p">)</span>
+            <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s2">"cols/rows required when using list of vectors"</span><span class="p">)</span>
         <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">arr</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">Iterable</span><span class="p">):</span>  <span class="c1"># matrix</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">ndim</span> <span class="o">=</span> <span class="mi">2</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">n</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">m</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">arr</span><span class="p">),</span> <span class="nb">len</span><span class="p">(</span><span class="n">arr</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
@@ -639,13 +639,13 @@
 
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">n</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">m</span> <span class="o">&gt;</span> <span class="mi">144</span><span class="p">:</span>
             <span class="n">warning</span><span class="p">(</span>
-                <span class="sa">f</span><span class="s2">&quot;Quadrants matrices/vectors with </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">n</span><span class="si">}</span><span class="s2">x</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">m</span><span class="si">}</span><span class="s2"> &gt; 144 entries are not suggested.&quot;</span>
-                <span class="s2">&quot; Matrices/vectors will be automatically unrolled at compile-time for performance.&quot;</span>
-                <span class="s2">&quot; So the compilation time could be extremely long if the matrix size is too big.&quot;</span>
-                <span class="s2">&quot; You may use a field to store a large matrix like this, e.g.:</span><span class="se">\n</span><span class="s2">&quot;</span>
-                <span class="sa">f</span><span class="s2">&quot;    x = qd.field(qd.f32, (</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">n</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">m</span><span class="si">}</span><span class="s2">)).</span><span class="se">\n</span><span class="s2">&quot;</span>
-                <span class="s2">&quot; See https://docs.taichi-lang.org/docs/field#matrix-size&quot;</span>
-                <span class="s2">&quot; for more details.&quot;</span><span class="p">,</span>
+                <span class="sa">f</span><span class="s2">"Quadrants matrices/vectors with </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">n</span><span class="si">}</span><span class="s2">x</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">m</span><span class="si">}</span><span class="s2"> &gt; 144 entries are not suggested."</span>
+                <span class="s2">" Matrices/vectors will be automatically unrolled at compile-time for performance."</span>
+                <span class="s2">" So the compilation time could be extremely long if the matrix size is too big."</span>
+                <span class="s2">" You may use a field to store a large matrix like this, e.g.:</span><span class="se">\n</span><span class="s2">"</span>
+                <span class="sa">f</span><span class="s2">"    x = qd.field(qd.f32, (</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">n</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">m</span><span class="si">}</span><span class="s2">)).</span><span class="se">\n</span><span class="s2">"</span>
+                <span class="s2">" See https://docs.taichi-lang.org/docs/field#matrix-size"</span>
+                <span class="s2">" for more details."</span><span class="p">,</span>
                 <span class="ne">UserWarning</span><span class="p">,</span>
                 <span class="n">stacklevel</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
             <span class="p">)</span>
@@ -661,7 +661,7 @@
 
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__matmul__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Matrix-matrix or matrix-vector multiply.</span>
+<span class="w">        </span><span class="sd">"""Matrix-matrix or matrix-vector multiply.</span>
 
 <span class="sd">        Args:</span>
 <span class="sd">            other (Union[Matrix, Vector]): a matrix or a vector.</span>
@@ -669,14 +669,14 @@
 <span class="sd">        Returns:</span>
 <span class="sd">            The matrix-matrix product or matrix-vector product.</span>
 
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">matrix_ops</span>  <span class="c1"># pylint: disable=C0415</span>
 
         <span class="k">return</span> <span class="n">matrix_ops</span><span class="o">.</span><span class="n">matmul</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">)</span>
 
     <span class="c1"># host access &amp; python scope operation</span>
     <span class="k">def</span><span class="w"> </span><span class="fm">__len__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Get the length of each row of a matrix&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""Get the length of each row of a matrix"""</span>
         <span class="c1"># TODO: When this is a vector, should return its dimension?</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">n</span>
 
@@ -686,7 +686,7 @@
         <span class="k">return</span> <span class="p">([</span><span class="bp">self</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">]</span> <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">m</span><span class="p">)]</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">n</span><span class="p">))</span>
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__getitem__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">indices</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Access to the element at the given indices in a matrix.</span>
+<span class="w">        </span><span class="sd">"""Access to the element at the given indices in a matrix.</span>
 
 <span class="sd">        Args:</span>
 <span class="sd">            indices (Sequence[Expr]): the indices of the element.</span>
@@ -694,7 +694,7 @@
 <span class="sd">        Returns:</span>
 <span class="sd">            The value of the element at a specific position of a matrix.</span>
 
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="n">entry</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_entry</span><span class="p">(</span><span class="n">indices</span><span class="p">)</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">is_host_access</span><span class="p">:</span>
             <span class="k">return</span> <span class="n">_read_host_access</span><span class="p">(</span><span class="n">entry</span><span class="p">)</span>
@@ -702,12 +702,12 @@
 
     <span class="nd">@python_scope</span>
     <span class="k">def</span><span class="w"> </span><span class="fm">__setitem__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">indices</span><span class="p">,</span> <span class="n">item</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Set the element value at the given indices in a matrix.</span>
+<span class="w">        </span><span class="sd">"""Set the element value at the given indices in a matrix.</span>
 
 <span class="sd">        Args:</span>
 <span class="sd">            indices (Sequence[Expr]): the indices of a element.</span>
 
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">is_host_access</span><span class="p">:</span>
             <span class="n">entry</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_entry</span><span class="p">(</span><span class="n">indices</span><span class="p">)</span>
             <span class="n">_write_host_access</span><span class="p">(</span><span class="n">entry</span><span class="p">,</span> <span class="n">item</span><span class="p">)</span>
@@ -715,7 +715,7 @@
             <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">indices</span><span class="p">,</span> <span class="p">(</span><span class="nb">list</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">)):</span>
                 <span class="n">indices</span> <span class="o">=</span> <span class="p">[</span><span class="n">indices</span><span class="p">]</span>
             <span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">indices</span><span class="p">)</span> <span class="ow">in</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">]</span>
-            <span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">indices</span><span class="p">)</span> <span class="o">==</span> <span class="bp">self</span><span class="o">.</span><span class="n">ndim</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;Expected </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">ndim</span><span class="si">}</span><span class="s2"> indices, got </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">indices</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">indices</span><span class="p">)</span> <span class="o">==</span> <span class="bp">self</span><span class="o">.</span><span class="n">ndim</span><span class="p">,</span> <span class="sa">f</span><span class="s2">"Expected </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">ndim</span><span class="si">}</span><span class="s2"> indices, got </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">indices</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span>
             <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">ndim</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">entries</span><span class="p">[</span><span class="n">indices</span><span class="p">[</span><span class="mi">0</span><span class="p">]]</span> <span class="o">=</span> <span class="n">item</span>
             <span class="k">else</span><span class="p">:</span>
@@ -725,7 +725,7 @@
         <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">indices</span><span class="p">,</span> <span class="p">(</span><span class="nb">list</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">)):</span>
             <span class="n">indices</span> <span class="o">=</span> <span class="p">[</span><span class="n">indices</span><span class="p">]</span>
         <span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">indices</span><span class="p">)</span> <span class="ow">in</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">]</span>
-        <span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">indices</span><span class="p">)</span> <span class="o">==</span> <span class="bp">self</span><span class="o">.</span><span class="n">ndim</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;Expected </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">ndim</span><span class="si">}</span><span class="s2"> indices, got </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">indices</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
+        <span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">indices</span><span class="p">)</span> <span class="o">==</span> <span class="bp">self</span><span class="o">.</span><span class="n">ndim</span><span class="p">,</span> <span class="sa">f</span><span class="s2">"Expected </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">ndim</span><span class="si">}</span><span class="s2"> indices, got </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">indices</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">ndim</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
             <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">entries</span><span class="p">[</span><span class="n">indices</span><span class="p">[</span><span class="mi">0</span><span class="p">]]</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">entries</span><span class="p">[</span><span class="n">indices</span><span class="p">[</span><span class="mi">0</span><span class="p">]][</span><span class="n">indices</span><span class="p">[</span><span class="mi">1</span><span class="p">]]</span>
@@ -770,11 +770,11 @@
 <div class="viewcode-block" id="Matrix.to_list">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/matrix/index.html#quadrants.lang.matrix.Matrix.to_list">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">to_list</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return this matrix as a 1D `list`.</span>
+<span class="w">        </span><span class="sd">"""Return this matrix as a 1D `list`.</span>
 
-<span class="sd">        This is similar to `numpy.ndarray`&#39;s `flatten` and `ravel` methods,</span>
+<span class="sd">        This is similar to `numpy.ndarray`'s `flatten` and `ravel` methods,</span>
 <span class="sd">        the difference is that this function always returns a new list.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">is_host_access</span><span class="p">:</span>
             <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">ndim</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
                 <span class="k">return</span> <span class="p">[</span><span class="n">_read_host_access</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">entries</span><span class="p">[</span><span class="n">i</span><span class="p">])</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">n</span><span class="p">)]</span>
@@ -787,7 +787,7 @@
 <div class="viewcode-block" id="Matrix.cast">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/matrix/index.html#quadrants.lang.matrix.Matrix.cast">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">cast</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">dtype</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Cast the matrix elements to a specified data type.</span>
+<span class="w">        </span><span class="sd">"""Cast the matrix elements to a specified data type.</span>
 
 <span class="sd">        Args:</span>
 <span class="sd">            dtype (:mod:`~quadrants.types.primitive_types`): data type of the</span>
@@ -802,7 +802,7 @@
 <span class="sd">            &gt;&gt;&gt; B = A.cast(qd.f32)</span>
 <span class="sd">            &gt;&gt;&gt; B</span>
 <span class="sd">            [0.0, 1.0, 2.0]</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">ndim</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
             <span class="k">return</span> <span class="n">Vector</span><span class="p">([</span><span class="n">ops_mod</span><span class="o">.</span><span class="n">cast</span><span class="p">(</span><span class="bp">self</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="n">dtype</span><span class="p">)</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">n</span><span class="p">)])</span>
         <span class="k">return</span> <span class="n">Matrix</span><span class="p">([[</span><span class="n">ops_mod</span><span class="o">.</span><span class="n">cast</span><span class="p">(</span><span class="bp">self</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">],</span> <span class="n">dtype</span><span class="p">)</span> <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">m</span><span class="p">)]</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">n</span><span class="p">)])</span></div>
@@ -811,7 +811,7 @@
 <div class="viewcode-block" id="Matrix.trace">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/matrix/index.html#quadrants.lang.matrix.Matrix.trace">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">trace</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;The sum of a matrix diagonal elements.</span>
+<span class="w">        </span><span class="sd">"""The sum of a matrix diagonal elements.</span>
 
 <span class="sd">        To call this method the matrix must be square-like.</span>
 
@@ -823,7 +823,7 @@
 <span class="sd">            &gt;&gt;&gt; m = qd.Matrix([[1, 2], [3, 4]])</span>
 <span class="sd">            &gt;&gt;&gt; m.trace()</span>
 <span class="sd">            5</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="c1"># pylint: disable-msg=C0415</span>
         <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">matrix_ops</span>
 
@@ -833,7 +833,7 @@
 <div class="viewcode-block" id="Matrix.inverse">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/matrix/index.html#quadrants.lang.matrix.Matrix.inverse">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">inverse</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Returns the inverse of this matrix.</span>
+<span class="w">        </span><span class="sd">"""Returns the inverse of this matrix.</span>
 
 <span class="sd">        Note:</span>
 <span class="sd">            The matrix dimension should be less than or equal to 4.</span>
@@ -843,7 +843,7 @@
 
 <span class="sd">        Raises:</span>
 <span class="sd">            Exception: Inversions of matrices with sizes &gt;= 5 are not supported.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">matrix_ops</span>  <span class="c1"># pylint: disable=C0415</span>
 
         <span class="k">return</span> <span class="n">matrix_ops</span><span class="o">.</span><span class="n">inverse</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span></div>
@@ -852,11 +852,11 @@
 <div class="viewcode-block" id="Matrix.normalized">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/matrix/index.html#quadrants.lang.matrix.Matrix.normalized">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">normalized</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">eps</span><span class="o">=</span><span class="mi">0</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Normalize a vector, i.e. matrices with the second dimension being</span>
+<span class="w">        </span><span class="sd">"""Normalize a vector, i.e. matrices with the second dimension being</span>
 <span class="sd">        equal to one.</span>
 
 <span class="sd">        The normalization of a vector `v` is a vector of length 1</span>
-<span class="sd">        and has the same direction with `v`. It&#39;s equal to `v/|v|`.</span>
+<span class="sd">        and has the same direction with `v`. It's equal to `v/|v|`.</span>
 
 <span class="sd">        Args:</span>
 <span class="sd">            eps (float): a safe-guard value for sqrt, usually 0.</span>
@@ -866,7 +866,7 @@
 <span class="sd">            &gt;&gt;&gt; a = qd.Vector([3, 4], qd.f32)</span>
 <span class="sd">            &gt;&gt;&gt; a.normalized()</span>
 <span class="sd">            [0.6, 0.8]</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="c1"># pylint: disable-msg=C0415</span>
         <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">matrix_ops</span>
 
@@ -876,7 +876,7 @@
 <div class="viewcode-block" id="Matrix.transpose">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/matrix/index.html#quadrants.lang.matrix.Matrix.transpose">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">transpose</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Returns the transpose of a matrix.</span>
+<span class="w">        </span><span class="sd">"""Returns the transpose of a matrix.</span>
 
 <span class="sd">        Returns:</span>
 <span class="sd">            :class:`~quadrants.Matrix`: The transpose of this matrix.</span>
@@ -886,7 +886,7 @@
 <span class="sd">            &gt;&gt;&gt; A = qd.Matrix([[0, 1], [2, 3]])</span>
 <span class="sd">            &gt;&gt;&gt; A.transpose()</span>
 <span class="sd">            [[0, 2], [1, 3]]</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="c1"># pylint: disable=C0415</span>
         <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">matrix_ops</span>
 
@@ -897,7 +897,7 @@
 <div class="viewcode-block" id="Matrix.determinant">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/matrix/index.html#quadrants.lang.matrix.Matrix.determinant">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">determinant</span><span class="p">(</span><span class="n">a</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Returns the determinant of this matrix.</span>
+<span class="w">        </span><span class="sd">"""Returns the determinant of this matrix.</span>
 
 <span class="sd">        Note:</span>
 <span class="sd">            The matrix dimension should be less than or equal to 4.</span>
@@ -907,7 +907,7 @@
 
 <span class="sd">        Raises:</span>
 <span class="sd">            Exception: Determinants of matrices with sizes &gt;= 5 are not supported.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="c1"># pylint: disable=C0415</span>
         <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">matrix_ops</span>
 
@@ -918,7 +918,7 @@
 <div class="viewcode-block" id="Matrix.diag">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/matrix/index.html#quadrants.lang.matrix.Matrix.diag">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">diag</span><span class="p">(</span><span class="n">dim</span><span class="p">,</span> <span class="n">val</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Returns a diagonal square matrix with the diagonals filled with `val`.</span>
+<span class="w">        </span><span class="sd">"""Returns a diagonal square matrix with the diagonals filled with `val`.</span>
 
 <span class="sd">        Args:</span>
 <span class="sd">            dim (int): the dimension of the wanted square matrix.</span>
@@ -933,7 +933,7 @@
 <span class="sd">            [[1, 0, 0],</span>
 <span class="sd">             [0, 1, 0],</span>
 <span class="sd">             [0, 0, 1]]</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="c1"># pylint: disable=C0415</span>
         <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">matrix_ops</span>
 
@@ -943,14 +943,14 @@
 <div class="viewcode-block" id="Matrix.sum">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/matrix/index.html#quadrants.lang.matrix.Matrix.sum">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">sum</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return the sum of all elements.</span>
+<span class="w">        </span><span class="sd">"""Return the sum of all elements.</span>
 
 <span class="sd">        Example::</span>
 
 <span class="sd">            &gt;&gt;&gt; m = qd.Matrix([[1, 2], [3, 4]])</span>
 <span class="sd">            &gt;&gt;&gt; m.sum()</span>
 <span class="sd">            10</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="c1"># pylint: disable=C0415</span>
         <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">matrix_ops</span>
 
@@ -960,7 +960,7 @@
 <div class="viewcode-block" id="Matrix.norm">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/matrix/index.html#quadrants.lang.matrix.Matrix.norm">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">norm</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">eps</span><span class="o">=</span><span class="mi">0</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Returns the square root of the sum of the absolute squares</span>
+<span class="w">        </span><span class="sd">"""Returns the square root of the sum of the absolute squares</span>
 <span class="sd">        of its elements.</span>
 
 <span class="sd">        Args:</span>
@@ -974,7 +974,7 @@
 
 <span class="sd">        Returns:</span>
 <span class="sd">            The square root of the sum of the absolute squares of its elements.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="c1"># pylint: disable=C0415</span>
         <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">matrix_ops</span>
 
@@ -984,14 +984,14 @@
 <div class="viewcode-block" id="Matrix.norm_inv">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/matrix/index.html#quadrants.lang.matrix.Matrix.norm_inv">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">norm_inv</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">eps</span><span class="o">=</span><span class="mi">0</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;The inverse of the matrix :func:`~quadrants.lang.matrix.Matrix.norm`.</span>
+<span class="w">        </span><span class="sd">"""The inverse of the matrix :func:`~quadrants.lang.matrix.Matrix.norm`.</span>
 
 <span class="sd">        Args:</span>
 <span class="sd">            eps (float): a safe-guard value for sqrt, usually 0.</span>
 
 <span class="sd">        Returns:</span>
 <span class="sd">            The inverse of the matrix/vector `norm`.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="c1"># pylint: disable=C0415</span>
         <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">matrix_ops</span>
 
@@ -1001,7 +1001,7 @@
 <div class="viewcode-block" id="Matrix.norm_sqr">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/matrix/index.html#quadrants.lang.matrix.Matrix.norm_sqr">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">norm_sqr</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Returns the sum of the absolute squares of its elements.&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""Returns the sum of the absolute squares of its elements."""</span>
         <span class="c1"># pylint: disable=C0415</span>
         <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">matrix_ops</span>
 
@@ -1011,7 +1011,7 @@
 <div class="viewcode-block" id="Matrix.frobenius_inner">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/matrix/index.html#quadrants.lang.matrix.Matrix.frobenius_inner">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">frobenius_inner</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Returns the Frobenius inner product :math:`\\langle A, B \\rangle = \\sum_{ij} A_{ij} B_{ij}`.</span>
+<span class="w">        </span><span class="sd">"""Returns the Frobenius inner product :math:`\\langle A, B \\rangle = \\sum_{ij} A_{ij} B_{ij}`.</span>
 
 <span class="sd">        Both operands must have the same shape. Defined for any tensor shape (vector or matrix); for matrices this</span>
 <span class="sd">        is the standard Frobenius inner product, and :meth:`norm_sqr` is the special case ``A.frobenius_inner(A)``.</span>
@@ -1028,7 +1028,7 @@
 <span class="sd">            &gt;&gt;&gt; B = qd.Matrix([[5.0, 6.0], [7.0, 8.0]])</span>
 <span class="sd">            &gt;&gt;&gt; A.frobenius_inner(B)</span>
 <span class="sd">            70.0</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="c1"># pylint: disable=C0415</span>
         <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">matrix_ops</span>
 
@@ -1038,7 +1038,7 @@
 <div class="viewcode-block" id="Matrix.max">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/matrix/index.html#quadrants.lang.matrix.Matrix.max">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">max</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Returns the maximum element value.&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""Returns the maximum element value."""</span>
         <span class="c1"># pylint: disable=C0415</span>
         <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">matrix_ops</span>
 
@@ -1048,7 +1048,7 @@
 <div class="viewcode-block" id="Matrix.min">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/matrix/index.html#quadrants.lang.matrix.Matrix.min">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">min</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Returns the minimum element value.&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""Returns the minimum element value."""</span>
         <span class="c1"># pylint: disable=C0415</span>
         <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">matrix_ops</span>
 
@@ -1058,7 +1058,7 @@
 <div class="viewcode-block" id="Matrix.any">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/matrix/index.html#quadrants.lang.matrix.Matrix.any">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">any</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Test whether any element not equal zero.</span>
+<span class="w">        </span><span class="sd">"""Test whether any element not equal zero.</span>
 
 <span class="sd">        Returns:</span>
 <span class="sd">            bool: `True` if any element is not equal zero, `False` otherwise.</span>
@@ -1068,7 +1068,7 @@
 <span class="sd">            &gt;&gt;&gt; v = qd.Vector([0, 0, 1])</span>
 <span class="sd">            &gt;&gt;&gt; v.any()</span>
 <span class="sd">            True</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="c1"># pylint: disable=C0415</span>
         <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">matrix_ops</span>
 
@@ -1078,7 +1078,7 @@
 <div class="viewcode-block" id="Matrix.all">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/matrix/index.html#quadrants.lang.matrix.Matrix.all">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">all</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Test whether all element not equal zero.</span>
+<span class="w">        </span><span class="sd">"""Test whether all element not equal zero.</span>
 
 <span class="sd">        Returns:</span>
 <span class="sd">            bool: `True` if all elements are not equal zero, `False` otherwise.</span>
@@ -1088,7 +1088,7 @@
 <span class="sd">            &gt;&gt;&gt; v = qd.Vector([0, 0, 1])</span>
 <span class="sd">            &gt;&gt;&gt; v.all()</span>
 <span class="sd">            False</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="c1"># pylint: disable=C0415</span>
         <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">matrix_ops</span>
 
@@ -1098,7 +1098,7 @@
 <div class="viewcode-block" id="Matrix.fill">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/matrix/index.html#quadrants.lang.matrix.Matrix.fill">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">fill</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">val</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Fills the matrix with a specified value.</span>
+<span class="w">        </span><span class="sd">"""Fills the matrix with a specified value.</span>
 
 <span class="sd">        Args:</span>
 <span class="sd">            val (Union[int, float]): Value to fill.</span>
@@ -1109,7 +1109,7 @@
 <span class="sd">            &gt;&gt;&gt; A.fill(-1)</span>
 <span class="sd">            &gt;&gt;&gt; A</span>
 <span class="sd">            [-1, -1, -1, -1]</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="c1"># pylint: disable=C0415</span>
         <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">matrix_ops</span>
 
@@ -1119,7 +1119,7 @@
 <div class="viewcode-block" id="Matrix.to_numpy">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/matrix/index.html#quadrants.lang.matrix.Matrix.to_numpy">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">to_numpy</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Converts this matrix to a numpy array.</span>
+<span class="w">        </span><span class="sd">"""Converts this matrix to a numpy array.</span>
 
 <span class="sd">        Returns:</span>
 <span class="sd">            numpy.ndarray: The result numpy array.</span>
@@ -1130,7 +1130,7 @@
 <span class="sd">            &gt;&gt;&gt; A.to_numpy()</span>
 <span class="sd">            &gt;&gt;&gt; A</span>
 <span class="sd">            array([[0], [1], [2], [3]])</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">is_host_access</span><span class="p">:</span>
             <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">to_list</span><span class="p">())</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">entries</span></div>
@@ -1138,24 +1138,24 @@
 
     <span class="nd">@quadrants_scope</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">__qd_repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-        <span class="k">yield</span> <span class="s2">&quot;[&quot;</span>
+        <span class="k">yield</span> <span class="s2">"["</span>
         <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">n</span><span class="p">):</span>
             <span class="k">if</span> <span class="n">i</span><span class="p">:</span>
-                <span class="k">yield</span> <span class="s2">&quot;, &quot;</span>
+                <span class="k">yield</span> <span class="s2">", "</span>
             <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">m</span> <span class="o">!=</span> <span class="mi">1</span><span class="p">:</span>
-                <span class="k">yield</span> <span class="s2">&quot;[&quot;</span>
+                <span class="k">yield</span> <span class="s2">"["</span>
             <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">m</span><span class="p">):</span>
                 <span class="k">if</span> <span class="n">j</span><span class="p">:</span>
-                    <span class="k">yield</span> <span class="s2">&quot;, &quot;</span>
+                    <span class="k">yield</span> <span class="s2">", "</span>
                 <span class="k">yield</span> <span class="bp">self</span><span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">)</span>
             <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">m</span> <span class="o">!=</span> <span class="mi">1</span><span class="p">:</span>
-                <span class="k">yield</span> <span class="s2">&quot;]&quot;</span>
-        <span class="k">yield</span> <span class="s2">&quot;]&quot;</span>
+                <span class="k">yield</span> <span class="s2">"]"</span>
+        <span class="k">yield</span> <span class="s2">"]"</span>
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__str__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Python scope matrix print support.&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""Python scope matrix print support."""</span>
         <span class="k">if</span> <span class="n">impl</span><span class="o">.</span><span class="n">inside_kernel</span><span class="p">():</span>
-<span class="w">            </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="w">            </span><span class="sd">"""</span>
 <span class="sd">            It seems that when pybind11 got an type mismatch, it will try to invoke `repr` to show the object... e.g.:</span>
 
 <span class="sd">            TypeError: make_const_expr_f32(): incompatible function arguments. The following argument types are supported:</span>
@@ -1164,8 +1164,8 @@
 <span class="sd">            Invoked with: &lt;Quadrants 2x1 Matrix&gt;</span>
 
 <span class="sd">            So we have to make it happy with a dummy string...</span>
-<span class="sd">            &quot;&quot;&quot;</span>
-            <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;&lt;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">n</span><span class="si">}</span><span class="s2">x</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">m</span><span class="si">}</span><span class="s2"> qd.Matrix&gt;&quot;</span>
+<span class="sd">            """</span>
+            <span class="k">return</span> <span class="sa">f</span><span class="s2">"&lt;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">n</span><span class="si">}</span><span class="s2">x</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">m</span><span class="si">}</span><span class="s2"> qd.Matrix&gt;"</span>
         <span class="k">return</span> <span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">to_numpy</span><span class="p">())</span>
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
@@ -1176,7 +1176,7 @@
 <div class="viewcode-block" id="Matrix.zero">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/matrix/index.html#quadrants.lang.matrix.Matrix.zero">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">zero</span><span class="p">(</span><span class="n">dt</span><span class="p">,</span> <span class="n">n</span><span class="p">,</span> <span class="n">m</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Constructs a Matrix filled with zeros.</span>
+<span class="w">        </span><span class="sd">"""Constructs a Matrix filled with zeros.</span>
 
 <span class="sd">        Args:</span>
 <span class="sd">            dt (DataType): The desired data type.</span>
@@ -1186,7 +1186,7 @@
 <span class="sd">        Returns:</span>
 <span class="sd">            :class:`~quadrants.lang.matrix.Matrix`: A :class:`~quadrants.lang.matrix.Matrix` instance filled with zeros.</span>
 
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">matrix_ops</span>  <span class="c1"># pylint: disable=C0415</span>
 
         <span class="k">if</span> <span class="n">m</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
@@ -1199,7 +1199,7 @@
 <div class="viewcode-block" id="Matrix.one">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/matrix/index.html#quadrants.lang.matrix.Matrix.one">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">one</span><span class="p">(</span><span class="n">dt</span><span class="p">,</span> <span class="n">n</span><span class="p">,</span> <span class="n">m</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Constructs a Matrix filled with ones.</span>
+<span class="w">        </span><span class="sd">"""Constructs a Matrix filled with ones.</span>
 
 <span class="sd">        Args:</span>
 <span class="sd">            dt (DataType): The desired data type.</span>
@@ -1209,7 +1209,7 @@
 <span class="sd">        Returns:</span>
 <span class="sd">            :class:`~quadrants.lang.matrix.Matrix`: A :class:`~quadrants.lang.matrix.Matrix` instance filled with ones.</span>
 
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">matrix_ops</span>  <span class="c1"># pylint: disable=C0415</span>
 
         <span class="k">if</span> <span class="n">m</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
@@ -1222,7 +1222,7 @@
 <div class="viewcode-block" id="Matrix.unit">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/matrix/index.html#quadrants.lang.matrix.Matrix.unit">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">unit</span><span class="p">(</span><span class="n">n</span><span class="p">,</span> <span class="n">i</span><span class="p">,</span> <span class="n">dt</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Constructs a n-D vector with the `i`-th entry being equal to one and</span>
+<span class="w">        </span><span class="sd">"""Constructs a n-D vector with the `i`-th entry being equal to one and</span>
 <span class="sd">        the remaining entries are all zeros.</span>
 
 <span class="sd">        Args:</span>
@@ -1238,7 +1238,7 @@
 <span class="sd">            &gt;&gt;&gt; A = qd.Matrix.unit(3, 1)</span>
 <span class="sd">            &gt;&gt;&gt; A</span>
 <span class="sd">            [0, 1, 0]</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">matrix_ops</span>  <span class="c1"># pylint: disable=C0415</span>
 
         <span class="k">if</span> <span class="n">dt</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
@@ -1252,7 +1252,7 @@
 <div class="viewcode-block" id="Matrix.identity">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/matrix/index.html#quadrants.lang.matrix.Matrix.identity">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">identity</span><span class="p">(</span><span class="n">dt</span><span class="p">,</span> <span class="n">n</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Constructs an identity Matrix with shape (n, n).</span>
+<span class="w">        </span><span class="sd">"""Constructs an identity Matrix with shape (n, n).</span>
 
 <span class="sd">        Args:</span>
 <span class="sd">            dt (DataType): The desired data type.</span>
@@ -1260,7 +1260,7 @@
 
 <span class="sd">        Returns:</span>
 <span class="sd">            :class:`~quadrants.Matrix`: An `n x n` identity matrix.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">matrix_ops</span>  <span class="c1"># pylint: disable=C0415</span>
 
         <span class="k">return</span> <span class="n">matrix_ops</span><span class="o">.</span><span class="n">_identity_matrix</span><span class="p">(</span><span class="n">n</span><span class="p">,</span> <span class="n">dt</span><span class="p">)</span></div>
@@ -1277,14 +1277,14 @@
         <span class="n">dtype</span><span class="p">,</span>
         <span class="n">shape</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
         <span class="n">order</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
-        <span class="n">name</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="p">,</span>
+        <span class="n">name</span><span class="o">=</span><span class="s2">""</span><span class="p">,</span>
         <span class="n">offset</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
         <span class="n">needs_grad</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
         <span class="n">needs_dual</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
         <span class="n">layout</span><span class="o">=</span><span class="n">Layout</span><span class="o">.</span><span class="n">AOS</span><span class="p">,</span>
         <span class="n">ndim</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
     <span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Construct a data container to hold all elements of the Matrix.</span>
+<span class="w">        </span><span class="sd">"""Construct a data container to hold all elements of the Matrix.</span>
 
 <span class="sd">        Args:</span>
 <span class="sd">            n (int): The desired number of rows of the Matrix.</span>
@@ -1300,7 +1300,7 @@
 
 <span class="sd">        Returns:</span>
 <span class="sd">            :class:`~quadrants.Matrix`: A matrix.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="k">if</span> <span class="n">impl</span><span class="o">.</span><span class="n">is_python_backend</span><span class="p">():</span>
             <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">shape</span><span class="p">,</span> <span class="n">numbers</span><span class="o">.</span><span class="n">Number</span><span class="p">):</span>
                 <span class="n">shape</span> <span class="o">=</span> <span class="p">(</span><span class="n">shape</span><span class="p">,)</span>
@@ -1316,7 +1316,7 @@
             <span class="k">if</span> <span class="n">m</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
                 <span class="k">assert</span> <span class="p">(</span>
                     <span class="nb">len</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">shape</span><span class="p">(</span><span class="n">dtype</span><span class="p">))</span> <span class="o">==</span> <span class="mi">1</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">dtype</span><span class="p">)</span> <span class="o">==</span> <span class="n">n</span>
-                <span class="p">),</span> <span class="sa">f</span><span class="s2">&quot;Please set correct dtype list for Vector. The shape of dtype list should be (</span><span class="si">{</span><span class="n">n</span><span class="si">}</span><span class="s2">, ) instead of </span><span class="si">{</span><span class="n">np</span><span class="o">.</span><span class="n">shape</span><span class="p">(</span><span class="n">dtype</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
+                <span class="p">),</span> <span class="sa">f</span><span class="s2">"Please set correct dtype list for Vector. The shape of dtype list should be (</span><span class="si">{</span><span class="n">n</span><span class="si">}</span><span class="s2">, ) instead of </span><span class="si">{</span><span class="n">np</span><span class="o">.</span><span class="n">shape</span><span class="p">(</span><span class="n">dtype</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span>
                 <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">n</span><span class="p">):</span>
                     <span class="n">entries</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
                         <span class="n">impl</span><span class="o">.</span><span class="n">create_field_member</span><span class="p">(</span>
@@ -1329,7 +1329,7 @@
             <span class="k">else</span><span class="p">:</span>
                 <span class="k">assert</span> <span class="p">(</span>
                     <span class="nb">len</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">shape</span><span class="p">(</span><span class="n">dtype</span><span class="p">))</span> <span class="o">==</span> <span class="mi">2</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">dtype</span><span class="p">)</span> <span class="o">==</span> <span class="n">n</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">dtype</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span> <span class="o">==</span> <span class="n">m</span>
-                <span class="p">),</span> <span class="sa">f</span><span class="s2">&quot;Please set correct dtype list for Matrix. The shape of dtype list should be (</span><span class="si">{</span><span class="n">n</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="n">m</span><span class="si">}</span><span class="s2">) instead of </span><span class="si">{</span><span class="n">np</span><span class="o">.</span><span class="n">shape</span><span class="p">(</span><span class="n">dtype</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
+                <span class="p">),</span> <span class="sa">f</span><span class="s2">"Please set correct dtype list for Matrix. The shape of dtype list should be (</span><span class="si">{</span><span class="n">n</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="n">m</span><span class="si">}</span><span class="s2">) instead of </span><span class="si">{</span><span class="n">np</span><span class="o">.</span><span class="n">shape</span><span class="p">(</span><span class="n">dtype</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span>
                 <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">n</span><span class="p">):</span>
                     <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">m</span><span class="p">):</span>
                         <span class="n">entries</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
@@ -1360,9 +1360,9 @@
 
         <span class="k">if</span> <span class="n">shape</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
             <span class="k">if</span> <span class="n">offset</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-                <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">&quot;shape cannot be None when offset is set&quot;</span><span class="p">)</span>
+                <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">"shape cannot be None when offset is set"</span><span class="p">)</span>
             <span class="k">if</span> <span class="n">order</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-                <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">&quot;shape cannot be None when order is set&quot;</span><span class="p">)</span>
+                <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">"shape cannot be None when order is set"</span><span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">shape</span><span class="p">,</span> <span class="n">numbers</span><span class="o">.</span><span class="n">Number</span><span class="p">):</span>
                 <span class="n">shape</span> <span class="o">=</span> <span class="p">(</span><span class="n">shape</span><span class="p">,)</span>
@@ -1371,21 +1371,21 @@
             <span class="n">dim</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">shape</span><span class="p">)</span>
             <span class="k">if</span> <span class="n">offset</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">dim</span> <span class="o">!=</span> <span class="nb">len</span><span class="p">(</span><span class="n">offset</span><span class="p">):</span>
                 <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span>
-                    <span class="sa">f</span><span class="s2">&quot;The dimensionality of shape and offset must be the same (</span><span class="si">{</span><span class="n">dim</span><span class="si">}</span><span class="s2"> != </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">offset</span><span class="p">)</span><span class="si">}</span><span class="s2">)&quot;</span>
+                    <span class="sa">f</span><span class="s2">"The dimensionality of shape and offset must be the same (</span><span class="si">{</span><span class="n">dim</span><span class="si">}</span><span class="s2"> != </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">offset</span><span class="p">)</span><span class="si">}</span><span class="s2">)"</span>
                 <span class="p">)</span>
             <span class="n">axis_seq</span> <span class="o">=</span> <span class="p">[]</span>
             <span class="n">shape_seq</span> <span class="o">=</span> <span class="p">[]</span>
             <span class="k">if</span> <span class="n">order</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
                 <span class="k">if</span> <span class="n">dim</span> <span class="o">!=</span> <span class="nb">len</span><span class="p">(</span><span class="n">order</span><span class="p">):</span>
                     <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span>
-                        <span class="sa">f</span><span class="s2">&quot;The dimensionality of shape and order must be the same (</span><span class="si">{</span><span class="n">dim</span><span class="si">}</span><span class="s2"> != </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">order</span><span class="p">)</span><span class="si">}</span><span class="s2">)&quot;</span>
+                        <span class="sa">f</span><span class="s2">"The dimensionality of shape and order must be the same (</span><span class="si">{</span><span class="n">dim</span><span class="si">}</span><span class="s2"> != </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">order</span><span class="p">)</span><span class="si">}</span><span class="s2">)"</span>
                     <span class="p">)</span>
                 <span class="k">if</span> <span class="n">dim</span> <span class="o">!=</span> <span class="nb">len</span><span class="p">(</span><span class="nb">set</span><span class="p">(</span><span class="n">order</span><span class="p">)):</span>
-                    <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">&quot;The axes in order must be different&quot;</span><span class="p">)</span>
+                    <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">"The axes in order must be different"</span><span class="p">)</span>
                 <span class="k">for</span> <span class="n">ch</span> <span class="ow">in</span> <span class="n">order</span><span class="p">:</span>
-                    <span class="n">axis</span> <span class="o">=</span> <span class="nb">ord</span><span class="p">(</span><span class="n">ch</span><span class="p">)</span> <span class="o">-</span> <span class="nb">ord</span><span class="p">(</span><span class="s2">&quot;i&quot;</span><span class="p">)</span>
+                    <span class="n">axis</span> <span class="o">=</span> <span class="nb">ord</span><span class="p">(</span><span class="n">ch</span><span class="p">)</span> <span class="o">-</span> <span class="nb">ord</span><span class="p">(</span><span class="s2">"i"</span><span class="p">)</span>
                     <span class="k">if</span> <span class="n">axis</span> <span class="o">&lt;</span> <span class="mi">0</span> <span class="ow">or</span> <span class="n">axis</span> <span class="o">&gt;=</span> <span class="n">dim</span><span class="p">:</span>
-                        <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Invalid axis </span><span class="si">{</span><span class="n">ch</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                        <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Invalid axis </span><span class="si">{</span><span class="n">ch</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
                     <span class="n">axis_seq</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">axis</span><span class="p">)</span>
                     <span class="n">shape_seq</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">shape</span><span class="p">[</span><span class="n">axis</span><span class="p">])</span>
             <span class="k">else</span><span class="p">:</span>
@@ -1447,7 +1447,7 @@
 <div class="viewcode-block" id="Matrix.ndarray">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/matrix/index.html#quadrants.lang.matrix.Matrix.ndarray">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">ndarray</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">n</span><span class="p">,</span> <span class="n">m</span><span class="p">,</span> <span class="n">dtype</span><span class="p">,</span> <span class="n">shape</span><span class="p">,</span> <span class="n">needs_grad</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Defines a Quadrants ndarray with matrix elements.</span>
+<span class="w">        </span><span class="sd">"""Defines a Quadrants ndarray with matrix elements.</span>
 <span class="sd">        This function must be called in Python scope, and after `qd.init` is called.</span>
 
 <span class="sd">        Args:</span>
@@ -1464,7 +1464,7 @@
 <span class="sd">            The code below shows how a Quadrants ndarray with matrix elements can be declared and defined::</span>
 
 <span class="sd">                &gt;&gt;&gt; x = qd.Matrix.ndarray(4, 5, qd.f32, shape=(16, 8))</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">shape</span><span class="p">,</span> <span class="n">numbers</span><span class="o">.</span><span class="n">Number</span><span class="p">):</span>
             <span class="n">shape</span> <span class="o">=</span> <span class="p">(</span><span class="n">shape</span><span class="p">,)</span>
         <span class="k">if</span> <span class="n">impl</span><span class="o">.</span><span class="n">is_python_backend</span><span class="p">():</span>
@@ -1479,7 +1479,7 @@
             <span class="n">dt</span> <span class="o">=</span> <span class="n">cook_dtype</span><span class="p">(</span><span class="n">dtype</span><span class="p">)</span>
             <span class="k">if</span> <span class="ow">not</span> <span class="n">qd_python_core</span><span class="o">.</span><span class="n">is_real</span><span class="p">(</span><span class="n">dt</span><span class="p">):</span>
                 <span class="k">raise</span> <span class="n">QuadrantsRuntimeError</span><span class="p">(</span>
-                    <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">dtype</span><span class="si">}</span><span class="s2"> is not supported for Matrix.ndarray with needs_grad=True; element dtype must be real (floating-point).&quot;</span>
+                    <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">dtype</span><span class="si">}</span><span class="s2"> is not supported for Matrix.ndarray with needs_grad=True; element dtype must be real (floating-point)."</span>
                 <span class="p">)</span>
             <span class="n">arr</span><span class="o">.</span><span class="n">_set_grad</span><span class="p">(</span><span class="bp">cls</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">n</span><span class="p">,</span> <span class="n">m</span><span class="p">,</span> <span class="n">dtype</span><span class="p">,</span> <span class="n">shape</span><span class="p">,</span> <span class="n">needs_grad</span><span class="o">=</span><span class="kc">False</span><span class="p">))</span>
         <span class="k">return</span> <span class="n">arr</span></div>
@@ -1489,7 +1489,7 @@
 <div class="viewcode-block" id="Matrix.tensor">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/matrix/index.html#quadrants.lang.matrix.Matrix.tensor">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">tensor</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">n</span><span class="p">,</span> <span class="n">m</span><span class="p">,</span> <span class="n">dtype</span><span class="p">,</span> <span class="n">shape</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Allocate a tensor whose elements are ``n``-by-``m`` matrices.</span>
+<span class="w">        </span><span class="sd">"""Allocate a tensor whose elements are ``n``-by-``m`` matrices.</span>
 
 <span class="sd">        Per-tensor backend dispatcher, equivalent to scalar ``qd.tensor()`` for matrix-valued elements. Selects</span>
 <span class="sd">        between ``qd.Matrix.field`` and ``qd.Matrix.ndarray`` based on the ``backend=`` keyword.</span>
@@ -1506,7 +1506,7 @@
 
 <span class="sd">            &gt;&gt;&gt; a = qd.Matrix.tensor(2, 3, qd.f32, shape=(4,))</span>
 <span class="sd">            &gt;&gt;&gt; b = qd.Matrix.tensor(2, 3, qd.f32, shape=(4,), backend=qd.Backend.NDARRAY)</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._tensor</span><span class="w"> </span><span class="kn">import</span> <span class="n">_tensor_mat</span>  <span class="c1"># pylint: disable=C0415</span>
 
         <span class="k">return</span> <span class="n">_tensor_mat</span><span class="p">(</span><span class="n">n</span><span class="p">,</span> <span class="n">m</span><span class="p">,</span> <span class="n">dtype</span><span class="p">,</span> <span class="n">shape</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></div>
@@ -1516,7 +1516,7 @@
 <div class="viewcode-block" id="Matrix.rows">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/matrix/index.html#quadrants.lang.matrix.Matrix.rows">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">rows</span><span class="p">(</span><span class="n">rows</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Constructs a matrix by concatenating a list of vectors/lists row by row. Must be called in Quadrants scope.</span>
+<span class="w">        </span><span class="sd">"""Constructs a matrix by concatenating a list of vectors/lists row by row. Must be called in Quadrants scope.</span>
 
 <span class="sd">        Args:</span>
 <span class="sd">            rows (List): A list of Vector (1-D Matrix) or a list of list.</span>
@@ -1535,7 +1535,7 @@
 <span class="sd">            &gt;&gt;&gt;</span>
 <span class="sd">            &gt;&gt;&gt; test()</span>
 <span class="sd">            [[1, 2, 3], [4, 5, 6]]</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">matrix_ops</span>  <span class="c1"># pylint: disable=C0415</span>
 
         <span class="k">return</span> <span class="n">matrix_ops</span><span class="o">.</span><span class="n">rows</span><span class="p">(</span><span class="n">rows</span><span class="p">)</span></div>
@@ -1545,7 +1545,7 @@
 <div class="viewcode-block" id="Matrix.cols">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/matrix/index.html#quadrants.lang.matrix.Matrix.cols">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">cols</span><span class="p">(</span><span class="n">cols</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Constructs a Matrix instance by concatenating Vectors/lists column by column.</span>
+<span class="w">        </span><span class="sd">"""Constructs a Matrix instance by concatenating Vectors/lists column by column.</span>
 
 <span class="sd">        Args:</span>
 <span class="sd">            cols (List): A list of Vector (1-D Matrix) or a list of list.</span>
@@ -1564,7 +1564,7 @@
 <span class="sd">            &gt;&gt;&gt;</span>
 <span class="sd">            &gt;&gt;&gt; test()</span>
 <span class="sd">            [[1, 4], [2, 5], [3, 6]]</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">matrix_ops</span>  <span class="c1"># pylint: disable=C0415</span>
 
         <span class="k">return</span> <span class="n">matrix_ops</span><span class="o">.</span><span class="n">cols</span><span class="p">(</span><span class="n">cols</span><span class="p">)</span></div>
@@ -1579,7 +1579,7 @@
 <div class="viewcode-block" id="Matrix.dot">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/matrix/index.html#quadrants.lang.matrix.Matrix.dot">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">dot</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Performs the dot product of two vectors.</span>
+<span class="w">        </span><span class="sd">"""Performs the dot product of two vectors.</span>
 
 <span class="sd">        To call this method, both multiplicatives must be vectors.</span>
 
@@ -1595,7 +1595,7 @@
 <span class="sd">            &gt;&gt;&gt; v2 = qd.Vector([3, 4, 5])</span>
 <span class="sd">            &gt;&gt;&gt; v1.dot(v2)</span>
 <span class="sd">            26</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">matrix_ops</span>  <span class="c1"># pylint: disable=C0415</span>
 
         <span class="k">return</span> <span class="n">matrix_ops</span><span class="o">.</span><span class="n">dot</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">)</span></div>
@@ -1604,7 +1604,7 @@
 <div class="viewcode-block" id="Matrix.cross">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/matrix/index.html#quadrants.lang.matrix.Matrix.cross">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">cross</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Performs the cross product with the input vector (1-D Matrix).</span>
+<span class="w">        </span><span class="sd">"""Performs the cross product with the input vector (1-D Matrix).</span>
 
 <span class="sd">        Both two vectors must have the same dimension &lt;= 3.</span>
 
@@ -1617,7 +1617,7 @@
 
 <span class="sd">        Returns:</span>
 <span class="sd">            :class:`~quadrants.Matrix`: The cross product of the two Vectors.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">matrix_ops</span>  <span class="c1"># pylint: disable=C0415</span>
 
         <span class="k">return</span> <span class="n">matrix_ops</span><span class="o">.</span><span class="n">cross</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">)</span></div>
@@ -1626,7 +1626,7 @@
 <div class="viewcode-block" id="Matrix.outer_product">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/matrix/index.html#quadrants.lang.matrix.Matrix.outer_product">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">outer_product</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Performs the outer product with the input Vector (1-D Matrix).</span>
+<span class="w">        </span><span class="sd">"""Performs the outer product with the input Vector (1-D Matrix).</span>
 
 <span class="sd">        The outer_product of two vectors `v = (x1, x2, ..., xn)`,</span>
 <span class="sd">        `w = (y1, y2, ..., yn)` is a `n` times `n` square matrix, and its `(i, j)`</span>
@@ -1637,7 +1637,7 @@
 
 <span class="sd">        Returns:</span>
 <span class="sd">            :class:`~quadrants.Matrix`: The outer product of the two Vectors.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">matrix_ops</span>  <span class="c1"># pylint: disable=C0415</span>
 
         <span class="k">return</span> <span class="n">matrix_ops</span><span class="o">.</span><span class="n">outer_product</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">)</span></div>
@@ -1649,7 +1649,7 @@
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/matrix/index.html#quadrants.lang.matrix.Vector">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">Vector</span><span class="p">(</span><span class="n">Matrix</span><span class="p">):</span>
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">arr</span><span class="p">,</span> <span class="n">dt</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Constructs a vector from given array.</span>
+<span class="w">        </span><span class="sd">"""Constructs a vector from given array.</span>
 
 <span class="sd">        A vector is an instance of a 2-D matrix with the second dimension being equal to 1.</span>
 
@@ -1666,7 +1666,7 @@
 <span class="sd">            &gt;&gt;&gt; v = qd.Vector([3, 4])</span>
 <span class="sd">            &gt;&gt;&gt; u + v</span>
 <span class="sd">            [4 6]</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">arr</span><span class="p">,</span> <span class="n">dt</span><span class="o">=</span><span class="n">dt</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
 
 <div class="viewcode-block" id="Vector.get_shape">
@@ -1679,10 +1679,10 @@
 <div class="viewcode-block" id="Vector.field">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/matrix/index.html#quadrants.lang.matrix.Vector.field">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">field</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">n</span><span class="p">,</span> <span class="n">dtype</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;qd.Vector.field&quot;&quot;&quot;</span>
-        <span class="n">ndim</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;ndim&quot;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+<span class="w">        </span><span class="sd">"""qd.Vector.field"""</span>
+        <span class="n">ndim</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"ndim"</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
         <span class="k">assert</span> <span class="n">ndim</span> <span class="o">==</span> <span class="mi">1</span>
-        <span class="n">kwargs</span><span class="p">[</span><span class="s2">&quot;ndim&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1</span>
+        <span class="n">kwargs</span><span class="p">[</span><span class="s2">"ndim"</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1</span>
         <span class="k">return</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">n</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="n">dtype</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></div>
 
 
@@ -1691,7 +1691,7 @@
 <div class="viewcode-block" id="Vector.ndarray">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/matrix/index.html#quadrants.lang.matrix.Vector.ndarray">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">ndarray</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">n</span><span class="p">,</span> <span class="n">dtype</span><span class="p">,</span> <span class="n">shape</span><span class="p">,</span> <span class="n">needs_grad</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Defines a Quadrants ndarray with vector elements.</span>
+<span class="w">        </span><span class="sd">"""Defines a Quadrants ndarray with vector elements.</span>
 
 <span class="sd">        Args:</span>
 <span class="sd">            n (int): Size of the vector.</span>
@@ -1705,7 +1705,7 @@
 <span class="sd">            The code below shows how a Quadrants ndarray with vector elements can be declared and defined::</span>
 
 <span class="sd">                &gt;&gt;&gt; x = qd.Vector.ndarray(3, qd.f32, shape=(16, 8))</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">shape</span><span class="p">,</span> <span class="n">numbers</span><span class="o">.</span><span class="n">Number</span><span class="p">):</span>
             <span class="n">shape</span> <span class="o">=</span> <span class="p">(</span><span class="n">shape</span><span class="p">,)</span>
         <span class="k">if</span> <span class="n">impl</span><span class="o">.</span><span class="n">is_python_backend</span><span class="p">():</span>
@@ -1720,7 +1720,7 @@
             <span class="n">dt</span> <span class="o">=</span> <span class="n">cook_dtype</span><span class="p">(</span><span class="n">dtype</span><span class="p">)</span>
             <span class="k">if</span> <span class="ow">not</span> <span class="n">qd_python_core</span><span class="o">.</span><span class="n">is_real</span><span class="p">(</span><span class="n">dt</span><span class="p">):</span>
                 <span class="k">raise</span> <span class="n">QuadrantsRuntimeError</span><span class="p">(</span>
-                    <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">dtype</span><span class="si">}</span><span class="s2"> is not supported for Vector.ndarray with needs_grad=True; element dtype must be real (floating-point).&quot;</span>
+                    <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">dtype</span><span class="si">}</span><span class="s2"> is not supported for Vector.ndarray with needs_grad=True; element dtype must be real (floating-point)."</span>
                 <span class="p">)</span>
             <span class="n">arr</span><span class="o">.</span><span class="n">_set_grad</span><span class="p">(</span><span class="bp">cls</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="n">n</span><span class="p">,</span> <span class="n">dtype</span><span class="p">,</span> <span class="n">shape</span><span class="p">,</span> <span class="n">needs_grad</span><span class="o">=</span><span class="kc">False</span><span class="p">))</span>
         <span class="k">return</span> <span class="n">arr</span></div>
@@ -1730,7 +1730,7 @@
 <div class="viewcode-block" id="Vector.tensor">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/matrix/index.html#quadrants.lang.matrix.Vector.tensor">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">tensor</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">n</span><span class="p">,</span> <span class="n">dtype</span><span class="p">,</span> <span class="n">shape</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Allocate a tensor whose elements are length-``n`` vectors.</span>
+<span class="w">        </span><span class="sd">"""Allocate a tensor whose elements are length-``n`` vectors.</span>
 
 <span class="sd">        Per-tensor backend dispatcher, equivalent to scalar ``qd.tensor()`` for vector-valued elements. Selects</span>
 <span class="sd">        between ``qd.Vector.field`` and ``qd.Vector.ndarray`` based on the ``backend=`` keyword.</span>
@@ -1746,7 +1746,7 @@
 
 <span class="sd">            &gt;&gt;&gt; v = qd.Vector.tensor(3, qd.f32, shape=(4,))</span>
 <span class="sd">            &gt;&gt;&gt; u = qd.Vector.tensor(3, qd.f32, shape=(4,), backend=qd.Backend.NDARRAY)</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._tensor</span><span class="w"> </span><span class="kn">import</span> <span class="n">_tensor_vec</span>  <span class="c1"># pylint: disable=C0415</span>
 
         <span class="k">return</span> <span class="n">_tensor_vec</span><span class="p">(</span><span class="n">n</span><span class="p">,</span> <span class="n">dtype</span><span class="p">,</span> <span class="n">shape</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span></div>
@@ -1757,14 +1757,14 @@
 <div class="viewcode-block" id="MatrixField">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/matrix/index.html#quadrants.lang.matrix.MatrixField">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">MatrixField</span><span class="p">(</span><span class="n">Field</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Quadrants matrix field with SNode implementation.</span>
+<span class="w">    </span><span class="sd">"""Quadrants matrix field with SNode implementation.</span>
 
 <span class="sd">    Args:</span>
 <span class="sd">        vars (List[Expr]): Field members.</span>
 <span class="sd">        n (Int): Number of rows.</span>
 <span class="sd">        m (Int): Number of columns.</span>
 <span class="sd">        ndim (Int): Number of dimensions; forced reshape if given.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">_vars</span><span class="p">,</span> <span class="n">n</span><span class="p">,</span> <span class="n">m</span><span class="p">,</span> <span class="n">ndim</span><span class="o">=</span><span class="mi">2</span><span class="p">):</span>
         <span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">_vars</span><span class="p">)</span> <span class="o">==</span> <span class="n">n</span> <span class="o">*</span> <span class="n">m</span>
@@ -1790,14 +1790,14 @@
 <div class="viewcode-block" id="MatrixField.to_dlpack">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/matrix/index.html#quadrants.lang.matrix.MatrixField.to_dlpack">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">to_dlpack</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">versioned</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Export this matrix field as a DLPack capsule.</span>
+<span class="w">        </span><span class="sd">"""Export this matrix field as a DLPack capsule.</span>
 
 <span class="sd">        Args:</span>
 <span class="sd">            versioned: If True, emit a DLPack v1 capsule (writable numpy arrays). If False (default), emit v0</span>
 <span class="sd">                (required by ``torch.utils.dlpack.from_dlpack``). See :meth:`ScalarField.to_dlpack`.</span>
 
 <span class="sd">        Note: caller is responsible for calling qd.sync() between modifying the field and reading it.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">materialize</span><span class="p">()</span>
         <span class="k">try</span><span class="p">:</span>
             <span class="n">capsule</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">prog</span><span class="o">.</span><span class="n">field_to_dlpack</span><span class="p">(</span>
@@ -1805,12 +1805,12 @@
             <span class="p">)</span>
         <span class="k">except</span> <span class="ne">ModuleNotFoundError</span><span class="p">:</span>
             <span class="k">raise</span> <span class="ne">ModuleNotFoundError</span><span class="p">(</span>
-                <span class="s2">&quot;MatrixField.to_dlpack() requires torch to be installed &quot;</span>
-                <span class="s2">&quot;(the C++ layer checks torch version for DLPack byte_offset support)&quot;</span>
+                <span class="s2">"MatrixField.to_dlpack() requires torch to be installed "</span>
+                <span class="s2">"(the C++ layer checks torch version for DLPack byte_offset support)"</span>
             <span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="kc">None</span>
         <span class="c1"># See ``Field.to_dlpack`` for the rationale. Only the outer ``len(layout)`` spatial axes are permuted — the</span>
         <span class="c1"># trailing element axes (``n``, ``m``) sit innermost and stay identity.</span>
-        <span class="n">layout</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s2">&quot;_qd_layout&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="n">layout</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s2">"_qd_layout"</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">layout</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
             <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.field</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>  <span class="c1"># pylint: disable=C0415</span>
                 <span class="n">_patch_field_dlpack_canonical</span><span class="p">,</span>
@@ -1823,14 +1823,14 @@
 <div class="viewcode-block" id="MatrixField.get_scalar_field">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/matrix/index.html#quadrants.lang.matrix.MatrixField.get_scalar_field">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">get_scalar_field</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">indices</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Creates a ScalarField using a specific field member.</span>
+<span class="w">        </span><span class="sd">"""Creates a ScalarField using a specific field member.</span>
 
 <span class="sd">        Args:</span>
 <span class="sd">            indices (Tuple[Int]): Specified indices of the field member.</span>
 
 <span class="sd">        Returns:</span>
 <span class="sd">            ScalarField: The result ScalarField.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">indices</span><span class="p">)</span> <span class="ow">in</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">]</span>
         <span class="n">i</span> <span class="o">=</span> <span class="n">indices</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
         <span class="n">j</span> <span class="o">=</span> <span class="mi">0</span> <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">indices</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span> <span class="k">else</span> <span class="n">indices</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
@@ -1838,7 +1838,7 @@
         <span class="c1"># Propagate the canonical-&gt;physical layout from the parent MatrixField so that subscripts / ``get_addr`` on</span>
         <span class="c1"># the extracted ScalarField go through the same rewrite (each member lives in the same permuted-physical SNode</span>
         <span class="c1"># hierarchy as the parent).</span>
-        <span class="n">parent_layout</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s2">&quot;_qd_layout&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="n">parent_layout</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s2">"_qd_layout"</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">parent_layout</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
             <span class="n">sf</span><span class="o">.</span><span class="n">_qd_layout</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">parent_layout</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">sf</span></div>
@@ -1887,12 +1887,12 @@
 <div class="viewcode-block" id="MatrixField.fill">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/matrix/index.html#quadrants.lang.matrix.MatrixField.fill">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">fill</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">val</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Fills this matrix field with specified values.</span>
+<span class="w">        </span><span class="sd">"""Fills this matrix field with specified values.</span>
 
 <span class="sd">        Args:</span>
 <span class="sd">            val (Union[Number, Expr, List, Tuple, Matrix]): Values to fill,</span>
 <span class="sd">                should have consistent dimension consistent with `self`.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">val</span><span class="p">,</span> <span class="n">numbers</span><span class="o">.</span><span class="n">Number</span><span class="p">)</span> <span class="ow">or</span> <span class="p">(</span><span class="nb">isinstance</span><span class="p">(</span><span class="n">val</span><span class="p">,</span> <span class="n">expr</span><span class="o">.</span><span class="n">Expr</span><span class="p">)</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">val</span><span class="o">.</span><span class="n">is_tensor</span><span class="p">()):</span>
             <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">ndim</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
                 <span class="n">val</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="nb">tuple</span><span class="p">(</span><span class="n">val</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">m</span><span class="p">))</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">n</span><span class="p">))</span>
@@ -1929,7 +1929,7 @@
 <div class="viewcode-block" id="MatrixField.to_numpy">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/matrix/index.html#quadrants.lang.matrix.MatrixField.to_numpy">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">to_numpy</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">keep_dims</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">copy</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Converts the field instance to a NumPy array.</span>
+<span class="w">        </span><span class="sd">"""Converts the field instance to a NumPy array.</span>
 
 <span class="sd">        Args:</span>
 <span class="sd">            keep_dims (bool, optional): Whether to keep the dimension after conversion. When keep_dims=True, on an n-D</span>
@@ -1942,7 +1942,7 @@
 
 <span class="sd">        Returns:</span>
 <span class="sd">            numpy.ndarray: The result NumPy array.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="k">if</span> <span class="n">copy</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">True</span><span class="p">:</span>
             <span class="n">arr</span> <span class="o">=</span> <span class="n">_try_zerocopy_numpy</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">copy</span><span class="o">=</span><span class="n">copy</span><span class="p">)</span>
             <span class="k">if</span> <span class="n">arr</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
@@ -1952,7 +1952,7 @@
                     <span class="n">arr</span> <span class="o">=</span> <span class="n">arr</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">expected</span><span class="p">)</span>
                 <span class="k">if</span> <span class="n">dtype</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">arr</span><span class="o">.</span><span class="n">dtype</span> <span class="o">!=</span> <span class="n">dtype</span><span class="p">:</span>
                     <span class="k">if</span> <span class="n">copy</span> <span class="ow">is</span> <span class="kc">False</span><span class="p">:</span>
-                        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;copy=False is incompatible with dtype conversion (</span><span class="si">{</span><span class="n">arr</span><span class="o">.</span><span class="n">dtype</span><span class="si">}</span><span class="s2"> -&gt; </span><span class="si">{</span><span class="n">dtype</span><span class="si">}</span><span class="s2">)&quot;</span><span class="p">)</span>
+                        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"copy=False is incompatible with dtype conversion (</span><span class="si">{</span><span class="n">arr</span><span class="o">.</span><span class="n">dtype</span><span class="si">}</span><span class="s2"> -&gt; </span><span class="si">{</span><span class="n">dtype</span><span class="si">}</span><span class="s2">)"</span><span class="p">)</span>
                 <span class="k">else</span><span class="p">:</span>
                     <span class="k">return</span> <span class="n">arr</span>
 
@@ -1971,7 +1971,7 @@
 <div class="viewcode-block" id="MatrixField.to_torch">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/matrix/index.html#quadrants.lang.matrix.MatrixField.to_torch">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">to_torch</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">keep_dims</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">copy</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Converts the field instance to a PyTorch tensor.</span>
+<span class="w">        </span><span class="sd">"""Converts the field instance to a PyTorch tensor.</span>
 
 <span class="sd">        Args:</span>
 <span class="sd">            device (torch.device, optional): The desired device of returned tensor.</span>
@@ -1982,7 +1982,7 @@
 
 <span class="sd">        Returns:</span>
 <span class="sd">            torch.tensor: The result torch tensor.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="k">if</span> <span class="n">copy</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">True</span><span class="p">:</span>
             <span class="n">tc</span> <span class="o">=</span> <span class="n">_try_zerocopy_torch</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">copy</span><span class="o">=</span><span class="n">copy</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">)</span>
             <span class="k">if</span> <span class="n">tc</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
@@ -2010,7 +2010,7 @@
     <span class="k">def</span><span class="w"> </span><span class="nf">_from_external_arr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">arr</span><span class="p">):</span>
         <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">arr</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span> <span class="o">==</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span> <span class="o">+</span> <span class="mi">1</span><span class="p">:</span>
             <span class="n">as_vector</span> <span class="o">=</span> <span class="kc">True</span>
-            <span class="k">assert</span> <span class="bp">self</span><span class="o">.</span><span class="n">m</span> <span class="o">==</span> <span class="mi">1</span><span class="p">,</span> <span class="s2">&quot;This is not a vector field&quot;</span>
+            <span class="k">assert</span> <span class="bp">self</span><span class="o">.</span><span class="n">m</span> <span class="o">==</span> <span class="mi">1</span><span class="p">,</span> <span class="s2">"This is not a vector field"</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="n">as_vector</span> <span class="o">=</span> <span class="kc">False</span>
             <span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">arr</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span> <span class="o">==</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span> <span class="o">+</span> <span class="mi">2</span>
@@ -2025,14 +2025,14 @@
 <div class="viewcode-block" id="MatrixField.from_numpy">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/matrix/index.html#quadrants.lang.matrix.MatrixField.from_numpy">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">from_numpy</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">arr</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Copies an `numpy.ndarray` into this field.</span>
+<span class="w">        </span><span class="sd">"""Copies an `numpy.ndarray` into this field.</span>
 
 <span class="sd">        Example::</span>
 
 <span class="sd">            &gt;&gt;&gt; m = qd.Matrix.field(2, 2, qd.f32, shape=(3, 3))</span>
 <span class="sd">            &gt;&gt;&gt; arr = numpy.ones((3, 3, 2, 2))</span>
 <span class="sd">            &gt;&gt;&gt; m.from_numpy(arr)</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
 
         <span class="k">if</span> <span class="ow">not</span> <span class="n">arr</span><span class="o">.</span><span class="n">flags</span><span class="o">.</span><span class="n">c_contiguous</span><span class="p">:</span>
             <span class="n">arr</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ascontiguousarray</span><span class="p">(</span><span class="n">arr</span><span class="p">)</span>
@@ -2055,7 +2055,7 @@
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="c1"># make interactive shell happy, prevent materialization</span>
-        <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;&lt;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">n</span><span class="si">}</span><span class="s2">x</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">m</span><span class="si">}</span><span class="s2"> qd.Matrix.field&gt;&quot;</span></div>
+        <span class="k">return</span> <span class="sa">f</span><span class="s2">"&lt;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">n</span><span class="si">}</span><span class="s2">x</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">m</span><span class="si">}</span><span class="s2"> qd.Matrix.field&gt;"</span></div>
 
 
 
@@ -2075,7 +2075,7 @@
             <span class="bp">self</span><span class="o">.</span><span class="n">tensor_type</span> <span class="o">=</span> <span class="kc">None</span>
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return a matrix matching the shape and dtype.</span>
+<span class="w">        </span><span class="sd">"""Return a matrix matching the shape and dtype.</span>
 
 <span class="sd">        This function will try to convert the input to a `n x m` matrix, with n, m being</span>
 <span class="sd">        the number of rows/cols of this matrix type.</span>
@@ -2104,9 +2104,9 @@
 <span class="sd">                &gt;&gt;&gt; m = mat4x3(m)</span>
 <span class="sd">                &gt;&gt;&gt; k = mat2x6(m)</span>
 
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">args</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">&quot;Custom type instances need to be created with an initial value.&quot;</span><span class="p">)</span>
+            <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">"Custom type instances need to be created with an initial value."</span><span class="p">)</span>
         <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">args</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
             <span class="c1"># Init from a real Matrix</span>
             <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">expr</span><span class="o">.</span><span class="n">Expr</span><span class="p">)</span> <span class="ow">and</span> <span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">ptr</span><span class="o">.</span><span class="n">is_tensor</span><span class="p">():</span>
@@ -2160,7 +2160,7 @@
         <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">dtype</span> <span class="ow">in</span> <span class="n">primitive_types</span><span class="o">.</span><span class="n">real_types</span><span class="p">:</span>
             <span class="n">get_ret_func</span> <span class="o">=</span> <span class="n">launch_ctx</span><span class="o">.</span><span class="n">get_struct_ret_float</span>
         <span class="k">else</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="n">QuadrantsRuntimeTypeError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Invalid return type on index=</span><span class="si">{</span><span class="n">ret_index</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="k">raise</span> <span class="n">QuadrantsRuntimeTypeError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Invalid return type on index=</span><span class="si">{</span><span class="n">ret_index</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
         <span class="k">return</span> <span class="bp">self</span><span class="p">([</span><span class="n">get_ret_func</span><span class="p">(</span><span class="n">ret_index</span> <span class="o">+</span> <span class="p">(</span><span class="n">i</span><span class="p">,))</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">m</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">n</span><span class="p">)])</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">set_kernel_struct_args</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">mat</span><span class="p">,</span> <span class="n">launch_ctx</span><span class="p">,</span> <span class="n">ret_index</span><span class="o">=</span><span class="p">()):</span>
@@ -2172,7 +2172,7 @@
         <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">dtype</span> <span class="ow">in</span> <span class="n">primitive_types</span><span class="o">.</span><span class="n">real_types</span><span class="p">:</span>
             <span class="n">set_arg_func</span> <span class="o">=</span> <span class="n">launch_ctx</span><span class="o">.</span><span class="n">set_struct_arg_float</span>
         <span class="k">else</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="n">QuadrantsRuntimeTypeError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Invalid return type on index=</span><span class="si">{</span><span class="n">ret_index</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="k">raise</span> <span class="n">QuadrantsRuntimeTypeError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Invalid return type on index=</span><span class="si">{</span><span class="n">ret_index</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">ndim</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
             <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">n</span><span class="p">):</span>
                 <span class="n">set_arg_func</span><span class="p">(</span><span class="n">ret_index</span> <span class="o">+</span> <span class="p">(</span><span class="n">i</span><span class="p">,),</span> <span class="n">mat</span><span class="p">[</span><span class="n">i</span><span class="p">])</span>
@@ -2201,13 +2201,13 @@
         <span class="k">return</span> <span class="n">make_matrix_with_shape</span><span class="p">(</span><span class="n">entries</span><span class="p">,</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">n</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">m</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">dtype</span><span class="p">)</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">field</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
-        <span class="k">assert</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;ndim&quot;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">ndim</span><span class="p">)</span> <span class="o">==</span> <span class="bp">self</span><span class="o">.</span><span class="n">ndim</span>
-        <span class="n">kwargs</span><span class="o">.</span><span class="n">update</span><span class="p">({</span><span class="s2">&quot;ndim&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">ndim</span><span class="p">})</span>
+        <span class="k">assert</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"ndim"</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">ndim</span><span class="p">)</span> <span class="o">==</span> <span class="bp">self</span><span class="o">.</span><span class="n">ndim</span>
+        <span class="n">kwargs</span><span class="o">.</span><span class="n">update</span><span class="p">({</span><span class="s2">"ndim"</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">ndim</span><span class="p">})</span>
         <span class="k">return</span> <span class="n">Matrix</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">n</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">m</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">dtype</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">ndarray</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
-        <span class="k">assert</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;ndim&quot;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">ndim</span><span class="p">)</span> <span class="o">==</span> <span class="bp">self</span><span class="o">.</span><span class="n">ndim</span>
-        <span class="n">kwargs</span><span class="o">.</span><span class="n">update</span><span class="p">({</span><span class="s2">&quot;ndim&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">ndim</span><span class="p">})</span>
+        <span class="k">assert</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"ndim"</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">ndim</span><span class="p">)</span> <span class="o">==</span> <span class="bp">self</span><span class="o">.</span><span class="n">ndim</span>
+        <span class="n">kwargs</span><span class="o">.</span><span class="n">update</span><span class="p">({</span><span class="s2">"ndim"</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">ndim</span><span class="p">})</span>
         <span class="k">return</span> <span class="n">Matrix</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">n</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">m</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">dtype</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">get_shape</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
@@ -2216,8 +2216,8 @@
         <span class="k">return</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">n</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">m</span><span class="p">)</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">to_string</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-        <span class="n">dtype_str</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">dtype</span><span class="o">.</span><span class="n">to_string</span><span class="p">()</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">dtype</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="s2">&quot;&quot;</span>
-        <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;MatrixType[</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">n</span><span class="si">}</span><span class="s2">,</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">m</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="n">dtype_str</span><span class="si">}</span><span class="s2">]&quot;</span>
+        <span class="n">dtype_str</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">dtype</span><span class="o">.</span><span class="n">to_string</span><span class="p">()</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">dtype</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="s2">""</span>
+        <span class="k">return</span> <span class="sa">f</span><span class="s2">"MatrixType[</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">n</span><span class="si">}</span><span class="s2">,</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">m</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="n">dtype_str</span><span class="si">}</span><span class="s2">]"</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">check_matched</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">ndim</span> <span class="o">!=</span> <span class="nb">len</span><span class="p">(</span><span class="n">other</span><span class="o">.</span><span class="n">shape</span><span class="p">()):</span>
@@ -2243,13 +2243,13 @@
     <span class="k">def</span><span class="w"> </span><span class="nf">_reject_if_unpacked</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">what</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_is_unpacked</span><span class="p">:</span>
             <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span>
-                <span class="sa">f</span><span class="s2">&quot;cannot </span><span class="si">{</span><span class="n">what</span><span class="si">}</span><span class="s2"> a vector declared with unpacked=True; the unpacked layout is only honored on &quot;</span>
-                <span class="s2">&quot;``@qd.dataclass`` field annotations. Either drop ``unpacked=True`` or use the type in an annotation &quot;</span>
-                <span class="s2">&quot;like ``r: qd.types.vector(N, dtype, unpacked=True)`` on a class decorated with @qd.dataclass.&quot;</span>
+                <span class="sa">f</span><span class="s2">"cannot </span><span class="si">{</span><span class="n">what</span><span class="si">}</span><span class="s2"> a vector declared with unpacked=True; the unpacked layout is only honored on "</span>
+                <span class="s2">"``@qd.dataclass`` field annotations. Either drop ``unpacked=True`` or use the type in an annotation "</span>
+                <span class="s2">"like ``r: qd.types.vector(N, dtype, unpacked=True)`` on a class decorated with @qd.dataclass."</span>
             <span class="p">)</span>
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return a vector matching the shape and dtype.</span>
+<span class="w">        </span><span class="sd">"""Return a vector matching the shape and dtype.</span>
 
 <span class="sd">        This function will try to convert the input to a `n`-component vector.</span>
 
@@ -2269,10 +2269,10 @@
 
 <span class="sd">                &gt;&gt;&gt; v = vec3(1)</span>
 
-<span class="sd">        &quot;&quot;&quot;</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">_reject_if_unpacked</span><span class="p">(</span><span class="s2">&quot;instantiate&quot;</span><span class="p">)</span>
+<span class="sd">        """</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_reject_if_unpacked</span><span class="p">(</span><span class="s2">"instantiate"</span><span class="p">)</span>
         <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">args</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">&quot;Custom type instances need to be created with an initial value.&quot;</span><span class="p">)</span>
+            <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">"Custom type instances need to be created with an initial value."</span><span class="p">)</span>
         <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">args</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
             <span class="c1"># Init from a real Matrix</span>
             <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">expr</span><span class="o">.</span><span class="n">Expr</span><span class="p">)</span> <span class="ow">and</span> <span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">ptr</span><span class="o">.</span><span class="n">is_tensor</span><span class="p">():</span>
@@ -2318,23 +2318,23 @@
         <span class="k">return</span> <span class="n">make_matrix_with_shape</span><span class="p">(</span><span class="n">entries</span><span class="p">,</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">n</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">dtype</span><span class="p">)</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">field</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">_reject_if_unpacked</span><span class="p">(</span><span class="s2">&quot;create a field of&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_reject_if_unpacked</span><span class="p">(</span><span class="s2">"create a field of"</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">Vector</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">n</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">dtype</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">ndarray</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">_reject_if_unpacked</span><span class="p">(</span><span class="s2">&quot;create an ndarray of&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_reject_if_unpacked</span><span class="p">(</span><span class="s2">"create an ndarray of"</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">Vector</span><span class="o">.</span><span class="n">ndarray</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">n</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">dtype</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">to_string</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-        <span class="n">dtype_str</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">dtype</span><span class="o">.</span><span class="n">to_string</span><span class="p">()</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">dtype</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="s2">&quot;&quot;</span>
-        <span class="n">suffix</span> <span class="o">=</span> <span class="s2">&quot;, unpacked=True&quot;</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_is_unpacked</span> <span class="k">else</span> <span class="s2">&quot;&quot;</span>
-        <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;VectorType[</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">n</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="n">dtype_str</span><span class="si">}{</span><span class="n">suffix</span><span class="si">}</span><span class="s2">]&quot;</span>
+        <span class="n">dtype_str</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">dtype</span><span class="o">.</span><span class="n">to_string</span><span class="p">()</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">dtype</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="s2">""</span>
+        <span class="n">suffix</span> <span class="o">=</span> <span class="s2">", unpacked=True"</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_is_unpacked</span> <span class="k">else</span> <span class="s2">""</span>
+        <span class="k">return</span> <span class="sa">f</span><span class="s2">"VectorType[</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">n</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="n">dtype_str</span><span class="si">}{</span><span class="n">suffix</span><span class="si">}</span><span class="s2">]"</span>
 
 
 <div class="viewcode-block" id="MatrixNdarray">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/matrix/index.html#quadrants.lang.matrix.MatrixNdarray">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">MatrixNdarray</span><span class="p">(</span><span class="n">Ndarray</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Quadrants ndarray with matrix elements.</span>
+<span class="w">    </span><span class="sd">"""Quadrants ndarray with matrix elements.</span>
 
 <span class="sd">    Args:</span>
 <span class="sd">        n (int): Number of rows of the matrix.</span>
@@ -2345,7 +2345,7 @@
 <span class="sd">    Example::</span>
 
 <span class="sd">        &gt;&gt;&gt; arr = qd.MatrixNdarray(2, 2, qd.f32, shape=(3, 3))</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">n</span><span class="p">,</span> <span class="n">m</span><span class="p">,</span> <span class="n">dtype</span><span class="p">,</span> <span class="n">shape</span><span class="p">):</span>
 <div class="viewcode-block" id="MatrixNdarray.n">
@@ -2384,14 +2384,14 @@
 <div class="viewcode-block" id="MatrixNdarray.element_shape">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/matrix/index.html#quadrants.lang.matrix.MatrixNdarray.element_shape">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">element_shape</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Returns the shape of each element (a 2D matrix) in this ndarray.</span>
+<span class="w">        </span><span class="sd">"""Returns the shape of each element (a 2D matrix) in this ndarray.</span>
 
 <span class="sd">        Example::</span>
 
 <span class="sd">            &gt;&gt;&gt; arr = qd.MatrixNdarray(2, 2, qd.f32, shape=(3, 3))</span>
 <span class="sd">            &gt;&gt;&gt; arr.element_shape</span>
 <span class="sd">            (2, 2)</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="k">return</span> <span class="nb">tuple</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">arr</span><span class="o">.</span><span class="n">element_shape</span><span class="p">())</span></div>
 
 
@@ -2416,7 +2416,7 @@
 <div class="viewcode-block" id="MatrixNdarray.to_numpy">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/matrix/index.html#quadrants.lang.matrix.MatrixNdarray.to_numpy">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">to_numpy</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">copy</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Converts this ndarray to a ``numpy.ndarray``.</span>
+<span class="w">        </span><span class="sd">"""Converts this ndarray to a ``numpy.ndarray``.</span>
 
 <span class="sd">        Args:</span>
 <span class="sd">            copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises,</span>
@@ -2431,13 +2431,13 @@
 
 <span class="sd">             [[[0. 0.]</span>
 <span class="sd">               [0. 0.]]]]</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="k">if</span> <span class="n">copy</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">True</span><span class="p">:</span>
             <span class="n">arr</span> <span class="o">=</span> <span class="n">_try_zerocopy_numpy</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">copy</span><span class="o">=</span><span class="n">copy</span><span class="p">,</span> <span class="n">is_ndarray</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
             <span class="k">if</span> <span class="n">arr</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
                 <span class="k">if</span> <span class="n">dtype</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">arr</span><span class="o">.</span><span class="n">dtype</span> <span class="o">!=</span> <span class="n">dtype</span><span class="p">:</span>
                     <span class="k">if</span> <span class="n">copy</span> <span class="ow">is</span> <span class="kc">False</span><span class="p">:</span>
-                        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;copy=False is incompatible with dtype conversion (</span><span class="si">{</span><span class="n">arr</span><span class="o">.</span><span class="n">dtype</span><span class="si">}</span><span class="s2"> -&gt; </span><span class="si">{</span><span class="n">dtype</span><span class="si">}</span><span class="s2">)&quot;</span><span class="p">)</span>
+                        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"copy=False is incompatible with dtype conversion (</span><span class="si">{</span><span class="n">arr</span><span class="o">.</span><span class="n">dtype</span><span class="si">}</span><span class="s2"> -&gt; </span><span class="si">{</span><span class="n">dtype</span><span class="si">}</span><span class="s2">)"</span><span class="p">)</span>
                 <span class="k">else</span><span class="p">:</span>
                     <span class="k">return</span> <span class="n">arr</span>
         <span class="n">arr</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_ndarray_matrix_to_numpy</span><span class="p">(</span><span class="n">as_vector</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
@@ -2450,14 +2450,14 @@
 <div class="viewcode-block" id="MatrixNdarray.from_numpy">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/matrix/index.html#quadrants.lang.matrix.MatrixNdarray.from_numpy">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">from_numpy</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">arr</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Copies the data of a `numpy.ndarray` into this array.</span>
+<span class="w">        </span><span class="sd">"""Copies the data of a `numpy.ndarray` into this array.</span>
 
 <span class="sd">        Example::</span>
 
 <span class="sd">            &gt;&gt;&gt; m = qd.MatrixNdarray(2, 2, qd.f32, shape=(2, 1), layout=0)</span>
 <span class="sd">            &gt;&gt;&gt; arr = np.ones((2, 1, 2, 2))</span>
 <span class="sd">            &gt;&gt;&gt; m.from_numpy(arr)</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_ndarray_matrix_from_numpy</span><span class="p">(</span><span class="n">arr</span><span class="p">,</span> <span class="n">as_vector</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span></div>
 
 
@@ -2465,14 +2465,14 @@
 <div class="viewcode-block" id="MatrixNdarray.to_torch">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/matrix/index.html#quadrants.lang.matrix.MatrixNdarray.to_torch">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">to_torch</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">copy</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Convert this matrix ndarray to a ``torch.Tensor`` of shape ``self.shape + (n, m)``.</span>
+<span class="w">        </span><span class="sd">"""Convert this matrix ndarray to a ``torch.Tensor`` of shape ``self.shape + (n, m)``.</span>
 
 <span class="sd">        Mirrors :meth:`MatrixField.to_torch`.</span>
 
 <span class="sd">        Args:</span>
 <span class="sd">            copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises,</span>
 <span class="sd">                ``None`` uses zero-copy when available and falls back to a copy otherwise.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="k">if</span> <span class="n">copy</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">True</span><span class="p">:</span>
             <span class="n">result</span> <span class="o">=</span> <span class="n">_try_zerocopy_torch</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">copy</span><span class="o">=</span><span class="n">copy</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">,</span> <span class="n">is_ndarray</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
             <span class="k">if</span> <span class="n">result</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
@@ -2484,8 +2484,8 @@
 <div class="viewcode-block" id="MatrixNdarray.from_torch">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/matrix/index.html#quadrants.lang.matrix.MatrixNdarray.from_torch">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">from_torch</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">arr</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Load all entries from a ``torch.Tensor`` of shape ``self.shape + (n, m)``. Mirrors</span>
-<span class="sd">        :meth:`MatrixField.from_torch`.&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""Load all entries from a ``torch.Tensor`` of shape ``self.shape + (n, m)``. Mirrors</span>
+<span class="sd">        :meth:`MatrixField.from_torch`."""</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_ndarray_matrix_from_torch</span><span class="p">(</span><span class="n">arr</span><span class="p">,</span> <span class="n">as_vector</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span></div>
 
 
@@ -2517,14 +2517,14 @@
 
     <span class="nd">@python_scope</span>
     <span class="k">def</span><span class="w"> </span><span class="fm">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-        <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;&lt;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">n</span><span class="si">}</span><span class="s2">x</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">m</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">Layout</span><span class="o">.</span><span class="n">AOS</span><span class="si">}</span><span class="s2"> qd.Matrix.ndarray&gt;&quot;</span></div>
+        <span class="k">return</span> <span class="sa">f</span><span class="s2">"&lt;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">n</span><span class="si">}</span><span class="s2">x</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">m</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">Layout</span><span class="o">.</span><span class="n">AOS</span><span class="si">}</span><span class="s2"> qd.Matrix.ndarray&gt;"</span></div>
 
 
 
 <div class="viewcode-block" id="VectorNdarray">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/matrix/index.html#quadrants.lang.matrix.VectorNdarray">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">VectorNdarray</span><span class="p">(</span><span class="n">Ndarray</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Quadrants ndarray with vector elements.</span>
+<span class="w">    </span><span class="sd">"""Quadrants ndarray with vector elements.</span>
 
 <span class="sd">    Args:</span>
 <span class="sd">        n (int): Size of the vector.</span>
@@ -2534,7 +2534,7 @@
 <span class="sd">    Example::</span>
 
 <span class="sd">        &gt;&gt;&gt; a = qd.VectorNdarray(3, qd.f32, (3, 3))</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">n</span><span class="p">,</span> <span class="n">dtype</span><span class="p">,</span> <span class="n">shape</span><span class="p">):</span>
 <div class="viewcode-block" id="VectorNdarray.n">
@@ -2568,14 +2568,14 @@
 <div class="viewcode-block" id="VectorNdarray.element_shape">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/matrix/index.html#quadrants.lang.matrix.VectorNdarray.element_shape">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">element_shape</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Gets the dimension of the vector of this ndarray.</span>
+<span class="w">        </span><span class="sd">"""Gets the dimension of the vector of this ndarray.</span>
 
 <span class="sd">        Example::</span>
 
 <span class="sd">            &gt;&gt;&gt; a = qd.VectorNdarray(3, qd.f32, (3, 3))</span>
 <span class="sd">            &gt;&gt;&gt; a.element_shape</span>
 <span class="sd">            (3,)</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="k">return</span> <span class="nb">tuple</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">arr</span><span class="o">.</span><span class="n">element_shape</span><span class="p">())</span></div>
 
 
@@ -2597,7 +2597,7 @@
 <div class="viewcode-block" id="VectorNdarray.to_numpy">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/matrix/index.html#quadrants.lang.matrix.VectorNdarray.to_numpy">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">to_numpy</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">copy</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Converts this vector ndarray to a ``numpy.ndarray``.</span>
+<span class="w">        </span><span class="sd">"""Converts this vector ndarray to a ``numpy.ndarray``.</span>
 
 <span class="sd">        Args:</span>
 <span class="sd">            copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises,</span>
@@ -2612,13 +2612,13 @@
 
 <span class="sd">                   [[0., 0., 0.],</span>
 <span class="sd">                    [0., 0., 0.]]], dtype=float32)</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="k">if</span> <span class="n">copy</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">True</span><span class="p">:</span>
             <span class="n">arr</span> <span class="o">=</span> <span class="n">_try_zerocopy_numpy</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">copy</span><span class="o">=</span><span class="n">copy</span><span class="p">,</span> <span class="n">is_ndarray</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
             <span class="k">if</span> <span class="n">arr</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
                 <span class="k">if</span> <span class="n">dtype</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">arr</span><span class="o">.</span><span class="n">dtype</span> <span class="o">!=</span> <span class="n">dtype</span><span class="p">:</span>
                     <span class="k">if</span> <span class="n">copy</span> <span class="ow">is</span> <span class="kc">False</span><span class="p">:</span>
-                        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;copy=False is incompatible with dtype conversion (</span><span class="si">{</span><span class="n">arr</span><span class="o">.</span><span class="n">dtype</span><span class="si">}</span><span class="s2"> -&gt; </span><span class="si">{</span><span class="n">dtype</span><span class="si">}</span><span class="s2">)&quot;</span><span class="p">)</span>
+                        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"copy=False is incompatible with dtype conversion (</span><span class="si">{</span><span class="n">arr</span><span class="o">.</span><span class="n">dtype</span><span class="si">}</span><span class="s2"> -&gt; </span><span class="si">{</span><span class="n">dtype</span><span class="si">}</span><span class="s2">)"</span><span class="p">)</span>
                 <span class="k">else</span><span class="p">:</span>
                     <span class="k">return</span> <span class="n">arr</span>
         <span class="n">arr</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_ndarray_matrix_to_numpy</span><span class="p">(</span><span class="n">as_vector</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
@@ -2631,7 +2631,7 @@
 <div class="viewcode-block" id="VectorNdarray.from_numpy">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/matrix/index.html#quadrants.lang.matrix.VectorNdarray.from_numpy">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">from_numpy</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">arr</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Copies the data from a `numpy.ndarray` into this ndarray.</span>
+<span class="w">        </span><span class="sd">"""Copies the data from a `numpy.ndarray` into this ndarray.</span>
 
 <span class="sd">        The shape and data type of `arr` must match this ndarray.</span>
 
@@ -2641,7 +2641,7 @@
 <span class="sd">            &gt;&gt;&gt; a = qd.VectorNdarray(3, qd.f32, (2, 2), 0)</span>
 <span class="sd">            &gt;&gt;&gt; b = np.ones((2, 2, 3), dtype=np.float32)</span>
 <span class="sd">            &gt;&gt;&gt; a.from_numpy(b)</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_ndarray_matrix_from_numpy</span><span class="p">(</span><span class="n">arr</span><span class="p">,</span> <span class="n">as_vector</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span></div>
 
 
@@ -2649,14 +2649,14 @@
 <div class="viewcode-block" id="VectorNdarray.to_torch">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/matrix/index.html#quadrants.lang.matrix.VectorNdarray.to_torch">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">to_torch</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">copy</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Convert this vector ndarray to a ``torch.Tensor`` of shape ``self.shape + (n,)``.</span>
+<span class="w">        </span><span class="sd">"""Convert this vector ndarray to a ``torch.Tensor`` of shape ``self.shape + (n,)``.</span>
 
 <span class="sd">        Mirrors :meth:`MatrixField.to_torch` on the vector code path.</span>
 
 <span class="sd">        Args:</span>
 <span class="sd">            copy: ``True`` (default) returns an independent copy, ``False`` requires zero-copy or raises,</span>
 <span class="sd">                ``None`` uses zero-copy when available and falls back to a copy otherwise.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="k">if</span> <span class="n">copy</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">True</span><span class="p">:</span>
             <span class="n">result</span> <span class="o">=</span> <span class="n">_try_zerocopy_torch</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">copy</span><span class="o">=</span><span class="n">copy</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">,</span> <span class="n">is_ndarray</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
             <span class="k">if</span> <span class="n">result</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
@@ -2668,7 +2668,7 @@
 <div class="viewcode-block" id="VectorNdarray.from_torch">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/matrix/index.html#quadrants.lang.matrix.VectorNdarray.from_torch">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">from_torch</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">arr</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Load all entries from a ``torch.Tensor`` of shape ``self.shape + (n,)``.&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""Load all entries from a ``torch.Tensor`` of shape ``self.shape + (n,)``."""</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_ndarray_matrix_from_torch</span><span class="p">(</span><span class="n">arr</span><span class="p">,</span> <span class="n">as_vector</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span></div>
 
 
@@ -2695,11 +2695,11 @@
 
     <span class="nd">@python_scope</span>
     <span class="k">def</span><span class="w"> </span><span class="fm">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-        <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;&lt;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">n</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">Layout</span><span class="o">.</span><span class="n">AOS</span><span class="si">}</span><span class="s2"> qd.Vector.ndarray&gt;&quot;</span></div>
+        <span class="k">return</span> <span class="sa">f</span><span class="s2">"&lt;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">n</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">Layout</span><span class="o">.</span><span class="n">AOS</span><span class="si">}</span><span class="s2"> qd.Vector.ndarray&gt;"</span></div>
 
 
 
-<span class="n">__all__</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;Matrix&quot;</span><span class="p">,</span> <span class="s2">&quot;Vector&quot;</span><span class="p">,</span> <span class="s2">&quot;MatrixField&quot;</span><span class="p">,</span> <span class="s2">&quot;MatrixNdarray&quot;</span><span class="p">,</span> <span class="s2">&quot;VectorNdarray&quot;</span><span class="p">]</span>
+<span class="n">__all__</span> <span class="o">=</span> <span class="p">[</span><span class="s2">"Matrix"</span><span class="p">,</span> <span class="s2">"Vector"</span><span class="p">,</span> <span class="s2">"MatrixField"</span><span class="p">,</span> <span class="s2">"MatrixNdarray"</span><span class="p">,</span> <span class="s2">"VectorNdarray"</span><span class="p">]</span>
 </pre></div>
 
                 </article>

@@ -441,7 +441,7 @@
 <section id="running-tests">
 <h2>Running tests<a class="headerlink" href="#running-tests" title="Link to this heading">#</a></h2>
 <p>Run the test suite with <code class="docutils literal notranslate"><span class="pre">python</span> <span class="pre">tests/run_tests.py</span></code>. CLI arguments are forwarded to pytest. For example, to run only Metal tests matching a keyword:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">python</span> <span class="n">tests</span><span class="o">/</span><span class="n">run_tests</span><span class="o">.</span><span class="n">py</span> <span class="o">--</span><span class="n">arch</span> <span class="n">metal</span> <span class="o">-</span><span class="n">k</span> <span class="s2">&quot;test_cholesky&quot;</span>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">python</span> <span class="n">tests</span><span class="o">/</span><span class="n">run_tests</span><span class="o">.</span><span class="n">py</span> <span class="o">--</span><span class="n">arch</span> <span class="n">metal</span> <span class="o">-</span><span class="n">k</span> <span class="s2">"test_cholesky"</span>
 </pre></div>
 </div>
 <p>The target architecture can also be set via the <code class="docutils literal notranslate"><span class="pre">QD_WANTED_ARCHS</span></code> environment variable (comma-separated, e.g. <code class="docutils literal notranslate"><span class="pre">QD_WANTED_ARCHS=metal,vulkan</span></code>).</p>
@@ -507,21 +507,21 @@
 </pre></div>
 </div>
 <p>You could then set the environment variable <code class="docutils literal notranslate"><span class="pre">CMAKE_ARGS</span></code> (scikit-build-core’s CMake-args passthrough) to configure the build. <code class="docutils literal notranslate"><span class="pre">build.py</span></code> reads it, layers on the toolchain options it manages, and exports it back. For instance, to disable the CUDA and AMDGPU backends:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">export</span> <span class="n">CMAKE_ARGS</span><span class="o">=</span><span class="s2">&quot;-DQD_WITH_CUDA=OFF -DQD_WITH_AMDGPU=OFF&quot;</span>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">export</span> <span class="n">CMAKE_ARGS</span><span class="o">=</span><span class="s2">"-DQD_WITH_CUDA=OFF -DQD_WITH_AMDGPU=OFF"</span>
 </pre></div>
 </div>
 <p>To direct <code class="docutils literal notranslate"><span class="pre">cmake</span></code> where to look at for some dependencies, for example <code class="docutils literal notranslate"><span class="pre">LLVM</span></code>, you could either use an environment variable <code class="docutils literal notranslate"><span class="pre">LLVM_DIR</span></code> or specify the cmake option <code class="docutils literal notranslate"><span class="pre">LLVM_ROOT</span></code>:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="c1"># using an env var</span>
-<span class="n">export</span> <span class="n">LLVM_DIR</span><span class="o">=</span><span class="s2">&quot;/path/to/llvm/&quot;</span>
+<span class="n">export</span> <span class="n">LLVM_DIR</span><span class="o">=</span><span class="s2">"/path/to/llvm/"</span>
 <span class="c1"># or with a cmake option</span>
-<span class="n">export</span> <span class="n">CMAKE_ARGS</span><span class="o">=</span><span class="s2">&quot;$CMAKE_ARGS -DLLVM_ROOT=/path/to/llvm&quot;</span>
+<span class="n">export</span> <span class="n">CMAKE_ARGS</span><span class="o">=</span><span class="s2">"$CMAKE_ARGS -DLLVM_ROOT=/path/to/llvm"</span>
 </pre></div>
 </div>
 <section id="building-with-the-amd-gpu-backend-linux">
 <h3>Building with the AMD GPU backend (Linux)<a class="headerlink" href="#building-with-the-amd-gpu-backend-linux" title="Link to this heading">#</a></h3>
 <p>The AMD GPU backend is Linux-only (it is force-disabled on macOS and Windows) and is off by default, so enable it explicitly through <code class="docutils literal notranslate"><span class="pre">CMAKE_ARGS</span></code>:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">./</span><span class="n">build</span><span class="o">.</span><span class="n">py</span> <span class="o">--</span><span class="n">shell</span>
-<span class="n">CMAKE_ARGS</span><span class="o">=</span><span class="s2">&quot;-DQD_WITH_AMDGPU=ON -DQD_WITH_CUDA=OFF&quot;</span> <span class="n">pip</span> <span class="n">install</span> <span class="o">--</span><span class="n">no</span><span class="o">-</span><span class="n">build</span><span class="o">-</span><span class="n">isolation</span> <span class="o">-</span><span class="n">e</span> <span class="o">.</span> <span class="o">-</span><span class="n">v</span>
+<span class="n">CMAKE_ARGS</span><span class="o">=</span><span class="s2">"-DQD_WITH_AMDGPU=ON -DQD_WITH_CUDA=OFF"</span> <span class="n">pip</span> <span class="n">install</span> <span class="o">--</span><span class="n">no</span><span class="o">-</span><span class="n">build</span><span class="o">-</span><span class="n">isolation</span> <span class="o">-</span><span class="n">e</span> <span class="o">.</span> <span class="o">-</span><span class="n">v</span>
 </pre></div>
 </div>
 </section>

@@ -331,13 +331,13 @@
                 <article class="bd-article">
                   
   <h1>Source code for quadrants.lang.graph_status</h1><div class="highlight"><pre>
-<span></span><span class="sd">&quot;&quot;&quot;Plain-Python container returned from graph kernels that contain ``qd.checkpoint(yield_on=...)``.</span>
+<span></span><span class="sd">"""Plain-Python container returned from graph kernels that contain ``qd.checkpoint(yield_on=...)``.</span>
 
 <span class="sd">Lives in its own module (with no Quadrants-internal imports) so it can be imported safely from both ``kernel.py`` and</span>
 <span class="sd">``misc.py`` without re-introducing the circular import chain that ``misc.py -&gt; impl.py -&gt; kernel.py`` would create.</span>
 
 <span class="sd">Re-exported via ``qd.lang.misc`` (and therefore as ``qd.GraphStatus``) for the user-facing canonical import path.</span>
-<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">"""</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
 
@@ -345,7 +345,7 @@
 <div class="viewcode-block" id="GraphStatus">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/graph_status/index.html#quadrants.lang.graph_status.GraphStatus">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">GraphStatus</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Result returned by a graph kernel that contains ``qd.checkpoint(cp_id, yield_on=...)`` blocks.</span>
+<span class="w">    </span><span class="sd">"""Result returned by a graph kernel that contains ``qd.checkpoint(cp_id, yield_on=...)`` blocks.</span>
 
 <span class="sd">    .. warning::</span>
 
@@ -372,14 +372,14 @@
 <span class="sd">                                 from_checkpoint=status.checkpoint)</span>
 
 <span class="sd">    Attributes:</span>
-<span class="sd">        yielded: ``True`` iff one of the kernel&#39;s checkpoints paused on the most recent launch (i.e. its ``yield_on=``</span>
+<span class="sd">        yielded: ``True`` iff one of the kernel's checkpoints paused on the most recent launch (i.e. its ``yield_on=``</span>
 <span class="sd">            flag was non-zero). ``False`` means the kernel completed normally and the host loop should exit.</span>
 <span class="sd">        checkpoint: The ``cp_id`` label of the checkpoint that paused (an ``int`` or the original ``IntEnum`` instance</span>
 <span class="sd">            you passed to ``qd.checkpoint(cp_id, ...)``), or ``None`` when ``yielded`` is ``False``. Pass it to</span>
 <span class="sd">            ``kernel.resume(..., from_checkpoint=...)`` to continue from that point on the next launch.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
 
-    <span class="vm">__slots__</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;yielded&quot;</span><span class="p">,</span> <span class="s2">&quot;checkpoint&quot;</span><span class="p">)</span>
+    <span class="vm">__slots__</span> <span class="o">=</span> <span class="p">(</span><span class="s2">"yielded"</span><span class="p">,</span> <span class="s2">"checkpoint"</span><span class="p">)</span>
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">yielded</span><span class="p">:</span> <span class="nb">bool</span><span class="p">,</span> <span class="n">checkpoint</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span><span class="p">):</span>
 <div class="viewcode-block" id="GraphStatus.yielded">
@@ -394,9 +394,9 @@
     <span class="k">def</span><span class="w"> </span><span class="fm">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">yielded</span><span class="p">:</span>
             <span class="c1"># Use `!r` so an `IntEnum` cp_id is shown as `&lt;Stage.LOAD: 0&gt;` rather than collapsing to its raw int via</span>
-            <span class="c1"># `int.__format__` (which Python 3.10&#39;s `f&quot;{IntEnum.X}&quot;` does). Plain ints round-trip unchanged.</span>
-            <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;GraphStatus(yielded=True, checkpoint=</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">checkpoint</span><span class="si">!r}</span><span class="s2">)&quot;</span>
-        <span class="k">return</span> <span class="s2">&quot;GraphStatus(yielded=False)&quot;</span></div>
+            <span class="c1"># `int.__format__` (which Python 3.10's `f"{IntEnum.X}"` does). Plain ints round-trip unchanged.</span>
+            <span class="k">return</span> <span class="sa">f</span><span class="s2">"GraphStatus(yielded=True, checkpoint=</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">checkpoint</span><span class="si">!r}</span><span class="s2">)"</span>
+        <span class="k">return</span> <span class="s2">"GraphStatus(yielded=False)"</span></div>
 
 </pre></div>
 

@@ -26,6 +26,8 @@ Because `use_fast_path` is a templated parameter, it is known at compile time. T
 
 Without `qd.static`, the condition would be evaluated at runtime for every thread, which is slower. In addition, the kernel will contain the code for both branches, which will increase register pressure, and likely reduce occupancy.
 
+`is None` and `is not None` are supported inside `qd.static()` for direct `qd.Template` and `qd.Tensor` kernel arguments. Other identity comparisons and runtime operands remain unsupported.
+
 ## Loop unrolling
 
 ```python

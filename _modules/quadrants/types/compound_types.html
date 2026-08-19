@@ -346,7 +346,7 @@
 <div class="viewcode-block" id="matrix">
 <a class="viewcode-back" href="../../../autoapi/quadrants/types/compound_types/index.html#quadrants.types.compound_types.matrix">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">matrix</span><span class="p">(</span><span class="n">n</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">m</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Creates a matrix type with given shape and data type.</span>
+<span class="w">    </span><span class="sd">"""Creates a matrix type with given shape and data type.</span>
 
 <span class="sd">    Args:</span>
 <span class="sd">        n (int): number of rows of the matrix.</span>
@@ -360,7 +360,7 @@
 
 <span class="sd">        &gt;&gt;&gt; mat2x2 = qd.types.matrix(2, 2, qd.f32)  # 2x2 matrix type</span>
 <span class="sd">        &gt;&gt;&gt; M = mat2x2([[1., 2.], [3., 4.]])  # an instance of this type</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
     <span class="k">return</span> <span class="n">quadrants</span><span class="o">.</span><span class="n">lang</span><span class="o">.</span><span class="n">matrix</span><span class="o">.</span><span class="n">MatrixType</span><span class="p">(</span><span class="n">n</span><span class="p">,</span> <span class="n">m</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="n">dtype</span><span class="p">)</span>  <span class="c1"># type: ignore</span></div>
 
 
@@ -368,7 +368,7 @@
 <div class="viewcode-block" id="vector">
 <a class="viewcode-back" href="../../../autoapi/quadrants/types/compound_types/index.html#quadrants.types.compound_types.vector">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">vector</span><span class="p">(</span><span class="n">n</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">unpacked</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Creates a vector type with given shape and data type.</span>
+<span class="w">    </span><span class="sd">"""Creates a vector type with given shape and data type.</span>
 
 <span class="sd">    Args:</span>
 <span class="sd">        n (int): dimension of the vector.</span>
@@ -385,7 +385,7 @@
 
 <span class="sd">        &gt;&gt;&gt; vec3 = qd.types.vector(3, qd.f32)  # 3d vector type</span>
 <span class="sd">        &gt;&gt;&gt; v = vec3([1., 2., 3.])  # an instance of this type</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
     <span class="k">return</span> <span class="n">quadrants</span><span class="o">.</span><span class="n">lang</span><span class="o">.</span><span class="n">matrix</span><span class="o">.</span><span class="n">VectorType</span><span class="p">(</span><span class="n">n</span><span class="p">,</span> <span class="n">dtype</span><span class="p">,</span> <span class="n">unpacked</span><span class="o">=</span><span class="n">unpacked</span><span class="p">)</span>  <span class="c1"># type: ignore</span></div>
 
 
@@ -393,7 +393,7 @@
 <div class="viewcode-block" id="struct">
 <a class="viewcode-back" href="../../../autoapi/quadrants/types/compound_types/index.html#quadrants.types.compound_types.struct">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">struct</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Creates a struct type with given members.</span>
+<span class="w">    </span><span class="sd">"""Creates a struct type with given members.</span>
 
 <span class="sd">    Args:</span>
 <span class="sd">        kwargs (dict): a dictionary contains the names and types of the</span>
@@ -407,12 +407,12 @@
 <span class="sd">        &gt;&gt;&gt; vec3 = qd.types.vector(3, qd.f32)</span>
 <span class="sd">        &gt;&gt;&gt; sphere = qd.types.struct(center=vec3, radius=float)</span>
 <span class="sd">        &gt;&gt;&gt; s = sphere(center=vec3([0., 0., 0.]), radius=1.0)</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
     <span class="k">return</span> <span class="n">quadrants</span><span class="o">.</span><span class="n">lang</span><span class="o">.</span><span class="n">struct</span><span class="o">.</span><span class="n">StructType</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>  <span class="c1"># type: ignore</span></div>
 
 
 
-<span class="n">__all__</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;matrix&quot;</span><span class="p">,</span> <span class="s2">&quot;vector&quot;</span><span class="p">,</span> <span class="s2">&quot;struct&quot;</span><span class="p">]</span>
+<span class="n">__all__</span> <span class="o">=</span> <span class="p">[</span><span class="s2">"matrix"</span><span class="p">,</span> <span class="s2">"vector"</span><span class="p">,</span> <span class="s2">"struct"</span><span class="p">]</span>
 </pre></div>
 
                 </article>

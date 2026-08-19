@@ -358,7 +358,7 @@
 <span class="p">)</span>
 
 
-<span class="n">F</span> <span class="o">=</span> <span class="n">TypeVar</span><span class="p">(</span><span class="s2">&quot;F&quot;</span><span class="p">,</span> <span class="n">bound</span><span class="o">=</span><span class="n">Callable</span><span class="p">)</span>
+<span class="n">F</span> <span class="o">=</span> <span class="n">TypeVar</span><span class="p">(</span><span class="s2">"F"</span><span class="p">,</span> <span class="n">bound</span><span class="o">=</span><span class="n">Callable</span><span class="p">)</span>
 
 
 <span class="nd">@overload</span>
@@ -373,7 +373,7 @@
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">func</span><span class="p">(</span><span class="n">fn</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">is_real_function</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">requires_top_level</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Marks a function as callable in Quadrants-scope.</span>
+<span class="w">    </span><span class="sd">"""Marks a function as callable in Quadrants-scope.</span>
 
 <span class="sd">    This decorator transforms a Python function into a Quadrants one. Quadrants</span>
 <span class="sd">    will JIT compile it into native instructions.</span>
@@ -404,12 +404,12 @@
 <span class="sd">        &gt;&gt;&gt; @qd.kernel</span>
 <span class="sd">        &gt;&gt;&gt; def run():</span>
 <span class="sd">        &gt;&gt;&gt;     print(foo(40))  # 42</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">decorator</span><span class="p">(</span><span class="n">fn</span><span class="p">:</span> <span class="n">F</span><span class="p">,</span> <span class="n">_bare</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">F</span><span class="p">:</span>
         <span class="c1"># Bare ``@qd.func`` reaches ``decorator`` from inside ``func`` (one extra stack frame); the</span>
         <span class="c1"># factory form ``@qd.func(...)`` is invoked directly by Python. Add the extra level in the</span>
-        <span class="c1"># bare case so ``_inside_class`` inspects the user&#39;s class/def frame in both forms (mirrors</span>
+        <span class="c1"># bare case so ``_inside_class`` inspects the user's class/def frame in both forms (mirrors</span>
         <span class="c1"># the offset handling in ``kernel``).</span>
         <span class="n">level</span> <span class="o">=</span> <span class="p">(</span><span class="mi">4</span> <span class="k">if</span> <span class="n">_bare</span> <span class="k">else</span> <span class="mi">3</span><span class="p">)</span> <span class="o">+</span> <span class="n">is_real_function</span>
         <span class="n">is_classfunc</span> <span class="o">=</span> <span class="n">_inside_class</span><span class="p">(</span><span class="n">level_of_class_stackframe</span><span class="o">=</span><span class="n">level</span><span class="p">)</span>
@@ -438,7 +438,7 @@
 <div class="viewcode-block" id="pyfunc">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/kernel_impl/index.html#quadrants.lang.kernel_impl.pyfunc">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">pyfunc</span><span class="p">(</span><span class="n">fn</span><span class="p">:</span> <span class="n">Callable</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">QuadrantsCallable</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Marks a function as callable in both Quadrants and Python scopes.</span>
+<span class="w">    </span><span class="sd">"""Marks a function as callable in both Quadrants and Python scopes.</span>
 
 <span class="sd">    When called inside the Quadrants scope, Quadrants will JIT compile it into</span>
 <span class="sd">    native instructions. Otherwise it will be invoked directly as a</span>
@@ -451,7 +451,7 @@
 
 <span class="sd">    Returns:</span>
 <span class="sd">        Callable: The decorated function</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
     <span class="n">is_classfunc</span> <span class="o">=</span> <span class="n">_inside_class</span><span class="p">(</span><span class="n">level_of_class_stackframe</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>
     <span class="n">fun</span> <span class="o">=</span> <span class="n">Func</span><span class="p">(</span><span class="n">fn</span><span class="p">,</span> <span class="n">_classfunc</span><span class="o">=</span><span class="n">is_classfunc</span><span class="p">,</span> <span class="n">_pyfunc</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
     <span class="n">quadrants_callable</span> <span class="o">=</span> <span class="n">QuadrantsCallable</span><span class="p">(</span><span class="n">fn</span><span class="p">,</span> <span class="n">fun</span><span class="p">)</span>
@@ -469,14 +469,14 @@
 <span class="c1">#   def foo(self):</span>
 <span class="c1">#     ...</span>
 <span class="c1">#</span>
-<span class="c1"># When qd.kernel runs, the stackframe&#39;s |code_context| of Python 3.8(+) is</span>
-<span class="c1"># different from that of Python 3.7 and below. In 3.8+, it is &#39;class X:&#39;,</span>
-<span class="c1"># whereas in &lt;=3.7, it is &#39;@qd.data_oriented&#39;. More interestingly, if the class</span>
+<span class="c1"># When qd.kernel runs, the stackframe's |code_context| of Python 3.8(+) is</span>
+<span class="c1"># different from that of Python 3.7 and below. In 3.8+, it is 'class X:',</span>
+<span class="c1"># whereas in &lt;=3.7, it is '@qd.data_oriented'. More interestingly, if the class</span>
 <span class="c1"># inherits, i.e. class X(object):, then in both versions, |code_context| is</span>
-<span class="c1"># &#39;class X(object):&#39;...</span>
+<span class="c1"># 'class X(object):'...</span>
 <span class="n">_KERNEL_CLASS_STACKFRAME_STMT_RES</span> <span class="o">=</span> <span class="p">[</span>
-    <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="sa">r</span><span class="s2">&quot;@(\w+\.)?data_oriented&quot;</span><span class="p">),</span>
-    <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="sa">r</span><span class="s2">&quot;class &quot;</span><span class="p">),</span>
+    <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="sa">r</span><span class="s2">"@(\w+\.)?data_oriented"</span><span class="p">),</span>
+    <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="sa">r</span><span class="s2">"class "</span><span class="p">),</span>
 <span class="p">]</span>
 
 
@@ -507,7 +507,7 @@
     <span class="n">is_classkernel</span> <span class="o">=</span> <span class="n">_inside_class</span><span class="p">(</span><span class="n">level_of_class_stackframe</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span>
 
     <span class="k">if</span> <span class="n">verbose</span><span class="p">:</span>
-        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;kernel=</span><span class="si">{</span><span class="n">_func</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2"> is_classkernel=</span><span class="si">{</span><span class="n">is_classkernel</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"kernel=</span><span class="si">{</span><span class="n">_func</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2"> is_classkernel=</span><span class="si">{</span><span class="n">is_classkernel</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
     <span class="n">primal</span> <span class="o">=</span> <span class="n">Kernel</span><span class="p">(</span><span class="n">_func</span><span class="p">,</span> <span class="n">autodiff_mode</span><span class="o">=</span><span class="n">_NONE</span><span class="p">,</span> <span class="n">_is_classkernel</span><span class="o">=</span><span class="n">is_classkernel</span><span class="p">)</span>
     <span class="n">adjoint</span> <span class="o">=</span> <span class="n">Kernel</span><span class="p">(</span><span class="n">_func</span><span class="p">,</span> <span class="n">autodiff_mode</span><span class="o">=</span><span class="n">_REVERSE</span><span class="p">,</span> <span class="n">_is_classkernel</span><span class="o">=</span><span class="n">is_classkernel</span><span class="p">)</span>
     <span class="n">primal</span><span class="o">.</span><span class="n">use_graph</span> <span class="o">=</span> <span class="n">graph</span>
@@ -523,7 +523,7 @@
         <span class="k">except</span> <span class="p">(</span><span class="n">QuadrantsCompilationError</span><span class="p">,</span> <span class="n">QuadrantsRuntimeError</span><span class="p">)</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
             <span class="k">if</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">print_full_traceback</span><span class="p">:</span>
                 <span class="k">raise</span> <span class="n">e</span>
-            <span class="k">raise</span> <span class="nb">type</span><span class="p">(</span><span class="n">e</span><span class="p">)(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">))</span> <span class="kn">from</span><span class="w"> </span><span class="kc">None</span>
+            <span class="k">raise</span> <span class="nb">type</span><span class="p">(</span><span class="n">e</span><span class="p">)(</span><span class="s2">"</span><span class="se">\n</span><span class="s2">"</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">))</span> <span class="kn">from</span><span class="w"> </span><span class="kc">None</span>
 
     <span class="n">wrapped</span><span class="p">:</span> <span class="n">QuadrantsCallable</span>
     <span class="k">if</span> <span class="n">is_classkernel</span><span class="p">:</span>
@@ -534,8 +534,8 @@
         <span class="c1"># See also: _BoundedDifferentiableMethod, data_oriented.</span>
         <span class="nd">@wraps</span><span class="p">(</span><span class="n">_func</span><span class="p">)</span>
         <span class="k">def</span><span class="w"> </span><span class="nf">wrapped_classkernel</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
-            <span class="k">if</span> <span class="n">args</span> <span class="ow">and</span> <span class="ow">not</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="s2">&quot;_data_oriented&quot;</span><span class="p">,</span> <span class="kc">False</span><span class="p">):</span>
-                <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Please decorate class </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2"> with @qd.data_oriented&quot;</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">args</span> <span class="ow">and</span> <span class="ow">not</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="s2">"_data_oriented"</span><span class="p">,</span> <span class="kc">False</span><span class="p">):</span>
+                <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Please decorate class </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">args</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2"> with @qd.data_oriented"</span><span class="p">)</span>
             <span class="k">return</span> <span class="n">wrapped_func</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
 
         <span class="n">wrapped</span> <span class="o">=</span> <span class="n">QuadrantsCallable</span><span class="p">(</span><span class="n">_func</span><span class="p">,</span> <span class="n">wrapped_classkernel</span><span class="p">)</span>
@@ -580,7 +580,7 @@
     <span class="n">graph</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
     <span class="n">checkpoints</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
 <span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""</span>
 <span class="sd">    Marks a function as a Quadrants kernel.</span>
 
 <span class="sd">    A Quadrants kernel is a function written in Python, and gets JIT compiled by</span>
@@ -588,7 +588,7 @@
 <span class="sd">    The top-level ``for`` loops are automatically parallelized, and distributed</span>
 <span class="sd">    to either a CPU thread pool or massively parallel GPUs.</span>
 
-<span class="sd">    Kernel&#39;s gradient kernel would be generated automatically by the AutoDiff system.</span>
+<span class="sd">    Kernel's gradient kernel would be generated automatically by the AutoDiff system.</span>
 
 <span class="sd">    Args:</span>
 <span class="sd">        graph: If True, kernels with 2+ top-level for loops are captured</span>
@@ -609,7 +609,7 @@
 <span class="sd">        &gt;&gt;&gt;     # Assigns all the elements of `x` in parallel.</span>
 <span class="sd">        &gt;&gt;&gt;     for i in x:</span>
 <span class="sd">        &gt;&gt;&gt;         x[i] = i</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">decorator</span><span class="p">(</span><span class="n">fn</span><span class="p">:</span> <span class="n">F</span><span class="p">,</span> <span class="n">has_kernel_params</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">F</span><span class="p">:</span>
         <span class="c1"># Adjust stack frame: +1 if called via decorator factory (@kernel()), else as-is (@kernel)</span>
@@ -620,22 +620,22 @@
 
         <span class="k">if</span> <span class="n">checkpoints</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">graph</span><span class="p">:</span>
             <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span>
-                <span class="sa">f</span><span class="s2">&quot;@qd.kernel(</span><span class="si">{</span><span class="n">fn</span><span class="o">.</span><span class="vm">__name__</span><span class="si">!r}</span><span class="s2">, checkpoints=True) requires graph=True; &quot;</span>
-                <span class="s2">&quot;the checkpoint resume model is only meaningful for graph kernels.&quot;</span>
+                <span class="sa">f</span><span class="s2">"@qd.kernel(</span><span class="si">{</span><span class="n">fn</span><span class="o">.</span><span class="vm">__name__</span><span class="si">!r}</span><span class="s2">, checkpoints=True) requires graph=True; "</span>
+                <span class="s2">"the checkpoint resume model is only meaningful for graph kernels."</span>
             <span class="p">)</span>
         <span class="n">wrapped</span> <span class="o">=</span> <span class="n">_kernel_impl</span><span class="p">(</span><span class="n">fn</span><span class="p">,</span> <span class="n">level_of_class_stackframe</span><span class="o">=</span><span class="n">level</span><span class="p">,</span> <span class="n">graph</span><span class="o">=</span><span class="n">graph</span><span class="p">,</span> <span class="n">checkpoints</span><span class="o">=</span><span class="n">checkpoints</span><span class="p">)</span>
         <span class="n">wrapped</span><span class="o">.</span><span class="n">is_pure</span> <span class="o">=</span> <span class="n">pure</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">pure</span> <span class="ow">or</span> <span class="n">fastcache</span>
         <span class="k">if</span> <span class="n">pure</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
             <span class="n">warnings_helper</span><span class="o">.</span><span class="n">warn_once</span><span class="p">(</span>
-                <span class="s2">&quot;@qd.kernel parameter `pure` is deprecated. Please use parameter `fastcache`. &quot;</span>
-                <span class="s2">&quot;`pure` parameter is intended to be removed in 4.0.0&quot;</span>
+                <span class="s2">"@qd.kernel parameter `pure` is deprecated. Please use parameter `fastcache`. "</span>
+                <span class="s2">"`pure` parameter is intended to be removed in 4.0.0"</span>
             <span class="p">)</span>
 
         <span class="n">update_wrapper</span><span class="p">(</span><span class="n">wrapped</span><span class="p">,</span> <span class="n">fn</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">cast</span><span class="p">(</span><span class="n">F</span><span class="p">,</span> <span class="n">wrapped</span><span class="p">)</span>
 
     <span class="k">if</span> <span class="n">_fn</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-        <span class="c1"># Called with @kernel() or @kernel(foo=&quot;bar&quot;)</span>
+        <span class="c1"># Called with @kernel() or @kernel(foo="bar")</span>
         <span class="k">return</span> <span class="n">decorator</span>
 
     <span class="k">return</span> <span class="n">decorator</span><span class="p">(</span><span class="n">_fn</span><span class="p">,</span> <span class="n">has_kernel_params</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
@@ -644,8 +644,8 @@
 <span class="k">class</span><span class="w"> </span><span class="nc">_BoundedDifferentiableMethod</span><span class="p">:</span>
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">kernel_owner</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">wrapped_kernel_func</span><span class="p">:</span> <span class="n">QuadrantsCallable</span> <span class="o">|</span> <span class="n">BoundQuadrantsCallable</span><span class="p">):</span>
         <span class="n">clsobj</span> <span class="o">=</span> <span class="nb">type</span><span class="p">(</span><span class="n">kernel_owner</span><span class="p">)</span>
-        <span class="k">if</span> <span class="ow">not</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">clsobj</span><span class="p">,</span> <span class="s2">&quot;_data_oriented&quot;</span><span class="p">,</span> <span class="kc">False</span><span class="p">):</span>
-            <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Please decorate class </span><span class="si">{</span><span class="n">clsobj</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2"> with @qd.data_oriented&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">clsobj</span><span class="p">,</span> <span class="s2">"_data_oriented"</span><span class="p">,</span> <span class="kc">False</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Please decorate class </span><span class="si">{</span><span class="n">clsobj</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2"> with @qd.data_oriented"</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_kernel_owner</span> <span class="o">=</span> <span class="n">kernel_owner</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_primal</span> <span class="o">=</span> <span class="n">wrapped_kernel_func</span><span class="o">.</span><span class="n">_primal</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_adjoint</span> <span class="o">=</span> <span class="n">wrapped_kernel_func</span><span class="o">.</span><span class="n">_adjoint</span>
@@ -658,9 +658,9 @@
         <span class="k">except</span> <span class="p">(</span><span class="n">QuadrantsCompilationError</span><span class="p">,</span> <span class="n">QuadrantsRuntimeError</span><span class="p">)</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
             <span class="k">if</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">print_full_traceback</span><span class="p">:</span>
                 <span class="k">raise</span> <span class="n">e</span>
-            <span class="k">raise</span> <span class="nb">type</span><span class="p">(</span><span class="n">e</span><span class="p">)(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">))</span> <span class="kn">from</span><span class="w"> </span><span class="kc">None</span>
+            <span class="k">raise</span> <span class="nb">type</span><span class="p">(</span><span class="n">e</span><span class="p">)(</span><span class="s2">"</span><span class="se">\n</span><span class="s2">"</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">))</span> <span class="kn">from</span><span class="w"> </span><span class="kc">None</span>
 
-    <span class="k">def</span><span class="w"> </span><span class="nf">grad</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;Kernel&quot;</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">grad</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">"Kernel"</span><span class="p">:</span>
         <span class="k">assert</span> <span class="bp">self</span><span class="o">.</span><span class="n">_adjoint</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_adjoint</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_kernel_owner</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
 
@@ -668,7 +668,7 @@
 <div class="viewcode-block" id="data_oriented">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/kernel_impl/index.html#quadrants.lang.kernel_impl.data_oriented">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">data_oriented</span><span class="p">(</span><span class="bp">cls</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">template_primitives</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Marks a class as Quadrants compatible.</span>
+<span class="w">    </span><span class="sd">"""Marks a class as Quadrants compatible.</span>
 
 <span class="sd">    To allow for modularized code, Quadrants provides this decorator so that</span>
 <span class="sd">    Quadrants kernels can be defined inside a class.</span>
@@ -705,7 +705,7 @@
 
 <span class="sd">    Returns:</span>
 <span class="sd">        The decorated class.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">decorate</span><span class="p">(</span><span class="bp">cls</span><span class="p">):</span>
         <span class="k">def</span><span class="w"> </span><span class="nf">make_kernel_indirect</span><span class="p">(</span><span class="n">fun</span><span class="p">,</span> <span class="n">is_property</span><span class="p">):</span>
@@ -747,7 +747,7 @@
 
 
 
-<span class="n">__all__</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;data_oriented&quot;</span><span class="p">,</span> <span class="s2">&quot;func&quot;</span><span class="p">,</span> <span class="s2">&quot;kernel&quot;</span><span class="p">,</span> <span class="s2">&quot;pyfunc&quot;</span><span class="p">,</span> <span class="s2">&quot;real_func&quot;</span><span class="p">]</span>
+<span class="n">__all__</span> <span class="o">=</span> <span class="p">[</span><span class="s2">"data_oriented"</span><span class="p">,</span> <span class="s2">"func"</span><span class="p">,</span> <span class="s2">"kernel"</span><span class="p">,</span> <span class="s2">"pyfunc"</span><span class="p">,</span> <span class="s2">"real_func"</span><span class="p">]</span>
 </pre></div>
 
                 </article>

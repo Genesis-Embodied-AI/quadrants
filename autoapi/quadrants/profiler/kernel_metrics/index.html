@@ -419,17 +419,17 @@ For usage of this class, see examples in func <code class="xref py py-func docut
 <span class="gp">&gt;&gt;&gt; </span>        <span class="n">y</span><span class="p">[</span><span class="kc">None</span><span class="p">]</span> <span class="o">+=</span> <span class="n">x</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
 
 <span class="gp">&gt;&gt;&gt; </span><span class="n">global_op_atom</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">profiler</span><span class="o">.</span><span class="n">CuptiMetric</span><span class="p">(</span>
-<span class="gp">&gt;&gt;&gt; </span>    <span class="n">name</span><span class="o">=</span><span class="s1">&#39;l1tex__t_set_accesses_pipe_lsu_mem_global_op_atom.sum&#39;</span><span class="p">,</span>
-<span class="gp">&gt;&gt;&gt; </span>    <span class="n">header</span><span class="o">=</span><span class="s1">&#39; global.atom &#39;</span><span class="p">,</span>
-<span class="gp">&gt;&gt;&gt; </span>    <span class="n">val_format</span><span class="o">=</span><span class="s1">&#39;    </span><span class="si">{:8.0f}</span><span class="s1"> &#39;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="n">name</span><span class="o">=</span><span class="s1">'l1tex__t_set_accesses_pipe_lsu_mem_global_op_atom.sum'</span><span class="p">,</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="n">header</span><span class="o">=</span><span class="s1">' global.atom '</span><span class="p">,</span>
+<span class="gp">&gt;&gt;&gt; </span>    <span class="n">val_format</span><span class="o">=</span><span class="s1">'    </span><span class="si">{:8.0f}</span><span class="s1"> '</span><span class="p">)</span>
 
 <span class="gp">&gt;&gt;&gt; </span><span class="c1"># add and set user defined metrics</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">profiling_metrics</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">profiler</span><span class="o">.</span><span class="n">get_predefined_cupti_metrics</span><span class="p">(</span><span class="s1">&#39;global_access&#39;</span><span class="p">)</span> <span class="o">+</span> <span class="p">[</span><span class="n">global_op_atom</span><span class="p">]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">profiling_metrics</span> <span class="o">=</span> <span class="n">qd</span><span class="o">.</span><span class="n">profiler</span><span class="o">.</span><span class="n">get_predefined_cupti_metrics</span><span class="p">(</span><span class="s1">'global_access'</span><span class="p">)</span> <span class="o">+</span> <span class="p">[</span><span class="n">global_op_atom</span><span class="p">]</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">qd</span><span class="o">.</span><span class="n">profiler</span><span class="o">.</span><span class="n">set_kernel_profile_metrics</span><span class="p">(</span><span class="n">profiling_metrics</span><span class="p">)</span>
 
 <span class="gp">&gt;&gt;&gt; </span><span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">16</span><span class="p">):</span>
 <span class="gp">&gt;&gt;&gt; </span>    <span class="n">reduction</span><span class="p">()</span>
-<span class="gp">&gt;&gt;&gt; </span><span class="n">qd</span><span class="o">.</span><span class="n">profiler</span><span class="o">.</span><span class="n">print_kernel_profiler_info</span><span class="p">(</span><span class="s1">&#39;trace&#39;</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">qd</span><span class="o">.</span><span class="n">profiler</span><span class="o">.</span><span class="n">print_kernel_profiler_info</span><span class="p">(</span><span class="s1">'trace'</span><span class="p">)</span>
 </pre></div>
 </div>
 <div class="admonition note">

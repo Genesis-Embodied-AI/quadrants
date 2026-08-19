@@ -341,22 +341,22 @@
 <span class="kn">from</span><span class="w"> </span><span class="nn">collections</span><span class="w"> </span><span class="kn">import</span> <span class="n">defaultdict</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">dataclasses</span><span class="w"> </span><span class="kn">import</span> <span class="n">_FIELDS</span>  <span class="c1"># type: ignore[reportAttributeAccessIssue]</span>
 
-<span class="c1"># Must import &#39;partial&#39; directly instead of the entire module to avoid attribute lookup overhead.</span>
+<span class="c1"># Must import 'partial' directly instead of the entire module to avoid attribute lookup overhead.</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">functools</span><span class="w"> </span><span class="kn">import</span> <span class="n">partial</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Callable</span>
 
-<span class="c1"># Must import &#39;ReferenceType&#39; directly instead of the entire module to avoid attribute lookup overhead.</span>
+<span class="c1"># Must import 'ReferenceType' directly instead of the entire module to avoid attribute lookup overhead.</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">weakref</span><span class="w"> </span><span class="kn">import</span> <span class="n">ReferenceType</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants</span><span class="w"> </span><span class="kn">import</span> <span class="n">_logging</span>
 
-<span class="n">_GRAPH_ENABLED</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;QD_GRAPH&quot;</span><span class="p">,</span> <span class="s2">&quot;1&quot;</span><span class="p">)</span> <span class="o">==</span> <span class="s2">&quot;1&quot;</span>
+<span class="n">_GRAPH_ENABLED</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"QD_GRAPH"</span><span class="p">,</span> <span class="s2">"1"</span><span class="p">)</span> <span class="o">==</span> <span class="s2">"1"</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants</span><span class="w"> </span><span class="kn">import</span> <span class="n">_tensor_wrapper</span>
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_kernel_coverage_enabled</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
-    <span class="k">return</span> <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;QD_KERNEL_COVERAGE&quot;</span><span class="p">)</span> <span class="o">==</span> <span class="s2">&quot;1&quot;</span>
+    <span class="k">return</span> <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"QD_KERNEL_COVERAGE"</span><span class="p">)</span> <span class="o">==</span> <span class="s2">"1"</span>
 
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._lib.core.quadrants_python</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
@@ -368,11 +368,12 @@
     <span class="n">KernelLaunchContext</span><span class="p">,</span>
 <span class="p">)</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._tensor_wrapper</span><span class="w"> </span><span class="kn">import</span> <span class="n">_TENSOR_WRAPPER_TYPES</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants._tensor_wrapper</span><span class="w"> </span><span class="kn">import</span> <span class="n">Tensor</span> <span class="k">as</span> <span class="n">_TensorClass</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">_kernel_impl_dataclass</span><span class="p">,</span> <span class="n">impl</span><span class="p">,</span> <span class="n">runtime_ops</span>
 
 <span class="c1"># `qd.checkpoint` pause / resume model helpers. See `kernel_checkpoint.py` for the full extracted surface; `Kernel`</span>
 <span class="c1"># delegates the resume-cookie validation, label translation, per-launch yield_on= arg-id table build, and GraphStatus</span>
-<span class="c1"># construction to those free functions so this hot file doesn&#39;t accrete checkpoint-feature-specific blocks.</span>
+<span class="c1"># construction to those free functions so this hot file doesn't accrete checkpoint-feature-specific blocks.</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">kernel_checkpoint</span> <span class="k">as</span> <span class="n">_checkpoint_helpers</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._fast_caching</span><span class="w"> </span><span class="kn">import</span> <span class="n">src_hasher</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._template_mapper_hotpath</span><span class="w"> </span><span class="kn">import</span> <span class="n">chain_has_mutable_container</span>
@@ -427,7 +428,7 @@
     <span class="c1"># buffer is allowing skipping recursive processing of all the input arguments one-by-one, which is adding a</span>
     <span class="c1"># significant overhead, without changing anything in regards of the function calls to the launch context that must</span>
     <span class="c1"># be made for a given kernel.</span>
-    <span class="c1"># You can understand this as resolving the static part of the entire control flow of &#39;_recursive_set_args&#39; for a</span>
+    <span class="c1"># You can understand this as resolving the static part of the entire control flow of '_recursive_set_args' for a</span>
     <span class="c1"># given set of arguments, which is (mostly surely uniquely) characterized by its hash, gathering all the</span>
     <span class="c1"># instructions that cannot be evaluated statically and packing them in a buffer without evaluating them at this</span>
     <span class="c1"># point. This buffer is then cached once and for all and evaluated every time the exact same set of input argument</span>
@@ -446,17 +447,17 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">_prog_weakref</span><span class="p">:</span> <span class="n">ReferenceType</span><span class="p">[</span><span class="n">Program</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
 
         <span class="c1"># The cache key corresponds to the hash of the (packed) python-side input arguments of the kernel.</span>
-        <span class="c1"># * &#39;_launch_ctx_cache&#39; is storing a backup of the launch context BEFORE ever calling the kernel.</span>
-        <span class="c1"># * &#39;_launch_ctx_cache_tracker&#39; is used for bounding the lifetime of a cache entry to its corresponding set of</span>
+        <span class="c1"># * '_launch_ctx_cache' is storing a backup of the launch context BEFORE ever calling the kernel.</span>
+        <span class="c1"># * '_launch_ctx_cache_tracker' is used for bounding the lifetime of a cache entry to its corresponding set of</span>
         <span class="c1">#   input arguments. Internally, this is done by wrapping all Quadrants ndarrays as weak reference.</span>
-        <span class="c1"># * &#39;_prog_weakref&#39;is used for bounding the lifetime of the entire cache to the Quadrants programm managing all</span>
+        <span class="c1"># * '_prog_weakref'is used for bounding the lifetime of the entire cache to the Quadrants programm managing all</span>
         <span class="c1">#   the launch context being stored in cache.</span>
-        <span class="c1"># See &#39;launch_kernel&#39; for details regarding the intended use of caching.</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">_launch_ctx_cache</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="s2">&quot;ArgsHash&quot;</span><span class="p">,</span> <span class="n">KernelLaunchContext</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">_launch_ctx_cache_tracker</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="s2">&quot;ArgsHash&quot;</span><span class="p">,</span> <span class="nb">list</span><span class="p">[</span><span class="n">ReferenceType</span> <span class="o">|</span> <span class="kc">None</span><span class="p">]]</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="c1"># See 'launch_kernel' for details regarding the intended use of caching.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_launch_ctx_cache</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="s2">"ArgsHash"</span><span class="p">,</span> <span class="n">KernelLaunchContext</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_launch_ctx_cache_tracker</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="s2">"ArgsHash"</span><span class="p">,</span> <span class="nb">list</span><span class="p">[</span><span class="n">ReferenceType</span> <span class="o">|</span> <span class="kc">None</span><span class="p">]]</span> <span class="o">=</span> <span class="p">{}</span>
 
     <span class="nd">@staticmethod</span>
-    <span class="k">def</span><span class="w"> </span><span class="nf">_destroy_callback</span><span class="p">(</span><span class="n">kernel_ref</span><span class="p">:</span> <span class="n">ReferenceType</span><span class="p">[</span><span class="s2">&quot;LaunchContextBufferCache&quot;</span><span class="p">],</span> <span class="n">ref</span><span class="p">:</span> <span class="n">ReferenceType</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_destroy_callback</span><span class="p">(</span><span class="n">kernel_ref</span><span class="p">:</span> <span class="n">ReferenceType</span><span class="p">[</span><span class="s2">"LaunchContextBufferCache"</span><span class="p">],</span> <span class="n">ref</span><span class="p">:</span> <span class="n">ReferenceType</span><span class="p">):</span>
         <span class="n">maybe_kernel</span> <span class="o">=</span> <span class="n">kernel_ref</span><span class="p">()</span>
         <span class="k">if</span> <span class="n">maybe_kernel</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
             <span class="n">maybe_kernel</span><span class="o">.</span><span class="n">_launch_ctx_cache</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span>
@@ -468,7 +469,7 @@
     <span class="k">def</span><span class="w"> </span><span class="nf">cache</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span>
         <span class="n">t_kernel</span><span class="p">,</span>
-        <span class="n">args_hash</span><span class="p">:</span> <span class="s2">&quot;ArgsHash&quot;</span><span class="p">,</span>
+        <span class="n">args_hash</span><span class="p">:</span> <span class="s2">"ArgsHash"</span><span class="p">,</span>
         <span class="n">launch_ctx</span><span class="p">:</span> <span class="n">KernelLaunchContext</span><span class="p">,</span>
         <span class="n">launch_ctx_buffer</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="n">KernelBatchedArgType</span><span class="p">,</span> <span class="nb">list</span><span class="p">[</span><span class="nb">tuple</span><span class="p">]],</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
@@ -481,7 +482,7 @@
         <span class="c1"># objects, because all the weakrefs get deallocated right away, and their respective callback vanishes</span>
         <span class="c1"># with them, without even getting a chance to get called. This means that registering the clearing</span>
         <span class="c1"># callback systematically does not incur any cumulative runtime penalty yet ensures full memory safety.</span>
-        <span class="c1"># Note that it is important to prepend the cache tracker with &#39;None&#39; to avoid misclassifying no argument</span>
+        <span class="c1"># Note that it is important to prepend the cache tracker with 'None' to avoid misclassifying no argument</span>
         <span class="c1"># with expired cache entry caused by deallocated argument.</span>
         <span class="n">launch_ctx_cache_tracker_</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">ReferenceType</span> <span class="o">|</span> <span class="kc">None</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span><span class="kc">None</span><span class="p">]</span>
 
@@ -502,7 +503,7 @@
 
 <div class="viewcode-block" id="LaunchContextBufferCache.populate_launch_ctx_from_cache">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/kernel/index.html#quadrants.lang.kernel.LaunchContextBufferCache.populate_launch_ctx_from_cache">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">populate_launch_ctx_from_cache</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">args_hash</span><span class="p">:</span> <span class="s2">&quot;ArgsHash&quot;</span><span class="p">,</span> <span class="n">launch_ctx</span><span class="p">:</span> <span class="n">KernelLaunchContext</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">populate_launch_ctx_from_cache</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">args_hash</span><span class="p">:</span> <span class="s2">"ArgsHash"</span><span class="p">,</span> <span class="n">launch_ctx</span><span class="p">:</span> <span class="n">KernelLaunchContext</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_prog_weakref</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
             <span class="n">prog</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">prog</span>
             <span class="k">assert</span> <span class="n">prog</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
@@ -537,7 +538,7 @@
         <span class="bp">self</span><span class="p">,</span>
         <span class="n">ctx</span><span class="p">:</span> <span class="n">ASTTransformerFuncContext</span><span class="p">,</span>
         <span class="n">kernel_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
-        <span class="n">current_kernel</span><span class="p">:</span> <span class="s2">&quot;Kernel&quot;</span><span class="p">,</span>
+        <span class="n">current_kernel</span><span class="p">:</span> <span class="s2">"Kernel"</span><span class="p">,</span>
         <span class="n">only_parse_function_def</span><span class="p">:</span> <span class="nb">bool</span><span class="p">,</span>
         <span class="n">tree</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">Module</span><span class="p">,</span>
         <span class="n">dump_ast</span><span class="p">:</span> <span class="nb">bool</span><span class="p">,</span>
@@ -571,20 +572,20 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">dump_ast</span> <span class="o">=</span> <span class="n">dump_ast</span></div>
 
 
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""</span>
 <span class="sd">    only_parse_function_def will be set when running from fast cache.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
 
-    <span class="c1"># Do not change the name of &#39;quadrants_ast_generator&#39;</span>
+    <span class="c1"># Do not change the name of 'quadrants_ast_generator'</span>
     <span class="c1"># The warning system needs this identifier to remove unnecessary messages</span>
     <span class="k">def</span><span class="w"> </span><span class="fm">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">kernel_cxx</span><span class="p">:</span> <span class="n">KernelCxx</span><span class="p">):</span>
         <span class="c1"># nonlocal tree, used_py_dataclass_parameters</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">runtime</span><span class="o">.</span><span class="n">inside_kernel</span><span class="p">:</span>
             <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span>
-                <span class="s2">&quot;Kernels cannot call other kernels. I.e., nested kernels are not allowed. &quot;</span>
-                <span class="s2">&quot;Please check if you have direct/indirect invocation of kernels within kernels. &quot;</span>
-                <span class="s2">&quot;Note that some methods provided by the Quadrants standard library may invoke kernels, &quot;</span>
-                <span class="s2">&quot;and please move their invocations to Python-scope.&quot;</span>
+                <span class="s2">"Kernels cannot call other kernels. I.e., nested kernels are not allowed. "</span>
+                <span class="s2">"Please check if you have direct/indirect invocation of kernels within kernels. "</span>
+                <span class="s2">"Note that some methods provided by the Quadrants standard library may invoke kernels, "</span>
+                <span class="s2">"and please move their invocations to Python-scope."</span>
             <span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">current_kernel</span><span class="o">.</span><span class="n">kernel_cpp</span> <span class="o">=</span> <span class="n">kernel_cxx</span>
         <span class="n">ctx</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">ctx</span>
@@ -614,39 +615,39 @@
             <span class="n">transform_tree</span><span class="p">(</span><span class="n">tree</span><span class="p">,</span> <span class="n">ctx</span><span class="p">)</span>
             <span class="k">if</span> <span class="ow">not</span> <span class="n">ctx</span><span class="o">.</span><span class="n">is_real_function</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">ctx</span><span class="o">.</span><span class="n">only_parse_function_def</span><span class="p">:</span>
                 <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">current_kernel</span><span class="o">.</span><span class="n">return_type</span> <span class="ow">and</span> <span class="n">ctx</span><span class="o">.</span><span class="n">returned</span> <span class="o">!=</span> <span class="n">ReturnStatus</span><span class="o">.</span><span class="n">ReturnedValue</span><span class="p">:</span>
-                    <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">&quot;Kernel has a return type but does not have a return statement&quot;</span><span class="p">)</span>
+                    <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">"Kernel has a return type but does not have a return statement"</span><span class="p">)</span>
         <span class="k">finally</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">current_kernel</span><span class="o">.</span><span class="n">runtime</span><span class="o">.</span><span class="n">inside_kernel</span> <span class="o">=</span> <span class="kc">False</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">runtime</span><span class="o">.</span><span class="n">_current_global_context</span> <span class="o">=</span> <span class="kc">None</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">current_kernel</span><span class="o">.</span><span class="n">runtime</span><span class="o">.</span><span class="n">_compiling_callable</span> <span class="o">=</span> <span class="kc">None</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_dump_ast</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-        <span class="n">target_dir</span> <span class="o">=</span> <span class="n">pathlib</span><span class="o">.</span><span class="n">Path</span><span class="p">(</span><span class="s2">&quot;/tmp/ast&quot;</span><span class="p">)</span>
+        <span class="n">target_dir</span> <span class="o">=</span> <span class="n">pathlib</span><span class="o">.</span><span class="n">Path</span><span class="p">(</span><span class="s2">"/tmp/ast"</span><span class="p">)</span>
         <span class="n">target_dir</span><span class="o">.</span><span class="n">mkdir</span><span class="p">(</span><span class="n">parents</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 
         <span class="n">start</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
         <span class="n">ast_str</span> <span class="o">=</span> <span class="n">ast</span><span class="o">.</span><span class="n">dump</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">tree</span><span class="p">,</span> <span class="n">indent</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
-        <span class="n">output_file</span> <span class="o">=</span> <span class="n">target_dir</span> <span class="o">/</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">kernel_name</span><span class="si">}</span><span class="s2">_ast_.txt&quot;</span>
+        <span class="n">output_file</span> <span class="o">=</span> <span class="n">target_dir</span> <span class="o">/</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">kernel_name</span><span class="si">}</span><span class="s2">_ast_.txt"</span>
         <span class="n">output_file</span><span class="o">.</span><span class="n">write_text</span><span class="p">(</span><span class="n">ast_str</span><span class="p">)</span>
         <span class="n">elapsed_txt</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="o">-</span> <span class="n">start</span>
 
         <span class="n">start</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
         <span class="n">json_str</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_ast_to_dict</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">tree</span><span class="p">),</span> <span class="n">indent</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
-        <span class="n">output_file</span> <span class="o">=</span> <span class="n">target_dir</span> <span class="o">/</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">kernel_name</span><span class="si">}</span><span class="s2">_ast.json&quot;</span>
+        <span class="n">output_file</span> <span class="o">=</span> <span class="n">target_dir</span> <span class="o">/</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">kernel_name</span><span class="si">}</span><span class="s2">_ast.json"</span>
         <span class="n">output_file</span><span class="o">.</span><span class="n">write_text</span><span class="p">(</span><span class="n">json_str</span><span class="p">)</span>
         <span class="n">elapsed_json</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="o">-</span> <span class="n">start</span>
 
-        <span class="n">output_file</span> <span class="o">=</span> <span class="n">target_dir</span> <span class="o">/</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">kernel_name</span><span class="si">}</span><span class="s2">_gen_time.json&quot;</span>
-        <span class="n">output_file</span><span class="o">.</span><span class="n">write_text</span><span class="p">(</span><span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">({</span><span class="s2">&quot;elapsed_txt&quot;</span><span class="p">:</span> <span class="n">elapsed_txt</span><span class="p">,</span> <span class="s2">&quot;elapsed_json&quot;</span><span class="p">:</span> <span class="n">elapsed_json</span><span class="p">},</span> <span class="n">indent</span><span class="o">=</span><span class="mi">2</span><span class="p">))</span>
+        <span class="n">output_file</span> <span class="o">=</span> <span class="n">target_dir</span> <span class="o">/</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">kernel_name</span><span class="si">}</span><span class="s2">_gen_time.json"</span>
+        <span class="n">output_file</span><span class="o">.</span><span class="n">write_text</span><span class="p">(</span><span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">({</span><span class="s2">"elapsed_txt"</span><span class="p">:</span> <span class="n">elapsed_txt</span><span class="p">,</span> <span class="s2">"elapsed_json"</span><span class="p">:</span> <span class="n">elapsed_json</span><span class="p">},</span> <span class="n">indent</span><span class="o">=</span><span class="mi">2</span><span class="p">))</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_ast_to_dict</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">node</span><span class="p">:</span> <span class="n">ast</span><span class="o">.</span><span class="n">AST</span> <span class="o">|</span> <span class="nb">list</span> <span class="o">|</span> <span class="n">primitive_types</span><span class="o">.</span><span class="n">_python_primitive_types</span><span class="p">):</span>
         <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">AST</span><span class="p">):</span>
             <span class="n">fields</span> <span class="o">=</span> <span class="p">{</span><span class="n">k</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_ast_to_dict</span><span class="p">(</span><span class="n">v</span><span class="p">)</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">ast</span><span class="o">.</span><span class="n">iter_fields</span><span class="p">(</span><span class="n">node</span><span class="p">)}</span>
             <span class="k">return</span> <span class="p">{</span>
-                <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="n">node</span><span class="o">.</span><span class="vm">__class__</span><span class="o">.</span><span class="vm">__name__</span><span class="p">,</span>
-                <span class="s2">&quot;fields&quot;</span><span class="p">:</span> <span class="n">fields</span><span class="p">,</span>
-                <span class="s2">&quot;lineno&quot;</span><span class="p">:</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="s2">&quot;lineno&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">),</span>
-                <span class="s2">&quot;col_offset&quot;</span><span class="p">:</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="s2">&quot;col_offset&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">),</span>
+                <span class="s2">"type"</span><span class="p">:</span> <span class="n">node</span><span class="o">.</span><span class="vm">__class__</span><span class="o">.</span><span class="vm">__name__</span><span class="p">,</span>
+                <span class="s2">"fields"</span><span class="p">:</span> <span class="n">fields</span><span class="p">,</span>
+                <span class="s2">"lineno"</span><span class="p">:</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="s2">"lineno"</span><span class="p">,</span> <span class="kc">None</span><span class="p">),</span>
+                <span class="s2">"col_offset"</span><span class="p">:</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="s2">"col_offset"</span><span class="p">,</span> <span class="kc">None</span><span class="p">),</span>
             <span class="p">}</span>
         <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="nb">list</span><span class="p">):</span>
             <span class="k">return</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">_ast_to_dict</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">node</span><span class="p">]</span>
@@ -658,8 +659,8 @@
 <div class="viewcode-block" id="GraphDoWhileLevel">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/kernel/index.html#quadrants.lang.kernel.GraphDoWhileLevel">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">GraphDoWhileLevel</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;One nested ``qd.graph_do_while`` loop in a ``graph=True`` kernel, indexed by level id (assigned</span>
-<span class="sd">    outer-before-inner by the AST transformer). Mirrors the C++ ``GraphDoWhileLevel``.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""One nested ``qd.graph_do_while`` loop in a ``graph=True`` kernel, indexed by level id (assigned</span>
+<span class="sd">    outer-before-inner by the AST transformer). Mirrors the C++ ``GraphDoWhileLevel``."""</span>
 
 <div class="viewcode-block" id="GraphDoWhileLevel.cond_arg_name">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/kernel/index.html#quadrants.lang.kernel.GraphDoWhileLevel.cond_arg_name">[docs]</a>
@@ -711,7 +712,7 @@
 
 <div class="viewcode-block" id="Kernel.grad">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/kernel/index.html#quadrants.lang.kernel.Kernel.grad">[docs]</a>
-        <span class="bp">self</span><span class="o">.</span><span class="n">grad</span><span class="p">:</span> <span class="s2">&quot;Kernel | None&quot;</span> <span class="o">=</span> <span class="kc">None</span></div>
+        <span class="bp">self</span><span class="o">.</span><span class="n">grad</span><span class="p">:</span> <span class="s2">"Kernel | None"</span> <span class="o">=</span> <span class="kc">None</span></div>
 
         <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">kernels</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>  <span class="c1"># type: ignore[arg-type]</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">reset</span><span class="p">()</span>
@@ -734,14 +735,14 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">use_graph</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span></div>
 
         <span class="c1"># Opt-in flag set by `@qd.kernel(graph=True, checkpoints=True)`. When True, the AST transformer enables</span>
-        <span class="c1"># `qd.checkpoint(...)` recognition AND auto-wraps every top-level for-loop that isn&#39;t already inside a `with</span>
+        <span class="c1"># `qd.checkpoint(...)` recognition AND auto-wraps every top-level for-loop that isn't already inside a `with</span>
         <span class="c1"># qd.checkpoint(...)` block in an implicit no-yield checkpoint. When False, any use of `qd.checkpoint(...)` in</span>
         <span class="c1"># the kernel body is rejected at compile time with a fix-it pointing at `checkpoints=True`.</span>
 <div class="viewcode-block" id="Kernel.use_checkpoints">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/kernel/index.html#quadrants.lang.kernel.Kernel.use_checkpoints">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">use_checkpoints</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span></div>
 
-        <span class="c1"># Legacy single-loop arg name, kept for reporting/back-compat; equals the outermost level&#39;s condition arg for</span>
+        <span class="c1"># Legacy single-loop arg name, kept for reporting/back-compat; equals the outermost level's condition arg for</span>
         <span class="c1"># nested kernels. The authoritative data is `graph_do_while_levels`.</span>
 <div class="viewcode-block" id="Kernel.graph_do_while_arg">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/kernel/index.html#quadrants.lang.kernel.Kernel.graph_do_while_arg">[docs]</a>
@@ -756,8 +757,8 @@
         <span class="c1"># Transient stack of active level ids, used only while transforming the AST.</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_graph_do_while_level_stack</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
         <span class="c1"># Per-checkpoint metadata, one entry per `with qd.checkpoint(...)` block (explicit AND auto-injected implicit)</span>
-        <span class="c1"># in declaration order. List index is the checkpoint&#39;s internal `cp_id` (0, 1, 2, ... dense, flat across the</span>
-        <span class="c1"># kernel). Each entry is the readable label of the `yield_on=` argument (e.g. &quot;flag&quot; or &quot;self.flag&quot;), or</span>
+        <span class="c1"># in declaration order. List index is the checkpoint's internal `cp_id` (0, 1, 2, ... dense, flat across the</span>
+        <span class="c1"># kernel). Each entry is the readable label of the `yield_on=` argument (e.g. "flag" or "self.flag"), or</span>
         <span class="c1"># `None` for implicit checkpoints (which never yield). Populated by the AST transformer; empty means the</span>
         <span class="c1"># kernel uses no checkpoints. Used for error messages / introspection only -- the runtime forwards the flat</span>
         <span class="c1"># C++ arg-id from `checkpoint_yield_on_cpp_arg_ids` below.</span>
@@ -765,9 +766,9 @@
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/kernel/index.html#quadrants.lang.kernel.Kernel.checkpoint_yield_on_args">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">checkpoint_yield_on_args</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span></div>
 
-        <span class="c1"># Flat C++ arg-ids (post-template) of each explicit checkpoint&#39;s `yield_on=` ndarray, resolved at AST-build time</span>
+        <span class="c1"># Flat C++ arg-ids (post-template) of each explicit checkpoint's `yield_on=` ndarray, resolved at AST-build time</span>
         <span class="c1"># by `CheckpointTransformer.build_checkpoint_with` via `ASTTransformer._resolve_ndarray_kernel_arg_id`. Same</span>
-        <span class="c1"># indexing as `checkpoint_yield_on_args`: entry `i` is the flat arg-id the runtime uses to look up the ndarray&#39;s</span>
+        <span class="c1"># indexing as `checkpoint_yield_on_args`: entry `i` is the flat arg-id the runtime uses to look up the ndarray's</span>
         <span class="c1"># device pointer for the checkpoint whose internal cp_id is `i`. `-1` for implicit checkpoints (which never</span>
         <span class="c1"># yield). Resolving at AST-build time uniformly handles bare kernel parameters (`yield_on=flag`),</span>
         <span class="c1"># `@qd.data_oriented` member ndarrays (`yield_on=self.flag`), and `@dataclasses.dataclass` parameter members</span>
@@ -858,7 +859,7 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">fe_ll_cache_observations</span> <span class="o">=</span> <span class="n">FeLlCacheObservations</span><span class="p">()</span></div>
 
 
-    <span class="k">def</span><span class="w"> </span><span class="nf">_try_load_fastcache</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">args</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">Any</span><span class="p">,</span> <span class="o">...</span><span class="p">],</span> <span class="n">key</span><span class="p">:</span> <span class="s2">&quot;CompiledKernelKeyType&quot;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">set</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_try_load_fastcache</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">args</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">Any</span><span class="p">,</span> <span class="o">...</span><span class="p">],</span> <span class="n">key</span><span class="p">:</span> <span class="s2">"CompiledKernelKeyType"</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">set</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
         <span class="n">frontend_cache_key</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">runtime</span><span class="o">.</span><span class="n">src_ll_cache</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">quadrants_callable</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">quadrants_callable</span><span class="o">.</span><span class="n">is_pure</span><span class="p">:</span>
             <span class="n">kernel_source_info</span><span class="p">,</span> <span class="n">_src</span> <span class="o">=</span> <span class="n">get_source_info_and_src</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">func</span><span class="p">)</span>
@@ -917,12 +918,12 @@
             <span class="c1"># freetext can be freely modified.</span>
             <span class="c1"># As for why we are using `print` rather than eg logger.info, it is because this is only printed when</span>
             <span class="c1"># qd.init(print_non_pure=..) is True. And it is confusing to set that to True, and see nothing printed.</span>
-            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;[NOT_PURE] Debug information: not pure: </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">func</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"[NOT_PURE] Debug information: not pure: </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">func</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
         <span class="k">return</span> <span class="kc">None</span>
 
 <div class="viewcode-block" id="Kernel.materialize">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/kernel/index.html#quadrants.lang.kernel.Kernel.materialize">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">materialize</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">:</span> <span class="s2">&quot;CompiledKernelKeyType | None&quot;</span><span class="p">,</span> <span class="n">py_args</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">Any</span><span class="p">,</span> <span class="o">...</span><span class="p">],</span> <span class="n">arg_features</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">materialize</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">:</span> <span class="s2">"CompiledKernelKeyType | None"</span><span class="p">,</span> <span class="n">py_args</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">Any</span><span class="p">,</span> <span class="o">...</span><span class="p">],</span> <span class="n">arg_features</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
         <span class="k">if</span> <span class="n">key</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
             <span class="n">key</span> <span class="o">=</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">func</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">autodiff_mode</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">fast_checksum</span> <span class="o">=</span> <span class="kc">None</span>
@@ -942,11 +943,11 @@
                 <span class="k">continue</span>
             <span class="k">if</span> <span class="n">dataclasses</span><span class="o">.</span><span class="n">is_dataclass</span><span class="p">(</span><span class="n">val</span><span class="p">)</span> <span class="ow">and</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">val</span><span class="p">,</span> <span class="nb">type</span><span class="p">)</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">is_data_oriented</span><span class="p">(</span><span class="n">val</span><span class="p">):</span>
                 <span class="n">warnings</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span>
-                    <span class="sa">f</span><span class="s2">&quot;Kernel </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">func</span><span class="o">.</span><span class="vm">__qualname__</span><span class="si">!r}</span><span class="s2"> parameter </span><span class="si">{</span><span class="n">arg_meta</span><span class="o">.</span><span class="n">name</span><span class="si">!r}</span><span class="s2">: passing a &quot;</span>
-                    <span class="s2">&quot;@dataclasses.dataclass instance into a qd.Template-annotated kernel parameter was &quot;</span>
-                    <span class="s2">&quot;never intended to be supported, and only works inadvertently. Use the dataclass type &quot;</span>
-                    <span class="sa">f</span><span class="s2">&quot;itself as the annotation instead (e.g. `def </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">func</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">(</span><span class="si">{</span><span class="n">arg_meta</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">: &quot;</span>
-                    <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">val</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">, ...)`). In a future release this will become an error.&quot;</span><span class="p">,</span>
+                    <span class="sa">f</span><span class="s2">"Kernel </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">func</span><span class="o">.</span><span class="vm">__qualname__</span><span class="si">!r}</span><span class="s2"> parameter </span><span class="si">{</span><span class="n">arg_meta</span><span class="o">.</span><span class="n">name</span><span class="si">!r}</span><span class="s2">: passing a "</span>
+                    <span class="s2">"@dataclasses.dataclass instance into a qd.Template-annotated kernel parameter was "</span>
+                    <span class="s2">"never intended to be supported, and only works inadvertently. Use the dataclass type "</span>
+                    <span class="sa">f</span><span class="s2">"itself as the annotation instead (e.g. `def </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">func</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">(</span><span class="si">{</span><span class="n">arg_meta</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">: "</span>
+                    <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">val</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">, ...)`). In a future release this will become an error."</span><span class="p">,</span>
                     <span class="ne">DeprecationWarning</span><span class="p">,</span>
                     <span class="n">stacklevel</span><span class="o">=</span><span class="mi">4</span><span class="p">,</span>
                 <span class="p">)</span>
@@ -962,8 +963,8 @@
 
             <span class="bp">self</span><span class="o">.</span><span class="n">runtime</span><span class="o">.</span><span class="n">materialize</span><span class="p">()</span>
             <span class="n">used_py_dataclass_parameters</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_try_load_fastcache</span><span class="p">(</span><span class="n">py_args</span><span class="p">,</span> <span class="n">key</span><span class="p">)</span>
-            <span class="n">kernel_name</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">func</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">_c</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">kernel_counter</span><span class="si">}</span><span class="s2">_</span><span class="si">{</span><span class="n">key</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span>
-            <span class="n">_logging</span><span class="o">.</span><span class="n">trace</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Materializing kernel </span><span class="si">{</span><span class="n">kernel_name</span><span class="si">}</span><span class="s2"> in </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">autodiff_mode</span><span class="si">}</span><span class="s2">...&quot;</span><span class="p">)</span>
+            <span class="n">kernel_name</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">func</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">_c</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">kernel_counter</span><span class="si">}</span><span class="s2">_</span><span class="si">{</span><span class="n">key</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="si">}</span><span class="s2">"</span>
+            <span class="n">_logging</span><span class="o">.</span><span class="n">trace</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Materializing kernel </span><span class="si">{</span><span class="n">kernel_name</span><span class="si">}</span><span class="s2"> in </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">autodiff_mode</span><span class="si">}</span><span class="s2">..."</span><span class="p">)</span>
 
             <span class="n">pruning</span> <span class="o">=</span> <span class="n">Pruning</span><span class="p">(</span><span class="n">kernel_used_parameters</span><span class="o">=</span><span class="n">used_py_dataclass_parameters</span><span class="p">)</span>
             <span class="n">range_begin</span> <span class="o">=</span> <span class="mi">0</span> <span class="k">if</span> <span class="n">used_py_dataclass_parameters</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="mi">1</span>
@@ -991,7 +992,7 @@
                     <span class="n">current_kernel</span><span class="o">=</span><span class="bp">self</span><span class="p">,</span>
                     <span class="n">only_parse_function_def</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">compiled_kernel_data_by_key</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">key</span><span class="p">)</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">,</span>
                     <span class="n">tree</span><span class="o">=</span><span class="n">tree</span><span class="p">,</span>
-                    <span class="n">dump_ast</span><span class="o">=</span><span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;QD_DUMP_AST&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span> <span class="o">==</span> <span class="s2">&quot;1&quot;</span> <span class="ow">and</span> <span class="n">_pass</span> <span class="o">==</span> <span class="mi">1</span><span class="p">,</span>
+                    <span class="n">dump_ast</span><span class="o">=</span><span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"QD_DUMP_AST"</span><span class="p">,</span> <span class="s2">""</span><span class="p">)</span> <span class="o">==</span> <span class="s2">"1"</span> <span class="ow">and</span> <span class="n">_pass</span> <span class="o">==</span> <span class="mi">1</span><span class="p">,</span>
                 <span class="p">)</span>
                 <span class="n">quadrants_kernel</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">prog</span><span class="o">.</span><span class="n">create_kernel</span><span class="p">(</span>
                     <span class="n">quadrants_ast_generator</span><span class="p">,</span> <span class="n">kernel_name</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">autodiff_mode</span>
@@ -1000,14 +1001,14 @@
                     <span class="k">assert</span> <span class="n">key</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">materialized_kernels</span>
                     <span class="bp">self</span><span class="o">.</span><span class="n">materialized_kernels</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">quadrants_kernel</span>
                     <span class="bp">self</span><span class="o">.</span><span class="n">_struct_ndarray_launch_info_by_key</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span>
-                        <span class="n">ctx</span><span class="o">.</span><span class="n">global_context</span><span class="p">,</span> <span class="s2">&quot;struct_ndarray_launch_info&quot;</span><span class="p">,</span> <span class="p">[]</span>
+                        <span class="n">ctx</span><span class="o">.</span><span class="n">global_context</span><span class="p">,</span> <span class="s2">"struct_ndarray_launch_info"</span><span class="p">,</span> <span class="p">[]</span>
                     <span class="p">)</span>
                     <span class="c1"># Only record an entry when this key actually lifts primitives, so the dict stays empty for the</span>
                     <span class="c1"># overwhelming majority of kernels (none use template_primitives=False). launch_kernel can then</span>
                     <span class="c1"># skip the whole primitive-binding path with a single empty-dict check instead of paying a</span>
                     <span class="c1"># per-launch ``.get(key)`` (tuple hash) on every cache-missing launch -- which is the hot path for</span>
                     <span class="c1"># CPU / unbatched genesis steps that launch many tiny kernels.</span>
-                    <span class="n">struct_primitive_launch_info</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">ctx</span><span class="o">.</span><span class="n">global_context</span><span class="p">,</span> <span class="s2">&quot;struct_primitive_launch_info&quot;</span><span class="p">,</span> <span class="p">[])</span>
+                    <span class="n">struct_primitive_launch_info</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">ctx</span><span class="o">.</span><span class="n">global_context</span><span class="p">,</span> <span class="s2">"struct_primitive_launch_info"</span><span class="p">,</span> <span class="p">[])</span>
                     <span class="k">if</span> <span class="n">struct_primitive_launch_info</span><span class="p">:</span>
                         <span class="bp">self</span><span class="o">.</span><span class="n">_struct_primitive_launch_info_by_key</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">struct_primitive_launch_info</span>
                 <span class="k">else</span><span class="p">:</span>
@@ -1017,9 +1018,9 @@
                     <span class="k">for</span> <span class="n">used_parameters</span> <span class="ow">in</span> <span class="n">pruning</span><span class="o">.</span><span class="n">used_vars_by_func_id</span><span class="o">.</span><span class="n">values</span><span class="p">():</span>
                         <span class="n">new_used_parameters</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
                         <span class="k">for</span> <span class="n">param</span> <span class="ow">in</span> <span class="n">used_parameters</span><span class="p">:</span>
-                            <span class="n">split_param</span> <span class="o">=</span> <span class="n">param</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;__qd_&quot;</span><span class="p">)</span>
+                            <span class="n">split_param</span> <span class="o">=</span> <span class="n">param</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">"__qd_"</span><span class="p">)</span>
                             <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">split_param</span><span class="p">),</span> <span class="mi">1</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">):</span>
-                                <span class="n">joined</span> <span class="o">=</span> <span class="s2">&quot;__qd_&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">split_param</span><span class="p">[:</span><span class="n">i</span><span class="p">])</span>
+                                <span class="n">joined</span> <span class="o">=</span> <span class="s2">"__qd_"</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">split_param</span><span class="p">[:</span><span class="n">i</span><span class="p">])</span>
                                 <span class="k">if</span> <span class="n">joined</span> <span class="ow">in</span> <span class="n">new_used_parameters</span><span class="p">:</span>
                                     <span class="k">break</span>
                                 <span class="n">new_used_parameters</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">joined</span><span class="p">)</span>
@@ -1042,18 +1043,18 @@
         <span class="n">qd_stream</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
         <span class="n">_resume_from_checkpoint</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
-        <span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">args</span><span class="p">)</span> <span class="o">==</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">arg_metas</span><span class="p">),</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">arg_metas</span><span class="p">)</span><span class="si">}</span><span class="s2"> arguments needed but </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">args</span><span class="p">)</span><span class="si">}</span><span class="s2"> provided&quot;</span>
+        <span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">args</span><span class="p">)</span> <span class="o">==</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">arg_metas</span><span class="p">),</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">arg_metas</span><span class="p">)</span><span class="si">}</span><span class="s2"> arguments needed but </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">args</span><span class="p">)</span><span class="si">}</span><span class="s2"> provided"</span>
 
         <span class="n">callbacks</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">Callable</span><span class="p">[[],</span> <span class="kc">None</span><span class="p">]]</span> <span class="o">=</span> <span class="p">[]</span>
         <span class="n">launch_ctx</span> <span class="o">=</span> <span class="n">t_kernel</span><span class="o">.</span><span class="n">make_launch_context</span><span class="p">()</span>
-        <span class="c1"># Special treatment for primitive types is unecessary and detrimental. See &#39;TemplateMapper.lookup&#39; for details.</span>
-        <span class="n">args_hash</span><span class="p">:</span> <span class="s2">&quot;ArgsHash&quot;</span> <span class="o">=</span> <span class="p">(</span><span class="nb">id</span><span class="p">(</span><span class="n">t_kernel</span><span class="p">),</span> <span class="o">*</span><span class="p">[</span><span class="nb">id</span><span class="p">(</span><span class="n">arg</span><span class="p">)</span> <span class="k">for</span> <span class="n">arg</span> <span class="ow">in</span> <span class="n">args</span><span class="p">])</span>
+        <span class="c1"># Special treatment for primitive types is unecessary and detrimental. See 'TemplateMapper.lookup' for details.</span>
+        <span class="n">args_hash</span><span class="p">:</span> <span class="s2">"ArgsHash"</span> <span class="o">=</span> <span class="p">(</span><span class="nb">id</span><span class="p">(</span><span class="n">t_kernel</span><span class="p">),</span> <span class="o">*</span><span class="p">[</span><span class="nb">id</span><span class="p">(</span><span class="n">arg</span><span class="p">)</span> <span class="k">for</span> <span class="n">arg</span> <span class="ow">in</span> <span class="n">args</span><span class="p">])</span>
         <span class="c1"># Stale-cache guard for mutable structs containing ndarrays. Frozen dataclass fields cannot be reassigned, so</span>
         <span class="c1"># id(struct) in args_hash is already sufficient. For mutable structs, ndarray attributes can change between</span>
         <span class="c1"># calls while the struct id stays the same, so we fold the live ndarray id(s) into the hash.</span>
         <span class="c1">#</span>
-        <span class="c1"># The predicate must catch any &quot;host container in which ndarray member references can be reassigned at</span>
-        <span class="c1"># runtime&quot; case. Non-frozen dataclasses have ``__hash__ is None`` (Python sets it when ``eq=True,</span>
+        <span class="c1"># The predicate must catch any "host container in which ndarray member references can be reassigned at</span>
+        <span class="c1"># runtime" case. Non-frozen dataclasses have ``__hash__ is None`` (Python sets it when ``eq=True,</span>
         <span class="c1"># frozen=False``), so they hit the first arm. ``@qd.data_oriented`` classes inherit ``object.__hash__`` so the</span>
         <span class="c1"># ``__hash__ is None`` check is False for them — we need a separate arm. Without it, ``state.x = other_nd`` on</span>
         <span class="c1"># the same data_oriented instance would not invalidate the launch-context cache and the kernel would re-launch</span>
@@ -1103,7 +1104,7 @@
                 <span class="c1"># As a result, once an instance has _qd_all_field=True, passing it to a kernel parameter annotated with a</span>
                 <span class="c1"># different all-Field dataclass type can be silently accepted instead of raising the previous runtime type error,</span>
                 <span class="c1"># which weakens API/type safety and can route the wrong struct type through launch.</span>
-                <span class="k">if</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">val</span><span class="p">,</span> <span class="s2">&quot;_qd_all_field&quot;</span><span class="p">,</span> <span class="kc">False</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">needed_</span><span class="p">,</span> <span class="n">_FIELDS</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="k">if</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">val</span><span class="p">,</span> <span class="s2">"_qd_all_field"</span><span class="p">,</span> <span class="kc">False</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">needed_</span><span class="p">,</span> <span class="n">_FIELDS</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
                     <span class="k">continue</span>
                 <span class="c1"># `graph_do_while_levels[*].cond_cpp_arg_id` is also populated at AST-build time (see</span>
                 <span class="c1"># `ASTTransformer.build_While` -&gt; `_resolve_ndarray_kernel_arg_id`), so the launch path forwards it</span>
@@ -1129,7 +1130,7 @@
             <span class="k">if</span> <span class="n">struct_nd_info</span><span class="p">:</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">_set_struct_ndarray_args</span><span class="p">(</span><span class="n">struct_nd_info</span><span class="p">,</span> <span class="n">args</span><span class="p">,</span> <span class="n">launch_ctx_buffer</span><span class="p">,</span> <span class="n">is_launch_ctx_cacheable</span><span class="p">)</span>
 
-            <span class="c1"># Empty for every kernel that doesn&#39;t use template_primitives=False (the common case), so this guard</span>
+            <span class="c1"># Empty for every kernel that doesn't use template_primitives=False (the common case), so this guard</span>
             <span class="c1"># short-circuits without hashing ``key`` -- keeping the per-launch hot path free of added overhead.</span>
             <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_struct_primitive_launch_info_by_key</span><span class="p">:</span>
                 <span class="n">struct_prim_info</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_struct_primitive_launch_info_by_key</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">key</span><span class="p">)</span>
@@ -1196,8 +1197,8 @@
             <span class="n">launch_ctx</span><span class="o">.</span><span class="n">use_graph</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">use_graph</span> <span class="ow">and</span> <span class="n">_GRAPH_ENABLED</span>
             <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">use_graph</span> <span class="ow">and</span> <span class="n">qd_stream</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
                 <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span>
-                    <span class="s2">&quot;qd_stream is not compatible with graph=True kernels. &quot;</span>
-                    <span class="s2">&quot;See docs/source/user_guide/streams.md for details.&quot;</span>
+                    <span class="s2">"qd_stream is not compatible with graph=True kernels. "</span>
+                    <span class="s2">"See docs/source/user_guide/streams.md for details."</span>
                 <span class="p">)</span>
             <span class="k">for</span> <span class="n">_gdw_level</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">graph_do_while_levels</span><span class="p">:</span>
                 <span class="n">launch_ctx</span><span class="o">.</span><span class="n">add_graph_do_while_level</span><span class="p">(</span><span class="n">_gdw_level</span><span class="o">.</span><span class="n">cond_cpp_arg_id</span><span class="p">,</span> <span class="n">_gdw_level</span><span class="o">.</span><span class="n">parent_id</span><span class="p">)</span>
@@ -1208,10 +1209,10 @@
                 <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">checkpoint_yield_on_args</span><span class="p">:</span>
                     <span class="n">_checkpoint_helpers</span><span class="o">.</span><span class="n">forward_yield_on_table_to_ctx</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">launch_ctx</span><span class="p">)</span>
                 <span class="c1"># `_resume_from_checkpoint` is `None` for fresh launches (host-side default 0 in</span>
-                <span class="c1"># `LaunchContextBuilder`, which means &quot;run every checkpoint&quot;). When `Kernel.resume` plumbs an int</span>
-                <span class="c1"># through, copy it onto the launch context so the GraphManager&#39;s `launch_cached_graph` memcpys it into</span>
+                <span class="c1"># `LaunchContextBuilder`, which means "run every checkpoint"). When `Kernel.resume` plumbs an int</span>
+                <span class="c1"># through, copy it onto the launch context so the GraphManager's `launch_cached_graph` memcpys it into</span>
                 <span class="c1"># the device-side `resume_point` slot instead of clearing to 0. Slice 2 implementation;</span>
-                <span class="c1"># pre-CUDA-12.4 / non-CUDA backends ignore the value since they don&#39;t have a resume_point slot today</span>
+                <span class="c1"># pre-CUDA-12.4 / non-CUDA backends ignore the value since they don't have a resume_point slot today</span>
                 <span class="c1"># (slices 4-6 will add an indirect-dispatch equivalent).</span>
                 <span class="k">if</span> <span class="n">_resume_from_checkpoint</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
                     <span class="n">launch_ctx</span><span class="o">.</span><span class="n">resume_from_checkpoint</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">_resume_from_checkpoint</span><span class="p">)</span>
@@ -1256,12 +1257,12 @@
             <span class="k">return</span> <span class="n">launch_ctx</span><span class="o">.</span><span class="n">get_struct_ret_uint</span><span class="p">(</span><span class="n">indices</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">ret_type</span> <span class="ow">in</span> <span class="n">primitive_types</span><span class="o">.</span><span class="n">real_types</span><span class="p">:</span>
             <span class="k">return</span> <span class="n">launch_ctx</span><span class="o">.</span><span class="n">get_struct_ret_float</span><span class="p">(</span><span class="n">indices</span><span class="p">)</span>
-        <span class="k">raise</span> <span class="n">QuadrantsRuntimeTypeError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Invalid return type on index=</span><span class="si">{</span><span class="n">indices</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span></div>
+        <span class="k">raise</span> <span class="n">QuadrantsRuntimeTypeError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Invalid return type on index=</span><span class="si">{</span><span class="n">indices</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span></div>
 
 
     <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">_resolve_struct_ndarray</span><span class="p">(</span><span class="n">args</span><span class="p">,</span> <span class="n">template_arg_idx</span><span class="p">,</span> <span class="n">attr_chain</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Walk a struct&#39;s attribute chain to find the live ndarray (or Tensor wrapper).&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""Walk a struct's attribute chain to find the live ndarray (or Tensor wrapper)."""</span>
         <span class="n">obj</span> <span class="o">=</span> <span class="n">args</span><span class="p">[</span><span class="n">template_arg_idx</span><span class="p">]</span>
         <span class="k">for</span> <span class="n">attr_name</span> <span class="ow">in</span> <span class="n">attr_chain</span><span class="p">:</span>
             <span class="n">obj</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="n">attr_name</span><span class="p">)</span>
@@ -1276,7 +1277,7 @@
         <span class="n">launch_ctx_buffer</span><span class="p">:</span> <span class="nb">dict</span><span class="p">,</span>
         <span class="n">is_launch_ctx_cacheable</span><span class="p">:</span> <span class="nb">bool</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Set ndarray kernel args that were pre-declared from struct template fields during compilation.&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""Set ndarray kernel args that were pre-declared from struct template fields during compilation."""</span>
         <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._ndarray</span><span class="w"> </span><span class="kn">import</span> <span class="n">Ndarray</span>  <span class="c1"># pylint: disable=C0415</span>
 
         <span class="k">for</span> <span class="n">arg_id</span><span class="p">,</span> <span class="n">template_arg_idx</span><span class="p">,</span> <span class="n">attr_chain</span> <span class="ow">in</span> <span class="n">launch_info</span><span class="p">:</span>
@@ -1285,7 +1286,7 @@
                 <span class="n">obj</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="n">attr_name</span><span class="p">)</span>
             <span class="k">if</span> <span class="nb">type</span><span class="p">(</span><span class="n">obj</span><span class="p">)</span> <span class="ow">in</span> <span class="n">_TENSOR_WRAPPER_TYPES</span><span class="p">:</span>
                 <span class="n">obj</span> <span class="o">=</span> <span class="n">obj</span><span class="o">.</span><span class="n">_unwrap</span><span class="p">()</span>
-            <span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="n">Ndarray</span><span class="p">),</span> <span class="sa">f</span><span class="s2">&quot;Expected Ndarray at </span><span class="si">{</span><span class="n">attr_chain</span><span class="si">}</span><span class="s2">, got </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">obj</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="n">Ndarray</span><span class="p">),</span> <span class="sa">f</span><span class="s2">"Expected Ndarray at </span><span class="si">{</span><span class="n">attr_chain</span><span class="si">}</span><span class="s2">, got </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">obj</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span>
             <span class="n">v_primal</span> <span class="o">=</span> <span class="n">obj</span><span class="o">.</span><span class="n">arr</span>
             <span class="n">v_grad</span> <span class="o">=</span> <span class="n">obj</span><span class="o">.</span><span class="n">grad</span><span class="o">.</span><span class="n">arr</span> <span class="k">if</span> <span class="n">obj</span><span class="o">.</span><span class="n">grad</span> <span class="k">else</span> <span class="kc">None</span>
             <span class="k">if</span> <span class="n">v_grad</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
@@ -1299,29 +1300,29 @@
         <span class="n">args</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">,</span>
         <span class="n">launch_ctx_buffer</span><span class="p">:</span> <span class="nb">dict</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Set scalar kernel args lifted from ``@qd.data_oriented(template_primitives=False)`` template-arg primitive</span>
-<span class="sd">        members. Walks each recorded attr-chain to read the live value and buckets it by declared dtype kind (``&#39;f&#39;``</span>
-<span class="sd">        float, ``&#39;i&#39;`` signed int, ``&#39;u&#39;`` unsigned int), so the value is bound fresh on every launch.</span>
+<span class="w">        </span><span class="sd">"""Set scalar kernel args lifted from ``@qd.data_oriented(template_primitives=False)`` template-arg primitive</span>
+<span class="sd">        members. Walks each recorded attr-chain to read the live value and buckets it by declared dtype kind (``'f'``</span>
+<span class="sd">        float, ``'i'`` signed int, ``'u'`` unsigned int), so the value is bound fresh on every launch.</span>
 
 <span class="sd">        The dtype kind is frozen at first compile (see ``struct_primitive_predeclarer``). Binding a ``float`` to an</span>
 <span class="sd">        arg that was lifted as an integer would silently truncate (``int(1.5) == 1``), so that one lossy direction is</span>
 <span class="sd">        rejected here rather than corrupting the value; the lossless directions (``int``/``bool`` -&gt; float, and</span>
-<span class="sd">        ``bool`` &lt;-&gt; ``int``) still coerce, matching typed-scalar-arg semantics.&quot;&quot;&quot;</span>
+<span class="sd">        ``bool`` &lt;-&gt; ``int``) still coerce, matching typed-scalar-arg semantics."""</span>
         <span class="k">for</span> <span class="n">arg_id</span><span class="p">,</span> <span class="n">template_arg_idx</span><span class="p">,</span> <span class="n">attr_chain</span><span class="p">,</span> <span class="n">kind</span> <span class="ow">in</span> <span class="n">launch_info</span><span class="p">:</span>
             <span class="n">obj</span> <span class="o">=</span> <span class="n">args</span><span class="p">[</span><span class="n">template_arg_idx</span><span class="p">]</span>
             <span class="k">for</span> <span class="n">attr_name</span> <span class="ow">in</span> <span class="n">attr_chain</span><span class="p">:</span>
                 <span class="n">obj</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="n">attr_name</span><span class="p">)</span>
-            <span class="k">if</span> <span class="n">kind</span> <span class="o">==</span> <span class="s2">&quot;f&quot;</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">kind</span> <span class="o">==</span> <span class="s2">"f"</span><span class="p">:</span>
                 <span class="n">launch_ctx_buffer</span><span class="p">[</span><span class="n">_FLOAT</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">arg_id</span><span class="p">,</span> <span class="nb">float</span><span class="p">(</span><span class="n">obj</span><span class="p">)))</span>
             <span class="k">else</span><span class="p">:</span>
                 <span class="k">if</span> <span class="nb">type</span><span class="p">(</span><span class="n">obj</span><span class="p">)</span> <span class="ow">is</span> <span class="nb">float</span><span class="p">:</span>
                     <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span>
-                        <span class="sa">f</span><span class="s2">&quot;Primitive member &#39;</span><span class="si">{</span><span class="s1">&#39;.&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">attr_chain</span><span class="p">)</span><span class="si">}</span><span class="s2">&#39; of a @qd.data_oriented(template_primitives=False) &quot;</span>
-                        <span class="sa">f</span><span class="s2">&quot;object was lifted as an integer kernel argument (its type at first compile), but is now a &quot;</span>
-                        <span class="sa">f</span><span class="s2">&quot;float (</span><span class="si">{</span><span class="n">obj</span><span class="si">!r}</span><span class="s2">); coercing it would truncate. Keep the member&#39;s type stable across launches, &quot;</span>
-                        <span class="sa">f</span><span class="s2">&quot;or use the default template_primitives=True to re-specialise the kernel per type.&quot;</span>
+                        <span class="sa">f</span><span class="s2">"Primitive member '</span><span class="si">{</span><span class="s1">'.'</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">attr_chain</span><span class="p">)</span><span class="si">}</span><span class="s2">' of a @qd.data_oriented(template_primitives=False) "</span>
+                        <span class="sa">f</span><span class="s2">"object was lifted as an integer kernel argument (its type at first compile), but is now a "</span>
+                        <span class="sa">f</span><span class="s2">"float (</span><span class="si">{</span><span class="n">obj</span><span class="si">!r}</span><span class="s2">); coercing it would truncate. Keep the member's type stable across launches, "</span>
+                        <span class="sa">f</span><span class="s2">"or use the default template_primitives=True to re-specialise the kernel per type."</span>
                     <span class="p">)</span>
-                <span class="k">if</span> <span class="n">kind</span> <span class="o">==</span> <span class="s2">&quot;u&quot;</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">kind</span> <span class="o">==</span> <span class="s2">"u"</span><span class="p">:</span>
                     <span class="n">launch_ctx_buffer</span><span class="p">[</span><span class="n">_UINT</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">arg_id</span><span class="p">,</span> <span class="nb">int</span><span class="p">(</span><span class="n">obj</span><span class="p">)))</span>
                 <span class="k">else</span><span class="p">:</span>
                     <span class="n">launch_ctx_buffer</span><span class="p">[</span><span class="n">_INT</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">arg_id</span><span class="p">,</span> <span class="nb">int</span><span class="p">(</span><span class="n">obj</span><span class="p">)))</span>
@@ -1332,7 +1333,7 @@
         <span class="k">try</span><span class="p">:</span>
             <span class="n">instance_id</span><span class="p">,</span> <span class="n">arg_features</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">mapper</span><span class="o">.</span><span class="n">lookup</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">raise_on_templated_floats</span><span class="p">,</span> <span class="n">py_args</span><span class="p">)</span>
         <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="nb">type</span><span class="p">(</span><span class="n">e</span><span class="p">)(</span><span class="sa">f</span><span class="s2">&quot;exception while trying to ensure compiled </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">func</span><span class="si">}</span><span class="s2">:</span><span class="se">\n</span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="nn">e</span>
+            <span class="k">raise</span> <span class="nb">type</span><span class="p">(</span><span class="n">e</span><span class="p">)(</span><span class="sa">f</span><span class="s2">"exception while trying to ensure compiled </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">func</span><span class="si">}</span><span class="s2">:</span><span class="se">\n</span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="nn">e</span>
         <span class="n">key</span> <span class="o">=</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">func</span><span class="p">,</span> <span class="n">instance_id</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">autodiff_mode</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">materialize</span><span class="p">(</span><span class="n">key</span><span class="o">=</span><span class="n">key</span><span class="p">,</span> <span class="n">py_args</span><span class="o">=</span><span class="n">py_args</span><span class="p">,</span> <span class="n">arg_features</span><span class="o">=</span><span class="n">arg_features</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">key</span></div>
@@ -1342,7 +1343,7 @@
     <span class="c1"># Thus this part needs to be fast. (i.e. &lt; 3us on a 4 GHz x64 CPU)</span>
     <span class="nd">@_shell_pop_print</span>
     <span class="k">def</span><span class="w"> </span><span class="fm">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">py_args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
-        <span class="n">qd_stream</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">&quot;qd_stream&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="n">qd_stream</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">"qd_stream"</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
         <span class="c1"># `use_checkpoints` is the kernel-construction-time flag set by `@qd.kernel(graph=True, checkpoints=True)`. The</span>
         <span class="c1"># `_qd_from_checkpoint` kwarg can only be injected by `QuadrantsCallable.resume()`, which is the user-facing</span>
         <span class="c1"># entry that requires `use_checkpoints=True`. So for the dominant (non-checkpoint) launch path we can skip the</span>
@@ -1350,10 +1351,10 @@
         <span class="c1"># with `main`. The same single gate also guards the post-launch `maybe_build_graph_status` branch.</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">use_checkpoints</span><span class="p">:</span>
             <span class="c1"># Pop the resume cookie before anything else touches kwargs -- the AST mapper sees user parameter names</span>
-            <span class="c1"># only, so a stray `from_checkpoint=` would raise &quot;unexpected kwarg&quot;. `_resume_from_checkpoint` is the</span>
-            <span class="c1"># resolved cp_id to copy into the device-side `resume_point` slot before launch; `None` means &quot;fresh start,</span>
-            <span class="c1"># reset to 0&quot;. Plumbed via `Kernel.resume()` only; users do not pass this directly.</span>
-            <span class="n">_resume_from_checkpoint</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">&quot;_qd_from_checkpoint&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+            <span class="c1"># only, so a stray `from_checkpoint=` would raise "unexpected kwarg". `_resume_from_checkpoint` is the</span>
+            <span class="c1"># resolved cp_id to copy into the device-side `resume_point` slot before launch; `None` means "fresh start,</span>
+            <span class="c1"># reset to 0". Plumbed via `Kernel.resume()` only; users do not pass this directly.</span>
+            <span class="n">_resume_from_checkpoint</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">"_qd_from_checkpoint"</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
             <span class="c1"># `validate_resume_cookie` only does work when a resume cookie was actually passed; skip the function call</span>
             <span class="c1"># entirely otherwise so the dominant non-resume call path stays clear of the checkpoint helpers.</span>
             <span class="k">if</span> <span class="n">_resume_from_checkpoint</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
@@ -1362,13 +1363,13 @@
             <span class="n">_resume_from_checkpoint</span> <span class="o">=</span> <span class="kc">None</span>
         <span class="k">if</span> <span class="n">qd_stream</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">autodiff_mode</span> <span class="o">!=</span> <span class="n">_NONE</span><span class="p">:</span>
             <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span>
-                <span class="s2">&quot;qd_stream is not compatible with autodiff kernels. Streams cannot be used with &quot;</span>
-                <span class="s2">&quot;reverse-mode or forward-mode differentiation.&quot;</span>
+                <span class="s2">"qd_stream is not compatible with autodiff kernels. Streams cannot be used with "</span>
+                <span class="s2">"reverse-mode or forward-mode differentiation."</span>
             <span class="p">)</span>
         <span class="k">if</span> <span class="n">qd_stream</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">runtime</span><span class="o">.</span><span class="n">target_tape</span><span class="p">:</span>
             <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span>
-                <span class="s2">&quot;qd_stream is not compatible with autograd Tape. Launch the kernel outside the Tape &quot;</span>
-                <span class="s2">&quot;context, or omit qd_stream.&quot;</span>
+                <span class="s2">"qd_stream is not compatible with autograd Tape. Launch the kernel outside the Tape "</span>
+                <span class="s2">"context, or omit qd_stream."</span>
             <span class="p">)</span>
         <span class="k">if</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">_arch</span> <span class="o">==</span> <span class="n">_ARCH_PYTHON</span><span class="p">:</span>
             <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">func</span><span class="p">(</span><span class="o">*</span><span class="n">py_args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
@@ -1376,38 +1377,35 @@
 
         <span class="bp">self</span><span class="o">.</span><span class="n">raise_on_templated_floats</span> <span class="o">=</span> <span class="n">config</span><span class="o">.</span><span class="n">raise_on_templated_floats</span>
         <span class="n">py_args</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">fuse_args</span><span class="p">(</span><span class="n">is_func</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">is_pyfunc</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">py_args</span><span class="o">=</span><span class="n">py_args</span><span class="p">,</span> <span class="n">kwargs</span><span class="o">=</span><span class="n">kwargs</span><span class="p">,</span> <span class="n">global_context</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span>
-        <span class="c1"># Tensor-wrapper unwrap (stork-17). Substitute each ``qd.Tensor`` instance (including ``VectorTensor`` /</span>
-        <span class="c1"># ``MatrixTensor`` subclasses) with its underlying ``Ndarray`` / ``ScalarField`` impl *before* anything</span>
-        <span class="c1"># downstream observes the arg tuple — including the autograd tape (uses identity), the template mapper</span>
-        <span class="c1"># (cache-keys on ``id(arg)``), ``_extract_arg``, and the AST builder. This guarantees JIT cache stability:</span>
-        <span class="c1"># ``id(Tensor(impl))`` differs across constructions, but ``id(impl)`` is stable, so wrapper-or-not yields</span>
-        <span class="c1"># identical cache keys.</span>
+        <span class="c1"># Tensor-wrapper unwrap (stork-17). Canonicalize ``qd.Tensor`` slots, plus wrapper positions discovered on</span>
+        <span class="c1"># the first launch, before the autograd tape and identity-keyed caches observe the arg tuple.</span>
         <span class="c1">#</span>
-        <span class="c1"># PERF: On first call, record which arg positions are Tensor wrappers. On subsequent calls, skip entirely</span>
-        <span class="c1"># (empty indices) or unwrap only the cached positions (no full-arg scan). For a kernel with 30 args and 1</span>
+        <span class="c1"># PERF: On first call, record the candidate arg positions. On subsequent calls, skip entirely (empty</span>
+        <span class="c1"># candidates) or type-check only the cached positions (no full-arg scan). For a kernel with 30 args and 1</span>
         <span class="c1"># Tensor, this reduces per-call type checks from 30 to 1.</span>
         <span class="c1">#</span>
-        <span class="c1"># Safety of caching: kernel parameter annotations are fixed per position (they come from the function</span>
-        <span class="c1"># signature and are stored in ``self.mapper.arguments``). Whether a given position receives a Tensor wrapper</span>
-        <span class="c1"># or a bare impl is determined by the caller&#39;s annotation pattern, which is stable across calls — a user who</span>
-        <span class="c1"># passes ``qd.Tensor(impl)`` at position *i* will do so on every call, because the annotation (``qd.Tensor``,</span>
-        <span class="c1"># ``qd.Template``, ``qd.types.ndarray()``, or a dataclass type) doesn&#39;t change. The template mapper</span>
-        <span class="c1"># enforces a fixed arg count (``len(args) == self.num_args``), so cached indices cannot go out of bounds.</span>
+        <span class="c1"># ``qd.Tensor`` slots may alternate wrappers, ``None``, and bare impls, so annotation positions remain</span>
+        <span class="c1"># candidates even when the first value is not wrapped. Other annotations retain first-call discovery. The</span>
+        <span class="c1"># template mapper enforces a fixed arg count, so cached indices cannot go out of bounds.</span>
         <span class="k">if</span> <span class="n">_tensor_wrapper</span><span class="o">.</span><span class="n">_any_tensor_constructed</span><span class="p">:</span>  <span class="c1"># pyright: ignore[reportOptionalMemberAccess]</span>
             <span class="n">_indices</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_tensor_unwrap_indices</span>
             <span class="k">if</span> <span class="n">_indices</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-                <span class="n">_indices</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">i</span> <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">a</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">py_args</span><span class="p">)</span> <span class="k">if</span> <span class="nb">type</span><span class="p">(</span><span class="n">a</span><span class="p">)</span> <span class="ow">in</span> <span class="n">_TENSOR_WRAPPER_TYPES</span><span class="p">)</span>
+                <span class="n">_indices</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span>
+                    <span class="n">i</span>
+                    <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">m</span><span class="p">)</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="nb">zip</span><span class="p">(</span><span class="n">py_args</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">arg_metas</span><span class="p">))</span>
+                    <span class="k">if</span> <span class="nb">type</span><span class="p">(</span><span class="n">a</span><span class="p">)</span> <span class="ow">in</span> <span class="n">_TENSOR_WRAPPER_TYPES</span> <span class="ow">or</span> <span class="n">m</span><span class="o">.</span><span class="n">annotation</span> <span class="ow">is</span> <span class="n">_TensorClass</span>
+                <span class="p">)</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">_tensor_unwrap_indices</span> <span class="o">=</span> <span class="n">_indices</span>
-                <span class="k">if</span> <span class="n">_indices</span><span class="p">:</span>
-                    <span class="n">py_args_l</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">py_args</span><span class="p">)</span>
-                    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">_indices</span><span class="p">:</span>
-                        <span class="n">py_args_l</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">py_args_l</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">_impl</span>  <span class="c1"># pyright: ignore[reportAttributeAccessIssue]</span>
-                    <span class="n">py_args</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">py_args_l</span><span class="p">)</span>
-            <span class="k">elif</span> <span class="n">_indices</span><span class="p">:</span>
-                <span class="n">py_args_l</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">py_args</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">_indices</span><span class="p">:</span>
+                <span class="n">py_args_l</span> <span class="o">=</span> <span class="kc">None</span>
                 <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">_indices</span><span class="p">:</span>
-                    <span class="n">py_args_l</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">py_args_l</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">_impl</span>  <span class="c1"># pyright: ignore[reportAttributeAccessIssue]</span>
-                <span class="n">py_args</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">py_args_l</span><span class="p">)</span>
+                    <span class="n">_arg</span> <span class="o">=</span> <span class="n">py_args</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+                    <span class="k">if</span> <span class="nb">type</span><span class="p">(</span><span class="n">_arg</span><span class="p">)</span> <span class="ow">in</span> <span class="n">_TENSOR_WRAPPER_TYPES</span><span class="p">:</span>
+                        <span class="k">if</span> <span class="n">py_args_l</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                            <span class="n">py_args_l</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">py_args</span><span class="p">)</span>
+                        <span class="n">py_args_l</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">_arg</span><span class="o">.</span><span class="n">_impl</span>
+                <span class="k">if</span> <span class="n">py_args_l</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                    <span class="n">py_args</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">py_args_l</span><span class="p">)</span>
 
         <span class="c1"># Transform the primal kernel to forward mode grad kernel</span>
         <span class="c1"># then recover to primal when exiting the forward mode manager</span>
@@ -1425,7 +1423,7 @@
             <span class="bp">self</span><span class="o">.</span><span class="n">runtime</span><span class="o">.</span><span class="n">target_tape</span><span class="o">.</span><span class="n">insert</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">py_args</span><span class="p">)</span>
 
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">autodiff_mode</span> <span class="o">!=</span> <span class="n">_NONE</span> <span class="ow">and</span> <span class="n">impl</span><span class="o">.</span><span class="n">current_cfg</span><span class="p">()</span><span class="o">.</span><span class="n">opt_level</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
-            <span class="n">_logging</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="s2">&quot;&quot;&quot;opt_level = 1 is enforced to enable gradient computation.&quot;&quot;&quot;</span><span class="p">)</span>
+            <span class="n">_logging</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="s2">"""opt_level = 1 is enforced to enable gradient computation."""</span><span class="p">)</span>
             <span class="n">impl</span><span class="o">.</span><span class="n">current_cfg</span><span class="p">()</span><span class="o">.</span><span class="n">opt_level</span> <span class="o">=</span> <span class="mi">1</span>
         <span class="n">key</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">ensure_compiled</span><span class="p">(</span><span class="o">*</span><span class="n">py_args</span><span class="p">)</span>  <span class="c1"># type: ignore[arg-type]</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_last_launch_key</span> <span class="o">=</span> <span class="n">key</span>
@@ -1451,7 +1449,7 @@
             <span class="p">)</span>
         <span class="c1"># Only forward `_resume_from_checkpoint` when the caller actually supplied one (i.e. via `Kernel.resume(...)`).</span>
         <span class="c1"># Otherwise omit the kwarg entirely so subclasses / monkeypatches of `launch_kernel` that pre-date this kwarg</span>
-        <span class="c1"># keep working unmodified. The host-side default in `LaunchContextBuilder` is 0 (&quot;run every checkpoint&quot;), which</span>
+        <span class="c1"># keep working unmodified. The host-side default in `LaunchContextBuilder` is 0 ("run every checkpoint"), which</span>
         <span class="c1"># matches the `None` semantics in `launch_kernel`.</span>
         <span class="k">if</span> <span class="n">_resume_from_checkpoint</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
             <span class="n">ret</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">launch_kernel</span><span class="p">(</span>
@@ -1475,7 +1473,7 @@
             <span class="bp">self</span><span class="o">.</span><span class="n">compiled_kernel_data_by_key</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_last_compiled_kernel_data</span>
         <span class="c1"># Surface a GraphStatus for kernels with `qd.checkpoint(yield_on=...)` so the host can drive the qipc-style</span>
         <span class="c1"># re-entrant loop. Kernels without yield-capable checkpoints get `ret` (typically `None`) passed through;</span>
-        <span class="c1"># short-circuit the helper call so the hot non-checkpoint path doesn&#39;t even enter the Python frame.</span>
+        <span class="c1"># short-circuit the helper call so the hot non-checkpoint path doesn't even enter the Python frame.</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">checkpoint_yield_on_args</span><span class="p">:</span>
             <span class="k">return</span> <span class="n">_checkpoint_helpers</span><span class="o">.</span><span class="n">maybe_build_graph_status</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ret</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">ret</span></div>
