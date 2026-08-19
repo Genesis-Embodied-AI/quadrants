@@ -110,7 +110,7 @@ JITSessionCUDA::JITSessionCUDA(QuadrantsLLVMContext *tlctx,
   program_impl_->register_needs_finalizing(finalizer_.get());
 }
 
-JITModule *JITSessionCUDA::add_module(std::unique_ptr<llvm::Module> M, int max_reg) {
+std::string JITSessionCUDA::compile_module_to_ptx_with_dump(std::unique_ptr<llvm::Module> &module) {
   // Read through get_environ_config, as codegen_llvm.cpp does for QD_DUMP_IR and QD_LOAD_IR, so that a value of 0
   // turns the variable off here too rather than only its absence.
   const bool dump_ir = get_environ_config(DUMP_IR_ENV.data()) != 0;
@@ -119,7 +119,7 @@ JITModule *JITSessionCUDA::add_module(std::unique_ptr<llvm::Module> M, int max_r
   // Capture the dump name before compile_module_to_ptx renames functions via convert().
   std::string dump_name;
   if (dump_ir || load_ptx_from_dump) {
-    dump_name = moduleToDumpName(M.get());
+    dump_name = moduleToDumpName(module.get());
   }
 
   if (dump_ir && !dump_name.empty()) {
@@ -129,14 +129,14 @@ JITModule *JITSessionCUDA::add_module(std::unique_ptr<llvm::Module> M, int max_r
     std::error_code EC;
     llvm::raw_fd_ostream dest_file(filename.string(), EC);
     if (!EC) {
-      M->print(dest_file, nullptr);
+      module->print(dest_file, nullptr);
     } else {
       std::cout << "problem dumping file " << filename.string() << ": " << EC.message() << std::endl;
       QD_ERROR("Failed to dump LLVM IR to file: {}", filename.string());
     }
   }
 
-  auto ptx = compile_module_to_ptx(M);
+  auto ptx = compile_module_to_ptx(module);
   if (this->config_.print_kernel_asm) {
     static FileSequenceWriter writer("quadrants_kernel_nvptx_{:04d}.ptx", "module NVPTX");
     writer.write(ptx);
@@ -171,6 +171,11 @@ JITModule *JITSessionCUDA::add_module(std::unique_ptr<llvm::Module> M, int max_r
       QD_WARN("Failed to open PTX file for loading: {}", ptx_path.string());
     }
   }
+  return ptx;
+}
+
+JITModule *JITSessionCUDA::add_module(std::unique_ptr<llvm::Module> M, int max_reg) {
+  auto ptx = compile_module_to_ptx_with_dump(M);
 
   // TODO: figure out why using the guard leads to wrong tests results
   // auto context_guard = CUDAContext::get_instance().get_guard();
@@ -215,10 +220,11 @@ JITModule *JITSessionCUDA::add_module_per_task(std::vector<PerConstructArtifact>
   auto &drv = CUDADriver::get_instance();
 
   // The cheap LLVM->PTX step (the expensive PTX->SASS now happens in the driver at load, cached in ~/.nv/ComputeCache).
+  // Use the dump-aware variant so QD_DUMP_IR / QD_LOAD_IR behave the same per task as on the whole-module path.
   std::vector<std::string> ptxs(artifacts.size());
   for (std::size_t i = 0; i < artifacts.size(); i++) {
     std::lock_guard<std::mutex> g(g_ptxgen_mu);
-    ptxs[i] = compile_module_to_ptx(artifacts[i].module);
+    ptxs[i] = compile_module_to_ptx_with_dump(artifacts[i].module);
   }
 
   CUDAContext::get_instance().make_current();

@@ -92,6 +92,10 @@ class JITSessionCUDA : public JITSession {
   };
 
   std::string compile_module_to_ptx(std::unique_ptr<llvm::Module> &module);
+  // compile_module_to_ptx plus the QD_DUMP_IR / QD_LOAD_IR side effects (dump <name>_before_ptx.ll and <name>.ptx
+  // under debug_dump_path, optionally reload PTX from that dump). Shared by the whole-module and per-task load paths
+  // so their debug-dump behaviour stays identical. Callers sharing an LLVMContext across modules must serialise it.
+  std::string compile_module_to_ptx_with_dump(std::unique_ptr<llvm::Module> &module);
   std::unique_ptr<PtxCache> ptx_cache_;
   ProgramImpl *program_impl_;
   std::unique_ptr<Finalizer> finalizer_;
