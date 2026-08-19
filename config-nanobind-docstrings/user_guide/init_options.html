@@ -430,14 +430,24 @@
                   
   <section class="tex2jax_ignore mathjax_ignore" id="qd-init-options">
 <h1>qd.init options<a class="headerlink" href="#qd-init-options" title="Link to this heading">#</a></h1>
-<p><code class="docutils literal notranslate"><span class="pre">qd.init(...)</span></code> accepts a wide set of configuration options as keyword arguments; most are also reachable as an environment variable of the form <code class="docutils literal notranslate"><span class="pre">QD_&lt;UPPERCASE_NAME&gt;</span></code> (e.g. <code class="docutils literal notranslate"><span class="pre">QD_OFFLINE_CACHE=0</span></code>). This page walks through the knobs that are commonly tuned in practice; the <a class="reference internal" href="#all-options">full list of options</a> is at the bottom.</p>
+<p><code class="docutils literal notranslate"><span class="pre">qd.init(...)</span></code> accepts a range of keyword options that tune how Quadrants compiles and runs your kernels; most are also settable as an environment variable of the form <code class="docutils literal notranslate"><span class="pre">QD_&lt;UPPERCASE_NAME&gt;</span></code> (e.g. <code class="docutils literal notranslate"><span class="pre">QD_OFFLINE_CACHE=0</span></code>). This page walks through the options most commonly tuned in practice; the <a class="reference internal" href="#all-options">full list of options</a> is at the bottom.</p>
 <section id="caching">
 <h2>Caching<a class="headerlink" href="#caching" title="Link to this heading">#</a></h2>
 <section id="offline-cache">
 <h3><code class="docutils literal notranslate"><span class="pre">offline_cache</span></code><a class="headerlink" href="#offline-cache" title="Link to this heading">#</a></h3>
 <p>Whether the compilation caches <strong>persist on disk across Python invocations</strong>. Default <code class="docutils literal notranslate"><span class="pre">True</span></code>. The “offline” in the name refers to the fact that this cache outlives the process: it is what makes the <em>second</em> time you start a Python interpreter and run a kernel cheap, by reusing artifacts from the first run.</p>
-<p>Setting <code class="docutils literal notranslate"><span class="pre">offline_cache=False</span></code> is intended to emulate cold-start, i.e. a fresh Python process with no prior on-disk artifacts available. In-process caches operate independently of this flag: within a single Python session, identical kernels are never recompiled. The flag therefore controls only whether the next Python invocation observes a warm or a cold disk.</p>
-<p>When <code class="docutils literal notranslate"><span class="pre">offline_cache=True</span></code>, three persistent layers cooperate. The first two share the cache directory configured by <code class="docutils literal notranslate"><span class="pre">offline_cache_file_path</span></code> (default <code class="docutils literal notranslate"><span class="pre">~/.cache/quadrants/qdcache</span></code>); the third is owned by libcuda and lives outside that path.</p>
+<p>Setting <code class="docutils literal notranslate"><span class="pre">offline_cache=False</span></code> is intended to emulate cold-start, i.e. a fresh Python process with no prior on-disk artifacts available. Caching within a single Python session is unaffected by this flag: identical kernels are never recompiled within one process regardless of its value. The flag controls only whether the <em>next</em> Python invocation observes a warm or a cold disk. The on-disk cache lives in the directory set by <code class="docutils literal notranslate"><span class="pre">offline_cache_file_path</span></code> (default <code class="docutils literal notranslate"><span class="pre">~/.cache/quadrants/qdcache</span></code>).</p>
+<p>When to set it to <code class="docutils literal notranslate"><span class="pre">False</span></code>:</p>
+<ul class="simple">
+<li><p>Taking compile-time profiles where a cached kernel would mask the real cost.</p></li>
+<li><p>Investigating a stale-cache bug or suspected cache corruption.</p></li>
+<li><p>Reproducing first-run behavior in CI matrix runs that would otherwise warm the caches across iterations.</p></li>
+</ul>
+<p>For normal use, leave it at <code class="docutils literal notranslate"><span class="pre">True</span></code>; the cache is the dominant source of fast warm-up.</p>
+<section id="under-the-hood-cache-layers-advanced">
+<h4>Under the hood: cache layers (advanced)<a class="headerlink" href="#under-the-hood-cache-layers-advanced" title="Link to this heading">#</a></h4>
+<p><em>You do not need this section to use <code class="docutils literal notranslate"><span class="pre">offline_cache</span></code>; it explains what the flag turns on and off internally.</em></p>
+<p>When <code class="docutils literal notranslate"><span class="pre">offline_cache=True</span></code>, three persistent layers cooperate. The first two share the cache directory configured by <code class="docutils literal notranslate"><span class="pre">offline_cache_file_path</span></code>; the third is owned by libcuda and lives outside that path.</p>
 <ol class="arabic simple">
 <li><p>The cross-backend kernel-IR / compiled-kernel cache (driven by <code class="docutils literal notranslate"><span class="pre">KernelCompilationManager</span></code>). When the IR-and-config hash hits, the previously compiled kernel data is loaded from disk and the entire compile pipeline is skipped. Active for every backend (CPU, CUDA, AMDGPU, Metal, Vulkan).</p></li>
 <li><p>The CUDA per-arch PTX cache, written under <code class="docutils literal notranslate"><span class="pre">&lt;offline_cache_file_path&gt;/ptx_cache_sm_*</span></code> (driven by <code class="docutils literal notranslate"><span class="pre">PtxCache</span></code>). When the LLVM-IR hash hits, the previously emitted PTX is loaded from disk and the LLVM-to-PTX compilation pipeline (LLVM optimization passes plus the NVPTX backend’s PTX emission) is skipped. <code class="docutils literal notranslate"><span class="pre">ptxas</span></code> itself runs later inside <code class="docutils literal notranslate"><span class="pre">cuModuleLoadDataEx</span></code> and is governed by Layer 3.</p></li>
@@ -449,20 +459,14 @@
 <li><p>Layer 2 falls back to memory-only. PTX is still cached within one process so kernels with identical LLVM IR share PTX output, but nothing is read from or written to disk.</p></li>
 <li><p>Layer 3 cannot be controlled by the libcuda environment variable <code class="docutils literal notranslate"><span class="pre">CUDA_CACHE_DISABLE</span></code> from inside Python because the variable is captured by libcuda at process start. Quadrants instead appends a per-process nonce comment to the PTX it submits to <code class="docutils literal notranslate"><span class="pre">cuModuleLoadDataEx</span></code>. The nonce is constant within one process - kernels with identical PTX still share a cubin in the same run - and changes between processes so cross-run hits cannot quietly serve stale SASS.</p></li>
 </ul>
-<p>When to set it to <code class="docutils literal notranslate"><span class="pre">False</span></code>:</p>
-<ul class="simple">
-<li><p>Taking compile-time profiles where any cached SASS would mask the real cost.</p></li>
-<li><p>Investigating a stale-cache bug or suspected cache corruption.</p></li>
-<li><p>Reproducing first-run behavior in CI matrix runs that would otherwise warm the caches across iterations.</p></li>
-</ul>
-<p>For normal use, leave it at <code class="docutils literal notranslate"><span class="pre">True</span></code>; the cache layers are the dominant source of fast warm-up.</p>
+</section>
 </section>
 </section>
 <section id="compile-time-tuning">
 <h2>Compile-time tuning<a class="headerlink" href="#compile-time-tuning" title="Link to this heading">#</a></h2>
 <section id="cfg-optimization">
 <h3><code class="docutils literal notranslate"><span class="pre">cfg_optimization</span></code><a class="headerlink" href="#cfg-optimization" title="Link to this heading">#</a></h3>
-<p>Whether to run the control-flow-graph optimization pass. Default <code class="docutils literal notranslate"><span class="pre">True</span></code>. Setting it to <code class="docutils literal notranslate"><span class="pre">False</span></code> makes compilation up to 6x faster while costing 1-5% of runtime speed; consider disabling it if compile time is the bottleneck and the runtime delta is acceptable.</p>
+<p>Whether to run the control-flow-graph optimization (an internal compile-time optimization of your kernel’s branches and loops). Default <code class="docutils literal notranslate"><span class="pre">True</span></code>. Setting it to <code class="docutils literal notranslate"><span class="pre">False</span></code> makes compilation up to 6x faster while costing 1-5% of runtime speed; consider disabling it if compile time is the bottleneck and the runtime delta is acceptable.</p>
 </section>
 <section id="fast-math">
 <h3><code class="docutils literal notranslate"><span class="pre">fast_math</span></code><a class="headerlink" href="#fast-math" title="Link to this heading">#</a></h3>
@@ -478,7 +482,7 @@
 <p>See <a class="reference internal" href="autodiff.html"><span class="std std-doc">Autodiff</span></a> for the reverse-mode pipeline overview.</p>
 <section id="ad-stack-experimental-enabled">
 <h3><code class="docutils literal notranslate"><span class="pre">ad_stack_experimental_enabled</span></code><a class="headerlink" href="#ad-stack-experimental-enabled" title="Link to this heading">#</a></h3>
-<p>Enables the dynamic-loop reverse-mode pipeline (the <em>adstack</em>). Default <code class="docutils literal notranslate"><span class="pre">False</span></code>. Required when a reverse-mode kernel has a runtime-bounded loop carrying a non-linear primal; without it, such kernels either compile-error or produce silently-wrong gradients depending on the loop shape. See <a class="reference internal" href="autodiff.html#autodiff-with-dynamic-loops"><span class="std std-ref">Autodiff with dynamic loops</span></a> for the rules. Adstack-on is safe even when not strictly needed, but it does come with a few drawbacks:</p>
+<p>Enables the dynamic-loop reverse-mode pipeline (the <em>adstack</em>). Default <code class="docutils literal notranslate"><span class="pre">False</span></code>. Required when a reverse-mode kernel has a runtime-bounded loop carrying a non-linear primal (a value computed on the forward pass that then feeds a non-linear operation); without it, such kernels either compile-error or produce silently-wrong gradients depending on the loop shape. See <a class="reference internal" href="autodiff.html#autodiff-with-dynamic-loops"><span class="std std-ref">Autodiff with dynamic loops</span></a> for the rules. Adstack-on is safe even when not strictly needed, but it does come with a few drawbacks:</p>
 <ul class="simple">
 <li><p><strong>Memory.</strong> The reverse pass replays each iteration of the dynamic loop, so the adstack stores per-iteration intermediate values for every thread. See <a class="reference internal" href="autodiff.html#memory-footprint"><span class="std std-ref">Memory footprint</span></a> for the exact formula and the knobs that shrink it (<code class="docutils literal notranslate"><span class="pre">ad_stack_size</span></code>, <code class="docutils literal notranslate"><span class="pre">ad_stack_sparse_threshold_bytes</span></code>).</p></li>
 <li><p><strong>Per-launch overhead.</strong> Every backward kernel launch incurs a small fixed CPU-to-GPU data transfer. Kernels whose dynamic loop is gated by a sparse predicate (e.g. <code class="docutils literal notranslate"><span class="pre">for</span> <span class="pre">i</span> <span class="pre">in</span> <span class="pre">range(n):</span> <span class="pre">if</span> <span class="pre">active[i]</span> <span class="pre">&gt;</span> <span class="pre">0:</span> <span class="pre">...</span></code>) additionally run a fast GPU pre-step that counts how many threads pass the gate so that the adstack can be tightly sized instead of upper-bounded by worst case.</p></li>
@@ -511,16 +515,16 @@
 <p>See <a class="reference internal" href="debug.html"><span class="std std-doc">Debug mode</span></a> for runnable examples and a typical develop / benchmark workflow.</p>
 <section id="debug">
 <h3><code class="docutils literal notranslate"><span class="pre">debug</span></code><a class="headerlink" href="#debug" title="Link to this heading">#</a></h3>
-<p>Default <code class="docutils literal notranslate"><span class="pre">False</span></code>. Turns on every available correctness check. Use while iterating on a kernel that produces wrong numerics or while developing a new compiler pass; turn off for benchmarks and production.</p>
+<p>Default <code class="docutils literal notranslate"><span class="pre">False</span></code>. Turns on every available correctness check. Use while iterating on a kernel that produces wrong numerics; turn off for benchmarks and production.</p>
 <p>Enables:</p>
 <ul class="simple">
 <li><p>field-bounds check on tensor indexing (out-of-range index raises <code class="docutils literal notranslate"><span class="pre">RuntimeError</span></code>);</p></li>
 <li><p>kernel <code class="docutils literal notranslate"><span class="pre">assert</span></code> statements;</p></li>
 <li><p>integer-overflow guards on arithmetic;</p></li>
-<li><p>IR verification after every compiler pass.</p></li>
+<li><p>extra internal consistency checks throughout compilation.</p></li>
 </ul>
-<p>The adstack-overflow check on reverse-mode autodiff runs unconditionally on every backend regardless of <code class="docutils literal notranslate"><span class="pre">debug</span></code>; see <a class="reference internal" href="autodiff.html"><span class="std std-doc">Autodiff -&gt; What can go wrong</span></a> for the contract.</p>
-<p><strong>Cost.</strong> Significant on both compile time (verifier walks the IR after every transform; extra runtime checks expand the emitted code; ~21s extra observed on adstack-heavy kernels) and runtime. For just the field-bounds check in a release build without the rest, use <a class="reference internal" href="#check-out-of-bound"><code class="docutils literal notranslate"><span class="pre">check_out_of_bound</span></code></a> below.</p>
+<p>The adstack-overflow check on reverse-mode autodiff runs unconditionally on every backend regardless of <code class="docutils literal notranslate"><span class="pre">debug</span></code>; see <a class="reference internal" href="autodiff.html#what-can-go-wrong"><span class="std std-ref">Autodiff -&gt; What can go wrong</span></a> for the contract.</p>
+<p><strong>Cost.</strong> Significant on both compile time (extra checks are inserted and validated throughout compilation; e.g. ~21s of added compile time observed on adstack-heavy kernels) and runtime. For just the field-bounds check in a release build without the rest, use <a class="reference internal" href="#check-out-of-bound"><code class="docutils literal notranslate"><span class="pre">check_out_of_bound</span></code></a> below.</p>
 </section>
 <section id="check-out-of-bound">
 <h3><code class="docutils literal notranslate"><span class="pre">check_out_of_bound</span></code><a class="headerlink" href="#check-out-of-bound" title="Link to this heading">#</a></h3>
@@ -598,7 +602,7 @@
 <dl class="py property">
 <dt class="sig sig-object py" id="quadrants._lib.core.quadrants_python.CompileConfig.ad_stack_size">
 <em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">ad_stack_size</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">int</span></em><a class="headerlink" href="#quadrants._lib.core.quadrants_python.CompileConfig.ad_stack_size" title="Link to this definition">#</a></dt>
-<dd><p>Force every autodiff stack to exactly this many slots. 0 lets the launch-time sizer choose automatically.</p>
+<dd><p>Force autodiff stacks to exactly this many slots. 0 lets the launch-time sizer choose automatically.</p>
 <p>Default: <code class="docutils literal notranslate"><span class="pre">0</span></code>.</p>
 </dd></dl>
 
@@ -1166,7 +1170,10 @@
   <nav id="pst-page-toc-nav" class="page-toc" aria-labelledby="pst-page-navigation-heading-2">
     <ul class="pst-show_toc_level nav section-nav flex-column">
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#caching">Caching</a><ul class="nav section-nav flex-column">
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#offline-cache"><code class="docutils literal notranslate"><span class="pre">offline_cache</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#offline-cache"><code class="docutils literal notranslate"><span class="pre">offline_cache</span></code></a><ul class="nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#under-the-hood-cache-layers-advanced">Under the hood: cache layers (advanced)</a></li>
+</ul>
+</li>
 </ul>
 </li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#compile-time-tuning">Compile-time tuning</a><ul class="nav section-nav flex-column">
