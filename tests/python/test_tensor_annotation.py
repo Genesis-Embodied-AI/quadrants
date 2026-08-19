@@ -168,6 +168,82 @@ def test_tensor_layouts_keep_separate_cache_entries():
     assert len(k._primal.mapper.mapping) == 2
 
 
+# ----------------------------------------------------------------------------
+# Alternating values at a qd.Tensor slot
+# ----------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("later_kind", ["none", "bare"])
+@test_utils.test()
+def test_tensor_slot_cached_wrapper_accepts_none_or_bare_impl(later_kind):
+    out = qd.ndarray(qd.f32, shape=(4,))
+    bias = qd.ndarray(qd.f32, shape=(4,))
+    bias.from_numpy(np.full(4, 100.0, dtype=np.float32))
+
+    @qd.kernel
+    def add_bias(out: qd.types.NDArray[qd.f32, 1], bias: qd.Tensor):
+        for i in range(out.shape[0]):
+            if qd.static(bias is not None):
+                out[i] = qd.f32(i) + bias[i]
+            else:
+                out[i] = qd.f32(i)
+
+    bias_wrapper = qd.wrap(bias)
+    add_bias(out, bias_wrapper)
+    later = None if later_kind == "none" else bias
+    add_bias(out, later)
+
+    expected = np.arange(4, dtype=np.float32)
+    if later is not None:
+        expected += 100.0
+    np.testing.assert_array_equal(out.to_numpy(), expected)
+
+    add_bias(out, bias_wrapper)
+    np.testing.assert_array_equal(out.to_numpy(), np.arange(4, dtype=np.float32) + 100.0)
+    assert len(add_bias._primal.mapper.mapping) == (2 if later is None else 1)
+
+
+@test_utils.test(arch=[qd.cpu, qd.cuda, qd.amdgpu, qd.metal], require=qd.extension.adstack)
+def test_tensor_slot_none_then_wrapper_survives_tape_replay():
+    bias = qd.ndarray(qd.f32, shape=(4,), needs_grad=True)
+    loss = qd.ndarray(qd.f32, shape=(), needs_grad=True)
+    bias.from_numpy(np.array([3.0, 0.0, 0.0, 0.0], dtype=np.float32))
+
+    @qd.kernel
+    def pick_first(loss: qd.types.NDArray[qd.f32, None], bias: qd.Tensor):
+        if qd.static(bias is not None):
+            loss[None] = bias[0] * 2.0
+
+    bias_wrapper = qd.wrap(bias)
+
+    with qd.ad.Tape(loss=loss):
+        pick_first(loss, None)
+        pick_first(loss, bias_wrapper)
+        pick_first(loss, None)
+
+    np.testing.assert_allclose(loss.to_numpy(), 6.0)
+    np.testing.assert_allclose(bias.grad.to_numpy(), [2.0, 0.0, 0.0, 0.0])
+    assert len(pick_first._primal.mapper.mapping) == 2
+
+
+@test_utils.test()
+def test_tensor_slot_later_wrapper_uses_impl_identity_cache():
+    out = qd.ndarray(qd.f32, shape=(4,))
+    bias = qd.ndarray(qd.f32, shape=(4,))
+    bias_wrapper = qd.wrap(bias)
+
+    @qd.kernel
+    def copy(out: qd.types.NDArray[qd.f32, 1], bias: qd.Tensor):
+        for i in range(out.shape[0]):
+            out[i] = bias[i]
+
+    copy(out, bias)
+    cache_size = len(copy._primal.mapper._mapping_cache)
+    copy(out, bias_wrapper)
+
+    assert len(copy._primal.mapper._mapping_cache) == cache_size
+
+
 # Vector / matrix element types: qd.Tensor must dispatch the compound-element tensors built by qd.Vector.tensor /
 # qd.Matrix.tensor on both backends.
 
