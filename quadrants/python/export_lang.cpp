@@ -210,9 +210,11 @@ void export_lang(nb::module_ &m) {
               "while the LLVM-IR and assembly ones (e.g. print_kernel_llvm_ir, print_kernel_asm) write files in the "
               "current working directory.")
       .def_rw("simplify_before_lower_access", &CompileConfig::simplify_before_lower_access,
-              "Run the simplify pass before the lower-access pass.")
+              "Intended to run the simplify pass before the lower-access pass; currently has no effect, as nothing "
+              "reads it.")
       .def_rw("simplify_after_lower_access", &CompileConfig::simplify_after_lower_access,
-              "Run the simplify pass after the lower-access pass.")
+              "Intended to run the simplify pass after the lower-access pass; currently has no effect, as nothing "
+              "reads it.")
       .def_rw("lower_access", &CompileConfig::lower_access,
               "Lower high-level field accesses to low-level pointer arithmetic.")
       .def_rw("move_loop_invariant_outside_if", &CompileConfig::move_loop_invariant_outside_if,
