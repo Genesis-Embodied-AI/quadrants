@@ -10,7 +10,7 @@ Whether the compilation caches **persist on disk across Python invocations**. De
 
 Setting `offline_cache=False` is intended to emulate cold-start, i.e. a fresh Python process with no prior on-disk artifacts available. In-process caches operate independently of this flag: within a single Python session, identical kernels are never recompiled. The flag therefore controls only whether the next Python invocation observes a warm or a cold disk.
 
-When `offline_cache=True`, compilation artifacts persist on disk under `offline_cache_file_path` (default `~/.cache/quadrants/qdcache`), so a later Python process reuses them instead of recompiling. Setting `offline_cache=False` (or `QD_OFFLINE_CACHE=0`) forces a true cold start: nothing is read from or written to disk, and kernels are recompiled on the next invocation.
+When `offline_cache=True`, compilation artifacts persist on disk under `offline_cache_file_path` (default `~/.cache/quadrants/qdcache`), so a later Python process reuses them instead of recompiling. Setting `offline_cache=False` (or `QD_OFFLINE_CACHE=0`) forces a cold start: Quadrants recompiles kernels and neither reads nor writes its own on-disk cache. (On CUDA the driver keeps a separate SASS cache at `~/.nv/ComputeCache` that this flag does not disable; `offline_cache=False` only stops that cache from serving results across runs. Set `CUDA_CACHE_DISABLE=1` to turn it off entirely.)
 
 When to set it to `False`:
 - Taking compile-time profiles where any cached SASS would mask the real cost.
