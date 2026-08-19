@@ -389,14 +389,18 @@ def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: Annotati
         # truly frozen by specifying 'unsafe_hash=True'. If a user is doing this on purpose, it makes sense to honor it.
         is_frozen = annotation.__hash__ is not None
         if is_frozen:
+            # Note that it is necessary to store the key at instance-level instead of class-level because because
+            # multiple instances of the same class may have different memory layout (although unusual).
+            # One limitation is that storing '_key' is then impossible for dataclasses enforcing 'slots=True',
+            # but this not the default option and almost never used in practice because of other limitations.
+            # Stored as a dict[annotation, key] to allow for polymorphism on the passed dataclass: a subclass instance
+            # may be extracted against different ancestor annotations (different active fields), each cached separately.
             try:
-                # Note that it is necessary to store the key at instance-level instead of class-level because because
-                # multiple instances of the same class may have different memory layout (although unusual).
-                # One limitation is that storing '_key' is then impossible for dataclasses enforcing 'slots=True',
-                # but this not the default option and almost never used in practice because of other limitations.
-                return arg._key
+                _key_hit = arg._key.get(annotation)
             except AttributeError:
-                pass
+                _key_hit = None
+            if _key_hit is not None:
+                return _key_hit
         key = tuple(
             [
                 _extract_arg(
@@ -411,10 +415,17 @@ def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: Annotati
         )
         if is_frozen:
             try:
-                object.__setattr__(arg, "_key", key)
+                _key_map = arg._key
             except AttributeError:
-                # Impossible to store _key at instance-level if 'slots=True'. It will be recomputed systematically.
-                pass
+                _key_map = None
+            if _key_map is None:
+                try:
+                    object.__setattr__(arg, "_key", {annotation: key})
+                except AttributeError:
+                    # Impossible to store _key at instance-level if 'slots=True'. It will be recomputed systematically.
+                    pass
+            else:
+                _key_map[annotation] = key
         return key
     if annotation_type is sparse_matrix_builder:
         return arg.dtype

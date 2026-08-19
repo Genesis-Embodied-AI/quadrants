@@ -181,9 +181,99 @@ def test_frozen_dc_unwrapped_cache_populated():
     assert not hasattr(state, "_qd_dc_unwrapped")
     noop(state)
     assert hasattr(state, "_qd_dc_unwrapped")
-    cached = state._qd_dc_unwrapped
+    cache = state._qd_dc_unwrapped
+    assert State in cache
+    cached = cache[State]
     assert "a" in cached
     assert cached["a"] is a
+
+
+# ---------------------------------------------------------------------------
+# Template-key cache: verify _key is cached per annotated type (covariant reuse).
+# ---------------------------------------------------------------------------
+
+
+@test_utils.test(arch=qd.cpu)
+def test_frozen_dc_template_key_cache_populated():
+    """The template key should depend on the way we use it"""
+
+    @dataclasses.dataclass(frozen=True)
+    class Base1:
+        x1: qd.types.NDArray[qd.i32, 1]
+
+    @dataclasses.dataclass(frozen=True)
+    class Base2:
+        x2: qd.types.NDArray[qd.f32, 2]
+
+    @dataclasses.dataclass(frozen=True)
+    class Sub(Base1, Base2):
+        pass
+
+    @qd.kernel
+    def use1(dat: Base1):
+        for i in range(4):
+            dat.x1[i] = 1
+
+    @qd.kernel
+    def use2(dat: Base2):
+        for i, j in qd.ndrange(2, 2):
+            dat.x2[i, j] = 2.0
+
+    sub = Sub(x1=qd.ndarray(qd.i32, shape=(4,)), x2=qd.ndarray(qd.f32, shape=(2, 2)))
+
+    assert not hasattr(sub, "_key")
+    use1(sub)
+    assert Base1 in sub._key
+    use2(sub)
+    assert Base1 in sub._key and Base2 in sub._key
+
+    # Distinct field sets (i32/1D vs f32/2D) must yield distinct keys, i.e. neither annotation reused the other's.
+    assert sub._key[Base1] != sub._key[Base2]
+
+
+# ---------------------------------------------------------------------------
+# all-Field cache: the _recursive_set_args shortcut must be keyed per annotated type.
+# ---------------------------------------------------------------------------
+
+
+@test_utils.test(arch=qd.cpu)
+def test_frozen_dc_all_field_cache_per_annotated_type():
+    """We should have different all field caches depending on the ways that a subclass is used"""
+
+    @dataclasses.dataclass(frozen=True)
+    class Base1:
+        a: qd.Template
+
+    @dataclasses.dataclass(frozen=True)
+    class Base2:
+        b: qd.Template
+
+    @dataclasses.dataclass(frozen=True)
+    class Sub(Base1, Base2):
+        pass
+
+    @qd.kernel
+    def use1(dat: Base1):
+        for i in range(4):
+            dat.a[i] = 1
+
+    @qd.kernel
+    def use2(dat: Base2):
+        for i in range(4):
+            dat.b[i] = 2
+
+    a = qd.field(qd.i32, shape=(4,))
+    b = qd.field(qd.i32, shape=(4,))
+    sub = Sub(a=a, b=b)
+
+    use1(sub)
+    assert sub._qd_all_field == {Base1: True}
+    use2(sub)
+    # Second annotation gets its own entry rather than reusing Base1's shortcut verdict.
+    assert sub._qd_all_field == {Base1: True, Base2: True}
+
+    np.testing.assert_array_equal(a.to_numpy(), [1, 1, 1, 1])
+    np.testing.assert_array_equal(b.to_numpy(), [2, 2, 2, 2])
 
 
 # ---------------------------------------------------------------------------

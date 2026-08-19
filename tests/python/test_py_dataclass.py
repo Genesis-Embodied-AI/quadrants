@@ -9,6 +9,7 @@ import pytest
 
 import quadrants as qd
 from quadrants.lang._kernel_types import KernelBatchedArgType
+from quadrants.lang.exception import QuadrantsRuntimeTypeError
 from quadrants.lang.impl import Kernel, QuadrantsSyntaxError
 
 from tests import test_utils
@@ -3239,3 +3240,146 @@ def test_typed_dataclass_does_not_emit_deprecation_warning():
         run(f)
     matching = [w for w in caught if issubclass(w.category, DeprecationWarning) and "qd.Template" in str(w.message)]
     assert matching == [], f"unexpected DeprecationWarning(s): {[str(w.message) for w in matching]}"
+
+
+@test_utils.test()
+def test_kernel_accepts_subclass_of_annotated_dataclass_param():
+    @dataclass
+    class QdSafe:
+        x: qd.types.NDArray[qd.i32, 1]
+
+    @dataclass
+    class SubDataclass(QdSafe):
+        y: str
+
+    class SubPyClass(QdSafe):
+        y: str | None
+
+    x_desired = 100
+
+    @qd.kernel
+    def mykernel(dat: QdSafe) -> None:
+        for i in range(dat.x.shape[0]):
+            dat.x[i] = x_desired
+
+    y_desired = "i love quadrants"
+
+    dat = SubDataclass(x=qd.ndarray(qd.i32, (8,)), y=y_desired)
+    mykernel(dat)
+    assert dat.x[0] == x_desired
+    assert dat.x[4] == x_desired
+    assert dat.x[7] == x_desired
+    assert dat.y == y_desired
+
+    pydat = SubPyClass(x=qd.ndarray(qd.i32, (8,)))
+    pydat.y = y_desired
+    mykernel(pydat)
+    assert pydat.x[1] == x_desired
+    assert pydat.x[5] == x_desired
+    assert pydat.x[6] == x_desired
+    assert pydat.y == y_desired
+
+
+@test_utils.test()
+def test_kernel_accepts_subclass_of_annotated_frozen_dataclass_param():
+    @dataclass(frozen=True)
+    class QdSafe:
+        x: int
+
+    @dataclass(frozen=True)
+    class SubDataclass(QdSafe):
+        y: set[int]
+
+    class SubPyClass(QdSafe):
+        y: set[int] | None
+
+    @qd.func
+    def read_x(dat: QdSafe) -> int:
+        return dat.x
+
+    @qd.kernel
+    def mykernel(dat: QdSafe) -> int:
+        return read_x(dat)
+
+    y_desired = {1, 2, 3, 4, 5, 6, 7, 8}
+    x_desired = 12345678
+
+    dat = SubDataclass(x=x_desired, y=y_desired)
+    assert mykernel(dat) == x_desired
+    assert dat.y is y_desired
+
+    pydat = SubPyClass(x=x_desired)
+    object.__setattr__(pydat, "y", y_desired)
+    assert mykernel(pydat) == x_desired
+    assert pydat.y is y_desired
+
+
+@test_utils.test()
+def test_kernel_accepts_data_oriented_subclass_of_dataclass_param():
+    # A @qd.data_oriented class subclassing a dataclasses.dataclass is still a subclass of the annotated type, so it
+    # should dispatch through the dataclass path: the kernel reads only the base's declared fields via getattr.
+    @dataclass
+    class QdSafe:
+        x: qd.types.NDArray[qd.i32, 1]
+
+    @qd.data_oriented
+    class DataOrientedSub(QdSafe):
+        pass
+
+    @qd.kernel
+    def mykernel(dat: QdSafe) -> None:
+        for i in range(4):
+            dat.x[i] = 7
+
+    sub = DataOrientedSub(x=qd.ndarray(qd.i32, shape=(4,)))
+    mykernel(sub)
+    assert sub.x[0] == 7
+    assert sub.x[3] == 7
+
+
+@test_utils.test()
+def test_kernel_disallows_unassignable_dataclass():
+    @dataclass
+    class Expected:
+        x: int
+
+    @dataclass
+    class Unrelated:
+        x: int
+
+    @qd.kernel
+    def mykernel(_: Expected) -> None: ...
+
+    other = Unrelated(x=0)
+    with pytest.raises(QuadrantsRuntimeTypeError):
+        mykernel(other)
+
+
+@test_utils.test()
+def test_frozen_dataclass_passed_to_multiple_ancestor_annotations():
+    @dataclass(frozen=True)
+    class QdSafe1:
+        x1: qd.types.NDArray[qd.i32, 1]
+
+    @dataclass(frozen=True)
+    class QdSafe2:
+        x2: qd.types.NDArray[qd.i32, 1]
+
+    @dataclass(frozen=True)
+    class Sub(QdSafe1, QdSafe2): ...
+
+    @qd.kernel
+    def mykernel1(dat: QdSafe1) -> None:
+        dat.x1[0] = 1
+
+    @qd.kernel
+    def mykernel2(dat: QdSafe2) -> None:
+        dat.x2[0] = 2
+
+    sub = Sub(x1=qd.ndarray(qd.i32, shape=(4,)), x2=qd.ndarray(qd.i32, shape=(4,)))
+    # mykernel1 and mykernel2 might use different caching mechanisms! Well, we
+    # hope that this is fine and still works.
+    mykernel1(sub)
+    mykernel2(sub)
+    assert sub.x1[0] == 1
+    assert sub.x2[0] == 2

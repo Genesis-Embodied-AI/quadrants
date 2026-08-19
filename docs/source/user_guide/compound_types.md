@@ -142,6 +142,26 @@ Note: assigning a sub-struct to a local variable and then passing it (`t = s.inn
 
 A `dataclasses.dataclass` may be either non-frozen (the default) or frozen (`@dataclass(frozen=True)`). Both work as kernel arguments, but **kernel launch is faster with `frozen=True`** (because it enables some optimizations that would otherwise not be possible). Recommend `frozen=True` unless you specifically need to rebind members after construction. Note that rebinding members after construction contradicts certain best practices; for example, it is typically incompatible with type linters such as pyright and mypy.
 
+### Subclasses
+
+You are able to pass any subclass of the annotated dataclass type. This is especially useful for cases where only a subset of your class is valid in quadrants, as below:
+
+```python
+@dataclass(frozen=True)  # frozen not needed!
+class Position:
+    x: qd.types.NDArray[qd.math.vec3, 1]
+
+# Any type of dataclass or non-dataclass class works here
+# @dataclass(frozen=True) 
+class Particle(Position):
+    name: list[str]
+
+@qd.kernel
+def update_positions(pos: Position) -> None:
+    for i in range(pos.x.shape[0]):
+        update_position(pos.x, i)
+```
+
 ### Under the hood
 
 A `dataclasses.dataclass` is a Python-only container. The compiler reads it at compile time and flattens its members into individual kernel parameters — the container itself has no memory layout and doesn't exist on the kernel side. Inside a kernel, tensor members are read-write through indexing (`s.x[i] = ...`), but the member *binding* itself (`s.x = other_tensor`) cannot be reassigned from inside a kernel.

@@ -96,9 +96,10 @@ _is_cpython = sys.implementation.name == "cpython"
 #    which fields are active and their (name, full_name, type) tuples. Reduces the 43-iteration filter loop to ~10-15
 #    direct entries.
 #
-# 2. **Unwrapped-value cache** (per-instance, stored as ``_qd_dc_unwrapped``): for a frozen dataclass, field values
-#    never change. Cache the unwrapped (post-``_unwrap()``) value for each field on the instance. Eliminates
-#    ``getattr`` + ``type() in _TENSOR_WRAPPER_TYPES`` + ``_unwrap()`` on every launch.
+# 2. **Unwrapped-value cache** (per-instance, stored as ``_qd_dc_unwrapped``, a ``dict[annotated_type, values]``): for
+#    a frozen dataclass, field values never change. Cache the unwrapped (post-``_unwrap()``) value for each field on
+#    the instance. Eliminates ``getattr`` + ``type() in _TENSOR_WRAPPER_TYPES`` + ``_unwrap()`` on every launch. Keyed
+#    by the annotated type so a subclass instance reused across different ancestor annotations stays correct.
 
 _frozen_dc_plans: dict[tuple[int, type, str], tuple[set[str], tuple[tuple[str, str, Any], ...]]] = {}
 
@@ -136,11 +137,18 @@ def _get_frozen_dc_plan(
     return plan
 
 
-def _get_frozen_dc_unwrapped(v: Any, fields_dict: dict) -> dict[str, Any]:
-    """Return a dict mapping field_name -> unwrapped value for a frozen dataclass, caching on the instance."""
-    cached = getattr(v, "_qd_dc_unwrapped", None)
-    if cached is not None:
-        return cached
+def _get_frozen_dc_unwrapped(v: Any, struct_cls: type, fields_dict: dict) -> dict[str, Any]:
+    """Return a dict mapping field_name -> unwrapped value for a frozen dataclass, caching on the instance.
+
+    A single class might have many cached versions, in particular if it has multiple base classes,
+    which act as multiple annotated types. Thus, we store a dict[annotated_ty, unwrapped] for each
+    possible annotated type
+    """
+    cache = getattr(v, "_qd_dc_unwrapped", None)
+    if cache is not None:
+        hit = cache.get(struct_cls)
+        if hit is not None:
+            return hit
     unwrapped: dict[str, Any] = {}
     for field in fields_dict.values():
         if field._field_type is not _FIELD:
@@ -149,21 +157,27 @@ def _get_frozen_dc_unwrapped(v: Any, fields_dict: dict) -> dict[str, Any]:
         if _tensor_wrapper._any_tensor_constructed and type(val) in _TENSOR_WRAPPER_TYPES:
             val = val._unwrap()
         unwrapped[field.name] = val
-    try:
-        object.__setattr__(v, "_qd_dc_unwrapped", unwrapped)
-    except AttributeError:
-        pass
-    # Cache whether ALL unwrapped values are Fields (zero launch-context slots).  This is a property of the instance
-    # alone — independent of which kernel or field-subset is active — so a simple boolean suffices and survives
-    # qd.reset() harmlessly (the boolean remains valid as long as the instance is alive).
-    if getattr(v, "_qd_all_field", None) is None:
+    if cache is None:
+        try:
+            object.__setattr__(v, "_qd_dc_unwrapped", {struct_cls: unwrapped})
+        except AttributeError:
+            pass
+    else:
+        cache[struct_cls] = unwrapped
+    # Cache whether ALL unwrapped values are Fields (zero launch-context slots). This depends on which annotated type
+    # (field subset) is active, so it is keyed by ``struct_cls`` alongside the unwrapped values.
+    all_field_cache = getattr(v, "_qd_all_field", None)
+    if all_field_cache is None or struct_cls not in all_field_cache:
         from quadrants.lang.field import Field as _Field  # pylint: disable=C0415
 
         _all_field = all(isinstance(fv, _Field) for fv in unwrapped.values())
-        try:
-            object.__setattr__(v, "_qd_all_field", _all_field)
-        except (AttributeError, TypeError):
-            pass
+        if all_field_cache is None:
+            try:
+                object.__setattr__(v, "_qd_all_field", {struct_cls: _all_field})
+            except (AttributeError, TypeError):
+                pass
+        else:
+            all_field_cache[struct_cls] = _all_field
     return unwrapped
 
 
@@ -647,9 +661,11 @@ class FuncBase:
             # See for reference: https://docs.python.org/3/c-api/long.html#c.PyLong_FromLong
             return 1, _is_cpython and -5 <= v <= 256
         needed_arg_fields = getattr(needed_arg_type, _FIELDS, None)
+        # We get the fields from the needed arg type, thus subclasses are allowed
         if needed_arg_fields is not None:
-            if provided_arg_type is not needed_arg_type:
-                raise QuadrantsRuntimeError("needed", needed_arg_type, "!= provided", provided_arg_type)
+            if provided_arg_type is not needed_arg_type and not issubclass(provided_arg_type, needed_arg_type):
+                # PERF: Check immediate case first (`is not needed_arg_type`), fallback to subclass
+                raise QuadrantsRuntimeTypeError("needed", needed_arg_type, "cannot be assigned the provided", provided_arg_type)
             is_frozen = needed_arg_type.__hash__ is not None
             idx = 0
             if is_frozen:
@@ -660,7 +676,7 @@ class FuncBase:
                 plan = _get_frozen_dc_plan(
                     used_py_dataclass_parameters, needed_arg_type, py_dataclass_basename, needed_arg_fields
                 )
-                unwrapped = _get_frozen_dc_unwrapped(v, needed_arg_fields)
+                unwrapped = _get_frozen_dc_unwrapped(v, needed_arg_type, needed_arg_fields)
                 for field_name, field_full_name, field_type in plan:
                     field_value = unwrapped[field_name]
                     num_args_, _ = FuncBase._recursive_set_args(
