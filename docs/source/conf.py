@@ -65,8 +65,6 @@ autodoc_typehints_description_target = "all"
 autodoc_default_flags = ["members", "show-inheritance", "undoc-members"]
 autodoc_member_order = "bysource"
 autosummary_generate = True
-# Show documented objects by their short name (e.g. "CompileConfig") instead of the full internal dotted path.
-add_module_names = False
 
 
 # --- Surface CompileConfig option types and defaults in autodoc --------------
@@ -162,7 +160,30 @@ def _append_config_default(app, what, name, obj, options, lines):
         lines.extend(["", f"Default: {default_text}."])
 
 
+def _patch_autoclass_module_names():
+    # Show CompileConfig by its short name rather than its full internal dotted path. Rather than flip add_module_names
+    # globally -- which would restyle the entire autoapi API reference -- we scope the suppression to just this one
+    # autoclass directive, toggling the config for its run() (which also covers the nested rendering of its members).
+    from sphinx.ext.autodoc.directive import AutodocDirective
+
+    original_run = AutodocDirective.run
+
+    def run(self):
+        target = self.arguments[0] if self.arguments else ""
+        if "quadrants._lib.core" not in target:
+            return original_run(self)
+        saved = self.config.add_module_names
+        self.config.add_module_names = False
+        try:
+            return original_run(self)
+        finally:
+            self.config.add_module_names = saved
+
+    AutodocDirective.run = run
+
+
 def setup(app):
     _patch_property_documenter()
+    _patch_autoclass_module_names()
     app.connect("autodoc-process-docstring", _append_config_default)
     return {"parallel_read_safe": True, "parallel_write_safe": True}
