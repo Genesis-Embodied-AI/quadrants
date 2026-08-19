@@ -470,11 +470,11 @@
 </section>
 <section id="fast-math">
 <h3><code class="docutils literal notranslate"><span class="pre">fast_math</span></code><a class="headerlink" href="#fast-math" title="Link to this heading">#</a></h3>
-<p>Whether to enable IEEE-relaxed floating-point optimizations (FMA fusion, no NaN / infinity / signed-zero guarantees). Default <code class="docutils literal notranslate"><span class="pre">True</span></code>. Disable when investigating numerical anomalies or running deterministic-tolerance tests.</p>
+<p>Whether to enable relaxed floating-point optimizations (fusing multiply-add operations, and dropping NaN / infinity / signed-zero guarantees). Default <code class="docutils literal notranslate"><span class="pre">True</span></code>. Disable when investigating numerical anomalies or running deterministic-tolerance tests.</p>
 </section>
 <section id="num-compile-threads">
 <h3><code class="docutils literal notranslate"><span class="pre">num_compile_threads</span></code><a class="headerlink" href="#num-compile-threads" title="Link to this heading">#</a></h3>
-<p>Number of host threads used when compiling kernels. Default <code class="docutils literal notranslate"><span class="pre">4</span></code>. Raise on machines with many idle cores compiling many kernels back-to-back; lower (or set to <code class="docutils literal notranslate"><span class="pre">1</span></code>) on memory-pressure-bound systems where concurrent LLVM compilations thrash.</p>
+<p>Number of host threads used when compiling kernels. Default <code class="docutils literal notranslate"><span class="pre">4</span></code>. Raise on machines with many idle cores compiling many kernels back-to-back; lower (or set to <code class="docutils literal notranslate"><span class="pre">1</span></code>) on memory-pressure-bound systems where many concurrent kernel compilations would thrash memory.</p>
 </section>
 </section>
 <section id="reverse-mode-autodiff">
@@ -746,14 +746,14 @@
 <dl class="py property">
 <dt class="sig sig-object py" id="quadrants._lib.core.quadrants_python.CompileConfig.device_memory_GB">
 <em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">device_memory_GB</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">float</span></em><a class="headerlink" href="#quadrants._lib.core.quadrants_python.CompileConfig.device_memory_GB" title="Link to this definition">#</a></dt>
-<dd><p>Amount of GPU memory, in gigabytes, to preallocate.</p>
+<dd><p>Amount of GPU memory, in gigabytes, to preallocate. Only used on the fallback allocator path; ignored on CUDA/AMDGPU drivers that support memory pools, where allocation is on demand.</p>
 <p>Default: <code class="docutils literal notranslate"><span class="pre">1.0</span></code>.</p>
 </dd></dl>
 
 <dl class="py property">
 <dt class="sig sig-object py" id="quadrants._lib.core.quadrants_python.CompileConfig.device_memory_fraction">
 <em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">device_memory_fraction</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">float</span></em><a class="headerlink" href="#quadrants._lib.core.quadrants_python.CompileConfig.device_memory_fraction" title="Link to this definition">#</a></dt>
-<dd><p>Fraction of total GPU memory to preallocate (overrides device_memory_GB when greater than 0).</p>
+<dd><p>Fraction of total GPU memory to preallocate (overrides device_memory_GB when greater than 0). Only used on the fallback allocator path; ignored on CUDA/AMDGPU drivers that support memory pools.</p>
 <p>Default: <code class="docutils literal notranslate"><span class="pre">0.0</span></code>.</p>
 </dd></dl>
 
@@ -922,7 +922,7 @@
 <dt class="sig sig-object py" id="quadrants._lib.core.quadrants_python.CompileConfig.offline_cache_file_path">
 <em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">offline_cache_file_path</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">str</span></em><a class="headerlink" href="#quadrants._lib.core.quadrants_python.CompileConfig.offline_cache_file_path" title="Link to this definition">#</a></dt>
 <dd><p>Directory that holds the on-disk compilation cache.</p>
-<p>Default: <code class="docutils literal notranslate"><span class="pre">'/home/runner/.cache/quadrants/qdcache'</span></code>.</p>
+<p>Default: the per-user Quadrants cache directory (<code class="docutils literal notranslate"><span class="pre">~/.cache/quadrants/qdcache</span></code> on Linux).</p>
 </dd></dl>
 
 <dl class="py property">
@@ -949,14 +949,14 @@
 <dl class="py property">
 <dt class="sig sig-object py" id="quadrants._lib.core.quadrants_python.CompileConfig.print_accessor_ir">
 <em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">print_accessor_ir</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">bool</span></em><a class="headerlink" href="#quadrants._lib.core.quadrants_python.CompileConfig.print_accessor_ir" title="Link to this definition">#</a></dt>
-<dd><p>Print the IR generated for field accessor kernels.</p>
+<dd><p>Also include field accessor kernels in the IR printout. Only has an effect together with print_ir, which otherwise suppresses accessor kernels.</p>
 <p>Default: <code class="docutils literal notranslate"><span class="pre">False</span></code>.</p>
 </dd></dl>
 
 <dl class="py property">
 <dt class="sig sig-object py" id="quadrants._lib.core.quadrants_python.CompileConfig.print_ir">
 <em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">print_ir</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">bool</span></em><a class="headerlink" href="#quadrants._lib.core.quadrants_python.CompileConfig.print_ir" title="Link to this definition">#</a></dt>
-<dd><p>Print each kernel’s IR after compilation (for debugging the compiler).</p>
+<dd><p>Print each kernel’s IR after every compilation pass (per-pass tracing, for debugging the compiler), not a single dump at the end.</p>
 <p>Default: <code class="docutils literal notranslate"><span class="pre">False</span></code>.</p>
 </dd></dl>
 

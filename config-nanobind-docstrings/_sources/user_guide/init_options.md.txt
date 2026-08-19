@@ -41,11 +41,11 @@ Whether to run the control-flow-graph optimization (an internal compile-time opt
 
 ### `fast_math`
 
-Whether to enable IEEE-relaxed floating-point optimizations (FMA fusion, no NaN / infinity / signed-zero guarantees). Default `True`. Disable when investigating numerical anomalies or running deterministic-tolerance tests.
+Whether to enable relaxed floating-point optimizations (fusing multiply-add operations, and dropping NaN / infinity / signed-zero guarantees). Default `True`. Disable when investigating numerical anomalies or running deterministic-tolerance tests.
 
 ### `num_compile_threads`
 
-Number of host threads used when compiling kernels. Default `4`. Raise on machines with many idle cores compiling many kernels back-to-back; lower (or set to `1`) on memory-pressure-bound systems where concurrent LLVM compilations thrash.
+Number of host threads used when compiling kernels. Default `4`. Raise on machines with many idle cores compiling many kernels back-to-back; lower (or set to `1`) on memory-pressure-bound systems where many concurrent kernel compilations would thrash memory.
 
 ## Reverse-mode autodiff
 
