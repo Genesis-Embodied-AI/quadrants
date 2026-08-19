@@ -934,13 +934,16 @@ class ASTTransformer(Builder):
         ops_static = {
             ast.In: lambda l, r: l in r,
             ast.NotIn: lambda l, r: l not in r,
+            ast.Is: lambda l, r: l is r,
+            ast.IsNot: lambda l, r: l is not r,
         }
         if ctx.is_in_static_scope():
             ops = {**ops, **ops_static}
         operands = [node.left.ptr] + [comparator.ptr for comparator in node.comparators]
+        operand_nodes = (node.left, *node.comparators)
         val = True
         for i, node_op in enumerate(node.ops):
-            if isinstance(node_op, (ast.Is, ast.IsNot)):
+            if not ctx.is_in_static_scope() and isinstance(node_op, (ast.Is, ast.IsNot)):
                 name = "is" if isinstance(node_op, ast.Is) else "is not"
                 raise QuadrantsSyntaxError(f'Operator "{name}" in Quadrants scope is not supported.')
             l = operands[i]
@@ -952,6 +955,34 @@ class ASTTransformer(Builder):
                     raise QuadrantsSyntaxError(f'"{type(node_op).__name__}" is only supported inside `qd.static`.')
                 else:
                     raise QuadrantsSyntaxError(f'"{type(node_op).__name__}" is not supported in Quadrants kernels.')
+            if isinstance(node_op, (ast.Is, ast.IsNot)):
+                name = "is" if isinstance(node_op, ast.Is) else "is not"
+                l_node, r_node = operand_nodes[i : i + 2]
+                if isinstance(r_node, ast.Constant) and r_node.value is None:
+                    template_node = l_node
+                    template_side = "left"
+                elif isinstance(l_node, ast.Constant) and l_node.value is None:
+                    template_node = r_node
+                    template_side = "right"
+                else:
+                    template_node = None
+                    template_side = None
+                template_arg_names = {ctx.func.arg_metas[index].name for index in ctx.template_slot_locations}
+                if (
+                    not ctx.is_kernel
+                    or not isinstance(template_node, ast.Name)
+                    or template_node.id.startswith("__qd_")
+                    or any(template_node.id in scope for scope in ctx.local_scopes[1:])
+                    or template_node.id not in template_arg_names
+                    or template_node.id not in ctx.template_vars
+                ):
+                    raise QuadrantsSyntaxError(
+                        f'Operator "{name}" inside `qd.static` requires a direct `qd.template()` or `qd.Tensor` kernel argument and `None`.'
+                    )
+                if template_side == "left":
+                    l = ctx.template_vars[template_node.id]
+                else:
+                    r = ctx.template_vars[template_node.id]
             val = qd_ops.logical_and(val, op(l, r))
         if not isinstance(val, (bool, np.bool_)):
             val = qd_ops.cast(val, primitive_types.u1)
