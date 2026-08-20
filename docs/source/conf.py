@@ -174,8 +174,10 @@ def _patch_autoclass_module_names():
     original_run = AutodocDirective.run
 
     def run(self):
-        target = self.arguments[0] if self.arguments else ""
-        if "quadrants._lib.core" not in target:
+        target = self.arguments[0].strip() if self.arguments else ""
+        # Scope strictly to CompileConfig; other native bindings under quadrants._lib.core keep their normal module
+        # qualification (this mirrors the class-name guards in _append_config_default / _patch_property_documenter).
+        if target.rsplit(".", 1)[-1] != "CompileConfig":
             return original_run(self)
         saved = self.config.add_module_names
         self.config.add_module_names = False
