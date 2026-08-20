@@ -319,7 +319,8 @@ void export_lang(nb::module_ &m) {
               "that cache, not the CUDA PTX cache or the source-level fastcache, so the on-disk cache directory can "
               "grow beyond it.")
       .def_rw("offline_cache_cleaning_factor", &CompileConfig::offline_cache_cleaning_factor,
-              "Fraction of the compiled-kernel offline cache to evict when it exceeds the size limit.")
+              "Fraction of the compiled-kernel offline cache to evict once it exceeds the size limit. Applied only "
+              "under the \"lru\" and \"fifo\" cleaning policies; \"version\" does no size-based eviction.")
       .def_rw("num_compile_threads", &CompileConfig::num_compile_threads,
               "Number of host threads used to compile kernels.")
       .def_rw("vk_api_version", &CompileConfig::vk_api_version,
