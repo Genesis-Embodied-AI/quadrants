@@ -228,7 +228,7 @@ std::unordered_set<Stmt *> compute_construct_needed(
 }
 
 // Split-safety gate. Cross-construct SSA that is purely recomputable -- consts, args, top-level pure arithmetic -- is
-// fine: clone+die duplicates it into each construct. Two things are NOT recomputable and force a fall back to the
+// fine: clone+die duplicates it into each construct. Three things are NOT recomputable and force a fall back to the
 // whole-kernel path:
 //
 //   (1) Loop-carried locals. A local produced INSIDE a top-level loop and consumed by another construct cannot be
@@ -237,7 +237,13 @@ std::unordered_set<Stmt *> compute_construct_needed(
 //       *union* of writer constructs is unsound: when two constructs both read-modify-write the same local, each is
 //       "covered" by the union, yet the second still consumes the value the first produced.
 //
-//   (2) Field loads snapshotted before a later construct. The backward slice recomputes a serial def -- including a
+//   (2) Effectful producers recomputed into a consumer. The backward slice pulls the writers (and operand chains) of
+//       any local a construct reads. If such a producer is EFFECTFUL -- e.g. a local capturing the return of a global
+//       `AtomicOpStmt` -- it already emits its own task in its home segment, so cloning it into a consuming construct
+//       runs the effect again (e.g. `old = atomic_add(counter, 1); for i: out[i] = old` would increment `counter`
+//       twice). Any statement the slice would recompute from a DIFFERENT segment must be side-effect free.
+//
+//   (3) Field loads snapshotted before a later construct. The backward slice recomputes a serial def -- including a
 //       field/ndarray LOAD -- into every construct that consumes it. That is sound only if no construct BETWEEN the
 //       original load and the consuming construct writes global memory; otherwise the recomputed load, now executing
 //       inside the later construct, observes the mutation instead of the source-order snapshot (e.g.
@@ -285,7 +291,7 @@ bool split_is_recompute_safe(Block *block) {
       return false;  // a loop-produced local is shared across constructs -> not recomputable
   }
 
-  // (2) Field loads snapshotted before a later construct.
+  // (2) + (3): both need each construct's backward slice and the top-level positions of global writes.
   const int n = (int)block->statements.size();
   std::unordered_map<Stmt *, int> top_index;
   for (int j = 0; j < n; j++)
@@ -315,13 +321,11 @@ bool split_is_recompute_safe(Block *block) {
     if (b_lo < 0)
       continue;
     auto needed = compute_construct_needed(block, segs.seg_id, k, alloca_writers);
-    // Earliest top-level position of a global read this construct RECOMPUTES (i.e. one that lives in an earlier
-    // segment; reads in the construct's own segment are not moved). If any global write sits strictly between that read
-    // and the construct, the recomputed read would observe the mutation -> not safe.
+    // (2) Every statement this construct recomputes from ANOTHER segment must be side-effect free. An effectful
+    // statement (atomic, global store, ...) already emits its own task in its home segment, so cloning it here would
+    // run the effect a second time.
     int min_recomputed_read_pos = -1;
     for (Stmt *s : needed) {
-      if (!stmt_is_global_read(s))
-        continue;
       bool inside = false;
       Stmt *owner = top_level_owner(s, block, &inside);
       if (owner == nullptr)
@@ -330,7 +334,12 @@ bool split_is_recompute_safe(Block *block) {
       if (it == top_index.end())
         continue;
       int pos = it->second;
-      if (pos < b_lo && (min_recomputed_read_pos < 0 || pos < min_recomputed_read_pos))
+      if (segs.seg_id[pos] != k && stmt_is_task_effect(s))
+        return false;  // recomputing another segment's effect would duplicate it
+      // (3) Earliest top-level position of a global read this construct RECOMPUTES (one that lives in an earlier
+      // segment; reads in the construct's own segment are not moved). If a global write sits strictly between that read
+      // and the construct, the recomputed read would observe the mutation -> not safe.
+      if (stmt_is_global_read(s) && pos < b_lo && (min_recomputed_read_pos < 0 || pos < min_recomputed_read_pos))
         min_recomputed_read_pos = pos;
     }
     if (min_recomputed_read_pos < 0)

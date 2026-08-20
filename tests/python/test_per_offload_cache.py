@@ -3,8 +3,9 @@
 `compile_to_offloads` splits the frontend (simplify / merge_global_ptrs / offload) to run per top-level construct
 instead of once over the whole kernel, isolating each construct by its backward slice (in
 `transforms/split_frontend_per_construct.cpp`), and falls back to the whole-kernel path for kernels that are not
-recompute-safe: autodiff, mesh-for, a loop-produced local shared across constructs, or a serial field load that a
-later construct would recompute after an intervening construct mutated global memory. This PR ships the split WITHOUT a
+recompute-safe: autodiff, mesh-for, a loop-produced local shared across constructs, an effectful producer (e.g. a
+local capturing a global atomic) a later construct would clone, or a serial field load that a later construct would
+recompute after an intervening construct mutated global memory. This PR ships the split WITHOUT a
 reuse tier, so it recompiles every construct on every compile; the reuse (a disk manifest keyed by
 `get_hashed_per_construct_cache_key`) is added by the cross-process cache PR.
 
@@ -158,3 +159,27 @@ def test_per_construct_frontend_split_fallback_carried_rmw_local() -> None:
 
     # s: 1 -> 2 (loop A) -> 3 (loop B). A split that dropped loop A from B's slice would wrongly produce 2.
     assert int(out.to_numpy()[0]) == 3, out.to_numpy()
+
+
+@test_utils.test(arch=[qd.cpu, qd.cuda], offline_cache=False)
+def test_per_construct_frontend_split_fallback_effectful_producer() -> None:
+    # `old` captures the return value of a global atomic, which is an EFFECT that emits its own task. A later construct
+    # reads `old`; cloning its producer into that construct's backward slice would run the atomic a second time. The
+    # gate must reject recomputing an effectful producer and fall back.
+    @qd.kernel
+    def kernel_atomic(counter: qd.types.ndarray(), out: qd.types.ndarray()) -> None:
+        old = qd.atomic_add(counter[0], 1)
+        for i in range(_N):
+            out[i] = old
+
+    counter = qd.ndarray(qd.i32, shape=(1,))
+    out = qd.ndarray(qd.i32, shape=(_N,))
+    kernel_atomic(counter, out)
+
+    obs = kernel_atomic._primal.per_offload_cache_observations
+    assert obs.frontend_constructs_total == -1, obs
+
+    # The atomic must run exactly ONCE: counter == 1, and every out[i] is the pre-increment return value 0. A split that
+    # cloned the atomic into the loop construct would increment counter twice and store 1.
+    assert int(counter.to_numpy()[0]) == 1, counter.to_numpy()
+    assert np.all(out.to_numpy() == 0), out.to_numpy()
