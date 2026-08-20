@@ -237,7 +237,9 @@ void export_lang(nb::module_ &m) {
               "Intended to cap the number of registers per GPU thread (0 = driver default); currently has no effect, "
               "as the value is not yet passed to the GPU JIT.")
       .def_rw("saturating_grid_dim", &CompileConfig::saturating_grid_dim,
-              "GPU grid size to launch on the CUDA/AMDGPU backends (0 lets Quadrants pick based on occupancy). "
+              "Target GPU grid size (number of blocks) on the CUDA/AMDGPU backends; 0 lets Quadrants pick based on "
+              "occupancy. It is an upper bound rather than a guarantee: reverse-mode kernels that carry an autodiff "
+              "stack launch with a smaller grid, capped so the concurrent thread count stays within 65536. "
               "Vulkan/Metal compute their dispatch grid automatically and ignore this.")
       .def_rw("max_block_dim", &CompileConfig::max_block_dim,
               "Intended as an upper bound on GPU block size, but currently limits only the block size of internal "
