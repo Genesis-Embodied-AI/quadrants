@@ -223,7 +223,8 @@ void export_lang(nb::module_ &m) {
               "Intended to lower high-level field accesses to low-level pointer arithmetic; currently has no effect, "
               "as nothing reads it (this lowering always runs).")
       .def_rw("move_loop_invariant_outside_if", &CompileConfig::move_loop_invariant_outside_if,
-              "Hoist loop-invariant computations out of conditional branches.")
+              "Hoist loop-invariant computations out of conditional branches. Runs only within the "
+              "advanced_optimization pipeline.")
       .def_rw("cache_loop_invariant_global_vars", &CompileConfig::cache_loop_invariant_global_vars,
               "Cache loop-invariant global loads into locals inside loops.")
       .def_rw("default_cpu_block_dim", &CompileConfig::default_cpu_block_dim,
@@ -236,7 +237,8 @@ void export_lang(nb::module_ &m) {
               "Intended to cap the number of registers per GPU thread (0 = driver default); currently has no effect, "
               "as the value is not yet passed to the GPU JIT.")
       .def_rw("saturating_grid_dim", &CompileConfig::saturating_grid_dim,
-              "GPU grid size to launch (0 lets Quadrants pick based on occupancy).")
+              "GPU grid size to launch on the CUDA/AMDGPU backends (0 lets Quadrants pick based on occupancy). "
+              "Vulkan/Metal compute their dispatch grid automatically and ignore this.")
       .def_rw("max_block_dim", &CompileConfig::max_block_dim,
               "Intended as an upper bound on GPU block size, but currently limits only the block size of internal "
               "list-generation kernels; ordinary range-for/struct-for launches use default_gpu_block_dim instead. 0 "
@@ -253,7 +255,9 @@ void export_lang(nb::module_ &m) {
               "Lower dense struct-for loops to ordinary range-for loops.")
       .def_rw("kernel_profiler", &CompileConfig::kernel_profiler,
               "Enable the on-device kernel profiler to collect per-kernel timings.")
-      .def_rw("timeline", &CompileConfig::timeline, "Record a chrome-tracing timeline of compilation and execution.")
+      .def_rw("timeline", &CompileConfig::timeline,
+              "Record a chrome-tracing timeline of GPU kernel execution, sourced from the CUDA/AMDGPU kernel profiler "
+              "(so kernel_profiler must be enabled). Compilation is not recorded.")
       .def_rw("default_fp", &CompileConfig::default_fp,
               "Default floating-point type for fields and kernels (e.g. qd.f32).")
       .def_rw("default_ip", &CompileConfig::default_ip,
@@ -261,11 +265,13 @@ void export_lang(nb::module_ &m) {
       .def_rw("default_up", &CompileConfig::default_up,
               "Default unsigned-integer type for fields and kernels (e.g. qd.u32).")
       .def_rw("device_memory_GB", &CompileConfig::device_memory_GB,
-              "Amount of GPU memory, in gigabytes, to preallocate. Only used on the fallback allocator path; ignored "
-              "on CUDA/AMDGPU drivers that support memory pools, where allocation is on demand.")
+              "Amount of GPU memory, in gigabytes, to preallocate. Used on the fallback allocator path, and on "
+              "pool-supporting CUDA/AMDGPU drivers when the program uses sparse (non-dense) fields; for an all-dense "
+              "program on a pool driver it is ignored (allocation is on demand).")
       .def_rw("device_memory_fraction", &CompileConfig::device_memory_fraction,
-              "Fraction of total GPU memory to preallocate (overrides device_memory_GB when greater than 0). Only used "
-              "on the fallback allocator path; ignored on CUDA/AMDGPU drivers that support memory pools.")
+              "Fraction of total GPU memory to preallocate (overrides device_memory_GB when greater than 0). Same "
+              "applicability as device_memory_GB: the fallback allocator path, plus pool-supporting drivers when the "
+              "program uses sparse (non-dense) fields.")
       .def_rw("fast_math", &CompileConfig::fast_math,
               "Allow IEEE-relaxed floating-point optimizations (e.g. fused multiply-add). Faster, but drops strict "
               "NaN/inf/signed-zero guarantees.")
