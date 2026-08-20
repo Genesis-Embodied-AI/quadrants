@@ -3923,6 +3923,22 @@ def test_final_scalar_key_distinguishes_signed_zero_and_nan_payloads():
     assert final_scalar_key(ModeA.X) != final_scalar_key(ModeB.Y)  # same value, different enum class
     assert final_scalar_key(ModeA.X) == final_scalar_key(ModeA.X)  # same member is stable
 
+    # Unnamed ``IntFlag`` composites have ``name is None``, so distinct bitmasks must be kept apart by their value.
+    class Perm(enum.IntFlag):
+        R = 1
+        W = 2
+        X = 4
+
+    assert final_scalar_key(Perm.R | Perm.W) != final_scalar_key(Perm.R | Perm.X)  # values 3 vs 5 (name may be None)
+    assert final_scalar_key(Perm.R | Perm.W) == final_scalar_key(Perm.R | Perm.W)  # stable
+
+    # A ``float`` subclass must be bit-encoded (signed zero stays distinct) yet tagged with its own type.
+    class Meters(float):
+        pass
+
+    assert final_scalar_key(Meters(0.0)) != final_scalar_key(Meters(-0.0))  # signed zero within the subclass
+    assert final_scalar_key(Meters(1.0)) != final_scalar_key(1.0)  # subclass not confused with a plain float
+
     # Remaining scalars are type-tagged: Python conflates value-equal but distinct-typed constants (True == 1 ==
     # np.int64(1), with equal hashes), and they bake observably different Python constants, so they must not alias.
     assert final_scalar_key(True) != final_scalar_key(1)

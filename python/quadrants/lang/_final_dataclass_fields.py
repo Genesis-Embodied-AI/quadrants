@@ -304,12 +304,15 @@ def final_scalar_key(value: Any) -> Any:
     constants as equal (with equal hashes) and annotations are not enforced at runtime, so one ``Final`` field can
     receive any of them across launches. The encodings:
 
-    - builtin ``float`` -> ``(_FLOAT_KEY_TAG, <IEEE-754 bits as int>)``; NumPy floating scalar ->
-      ``(_FLOAT_KEY_TAG, <dtype str>, <raw bytes>)``. Bits (not value) so ``-0.0``/``0.0`` (equal, equal hash) and
-      NaNs differing only in sign/payload (all ``str``-ed to ``"nan"``) stay distinct, and widths never alias.
-    - ``enum`` member -> ``(_ENUM_KEY_TAG, module, qualname, name)``. An ``IntEnum`` / ``StrEnum`` member is ``==``
-      to its bare scalar and to a same-valued member of another enum class (and ``str(member)`` is just the scalar
-      on Python >=3.11), so keying on identity keeps them distinct - relevant when codegen reads e.g. ``mode.name``.
+    - a ``float`` (builtin, a subclass, or a NumPy floating scalar) -> its exact IEEE-754 bits under
+      ``_FLOAT_KEY_TAG`` (builtin ``(_FLOAT_KEY_TAG, <bits as int>)``; a subclass adds its ``module``/``qualname``;
+      a NumPy scalar uses ``(_FLOAT_KEY_TAG, <dtype str>, <raw bytes>)``). Bits (not value) so ``-0.0``/``0.0``
+      (equal, equal hash) and NaNs differing only in sign/payload (all ``str``-ed to ``"nan"``) stay distinct, and
+      widths never alias.
+    - an ``enum`` member -> ``(_ENUM_KEY_TAG, module, qualname, name-or-value)``. An ``IntEnum`` / ``StrEnum``
+      member is ``==`` to its bare scalar and to a same-valued member of another enum class (and ``str(member)`` is
+      just the scalar on Python >=3.11), so keying on identity keeps them distinct; an unnamed ``IntFlag`` composite
+      (whose ``name`` is ``None``) falls back to its integer ``value`` so distinct bitmasks do not collide.
     - every remaining scalar (``bool`` / ``int`` / ``str`` and NumPy analogues) ->
       ``(_SCALAR_KEY_TAG, module, qualname, value)``. ``True == 1 == np.int64(1)`` with equal hashes, but they bake
       observably different Python constants (e.g. ``config.value is True``), so the exact type must be in the key.
@@ -319,16 +322,24 @@ def final_scalar_key(value: Any) -> Any:
     """
     if type(value) is float:
         return (_FLOAT_KEY_TAG, _unpack_u64(_pack_f64(value))[0])
+    if isinstance(value, enum.Enum):
+        # Checked before the ``float``/``int`` branches so a mixed-in enum (``IntEnum``/``StrEnum``, or an exotic
+        # ``float`` mix-in) keys by identity, not by its value. ``name`` uniquely identifies a canonical member;
+        # unnamed ``IntFlag`` composites have ``name is None`` so they fall back to their (integer) ``value``.
+        # ``module``/``qualname`` disambiguate identically-named members of different enum classes.
+        cls = type(value)
+        member_id = value.name if value.name is not None else value.value
+        return (_ENUM_KEY_TAG, cls.__module__, cls.__qualname__, member_id)
     if isinstance(value, np.floating):
         # ``dtype.str`` (e.g. ``"<f4"``) + ``tobytes()`` preserves sign bit, NaN payload and width, and stays in the
         # same tagged space as the builtin-float branch so it can never equal a bare int / str key component.
         return (_FLOAT_KEY_TAG, value.dtype.str, value.tobytes())
-    if isinstance(value, enum.Enum):
-        # ``name`` (not ``value``) so members that share a numeric/string value across enum classes stay distinct,
-        # and so the key never equals the bare scalar the member is ``==`` to; ``module``/``qualname`` disambiguate
-        # identically-named members of different enums.
+    if isinstance(value, float):
+        # A ``float`` subclass (the exact builtin ``float`` took the fast path above). Bit-encode like a plain float
+        # so signed zeros stay distinct, but keep the subclass ``module``/``qualname`` so it is not confused with a
+        # plain ``float`` of the same value.
         cls = type(value)
-        return (_ENUM_KEY_TAG, cls.__module__, cls.__qualname__, value.name)
+        return (_FLOAT_KEY_TAG, cls.__module__, cls.__qualname__, _unpack_u64(_pack_f64(value))[0])
     # ``bool`` / ``int`` / ``str`` and their NumPy analogues. The exact type completes the tag so value-equal but
     # distinct-typed constants (``True`` vs ``1``, ``np.int64(1)`` vs ``1``) never share a specialization.
     cls = type(value)
