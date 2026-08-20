@@ -11,7 +11,7 @@ from quadrants._tensor_wrapper import _TENSOR_WRAPPER_TYPES
 from quadrants._tensor_wrapper import Tensor as _TensorWrapper
 from quadrants.types.annotations import Template
 
-from .._final_dataclass_fields import final_field_names
+from .._final_dataclass_fields import final_field_names, final_scalar_key
 from .._ndarray import ScalarNdarray
 from ..field import ScalarField
 from ..kernel_arguments import ArgMetadata
@@ -109,8 +109,13 @@ def dataclass_to_repr(raise_on_templated_floats: bool, path: tuple[str, ...], ar
                     pass
             return None
         full_repr = f"{field.name}: ({_repr})"
-        if field.name in final_names or field.metadata.get(FIELD_METADATA_CACHE_VALUE, False):
-            full_repr += f" = {child_value}"
+        is_final = field.name in final_names
+        if is_final or field.metadata.get(FIELD_METADATA_CACHE_VALUE, False):
+            # Final floats are encoded by their IEEE bits so NaNs that differ only in sign or payload are not all
+            # collapsed to ``str`` "nan" in this cross-process key. The pre-existing ``FIELD_METADATA_CACHE_VALUE``
+            # path is left byte-for-byte unchanged.
+            value_repr = final_scalar_key(child_value) if is_final else child_value
+            full_repr += f" = {value_repr}"
         repr_l.append(full_repr)
     result = "[" + ",".join(repr_l) + "]"
     if is_frozen:

@@ -3842,3 +3842,55 @@ def test_final_field_string_annotation_is_rejected():
         x: "int"
 
     assert final_field_names(PlainStringAnnotated) == frozenset()
+
+
+@test_utils.test()
+def test_final_scalar_key_distinguishes_signed_zero_and_nan_payloads():
+    """``final_scalar_key`` encodes floats by their IEEE-754 bits so values that Python conflates stay distinct
+    in both the in-process spec key and the on-disk fastcache key: ``-0.0`` vs ``0.0`` (equal under ``==`` with
+    equal hashes) and NaNs differing only in sign/payload (all rendered ``"nan"`` by ``str``). Non-float values
+    pass through unchanged."""
+    import math
+    import struct
+
+    from quadrants.lang._final_dataclass_fields import final_scalar_key
+
+    # Signed zero: Python conflates these; the bit encoding must not.
+    assert 0.0 == -0.0 and hash(0.0) == hash(-0.0)
+    assert final_scalar_key(0.0) != final_scalar_key(-0.0)
+
+    # NaN sign/payload: ``str`` renders them all ``"nan"``; the bit encoding keeps them distinct.
+    payload_nan = struct.unpack("<d", struct.pack("<Q", 0x7FF8000000000ABC))[0]
+    nan_keys = {final_scalar_key(math.nan), final_scalar_key(-math.nan), final_scalar_key(payload_nan)}
+    assert len(nan_keys) == 3, "distinct NaN bit patterns must produce distinct keys"
+
+    # Equal floats produce equal keys, so kernel reuse stays correct.
+    assert final_scalar_key(1.5) == final_scalar_key(1.5)
+
+    # Non-float ``Final`` value types are returned unchanged.
+    for v in (True, 7, "abc"):
+        assert final_scalar_key(v) == v
+
+
+@test_utils.test()
+def test_final_float_signed_zero_keys_distinct_kernels():
+    """``-0.0`` and ``0.0`` are equal under Python ``==``/``hash`` but name different baked constants (the sign
+    bit is observable). Encoding Final floats by their IEEE bits keeps them as distinct entries in the template
+    mapper spec key, so each value compiles its own kernel instead of the second launch reusing the first's."""
+    from typing import Final
+
+    @dataclass(frozen=True)
+    class Cfg:
+        z: Final[float]
+
+    @qd.kernel
+    def write_z(config: Cfg, out: qd.types.NDArray[qd.f32, 1]):
+        v = qd.static(config.z)
+        for i in out:
+            out[i] = v
+
+    out = qd.ndarray(qd.f32, shape=(1,))
+    write_z(Cfg(z=0.0), out)
+    assert len(write_z._primal.mapper.mapping) == 1
+    write_z(Cfg(z=-0.0), out)  # equal to 0.0 under ==/hash, but a distinct baked constant
+    assert len(write_z._primal.mapper.mapping) == 2, "-0.0 and 0.0 must not share a compiled kernel"

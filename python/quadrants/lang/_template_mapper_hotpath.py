@@ -39,7 +39,7 @@ from quadrants._tensor import (
 from quadrants._tensor_wrapper import _TENSOR_WRAPPER_TYPES
 from quadrants._tensor_wrapper import Tensor as _TensorClass
 from quadrants.lang._dataclass_util import create_flat_name
-from quadrants.lang._final_dataclass_fields import final_field_names
+from quadrants.lang._final_dataclass_fields import final_field_names, final_scalar_key
 from quadrants.lang._ndarray import Ndarray
 from quadrants.lang.any_array import AnyArray
 from quadrants.lang.buffer_view import BufferView as BufferViewInstance
@@ -427,7 +427,9 @@ def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: Annotati
                             f"value compiles a separate kernel. Drop the ``Final`` to make it an ordinary runtime "
                             f"field, or unset ``raise_on_templated_floats``."
                         )
-                    key_parts.append(field_value)
+                    # Encode floats by IEEE bits so ``-0.0``/``0.0`` (equal under ``==`` and ``hash``) do not
+                    # collapse onto one compiled kernel here. See ``final_scalar_key``.
+                    key_parts.append(final_scalar_key(field_value))
                 else:
                     key_parts.append(
                         _extract_arg(

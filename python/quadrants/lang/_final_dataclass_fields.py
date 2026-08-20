@@ -12,6 +12,7 @@ that matters (``isinstance`` is a ~100-200ns MRO walk vs a ~10ns pointer compari
 
 import dataclasses
 import enum
+import struct
 import typing
 from typing import Any
 
@@ -272,3 +273,31 @@ def final_field_names(dc_type: Any) -> "frozenset[str]":
         names = _build_final_plan(dc_type)
         _final_plan_cache[dc_type] = names
     return names
+
+
+# Precomputed packers for encoding a ``float`` by its exact IEEE-754 bits (see ``final_scalar_key``).
+_pack_f64 = struct.Struct("<d").pack
+_unpack_u64 = struct.Struct("<Q").unpack
+
+
+def final_scalar_key(value: Any) -> Any:
+    """Return a process-stable, collision-free key component for a baked ``Final`` field value.
+
+    A ``float`` is encoded by its raw IEEE-754 bit pattern (as an ``int``); every other permitted ``Final`` value
+    (``bool`` / ``int`` / ``str`` / ``enum.Enum``) is returned unchanged. Encoding is needed because Python
+    conflates floats that name *distinct* compile-time constants:
+
+    - ``-0.0 == 0.0`` and ``hash(-0.0) == hash(0.0)``, so the in-process template mapper spec key (a plain
+      tuple used as a ``dict`` key) would reuse one compiled kernel for both, even though the baked constant
+      differs observably (sign bit; ``1.0 / x`` gives ``+inf`` vs ``-inf``).
+    - ``str`` (and ``float.hex``) render every NaN as ``"nan"`` regardless of sign or mantissa payload, so the
+      cross-process fastcache key built from ``str(value)`` would collide distinct NaNs.
+
+    Encoding by bits fixes both and keeps the in-process and offline key paths consistent. Only ``float`` needs it,
+    and it runs once per instance (Final keys/reprs are cached), never on the steady-state launch path.
+    ``type(value) is float`` matches the guard in ``_extract_arg`` exactly - a NumPy scalar or other non-``float``
+    passes through unchanged.
+    """
+    if type(value) is float:
+        return _unpack_u64(_pack_f64(value))[0]
+    return value
