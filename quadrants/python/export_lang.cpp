@@ -252,9 +252,11 @@ void export_lang(nb::module_ &m) {
       .def_rw("verbose", &CompileConfig::verbose,
               "Intended to print verbose logging during initialization and compilation; currently has no effect.")
       .def_rw("demote_dense_struct_fors", &CompileConfig::demote_dense_struct_fors,
-              "Lower dense struct-for loops to ordinary range-for loops.")
+              "Lower dense struct-for loops to ordinary range-for loops. Forced on for the Vulkan/Metal (SPIR-V) "
+              "backends, where the value you pass is ignored.")
       .def_rw("kernel_profiler", &CompileConfig::kernel_profiler,
-              "Enable the on-device kernel profiler to collect per-kernel timings.")
+              "Enable the on-device kernel profiler to collect per-kernel timings. Only the CPU, CUDA, and AMDGPU "
+              "backends emit the timing hooks; on Vulkan/Metal it produces no per-kernel timings.")
       .def_rw("timeline", &CompileConfig::timeline,
               "Record a chrome-tracing timeline of GPU kernel execution, sourced from the CUDA/AMDGPU kernel profiler "
               "(so kernel_profiler must be enabled). Compilation is not recorded.")
