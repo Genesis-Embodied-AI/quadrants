@@ -436,31 +436,16 @@
 <section id="offline-cache">
 <h3><code class="docutils literal notranslate"><span class="pre">offline_cache</span></code><a class="headerlink" href="#offline-cache" title="Link to this heading">#</a></h3>
 <p>Whether the compilation caches <strong>persist on disk across Python invocations</strong>. Default <code class="docutils literal notranslate"><span class="pre">True</span></code>. The “offline” in the name refers to the fact that this cache outlives the process: it is what makes the <em>second</em> time you start a Python interpreter and run a kernel cheap, by reusing artifacts from the first run.</p>
-<p>Setting <code class="docutils literal notranslate"><span class="pre">offline_cache=False</span></code> is intended to emulate cold-start, i.e. a fresh Python process with no prior on-disk artifacts available. In-memory caching within a single initialized runtime is unaffected by this flag: while a runtime is alive, identical kernels are not recompiled regardless of its value. (<code class="docutils literal notranslate"><span class="pre">qd.reset()</span></code> discards that in-memory cache, so after resetting and reinitializing with <code class="docutils literal notranslate"><span class="pre">offline_cache=False</span></code>, kernels compile again.) The flag controls only whether the <em>next</em> Python invocation observes a warm or a cold disk. The on-disk cache lives in the directory set by <code class="docutils literal notranslate"><span class="pre">offline_cache_file_path</span></code> (default <code class="docutils literal notranslate"><span class="pre">~/.cache/quadrants/qdcache</span></code>).</p>
+<p>Setting <code class="docutils literal notranslate"><span class="pre">offline_cache=False</span></code> is intended to emulate cold-start, i.e. a fresh Python process with no prior on-disk artifacts available. In-process caches operate independently of this flag: while a runtime is alive, identical kernels are not recompiled regardless of its value (though <code class="docutils literal notranslate"><span class="pre">qd.reset()</span></code> clears that in-process cache, so kernels recompile after a reset). The flag therefore controls only whether the next Python invocation observes a warm or a cold disk.</p>
+<p>When <code class="docutils literal notranslate"><span class="pre">offline_cache=True</span></code>, compilation artifacts persist on disk under <code class="docutils literal notranslate"><span class="pre">offline_cache_file_path</span></code> (default <code class="docutils literal notranslate"><span class="pre">~/.cache/quadrants/qdcache</span></code>), so a later Python process reuses them instead of recompiling. Setting <code class="docutils literal notranslate"><span class="pre">offline_cache=False</span></code> (or <code class="docutils literal notranslate"><span class="pre">QD_OFFLINE_CACHE=0</span></code>) forces a cold start: Quadrants recompiles kernels and neither reads nor writes its own on-disk cache. (On CUDA the driver keeps its own separate cache of compiled GPU code at <code class="docutils literal notranslate"><span class="pre">~/.nv/ComputeCache</span></code> that this flag does not disable; <code class="docutils literal notranslate"><span class="pre">offline_cache=False</span></code> only stops that cache from serving results across runs. Set <code class="docutils literal notranslate"><span class="pre">CUDA_CACHE_DISABLE=1</span></code> to turn it off entirely.)</p>
+<p>The separate source-level cache used by <a class="reference internal" href="fastcache.html"><span class="std std-doc">fastcache</span></a> kernels is controlled by <code class="docutils literal notranslate"><span class="pre">src_ll_cache</span></code> (on by default), not by <code class="docutils literal notranslate"><span class="pre">offline_cache</span></code>; with <code class="docutils literal notranslate"><span class="pre">offline_cache=False</span></code> it still writes its own bookkeeping files to disk, so set <code class="docutils literal notranslate"><span class="pre">src_ll_cache=False</span></code> as well to stop that too.</p>
 <p>When to set it to <code class="docutils literal notranslate"><span class="pre">False</span></code>:</p>
 <ul class="simple">
 <li><p>Taking compile-time profiles where a cached kernel would mask the real cost.</p></li>
 <li><p>Investigating a stale-cache bug or suspected cache corruption.</p></li>
 <li><p>Reproducing first-run behavior in CI matrix runs that would otherwise warm the caches across iterations.</p></li>
 </ul>
-<p>For normal use, leave it at <code class="docutils literal notranslate"><span class="pre">True</span></code>; the cache is the dominant source of fast warm-up.</p>
-<section id="under-the-hood-cache-layers-advanced">
-<h4>Under the hood: cache layers (advanced)<a class="headerlink" href="#under-the-hood-cache-layers-advanced" title="Link to this heading">#</a></h4>
-<p><em>You do not need this section to use <code class="docutils literal notranslate"><span class="pre">offline_cache</span></code>; it explains what the flag turns on and off internally.</em></p>
-<p>When <code class="docutils literal notranslate"><span class="pre">offline_cache=True</span></code>, three persistent layers cooperate. The first two share the cache directory configured by <code class="docutils literal notranslate"><span class="pre">offline_cache_file_path</span></code>; the third is owned by libcuda and lives outside that path.</p>
-<ol class="arabic simple">
-<li><p>The cross-backend kernel-IR / compiled-kernel cache (driven by <code class="docutils literal notranslate"><span class="pre">KernelCompilationManager</span></code>). When the IR-and-config hash hits, the previously compiled kernel data is loaded from disk and the entire compile pipeline is skipped. Active for every backend (CPU, CUDA, AMDGPU, Metal, Vulkan).</p></li>
-<li><p>The CUDA per-arch PTX cache, written under <code class="docutils literal notranslate"><span class="pre">&lt;offline_cache_file_path&gt;/ptx_cache_sm_*</span></code> (driven by <code class="docutils literal notranslate"><span class="pre">PtxCache</span></code>). When the LLVM-IR hash hits, the previously emitted PTX is loaded from disk and the LLVM-to-PTX compilation pipeline (LLVM optimization passes plus the NVPTX backend’s PTX emission) is skipped. <code class="docutils literal notranslate"><span class="pre">ptxas</span></code> itself runs later inside <code class="docutils literal notranslate"><span class="pre">cuModuleLoadDataEx</span></code> and is governed by Layer 3.</p></li>
-<li><p>The NVIDIA driver compute cache at <code class="docutils literal notranslate"><span class="pre">~/.nv/ComputeCache</span></code>, keyed by PTX content hash. When this hits, <code class="docutils literal notranslate"><span class="pre">ptxas</span></code> work is skipped because the SASS itself is reused. This cache is owned by libcuda and not by Quadrants.</p></li>
-</ol>
-<p>Setting <code class="docutils literal notranslate"><span class="pre">offline_cache=False</span></code> (or <code class="docutils literal notranslate"><span class="pre">QD_OFFLINE_CACHE=0</span></code>) disables the three layers above so a fresh Python session sees a cold start for them:</p>
-<ul class="simple">
-<li><p>Layer 1 falls back to memory-only. The disk cache is not consulted for kernel data and new kernels are not persisted, so kernels are compiled from source on every Python invocation.</p></li>
-<li><p>Layer 2 falls back to memory-only. PTX is still cached within one process so kernels with identical LLVM IR share PTX output, but nothing is read from or written to disk.</p></li>
-<li><p>Layer 3 cannot be controlled by the libcuda environment variable <code class="docutils literal notranslate"><span class="pre">CUDA_CACHE_DISABLE</span></code> from inside Python because the variable is captured by libcuda at process start. Quadrants instead appends a per-process nonce comment to the PTX it submits to <code class="docutils literal notranslate"><span class="pre">cuModuleLoadDataEx</span></code>. The nonce is constant within one process - kernels with identical PTX still share a cubin in the same run - and changes between processes so cross-run hits cannot quietly serve stale SASS.</p></li>
-</ul>
-<p><code class="docutils literal notranslate"><span class="pre">offline_cache</span></code> does not, however, govern <em>every</em> disk-persistent layer. The source-level cache used by <a class="reference internal" href="fastcache.html"><span class="std std-doc">fastcache</span></a> kernels is controlled separately by <code class="docutils literal notranslate"><span class="pre">src_ll_cache</span></code> (on by default). With <code class="docutils literal notranslate"><span class="pre">offline_cache=False</span></code> it can no longer reuse compiled code across processes, but it still reads and writes its own bookkeeping files on disk. To stop that too, set <code class="docutils literal notranslate"><span class="pre">src_ll_cache=False</span></code> as well. (Layer 3 stays outside Quadrants’ control regardless: on CUDA the driver still writes to <code class="docutils literal notranslate"><span class="pre">~/.nv/ComputeCache</span></code> unless <code class="docutils literal notranslate"><span class="pre">CUDA_CACHE_DISABLE=1</span></code> is exported before the process starts.)</p>
-</section>
+<p>For normal use, leave it at <code class="docutils literal notranslate"><span class="pre">True</span></code>; the caches are the dominant source of fast warm-up.</p>
 </section>
 </section>
 <section id="compile-time-tuning">
@@ -603,14 +588,14 @@
 <dl class="py property">
 <dt class="sig sig-object py" id="quadrants._lib.core.quadrants_python.CompileConfig.ad_stack_size">
 <em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">ad_stack_size</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">int</span></em><a class="headerlink" href="#quadrants._lib.core.quadrants_python.CompileConfig.ad_stack_size" title="Link to this definition">#</a></dt>
-<dd><p>Force autodiff stacks to exactly this many slots. 0 lets the launch-time sizer choose automatically.</p>
+<dd><p>Force autodiff stacks to exactly this many slots. 0 lets the launch-time sizer choose automatically. No effect unless ad_stack_experimental_enabled is on.</p>
 <p>Default: <code class="docutils literal notranslate"><span class="pre">0</span></code>.</p>
 </dd></dl>
 
 <dl class="py property">
 <dt class="sig sig-object py" id="quadrants._lib.core.quadrants_python.CompileConfig.ad_stack_sparse_threshold_bytes">
 <em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">ad_stack_sparse_threshold_bytes</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">int</span></em><a class="headerlink" href="#quadrants._lib.core.quadrants_python.CompileConfig.ad_stack_sparse_threshold_bytes" title="Link to this definition">#</a></dt>
-<dd><p>Byte cutoff below which the sparse adstack sizing path is skipped in favor of eager heap allocation.</p>
+<dd><p>Byte cutoff below which the sparse adstack sizing path is skipped in favor of eager heap allocation. No effect unless ad_stack_experimental_enabled is on.</p>
 <p>Default: <code class="docutils literal notranslate"><span class="pre">104857600</span></code>.</p>
 </dd></dl>
 
@@ -644,14 +629,14 @@
 <dl class="py property">
 <dt class="sig sig-object py" id="quadrants._lib.core.quadrants_python.CompileConfig.cfg_optimization">
 <em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">cfg_optimization</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">bool</span></em><a class="headerlink" href="#quadrants._lib.core.quadrants_python.CompileConfig.cfg_optimization" title="Link to this definition">#</a></dt>
-<dd><p>Run the control-flow-graph optimization pass that simplifies kernel branches and loops. Disabling it speeds up compilation at a small runtime cost.</p>
+<dd><p>Run the control-flow-graph optimization pass that simplifies kernel branches and loops. Disabling it speeds up compilation at a small runtime cost. Only runs when advanced_optimization is on and opt_level &gt; 0 (both true by default).</p>
 <p>Default: <code class="docutils literal notranslate"><span class="pre">True</span></code>.</p>
 </dd></dl>
 
 <dl class="py property">
 <dt class="sig sig-object py" id="quadrants._lib.core.quadrants_python.CompileConfig.check_out_of_bound">
 <em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">check_out_of_bound</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">bool</span></em><a class="headerlink" href="#quadrants._lib.core.quadrants_python.CompileConfig.check_out_of_bound" title="Link to this definition">#</a></dt>
-<dd><p>Enable the field out-of-bounds check on tensor indexing without turning on the rest of debug mode.</p>
+<dd><p>Enable the field out-of-bounds check on tensor indexing without turning on the rest of debug mode. Reset to off (with a warning) on backends without assertion support, i.e. Vulkan and Metal.</p>
 <p>Default: <code class="docutils literal notranslate"><span class="pre">False</span></code>.</p>
 </dd></dl>
 
@@ -752,14 +737,19 @@
 <dl class="py property">
 <dt class="sig sig-object py" id="quadrants._lib.core.quadrants_python.CompileConfig.device_memory_GB">
 <em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">device_memory_GB</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">float</span></em><a class="headerlink" href="#quadrants._lib.core.quadrants_python.CompileConfig.device_memory_GB" title="Link to this definition">#</a></dt>
-<dd><p>Amount of GPU memory, in gigabytes, to preallocate. Only used on the fallback allocator path; ignored on CUDA/AMDGPU drivers that support memory pools, where allocation is on demand.</p>
+<dd><p>Amount of GPU memory, in gigabytes, to preallocate. Used on the fallback allocator path, and on pool-supporting CUDA/AMDGPU drivers when the program uses sparse (non-dense) fields; for an all-dense program on a pool driver it is ignored (allocation is on demand).</p>
 <p>Default: <code class="docutils literal notranslate"><span class="pre">1.0</span></code>.</p>
 </dd></dl>
 
 <dl class="py property">
 <dt class="sig sig-object py" id="quadrants._lib.core.quadrants_python.CompileConfig.device_memory_fraction">
 <em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">device_memory_fraction</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">float</span></em><a class="headerlink" href="#quadrants._lib.core.quadrants_python.CompileConfig.device_memory_fraction" title="Link to this definition">#</a></dt>
-<dd><p>Fraction of total GPU memory to preallocate (overrides device_memory_GB when greater than 0). Only used on the fallback allocator path; ignored on CUDA/AMDGPU drivers that support memory pools.</p>
+<dd><p>the fallback allocator path, plus pool-supporting drivers when the program uses sparse (non-dense) fields.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Fraction of total GPU memory to preallocate (overrides device_memory_GB when greater than 0). Same applicability as device_memory_GB</p>
+</dd>
+</dl>
 <p>Default: <code class="docutils literal notranslate"><span class="pre">0.0</span></code>.</p>
 </dd></dl>
 
@@ -815,7 +805,7 @@
 <dl class="py property">
 <dt class="sig sig-object py" id="quadrants._lib.core.quadrants_python.CompileConfig.half2_vectorization">
 <em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">half2_vectorization</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">bool</span></em><a class="headerlink" href="#quadrants._lib.core.quadrants_python.CompileConfig.half2_vectorization" title="Link to this definition">#</a></dt>
-<dd><p>Vectorize pairs of float16 operations into half2 ops (CUDA).</p>
+<dd><p>Vectorize pairs of float16 operations into half2 ops. CUDA only, and only when real_matrix_scalarize is also enabled.</p>
 <p>Default: <code class="docutils literal notranslate"><span class="pre">False</span></code>.</p>
 </dd></dl>
 
@@ -836,7 +826,7 @@
 <dl class="py property">
 <dt class="sig sig-object py" id="quadrants._lib.core.quadrants_python.CompileConfig.make_block_local">
 <em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">make_block_local</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">bool</span></em><a class="headerlink" href="#quadrants._lib.core.quadrants_python.CompileConfig.make_block_local" title="Link to this definition">#</a></dt>
-<dd><p>Enable the block-local optimization, which stages spatially-local field accesses through GPU shared memory. Mesh attribute localization is a separate pass controlled by make_mesh_block_local.</p>
+<dd><p>Enable the block-local optimization, which stages spatially-local field accesses through GPU shared memory. CUDA only (the required BLS extension is CUDA-only). Mesh attribute localization is a separate pass controlled by make_mesh_block_local.</p>
 <p>Default: <code class="docutils literal notranslate"><span class="pre">True</span></code>.</p>
 </dd></dl>
 
@@ -857,7 +847,7 @@
 <dl class="py property">
 <dt class="sig sig-object py" id="quadrants._lib.core.quadrants_python.CompileConfig.make_thread_local">
 <em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">make_thread_local</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">bool</span></em><a class="headerlink" href="#quadrants._lib.core.quadrants_python.CompileConfig.make_thread_local" title="Link to this definition">#</a></dt>
-<dd><p>Enable the thread-local optimization for reductions.</p>
+<dd><p>Enable the thread-local optimization for reductions. Honored on the LLVM backends (CPU, CUDA, AMDGPU) only; the Vulkan/Metal (SPIR-V) path forces it off.</p>
 <p>Default: <code class="docutils literal notranslate"><span class="pre">True</span></code>.</p>
 </dd></dl>
 
@@ -892,7 +882,7 @@
 <dl class="py property">
 <dt class="sig sig-object py" id="quadrants._lib.core.quadrants_python.CompileConfig.move_loop_invariant_outside_if">
 <em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">move_loop_invariant_outside_if</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">bool</span></em><a class="headerlink" href="#quadrants._lib.core.quadrants_python.CompileConfig.move_loop_invariant_outside_if" title="Link to this definition">#</a></dt>
-<dd><p>Hoist loop-invariant computations out of conditional branches.</p>
+<dd><p>Hoist loop-invariant computations out of conditional branches. Runs only within the advanced_optimization pipeline.</p>
 <p>Default: <code class="docutils literal notranslate"><span class="pre">False</span></code>.</p>
 </dd></dl>
 
@@ -955,7 +945,7 @@
 <dl class="py property">
 <dt class="sig sig-object py" id="quadrants._lib.core.quadrants_python.CompileConfig.print_accessor_ir">
 <em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">print_accessor_ir</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">bool</span></em><a class="headerlink" href="#quadrants._lib.core.quadrants_python.CompileConfig.print_accessor_ir" title="Link to this definition">#</a></dt>
-<dd><p>Also include field accessor kernels in the IR printout. Only has an effect together with print_ir, which otherwise suppresses accessor kernels.</p>
+<dd><p>Also include field accessor kernels in the IR printout. Only has an effect together with print_ir on the LLVM backends, which otherwise suppress accessor kernels.</p>
 <p>Default: <code class="docutils literal notranslate"><span class="pre">False</span></code>.</p>
 </dd></dl>
 
@@ -1009,7 +999,7 @@
 <dl class="py property">
 <dt class="sig sig-object py" id="quadrants._lib.core.quadrants_python.CompileConfig.print_preprocessed_ir">
 <em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">print_preprocessed_ir</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">bool</span></em><a class="headerlink" href="#quadrants._lib.core.quadrants_python.CompileConfig.print_preprocessed_ir" title="Link to this definition">#</a></dt>
-<dd><p>Print each kernel’s IR right after frontend preprocessing.</p>
+<dd><p>Print each kernel’s IR right after frontend preprocessing. Only prints when print_ir is off (print_ir already shows the initial IR).</p>
 <p>Default: <code class="docutils literal notranslate"><span class="pre">False</span></code>.</p>
 </dd></dl>
 
@@ -1058,7 +1048,7 @@
 <dl class="py property">
 <dt class="sig sig-object py" id="quadrants._lib.core.quadrants_python.CompileConfig.saturating_grid_dim">
 <em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">saturating_grid_dim</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">int</span></em><a class="headerlink" href="#quadrants._lib.core.quadrants_python.CompileConfig.saturating_grid_dim" title="Link to this definition">#</a></dt>
-<dd><p>GPU grid size to launch (0 lets Quadrants pick based on occupancy).</p>
+<dd><p>GPU grid size to launch on the CUDA/AMDGPU backends (0 lets Quadrants pick based on occupancy). Vulkan/Metal compute their dispatch grid automatically and ignore this.</p>
 <p>Default: <code class="docutils literal notranslate"><span class="pre">0</span></code>.</p>
 </dd></dl>
 
@@ -1079,7 +1069,7 @@
 <dl class="py property">
 <dt class="sig sig-object py" id="quadrants._lib.core.quadrants_python.CompileConfig.timeline">
 <em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">timeline</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">bool</span></em><a class="headerlink" href="#quadrants._lib.core.quadrants_python.CompileConfig.timeline" title="Link to this definition">#</a></dt>
-<dd><p>Record a chrome-tracing timeline of compilation and execution.</p>
+<dd><p>Record a chrome-tracing timeline of GPU kernel execution, sourced from the CUDA/AMDGPU kernel profiler (so kernel_profiler must be enabled). Compilation is not recorded.</p>
 <p>Default: <code class="docutils literal notranslate"><span class="pre">False</span></code>.</p>
 </dd></dl>
 
@@ -1176,10 +1166,7 @@
   <nav id="pst-page-toc-nav" class="page-toc" aria-labelledby="pst-page-navigation-heading-2">
     <ul class="pst-show_toc_level nav section-nav flex-column">
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#caching">Caching</a><ul class="nav section-nav flex-column">
-<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#offline-cache"><code class="docutils literal notranslate"><span class="pre">offline_cache</span></code></a><ul class="nav section-nav flex-column">
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#under-the-hood-cache-layers-advanced">Under the hood: cache layers (advanced)</a></li>
-</ul>
-</li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#offline-cache"><code class="docutils literal notranslate"><span class="pre">offline_cache</span></code></a></li>
 </ul>
 </li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#compile-time-tuning">Compile-time tuning</a><ul class="nav section-nav flex-column">
