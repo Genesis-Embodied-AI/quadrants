@@ -5,6 +5,7 @@
 #include <unordered_set>
 
 #include "llvm/IR/Module.h"
+#include "quadrants/codegen/compiled_kernel_data.h"
 #include "quadrants/common/serialization.h"
 #include "quadrants/ir/adstack_size_expr.h"
 #include "quadrants/transforms/static_adstack_analysis.h"
@@ -211,6 +212,9 @@ struct LLVMCompiledKernel {
   std::unique_ptr<llvm::Module> module{nullptr};
   // Per-task modules for the per-task path; empty => JIT uses the whole-module `module`. Transient (not in QD_IO_DEF).
   std::vector<PerConstructArtifact> per_construct_artifacts;
+  // Per-construct frontend-split cache stats for the compile that produced this kernel (transient, not serialized).
+  // Set by the codegen driver; surfaced host-side via `LLVM::CompiledKernelData::get_per_task_cache_stats`.
+  PerTaskCacheStats per_task_cache_stats;
   LLVMCompiledKernel() = default;
   LLVMCompiledKernel(LLVMCompiledKernel &&) = default;
   LLVMCompiledKernel &operator=(LLVMCompiledKernel &&) = default;

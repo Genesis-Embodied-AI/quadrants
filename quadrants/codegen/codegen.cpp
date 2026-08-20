@@ -16,6 +16,9 @@
 #include "quadrants/ir/analysis.h"
 #include "quadrants/ir/transforms.h"
 #include "quadrants/analysis/offline_cache_util.h"
+#include "quadrants/program/per_construct_cache.h"
+
+#include <mutex>
 
 namespace quadrants::lang {
 
@@ -98,6 +101,19 @@ LLVMCompiledKernel KernelCodeGen::compile_kernel_to_module() {
   auto llvm_compiled_kernel = tlctx_.link_compiled_tasks(std::move(data));
   optimize_module(llvm_compiled_kernel.module.get());
   llvm_compiled_kernel.per_construct_artifacts = std::move(per_construct_artifacts);
+  // If the per-construct frontend split ran for this kernel, surface its cache stats. Recorded by
+  // `split_frontend_per_construct` on the program-scoped construct-stats record, keyed by kernel name. Left at the
+  // default `-1` (split absent) for kernels that took the whole-kernel path (autodiff, mesh).
+  {
+    auto &cc = kernel->program->per_construct_cache();
+    std::lock_guard<std::mutex> g(cc.mu);
+    auto it = cc.last_stats.find(kernel->get_name());
+    if (it != cc.last_stats.end()) {
+      llvm_compiled_kernel.per_task_cache_stats.construct_total = it->second.total;
+      llvm_compiled_kernel.per_task_cache_stats.construct_cache_hit = it->second.hit;
+      llvm_compiled_kernel.per_task_cache_stats.construct_recompiled = it->second.recompiled;
+    }
+  }
   return llvm_compiled_kernel;
 }
 

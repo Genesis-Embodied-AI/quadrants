@@ -7,11 +7,289 @@
 #include "quadrants/program/extension.h"
 #include "quadrants/program/function.h"
 #include "quadrants/program/kernel.h"
+#include "quadrants/program/program.h"
+#include "quadrants/program/per_construct_cache.h"
 #include "quadrants/util/lang_util.h"
 #include "quadrants/codegen/ir_dump.h"
 #include <fstream>
+#include <unordered_map>
+#include <unordered_set>
+#include <set>
+#include <string>
 
 namespace quadrants::lang {
+
+namespace {
+// Run the whole pre-offload + offload frontend on ONE isolated top-level construct instead of once over the whole
+// kernel. Mirrors the kNone / non-mesh portion of the whole-kernel sequence in
+// `compile_to_offloads` between simplify_I and simplify_III, in the same order, so a per-construct compile produces the
+// same tasks the whole-kernel path would for that construct. `cb` is a construct already isolated + recomputed (other
+// constructs dropped, shared defs DIE'd) by `split_frontend_per_construct`.
+void run_construct_frontend(IRNode *cb, const CompileConfig &config, const Kernel *kernel, bool verbose) {
+  const std::string &name = kernel->get_name();
+  irpass::full_simplify(cb, config, {false, /*autodiff_enabled*/ false, name, verbose, "simplify_I"});
+  irpass::handle_external_ptr_boundary(cb, config);
+  if (config.check_out_of_bound) {
+    irpass::check_out_of_bound(cb, config, {name});
+  }
+  irpass::merge_global_ptrs(cb);
+  irpass::flag_access(cb);
+  irpass::full_simplify(cb, config, {false, /*autodiff_enabled*/ false, name, verbose, "simplify_II"});
+  irpass::offload(cb, config);
+  if (config.opt_level > 0) {
+    irpass::cse_offloaded_tasks(cb);
+  }
+  irpass::flag_access(cb);
+  irpass::full_simplify(cb, config, {false, /*autodiff_enabled*/ false, name, verbose, "simplify_III"});
+}
+
+bool block_has_mesh_for(Block *block) {
+  if (block == nullptr)
+    return false;
+  // `include_containers` is not optional here: `MeshForStmt` is a container, so without it this guard matches
+  // nothing and silently passes every mesh kernel into the split, which produces IR that segfaults at launch.
+  return !irpass::analysis::gather_statements(
+              block, [](Stmt *s) { return s->is<MeshForStmt>(); }, /*include_containers=*/true)
+              .empty();
+}
+
+// Resolve a local pointer (an AllocaStmt, or a MatrixPtrStmt into one) to its base AllocaStmt. Returns nullptr when the
+// pointer is not alloca-based (e.g. a global pointer / global temporary), in which case it is not a local variable.
+Stmt *resolve_local_alloca(Stmt *ptr) {
+  while (ptr != nullptr) {
+    if (ptr->is<AllocaStmt>())
+      return ptr;
+    if (auto *mp = ptr->cast<MatrixPtrStmt>()) {
+      ptr = mp->origin;
+      continue;
+    }
+    return nullptr;
+  }
+  return nullptr;
+}
+
+// Find the top-level statement (direct child of `top`) that transitively contains `s`, and report via
+// `*inside_container` whether the path from `s` up to `top` crosses any container statement (loop/while). Returns
+// nullptr when `s` is not under `top`.
+Stmt *top_level_owner(Stmt *s, Block *top, bool *inside_container) {
+  *inside_container = false;
+  Stmt *cur = s;
+  Block *b = s->parent;
+  while (b != nullptr && b != top) {
+    Stmt *owner = b->parent_stmt();
+    if (owner == nullptr)
+      return nullptr;
+    if (owner->is_container_statement())
+      *inside_container = true;
+    cur = owner;
+    b = owner->parent;
+  }
+  return (b == top) ? cur : nullptr;
+}
+
+// Split-safety gate for the per-construct frontend split. A kernel is NOT safe to split when a top-level local variable's value is *produced inside one construct* (written by a store/atomic
+// nested inside a top-level container / loop) and *consumed by a different construct* (read outside that producing
+// loop). Whole-kernel offload carries such values across tasks via a cross-construct GlobalTemporary; isolating the
+// consuming construct would drop the producing loop, so the value cannot be reconstructed (it is not recomputable from
+// pure top-level defs). Such mutable shared allocas are rare in practice, so falling back to the whole-kernel path
+// here costs little while keeping correctness in the general case. Recomputable cross-construct SSA -- consts, args,
+// field-loads, top-level pure defs -- is fine: clone+die duplicates it into each construct.
+bool split_is_recompute_safe(Block *block) {
+  if (block == nullptr)
+    return false;
+  auto accesses = irpass::analysis::gather_statements(block, [](Stmt *s) {
+    return s->is<LocalLoadStmt>() || s->is<LocalStoreStmt>() || s->is<AtomicOpStmt>();
+  });
+  std::unordered_map<Stmt *, std::set<Stmt *>> read_owners;        // alloca -> top-level constructs that read it
+  std::unordered_map<Stmt *, std::set<Stmt *>> loop_write_owners;  // alloca -> constructs that write it inside a loop
+  for (Stmt *acc : accesses) {
+    Stmt *read_ptr = nullptr;
+    Stmt *write_ptr = nullptr;
+    if (auto *ld = acc->cast<LocalLoadStmt>()) {
+      read_ptr = ld->src;
+    } else if (auto *st = acc->cast<LocalStoreStmt>()) {
+      write_ptr = st->dest;
+    } else if (auto *at = acc->cast<AtomicOpStmt>()) {
+      read_ptr = at->dest;  // atomic read-modify-write counts as both a read and a write of dest
+      write_ptr = at->dest;
+    }
+    bool inside_container = false;
+    Stmt *owner = top_level_owner(acc, block, &inside_container);
+    if (owner == nullptr)
+      continue;
+    if (Stmt *a = resolve_local_alloca(read_ptr))
+      read_owners[a].insert(owner);
+    if (Stmt *a = resolve_local_alloca(write_ptr)) {
+      if (inside_container)
+        loop_write_owners[a].insert(owner);
+    }
+  }
+  for (auto &kv : loop_write_owners) {
+    auto rit = read_owners.find(kv.first);
+    if (rit == read_owners.end())
+      continue;
+    for (Stmt *r : rit->second) {
+      if (kv.second.find(r) == kv.second.end())
+        return false;  // a loop-produced local is read outside its producing loop -> cross-construct, not recomputable
+    }
+  }
+  return true;
+}
+
+// Whether a top-level statement is a *real* observable effect that forces its segment to become a task. Pointer/address
+// computations (GlobalPtr/ExternalPtr/MatrixPtr) report has_global_side_effect()==true because of sparse activation,
+// but they are not standalone effects -- they are the address half of a load/store and get recomputed into whichever
+// construct consumes them (e.g. a dynamic loop bound `range(lo[None], hi[None])` lowers to GlobalPtr+GlobalLoad in a
+// serial segment that must NOT become its own task; it is recomputed into the loop construct via the backward slice).
+bool stmt_is_task_effect(Stmt *s) {
+  if (s->is<GlobalPtrStmt>() || s->is<ExternalPtrStmt>() || s->is<MatrixPtrStmt>())
+    return false;
+  return s->has_global_side_effect();
+}
+
+// Split the flat top-level block into constructs right after lower_ast + the structural prefix, run the full
+// per-construct frontend on each (recomputing shared top-level defs into every construct that reads them), and
+// reassemble the produced OffloadedStmts in source order. Compiling each construct independently keeps its
+// simplify/merge_global_ptrs working set tiny, and makes each construct's frontend output independently keyable --
+// which the cross-process cache PR uses to skip unchanged constructs. This PR runs the split with NO reuse tier (every
+// construct is recompiled every compile). Correctness for recompute-safe kernels rests on two things: cross-construct
+// global-temp hubs dissolve via recompute, and cross-construct memory ordering is preserved by keeping tasks in
+// original construct order. Restricted to autodiff_mode==kNone / non-mesh / recompute-safe kernels by the caller;
+// anything else falls back to the whole-kernel path.
+void split_frontend_per_construct(IRNode *ir, const CompileConfig &config, const Kernel *kernel, bool verbose) {
+  auto *block = ir->cast<Block>();
+  QD_ASSERT(block != nullptr);
+  const int n = (int)block->statements.size();
+
+  // Segment the top-level block exactly the way `offload` will chunk it into tasks: every container statement
+  // (RangeFor/StructFor/While/...) is its own segment, and every maximal run of consecutive non-container (serial)
+  // statements is one serial segment. A construct = a segment that emits a task: containers always do; a serial run
+  // does iff it contains a real effect (stmt_is_task_effect). A serial run of only pure value defs / pointer chains
+  // (e.g. dynamic loop bounds) emits no task and is recomputed into whichever construct consumes it.
+  std::vector<int> seg_id(n, -1);
+  std::vector<bool> seg_emits_task;  // per segment
+  int cur_seg = -1;
+  bool in_serial_run = false;
+  for (int j = 0; j < n; j++) {
+    Stmt *s = block->statements[j].get();
+    if (s->is_container_statement()) {
+      cur_seg = (int)seg_emits_task.size();
+      seg_emits_task.push_back(true);
+      in_serial_run = false;
+    } else {
+      if (!in_serial_run) {
+        cur_seg = (int)seg_emits_task.size();
+        seg_emits_task.push_back(false);
+        in_serial_run = true;
+      }
+      if (stmt_is_task_effect(s))
+        seg_emits_task[cur_seg] = true;
+    }
+    seg_id[j] = cur_seg;
+  }
+  const int n_segs = (int)seg_emits_task.size();
+
+  // Top-level writers of each local variable, for the backward slice below. A `LocalLoadStmt`'s only operand is the
+  // alloca (or a `MatrixPtrStmt` into it), never the store that gave it its value, so an operand-closed slice pulls in
+  // a bare, zero-initialized alloca and silently reads zeros. `split_is_recompute_safe` has already rejected kernels
+  // where a local is produced *inside* another construct's loop, so every writer that matters here is top-level and
+  // safe to recompute into the consuming construct.
+  std::unordered_map<Stmt *, std::vector<Stmt *>> alloca_writers;
+  for (int j = 0; j < n; j++) {
+    Stmt *s = block->statements[j].get();
+    Stmt *dest = nullptr;
+    if (auto *st = s->cast<LocalStoreStmt>())
+      dest = st->dest;
+    else if (auto *at = s->cast<AtomicOpStmt>())
+      dest = at->dest;
+    if (dest == nullptr)
+      continue;
+    if (Stmt *a = resolve_local_alloca(dest))
+      alloca_writers[a].push_back(s);
+  }
+
+  // Program-scoped record of this split's stats (total / hit / recompiled per kernel), read back by the codegen
+  // driver into the observability surface. This PR ships no reuse tier, so `hit` stays 0; the cross-process manifest
+  // PR turns this into an actual per-construct cache.
+  PerConstructCache *cc = (kernel->program != nullptr) ? &kernel->program->per_construct_cache() : nullptr;
+
+  std::vector<std::unique_ptr<Stmt>> tasks;
+  int n_constructs = 0, n_hit = 0, n_recompiled = 0;
+  for (int k = 0; k < n_segs; k++) {
+    if (!seg_emits_task[k])
+      continue;  // pure-def-only serial run: no standalone task, recomputed into consuming constructs below
+    n_constructs++;
+    // Isolate construct k by its BACKWARD SLICE: keep segment k's whole subtree plus the transitive operand-def chain
+    // it reads (const/arg/binop/pointer/field-load chains from earlier segments, recomputed into this construct), and
+    // drop every other top-level statement (other constructs' loops and stores). The slice is closed under operands, so
+    // no kept statement can reference a dropped one. This both keeps a store together with its own pointer operand and
+    // recomputes cross-construct recomputable values (e.g. dynamic loop bounds), without the has_global_side_effect
+    // heuristic that mis-stripped pointer chains.
+    //
+    // The slice is computed on the ORIGINAL block and only the surviving top-level statements are cloned. Cloning the
+    // whole block first and deleting afterwards is O(constructs x block size) -- ~5.9 s on this kernel -- so the slice
+    // clones only the construct that survives.
+    std::unordered_set<Stmt *> needed;
+    std::vector<Stmt *> worklist;
+    auto add_with_subtree = [&needed, &worklist](Stmt *s) {
+      if (needed.insert(s).second)
+        worklist.push_back(s);
+      // `include_containers`: a nested loop or branch has operands of its own (bounds, conditions) that the slice
+      // has to follow, so it has to enter the worklist like any other statement.
+      for (Stmt *sub : irpass::analysis::gather_statements(
+               s, [](Stmt *) { return true; }, /*include_containers=*/true))
+        if (needed.insert(sub).second)
+          worklist.push_back(sub);
+    };
+    for (int j = 0; j < n; j++) {
+      if (seg_id[j] != k)
+        continue;
+      add_with_subtree(block->statements[j].get());
+    }
+    while (!worklist.empty()) {
+      Stmt *s = worklist.back();
+      worklist.pop_back();
+      for (Stmt *op : s->get_operands())
+        if (op != nullptr && needed.insert(op).second)
+          worklist.push_back(op);
+      // Reaching an alloca means this construct reads the local; bring its top-level writers (and their own operand
+      // chains) along, or the construct compiles against an uninitialized variable.
+      if (s->is<AllocaStmt>()) {
+        auto it = alloca_writers.find(s);
+        if (it != alloca_writers.end()) {
+          for (Stmt *w : it->second)
+            add_with_subtree(w);
+        }
+      }
+    }
+    std::vector<int> keep_indices;
+    for (int j = 0; j < n; j++) {
+      if (needed.find(block->statements[j].get()) != needed.end())
+        keep_indices.push_back(j);
+    }
+    auto cloned = irpass::analysis::clone_block_subset(block, keep_indices);
+    auto *cb = cloned.get();
+    irpass::die(cb);  // clean up anything left dead after slicing (recompute per construct)
+    irpass::re_id(cb);
+
+    // Run the full per-construct frontend on the isolated construct and take its produced tasks. This PR ships the
+    // split with NO reuse tier, so every construct is recompiled here; the cross-process manifest PR keys this output
+    // (via `get_hashed_per_construct_cache_key`) and reuses an unchanged construct's tasks instead.
+    run_construct_frontend(cb, config, kernel, verbose);
+    n_recompiled++;
+    while (!cb->statements.empty())
+      tasks.push_back(cb->extract(0));
+  }
+  while (!block->statements.empty())
+    block->extract(0);
+  for (auto &t : tasks)
+    block->insert(std::move(t));
+  if (cc != nullptr) {
+    std::lock_guard<std::mutex> g(cc->mu);
+    cc->last_stats[kernel->get_name()] = {n_constructs, n_hit, n_recompiled};
+  }
+}
+}  // namespace
 
 namespace irpass {
 
@@ -92,6 +370,19 @@ void compile_to_offloads(IRNode *ir,
   }
 
   dump_ir("before_simplify_I");
+
+  // For recompute-safe kernels (forward-only, non-mesh), run the remaining pre-offload + offload frontend PER
+  // top-level construct and reassemble, instead of once over the whole kernel. The seam is here, right after
+  // lower_ast + the structural prefix (function inlining, matrix-ptr lowering, bit-loop vectorize) and before the
+  // expensive simplify/merge_global_ptrs/offload passes. Anything not recompute-safe (autodiff, mesh-for) falls
+  // through to the whole-kernel path below.
+  if (autodiff_mode == AutodiffMode::kNone && !block_has_mesh_for(ir->cast<Block>()) &&
+      split_is_recompute_safe(ir->cast<Block>())) {
+    split_frontend_per_construct(ir, config, kernel, verbose);
+    dump_ir("after_offload");
+    return;
+  }
+
   irpass::full_simplify(
       ir, config,
       {false, /*autodiff_enabled*/ autodiff_mode != AutodiffMode::kNone, kernel->get_name(), verbose, "simplify_I"});

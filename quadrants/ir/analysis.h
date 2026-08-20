@@ -76,6 +76,11 @@ std::unique_ptr<ControlFlowGraph> build_cfg(IRNode *root);
 void check_fields_registered(IRNode *root);
 std::unique_ptr<IRNode> clone(IRNode *root);
 std::unique_ptr<Stmt> clone(Stmt *root);
+// Clone only the listed top-level statements of `block` into a fresh Block, remapping operands among them. Operands
+// referring outside the subset keep pointing at the original statements, so pass a subset closed under operands if a
+// self-contained block is required. Used by the per-construct frontend split, where cloning the whole block per
+// construct is O(constructs x block size).
+std::unique_ptr<Block> clone_block_subset(Block *block, const std::vector<int> &indices);
 int count_statements(IRNode *root);
 
 /**
@@ -98,7 +103,14 @@ std::unordered_map<Stmt *, std::vector<std::pair<Stmt *, int>>> gather_statement
 std::unordered_set<Stmt *> gather_immutable_local_vars(IRNode *root);
 std::unordered_set<SNode *> gather_deactivations(IRNode *root);
 std::pair<std::unordered_set<SNode *>, std::unordered_set<SNode *>> gather_snode_read_writes(IRNode *root);
-std::vector<Stmt *> gather_statements(IRNode *root, const std::function<bool(Stmt *)> &test);
+// `test` is run on every statement reached from `root`, except that container statements (`MeshForStmt`,
+// `StructForStmt`, `RangeForStmt`, `IfStmt`, `WhileStmt`, `OffloadedStmt`) are only offered to it when
+// `include_containers` is set. The default is off because `BasicStmtVisitor` claims those types with typed
+// overloads that recurse into the body without consulting the predicate, so that is the behaviour every existing
+// caller was written against; a predicate testing for one of those types matches nothing unless it opts in.
+std::vector<Stmt *> gather_statements(IRNode *root,
+                                      const std::function<bool(Stmt *)> &test,
+                                      bool include_containers = false);
 void gather_uniquely_accessed_bit_structs(IRNode *root, AnalysisManager *amgr);
 std::tuple<std::unordered_map<const SNode *, GlobalPtrStmt *>,
            std::unordered_map<std::vector<int>, ExternalPtrStmt *, hashing::Hasher<std::vector<int>>>,

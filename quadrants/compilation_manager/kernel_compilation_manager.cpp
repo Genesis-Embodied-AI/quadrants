@@ -68,9 +68,10 @@ CompileResult KernelCompilationManager::load_or_compile(const CompileConfig &com
   const auto kernel_key = make_kernel_key(compile_config, caps, kernel_def);
   auto cached_kernel = try_load_cached_kernel(kernel_def.get_name(), kernel_key, compile_config.arch, cache_mode);
   bool cache_hit = (cached_kernel != nullptr);
-  return CompileResult{
-      cached_kernel ? *cached_kernel : compile_and_cache_kernel(kernel_key, compile_config, caps, kernel_def),
-      cache_hit, kernel_key};
+  const CompiledKernelData &ckd =
+      cached_kernel ? *cached_kernel : compile_and_cache_kernel(kernel_key, compile_config, caps, kernel_def);
+  auto pt = ckd.get_per_task_cache_stats();
+  return CompileResult{ckd, cache_hit, kernel_key, pt.construct_total, pt.construct_cache_hit, pt.construct_recompiled};
 }
 
 void KernelCompilationManager::dump() {

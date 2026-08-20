@@ -452,7 +452,10 @@ void export_lang(nb::module_ &m) {
       .def_prop_ro("compiled_kernel_data",
                    [](const CompileResult &self) -> const CompiledKernelData & { return self.compiled_kernel_data; })
       .def_ro("cache_hit", &CompileResult::cache_hit)
-      .def_ro("cache_key", &CompileResult::cache_key);
+      .def_ro("cache_key", &CompileResult::cache_key)
+      .def_ro("per_construct_total", &CompileResult::per_construct_total)
+      .def_ro("per_construct_cache_hit", &CompileResult::per_construct_cache_hit)
+      .def_ro("per_construct_recompiled", &CompileResult::per_construct_recompiled);
 
   nb::class_<Axis>(m, "Axis").def(nb::init<int>());
   nb::class_<SNode>(m, "SNodeCxx")

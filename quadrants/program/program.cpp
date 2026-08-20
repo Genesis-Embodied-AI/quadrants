@@ -6,6 +6,7 @@
 
 #include "quadrants/ir/adstack_size_expr.h"
 #include "quadrants/program/adstack_size_expr_eval.h"
+#include "quadrants/program/per_construct_cache.h"
 #include "quadrants/ir/statements.h"
 #include "quadrants/ir/type_factory.h"
 #include "quadrants/program/extension.h"
@@ -45,7 +46,9 @@ namespace quadrants::lang {
 std::atomic<int> Program::num_instances_;
 
 Program::Program(Arch desired_arch)
-    : snode_rw_accessors_bank_(this), adstack_cache_(std::make_unique<AdStackCache>(this)) {
+    : snode_rw_accessors_bank_(this),
+      adstack_cache_(std::make_unique<AdStackCache>(this)),
+      per_construct_cache_(std::make_unique<PerConstructCache>()) {
   QD_TRACE("Program initializing...");
 
   // For performance considerations and correctness of QuantFloatType operations, we force floating-point operations to
