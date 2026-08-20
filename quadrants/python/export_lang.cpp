@@ -238,7 +238,8 @@ void export_lang(nb::module_ &m) {
               "list-generation kernels; ordinary range-for/struct-for launches use default_gpu_block_dim instead. 0 "
               "means no cap.")
       .def_rw("cpu_max_num_threads", &CompileConfig::cpu_max_num_threads,
-              "Maximum number of CPU threads Quadrants may use.")
+              "Maximum number of CPU threads used to run kernels (the runtime thread pool and CPU parallel-for loops). "
+              "Compilation threads are governed separately by num_compile_threads.")
       .def_rw("random_seed", &CompileConfig::random_seed, "Seed for Quadrants' random-number generation.")
       .def_rw("verbose_kernel_launches", &CompileConfig::verbose_kernel_launches,
               "Intended to log a message on every kernel launch; currently has no effect.")
@@ -277,7 +278,8 @@ void export_lang(nb::module_ &m) {
       .def_rw("make_thread_local", &CompileConfig::make_thread_local,
               "Enable the thread-local optimization for reductions.")
       .def_rw("make_block_local", &CompileConfig::make_block_local,
-              "Enable the block-local optimization for GPU/mesh accesses.")
+              "Enable the block-local optimization, which stages spatially-local field accesses through GPU shared "
+              "memory. Mesh attribute localization is a separate pass controlled by make_mesh_block_local.")
       .def_rw("detect_read_only", &CompileConfig::detect_read_only,
               "Detect read-only field accesses to enable further optimization.")
       .def_rw("real_matrix_scalarize", &CompileConfig::real_matrix_scalarize,
