@@ -175,14 +175,15 @@ void export_lang(nb::module_ &m) {
               "Raise an error instead of silently specializing a kernel on a Python float it reads as a templated "
               "argument or a captured global variable (each distinct value would otherwise force its own compile).")
       .def_rw("print_ir", &CompileConfig::print_ir,
-              "Print each kernel's IR after every compilation pass (per-pass tracing, for debugging the compiler), "
-              "not a single dump at the end.")
+              "Trace each kernel's IR through compilation by printing it at labeled checkpoints across the pipeline "
+              "(for debugging the compiler), rather than as a single dump at the end. Coverage is not exhaustive: some "
+              "passes are not instrumented, so a few intermediate stages are not shown.")
       .def_rw("print_preprocessed_ir", &CompileConfig::print_preprocessed_ir,
               "Print each kernel's IR right after frontend preprocessing. Only prints when print_ir is off (print_ir "
               "already shows the initial IR).")
       .def_rw("print_ir_dbg_info", &CompileConfig::print_ir_dbg_info,
-              "Include source-line debug info in the per-pass print_ir output. Has no effect on other IR dumps such as "
-              "print_preprocessed_ir.")
+              "Include source-line debug info in the print_ir checkpoint output. Has no effect on other IR dumps such "
+              "as print_preprocessed_ir.")
       .def_rw("debug", &CompileConfig::debug,
               "Turn on the full suite of correctness checks: field out-of-bounds (implies check_out_of_bound) and "
               "runtime assertions. Considerably slower; intended for development.")
