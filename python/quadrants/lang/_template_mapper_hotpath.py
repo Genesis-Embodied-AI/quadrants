@@ -391,11 +391,14 @@ def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: Annotati
         is_frozen = annotation.__hash__ is not None
         if is_frozen:
             try:
-                # Note that it is necessary to store the key at instance-level instead of class-level because because
+                # Note that it is necessary to store the key at instance-level instead of class-level because
                 # multiple instances of the same class may have different memory layout (although unusual).
-                # One limitation is that storing '_key' is then impossible for dataclasses enforcing 'slots=True',
-                # but this not the default option and almost never used in practice because of other limitations.
-                return arg._key
+                # The attribute is ``_qd_``-prefixed so it cannot be shadowed by a user-declared dataclass field: a
+                # bare name like ``_key`` would be read as that field's value here, and this early return would then
+                # hand back the user's value instead of the real spec key (dropping Final-field discrimination and
+                # ndarray shape descriptors). One limitation is that storing ``_qd_spec_key`` is impossible for
+                # dataclasses enforcing 'slots=True', but that is not the default and almost never used in practice.
+                return arg._qd_spec_key
             except AttributeError:
                 pass
         # ``typing.Final[T]`` fields are baked into the compiled kernel as compile-time constants, so their *values*
@@ -406,7 +409,7 @@ def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: Annotati
         # PERF: ``final_field_names`` is a single ``dict.get`` keyed on the dataclass type (validated + computed once
         # per type, never per launch). When it is empty - every dataclass that does not use the feature, i.e. all
         # pre-existing code - we take the original comprehension verbatim, so this costs one dict lookup and nothing
-        # else. Frozen dataclasses short-circuit even that via the ``arg._key`` cache above.
+        # else. Frozen dataclasses short-circuit even that via the ``arg._qd_spec_key`` cache above.
         final_names = final_field_names(annotation)
         if final_names:
             key_parts = []
@@ -455,9 +458,9 @@ def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: Annotati
             )
         if is_frozen:
             try:
-                object.__setattr__(arg, "_key", key)
+                object.__setattr__(arg, "_qd_spec_key", key)
             except AttributeError:
-                # Impossible to store _key at instance-level if 'slots=True'. It will be recomputed systematically.
+                # Impossible to store _qd_spec_key at instance-level if 'slots=True'. It is recomputed each time.
                 pass
         return key
     if annotation_type is sparse_matrix_builder:

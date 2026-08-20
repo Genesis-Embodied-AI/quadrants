@@ -3894,3 +3894,31 @@ def test_final_float_signed_zero_keys_distinct_kernels():
     assert len(write_z._primal.mapper.mapping) == 1
     write_z(Cfg(z=-0.0), out)  # equal to 0.0 under ==/hash, but a distinct baked constant
     assert len(write_z._primal.mapper.mapping) == 2, "-0.0 and 0.0 must not share a compiled kernel"
+
+
+@test_utils.test()
+def test_final_key_field_name_does_not_shadow_internal_spec_key_cache():
+    """A frozen dataclass may legitimately declare a field named ``_key``. The internal per-instance spec-key cache
+    lives under the ``_qd_``-namespaced ``_qd_spec_key`` attribute precisely so a user ``_key`` field cannot shadow
+    it - otherwise the early ``return arg._qd_spec_key`` would hand back the user's field value and Final fields
+    would stop driving specialization, silently reusing the kernel baked with the first value."""
+    from typing import Final
+
+    @dataclass(frozen=True)
+    class Config:
+        _key: int  # user field whose name used to collide with the internal cache attribute
+        value: Final[int]
+
+    @qd.kernel
+    def bump(config: Config, out: qd.types.NDArray[qd.i32, 1]):
+        v = qd.static(config.value)
+        for i in out:
+            out[i] = v
+
+    out = qd.ndarray(qd.i32, shape=(1,))
+    bump(Config(_key=0, value=1), out)
+    assert out[0] == 1
+    assert len(bump._primal.mapper.mapping) == 1
+    bump(Config(_key=0, value=2), out)  # same user _key, different Final value
+    assert out[0] == 2, "distinct Final values must not share a compiled kernel despite equal user ``_key`` fields"
+    assert len(bump._primal.mapper.mapping) == 2
