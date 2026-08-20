@@ -105,19 +105,10 @@ bool stmt_is_task_effect(Stmt *s) {
   return s->has_global_side_effect();
 }
 
-// A load from global memory (field / ndarray). These are what the backward slice may recompute into a later construct.
+// A load from global memory (field / ndarray). These are side-effect-free, so the backward slice may recompute them
+// into a later construct -- subject to the shadowing check in `split_is_recompute_safe`.
 bool stmt_is_global_read(Stmt *s) {
   return s->is<GlobalLoadStmt>();
-}
-
-// A store to global memory (field / ndarray). Atomics count only when their destination is a global address; an atomic
-// on a local alloca is not a global write.
-bool stmt_is_global_write(Stmt *s) {
-  if (s->is<GlobalStoreStmt>())
-    return true;
-  if (auto *at = s->cast<AtomicOpStmt>())
-    return resolve_local_alloca(at->dest) == nullptr;
-  return false;
 }
 
 // Segmentation of the top-level block the way `offload` will chunk it into tasks: every container statement
@@ -237,19 +228,23 @@ std::unordered_set<Stmt *> compute_construct_needed(
 //       *union* of writer constructs is unsound: when two constructs both read-modify-write the same local, each is
 //       "covered" by the union, yet the second still consumes the value the first produced.
 //
-//   (2) Effectful producers recomputed into a consumer. The backward slice pulls the writers (and operand chains) of
-//       any local a construct reads. If such a producer is EFFECTFUL -- e.g. a local capturing the return of a global
-//       `AtomicOpStmt` -- it already emits its own task in its home segment, so cloning it into a consuming construct
-//       runs the effect again (e.g. `old = atomic_add(counter, 1); for i: out[i] = old` would increment `counter`
-//       twice). Any statement the slice would recompute from a DIFFERENT segment must be side-effect free.
+//   (2) Non-recomputable producers cloned into a consumer. The backward slice pulls the writers (and operand chains)
+//       of any local a construct reads. Cloning such a producer into a consuming construct is only sound if it is a
+//       pure, deterministic function of recomputed operands. Two kinds are not: an EFFECTFUL statement (e.g. a local
+//       capturing the return of a global `AtomicOpStmt`, or a sparse op) already emits its own task in its home
+//       segment, so cloning it runs the effect again (`old = atomic_add(counter, 1); for i: out[i] = old` increments
+//       `counter` twice); and a NON-DETERMINISTIC statement (`RandStmt`) resamples and advances the PRNG once per
+//       clone (`r = random(); for i: x[i] = r; for i: y[i] = r` gives the two loops different values). Any statement
+//       the slice would recompute from a DIFFERENT segment must therefore be neither effectful nor a `RandStmt`.
 //
 //   (3) Field loads snapshotted before a later construct. The backward slice recomputes a serial def -- including a
 //       field/ndarray LOAD -- into every construct that consumes it. That is sound only if no construct BETWEEN the
-//       original load and the consuming construct writes global memory; otherwise the recomputed load, now executing
-//       inside the later construct, observes the mutation instead of the source-order snapshot (e.g.
-//       `base = x[0]; for ..: x[0] = 2; for i: y[i] = base` would read 2 instead of the original x[0]). Field identity
-//       is not tracked, so this is conservative -- a write to an unrelated field also triggers the fallback -- which
-//       keeps correctness while costing only the rare shadowed-snapshot kernel a split.
+//       original load and the consuming construct performs a real effect (any `stmt_is_task_effect`: a global/ndarray
+//       store, a global atomic, or a sparse activate/deactivate); otherwise the recomputed load, now executing inside
+//       the later construct, observes the mutation instead of the source-order snapshot (e.g.
+//       `base = x[0]; for ..: x[0] = 2; for i: y[i] = base` would read 2 instead of the original x[0]). Neither field
+//       identity nor effect target is tracked, so this is conservative -- an unrelated store/sparse op also triggers
+//       the fallback -- which keeps correctness while costing only the rare shadowed-snapshot kernel a split.
 bool split_is_recompute_safe(Block *block) {
   if (block == nullptr)
     return false;
@@ -296,9 +291,11 @@ bool split_is_recompute_safe(Block *block) {
   std::unordered_map<Stmt *, int> top_index;
   for (int j = 0; j < n; j++)
     top_index[block->statements[j].get()] = j;
+  // Any real effect (`stmt_is_task_effect`) counts as an intervening mutation of global state: global/ndarray stores,
+  // global atomics, AND sparse-structure ops (`SNodeOpStmt` activate/deactivate inherit has_global_side_effect==true).
   std::vector<bool> writes_global(n, false);
   for (Stmt *w : irpass::analysis::gather_statements(
-           block, [](Stmt *s) { return stmt_is_global_write(s); }, /*include_containers=*/true)) {
+           block, [](Stmt *s) { return stmt_is_task_effect(s); }, /*include_containers=*/true)) {
     bool inside = false;
     Stmt *owner = top_level_owner(w, block, &inside);
     if (owner == nullptr)
@@ -321,9 +318,9 @@ bool split_is_recompute_safe(Block *block) {
     if (b_lo < 0)
       continue;
     auto needed = compute_construct_needed(block, segs.seg_id, k, alloca_writers);
-    // (2) Every statement this construct recomputes from ANOTHER segment must be side-effect free. An effectful
-    // statement (atomic, global store, ...) already emits its own task in its home segment, so cloning it here would
-    // run the effect a second time.
+    // (2) Every statement this construct recomputes from ANOTHER segment must be purely recomputable. An effectful
+    // statement (atomic, global store, sparse op, ...) already emits its own task in its home segment, so cloning it
+    // here would run the effect twice; a RandStmt would draw a fresh sample and advance the PRNG per clone.
     int min_recomputed_read_pos = -1;
     for (Stmt *s : needed) {
       bool inside = false;
@@ -334,8 +331,8 @@ bool split_is_recompute_safe(Block *block) {
       if (it == top_index.end())
         continue;
       int pos = it->second;
-      if (segs.seg_id[pos] != k && stmt_is_task_effect(s))
-        return false;  // recomputing another segment's effect would duplicate it
+      if (segs.seg_id[pos] != k && (stmt_is_task_effect(s) || s->is<RandStmt>()))
+        return false;  // recomputing another segment's effect (or a fresh PRNG draw) would change behavior
       // (3) Earliest top-level position of a global read this construct RECOMPUTES (one that lives in an earlier
       // segment; reads in the construct's own segment are not moved). If a global write sits strictly between that read
       // and the construct, the recomputed read would observe the mutation -> not safe.

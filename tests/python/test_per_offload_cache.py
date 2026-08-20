@@ -3,9 +3,10 @@
 `compile_to_offloads` splits the frontend (simplify / merge_global_ptrs / offload) to run per top-level construct
 instead of once over the whole kernel, isolating each construct by its backward slice (in
 `transforms/split_frontend_per_construct.cpp`), and falls back to the whole-kernel path for kernels that are not
-recompute-safe: autodiff, mesh-for, a loop-produced local shared across constructs, an effectful producer (e.g. a
-local capturing a global atomic) a later construct would clone, or a serial field load that a later construct would
-recompute after an intervening construct mutated global memory. This PR ships the split WITHOUT a
+recompute-safe: autodiff, mesh-for, a loop-produced local shared across constructs, a non-recomputable producer a
+later construct would clone (an effectful one such as a global atomic, or a non-deterministic `qd.random()`), or a
+serial field load that a later construct would recompute after an intervening effect (a store, atomic, or sparse
+activate/deactivate) mutated global state. This PR ships the split WITHOUT a
 reuse tier, so it recompiles every construct on every compile; the reuse (a disk manifest keyed by
 `get_hashed_per_construct_cache_key`) is added by the cross-process cache PR.
 
@@ -183,3 +184,63 @@ def test_per_construct_frontend_split_fallback_effectful_producer() -> None:
     # cloned the atomic into the loop construct would increment counter twice and store 1.
     assert int(counter.to_numpy()[0]) == 1, counter.to_numpy()
     assert np.all(out.to_numpy() == 0), out.to_numpy()
+
+
+@test_utils.test(arch=[qd.cpu, qd.cuda], offline_cache=False)
+def test_per_construct_frontend_split_fallback_random_producer() -> None:
+    # `r` is a single PRNG sample consumed by two later constructs. `RandStmt` has no global side effect, so it is not
+    # a task effect, but it is NON-deterministic: recomputing it into each construct resamples and advances the PRNG
+    # twice, so the gate must reject it and fall back.
+    @qd.kernel
+    def kernel_rand(x: qd.types.ndarray(), y: qd.types.ndarray()) -> None:
+        r = qd.random()
+        for i in range(_N):
+            x[i] = r
+        for i in range(_N):
+            y[i] = r
+
+    x = qd.ndarray(qd.f32, shape=(_N,))
+    y = qd.ndarray(qd.f32, shape=(_N,))
+    kernel_rand(x, y)
+
+    obs = kernel_rand._primal.per_offload_cache_observations
+    assert obs.frontend_constructs_total == -1, obs
+
+    # Both loops must observe the SAME sample. If the split recomputed qd.random() per construct the two loops would get
+    # different draws.
+    assert np.allclose(x.to_numpy(), y.to_numpy()), (x.to_numpy(), y.to_numpy())
+
+
+@test_utils.test(arch=[qd.cpu, qd.cuda], offline_cache=False, require=qd.extension.sparse)
+def test_per_construct_frontend_split_fallback_sparse_deactivate_shadow() -> None:
+    # `snap` snapshots x[0] before a construct deactivates x's sparse cells; a later construct consumes the snapshot.
+    # A sparse deactivate mutates global structure (SNodeOpStmt), so recomputing the load into the later construct
+    # would read the default 0 instead of the source-order snapshot. The gate must treat the deactivate as an
+    # intervening effect and fall back.
+    x = qd.field(qd.f32)
+    y = qd.field(qd.f32)
+    ptr = qd.root.pointer(qd.i, _N)
+    ptr.dense(qd.i, 1).place(x)
+    qd.root.dense(qd.i, _N).place(y)
+
+    @qd.kernel
+    def setup() -> None:
+        x[0] = 7.0
+
+    @qd.kernel
+    def kernel_sparse() -> None:
+        snap = x[0]
+        for i in range(_N):
+            qd.deactivate(ptr, i)
+        for i in range(_N):
+            y[i] = snap
+
+    setup()
+    kernel_sparse()
+
+    obs = kernel_sparse._primal.per_offload_cache_observations
+    assert obs.frontend_constructs_total == -1, obs
+
+    # snap captured the original x[0] == 7.0 before the deactivation, so every y[i] must be 7.0, not the 0 a
+    # recomputed-after-deactivate load would read.
+    assert np.allclose(y.to_numpy(), 7.0), y.to_numpy()
