@@ -142,6 +142,11 @@ def _patch_property_documenter():
         original_add_directive_header(self, sig)
         if self.config.autodoc_typehints == "none":
             return
+        # Only inject nanobind-derived types for CompileConfig properties; leave every other property's autodoc output
+        # untouched (this mirrors the class/name guard in _append_config_default).
+        objpath = getattr(self, "objpath", [])
+        if len(objpath) < 2 or objpath[-2] != "CompileConfig":
+            return
         type_str = _nb_property_type(self.object)
         if type_str:
             self.add_line("   :type: " + type_str, self.get_sourcename())
