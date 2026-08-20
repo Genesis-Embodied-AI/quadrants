@@ -952,14 +952,19 @@
 <dl class="py property">
 <dt class="sig sig-object py" id="quadrants._lib.core.quadrants_python.CompileConfig.print_ir">
 <em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">print_ir</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">bool</span></em><a class="headerlink" href="#quadrants._lib.core.quadrants_python.CompileConfig.print_ir" title="Link to this definition">#</a></dt>
-<dd><p>Print each kernel’s IR after every compilation pass (per-pass tracing, for debugging the compiler), not a single dump at the end.</p>
+<dd><p>some passes are not instrumented, so a few intermediate stages are not shown.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Trace each kernel’s IR through compilation by printing it at labeled checkpoints across the pipeline (for debugging the compiler), rather than as a single dump at the end. Coverage is not exhaustive</p>
+</dd>
+</dl>
 <p>Default: <code class="docutils literal notranslate"><span class="pre">False</span></code>.</p>
 </dd></dl>
 
 <dl class="py property">
 <dt class="sig sig-object py" id="quadrants._lib.core.quadrants_python.CompileConfig.print_ir_dbg_info">
 <em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">print_ir_dbg_info</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">bool</span></em><a class="headerlink" href="#quadrants._lib.core.quadrants_python.CompileConfig.print_ir_dbg_info" title="Link to this definition">#</a></dt>
-<dd><p>Include source-line debug info in the per-pass print_ir output. Has no effect on other IR dumps such as print_preprocessed_ir.</p>
+<dd><p>Include source-line debug info in the print_ir checkpoint output. Has no effect on other IR dumps such as print_preprocessed_ir.</p>
 <p>Default: <code class="docutils literal notranslate"><span class="pre">False</span></code>.</p>
 </dd></dl>
 
@@ -1048,7 +1053,12 @@
 <dl class="py property">
 <dt class="sig sig-object py" id="quadrants._lib.core.quadrants_python.CompileConfig.saturating_grid_dim">
 <em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">saturating_grid_dim</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">int</span></em><a class="headerlink" href="#quadrants._lib.core.quadrants_python.CompileConfig.saturating_grid_dim" title="Link to this definition">#</a></dt>
-<dd><p>GPU grid size to launch on the CUDA/AMDGPU backends (0 lets Quadrants pick based on occupancy). Vulkan/Metal compute their dispatch grid automatically and ignore this.</p>
+<dd><p>reverse-mode kernels that carry an autodiff stack launch with a smaller grid, capped so the concurrent thread count stays within 65536. Vulkan/Metal compute their dispatch grid automatically and ignore this.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Target GPU grid size (number of blocks) on the CUDA/AMDGPU backends; 0 lets Quadrants pick based on occupancy. It is an upper bound rather than a guarantee</p>
+</dd>
+</dl>
 <p>Default: <code class="docutils literal notranslate"><span class="pre">0</span></code>.</p>
 </dd></dl>
 
