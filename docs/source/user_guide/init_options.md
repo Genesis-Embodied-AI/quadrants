@@ -8,7 +8,7 @@
 
 Whether the compilation caches **persist on disk across Python invocations**. Default `True`. The "offline" in the name refers to the fact that this cache outlives the process: it is what makes the *second* time you start a Python interpreter and run a kernel cheap, by reusing artifacts from the first run.
 
-Setting `offline_cache=False` is intended to emulate cold-start, i.e. a fresh Python process with no prior on-disk artifacts available. Caching within a single Python session is unaffected by this flag: identical kernels are never recompiled within one process regardless of its value. The flag controls only whether the *next* Python invocation observes a warm or a cold disk. The on-disk cache lives in the directory set by `offline_cache_file_path` (default `~/.cache/quadrants/qdcache`).
+Setting `offline_cache=False` is intended to emulate cold-start, i.e. a fresh Python process with no prior on-disk artifacts available. In-memory caching within a single initialized runtime is unaffected by this flag: while a runtime is alive, identical kernels are not recompiled regardless of its value. (`qd.reset()` discards that in-memory cache, so after resetting and reinitializing with `offline_cache=False`, kernels compile again.) The flag controls only whether the *next* Python invocation observes a warm or a cold disk. The on-disk cache lives in the directory set by `offline_cache_file_path` (default `~/.cache/quadrants/qdcache`).
 
 When to set it to `False`:
 - Taking compile-time profiles where a cached kernel would mask the real cost.

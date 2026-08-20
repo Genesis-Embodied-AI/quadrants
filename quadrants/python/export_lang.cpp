@@ -216,7 +216,8 @@ void export_lang(nb::module_ &m) {
               "Intended to run the simplify pass after the lower-access pass; currently has no effect, as nothing "
               "reads it.")
       .def_rw("lower_access", &CompileConfig::lower_access,
-              "Lower high-level field accesses to low-level pointer arithmetic.")
+              "Intended to lower high-level field accesses to low-level pointer arithmetic; currently has no effect, "
+              "as nothing reads it (this lowering always runs).")
       .def_rw("move_loop_invariant_outside_if", &CompileConfig::move_loop_invariant_outside_if,
               "Hoist loop-invariant computations out of conditional branches.")
       .def_rw("cache_loop_invariant_global_vars", &CompileConfig::cache_loop_invariant_global_vars,
@@ -233,7 +234,9 @@ void export_lang(nb::module_ &m) {
       .def_rw("saturating_grid_dim", &CompileConfig::saturating_grid_dim,
               "GPU grid size to launch (0 lets Quadrants pick based on occupancy).")
       .def_rw("max_block_dim", &CompileConfig::max_block_dim,
-              "Upper bound on GPU block size (0 means no explicit cap).")
+              "Intended as an upper bound on GPU block size, but currently limits only the block size of internal "
+              "list-generation kernels; ordinary range-for/struct-for launches use default_gpu_block_dim instead. 0 "
+              "means no cap.")
       .def_rw("cpu_max_num_threads", &CompileConfig::cpu_max_num_threads,
               "Maximum number of CPU threads Quadrants may use.")
       .def_rw("random_seed", &CompileConfig::random_seed, "Seed for Quadrants' random-number generation.")
