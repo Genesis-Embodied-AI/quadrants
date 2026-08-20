@@ -180,7 +180,8 @@ void export_lang(nb::module_ &m) {
       .def_rw("print_preprocessed_ir", &CompileConfig::print_preprocessed_ir,
               "Print each kernel's IR right after frontend preprocessing.")
       .def_rw("print_ir_dbg_info", &CompileConfig::print_ir_dbg_info,
-              "Include source-line debug info when printing IR.")
+              "Include source-line debug info in the per-pass print_ir output. Has no effect on other IR dumps such as "
+              "print_preprocessed_ir.")
       .def_rw("debug", &CompileConfig::debug,
               "Turn on the full suite of correctness checks: field out-of-bounds (implies check_out_of_bound) and "
               "runtime assertions. Considerably slower; intended for development.")
