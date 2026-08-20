@@ -279,25 +279,35 @@ def final_field_names(dc_type: Any) -> "frozenset[str]":
 _pack_f64 = struct.Struct("<d").pack
 _unpack_u64 = struct.Struct("<Q").unpack
 
+# Namespaces the float bit-encoding so it lives in its own value space and can never be equal to a bare ``int`` key
+# component (see the third bullet in ``final_scalar_key``). Any short, process-stable marker works; it must only be
+# a type that a plain ``Final`` value can never be, and a 1-char ``str`` inside a 2-tuple satisfies that.
+_FLOAT_KEY_TAG = "f64"
+
 
 def final_scalar_key(value: Any) -> Any:
     """Return a process-stable, collision-free key component for a baked ``Final`` field value.
 
-    A ``float`` is encoded by its raw IEEE-754 bit pattern (as an ``int``); every other permitted ``Final`` value
-    (``bool`` / ``int`` / ``str`` / ``enum.Enum``) is returned unchanged. Encoding is needed because Python
-    conflates floats that name *distinct* compile-time constants:
+    A ``float`` is encoded as ``(_FLOAT_KEY_TAG, <IEEE-754 bits as int>)``; every other permitted ``Final``
+    value (``bool`` / ``int`` / ``str`` / ``enum.Enum``) is returned unchanged. Encoding is needed because Python
+    conflates floats that name *distinct* compile-time constants, and the raw bits on their own would collide
+    with an ordinary integer key:
 
     - ``-0.0 == 0.0`` and ``hash(-0.0) == hash(0.0)``, so the in-process template mapper spec key (a plain
       tuple used as a ``dict`` key) would reuse one compiled kernel for both, even though the baked constant
       differs observably (sign bit; ``1.0 / x`` gives ``+inf`` vs ``-inf``).
     - ``str`` (and ``float.hex``) render every NaN as ``"nan"`` regardless of sign or mantissa payload, so the
       cross-process fastcache key built from ``str(value)`` would collide distinct NaNs.
+    - Type annotations are not enforced at runtime, so a ``Final[float]`` field can legally be launched with an
+      ``int`` (as ordinary float args are). Without the tag the bare bits of ``1.0`` (``4607182418800017408``)
+      would equal ``final_scalar_key(4607182418800017408)``, so those two launches - which bake *different*
+      constants - would select the same specialization. The tag keeps encoded floats in a disjoint value space.
 
-    Encoding by bits fixes both and keeps the in-process and offline key paths consistent. Only ``float`` needs it,
-    and it runs once per instance (Final keys/reprs are cached), never on the steady-state launch path.
-    ``type(value) is float`` matches the guard in ``_extract_arg`` exactly - a NumPy scalar or other non-``float``
-    passes through unchanged.
+    Encoding by bits fixes the first two collisions and the tag fixes the third, keeping the in-process and offline
+    key paths consistent. Only ``float`` needs it, and it runs once per instance (Final keys/reprs are cached),
+    never on the steady-state launch path. ``type(value) is float`` matches the guard in ``_extract_arg`` exactly -
+    a NumPy scalar or other non-``float`` passes through unchanged.
     """
     if type(value) is float:
-        return _unpack_u64(_pack_f64(value))[0]
+        return (_FLOAT_KEY_TAG, _unpack_u64(_pack_f64(value))[0])
     return value

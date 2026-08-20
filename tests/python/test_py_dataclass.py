@@ -3867,6 +3867,11 @@ def test_final_scalar_key_distinguishes_signed_zero_and_nan_payloads():
     # Equal floats produce equal keys, so kernel reuse stays correct.
     assert final_scalar_key(1.5) == final_scalar_key(1.5)
 
+    # A ``Final[float]`` field may legally receive an ``int`` at runtime, so the encoded float is tagged: its bits
+    # must not collide with a bare int equal to those bits (both bake different constants).
+    one_as_bits = struct.unpack("<Q", struct.pack("<d", 1.0))[0]  # == 4607182418800017408
+    assert final_scalar_key(1.0) != final_scalar_key(one_as_bits)
+
     # Non-float ``Final`` value types are returned unchanged.
     for v in (True, 7, "abc"):
         assert final_scalar_key(v) == v
