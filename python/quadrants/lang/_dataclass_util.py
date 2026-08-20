@@ -1,8 +1,9 @@
 """Helpers for the ``@dataclasses.dataclass`` kernel-arg path, including ``typing.Final[T]`` compile-time template
 fields.
 
-PERF NOTE: everything about ``Final`` resolution is computed **once per dataclass type** and cached in
-``_final_plan_cache``. Callers on the per-launch hot path (``_extract_arg``, ``args_hasher.dataclass_to_repr``) do a
+PERF NOTE: everything about ``Final`` resolution - including the validation that rejects mutable carriers - is
+computed **once per dataclass type** and cached (``_final_plan_cache``, ``_final_path_cache``). Callers on the
+per-launch hot path (``_extract_arg``, ``args_hasher.dataclass_to_repr``) do a
 single ``dict.get`` keyed on the dataclass type and then, in the overwhelmingly common no-Final-field case, take a
 branch that is byte-for-byte the pre-existing code path. No ``isinstance`` / ``typing.get_origin`` /
 ``dataclasses.fields`` call happens per launch. See the module docstring of ``_template_mapper_hotpath.py`` for why
@@ -112,6 +113,58 @@ def _validate_final_inner_type(dc_type: type, field_name: str, annotation: Any) 
     )
 
 
+def _rebinding_is_prevented(dc_type: type) -> bool:
+    """Return True if ``dc_type`` prevents (or has explicitly disclaimed) rebinding of its fields.
+
+    ``frozen=True`` prevents it outright. ``unsafe_hash=True`` does not, but it is an explicit assertion by the user
+    that instances are value-stable, and the surrounding dataclass machinery already takes them at their word (see the
+    ``is_frozen`` key cache in ``_extract_arg``), so honour it here for consistency.
+
+    Deliberately *not* the codebase-wide ``__hash__ is not None`` proxy: ``@dataclass(eq=False)`` inherits
+    ``object.__hash__``, so that proxy reads a plain mutable class as frozen. For a ``Final`` field that means the
+    baked constant can be reassigned with no error and no recompilation (``TemplateMapper.lookup`` memoises on
+    ``id(arg)``), which is precisely what this check exists to prevent - and unlike ``unsafe_hash=True``, turning off
+    ``__eq__`` is not a statement about value stability.
+    """
+    params = getattr(dc_type, "__dataclass_params__", None)
+    if params is None:
+        return dc_type.__hash__ is not None
+    return params.frozen or params.unsafe_hash
+
+
+# Memo of ``dataclass type -> field path down to some Final leaf`` (``None`` if the subtree holds none), used to reject
+# mutable ancestors. Same once-per-type lifecycle as ``_final_plan_cache``; never consulted per launch.
+_final_path_cache: "dict[type, tuple[str, ...] | None]" = {}
+
+
+def _first_final_path(dc_type: type, visiting: "frozenset[type]") -> "tuple[str, ...] | None":
+    """Return the field path from ``dc_type`` down to some ``Final`` leaf, or None if the subtree contains none.
+
+    Only a witness is needed (to name one offending path in the error), so the first hit wins. Recursing through
+    ``final_field_names`` means every nested type is validated eagerly at the top-level call rather than lazily when
+    the hot path first walks that far down.
+
+    ``visiting`` guards against a self-referential type graph. Quadrants cannot actually lower a recursive dataclass
+    kernel arg, but validation must fail with a real error rather than a ``RecursionError``.
+    """
+    if dc_type in _final_path_cache:
+        return _final_path_cache[dc_type]
+    if dc_type in visiting:
+        return None
+    direct = final_field_names(dc_type)
+    path: "tuple[str, ...] | None" = (min(direct),) if direct else None
+    if path is None:
+        visiting = visiting | {dc_type}
+        for field in dataclasses.fields(dc_type):
+            if isinstance(field.type, type) and dataclasses.is_dataclass(field.type):
+                child = _first_final_path(field.type, visiting)
+                if child is not None:
+                    path = (field.name,) + child
+                    break
+    _final_path_cache[dc_type] = path
+    return path
+
+
 def _build_final_plan(dc_type: type) -> "frozenset[str]":
     """Validate every ``Final`` field on ``dc_type`` and return the set of Final-annotated field names.
 
@@ -160,17 +213,40 @@ def _build_final_plan(dc_type: type) -> "frozenset[str]":
         _validate_final_inner_type(dc_type, field.name, annotation)
         final_names.append(field.name)
 
-    if final_names and dc_type.__hash__ is None:
-        # ``@dataclasses.dataclass`` (non-frozen, eq=True) sets ``__hash__ = None``. ``Final`` asserts the value never
-        # changes, and Quadrants bakes it into compiled code accordingly - so a mutable carrier is a contradiction we
-        # reject rather than silently tolerate. ``unsafe_hash=True`` is accepted for the same reason the rest of the
-        # dataclass path accepts it: the user has explicitly asserted value-stability.
+    if final_names and not _rebinding_is_prevented(dc_type):
+        # ``Final`` asserts the value never changes, and Quadrants bakes it into compiled code accordingly - so a
+        # mutable carrier is a contradiction we reject rather than silently tolerate. Rebinding it is not merely
+        # untidy: ``TemplateMapper.lookup`` memoises the specialisation on ``id(arg)``, so re-launching with the same
+        # instance after a reassignment silently reuses the kernel compiled with the old value.
         raise TypeError(
             f"{dc_type.__name__} has ``Final`` field(s) {sorted(final_names)} but is not frozen. A ``Final`` field's "
-            f"value is baked into the compiled kernel, so it must not be reassignable. Declare the class as "
+            f"value is baked into the compiled kernel, so it must not be reassignable - reassigning it would silently "
+            f"keep using the kernel compiled for the old value. Declare the class as "
             f"``@dataclasses.dataclass(frozen=True)`` (or ``unsafe_hash=True`` if you must keep it mutable and accept "
             f"responsibility for never reassigning these fields)."
         )
+
+    # A mutable *ancestor* of a Final field is just as unsound as a mutable carrier, and is not covered by the check
+    # above because ``final_names`` only describes this class's own fields. Given a frozen ``Inner`` holding
+    # ``n: Final[int]``, a mutable ``Outer`` holding ``child: Inner`` still lets ``outer.child = Inner(n=9)`` change a
+    # baked constant, and the ``id(arg)``-keyed lookup cache then hands back the specialisation compiled for the old
+    # child. Reject every mutable dataclass on a path down to a Final leaf.
+    if not _rebinding_is_prevented(dc_type):
+        for field in dataclasses.fields(dc_type):
+            if not (isinstance(field.type, type) and dataclasses.is_dataclass(field.type)):
+                continue
+            nested = _first_final_path(field.type, frozenset({dc_type}))
+            if nested is None:
+                continue
+            leaf = ".".join((dc_type.__name__, field.name) + nested)
+            raise TypeError(
+                f"{dc_type.__name__} is not frozen but reaches the ``Final`` field {leaf} through its field "
+                f"``{field.name}``. A ``Final`` value is baked into the compiled kernel, so no dataclass on the path "
+                f"to it may be reassignable - rebinding ``{dc_type.__name__}.{field.name}`` would silently keep using "
+                f"the kernel compiled for the previous value. Declare {dc_type.__name__} as "
+                f"``@dataclasses.dataclass(frozen=True)`` (or ``unsafe_hash=True`` if you must keep it mutable and "
+                f"accept responsibility for never reassigning ``{field.name}``)."
+            )
     return frozenset(final_names)
 
 

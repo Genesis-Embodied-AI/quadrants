@@ -3507,6 +3507,17 @@ def test_final_field_on_non_frozen_dataclass_is_rejected():
     with pytest.raises(TypeError, match="but is not frozen"):
         final_field_names(Mutable)
 
+    # ``eq=False`` inherits ``object.__hash__``, so the codebase-wide ``__hash__ is not None`` frozen proxy reads this
+    # plain mutable class as frozen. It must still be rejected: ``config.x = 9`` on such a class raises nothing, and
+    # the ``id(arg)``-keyed lookup cache would then keep using the kernel baked with the old value.
+    @dataclass(eq=False)
+    class EqFalse:
+        x: Final[int]
+
+    assert EqFalse.__hash__ is not None
+    with pytest.raises(TypeError, match="but is not frozen"):
+        final_field_names(EqFalse)
+
     @dataclass(frozen=True)
     class Frozen:
         x: Final[int]
@@ -3518,6 +3529,131 @@ def test_final_field_on_non_frozen_dataclass_is_rejected():
         x: Final[int]
 
     assert final_field_names(UnsafeHash) == {"x"}
+
+
+@test_utils.test()
+def test_mutable_ancestor_of_nested_final_field_is_rejected():
+    """Every dataclass on the path down to a ``Final`` leaf must be non-reassignable, not just its direct carrier.
+
+    A frozen ``Inner`` holding ``n: Final[int]`` protects ``inner.n``, but a mutable ``Outer`` holding ``child: Inner``
+    still allows ``outer.child = Inner(n=9)``. ``TemplateMapper.lookup`` memoises the specialisation on the top-level
+    ``id(arg)``, so re-launching with that same ``outer`` would silently reuse the kernel compiled with the previous
+    child's baked constant and produce results for the old value. Reject the mutable ancestor instead."""
+    from typing import Final
+
+    from quadrants.lang._dataclass_util import final_field_names
+
+    @dataclass(frozen=True)
+    class Inner:
+        n: Final[int]
+
+    @dataclass  # mutable ancestor: `outer.child` can be rebound
+    class MutableOuter:
+        child: Inner
+
+    # The direct-carrier check cannot catch this: MutableOuter declares no Final field of its own.
+    assert not any(f.name == "n" for f in dataclasses.fields(MutableOuter))
+    with pytest.raises(TypeError, match=r"is not frozen but reaches the ``Final`` field MutableOuter\.child\.n"):
+        final_field_names(MutableOuter)
+
+    # Reported at launch rather than silently returning stale results.
+    @qd.kernel
+    def k(o: MutableOuter, out: qd.types.NDArray[qd.i32, 1]):
+        v = qd.static(o.child.n)
+        for i in out:
+            out[i] = v
+
+    with pytest.raises(Exception, match="is not frozen but reaches"):
+        k(MutableOuter(child=Inner(n=1)), qd.ndarray(qd.i32, shape=(2,)))
+
+    # Deeper nesting names the innermost mutable carrier, which is the one that needs changing.
+    @dataclass
+    class MutableMid:
+        child: Inner
+
+    @dataclass(frozen=True)
+    class FrozenTop:
+        mid: MutableMid
+
+    with pytest.raises(
+        TypeError, match=r"MutableMid is not frozen but reaches the ``Final`` field MutableMid\.child\.n"
+    ):
+        final_field_names(MutableMid)
+
+    # A frozen top level does not launder a mutable class further down: the spec-key walk validates each nested
+    # dataclass type it descends into, so the error still surfaces on the first launch rather than silently baking a
+    # value that ``top.mid.child = Inner(n=9)`` could change.
+    @qd.kernel
+    def k_deep(t: FrozenTop, out: qd.types.NDArray[qd.i32, 1]):
+        v = qd.static(t.mid.child.n)
+        for i in out:
+            out[i] = v
+
+    with pytest.raises(Exception, match="MutableMid is not frozen but reaches"):
+        k_deep(FrozenTop(mid=MutableMid(child=Inner(n=1))), qd.ndarray(qd.i32, shape=(2,)))
+
+    # Frozen all the way down is fine, and so is the explicit ``unsafe_hash`` opt-out.
+    @dataclass(frozen=True)
+    class FrozenOuter:
+        child: Inner
+
+    assert final_field_names(FrozenOuter) == frozenset()
+
+    @dataclass(unsafe_hash=True)
+    class UnsafeHashOuter:
+        child: Inner
+
+    assert final_field_names(UnsafeHashOuter) == frozenset()
+
+    # A mutable dataclass that reaches no Final field at all keeps its pre-existing behaviour: not our business.
+    @dataclass
+    class NoFinalInner:
+        n: int
+
+    @dataclass
+    class MutableNoFinalOuter:
+        child: NoFinalInner
+
+    assert final_field_names(MutableNoFinalOuter) == frozenset()
+
+
+@test_utils.test()
+def test_nested_final_field_recompiles_per_frozen_carrier_instance():
+    """The nested-Final path must specialise per value, not just per top-level object identity.
+
+    Complements the rejection test above: with every carrier frozen, distinct nested ``Final`` values must produce
+    distinct kernels rather than reusing the first one compiled."""
+    from typing import Final
+
+    @dataclass(frozen=True)
+    class Inner:
+        n: Final[int]
+
+    @dataclass(frozen=True)
+    class Outer:
+        child: Inner
+        scale: int
+
+    @qd.kernel
+    def k(o: Outer, out: qd.types.NDArray[qd.i32, 1]):
+        v = qd.static(o.child.n)
+        for i in out:
+            out[i] = v * o.scale
+
+    out = qd.ndarray(qd.i32, shape=(2,))
+    # Held in a list rather than passed as temporaries: the launch-context cache is keyed on the argument ids, and a
+    # temporary carrier is freed straight after its launch, so the next one can be allocated at the same address and
+    # collide with the previous entry. That is orthogonal to Final (it applies to any dataclass carrying a runtime
+    # scalar), but it would make the ``scale`` assertion below flaky.
+    configs = [Outer(child=Inner(n=3), scale=2), Outer(child=Inner(n=5), scale=2), Outer(child=Inner(n=5), scale=4)]
+
+    k(configs[0], out)
+    assert out[0] == 6
+    k(configs[1], out)
+    assert out[0] == 10, f"nested Final value change did not recompile: got {out[0]}, expected 10"
+    # ``scale`` is an ordinary runtime field, so it must not add a specialisation.
+    k(configs[2], out)
+    assert out[0] == 20
 
 
 @test_utils.test()
