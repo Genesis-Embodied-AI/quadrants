@@ -295,21 +295,26 @@ void export_lang(nb::module_ &m) {
       .def_rw("quant_opt_atomic_demotion", &CompileConfig::quant_opt_atomic_demotion,
               "Demote atomics to plain read-modify-write on quantized fields when safe.")
       .def_rw("make_mesh_block_local", &CompileConfig::make_mesh_block_local,
-              "Enable the block-local optimization for MeshQuadrants attributes.")
+              "Enable the block-local optimization for MeshQuadrants attributes. CUDA only (the pass runs only when "
+              "arch is CUDA).")
       .def_rw("mesh_localize_to_end_mapping", &CompileConfig::mesh_localize_to_end_mapping,
-              "Cache mesh relation to-end mappings in block-local memory.")
+              "Cache mesh relation to-end mappings in block-local memory. Only used by the CUDA-only "
+              "make_mesh_block_local pass.")
       .def_rw("mesh_localize_from_end_mapping", &CompileConfig::mesh_localize_from_end_mapping,
-              "Cache mesh relation from-end mappings in block-local memory.")
+              "Cache mesh relation from-end mappings in block-local memory. Only used by the CUDA-only "
+              "make_mesh_block_local pass.")
       .def_rw("optimize_mesh_reordered_mapping", &CompileConfig::optimize_mesh_reordered_mapping,
               "Optimize element access through reordered mesh index mappings.")
       .def_rw("mesh_localize_all_attr_mappings", &CompileConfig::mesh_localize_all_attr_mappings,
-              "Localize all mesh attribute mappings, not just the ones detected as beneficial.")
+              "Localize all mesh attribute mappings, not just the ones detected as beneficial. Used by the CUDA-only "
+              "make_mesh_block_local pass, and ignored when experimental_auto_mesh_local is enabled.")
       .def_rw("demote_no_access_mesh_fors", &CompileConfig::demote_no_access_mesh_fors,
               "Demote mesh-for loops that never access mesh attributes to range-fors.")
       .def_rw("experimental_auto_mesh_local", &CompileConfig::experimental_auto_mesh_local,
-              "Enable the experimental automatic mesh-local optimization.")
+              "Enable the experimental automatic mesh-local optimization. CUDA only.")
       .def_rw("auto_mesh_local_default_occupacy", &CompileConfig::auto_mesh_local_default_occupacy,
-              "Target occupancy used by the automatic mesh-local optimization.")
+              "Target occupancy used by the automatic mesh-local optimization. Only used on CUDA when "
+              "experimental_auto_mesh_local is enabled.")
       .def_rw("offline_cache", &CompileConfig::offline_cache,
               "Whether compiled-kernel caches persist on disk and are reused across separate Python processes.")
       .def_rw("offline_cache_file_path", &CompileConfig::offline_cache_file_path,
@@ -324,7 +329,8 @@ void export_lang(nb::module_ &m) {
               "Fraction of the compiled-kernel offline cache to evict once it exceeds the size limit. Applied only "
               "under the \"lru\" and \"fifo\" cleaning policies; \"version\" does no size-based eviction.")
       .def_rw("num_compile_threads", &CompileConfig::num_compile_threads,
-              "Number of host threads used to compile kernels.")
+              "Number of host threads used to compile kernels on the LLVM backends (CPU, CUDA, AMDGPU); other backends "
+              "ignore it, and it is forced to 1 when print_ir is set.")
       .def_rw("vk_api_version", &CompileConfig::vk_api_version,
               "Vulkan API version to request, as a \"major.minor.patch\" string (e.g. \"1.3.0\"). Empty lets Quadrants "
               "select a usable version automatically.")
