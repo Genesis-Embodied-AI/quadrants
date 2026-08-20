@@ -16,6 +16,8 @@ import struct
 import typing
 from typing import Any
 
+import numpy as np
+
 # ``T`` values permitted inside ``Final[T]``. A Final field's value is baked into the compiled kernel as a literal and
 # folded into both the in-process template spec key and the cross-process fastcache key, so ``T`` must be something
 # that (a) is meaningful as a compile-time literal in generated code and (b) hashes and ``repr``s by value, stably
@@ -288,14 +290,16 @@ _FLOAT_KEY_TAG = "f64"
 def final_scalar_key(value: Any) -> Any:
     """Return a process-stable, collision-free key component for a baked ``Final`` field value.
 
-    A ``float`` is encoded as ``(_FLOAT_KEY_TAG, <IEEE-754 bits as int>)``; every other permitted ``Final``
-    value (``bool`` / ``int`` / ``str`` / ``enum.Enum``) is returned unchanged. Encoding is needed because Python
-    conflates floats that name *distinct* compile-time constants, and the raw bits on their own would collide
-    with an ordinary integer key:
+    Floating-point values are encoded by their exact IEEE-754 bits, tagged with ``_FLOAT_KEY_TAG``; every other
+    permitted ``Final`` value (``bool`` / ``int`` / ``str`` / ``enum.Enum``) is returned unchanged. A builtin
+    ``float`` becomes ``(_FLOAT_KEY_TAG, <bits as int>)``; a NumPy floating scalar becomes
+    ``(_FLOAT_KEY_TAG, <dtype str>, <raw bytes>)`` so that distinct widths (float16/32/64/128) never alias.
+    Encoding is needed because Python conflates floats that name *distinct* compile-time constants, and the raw
+    bits on their own would collide with an ordinary integer key:
 
-    - ``-0.0 == 0.0`` and ``hash(-0.0) == hash(0.0)``, so the in-process template mapper spec key (a plain
-      tuple used as a ``dict`` key) would reuse one compiled kernel for both, even though the baked constant
-      differs observably (sign bit; ``1.0 / x`` gives ``+inf`` vs ``-inf``).
+    - ``-0.0 == 0.0`` and ``hash(-0.0) == hash(0.0)`` (for builtin *and* NumPy floats), so the in-process template
+      mapper spec key (a plain tuple used as a ``dict`` key) would reuse one compiled kernel for both, even though
+      the baked constant differs observably (sign bit; ``1.0 / x`` gives ``+inf`` vs ``-inf``).
     - ``str`` (and ``float.hex``) render every NaN as ``"nan"`` regardless of sign or mantissa payload, so the
       cross-process fastcache key built from ``str(value)`` would collide distinct NaNs.
     - Type annotations are not enforced at runtime, so a ``Final[float]`` field can legally be launched with an
@@ -303,11 +307,15 @@ def final_scalar_key(value: Any) -> Any:
       would equal ``final_scalar_key(4607182418800017408)``, so those two launches - which bake *different*
       constants - would select the same specialization. The tag keeps encoded floats in a disjoint value space.
 
-    Encoding by bits fixes the first two collisions and the tag fixes the third, keeping the in-process and offline
-    key paths consistent. Only ``float`` needs it, and it runs once per instance (Final keys/reprs are cached),
-    never on the steady-state launch path. ``type(value) is float`` matches the guard in ``_extract_arg`` exactly -
-    a NumPy scalar or other non-``float`` passes through unchanged.
+    A NumPy scalar is handled here (not just builtin ``float``) because it hits exactly the same conflations and
+    Genesis routinely stores NumPy scalars in ``Final[float]`` fields. Everything here runs once per instance
+    (Final keys/reprs are cached), never on the steady-state launch path, so the ``isinstance`` probe is off the
+    hot path.
     """
     if type(value) is float:
         return (_FLOAT_KEY_TAG, _unpack_u64(_pack_f64(value))[0])
+    if isinstance(value, np.floating):
+        # ``dtype.str`` (e.g. ``"<f4"``) + ``tobytes()`` preserves sign bit, NaN payload and width, and stays in the
+        # same tagged space as the builtin-float branch so it can never equal a bare int / str key component.
+        return (_FLOAT_KEY_TAG, value.dtype.str, value.tobytes())
     return value

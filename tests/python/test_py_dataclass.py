@@ -3872,8 +3872,16 @@ def test_final_scalar_key_distinguishes_signed_zero_and_nan_payloads():
     one_as_bits = struct.unpack("<Q", struct.pack("<d", 1.0))[0]  # == 4607182418800017408
     assert final_scalar_key(1.0) != final_scalar_key(one_as_bits)
 
-    # Non-float ``Final`` value types are returned unchanged.
-    for v in (True, 7, "abc"):
+    # NumPy scalars hit the same conflations and may legally land in a ``Final[float]`` field, so they are encoded
+    # too: signed zero stays distinct and different float widths must not alias.
+    import numpy as np
+
+    assert final_scalar_key(np.float32(0.0)) != final_scalar_key(np.float32(-0.0))
+    assert final_scalar_key(np.float64(0.0)) != final_scalar_key(np.float64(-0.0))
+    assert final_scalar_key(np.float32(1.0)) != final_scalar_key(np.float64(1.0))
+
+    # Non-float ``Final`` value types (including non-floating NumPy scalars) are returned unchanged.
+    for v in (True, 7, "abc", np.int64(7)):
         assert final_scalar_key(v) == v
 
 

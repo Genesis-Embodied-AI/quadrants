@@ -659,7 +659,18 @@ class FuncBase:
         if needed_arg_fields is not None:
             if provided_arg_type is not needed_arg_type:
                 raise QuadrantsRuntimeError("needed", needed_arg_type, "!= provided", provided_arg_type)
+            # Frozen detection must agree with the compile-time gate (``_rebinding_is_prevented`` in
+            # ``_final_dataclass_fields``), which keys off the dataclass ``frozen`` / ``unsafe_hash`` parameters.
+            # ``__hash__ is not None`` alone disagrees for the legal-but-rare ``@dataclass(frozen=True)`` that
+            # also sets ``__hash__ = None`` by hand: the compile path treats that as frozen and bakes its
+            # ``Final`` fields (omitting them from the runtime arg list), so launch must take the same frozen
+            # plan below rather than the runtime-arg loop, which would otherwise try to submit a baked
+            # ``Final[T]`` field as a real argument. The ``or`` only runs when ``__hash__ is None``, so the
+            # common frozen path pays nothing.
             is_frozen = needed_arg_type.__hash__ is not None
+            if not is_frozen:
+                params = getattr(needed_arg_type, "__dataclass_params__", None)
+                is_frozen = params is not None and (params.frozen or params.unsafe_hash)
             idx = 0
             if is_frozen:
                 # PERF: Frozen-dataclass fast path. Uses the pre-computed field plan (which fields are active for this
@@ -686,10 +697,11 @@ class FuncBase:
                     )
                     idx += num_args_
                 return idx, True
-            # Non-frozen dataclass: original path with full iteration and filtering. No ``Final`` handling is needed
-            # here - ``final_field_names`` rejects ``Final`` fields on a class with ``__hash__ is None`` (the only way
-            # to reach this branch, since ``frozen=True`` and ``unsafe_hash=True`` both take the plan path above), and
-            # that validation has already run during template mapping by the time we get here.
+            # Non-frozen dataclass: original path with full iteration and filtering. No ``Final`` handling is
+            # needed here - a class only reaches this branch when it is neither ``frozen`` nor ``unsafe_hash``
+            # (the detection above now matches the compile-time ``_rebinding_is_prevented`` gate), and
+            # ``final_field_names`` rejects ``Final`` fields on such a class outright, so that validation has
+            # already failed during template mapping by the time we get here.
             is_launch_ctx_cacheable = False
             for field in needed_arg_fields.values():
                 if field._field_type is not _FIELD:

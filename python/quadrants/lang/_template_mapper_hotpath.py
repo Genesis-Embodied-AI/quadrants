@@ -393,11 +393,13 @@ def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: Annotati
             try:
                 # Note that it is necessary to store the key at instance-level instead of class-level because
                 # multiple instances of the same class may have different memory layout (although unusual).
-                # The attribute is ``_qd_``-prefixed so it cannot be shadowed by a user-declared dataclass field: a
-                # bare name like ``_key`` would be read as that field's value here, and this early return would then
-                # hand back the user's value instead of the real spec key (dropping Final-field discrimination and
-                # ndarray shape descriptors). One limitation is that storing ``_qd_spec_key`` is impossible for
-                # dataclasses enforcing 'slots=True', but that is not the default and almost never used in practice.
+                # The attribute lives in the reserved ``_qd_`` namespace (documented in the dataclass user guide,
+                # and already relied on throughout Quadrants: ``_qd_layout``, ``_qd_dc_repr``, and more),
+                # so a user dataclass field must not begin with ``_qd_`` and therefore cannot shadow it. A bare
+                # name like ``_key`` (a legal user field) would instead be read as that field's value here, letting
+                # this early return hand back the user's value instead of the real spec key. One limitation is that
+                # storing ``_qd_spec_key`` is impossible for dataclasses enforcing 'slots=True', but that is not
+                # the default and almost never used in practice.
                 return arg._qd_spec_key
             except AttributeError:
                 pass
