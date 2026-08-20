@@ -27,11 +27,13 @@ When `offline_cache=True`, three persistent layers cooperate. The first two shar
 2. The CUDA per-arch PTX cache, written under `<offline_cache_file_path>/ptx_cache_sm_*` (driven by `PtxCache`). When the LLVM-IR hash hits, the previously emitted PTX is loaded from disk and the LLVM-to-PTX compilation pipeline (LLVM optimization passes plus the NVPTX backend's PTX emission) is skipped. `ptxas` itself runs later inside `cuModuleLoadDataEx` and is governed by Layer 3.
 3. The NVIDIA driver compute cache at `~/.nv/ComputeCache`, keyed by PTX content hash. When this hits, `ptxas` work is skipped because the SASS itself is reused. This cache is owned by libcuda and not by Quadrants.
 
-Setting `offline_cache=False` (or `QD_OFFLINE_CACHE=0`) disables every disk-persistent layer so a fresh Python session sees a true cold start:
+Setting `offline_cache=False` (or `QD_OFFLINE_CACHE=0`) disables the three layers above so a fresh Python session sees a cold start for them:
 
 - Layer 1 falls back to memory-only. The disk cache is not consulted for kernel data and new kernels are not persisted, so kernels are compiled from source on every Python invocation.
 - Layer 2 falls back to memory-only. PTX is still cached within one process so kernels with identical LLVM IR share PTX output, but nothing is read from or written to disk.
 - Layer 3 cannot be controlled by the libcuda environment variable `CUDA_CACHE_DISABLE` from inside Python because the variable is captured by libcuda at process start. Quadrants instead appends a per-process nonce comment to the PTX it submits to `cuModuleLoadDataEx`. The nonce is constant within one process - kernels with identical PTX still share a cubin in the same run - and changes between processes so cross-run hits cannot quietly serve stale SASS.
+
+`offline_cache` does not, however, govern *every* disk-persistent layer. The source-level cache used by [fastcache](./fastcache.md) kernels is controlled separately by `src_ll_cache` (on by default). With `offline_cache=False` it can no longer reuse compiled code across processes, but it still reads and writes its own bookkeeping files on disk. To stop that too, set `src_ll_cache=False` as well. (Layer 3 stays outside Quadrants' control regardless: on CUDA the driver still writes to `~/.nv/ComputeCache` unless `CUDA_CACHE_DISABLE=1` is exported before the process starts.)
 
 ## Compile-time tuning
 
