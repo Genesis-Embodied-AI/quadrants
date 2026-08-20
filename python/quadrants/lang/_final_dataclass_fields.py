@@ -378,14 +378,17 @@ def final_scalar_key(value: Any) -> Any:
       a NumPy scalar uses ``(_FLOAT_KEY_TAG, <dtype str>, <raw bytes>)``). Bits (not value) so ``-0.0``/``0.0``
       (equal, equal hash) and NaNs differing only in sign/payload (all ``str``-ed to ``"nan"``) stay distinct, and
       widths never alias.
-    - an ``enum`` member -> ``(_ENUM_KEY_TAG, module, qualname, name-or-value)``. An ``IntEnum`` / ``StrEnum``
-      member is ``==`` to its bare scalar and to a same-valued member of another enum class (and ``str(member)`` is
-      just the scalar on Python >=3.11), so keying on identity keeps them distinct; an unnamed ``IntFlag`` composite
-      (whose ``name`` is ``None``) falls back to its integer ``value`` so distinct bitmasks do not collide. A member
-      carrying user-defined per-member state is rejected (identity alone cannot capture that state).
+    - an ``enum`` member -> ``(_ENUM_KEY_TAG, module, qualname, name, value)``. An ``IntEnum`` / ``StrEnum`` member
+      is ``==`` to its bare scalar and to a same-valued member of another enum class (and ``str(member)`` is just
+      the scalar on Python >=3.11), so keying on identity keeps them distinct. Both ``name`` and ``value`` are kept:
+      ``name`` (``None`` for an unnamed ``IntFlag`` composite) plus ``value`` separates same-named members of two
+      classes that share ``module``/``qualname`` (e.g. an enum rebuilt by a local factory). A member carrying
+      user-defined per-member state is rejected (identity alone cannot capture that state).
     - every remaining scalar (``bool`` / ``int`` / ``str`` and NumPy analogues) ->
-      ``(_SCALAR_KEY_TAG, module, qualname, value)``. ``True == 1 == np.int64(1)`` with equal hashes, but they bake
-      observably different Python constants (e.g. ``config.value is True``), so the exact type must be in the key.
+      ``(_SCALAR_KEY_TAG, module, qualname, canonical-value)``. ``True == 1 == np.int64(1)`` with equal hashes, but
+      they bake observably different Python constants (e.g. ``config.value is True``), so the exact type is tagged;
+      the value is coerced to its plain base type so a subclass with a misleading ``__repr__`` cannot collapse two
+      distinct values to one string in the offline cache key.
 
     Everything here runs once per instance (Final keys/reprs are cached), never on the steady-state launch path, so
     the ``isinstance`` probes are off the hot path.
@@ -394,14 +397,20 @@ def final_scalar_key(value: Any) -> Any:
         return (_FLOAT_KEY_TAG, _unpack_u64(_pack_f64(value))[0])
     if isinstance(value, enum.Enum):
         # Checked before the ``float``/``int`` branches so a mixed-in enum (``IntEnum``/``StrEnum``, or an exotic
-        # ``float`` mix-in) keys by identity, not by its value. ``name`` uniquely identifies a canonical member;
-        # unnamed ``IntFlag`` composites have ``name is None`` so they fall back to their (integer) ``value``.
-        # ``module``/``qualname`` disambiguate identically-named members of different enum classes. A member with
-        # user-defined per-member state is rejected, since identity alone would not capture that state.
+        # ``float`` mix-in) keys by identity, not by its value. A member with user-defined per-member state is
+        # rejected, since identity alone would not capture that state. The key carries BOTH ``name`` and ``value``:
+        # ``name`` identifies the canonical member (``None`` for an unnamed ``IntFlag`` composite), while ``value``
+        # separates same-named members of two classes that share ``module``/``qualname`` - e.g. an enum rebuilt by a
+        # local factory, whose qualname is ``<factory>.<locals>.Local``. Fall back to ``repr`` for an unhashable
+        # value so the in-process tuple key stays hashable.
         _reject_stateful_enum_member(value)
         cls = type(value)
-        member_id = value.name if value.name is not None else value.value
-        return (_ENUM_KEY_TAG, cls.__module__, cls.__qualname__, member_id)
+        member_value = value.value
+        try:
+            hash(member_value)
+        except TypeError:
+            member_value = repr(member_value)
+        return (_ENUM_KEY_TAG, cls.__module__, cls.__qualname__, value.name, member_value)
     if isinstance(value, np.floating):
         # ``dtype.str`` (e.g. ``"<f4"``) + ``tobytes()`` preserves sign bit, NaN payload and width, and stays in the
         # same tagged space as the builtin-float branch so it can never equal a bare int / str key component.
@@ -419,4 +428,18 @@ def final_scalar_key(value: Any) -> Any:
     # float subclasses, an ``int`` / ``str`` subclass carrying extra observable state is rejected.
     _reject_stateful_primitive_subclass(value)
     cls = type(value)
-    return (_SCALAR_KEY_TAG, cls.__module__, cls.__qualname__, value)
+    # Embed a *canonical* base value rather than the object itself: the offline cache key is built by ``str``-ing
+    # this tuple (args_hasher), so a subclass (or NumPy scalar) whose ``__repr__`` does not preserve its value
+    # (e.g. ``OddInt.__repr__`` returning a constant) would otherwise serialize two distinct values to one string.
+    # Coercing to the plain base type keeps the in-process key correct and makes the string faithful and stable.
+    if cls in _EXACT_BAKED_TYPES:
+        canonical = value
+    elif isinstance(value, int):  # a Python ``int`` subclass (``bool`` cannot be subclassed)
+        canonical = int(value)
+    elif isinstance(value, np.integer):  # NumPy integer scalar (not a Python ``int`` subclass)
+        canonical = int(value)
+    elif isinstance(value, str):  # a ``str`` subclass, including ``np.str_``; bypass any ``__str__`` override
+        canonical = str.__str__(value)
+    else:
+        canonical = value  # other NumPy scalars (e.g. ``np.bool_``): distinct values already have distinct reprs
+    return (_SCALAR_KEY_TAG, cls.__module__, cls.__qualname__, canonical)

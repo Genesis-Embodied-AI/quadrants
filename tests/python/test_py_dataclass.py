@@ -3975,6 +3975,31 @@ def test_final_scalar_key_distinguishes_signed_zero_and_nan_payloads():
     with pytest.raises(TypeError, match="user-defined per-member state"):
         final_scalar_key(StatefulMode.A)
 
+    # Enum classes rebuilt by a local factory share module+qualname and can have same-named members with different
+    # values; the key includes the value so those stay distinct.
+    def _make_int_enum(v):
+        class Local(enum.IntEnum):
+            A = v
+
+        return Local
+
+    e1, e2 = _make_int_enum(1), _make_int_enum(2)
+    assert type(e1.A).__qualname__ == type(e2.A).__qualname__  # identical qualname across the two factory enums
+    assert final_scalar_key(e1.A) != final_scalar_key(e2.A)  # but different values -> distinct keys
+
+    # A stateless subclass whose ``__repr__`` does not preserve its value must still produce faithful *offline*
+    # (string) keys, since the fastcache key is built by ``str``-ing the key tuple.
+    class OddInt(int):
+        def __repr__(self):
+            return "odd"
+
+    class OddStr(str):
+        def __repr__(self):
+            return "weird"
+
+    assert str(final_scalar_key(OddInt(1))) != str(final_scalar_key(OddInt(2)))
+    assert str(final_scalar_key(OddStr("x"))) != str(final_scalar_key(OddStr("y")))
+
     # Remaining scalars are type-tagged: Python conflates value-equal but distinct-typed constants (True == 1 ==
     # np.int64(1), with equal hashes), and they bake observably different Python constants, so they must not alias.
     assert final_scalar_key(True) != final_scalar_key(1)
