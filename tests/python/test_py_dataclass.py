@@ -3820,13 +3820,17 @@ def test_final_float_field_honors_raise_on_templated_floats():
 
 @test_utils.test()
 def test_final_numpy_float_field_honors_raise_on_templated_floats():
-    """A ``Final[float]`` field can be launched with a NumPy floating scalar, which ``final_scalar_key`` specialises
-    on exactly like a builtin ``float``. So ``raise_on_templated_floats`` must reject a NumPy float too, not only a
-    builtin one - otherwise the option's guarantee (no float value drives kernel specialisation) is bypassed."""
+    """A ``Final[float]`` field can be launched with a NumPy floating scalar or a ``float`` subclass, both of which
+    ``final_scalar_key`` specialises on exactly like a builtin ``float``. So ``raise_on_templated_floats`` must
+    reject those too, not only a builtin one - otherwise the option's guarantee (no float value drives kernel
+    specialisation) is bypassed."""
     import numpy as np
     from typing import Final
 
     arch_name = qd.lang.impl.current_cfg().arch.name
+
+    class Meters(float):
+        pass
 
     @dataclass(frozen=True)
     class Cfg:
@@ -3843,8 +3847,9 @@ def test_final_numpy_float_field_honors_raise_on_templated_floats():
         k(cfg, qd.ndarray(qd.i32, shape=(2,)))
 
     qd.init(arch=getattr(qd, arch_name), raise_on_templated_floats=True)
-    with pytest.raises(ValueError, match="Floats not allowed as templated types"):
-        run(Cfg(dt=np.float32(0.5), n=3))
+    for bad_value in (np.float32(0.5), Meters(0.5)):
+        with pytest.raises(ValueError, match="Floats not allowed as templated types"):
+            run(Cfg(dt=bad_value, n=3))
 
     # Default setting: the same config compiles fine, and the Final int still specialises.
     qd.init(arch=getattr(qd, arch_name))
