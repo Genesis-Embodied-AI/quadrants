@@ -445,3 +445,97 @@ def test_qd_tensor_across_reset_and_reinit(req_arch, req_options):
     fill_2d(a_nd)
     np.testing.assert_array_equal(a_nd.to_numpy(), expected)
     # The autouse fixture's teardown will reset() again on the way out.
+
+
+# ----------------------------------------------------------------------------
+# External arrays (numpy / torch) at a qd.Tensor slot (issue #856, W3).
+#
+# A ``qd.Tensor`` slot routes numpy arrays and torch tensors through the ndarray feature path (keyed by dtype/ndim),
+# exactly like ``qd.types.ndarray()`` already does, instead of falling through to the template path. Before this,
+# torch produced one specialization per tensor instance and numpy raised ``TypeError: unhashable type:
+# 'numpy.ndarray'``. Field and scalar template values must be unaffected: Field also exposes ``.shape`` / ``.dtype``,
+# so the predicate is a positive numpy/torch allowlist rather than a duck-typed check.
+# ----------------------------------------------------------------------------
+
+
+@test_utils.test(arch=qd.cpu)
+def test_tensor_accepts_numpy():
+    out = qd.ndarray(qd.f32, shape=(4,))
+
+    @qd.kernel
+    def copy(out: qd.types.NDArray[qd.f32, 1], t: qd.Tensor):
+        for i in range(out.shape[0]):
+            out[i] = t[i]
+
+    copy(out, np.array([5, 6, 7, 8], dtype=np.float32))
+    np.testing.assert_array_equal(out.to_numpy(), [5, 6, 7, 8])
+
+
+@test_utils.test(arch=qd.cpu)
+def test_tensor_accepts_torch():
+    torch = pytest.importorskip("torch")
+    out = qd.ndarray(qd.f32, shape=(4,))
+
+    @qd.kernel
+    def copy(out: qd.types.NDArray[qd.f32, 1], t: qd.Tensor):
+        for i in range(out.shape[0]):
+            out[i] = t[i]
+
+    copy(out, torch.tensor([5.0, 6.0, 7.0, 8.0], dtype=torch.float32))
+    np.testing.assert_array_equal(out.to_numpy(), [5, 6, 7, 8])
+
+
+@test_utils.test(arch=qd.cpu)
+def test_tensor_numpy_collapses_to_one_spec():
+    """Two different numpy arrays of the same dtype/ndim share one specialization (not one per instance), and numpy
+    no longer raises ``unhashable type: 'numpy.ndarray'``."""
+    out = qd.ndarray(qd.f32, shape=(4,))
+
+    @qd.kernel
+    def copy(out: qd.types.NDArray[qd.f32, 1], t: qd.Tensor):
+        for i in range(out.shape[0]):
+            out[i] = t[i]
+
+    copy(out, np.array([1, 2, 3, 4], dtype=np.float32))
+    copy(out, np.array([5, 6, 7, 8], dtype=np.float32))
+    np.testing.assert_array_equal(out.to_numpy(), [5, 6, 7, 8])
+    assert len(copy._primal.mapper.mapping) == 1
+
+
+@test_utils.test(arch=qd.cpu)
+def test_tensor_torch_collapses_to_one_spec():
+    torch = pytest.importorskip("torch")
+    out = qd.ndarray(qd.f32, shape=(4,))
+
+    @qd.kernel
+    def copy(out: qd.types.NDArray[qd.f32, 1], t: qd.Tensor):
+        for i in range(out.shape[0]):
+            out[i] = t[i]
+
+    copy(out, torch.tensor([1.0, 2.0, 3.0, 4.0], dtype=torch.float32))
+    copy(out, torch.tensor([5.0, 6.0, 7.0, 8.0], dtype=torch.float32))
+    np.testing.assert_array_equal(out.to_numpy(), [5, 6, 7, 8])
+    assert len(copy._primal.mapper.mapping) == 1
+
+
+@test_utils.test(arch=qd.cpu)
+def test_tensor_external_array_does_not_reroute_field():
+    """Widening qd.Tensor to external arrays must not divert Field (which also exposes ``.shape`` / ``.dtype``) off
+    the template path. A field and a numpy array through the same slot produce two distinct specializations, and both
+    yield correct values."""
+    out = qd.ndarray(qd.f32, shape=(4,))
+    f = qd.field(qd.f32, shape=(4,))
+    for i in range(4):
+        f[i] = 11.0
+
+    @qd.kernel
+    def copy(out: qd.types.NDArray[qd.f32, 1], t: qd.Tensor):
+        for i in range(out.shape[0]):
+            out[i] = t[i]
+
+    copy(out, f)
+    np.testing.assert_array_equal(out.to_numpy(), [11, 11, 11, 11])
+    copy(out, np.array([5, 6, 7, 8], dtype=np.float32))
+    np.testing.assert_array_equal(out.to_numpy(), [5, 6, 7, 8])
+    # field -> template path (field marker), numpy -> ndarray path: two distinct specializations.
+    assert len(copy._primal.mapper.mapping) == 2
