@@ -790,10 +790,11 @@
 <span class="sd">        default_fp (Optional[type]): Default floating-point type.</span>
 <span class="sd">        default_ip (Optional[type]): Default integral type.</span>
 <span class="sd">        require_version: A version string.</span>
-<span class="sd">        print_non_pure: Print the names of kernels, at the time they are executed, which are not annotated with</span>
-<span class="sd">                        @qd.pure</span>
+<span class="sd">        print_non_pure: Print the names of kernels, at the time they are executed, which are not declared with</span>
+<span class="sd">                        @qd.kernel(fastcache=True) (or the deprecated @qd.kernel(pure=True))</span>
 <span class="sd">        src_ll_cache: enable SRC-LL-CACHE, which will accelerate loading from cache, across all architectures,</span>
-<span class="sd">                      for pure kernels (i.e. kernels declared as @qd.pure)</span>
+<span class="sd">                      for pure kernels (i.e. kernels declared with @qd.kernel(fastcache=True), or the deprecated</span>
+<span class="sd">                      @qd.kernel(pure=True))</span>
 <span class="sd">        **kwargs: Quadrants provides highly customizable compilation through</span>
 <span class="sd">            ``kwargs``, which allows for fine grained control of Quadrants compiler</span>
 <span class="sd">            behavior. Below we list some of the most frequently used ones. For a</span>
