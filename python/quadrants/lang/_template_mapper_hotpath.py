@@ -26,9 +26,12 @@ a consequence of inlining 'is_dataclass' and 'fields'.
 """
 
 import dataclasses
+import sys
 import weakref
 from dataclasses import _FIELD, _FIELDS
 from typing import Any, Union
+
+import numpy as np
 
 from quadrants import _tensor_wrapper
 from quadrants._lib import core as _qd_core
@@ -74,6 +77,26 @@ AnnotationType = Union[
 _ExprCxx = _qd_core.ExprCxx
 _composite_mutable_types = {list, dict, set}
 _primitive_types = {int, float, bool}
+_np_ndarray = np.ndarray
+
+
+def _is_external_array(arg: Any) -> bool:
+    """Whether ``arg`` is an external array (numpy / torch) that a ``qd.Tensor`` slot should route through the
+    ndarray feature path instead of the template path.
+
+    Positive allowlist of exactly ``numpy.ndarray`` and ``torch.Tensor``: these are the only external array types
+    the launch path (``FuncBase._recursive_set_args``) can actually bind, so anything else would specialize here
+    only to raise there. A looser duck-typed check on ``.shape`` / ``.dtype`` is unsafe because quadrants-native
+    ``Field`` and ``SNode`` both expose those attributes and must keep taking the template path. ``torch`` is
+    resolved via ``sys.modules`` so this stays free of a hard torch dependency and costs nothing when torch was
+    never imported.
+    """
+    if isinstance(arg, _np_ndarray):
+        return True
+    torch = sys.modules.get("torch")
+    if torch is not None:
+        return isinstance(arg, torch.Tensor)
+    return False
 
 
 # Per-instance ndarray-path cache, stored OFF-instance in a module-level ``id(arg) -> list[paths]`` dict and cleaned
@@ -239,7 +262,7 @@ def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: Annotati
         if type(arg) in _TENSOR_WRAPPER_TYPES:
             arg = arg._unwrap()
         arg_type = type(arg)
-        if issubclass(arg_type, (Ndarray, AnyArray)):
+        if issubclass(arg_type, (Ndarray, AnyArray)) or _is_external_array(arg):
             return (_TENSOR_T_NDARRAY_MARKER,) + tuple(
                 _extract_arg(
                     raise_on_templated_floats,
