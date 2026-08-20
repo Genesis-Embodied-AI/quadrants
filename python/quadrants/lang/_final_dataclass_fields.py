@@ -338,6 +338,34 @@ def _reject_stateful_primitive_subclass(value: Any) -> None:
         )
 
 
+# ``enum`` member instance-dict keys that are standard bookkeeping (name / value / sort order / owning class), not
+# user-defined per-member state. Anything else in a member's ``__dict__`` is observable state we cannot key on.
+_ENUM_INTERNAL_MEMBER_ATTRS = frozenset({"_name_", "_value_", "_sort_order_"})
+
+
+def _reject_stateful_enum_member(value: Any) -> None:
+    """Reject an ``enum`` member carrying user-defined per-member state, for the same reason as
+    ``_reject_stateful_primitive_subclass``: the key records only the member identity, so per-member state a kernel
+    can read at compile time (``qd.static(cfg.mode.unit == "m")``) - or that differs across processes for the
+    offline key - would not select a distinct specialization. Plain enums (and unnamed ``IntFlag`` composites)
+    carry only name/value bookkeeping and are unaffected. Runs once per instance, off the steady-state launch path.
+    """
+    d = getattr(value, "__dict__", None)
+    if not d:
+        return
+    for k in d:
+        if (k.startswith("__") and k.endswith("__")) or k in _ENUM_INTERNAL_MEMBER_ATTRS:
+            continue
+        cls = type(value)
+        raise TypeError(
+            f"A ``Final`` field received {cls.__module__}.{cls.__qualname__}.{value.name}, an ``enum`` member with "
+            f"user-defined per-member state (e.g. attribute {k!r}). A ``Final`` value is baked as a compile-time "
+            f"literal keyed by member identity, so per-member state a kernel could read (e.g. ``cfg.mode.unit``) "
+            f"would not select a distinct specialization. Use a plain ``enum`` (state-free members), or bake the "
+            f"needed value as a separate ``Final`` field."
+        )
+
+
 def final_scalar_key(value: Any) -> Any:
     """Return a process-stable, collision-free key component for a baked ``Final`` field value.
 
@@ -353,7 +381,8 @@ def final_scalar_key(value: Any) -> Any:
     - an ``enum`` member -> ``(_ENUM_KEY_TAG, module, qualname, name-or-value)``. An ``IntEnum`` / ``StrEnum``
       member is ``==`` to its bare scalar and to a same-valued member of another enum class (and ``str(member)`` is
       just the scalar on Python >=3.11), so keying on identity keeps them distinct; an unnamed ``IntFlag`` composite
-      (whose ``name`` is ``None``) falls back to its integer ``value`` so distinct bitmasks do not collide.
+      (whose ``name`` is ``None``) falls back to its integer ``value`` so distinct bitmasks do not collide. A member
+      carrying user-defined per-member state is rejected (identity alone cannot capture that state).
     - every remaining scalar (``bool`` / ``int`` / ``str`` and NumPy analogues) ->
       ``(_SCALAR_KEY_TAG, module, qualname, value)``. ``True == 1 == np.int64(1)`` with equal hashes, but they bake
       observably different Python constants (e.g. ``config.value is True``), so the exact type must be in the key.
@@ -367,7 +396,9 @@ def final_scalar_key(value: Any) -> Any:
         # Checked before the ``float``/``int`` branches so a mixed-in enum (``IntEnum``/``StrEnum``, or an exotic
         # ``float`` mix-in) keys by identity, not by its value. ``name`` uniquely identifies a canonical member;
         # unnamed ``IntFlag`` composites have ``name is None`` so they fall back to their (integer) ``value``.
-        # ``module``/``qualname`` disambiguate identically-named members of different enum classes.
+        # ``module``/``qualname`` disambiguate identically-named members of different enum classes. A member with
+        # user-defined per-member state is rejected, since identity alone would not capture that state.
+        _reject_stateful_enum_member(value)
         cls = type(value)
         member_id = value.name if value.name is not None else value.value
         return (_ENUM_KEY_TAG, cls.__module__, cls.__qualname__, member_id)

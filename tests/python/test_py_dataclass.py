@@ -3963,6 +3963,18 @@ def test_final_scalar_key_distinguishes_signed_zero_and_nan_payloads():
     with pytest.raises(TypeError, match="extra per-instance state"):
         final_scalar_key(TaggedInt(1, "m"))
 
+    # Enum members follow the same rule: user-defined per-member state (attributes set in ``__init__``) is rejected,
+    # while plain members and unnamed ``IntFlag`` composites (name/value bookkeeping only) are accepted above.
+    class StatefulMode(enum.Enum):
+        A = (1, "m")
+
+        def __init__(self, code, unit):
+            self.code = code
+            self.unit = unit
+
+    with pytest.raises(TypeError, match="user-defined per-member state"):
+        final_scalar_key(StatefulMode.A)
+
     # Remaining scalars are type-tagged: Python conflates value-equal but distinct-typed constants (True == 1 ==
     # np.int64(1), with equal hashes), and they bake observably different Python constants, so they must not alias.
     assert final_scalar_key(True) != final_scalar_key(1)
