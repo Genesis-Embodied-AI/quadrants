@@ -55,10 +55,6 @@ class CompiledKernelData : public lang::CompiledKernelData {
     return data_;
   }
 
-  PerTaskCacheStats get_per_task_cache_stats() const override {
-    return data_.compiled_data.per_task_cache_stats;
-  }
-
   std::string debug_dump_to_string() const override;  // for debug/dev/testing only
 
  protected:

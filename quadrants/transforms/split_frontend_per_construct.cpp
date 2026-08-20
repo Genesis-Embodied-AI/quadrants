@@ -364,9 +364,10 @@ void split_frontend_per_construct(IRNode *ir, const CompileConfig &config, const
   auto segs = segment_top_level(block);
   auto alloca_writers = gather_top_level_alloca_writers(block);
 
-  // Program-scoped record of this split's stats (total / hit / recompiled per kernel), read back by the codegen driver
-  // into the observability surface. This PR ships no reuse tier, so `hit` stays 0; the cross-process manifest PR turns
-  // this into an actual per-construct cache.
+  // Program-scoped record of this split's stats (total / hit / recompiled per kernel), read back by the compilation
+  // manager (`KernelCompilationManager::load_or_compile`) into the observability surface -- reading it there rather
+  // than in a backend codegen driver keeps the counts backend-agnostic (LLVM and SPIR-V alike). This PR ships no reuse
+  // tier, so `hit` stays 0; the cross-process manifest PR turns this into an actual per-construct cache.
   PerConstructCache *cc = (kernel->program != nullptr) ? &kernel->program->per_construct_cache() : nullptr;
 
   std::vector<std::unique_ptr<Stmt>> tasks;

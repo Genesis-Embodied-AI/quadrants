@@ -250,7 +250,8 @@ class QD_DLL_EXPORT Program {
 
   // Program-scoped per-construct FRONTEND split record (stats only; the reuse tier arrives with the cross-process
   // cache PR). See `program/per_construct_cache.h`. Lifecycle matches `Program`; eagerly created in the constructor.
-  // Written by the per-construct frontend split (`compile_to_offloads`), read back by the codegen driver.
+  // Written by the per-construct frontend split (`compile_to_offloads`), read back by the compilation manager
+  // (`KernelCompilationManager::load_or_compile`) so the observability is backend-agnostic.
   PerConstructCache &per_construct_cache() {
     return *per_construct_cache_;
   }

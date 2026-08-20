@@ -3467,9 +3467,6 @@ LLVMCompiledTask LLVMCompiledTask::clone() const {
 
 LLVMCompiledKernel LLVMCompiledKernel::clone() const {
   LLVMCompiledKernel result{tasks, llvm::CloneModule(*module)};
-  // Transient per-construct frontend-split stats: the host reads them off a clone (the launcher consumes a clone), so
-  // they must travel with it -- the 2-arg constructor above does not copy them.
-  result.per_task_cache_stats = per_task_cache_stats;
   // The launcher consumes a clone, so the per-task modules must travel with it.
   result.per_construct_artifacts.reserve(per_construct_artifacts.size());
   for (auto &a : per_construct_artifacts) {

@@ -10,19 +10,6 @@
 
 namespace quadrants::lang {
 
-// Per-construct FRONTEND compilation cache stats for one kernel compile. Transient (never serialized): recorded by
-// the per-construct frontend split and read back by the codegen driver, carried through the compilation manager into
-// `CompileResult`, and surfaced to Python as `PerOffloadCacheObservations`. `construct_*` are `-1` when the split did
-// not run for this compile (the whole-kernel path took it, e.g. autodiff or mesh), so Python can tell "split absent"
-// from "0 constructs". This PR ships the split with no reuse tier, so when it runs `construct_recompiled ==
-// construct_total` and `construct_cache_hit == 0`. The per-task reuse counts are added to this struct by the
-// cross-process cache PR (kept named `PerTaskCacheStats` for that continuation).
-struct PerTaskCacheStats {
-  int construct_total{-1};
-  int construct_cache_hit{-1};
-  int construct_recompiled{-1};
-};
-
 class KernelLaunchHandle {
  public:
   void set_launch_id(int id) {
@@ -137,12 +124,6 @@ class CompiledKernelData {
 
   const std::optional<KernelLaunchHandle> &get_handle() const {
     return kernel_launch_handle_;
-  }
-
-  // Per-construct frontend-split cache stats for the compile that produced this data (transient; default `-1` for
-  // backends / compiles where the split did not run and for data restored from the offline/fast cache).
-  virtual PerTaskCacheStats get_per_task_cache_stats() const {
-    return {};
   }
 
   static std::unique_ptr<CompiledKernelData> load(std::istream &is, Err *p_err);

@@ -2,8 +2,12 @@
 
 #include "quadrants/analysis/offline_cache_util.h"
 #include "quadrants/codegen/compiled_kernel_data.h"
+#include "quadrants/program/program.h"
+#include "quadrants/program/per_construct_cache.h"
 #include "quadrants/util/offline_cache.h"
 #include "quadrants/util/environ_config.h"
+
+#include <mutex>
 
 namespace quadrants::lang {
 
@@ -70,8 +74,25 @@ CompileResult KernelCompilationManager::load_or_compile(const CompileConfig &com
   bool cache_hit = (cached_kernel != nullptr);
   const CompiledKernelData &ckd =
       cached_kernel ? *cached_kernel : compile_and_cache_kernel(kernel_key, compile_config, caps, kernel_def);
-  auto pt = ckd.get_per_task_cache_stats();
-  return CompileResult{ckd, cache_hit, kernel_key, pt.construct_total, pt.construct_cache_hit, pt.construct_recompiled};
+  // Per-construct frontend-split observability. `split_frontend_per_construct` records its counts on the
+  // program-scoped `PerConstructCache::last_stats` (keyed by kernel name) regardless of backend, so read them here --
+  // this surfaces the same counts on every backend (LLVM and SPIR-V) instead of only where CompiledKernelData carries
+  // them. Only for a FRESH compile: a cache hit ran no frontend, so it keeps the no-split sentinel (-1), matching a
+  // disk-restored entry and staying consistent across cache tiers. Consume the entry so a later whole-kernel recompile
+  // of the same name cannot read a stale split result.
+  int total = -1, cache_hit_count = -1, recompiled = -1;
+  if (!cache_hit && kernel_def.program != nullptr) {
+    auto &cc = kernel_def.program->per_construct_cache();
+    std::lock_guard<std::mutex> g(cc.mu);
+    auto it = cc.last_stats.find(kernel_def.get_name());
+    if (it != cc.last_stats.end()) {
+      total = it->second.total;
+      cache_hit_count = it->second.hit;
+      recompiled = it->second.recompiled;
+      cc.last_stats.erase(it);
+    }
+  }
+  return CompileResult{ckd, cache_hit, kernel_key, total, cache_hit_count, recompiled};
 }
 
 void KernelCompilationManager::dump() {
