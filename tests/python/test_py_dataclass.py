@@ -3909,7 +3909,21 @@ def test_final_scalar_key_distinguishes_signed_zero_and_nan_payloads():
     assert final_scalar_key(np.float64(0.0)) != final_scalar_key(np.float64(-0.0))
     assert final_scalar_key(np.float32(1.0)) != final_scalar_key(np.float64(1.0))
 
-    # Non-float ``Final`` value types (including non-floating NumPy scalars) are returned unchanged.
+    # ``IntEnum`` / ``StrEnum`` members are ``==`` (with equal hashes) to their bare scalar value and to same-valued
+    # members of other enum classes; keying on class + member identity must keep all of these distinct.
+    import enum
+
+    class ModeA(enum.IntEnum):
+        X = 0
+
+    class ModeB(enum.IntEnum):
+        Y = 0
+
+    assert final_scalar_key(ModeA.X) != final_scalar_key(0)  # enum vs bare int
+    assert final_scalar_key(ModeA.X) != final_scalar_key(ModeB.Y)  # same value, different enum class
+    assert final_scalar_key(ModeA.X) == final_scalar_key(ModeA.X)  # same member is stable
+
+    # Non-float, non-enum ``Final`` value types (including non-floating NumPy scalars) are returned unchanged.
     for v in (True, 7, "abc", np.int64(7)):
         assert final_scalar_key(v) == v
 

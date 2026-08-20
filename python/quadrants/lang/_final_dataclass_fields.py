@@ -286,16 +286,21 @@ _unpack_u64 = struct.Struct("<Q").unpack
 # a type that a plain ``Final`` value can never be, and a 1-char ``str`` inside a 2-tuple satisfies that.
 _FLOAT_KEY_TAG = "f64"
 
+# Same idea for enum members: ``IntEnum`` / ``StrEnum`` members are ``==`` (with equal hashes) to their bare
+# ``int`` / ``str`` value, so keying on their class + member identity under this tag keeps them disjoint from
+# scalar keys and from same-valued members of other enum classes (see the enum bullet in ``final_scalar_key``).
+_ENUM_KEY_TAG = "enum"
+
 
 def final_scalar_key(value: Any) -> Any:
     """Return a process-stable, collision-free key component for a baked ``Final`` field value.
 
-    Floating-point values are encoded by their exact IEEE-754 bits, tagged with ``_FLOAT_KEY_TAG``; every other
-    permitted ``Final`` value (``bool`` / ``int`` / ``str`` / ``enum.Enum``) is returned unchanged. A builtin
-    ``float`` becomes ``(_FLOAT_KEY_TAG, <bits as int>)``; a NumPy floating scalar becomes
-    ``(_FLOAT_KEY_TAG, <dtype str>, <raw bytes>)`` so that distinct widths (float16/32/64/128) never alias.
-    Encoding is needed because Python conflates floats that name *distinct* compile-time constants, and the raw
-    bits on their own would collide with an ordinary integer key:
+    Floating-point values are encoded by their exact IEEE-754 bits (tagged with ``_FLOAT_KEY_TAG``) and ``enum``
+    members by their class + member identity (tagged with ``_ENUM_KEY_TAG``); the remaining permitted ``Final``
+    values (``bool`` / ``int`` / ``str``) are returned unchanged. A builtin ``float`` becomes
+    ``(_FLOAT_KEY_TAG, <bits as int>)``; a NumPy floating scalar becomes ``(_FLOAT_KEY_TAG, <dtype str>, <bytes>)``
+    so distinct widths (float16/32/64/128) never alias. Encoding is needed because Python conflates values that
+    name *distinct* compile-time constants:
 
     - ``-0.0 == 0.0`` and ``hash(-0.0) == hash(0.0)`` (for builtin *and* NumPy floats), so the in-process template
       mapper spec key (a plain tuple used as a ``dict`` key) would reuse one compiled kernel for both, even though
@@ -306,10 +311,15 @@ def final_scalar_key(value: Any) -> Any:
       ``int`` (as ordinary float args are). Without the tag the bare bits of ``1.0`` (``4607182418800017408``)
       would equal ``final_scalar_key(4607182418800017408)``, so those two launches - which bake *different*
       constants - would select the same specialization. The tag keeps encoded floats in a disjoint value space.
+    - An ``IntEnum`` / ``IntFlag`` / ``StrEnum`` member inherits value-equality from its mixed-in ``int`` / ``str``:
+      it is ``==`` with an equal hash to the bare scalar *and* to a same-valued member of a different enum class,
+      and on Python >=3.11 ``str(member)`` is just that scalar. Keying on ``(module, qualname, name)`` keeps
+      distinct members (and enum-vs-scalar) in separate specializations - which matters when codegen reads
+      member-specific attributes such as ``config.mode.name``.
 
-    A NumPy scalar is handled here (not just builtin ``float``) because it hits exactly the same conflations and
-    Genesis routinely stores NumPy scalars in ``Final[float]`` fields. Everything here runs once per instance
-    (Final keys/reprs are cached), never on the steady-state launch path, so the ``isinstance`` probe is off the
+    A NumPy scalar and an enum member are handled here (not just builtin ``float``) because they hit exactly the
+    same conflations and Genesis routinely stores both in ``Final`` fields. Everything here runs once per instance
+    (Final keys/reprs are cached), never on the steady-state launch path, so the ``isinstance`` probes are off the
     hot path.
     """
     if type(value) is float:
@@ -318,4 +328,10 @@ def final_scalar_key(value: Any) -> Any:
         # ``dtype.str`` (e.g. ``"<f4"``) + ``tobytes()`` preserves sign bit, NaN payload and width, and stays in the
         # same tagged space as the builtin-float branch so it can never equal a bare int / str key component.
         return (_FLOAT_KEY_TAG, value.dtype.str, value.tobytes())
+    if isinstance(value, enum.Enum):
+        # ``name`` (not ``value``) so members that share a numeric/string value across enum classes stay distinct,
+        # and so the key never equals the bare scalar the member is ``==`` to; ``module``/``qualname`` disambiguate
+        # identically-named members of different enums.
+        cls = type(value)
+        return (_ENUM_KEY_TAG, cls.__module__, cls.__qualname__, value.name)
     return value
