@@ -205,10 +205,11 @@ Module Contents
    :param default_ip: Default integral type.
    :type default_ip: Optional[type]
    :param require_version: A version string.
-   :param print_non_pure: Print the names of kernels, at the time they are executed, which are not annotated with
-                          @qd.pure
+   :param print_non_pure: Print the names of kernels, at the time they are executed, which are not declared with
+                          @qd.kernel(fastcache=True) (or the deprecated @qd.kernel(pure=True))
    :param src_ll_cache: enable SRC-LL-CACHE, which will accelerate loading from cache, across all architectures,
-                        for pure kernels (i.e. kernels declared as @qd.pure)
+                        for pure kernels (i.e. kernels declared with @qd.kernel(fastcache=True), or the deprecated
+                        @qd.kernel(pure=True))
    :param \*\*kwargs: Quadrants provides highly customizable compilation through
                       ``kwargs``, which allows for fine grained control of Quadrants compiler
                       behavior. Below we list some of the most frequently used ones. For a
