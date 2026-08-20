@@ -1,4 +1,7 @@
 #include <memory>
+#include <mutex>
+#include <unordered_map>
+#include <vector>
 
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Support/DynamicLibrary.h"
@@ -39,10 +42,16 @@ namespace quadrants::lang {
 #if defined(QD_WITH_CUDA)
 class JITModuleCUDA : public JITModule {
  private:
-  void *module_;
+  // A kernel is either one whole-module CUmodule or N self-contained per-task CUmodules (per-task path). A task's
+  // entry symbol lives in exactly one of them; `func_cache_` memoises the resolved CUfunction so the launcher / graph
+  // builder does not rescan the N modules on every by-name lookup.
+  std::vector<void *> modules_;
+  std::unordered_map<std::string, void *> func_cache_;
+  std::mutex func_mu_;
 
  public:
   explicit JITModuleCUDA(void *module);
+  explicit JITModuleCUDA(std::vector<void *> modules);
   void *lookup_function(const std::string &name) override;
   void call(const std::string &name,
             const std::vector<void *> &arg_pointers,
@@ -65,6 +74,7 @@ class JITSessionCUDA : public JITSession {
                  llvm::DataLayout data_layout,
                  ProgramImpl *program_impl);
   JITModule *add_module(std::unique_ptr<llvm::Module> M, int max_reg) override;
+  JITModule *add_module_per_task(std::vector<PerConstructArtifact> artifacts, int max_reg) override;
   llvm::DataLayout get_data_layout() override;
 
  private:
@@ -82,6 +92,10 @@ class JITSessionCUDA : public JITSession {
   };
 
   std::string compile_module_to_ptx(std::unique_ptr<llvm::Module> &module);
+  // compile_module_to_ptx plus the QD_DUMP_IR / QD_LOAD_IR side effects (dump <name>_before_ptx.ll and <name>.ptx
+  // under debug_dump_path, optionally reload PTX from that dump). Shared by the whole-module and per-task load paths
+  // so their debug-dump behaviour stays identical. Callers sharing an LLVMContext across modules must serialise it.
+  std::string compile_module_to_ptx_with_dump(std::unique_ptr<llvm::Module> &module);
   std::unique_ptr<PtxCache> ptx_cache_;
   ProgramImpl *program_impl_;
   std::unique_ptr<Finalizer> finalizer_;

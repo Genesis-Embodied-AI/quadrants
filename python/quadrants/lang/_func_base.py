@@ -195,6 +195,8 @@ class FuncBase:
         self.arg_metas_expanded: list[ArgMetadata] = []
         self.orig_arguments: list[ArgMetadata] = []
         self.return_type = None
+        # Shared by every AST transform of this function; see ASTTransformerFuncContext.get_pos_info.
+        self.pos_info_cache: dict[tuple, str] = {}
 
         self.check_parameter_annotations()
 

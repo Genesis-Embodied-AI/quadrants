@@ -201,9 +201,16 @@ struct LLVMCompiledTask {
   QD_IO_DEF(tasks);
 };
 
+// One offloaded task's self-contained module, for the per-task module path.
+struct PerConstructArtifact {
+  std::unique_ptr<llvm::Module> module{nullptr};
+};
+
 struct LLVMCompiledKernel {
   std::vector<OffloadedTask> tasks;
   std::unique_ptr<llvm::Module> module{nullptr};
+  // Per-task modules for the per-task path; empty => JIT uses the whole-module `module`. Transient (not in QD_IO_DEF).
+  std::vector<PerConstructArtifact> per_construct_artifacts;
   LLVMCompiledKernel() = default;
   LLVMCompiledKernel(LLVMCompiledKernel &&) = default;
   LLVMCompiledKernel &operator=(LLVMCompiledKernel &&) = default;
