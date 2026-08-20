@@ -178,7 +178,8 @@ void export_lang(nb::module_ &m) {
               "Print each kernel's IR after every compilation pass (per-pass tracing, for debugging the compiler), "
               "not a single dump at the end.")
       .def_rw("print_preprocessed_ir", &CompileConfig::print_preprocessed_ir,
-              "Print each kernel's IR right after frontend preprocessing.")
+              "Print each kernel's IR right after frontend preprocessing. Only prints when print_ir is off (print_ir "
+              "already shows the initial IR).")
       .def_rw("print_ir_dbg_info", &CompileConfig::print_ir_dbg_info,
               "Include source-line debug info in the per-pass print_ir output. Has no effect on other IR dumps such as "
               "print_preprocessed_ir.")
@@ -187,12 +188,14 @@ void export_lang(nb::module_ &m) {
               "runtime assertions. Considerably slower; intended for development.")
       .def_rw("cfg_optimization", &CompileConfig::cfg_optimization,
               "Run the control-flow-graph optimization pass that simplifies kernel branches and loops. Disabling it "
-              "speeds up compilation at a small runtime cost.")
+              "speeds up compilation at a small runtime cost. Only runs when advanced_optimization is on and "
+              "opt_level > 0 (both true by default).")
       .def_rw("check_out_of_bound", &CompileConfig::check_out_of_bound,
-              "Enable the field out-of-bounds check on tensor indexing without turning on the rest of debug mode.")
+              "Enable the field out-of-bounds check on tensor indexing without turning on the rest of debug mode. "
+              "Reset to off (with a warning) on backends without assertion support, i.e. Vulkan and Metal.")
       .def_rw("print_accessor_ir", &CompileConfig::print_accessor_ir,
-              "Also include field accessor kernels in the IR printout. Only has an effect together with print_ir, "
-              "which otherwise suppresses accessor kernels.")
+              "Also include field accessor kernels in the IR printout. Only has an effect together with print_ir on "
+              "the LLVM backends, which otherwise suppress accessor kernels.")
       .def_rw("use_llvm", &CompileConfig::use_llvm,
               "Intended to select the LLVM backend for code generation; currently has no effect, as nothing reads it.")
       .def_rw("print_struct_llvm_ir", &CompileConfig::print_struct_llvm_ir,
@@ -271,16 +274,20 @@ void export_lang(nb::module_ &m) {
       .def_rw("ad_stack_experimental_enabled", &CompileConfig::ad_stack_experimental_enabled,
               "Enable the reverse-mode autodiff pipeline for kernels with runtime-bounded loops (the adstack).")
       .def_rw("ad_stack_size", &CompileConfig::ad_stack_size,
-              "Force autodiff stacks to exactly this many slots. 0 lets the launch-time sizer choose automatically.")
+              "Force autodiff stacks to exactly this many slots. 0 lets the launch-time sizer choose automatically. "
+              "No effect unless ad_stack_experimental_enabled is on.")
       .def_rw("ad_stack_sparse_threshold_bytes", &CompileConfig::ad_stack_sparse_threshold_bytes,
-              "Byte cutoff below which the sparse adstack sizing path is skipped in favor of eager heap allocation.")
+              "Byte cutoff below which the sparse adstack sizing path is skipped in favor of eager heap allocation. "
+              "No effect unless ad_stack_experimental_enabled is on.")
       .def_rw("flatten_if", &CompileConfig::flatten_if,
               "Flatten simple if statements into predicated (branchless) form.")
       .def_rw("make_thread_local", &CompileConfig::make_thread_local,
-              "Enable the thread-local optimization for reductions.")
+              "Enable the thread-local optimization for reductions. Honored on the LLVM backends (CPU, CUDA, AMDGPU) "
+              "only; the Vulkan/Metal (SPIR-V) path forces it off.")
       .def_rw("make_block_local", &CompileConfig::make_block_local,
               "Enable the block-local optimization, which stages spatially-local field accesses through GPU shared "
-              "memory. Mesh attribute localization is a separate pass controlled by make_mesh_block_local.")
+              "memory. CUDA only (the required BLS extension is CUDA-only). Mesh attribute localization is a separate "
+              "pass controlled by make_mesh_block_local.")
       .def_rw("detect_read_only", &CompileConfig::detect_read_only,
               "Detect read-only field accesses to enable further optimization.")
       .def_rw("real_matrix_scalarize", &CompileConfig::real_matrix_scalarize,
@@ -288,7 +295,8 @@ void export_lang(nb::module_ &m) {
       .def_rw("force_scalarize_matrix", &CompileConfig::force_scalarize_matrix,
               "Always scalarize matrices, even where vectorized code would be legal.")
       .def_rw("half2_vectorization", &CompileConfig::half2_vectorization,
-              "Vectorize pairs of float16 operations into half2 ops (CUDA).")
+              "Vectorize pairs of float16 operations into half2 ops. CUDA only, and only when real_matrix_scalarize "
+              "is also enabled.")
       .def_rw("make_cpu_multithreading_loop", &CompileConfig::make_cpu_multithreading_loop,
               "Parallelize outer loops across CPU threads.")
       .def_rw("quant_opt_store_fusion", &CompileConfig::quant_opt_store_fusion,
