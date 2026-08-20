@@ -296,6 +296,47 @@ _ENUM_KEY_TAG = "enum"
 # value cannot do because Python gives them equal ``==`` and equal hashes (see the scalar bullet below).
 _SCALAR_KEY_TAG = "scalar"
 
+# Exact baked primitive types: an instance of exactly one of these is a pure literal with no extra per-instance
+# state, so it never needs the stateful-subclass check below.
+_EXACT_BAKED_TYPES = (bool, int, float, str)
+
+
+def _reject_stateful_primitive_subclass(value: Any) -> None:
+    """Reject a ``float`` / ``int`` / ``str`` *subclass* instance that carries extra observable per-instance state.
+
+    A ``Final`` value is baked as a compile-time literal and keyed by its (typed) value. A subclass that also
+    carries per-instance state - e.g. ``class TaggedFloat(float)`` with a ``unit`` attribute - is not fully
+    described by that value: compile-time code can read the extra state (``qd.static(cfg.x.unit == "m")``), so two
+    instances with an equal numeric value but different state would bake different kernels yet select the same
+    specialization. There is no bounded, process-stable way to serialise arbitrary state (it may live in
+    ``__dict__``, ``__slots__``, properties, ...), so we reject rather than silently mis-specialise.
+
+    Exact primitives, NumPy scalars (not Python-primitive subclasses) and stateless subclasses (e.g.
+    ``class Meters(float): pass``) are unaffected. Runs once per instance, off the steady-state launch path.
+    """
+    if type(value) in _EXACT_BAKED_TYPES or not isinstance(value, (int, float, str)):
+        return
+    if getattr(value, "__dict__", None):
+        stateful = True
+    else:
+        stateful = False
+        for klass in type(value).__mro__:
+            slots = getattr(klass, "__slots__", ())
+            if isinstance(slots, str):
+                slots = (slots,)
+            if any(slot not in ("__dict__", "__weakref__") and hasattr(value, slot) for slot in slots):
+                stateful = True
+                break
+    if stateful:
+        cls = type(value)
+        raise TypeError(
+            f"A ``Final`` field received {cls.__module__}.{cls.__qualname__}, a subclass of a baked primitive that "
+            f"carries extra per-instance state. A ``Final`` value is baked as a compile-time literal keyed by its "
+            f"value, so state a kernel could read at compile time (e.g. ``cfg.x.unit``) would not select a "
+            f"distinct specialization. Pass a plain ``bool`` / ``int`` / ``float`` / ``str`` (or an ``enum`` "
+            f"member) instead."
+        )
+
 
 def final_scalar_key(value: Any) -> Any:
     """Return a process-stable, collision-free key component for a baked ``Final`` field value.
@@ -337,10 +378,14 @@ def final_scalar_key(value: Any) -> Any:
     if isinstance(value, float):
         # A ``float`` subclass (the exact builtin ``float`` took the fast path above). Bit-encode like a plain float
         # so signed zeros stay distinct, but keep the subclass ``module``/``qualname`` so it is not confused with a
-        # plain ``float`` of the same value.
+        # plain ``float`` of the same value. A subclass carrying extra observable state is not fully described by
+        # its numeric value, so it is rejected rather than silently mis-specialised.
+        _reject_stateful_primitive_subclass(value)
         cls = type(value)
         return (_FLOAT_KEY_TAG, cls.__module__, cls.__qualname__, _unpack_u64(_pack_f64(value))[0])
     # ``bool`` / ``int`` / ``str`` and their NumPy analogues. The exact type completes the tag so value-equal but
-    # distinct-typed constants (``True`` vs ``1``, ``np.int64(1)`` vs ``1``) never share a specialization.
+    # distinct-typed constants (``True`` vs ``1``, ``np.int64(1)`` vs ``1``) never share a specialization. As with
+    # float subclasses, an ``int`` / ``str`` subclass carrying extra observable state is rejected.
+    _reject_stateful_primitive_subclass(value)
     cls = type(value)
     return (_SCALAR_KEY_TAG, cls.__module__, cls.__qualname__, value)

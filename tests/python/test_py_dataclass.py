@@ -3944,6 +3944,25 @@ def test_final_scalar_key_distinguishes_signed_zero_and_nan_payloads():
     assert final_scalar_key(Meters(0.0)) != final_scalar_key(Meters(-0.0))  # signed zero within the subclass
     assert final_scalar_key(Meters(1.0)) != final_scalar_key(1.0)  # subclass not confused with a plain float
 
+    # But a primitive subclass carrying extra observable per-instance state cannot be captured by value alone, so it
+    # is rejected rather than silently sharing a specialization with a different-state instance of equal value.
+    class TaggedFloat(float):
+        def __new__(cls, v, unit):
+            obj = super().__new__(cls, v)
+            obj.unit = unit
+            return obj
+
+    class TaggedInt(int):
+        def __new__(cls, v, unit):
+            obj = super().__new__(cls, v)
+            obj.unit = unit
+            return obj
+
+    with pytest.raises(TypeError, match="extra per-instance state"):
+        final_scalar_key(TaggedFloat(1.0, "m"))
+    with pytest.raises(TypeError, match="extra per-instance state"):
+        final_scalar_key(TaggedInt(1, "m"))
+
     # Remaining scalars are type-tagged: Python conflates value-equal but distinct-typed constants (True == 1 ==
     # np.int64(1), with equal hashes), and they bake observably different Python constants, so they must not alias.
     assert final_scalar_key(True) != final_scalar_key(1)
