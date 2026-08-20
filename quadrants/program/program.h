@@ -248,8 +248,9 @@ class QD_DLL_EXPORT Program {
   // Adstack-overflow identity registry, diagnostic classifier, and per-launch snapshot all live on
   // `AdStackCache`. Callers route through `prog->adstack_cache().method(...)`.
 
-  // Program-scoped per-construct FRONTEND cache. See `program/per_construct_cache.h`. Lifecycle matches
-  // `Program`; eagerly created in the constructor. Used by the per-construct frontend split (`compile_to_offloads`).
+  // Program-scoped per-construct FRONTEND split record (stats only; the reuse tier arrives with the cross-process
+  // cache PR). See `program/per_construct_cache.h`. Lifecycle matches `Program`; eagerly created in the constructor.
+  // Written by the per-construct frontend split (`compile_to_offloads`), read back by the codegen driver.
   PerConstructCache &per_construct_cache() {
     return *per_construct_cache_;
   }
@@ -398,9 +399,9 @@ class QD_DLL_EXPORT Program {
   // identity registry, diagnose-time launch snapshot). All adstack-specific surface lives in
   // `program/adstack_size_expr_eval.{h,cpp}`; routed through `adstack_cache()` getter.
   std::unique_ptr<AdStackCache> adstack_cache_;
-  // Program-scoped per-construct frontend cache (see `per_construct_cache()`). `unique_ptr` to a forward-declared type
-  // so `program/per_construct_cache.h` (which pulls in the IR headers) stays out of this header; the destructor is
-  // out-of-line in `program.cpp` where the complete type is visible.
+  // Program-scoped per-construct frontend split record (see `per_construct_cache()`). Held by `unique_ptr` to a
+  // forward-declared type so its definition stays out of this widely-included header; the destructor is out-of-line
+  // in `program.cpp` where the complete type is visible.
   std::unique_ptr<PerConstructCache> per_construct_cache_;
   std::stack<int> free_snode_tree_ids_;
 
