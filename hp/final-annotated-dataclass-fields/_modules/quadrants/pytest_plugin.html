@@ -331,11 +331,11 @@
                 <article class="bd-article">
                   
   <h1>Source code for quadrants.pytest_plugin</h1><div class="highlight"><pre>
-<span></span><span class="sd">&quot;&quot;&quot;Pytest plugin that auto-enables kernel coverage when pytest-cov is active.</span>
+<span></span><span class="sd">"""Pytest plugin that auto-enables kernel coverage when pytest-cov is active.</span>
 
 <span class="sd">Registered via the ``pytest11`` entry point so it loads automatically when quadrants is installed.</span>
 <span class="sd">Opt out by setting ``QD_KERNEL_COVERAGE=0`` explicitly.</span>
-<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">"""</span>
 
 <span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
 
@@ -343,16 +343,16 @@
 <div class="viewcode-block" id="pytest_configure">
 <a class="viewcode-back" href="../../autoapi/quadrants/pytest_plugin/index.html#quadrants.pytest_plugin.pytest_configure">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">pytest_configure</span><span class="p">(</span><span class="n">config</span><span class="p">):</span>
-    <span class="k">if</span> <span class="ow">not</span> <span class="n">config</span><span class="o">.</span><span class="n">pluginmanager</span><span class="o">.</span><span class="n">hasplugin</span><span class="p">(</span><span class="s2">&quot;_cov&quot;</span><span class="p">):</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">config</span><span class="o">.</span><span class="n">pluginmanager</span><span class="o">.</span><span class="n">hasplugin</span><span class="p">(</span><span class="s2">"_cov"</span><span class="p">):</span>
         <span class="k">return</span>
-    <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="s2">&quot;QD_KERNEL_COVERAGE&quot;</span><span class="p">,</span> <span class="s2">&quot;1&quot;</span><span class="p">)</span>
-    <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;QD_KERNEL_COVERAGE&quot;</span><span class="p">)</span> <span class="o">!=</span> <span class="s2">&quot;1&quot;</span><span class="p">:</span>
+    <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="s2">"QD_KERNEL_COVERAGE"</span><span class="p">,</span> <span class="s2">"1"</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"QD_KERNEL_COVERAGE"</span><span class="p">)</span> <span class="o">!=</span> <span class="s2">"1"</span><span class="p">:</span>
         <span class="k">return</span>
     <span class="c1"># Tell the kernel coverage module whether pytest-cov is running in branch (arc) mode,</span>
-    <span class="c1"># so it writes the matching format and avoids &quot;Can not mix line and arc data&quot; at combine time.</span>
+    <span class="c1"># so it writes the matching format and avoids "Can not mix line and arc data" at combine time.</span>
     <span class="c1"># We read config.option.cov_branch which pytest-cov has already populated by this point.</span>
-    <span class="n">cov_branch</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">config</span><span class="o">.</span><span class="n">option</span><span class="p">,</span> <span class="s2">&quot;cov_branch&quot;</span><span class="p">,</span> <span class="kc">False</span><span class="p">)</span> <span class="ow">or</span> <span class="kc">False</span>
-    <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="p">[</span><span class="s2">&quot;_QD_KCOV_ARC&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;1&quot;</span> <span class="k">if</span> <span class="n">cov_branch</span> <span class="k">else</span> <span class="s2">&quot;0&quot;</span></div>
+    <span class="n">cov_branch</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">config</span><span class="o">.</span><span class="n">option</span><span class="p">,</span> <span class="s2">"cov_branch"</span><span class="p">,</span> <span class="kc">False</span><span class="p">)</span> <span class="ow">or</span> <span class="kc">False</span>
+    <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="p">[</span><span class="s2">"_QD_KCOV_ARC"</span><span class="p">]</span> <span class="o">=</span> <span class="s2">"1"</span> <span class="k">if</span> <span class="n">cov_branch</span> <span class="k">else</span> <span class="s2">"0"</span></div>
 
 </pre></div>
 

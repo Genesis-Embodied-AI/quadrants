@@ -349,9 +349,9 @@
 <div class="viewcode-block" id="SNode">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/snode/index.html#quadrants.lang.snode.SNode">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">SNode</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;A Python-side SNode wrapper.</span>
+<span class="w">    </span><span class="sd">"""A Python-side SNode wrapper.</span>
 
-<span class="sd">    For more information on Quadrants&#39;s SNode system, please check out</span>
+<span class="sd">    For more information on Quadrants's SNode system, please check out</span>
 <span class="sd">    these references:</span>
 
 <span class="sd">    * https://docs.taichi-lang.org/docs/sparse</span>
@@ -359,7 +359,7 @@
 
 <span class="sd">    Arg:</span>
 <span class="sd">        ptr (pointer): The C++ side SNode pointer.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ptr</span><span class="p">:</span> <span class="n">SNodeCxx</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <div class="viewcode-block" id="SNode.ptr">
@@ -369,8 +369,8 @@
 
 <div class="viewcode-block" id="SNode.dense">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/snode/index.html#quadrants.lang.snode.SNode.dense">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">dense</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">axes</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">Axis</span><span class="p">],</span> <span class="n">dimensions</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">|</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;SNode&quot;</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Adds a dense SNode as a child component of `self`.</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">dense</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">axes</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">Axis</span><span class="p">],</span> <span class="n">dimensions</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">|</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">"SNode"</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Adds a dense SNode as a child component of `self`.</span>
 
 <span class="sd">        Args:</span>
 <span class="sd">            axes (List[Axis]): Axes to activate.</span>
@@ -378,7 +378,7 @@
 
 <span class="sd">        Returns:</span>
 <span class="sd">            The added :class:`~quadrants.lang.SNode` instance.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">dimensions</span><span class="p">,</span> <span class="n">numbers</span><span class="o">.</span><span class="n">Number</span><span class="p">):</span>
             <span class="n">dimensions</span> <span class="o">=</span> <span class="p">[</span><span class="n">dimensions</span><span class="p">]</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="n">axes</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">SNode</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ptr</span><span class="o">.</span><span class="n">dense</span><span class="p">(</span><span class="n">axes</span><span class="p">,</span> <span class="n">dimensions</span><span class="p">,</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">DebugInfo</span><span class="p">(</span><span class="n">get_traceback</span><span class="p">())))</span></div>
@@ -386,8 +386,8 @@
 
 <div class="viewcode-block" id="SNode.pointer">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/snode/index.html#quadrants.lang.snode.SNode.pointer">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">pointer</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">axes</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">Axis</span><span class="p">],</span> <span class="n">dimensions</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">|</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;SNode&quot;</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Adds a pointer SNode as a child component of `self`.</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">pointer</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">axes</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">Axis</span><span class="p">],</span> <span class="n">dimensions</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">|</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">"SNode"</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Adds a pointer SNode as a child component of `self`.</span>
 
 <span class="sd">        Args:</span>
 <span class="sd">            axes (List[Axis]): Axes to activate.</span>
@@ -395,9 +395,9 @@
 
 <span class="sd">        Returns:</span>
 <span class="sd">            The added :class:`~quadrants.lang.SNode` instance.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">is_extension_supported</span><span class="p">(</span><span class="n">impl</span><span class="o">.</span><span class="n">current_cfg</span><span class="p">()</span><span class="o">.</span><span class="n">arch</span><span class="p">,</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">Extension</span><span class="o">.</span><span class="n">sparse</span><span class="p">):</span>
-            <span class="k">raise</span> <span class="n">QuadrantsRuntimeError</span><span class="p">(</span><span class="s2">&quot;Pointer SNode is not supported on this backend.&quot;</span><span class="p">)</span>
+            <span class="k">raise</span> <span class="n">QuadrantsRuntimeError</span><span class="p">(</span><span class="s2">"Pointer SNode is not supported on this backend."</span><span class="p">)</span>
         <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">dimensions</span><span class="p">,</span> <span class="n">numbers</span><span class="o">.</span><span class="n">Number</span><span class="p">):</span>
             <span class="n">dimensions</span> <span class="o">=</span> <span class="p">[</span><span class="n">dimensions</span><span class="p">]</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="n">axes</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">SNode</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ptr</span><span class="o">.</span><span class="n">pointer</span><span class="p">(</span><span class="n">axes</span><span class="p">,</span> <span class="n">dimensions</span><span class="p">,</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">DebugInfo</span><span class="p">(</span><span class="n">get_traceback</span><span class="p">())))</span></div>
@@ -406,16 +406,16 @@
     <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">_hash</span><span class="p">(</span><span class="n">axes</span><span class="p">,</span> <span class="n">dimensions</span><span class="p">):</span>
         <span class="c1"># original code is #def hash(self,axes, dimensions) without #@staticmethod   before fix pylint R0201</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Not supported.&quot;&quot;&quot;</span>
-        <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s2">&quot;hash not yet supported&quot;</span><span class="p">)</span>
+<span class="w">        </span><span class="sd">"""Not supported."""</span>
+        <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s2">"hash not yet supported"</span><span class="p">)</span>
         <span class="c1"># if isinstance(dimensions, int):</span>
         <span class="c1">#     dimensions = [dimensions] * len(axes)</span>
         <span class="c1"># return SNode(self.ptr.hash(axes, dimensions))</span>
 
 <div class="viewcode-block" id="SNode.dynamic">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/snode/index.html#quadrants.lang.snode.SNode.dynamic">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">dynamic</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">axis</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">Axis</span><span class="p">],</span> <span class="n">dimension</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">chunk_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;SNode&quot;</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Adds a dynamic SNode as a child component of `self`.</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">dynamic</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">axis</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">Axis</span><span class="p">],</span> <span class="n">dimension</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">chunk_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">"SNode"</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Adds a dynamic SNode as a child component of `self`.</span>
 
 <span class="sd">        Args:</span>
 <span class="sd">            axis (List[Axis]): Axis to activate, must be 1.</span>
@@ -424,9 +424,9 @@
 
 <span class="sd">        Returns:</span>
 <span class="sd">            The added :class:`~quadrants.lang.SNode` instance.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">is_extension_supported</span><span class="p">(</span><span class="n">impl</span><span class="o">.</span><span class="n">current_cfg</span><span class="p">()</span><span class="o">.</span><span class="n">arch</span><span class="p">,</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">Extension</span><span class="o">.</span><span class="n">sparse</span><span class="p">):</span>
-            <span class="k">raise</span> <span class="n">QuadrantsRuntimeError</span><span class="p">(</span><span class="s2">&quot;Dynamic SNode is not supported on this backend.&quot;</span><span class="p">)</span>
+            <span class="k">raise</span> <span class="n">QuadrantsRuntimeError</span><span class="p">(</span><span class="s2">"Dynamic SNode is not supported on this backend."</span><span class="p">)</span>
         <span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">axis</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span>
         <span class="k">if</span> <span class="n">chunk_size</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
             <span class="n">chunk_size</span> <span class="o">=</span> <span class="n">dimension</span>
@@ -435,8 +435,8 @@
 
 <div class="viewcode-block" id="SNode.bitmasked">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/snode/index.html#quadrants.lang.snode.SNode.bitmasked">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">bitmasked</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">axes</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">Axis</span><span class="p">],</span> <span class="n">dimensions</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">|</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;SNode&quot;</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Adds a bitmasked SNode as a child component of `self`.</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">bitmasked</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">axes</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">Axis</span><span class="p">],</span> <span class="n">dimensions</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">|</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">"SNode"</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Adds a bitmasked SNode as a child component of `self`.</span>
 
 <span class="sd">        Args:</span>
 <span class="sd">            axes (List[Axis]): Axes to activate.</span>
@@ -444,9 +444,9 @@
 
 <span class="sd">        Returns:</span>
 <span class="sd">            The added :class:`~quadrants.lang.SNode` instance.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">is_extension_supported</span><span class="p">(</span><span class="n">impl</span><span class="o">.</span><span class="n">current_cfg</span><span class="p">()</span><span class="o">.</span><span class="n">arch</span><span class="p">,</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">Extension</span><span class="o">.</span><span class="n">sparse</span><span class="p">):</span>
-            <span class="k">raise</span> <span class="n">QuadrantsRuntimeError</span><span class="p">(</span><span class="s2">&quot;Bitmasked SNode is not supported on this backend.&quot;</span><span class="p">)</span>
+            <span class="k">raise</span> <span class="n">QuadrantsRuntimeError</span><span class="p">(</span><span class="s2">"Bitmasked SNode is not supported on this backend."</span><span class="p">)</span>
         <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">dimensions</span><span class="p">,</span> <span class="n">numbers</span><span class="o">.</span><span class="n">Number</span><span class="p">):</span>
             <span class="n">dimensions</span> <span class="o">=</span> <span class="p">[</span><span class="n">dimensions</span><span class="p">]</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="n">axes</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">SNode</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ptr</span><span class="o">.</span><span class="n">bitmasked</span><span class="p">(</span><span class="n">axes</span><span class="p">,</span> <span class="n">dimensions</span><span class="p">,</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">DebugInfo</span><span class="p">(</span><span class="n">get_traceback</span><span class="p">())))</span></div>
@@ -454,8 +454,8 @@
 
 <div class="viewcode-block" id="SNode.quant_array">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/snode/index.html#quadrants.lang.snode.SNode.quant_array">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">quant_array</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">axes</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">Axis</span><span class="p">],</span> <span class="n">dimensions</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">|</span> <span class="nb">int</span><span class="p">,</span> <span class="n">max_num_bits</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;SNode&quot;</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Adds a quant_array SNode as a child component of `self`.</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">quant_array</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">axes</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">Axis</span><span class="p">],</span> <span class="n">dimensions</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">|</span> <span class="nb">int</span><span class="p">,</span> <span class="n">max_num_bits</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">"SNode"</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Adds a quant_array SNode as a child component of `self`.</span>
 
 <span class="sd">        Args:</span>
 <span class="sd">            axes (List[Axis]): Axes to activate.</span>
@@ -464,7 +464,7 @@
 
 <span class="sd">        Returns:</span>
 <span class="sd">            The added :class:`~quadrants.lang.SNode` instance.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">dimensions</span><span class="p">,</span> <span class="n">numbers</span><span class="o">.</span><span class="n">Number</span><span class="p">):</span>
             <span class="n">dimensions</span> <span class="o">=</span> <span class="p">[</span><span class="n">dimensions</span><span class="p">]</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="n">axes</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">SNode</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ptr</span><span class="o">.</span><span class="n">quant_array</span><span class="p">(</span><span class="n">axes</span><span class="p">,</span> <span class="n">dimensions</span><span class="p">,</span> <span class="n">max_num_bits</span><span class="p">,</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">DebugInfo</span><span class="p">(</span><span class="n">get_traceback</span><span class="p">())))</span></div>
@@ -472,8 +472,8 @@
 
 <div class="viewcode-block" id="SNode.place">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/snode/index.html#quadrants.lang.snode.SNode.place">[docs]</a>
-    <span class="k">def</span><span class="w"> </span><span class="nf">place</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="n">offset</span><span class="p">:</span> <span class="n">numbers</span><span class="o">.</span><span class="n">Number</span> <span class="o">|</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">numbers</span><span class="o">.</span><span class="n">Number</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;SNode&quot;</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Places a list of Quadrants fields under the `self` container.</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">place</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="n">offset</span><span class="p">:</span> <span class="n">numbers</span><span class="o">.</span><span class="n">Number</span> <span class="o">|</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">numbers</span><span class="o">.</span><span class="n">Number</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">"SNode"</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Places a list of Quadrants fields under the `self` container.</span>
 
 <span class="sd">        Args:</span>
 <span class="sd">            *args (List[qd.field]): A list of Quadrants fields to place.</span>
@@ -481,7 +481,7 @@
 
 <span class="sd">        Returns:</span>
 <span class="sd">            The `self` container.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="k">if</span> <span class="n">offset</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
             <span class="n">offset</span> <span class="o">=</span> <span class="p">()</span>
         <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">offset</span><span class="p">,</span> <span class="n">numbers</span><span class="o">.</span><span class="n">Number</span><span class="p">):</span>
@@ -500,47 +500,47 @@
                 <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">arg</span><span class="p">:</span>
                     <span class="bp">self</span><span class="o">.</span><span class="n">place</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">offset</span><span class="o">=</span><span class="n">offset</span><span class="p">)</span>
             <span class="k">else</span><span class="p">:</span>
-                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">arg</span><span class="si">}</span><span class="s2"> cannot be placed&quot;</span><span class="p">)</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">arg</span><span class="si">}</span><span class="s2"> cannot be placed"</span><span class="p">)</span>
         <span class="k">return</span> <span class="bp">self</span></div>
 
 
 <div class="viewcode-block" id="SNode.lazy_grad">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/snode/index.html#quadrants.lang.snode.SNode.lazy_grad">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">lazy_grad</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Automatically place the adjoint fields following the layout of their primal fields.</span>
+<span class="w">        </span><span class="sd">"""Automatically place the adjoint fields following the layout of their primal fields.</span>
 
-<span class="sd">        Users don&#39;t need to specify ``needs_grad`` when they define scalar/vector/matrix fields (primal fields) using autodiff.</span>
+<span class="sd">        Users don't need to specify ``needs_grad`` when they define scalar/vector/matrix fields (primal fields) using autodiff.</span>
 <span class="sd">        When all the primal fields are defined, using ``quadrants.root.lazy_grad()`` could automatically generate</span>
 <span class="sd">        their corresponding adjoint fields (gradient field).</span>
 
 <span class="sd">        To know more details about primal, adjoint fields and ``lazy_grad()``,</span>
 <span class="sd">        please see Page 4 and Page 13-14 of DiffQuadrants Paper: https://arxiv.org/pdf/1910.00935.pdf</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">ptr</span><span class="o">.</span><span class="n">lazy_grad</span><span class="p">()</span></div>
 
 
 <div class="viewcode-block" id="SNode.lazy_dual">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/snode/index.html#quadrants.lang.snode.SNode.lazy_dual">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">lazy_dual</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Automatically place the dual fields following the layout of their primal fields.&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""Automatically place the dual fields following the layout of their primal fields."""</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">ptr</span><span class="o">.</span><span class="n">lazy_dual</span><span class="p">()</span></div>
 
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_allocate_adjoint_checkbit</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Automatically place the adjoint flag fields following the layout of their primal fields for global data access rule checker&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""Automatically place the adjoint flag fields following the layout of their primal fields for global data access rule checker"""</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">ptr</span><span class="o">.</span><span class="n">allocate_adjoint_checkbit</span><span class="p">()</span>
 
 <div class="viewcode-block" id="SNode.parent">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/snode/index.html#quadrants.lang.snode.SNode.parent">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">parent</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">n</span><span class="o">=</span><span class="mi">1</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Gets an ancestor of `self` in the SNode tree.</span>
+<span class="w">        </span><span class="sd">"""Gets an ancestor of `self` in the SNode tree.</span>
 
 <span class="sd">        Args:</span>
 <span class="sd">            n (int): the number of levels going up from `self`.</span>
 
 <span class="sd">        Returns:</span>
 <span class="sd">            Union[None, _Root, SNode]: The n-th parent of `self`.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="n">p</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">ptr</span>
         <span class="k">while</span> <span class="n">p</span> <span class="ow">and</span> <span class="n">n</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
             <span class="n">p</span> <span class="o">=</span> <span class="n">p</span><span class="o">.</span><span class="n">parent</span>
@@ -555,11 +555,11 @@
 
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_path_from_root</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Gets the path from root to `self` in the SNode tree.</span>
+<span class="w">        </span><span class="sd">"""Gets the path from root to `self` in the SNode tree.</span>
 
 <span class="sd">        Returns:</span>
 <span class="sd">            List[Union[_Root, SNode]]: The list of SNodes on the path from root to `self`.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="n">p</span> <span class="o">=</span> <span class="bp">self</span>
         <span class="n">res</span> <span class="o">=</span> <span class="p">[</span><span class="n">p</span><span class="p">]</span>
         <span class="k">while</span> <span class="n">p</span> <span class="o">!=</span> <span class="n">impl</span><span class="o">.</span><span class="n">root</span><span class="p">:</span>
@@ -570,20 +570,20 @@
 
     <span class="nd">@property</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">_dtype</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Gets the data type of `self`.</span>
+<span class="w">        </span><span class="sd">"""Gets the data type of `self`.</span>
 
 <span class="sd">        Returns:</span>
 <span class="sd">            DataType: The data type of `self`.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">ptr</span><span class="o">.</span><span class="n">data_type</span><span class="p">()</span>
 
     <span class="nd">@property</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">_id</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Gets the id of `self`.</span>
+<span class="w">        </span><span class="sd">"""Gets the id of `self`.</span>
 
 <span class="sd">        Returns:</span>
 <span class="sd">            int: The id of `self`.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">ptr</span><span class="o">.</span><span class="n">id</span>
 
     <span class="nd">@property</span>
@@ -594,11 +594,11 @@
 <div class="viewcode-block" id="SNode.shape">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/snode/index.html#quadrants.lang.snode.SNode.shape">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">shape</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Gets the number of elements from root in each axis of `self`.</span>
+<span class="w">        </span><span class="sd">"""Gets the number of elements from root in each axis of `self`.</span>
 
 <span class="sd">        Returns:</span>
 <span class="sd">            Tuple[int]: The number of elements from root in each axis of `self`.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="n">dim</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">ptr</span><span class="o">.</span><span class="n">num_active_indices</span><span class="p">()</span>
         <span class="n">ret</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ptr</span><span class="o">.</span><span class="n">get_shape_along_axis</span><span class="p">(</span><span class="n">i</span><span class="p">)</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">dim</span><span class="p">))</span>
 
@@ -606,36 +606,36 @@
 
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_loop_range</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Gets the quadrants_python.SNode to serve as loop range.</span>
+<span class="w">        </span><span class="sd">"""Gets the quadrants_python.SNode to serve as loop range.</span>
 
 <span class="sd">        Returns:</span>
 <span class="sd">            quadrants_python.SNode: See above.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">ptr</span>
 
     <span class="nd">@property</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">_name</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Gets the name of `self`.</span>
+<span class="w">        </span><span class="sd">"""Gets the name of `self`.</span>
 
 <span class="sd">        Returns:</span>
 <span class="sd">            str: The name of `self`.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">ptr</span><span class="o">.</span><span class="n">name</span><span class="p">()</span>
 
     <span class="nd">@property</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">_snode</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Gets `self`.</span>
+<span class="w">        </span><span class="sd">"""Gets `self`.</span>
 <span class="sd">        Returns:</span>
 <span class="sd">            SNode: `self`.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="k">return</span> <span class="bp">self</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_get_children</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Gets all children components of `self`.</span>
+<span class="w">        </span><span class="sd">"""Gets all children components of `self`.</span>
 
 <span class="sd">        Returns:</span>
 <span class="sd">            List[SNode]: All children components of `self`.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="n">children</span> <span class="o">=</span> <span class="p">[]</span>
         <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ptr</span><span class="o">.</span><span class="n">get_num_ch</span><span class="p">()):</span>
             <span class="n">children</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">SNode</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ptr</span><span class="o">.</span><span class="n">get_ch</span><span class="p">(</span><span class="n">i</span><span class="p">)))</span>
@@ -660,7 +660,7 @@
 <div class="viewcode-block" id="SNode.deactivate_all">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/snode/index.html#quadrants.lang.snode.SNode.deactivate_all">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">deactivate_all</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Recursively deactivate all children components of `self`.&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""Recursively deactivate all children components of `self`."""</span>
         <span class="n">ch</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_children</span><span class="p">()</span>
         <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">ch</span><span class="p">:</span>
             <span class="n">c</span><span class="o">.</span><span class="n">deactivate_all</span><span class="p">()</span>
@@ -681,26 +681,26 @@
 
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-        <span class="n">type_</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ptr</span><span class="o">.</span><span class="n">type</span><span class="p">)[</span><span class="nb">len</span><span class="p">(</span><span class="s2">&quot;SNodeType.&quot;</span><span class="p">)</span> <span class="p">:]</span>
-        <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;&lt;qd.SNode of type </span><span class="si">{</span><span class="n">type_</span><span class="si">}</span><span class="s2">&gt;&quot;</span>
+        <span class="n">type_</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ptr</span><span class="o">.</span><span class="n">type</span><span class="p">)[</span><span class="nb">len</span><span class="p">(</span><span class="s2">"SNodeType."</span><span class="p">)</span> <span class="p">:]</span>
+        <span class="k">return</span> <span class="sa">f</span><span class="s2">"&lt;qd.SNode of type </span><span class="si">{</span><span class="n">type_</span><span class="si">}</span><span class="s2">&gt;"</span>
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__str__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="c1"># qd.root.dense(qd.i, 3).dense(qd.jk, (4, 5)).place(x)</span>
         <span class="c1"># qd.root =&gt; dense [3] =&gt; dense [3, 4, 5] =&gt; place [3, 4, 5]</span>
-        <span class="n">type_</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ptr</span><span class="o">.</span><span class="n">type</span><span class="p">)[</span><span class="nb">len</span><span class="p">(</span><span class="s2">&quot;SNodeType.&quot;</span><span class="p">)</span> <span class="p">:]</span>
+        <span class="n">type_</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ptr</span><span class="o">.</span><span class="n">type</span><span class="p">)[</span><span class="nb">len</span><span class="p">(</span><span class="s2">"SNodeType."</span><span class="p">)</span> <span class="p">:]</span>
         <span class="n">shape</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">shape</span><span class="p">))</span>
         <span class="n">parent</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">parent</span><span class="p">())</span>
-        <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">parent</span><span class="si">}</span><span class="s2"> =&gt; </span><span class="si">{</span><span class="n">type_</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">shape</span><span class="si">}</span><span class="s2">&quot;</span>
+        <span class="k">return</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">parent</span><span class="si">}</span><span class="s2"> =&gt; </span><span class="si">{</span><span class="n">type_</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">shape</span><span class="si">}</span><span class="s2">"</span>
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__eq__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">ptr</span> <span class="o">==</span> <span class="n">other</span><span class="o">.</span><span class="n">ptr</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_physical_index_position</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Gets mappings from virtual axes to physical axes.</span>
+<span class="w">        </span><span class="sd">"""Gets mappings from virtual axes to physical axes.</span>
 
 <span class="sd">        Returns:</span>
 <span class="sd">            Dict[int, int]: Mappings from virtual axes to physical axes.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="n">ret</span> <span class="o">=</span> <span class="p">{}</span>
         <span class="k">for</span> <span class="n">virtual</span><span class="p">,</span> <span class="n">physical</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ptr</span><span class="o">.</span><span class="n">get_physical_index_position</span><span class="p">()):</span>
             <span class="k">if</span> <span class="n">physical</span> <span class="o">!=</span> <span class="o">-</span><span class="mi">1</span><span class="p">:</span>
@@ -712,7 +712,7 @@
 <div class="viewcode-block" id="rescale_index">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/snode/index.html#quadrants.lang.snode.rescale_index">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">rescale_index</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">I</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Rescales the index &#39;I&#39; of field (or SNode) &#39;a&#39; to match the shape of SNode &#39;b&#39;.</span>
+<span class="w">    </span><span class="sd">"""Rescales the index 'I' of field (or SNode) 'a' to match the shape of SNode 'b'.</span>
 
 <span class="sd">    Args:</span>
 
@@ -721,16 +721,16 @@
 
 <span class="sd">    Returns:</span>
 <span class="sd">        Ib (:class:`~quadrants.Vector`): rescaled grouped loop index</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
 
-    <span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="p">(</span><span class="n">Field</span><span class="p">,</span> <span class="n">SNode</span><span class="p">)),</span> <span class="s2">&quot;The first argument must be a field or an SNode&quot;</span>
-    <span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">b</span><span class="p">,</span> <span class="p">(</span><span class="n">Field</span><span class="p">,</span> <span class="n">SNode</span><span class="p">)),</span> <span class="s2">&quot;The second argument must be a field or an SNode&quot;</span>
+    <span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="p">(</span><span class="n">Field</span><span class="p">,</span> <span class="n">SNode</span><span class="p">)),</span> <span class="s2">"The first argument must be a field or an SNode"</span>
+    <span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">b</span><span class="p">,</span> <span class="p">(</span><span class="n">Field</span><span class="p">,</span> <span class="n">SNode</span><span class="p">)),</span> <span class="s2">"The second argument must be a field or an SNode"</span>
     <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">I</span><span class="p">,</span> <span class="nb">list</span><span class="p">):</span>
         <span class="n">n</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">I</span><span class="p">)</span>
     <span class="k">else</span><span class="p">:</span>
         <span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span>
             <span class="n">I</span><span class="p">,</span> <span class="p">(</span><span class="n">expr</span><span class="o">.</span><span class="n">Expr</span><span class="p">,</span> <span class="n">matrix</span><span class="o">.</span><span class="n">Matrix</span><span class="p">)</span>
-        <span class="p">),</span> <span class="s2">&quot;The third argument must be an index (list, qd.Vector, or Expr with TensorType)&quot;</span>
+        <span class="p">),</span> <span class="s2">"The third argument must be an index (list, qd.Vector, or Expr with TensorType)"</span>
         <span class="n">n</span> <span class="o">=</span> <span class="n">I</span><span class="o">.</span><span class="n">n</span>
 
     <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.kernel_impl</span><span class="w"> </span><span class="kn">import</span> <span class="n">pyfunc</span>  <span class="c1"># pylint: disable=C0415</span>
@@ -752,13 +752,13 @@
 <div class="viewcode-block" id="append">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/snode/index.html#quadrants.lang.snode.append">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">append</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">indices</span><span class="p">,</span> <span class="n">val</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Append a value `val` to a SNode `node` at index `indices`.</span>
+<span class="w">    </span><span class="sd">"""Append a value `val` to a SNode `node` at index `indices`.</span>
 
 <span class="sd">    Args:</span>
 <span class="sd">        node (:class:`~quadrants.SNode`): Input SNode.</span>
 <span class="sd">        indices (Union[int, :class:`~quadrants.Vector`]): the indices to visit.</span>
 <span class="sd">        val (Union[:mod:`~quadrants.types.primitive_types`, :mod:`~quadrants.types.compound_types`]): the data to be appended.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
     <span class="n">ptrs</span> <span class="o">=</span> <span class="n">expr</span><span class="o">.</span><span class="n">_get_flattened_ptrs</span><span class="p">(</span><span class="n">val</span><span class="p">)</span>
     <span class="n">append_expr</span> <span class="o">=</span> <span class="n">expr</span><span class="o">.</span><span class="n">Expr</span><span class="p">(</span>
         <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span>
@@ -774,7 +774,7 @@
 <div class="viewcode-block" id="is_active">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/snode/index.html#quadrants.lang.snode.is_active">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">is_active</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">indices</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Explicitly query whether a cell in a SNode `node` at location</span>
+<span class="w">    </span><span class="sd">"""Explicitly query whether a cell in a SNode `node` at location</span>
 <span class="sd">    `indices` is active or not.</span>
 
 <span class="sd">    Args:</span>
@@ -783,7 +783,7 @@
 
 <span class="sd">    Returns:</span>
 <span class="sd">        bool: the cell `node[indices]` is active or not.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
     <span class="k">return</span> <span class="n">expr</span><span class="o">.</span><span class="n">Expr</span><span class="p">(</span>
         <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span>
         <span class="o">.</span><span class="n">compiling_callable</span><span class="o">.</span><span class="n">ast_builder</span><span class="p">()</span>
@@ -796,12 +796,12 @@
 <div class="viewcode-block" id="activate">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/snode/index.html#quadrants.lang.snode.activate">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">activate</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">indices</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Explicitly activate a cell of `node` at location `indices`.</span>
+<span class="w">    </span><span class="sd">"""Explicitly activate a cell of `node` at location `indices`.</span>
 
 <span class="sd">    Args:</span>
 <span class="sd">        node (:class:`~quadrants.SNode`): Must be a pointer, hash or bitmasked node.</span>
 <span class="sd">        indices (Union[int, :class:`~quadrants.Vector`]): the indices to activate.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
     <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">compiling_callable</span><span class="o">.</span><span class="n">ast_builder</span><span class="p">()</span><span class="o">.</span><span class="n">insert_activate</span><span class="p">(</span>
         <span class="n">node</span><span class="o">.</span><span class="n">_snode</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">expr</span><span class="o">.</span><span class="n">make_expr_group</span><span class="p">(</span><span class="n">indices</span><span class="p">),</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">DebugInfo</span><span class="p">(</span><span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">get_current_src_info</span><span class="p">())</span>
     <span class="p">)</span></div>
@@ -811,7 +811,7 @@
 <div class="viewcode-block" id="deactivate">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/snode/index.html#quadrants.lang.snode.deactivate">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">deactivate</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">indices</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Explicitly deactivate a cell of `node` at location `indices`.</span>
+<span class="w">    </span><span class="sd">"""Explicitly deactivate a cell of `node` at location `indices`.</span>
 
 <span class="sd">    After deactivation, the Quadrants runtime automatically recycles and zero-fills</span>
 <span class="sd">    the memory of the deactivated cell.</span>
@@ -819,7 +819,7 @@
 <span class="sd">    Args:</span>
 <span class="sd">        node (:class:`~quadrants.SNode`): Must be a pointer, hash or bitmasked node.</span>
 <span class="sd">        indices (Union[int, :class:`~quadrants.Vector`]): the indices to deactivate.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
     <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">compiling_callable</span><span class="o">.</span><span class="n">ast_builder</span><span class="p">()</span><span class="o">.</span><span class="n">insert_deactivate</span><span class="p">(</span>
         <span class="n">node</span><span class="o">.</span><span class="n">_snode</span><span class="o">.</span><span class="n">ptr</span><span class="p">,</span> <span class="n">expr</span><span class="o">.</span><span class="n">make_expr_group</span><span class="p">(</span><span class="n">indices</span><span class="p">),</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">DebugInfo</span><span class="p">(</span><span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">get_current_src_info</span><span class="p">())</span>
     <span class="p">)</span></div>
@@ -829,7 +829,7 @@
 <div class="viewcode-block" id="length">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/snode/index.html#quadrants.lang.snode.length">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">length</span><span class="p">(</span><span class="n">node</span><span class="p">,</span> <span class="n">indices</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Return the length of the dynamic SNode `node` at index `indices`.</span>
+<span class="w">    </span><span class="sd">"""Return the length of the dynamic SNode `node` at index `indices`.</span>
 
 <span class="sd">    Args:</span>
 <span class="sd">        node (:class:`~quadrants.SNode`): a dynamic SNode.</span>
@@ -837,7 +837,7 @@
 
 <span class="sd">    Returns:</span>
 <span class="sd">        int: the length of cell `node[indices]`.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
     <span class="k">return</span> <span class="n">expr</span><span class="o">.</span><span class="n">Expr</span><span class="p">(</span>
         <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span>
         <span class="o">.</span><span class="n">compiling_callable</span><span class="o">.</span><span class="n">ast_builder</span><span class="p">()</span>
@@ -850,7 +850,7 @@
 <div class="viewcode-block" id="get_addr">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/snode/index.html#quadrants.lang.snode.get_addr">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">get_addr</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="n">indices</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Query the memory address (on CUDA/x64) of field `f` at index `indices`.</span>
+<span class="w">    </span><span class="sd">"""Query the memory address (on CUDA/x64) of field `f` at index `indices`.</span>
 
 <span class="sd">    Currently, this function can only be called inside a quadrants kernel.</span>
 
@@ -860,12 +860,12 @@
 
 <span class="sd">    Returns:</span>
 <span class="sd">        qd.u64: The memory address of `f[indices]`.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
     <span class="c1"># Layout-tagged fields: permute canonical user-supplied indices into physical storage order before passing to</span>
     <span class="c1"># the SNode layer, matching the canonical-&gt;physical rewrite applied to regular subscripts in</span>
     <span class="c1"># ``build_Subscript``. Without this, ``get_addr(f, [i, j, k])`` would be the only access path that treats</span>
     <span class="c1"># its arguments as already-physical and would return addresses inconsistent with ``f[i, j, k]``.</span>
-    <span class="n">layout</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="s2">&quot;_qd_layout&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+    <span class="n">layout</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="s2">"_qd_layout"</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
     <span class="k">if</span> <span class="n">layout</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
         <span class="n">layout_t</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">layout</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">layout_t</span> <span class="o">!=</span> <span class="nb">tuple</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">layout_t</span><span class="p">)))</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">indices</span><span class="p">)</span> <span class="o">==</span> <span class="nb">len</span><span class="p">(</span><span class="n">layout_t</span><span class="p">):</span>
@@ -880,14 +880,14 @@
 
 
 <span class="n">__all__</span> <span class="o">=</span> <span class="p">[</span>
-    <span class="s2">&quot;activate&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;append&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;deactivate&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;get_addr&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;is_active&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;length&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;rescale_index&quot;</span><span class="p">,</span>
-    <span class="s2">&quot;SNode&quot;</span><span class="p">,</span>
+    <span class="s2">"activate"</span><span class="p">,</span>
+    <span class="s2">"append"</span><span class="p">,</span>
+    <span class="s2">"deactivate"</span><span class="p">,</span>
+    <span class="s2">"get_addr"</span><span class="p">,</span>
+    <span class="s2">"is_active"</span><span class="p">,</span>
+    <span class="s2">"length"</span><span class="p">,</span>
+    <span class="s2">"rescale_index"</span><span class="p">,</span>
+    <span class="s2">"SNode"</span><span class="p">,</span>
 <span class="p">]</span>
 </pre></div>
 

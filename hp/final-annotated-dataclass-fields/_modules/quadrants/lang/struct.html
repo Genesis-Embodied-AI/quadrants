@@ -368,7 +368,7 @@
 <div class="viewcode-block" id="Struct">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/struct/index.html#quadrants.lang.struct.Struct">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">Struct</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;The Struct type class.</span>
+<span class="w">    </span><span class="sd">"""The Struct type class.</span>
 
 <span class="sd">    A struct is a dictionary-like data structure that stores members as</span>
 <span class="sd">    (key, value) pairs. Valid data members of a struct can be scalars,</span>
@@ -377,7 +377,7 @@
 <span class="sd">    Args:</span>
 <span class="sd">        entries (Dict[str, Union[Dict, Expr, Matrix, Struct]]): \</span>
 <span class="sd">            keys and values for struct members. Entries can optionally</span>
-<span class="sd">            include a dictionary of functions with the key &#39;__struct_methods&#39;</span>
+<span class="sd">            include a dictionary of functions with the key '__struct_methods'</span>
 <span class="sd">            which will be attached to the struct for executing on the struct data.</span>
 
 <span class="sd">    Returns:</span>
@@ -388,12 +388,12 @@
 <span class="sd">        &gt;&gt;&gt; vec3 = qd.types.vector(3, qd.f32)</span>
 <span class="sd">        &gt;&gt;&gt; a = qd.Struct(v=vec3([0, 0, 0]), t=1.0)</span>
 <span class="sd">        &gt;&gt;&gt; print(a.items)</span>
-<span class="sd">        dict_items([(&#39;v&#39;, [0. 0. 0.]), (&#39;t&#39;, 1.0)])</span>
+<span class="sd">        dict_items([('v', [0. 0. 0.]), ('t', 1.0)])</span>
 <span class="sd">        &gt;&gt;&gt;</span>
 <span class="sd">        &gt;&gt;&gt; B = qd.Struct(v=vec3([0., 0., 0.]), t=1.0, A=a)</span>
 <span class="sd">        &gt;&gt;&gt; print(B.items)</span>
-<span class="sd">        dict_items([(&#39;v&#39;, [0. 0. 0.]), (&#39;t&#39;, 1.0), (&#39;A&#39;, {&#39;v&#39;: [[0.], [0.], [0.]], &#39;t&#39;: 1.0})])</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">        dict_items([('v', [0. 0. 0.]), ('t', 1.0), ('A', {'v': [[0.], [0.], [0.]], 't': 1.0})])</span>
+<span class="sd">    """</span>
 
     <span class="n">_is_quadrants_class</span> <span class="o">=</span> <span class="kc">True</span>
     <span class="n">_instance_count</span> <span class="o">=</span> <span class="mi">0</span>
@@ -406,10 +406,10 @@
             <span class="bp">self</span><span class="o">.</span><span class="n">__entries</span> <span class="o">=</span> <span class="n">kwargs</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span>
-                <span class="s2">&quot;Custom structs need to be initialized using either dictionary or keyword arguments&quot;</span>
+                <span class="s2">"Custom structs need to be initialized using either dictionary or keyword arguments"</span>
             <span class="p">)</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">__methods</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">__entries</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">&quot;__struct_methods&quot;</span><span class="p">,</span> <span class="p">{})</span>
-        <span class="n">matrix_ndim</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">__entries</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">&quot;__matrix_ndim&quot;</span><span class="p">,</span> <span class="p">{})</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">__methods</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">__entries</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">"__struct_methods"</span><span class="p">,</span> <span class="p">{})</span>
+        <span class="n">matrix_ndim</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">__entries</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">"__matrix_ndim"</span><span class="p">,</span> <span class="p">{})</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_register_methods</span><span class="p">()</span>
 
         <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">__entries</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
@@ -425,15 +425,15 @@
 <div class="viewcode-block" id="Struct.keys">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/struct/index.html#quadrants.lang.struct.Struct.keys">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">keys</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Returns the list of member names in string format.</span>
+<span class="w">        </span><span class="sd">"""Returns the list of member names in string format.</span>
 
 <span class="sd">        Example::</span>
 
 <span class="sd">           &gt;&gt;&gt; vec3 = qd.types.vector(3, qd.f32)</span>
 <span class="sd">           &gt;&gt;&gt; sphere = qd.Struct(center=vec3([0, 0, 0]), radius=1.0)</span>
 <span class="sd">           &gt;&gt;&gt; a.keys</span>
-<span class="sd">           [&#39;center&#39;, &#39;radius&#39;]</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">           ['center', 'radius']</span>
+<span class="sd">        """</span>
         <span class="k">return</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">__entries</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span></div>
 
 
@@ -459,15 +459,15 @@
 <div class="viewcode-block" id="Struct.items">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/struct/index.html#quadrants.lang.struct.Struct.items">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">items</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Returns the items in this struct.</span>
+<span class="w">        </span><span class="sd">"""Returns the items in this struct.</span>
 
 <span class="sd">        Example::</span>
 
 <span class="sd">            &gt;&gt;&gt; vec3 = qd.types.vector(3, qd.f32)</span>
 <span class="sd">            &gt;&gt;&gt; sphere = qd.Struct(center=vec3([0, 0, 0]), radius=1.0)</span>
 <span class="sd">            &gt;&gt;&gt; sphere.items</span>
-<span class="sd">            dict_items([(&#39;center&#39;, 2), (&#39;radius&#39;, 1.0)])</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">            dict_items([('center', 2), ('radius', 1.0)])</span>
+<span class="sd">        """</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">__entries</span><span class="o">.</span><span class="n">items</span><span class="p">()</span></div>
 
 
@@ -501,7 +501,7 @@
                     <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">numbers</span><span class="o">.</span><span class="n">Number</span><span class="p">):</span>
                         <span class="bp">self</span><span class="o">.</span><span class="n">__entries</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">value</span>
                     <span class="k">else</span><span class="p">:</span>
-                        <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">&quot;A number is expected when assigning struct members&quot;</span><span class="p">)</span>
+                        <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">"A number is expected when assigning struct members"</span><span class="p">)</span>
             <span class="k">else</span><span class="p">:</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">__entries</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">value</span>
 
@@ -515,7 +515,7 @@
     <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">_make_getter</span><span class="p">(</span><span class="n">key</span><span class="p">):</span>
         <span class="k">def</span><span class="w"> </span><span class="nf">getter</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-<span class="w">            </span><span class="sd">&quot;&quot;&quot;Get an entry from custom struct by name.&quot;&quot;&quot;</span>
+<span class="w">            </span><span class="sd">"""Get an entry from custom struct by name."""</span>
             <span class="k">return</span> <span class="bp">self</span><span class="p">[</span><span class="n">key</span><span class="p">]</span>
 
         <span class="k">return</span> <span class="n">getter</span>
@@ -531,29 +531,29 @@
     <span class="nd">@quadrants_scope</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">_assign</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="p">(</span><span class="nb">dict</span><span class="p">,</span> <span class="n">Struct</span><span class="p">)):</span>
-            <span class="k">raise</span> <span class="n">QuadrantsTypeError</span><span class="p">(</span><span class="s2">&quot;Only dict or Struct can be assigned to a Struct&quot;</span><span class="p">)</span>
+            <span class="k">raise</span> <span class="n">QuadrantsTypeError</span><span class="p">(</span><span class="s2">"Only dict or Struct can be assigned to a Struct"</span><span class="p">)</span>
         <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
             <span class="n">other</span> <span class="o">=</span> <span class="n">Struct</span><span class="p">(</span><span class="n">other</span><span class="p">)</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">__entries</span><span class="o">.</span><span class="n">keys</span><span class="p">()</span> <span class="o">!=</span> <span class="n">other</span><span class="o">.</span><span class="n">__entries</span><span class="o">.</span><span class="n">keys</span><span class="p">():</span>
-            <span class="k">raise</span> <span class="n">QuadrantsTypeError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Member mismatch between structs </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">keys</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="n">other</span><span class="o">.</span><span class="n">keys</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="k">raise</span> <span class="n">QuadrantsTypeError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Member mismatch between structs </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">keys</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="n">other</span><span class="o">.</span><span class="n">keys</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
         <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">items</span><span class="p">:</span>
             <span class="n">v</span><span class="o">.</span><span class="n">_assign</span><span class="p">(</span><span class="n">other</span><span class="o">.</span><span class="n">__entries</span><span class="p">[</span><span class="n">k</span><span class="p">])</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">__dtype</span> <span class="o">=</span> <span class="n">other</span><span class="o">.</span><span class="n">__dtype</span>
         <span class="k">return</span> <span class="bp">self</span>
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__len__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Get the number of entries in a custom struct&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""Get the number of entries in a custom struct"""</span>
         <span class="k">return</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">__entries</span><span class="p">)</span>
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__iter__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">__entries</span><span class="o">.</span><span class="n">values</span><span class="p">()</span>
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__str__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Python scope struct array print support.&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""Python scope struct array print support."""</span>
         <span class="k">if</span> <span class="n">impl</span><span class="o">.</span><span class="n">inside_kernel</span><span class="p">():</span>
-            <span class="n">item_str</span> <span class="o">=</span> <span class="s2">&quot;, &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">([</span><span class="nb">str</span><span class="p">(</span><span class="n">k</span><span class="p">)</span> <span class="o">+</span> <span class="s2">&quot;=&quot;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">v</span><span class="p">)</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">items</span><span class="p">])</span>
-            <span class="n">item_str</span> <span class="o">+=</span> <span class="sa">f</span><span class="s2">&quot;, struct_methods=</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">__methods</span><span class="si">}</span><span class="s2">&quot;</span>
-            <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;&lt;qd.Struct </span><span class="si">{</span><span class="n">item_str</span><span class="si">}</span><span class="s2">&gt;&quot;</span>
+            <span class="n">item_str</span> <span class="o">=</span> <span class="s2">", "</span><span class="o">.</span><span class="n">join</span><span class="p">([</span><span class="nb">str</span><span class="p">(</span><span class="n">k</span><span class="p">)</span> <span class="o">+</span> <span class="s2">"="</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">v</span><span class="p">)</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">items</span><span class="p">])</span>
+            <span class="n">item_str</span> <span class="o">+=</span> <span class="sa">f</span><span class="s2">", struct_methods=</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">__methods</span><span class="si">}</span><span class="s2">"</span>
+            <span class="k">return</span> <span class="sa">f</span><span class="s2">"&lt;qd.Struct </span><span class="si">{</span><span class="n">item_str</span><span class="si">}</span><span class="s2">&gt;"</span>
         <span class="k">return</span> <span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">to_dict</span><span class="p">())</span>
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
@@ -562,15 +562,15 @@
 <div class="viewcode-block" id="Struct.to_dict">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/struct/index.html#quadrants.lang.struct.Struct.to_dict">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">to_dict</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">include_methods</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">include_ndim</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Converts the Struct to a dictionary.</span>
+<span class="w">        </span><span class="sd">"""Converts the Struct to a dictionary.</span>
 
 <span class="sd">        Args:</span>
 <span class="sd">            include_methods (bool): Whether any struct methods should be included</span>
-<span class="sd">                in the result dictionary under the key &#39;__struct_methods&#39;.</span>
+<span class="sd">                in the result dictionary under the key '__struct_methods'.</span>
 
 <span class="sd">        Returns:</span>
 <span class="sd">            Dict: The result dictionary.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="n">res_dict</span> <span class="o">=</span> <span class="p">{</span>
             <span class="n">k</span><span class="p">:</span> <span class="p">(</span>
                 <span class="n">v</span><span class="o">.</span><span class="n">to_dict</span><span class="p">(</span><span class="n">include_methods</span><span class="o">=</span><span class="n">include_methods</span><span class="p">,</span> <span class="n">include_ndim</span><span class="o">=</span><span class="n">include_ndim</span><span class="p">)</span>
@@ -580,12 +580,12 @@
             <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">__entries</span><span class="o">.</span><span class="n">items</span><span class="p">()</span>
         <span class="p">}</span>
         <span class="k">if</span> <span class="n">include_methods</span><span class="p">:</span>
-            <span class="n">res_dict</span><span class="p">[</span><span class="s2">&quot;__struct_methods&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">__methods</span>
+            <span class="n">res_dict</span><span class="p">[</span><span class="s2">"__struct_methods"</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">__methods</span>
         <span class="k">if</span> <span class="n">include_ndim</span><span class="p">:</span>
-            <span class="n">res_dict</span><span class="p">[</span><span class="s2">&quot;__matrix_ndim&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">()</span>
+            <span class="n">res_dict</span><span class="p">[</span><span class="s2">"__matrix_ndim"</span><span class="p">]</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">()</span>
             <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">__entries</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
                 <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="n">Matrix</span><span class="p">):</span>
-                    <span class="n">res_dict</span><span class="p">[</span><span class="s2">&quot;__matrix_ndim&quot;</span><span class="p">][</span><span class="n">k</span><span class="p">]</span> <span class="o">=</span> <span class="n">v</span><span class="o">.</span><span class="n">ndim</span>
+                    <span class="n">res_dict</span><span class="p">[</span><span class="s2">"__matrix_ndim"</span><span class="p">][</span><span class="n">k</span><span class="p">]</span> <span class="o">=</span> <span class="n">v</span><span class="o">.</span><span class="n">ndim</span>
         <span class="k">return</span> <span class="n">res_dict</span></div>
 
 
@@ -598,13 +598,13 @@
         <span class="n">members</span><span class="p">,</span>
         <span class="n">methods</span><span class="o">=</span><span class="p">{},</span>
         <span class="n">shape</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
-        <span class="n">name</span><span class="o">=</span><span class="s2">&quot;&lt;Struct&gt;&quot;</span><span class="p">,</span>
+        <span class="n">name</span><span class="o">=</span><span class="s2">"&lt;Struct&gt;"</span><span class="p">,</span>
         <span class="n">offset</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
         <span class="n">needs_grad</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
         <span class="n">needs_dual</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
         <span class="n">layout</span><span class="o">=</span><span class="n">Layout</span><span class="o">.</span><span class="n">AOS</span><span class="p">,</span>
     <span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Creates a :class:`~quadrants.StructField` with each element</span>
+<span class="w">        </span><span class="sd">"""Creates a :class:`~quadrants.StructField` with each element</span>
 <span class="sd">        has this struct as its type.</span>
 
 <span class="sd">        Args:</span>
@@ -623,10 +623,10 @@
 <span class="sd">        Example:</span>
 
 <span class="sd">            &gt;&gt;&gt; vec3 = qd.types.vector(3, qd.f32)</span>
-<span class="sd">            &gt;&gt;&gt; sphere = {&quot;center&quot;: vec3, &quot;radius&quot;: float}</span>
+<span class="sd">            &gt;&gt;&gt; sphere = {"center": vec3, "radius": float}</span>
 <span class="sd">            &gt;&gt;&gt; F = qd.Struct.field(sphere, shape=(3, 3))</span>
 <span class="sd">            &gt;&gt;&gt; F</span>
-<span class="sd">            {&#39;center&#39;: array([[[0., 0., 0.],</span>
+<span class="sd">            {'center': array([[[0., 0., 0.],</span>
 <span class="sd">                [0., 0., 0.],</span>
 <span class="sd">                [0., 0., 0.]],</span>
 
@@ -636,13 +636,13 @@
 
 <span class="sd">               [[0., 0., 0.],</span>
 <span class="sd">                [0., 0., 0.],</span>
-<span class="sd">                [0., 0., 0.]]], dtype=float32), &#39;radius&#39;: array([[0., 0., 0.],</span>
+<span class="sd">                [0., 0., 0.]]], dtype=float32), 'radius': array([[0., 0., 0.],</span>
 <span class="sd">               [0., 0., 0.],</span>
 <span class="sd">               [0., 0., 0.]], dtype=float32)}</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
 
         <span class="k">if</span> <span class="n">shape</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">offset</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">&quot;shape cannot be None when offset is being set&quot;</span><span class="p">)</span>
+            <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">"shape cannot be None when offset is being set"</span><span class="p">)</span>
 
         <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">shape</span><span class="p">,</span> <span class="n">numbers</span><span class="o">.</span><span class="n">Number</span><span class="p">):</span>
             <span class="n">shape</span> <span class="o">=</span> <span class="p">(</span><span class="n">shape</span><span class="p">,)</span>
@@ -652,13 +652,13 @@
         <span class="k">if</span> <span class="n">impl</span><span class="o">.</span><span class="n">is_python_backend</span><span class="p">():</span>
             <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">dtype</span> <span class="ow">in</span> <span class="n">members</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
                 <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">dtype</span><span class="p">,</span> <span class="n">StructType</span><span class="p">):</span>
-                    <span class="n">field_dict</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">dtype</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">shape</span><span class="o">=</span><span class="n">shape</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="n">name</span> <span class="o">+</span> <span class="s2">&quot;.&quot;</span> <span class="o">+</span> <span class="n">key</span><span class="p">)</span>
+                    <span class="n">field_dict</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">dtype</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">shape</span><span class="o">=</span><span class="n">shape</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="n">name</span> <span class="o">+</span> <span class="s2">"."</span> <span class="o">+</span> <span class="n">key</span><span class="p">)</span>
                 <span class="k">else</span><span class="p">:</span>
                     <span class="n">field_dict</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">dtype</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="n">shape</span> <span class="ow">or</span> <span class="p">())</span>
             <span class="k">return</span> <span class="n">StructField</span><span class="p">(</span><span class="n">field_dict</span><span class="p">,</span> <span class="n">methods</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span> <span class="n">is_primal</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
 
         <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">dtype</span> <span class="ow">in</span> <span class="n">members</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
-            <span class="n">field_name</span> <span class="o">=</span> <span class="n">name</span> <span class="o">+</span> <span class="s2">&quot;.&quot;</span> <span class="o">+</span> <span class="n">key</span>
+            <span class="n">field_name</span> <span class="o">=</span> <span class="n">name</span> <span class="o">+</span> <span class="s2">"."</span> <span class="o">+</span> <span class="n">key</span>
             <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">dtype</span><span class="p">,</span> <span class="n">CompoundType</span><span class="p">):</span>
                 <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">dtype</span><span class="p">,</span> <span class="n">StructType</span><span class="p">):</span>
                     <span class="n">field_dict</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">dtype</span><span class="o">.</span><span class="n">field</span><span class="p">(</span>
@@ -675,7 +675,7 @@
                         <span class="n">offset</span><span class="o">=</span><span class="n">offset</span><span class="p">,</span>
                         <span class="n">needs_grad</span><span class="o">=</span><span class="n">needs_grad</span><span class="p">,</span>
                         <span class="n">needs_dual</span><span class="o">=</span><span class="n">needs_dual</span><span class="p">,</span>
-                        <span class="n">ndim</span><span class="o">=</span><span class="nb">getattr</span><span class="p">(</span><span class="n">dtype</span><span class="p">,</span> <span class="s2">&quot;ndim&quot;</span><span class="p">,</span> <span class="mi">2</span><span class="p">),</span>
+                        <span class="n">ndim</span><span class="o">=</span><span class="nb">getattr</span><span class="p">(</span><span class="n">dtype</span><span class="p">,</span> <span class="s2">"ndim"</span><span class="p">,</span> <span class="mi">2</span><span class="p">),</span>
                     <span class="p">)</span>
             <span class="k">else</span><span class="p">:</span>
                 <span class="n">field_dict</span><span class="p">[</span><span class="n">key</span><span class="p">]</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">field</span><span class="p">(</span>
@@ -693,7 +693,7 @@
 
             <span class="k">if</span> <span class="n">offset</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">shape</span><span class="p">)</span> <span class="o">!=</span> <span class="nb">len</span><span class="p">(</span><span class="n">offset</span><span class="p">):</span>
                 <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span>
-                    <span class="sa">f</span><span class="s2">&quot;The dimensionality of shape and offset must be the same (</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">shape</span><span class="p">)</span><span class="si">}</span><span class="s2"> != </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">offset</span><span class="p">)</span><span class="si">}</span><span class="s2">)&quot;</span>
+                    <span class="sa">f</span><span class="s2">"The dimensionality of shape and offset must be the same (</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">shape</span><span class="p">)</span><span class="si">}</span><span class="s2"> != </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">offset</span><span class="p">)</span><span class="si">}</span><span class="s2">)"</span>
                 <span class="p">)</span>
             <span class="n">dim</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">shape</span><span class="p">)</span>
             <span class="k">if</span> <span class="n">layout</span> <span class="o">==</span> <span class="n">Layout</span><span class="o">.</span><span class="n">SOA</span><span class="p">:</span>
@@ -721,17 +721,17 @@
 
 
 <span class="k">class</span><span class="w"> </span><span class="nc">_IntermediateStruct</span><span class="p">(</span><span class="n">Struct</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Intermediate struct class for compiler internal use only.</span>
+<span class="w">    </span><span class="sd">"""Intermediate struct class for compiler internal use only.</span>
 
 <span class="sd">    Args:</span>
 <span class="sd">        entries (Dict[str, Union[Expr, Matrix, Struct]]): keys and values for struct members.</span>
-<span class="sd">            Any methods included under the key &#39;__struct_methods&#39; will be applied to each</span>
+<span class="sd">            Any methods included under the key '__struct_methods' will be applied to each</span>
 <span class="sd">            struct instance.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">entries</span><span class="p">):</span>
         <span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">entries</span><span class="p">,</span> <span class="nb">dict</span><span class="p">)</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">_Struct__methods</span> <span class="o">=</span> <span class="n">entries</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">&quot;__struct_methods&quot;</span><span class="p">,</span> <span class="p">{})</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_Struct__methods</span> <span class="o">=</span> <span class="n">entries</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">"__struct_methods"</span><span class="p">,</span> <span class="p">{})</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_register_methods</span><span class="p">()</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_Struct__entries</span> <span class="o">=</span> <span class="n">entries</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_register_members</span><span class="p">()</span>
@@ -740,7 +740,7 @@
 <div class="viewcode-block" id="StructField">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/struct/index.html#quadrants.lang.struct.StructField">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">StructField</span><span class="p">(</span><span class="n">Field</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Quadrants struct field with SNode implementation.</span>
+<span class="w">    </span><span class="sd">"""Quadrants struct field with SNode implementation.</span>
 
 <span class="sd">       Instead of directly constraining Expr entries, the StructField object</span>
 <span class="sd">       directly hosts members as `Field` instances to support nested structs.</span>
@@ -750,7 +750,7 @@
 <span class="sd">        struct_methods (Dict[str, callable]): Dictionary of functions to apply</span>
 <span class="sd">            to each struct instance in the field.</span>
 <span class="sd">        name (string, optional): The custom name of the field.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">field_dict</span><span class="p">,</span> <span class="n">struct_methods</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">is_primal</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
         <span class="c1"># will not call Field initializer</span>
@@ -781,12 +781,12 @@
             <span class="n">grad_field_dict</span> <span class="o">=</span> <span class="p">{}</span>
             <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">field_dict</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
                 <span class="n">grad_field_dict</span><span class="p">[</span><span class="n">k</span><span class="p">]</span> <span class="o">=</span> <span class="n">v</span><span class="o">.</span><span class="n">grad</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">grad</span> <span class="o">=</span> <span class="n">StructField</span><span class="p">(</span><span class="n">grad_field_dict</span><span class="p">,</span> <span class="n">struct_methods</span><span class="p">,</span> <span class="n">name</span> <span class="o">+</span> <span class="s2">&quot;.grad&quot;</span><span class="p">,</span> <span class="n">is_primal</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">grad</span> <span class="o">=</span> <span class="n">StructField</span><span class="p">(</span><span class="n">grad_field_dict</span><span class="p">,</span> <span class="n">struct_methods</span><span class="p">,</span> <span class="n">name</span> <span class="o">+</span> <span class="s2">".grad"</span><span class="p">,</span> <span class="n">is_primal</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
 
             <span class="n">dual_field_dict</span> <span class="o">=</span> <span class="p">{}</span>
             <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">field_dict</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
                 <span class="n">dual_field_dict</span><span class="p">[</span><span class="n">k</span><span class="p">]</span> <span class="o">=</span> <span class="n">v</span><span class="o">.</span><span class="n">dual</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">dual</span> <span class="o">=</span> <span class="n">StructField</span><span class="p">(</span><span class="n">dual_field_dict</span><span class="p">,</span> <span class="n">struct_methods</span><span class="p">,</span> <span class="n">name</span> <span class="o">+</span> <span class="s2">&quot;.dual&quot;</span><span class="p">,</span> <span class="n">is_primal</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">dual</span> <span class="o">=</span> <span class="n">StructField</span><span class="p">(</span><span class="n">dual_field_dict</span><span class="p">,</span> <span class="n">struct_methods</span><span class="p">,</span> <span class="n">name</span> <span class="o">+</span> <span class="s2">".dual"</span><span class="p">,</span> <span class="n">is_primal</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
         <span class="k">if</span> <span class="nb">all</span><span class="p">(</span><span class="nb">isinstance</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="n">Field</span><span class="p">)</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">field_dict</span><span class="o">.</span><span class="n">values</span><span class="p">()):</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">_register_fields</span><span class="p">()</span>
 
@@ -794,16 +794,16 @@
 <div class="viewcode-block" id="StructField.keys">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/struct/index.html#quadrants.lang.struct.StructField.keys">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">keys</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Returns the list of names of the field members.</span>
+<span class="w">        </span><span class="sd">"""Returns the list of names of the field members.</span>
 
 <span class="sd">        Example::</span>
 
 <span class="sd">            &gt;&gt;&gt; f1 = qd.Vector.field(3, qd.f32, shape=(3, 3))</span>
 <span class="sd">            &gt;&gt;&gt; f2 = qd.field(qd.f32, shape=(3, 3))</span>
-<span class="sd">            &gt;&gt;&gt; F = qd.StructField({&quot;center&quot;: f1, &quot;radius&quot;: f2})</span>
+<span class="sd">            &gt;&gt;&gt; F = qd.StructField({"center": f1, "radius": f2})</span>
 <span class="sd">            &gt;&gt;&gt; F.keys</span>
-<span class="sd">            [&#39;center&#39;, &#39;radius&#39;]</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">            ['center', 'radius']</span>
+<span class="sd">        """</span>
         <span class="k">return</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">field_dict</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span></div>
 
 
@@ -818,7 +818,7 @@
     <span class="nd">@staticmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">_make_getter</span><span class="p">(</span><span class="n">key</span><span class="p">):</span>
         <span class="k">def</span><span class="w"> </span><span class="nf">getter</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-<span class="w">            </span><span class="sd">&quot;&quot;&quot;Get an entry from custom struct by name.&quot;&quot;&quot;</span>
+<span class="w">            </span><span class="sd">"""Get an entry from custom struct by name."""</span>
             <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">field_dict</span><span class="p">[</span><span class="n">key</span><span class="p">]</span>
 
         <span class="k">return</span> <span class="n">getter</span>
@@ -836,11 +836,11 @@
             <span class="nb">setattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">k</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">field_dict</span><span class="p">[</span><span class="n">k</span><span class="p">])</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_get_field_members</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Gets A flattened list of all struct elements.</span>
+<span class="w">        </span><span class="sd">"""Gets A flattened list of all struct elements.</span>
 
 <span class="sd">        Returns:</span>
 <span class="sd">            A list of struct elements.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="n">field_members</span> <span class="o">=</span> <span class="p">[]</span>
         <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_members</span><span class="p">:</span>
             <span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">m</span><span class="p">,</span> <span class="n">Field</span><span class="p">)</span>
@@ -849,32 +849,32 @@
 
     <span class="nd">@property</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">_snode</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Gets representative SNode for info purposes.</span>
+<span class="w">        </span><span class="sd">"""Gets representative SNode for info purposes.</span>
 
 <span class="sd">        Returns:</span>
 <span class="sd">            SNode: Representative SNode (SNode of first field member).</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_members</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">_snode</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_loop_range</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Gets SNode of representative field member for loop range info.</span>
+<span class="w">        </span><span class="sd">"""Gets SNode of representative field member for loop range info.</span>
 
 <span class="sd">        Returns:</span>
 <span class="sd">            quadrants_python.SNode: SNode of representative (first) field member.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_members</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">_loop_range</span><span class="p">()</span>
 
     <span class="nd">@python_scope</span>
 <div class="viewcode-block" id="StructField.copy_from">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/struct/index.html#quadrants.lang.struct.StructField.copy_from">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">copy_from</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Copies all elements from another field.</span>
+<span class="w">        </span><span class="sd">"""Copies all elements from another field.</span>
 
 <span class="sd">        The shape of the other field needs to be the same as `self`.</span>
 
 <span class="sd">        Args:</span>
 <span class="sd">            other (Field): The source field.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="k">assert</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">other</span><span class="p">,</span> <span class="n">Field</span><span class="p">)</span>
         <span class="k">assert</span> <span class="nb">set</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">keys</span><span class="p">)</span> <span class="o">==</span> <span class="nb">set</span><span class="p">(</span><span class="n">other</span><span class="o">.</span><span class="n">keys</span><span class="p">)</span>
         <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">keys</span><span class="p">:</span>
@@ -885,11 +885,11 @@
 <div class="viewcode-block" id="StructField.fill">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/struct/index.html#quadrants.lang.struct.StructField.fill">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">fill</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">val</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Fills this struct field with a specified value.</span>
+<span class="w">        </span><span class="sd">"""Fills this struct field with a specified value.</span>
 
 <span class="sd">        Args:</span>
 <span class="sd">            val (Union[int, float]): Value to fill.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_members</span><span class="p">:</span>
             <span class="n">v</span><span class="o">.</span><span class="n">fill</span><span class="p">(</span><span class="n">val</span><span class="p">)</span></div>
 
@@ -903,14 +903,14 @@
 <div class="viewcode-block" id="StructField.get_member_field">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/struct/index.html#quadrants.lang.struct.StructField.get_member_field">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">get_member_field</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">key</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Creates a ScalarField using a specific field member.</span>
+<span class="w">        </span><span class="sd">"""Creates a ScalarField using a specific field member.</span>
 
 <span class="sd">        Args:</span>
 <span class="sd">            key (str): Specified key of the field member.</span>
 
 <span class="sd">        Returns:</span>
 <span class="sd">            ScalarField: The result ScalarField.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">field_dict</span><span class="p">[</span><span class="n">key</span><span class="p">]</span></div>
 
 
@@ -918,12 +918,12 @@
 <div class="viewcode-block" id="StructField.from_numpy">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/struct/index.html#quadrants.lang.struct.StructField.from_numpy">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">from_numpy</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">array_dict</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Copies the data from a set of `numpy.array` into this field.</span>
+<span class="w">        </span><span class="sd">"""Copies the data from a set of `numpy.array` into this field.</span>
 
 <span class="sd">        The argument `array_dict` must be a dictionay-like object, it</span>
 <span class="sd">        contains all the keys in this field and the copying process</span>
 <span class="sd">        between corresponding items can be performed.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_items</span><span class="p">:</span>
             <span class="n">v</span><span class="o">.</span><span class="n">from_numpy</span><span class="p">(</span><span class="n">array_dict</span><span class="p">[</span><span class="n">k</span><span class="p">])</span></div>
 
@@ -932,12 +932,12 @@
 <div class="viewcode-block" id="StructField.from_torch">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/struct/index.html#quadrants.lang.struct.StructField.from_torch">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">from_torch</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">array_dict</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Copies the data from a set of `torch.tensor` into this field.</span>
+<span class="w">        </span><span class="sd">"""Copies the data from a set of `torch.tensor` into this field.</span>
 
 <span class="sd">        The argument `array_dict` must be a dictionay-like object, it</span>
 <span class="sd">        contains all the keys in this field and the copying process</span>
 <span class="sd">        between corresponding items can be performed.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_items</span><span class="p">:</span>
             <span class="n">v</span><span class="o">.</span><span class="n">from_torch</span><span class="p">(</span><span class="n">array_dict</span><span class="p">[</span><span class="n">k</span><span class="p">])</span></div>
 
@@ -946,7 +946,7 @@
 <div class="viewcode-block" id="StructField.to_numpy">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/struct/index.html#quadrants.lang.struct.StructField.to_numpy">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">to_numpy</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">copy</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Converts the Struct field instance to a dictionary of NumPy arrays.</span>
+<span class="w">        </span><span class="sd">"""Converts the Struct field instance to a dictionary of NumPy arrays.</span>
 
 <span class="sd">        The dictionary may be nested when converting nested structs.</span>
 
@@ -956,7 +956,7 @@
 
 <span class="sd">        Returns:</span>
 <span class="sd">            Dict[str, Union[numpy.ndarray, Dict]]: The result NumPy array.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="k">return</span> <span class="p">{</span><span class="n">k</span><span class="p">:</span> <span class="n">v</span><span class="o">.</span><span class="n">to_numpy</span><span class="p">(</span><span class="n">copy</span><span class="o">=</span><span class="n">copy</span><span class="p">)</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_items</span><span class="p">}</span></div>
 
 
@@ -964,7 +964,7 @@
 <div class="viewcode-block" id="StructField.to_torch">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/struct/index.html#quadrants.lang.struct.StructField.to_torch">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">to_torch</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">copy</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Converts the Struct field instance to a dictionary of PyTorch tensors.</span>
+<span class="w">        </span><span class="sd">"""Converts the Struct field instance to a dictionary of PyTorch tensors.</span>
 
 <span class="sd">        The dictionary may be nested when converting nested structs.</span>
 
@@ -976,7 +976,7 @@
 <span class="sd">        Returns:</span>
 <span class="sd">            Dict[str, Union[torch.Tensor, Dict]]: The result</span>
 <span class="sd">                PyTorch tensor.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="k">return</span> <span class="p">{</span><span class="n">k</span><span class="p">:</span> <span class="n">v</span><span class="o">.</span><span class="n">to_torch</span><span class="p">(</span><span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">,</span> <span class="n">copy</span><span class="o">=</span><span class="n">copy</span><span class="p">)</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_items</span><span class="p">}</span></div>
 
 
@@ -993,7 +993,7 @@
             <span class="n">k</span><span class="p">:</span> <span class="n">v</span><span class="o">.</span><span class="n">_host_access</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_pad_key</span><span class="p">(</span><span class="n">indices</span><span class="p">))[</span><span class="mi">0</span><span class="p">]</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="n">ScalarField</span><span class="p">)</span> <span class="k">else</span> <span class="n">v</span><span class="p">[</span><span class="n">indices</span><span class="p">]</span>
             <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_items</span>
         <span class="p">}</span>
-        <span class="n">entries</span><span class="p">[</span><span class="s2">&quot;__struct_methods&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">struct_methods</span>
+        <span class="n">entries</span><span class="p">[</span><span class="s2">"__struct_methods"</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">struct_methods</span>
         <span class="k">return</span> <span class="n">Struct</span><span class="p">(</span><span class="n">entries</span><span class="p">)</span></div>
 
 
@@ -1008,9 +1008,9 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">_unpacked_groups</span><span class="p">:</span> <span class="nb">dict</span> <span class="o">=</span> <span class="p">{}</span>
         <span class="n">elements</span> <span class="o">=</span> <span class="p">[]</span>
         <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">dtype</span> <span class="ow">in</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
-            <span class="k">if</span> <span class="n">k</span> <span class="o">==</span> <span class="s2">&quot;__struct_methods&quot;</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">k</span> <span class="o">==</span> <span class="s2">"__struct_methods"</span><span class="p">:</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">methods</span> <span class="o">=</span> <span class="n">dtype</span>
-            <span class="k">elif</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">dtype</span><span class="p">,</span> <span class="s2">&quot;_is_unpacked&quot;</span><span class="p">,</span> <span class="kc">False</span><span class="p">):</span>
+            <span class="k">elif</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">dtype</span><span class="p">,</span> <span class="s2">"_is_unpacked"</span><span class="p">,</span> <span class="kc">False</span><span class="p">):</span>
                 <span class="n">expand_unpacked_into</span><span class="p">(</span><span class="n">k</span><span class="p">,</span> <span class="n">dtype</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">members</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_unpacked_groups</span><span class="p">,</span> <span class="n">elements</span><span class="p">,</span> <span class="n">cook_dtype</span><span class="p">)</span>
             <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">dtype</span><span class="p">,</span> <span class="n">StructType</span><span class="p">):</span>
                 <span class="n">_check_no_unpacked_collision</span><span class="p">(</span><span class="n">k</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">members</span><span class="p">)</span>
@@ -1028,7 +1028,7 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">dtype</span> <span class="o">=</span> <span class="n">_qd_core</span><span class="o">.</span><span class="n">get_type_factory_instance</span><span class="p">()</span><span class="o">.</span><span class="n">get_struct_type</span><span class="p">(</span><span class="n">elements</span><span class="p">)</span>
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__call__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Create an instance of this struct type.&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""Create an instance of this struct type."""</span>
         <span class="n">d</span> <span class="o">=</span> <span class="p">{}</span>
         <span class="n">items</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">members</span><span class="o">.</span><span class="n">items</span><span class="p">()</span>
         <span class="c1"># iterate over the members of this struct</span>
@@ -1060,7 +1060,7 @@
         <span class="k">if</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">members</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span> <span class="o">!=</span> <span class="nb">list</span><span class="p">(</span><span class="n">instance</span><span class="o">.</span><span class="n">_Struct__entries</span><span class="o">.</span><span class="n">keys</span><span class="p">()):</span>
             <span class="k">return</span> <span class="kc">False</span>
         <span class="k">if</span> <span class="p">(</span>
-            <span class="nb">hasattr</span><span class="p">(</span><span class="n">instance</span><span class="p">,</span> <span class="s2">&quot;_Struct__dtype&quot;</span><span class="p">)</span>
+            <span class="nb">hasattr</span><span class="p">(</span><span class="n">instance</span><span class="p">,</span> <span class="s2">"_Struct__dtype"</span><span class="p">)</span>
             <span class="ow">and</span> <span class="n">instance</span><span class="o">.</span><span class="n">_Struct__dtype</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
             <span class="ow">and</span> <span class="n">instance</span><span class="o">.</span><span class="n">_Struct__dtype</span> <span class="o">!=</span> <span class="bp">self</span><span class="o">.</span><span class="n">dtype</span>
         <span class="p">):</span>
@@ -1105,7 +1105,7 @@
                         <span class="n">_qd_core</span><span class="o">.</span><span class="n">DebugInfo</span><span class="p">(</span><span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">get_current_src_info</span><span class="p">()),</span>
                     <span class="p">)</span>
                 <span class="p">)</span>
-        <span class="n">d</span><span class="p">[</span><span class="s2">&quot;__struct_methods&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">methods</span>
+        <span class="n">d</span><span class="p">[</span><span class="s2">"__struct_methods"</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">methods</span>
 
         <span class="n">struct</span> <span class="o">=</span> <span class="n">Struct</span><span class="p">(</span><span class="n">d</span><span class="p">)</span>
         <span class="n">struct</span><span class="o">.</span><span class="n">_Struct__dtype</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">dtype</span>
@@ -1127,8 +1127,8 @@
                 <span class="k">elif</span> <span class="n">dtype</span> <span class="ow">in</span> <span class="n">primitive_types</span><span class="o">.</span><span class="n">real_types</span><span class="p">:</span>
                     <span class="n">d</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">launch_ctx</span><span class="o">.</span><span class="n">get_struct_ret_float</span><span class="p">(</span><span class="n">ret_index</span> <span class="o">+</span> <span class="p">(</span><span class="n">index</span><span class="p">,))</span>
                 <span class="k">else</span><span class="p">:</span>
-                    <span class="k">raise</span> <span class="n">QuadrantsRuntimeTypeError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Invalid return type on index=</span><span class="si">{</span><span class="n">ret_index</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="p">(</span><span class="n">index</span><span class="p">,</span><span class="w"> </span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-        <span class="n">d</span><span class="p">[</span><span class="s2">&quot;__struct_methods&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">methods</span>
+                    <span class="k">raise</span> <span class="n">QuadrantsRuntimeTypeError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Invalid return type on index=</span><span class="si">{</span><span class="n">ret_index</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="p">(</span><span class="n">index</span><span class="p">,</span><span class="w"> </span><span class="p">)</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+        <span class="n">d</span><span class="p">[</span><span class="s2">"__struct_methods"</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">methods</span>
 
         <span class="n">struct</span> <span class="o">=</span> <span class="n">Struct</span><span class="p">(</span><span class="n">d</span><span class="p">)</span>
         <span class="n">struct</span><span class="o">.</span><span class="n">_Struct__dtype</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">dtype</span>
@@ -1150,12 +1150,12 @@
                 <span class="k">elif</span> <span class="n">dtype</span> <span class="ow">in</span> <span class="n">primitive_types</span><span class="o">.</span><span class="n">real_types</span><span class="p">:</span>
                     <span class="n">launch_ctx</span><span class="o">.</span><span class="n">set_struct_arg_float</span><span class="p">(</span><span class="n">ret_index</span> <span class="o">+</span> <span class="p">(</span><span class="n">index</span><span class="p">,),</span> <span class="n">struct</span><span class="p">[</span><span class="n">name</span><span class="p">])</span>
                 <span class="k">else</span><span class="p">:</span>
-                    <span class="k">raise</span> <span class="n">QuadrantsRuntimeTypeError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Invalid argument type on index=</span><span class="si">{</span><span class="n">ret_index</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="p">(</span><span class="n">index</span><span class="p">,</span><span class="w"> </span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+                    <span class="k">raise</span> <span class="n">QuadrantsRuntimeTypeError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Invalid argument type on index=</span><span class="si">{</span><span class="n">ret_index</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="p">(</span><span class="n">index</span><span class="p">,</span><span class="w"> </span><span class="p">)</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">cast</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">struct</span><span class="p">):</span>
         <span class="c1"># sanity check members</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">members</span><span class="o">.</span><span class="n">keys</span><span class="p">()</span> <span class="o">!=</span> <span class="n">struct</span><span class="o">.</span><span class="n">_Struct__entries</span><span class="o">.</span><span class="n">keys</span><span class="p">():</span>
-            <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">&quot;Incompatible arguments for custom struct members!&quot;</span><span class="p">)</span>
+            <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">"Incompatible arguments for custom struct members!"</span><span class="p">)</span>
         <span class="n">entries</span> <span class="o">=</span> <span class="p">{}</span>
         <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">dtype</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">members</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
             <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">dtype</span><span class="p">,</span> <span class="n">MatrixType</span><span class="p">):</span>
@@ -1168,7 +1168,7 @@
                     <span class="n">entries</span><span class="p">[</span><span class="n">k</span><span class="p">]</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">v</span><span class="p">)</span> <span class="k">if</span> <span class="n">dtype</span> <span class="ow">in</span> <span class="n">primitive_types</span><span class="o">.</span><span class="n">integer_types</span> <span class="k">else</span> <span class="nb">float</span><span class="p">(</span><span class="n">v</span><span class="p">)</span>
                 <span class="k">else</span><span class="p">:</span>
                     <span class="n">entries</span><span class="p">[</span><span class="n">k</span><span class="p">]</span> <span class="o">=</span> <span class="n">ops</span><span class="o">.</span><span class="n">cast</span><span class="p">(</span><span class="n">struct</span><span class="o">.</span><span class="n">_Struct__entries</span><span class="p">[</span><span class="n">k</span><span class="p">],</span> <span class="n">dtype</span><span class="p">)</span>
-        <span class="n">entries</span><span class="p">[</span><span class="s2">&quot;__struct_methods&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">methods</span>
+        <span class="n">entries</span><span class="p">[</span><span class="s2">"__struct_methods"</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">methods</span>
         <span class="n">struct</span> <span class="o">=</span> <span class="n">Struct</span><span class="p">(</span><span class="n">entries</span><span class="p">)</span>
         <span class="n">struct</span><span class="o">.</span><span class="n">_Struct__dtype</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">dtype</span>
         <span class="n">attach_unpacked_groups</span><span class="p">(</span><span class="n">struct</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_unpacked_groups</span><span class="p">)</span>
@@ -1183,14 +1183,14 @@
                 <span class="n">entries</span><span class="p">[</span><span class="n">k</span><span class="p">]</span> <span class="o">=</span> <span class="n">dtype</span><span class="o">.</span><span class="n">filled_with_scalar</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
             <span class="k">else</span><span class="p">:</span>
                 <span class="n">entries</span><span class="p">[</span><span class="n">k</span><span class="p">]</span> <span class="o">=</span> <span class="n">value</span>
-        <span class="n">entries</span><span class="p">[</span><span class="s2">&quot;__struct_methods&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">methods</span>
+        <span class="n">entries</span><span class="p">[</span><span class="s2">"__struct_methods"</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">methods</span>
         <span class="n">struct</span> <span class="o">=</span> <span class="n">Struct</span><span class="p">(</span><span class="n">entries</span><span class="p">)</span>
         <span class="n">struct</span><span class="o">.</span><span class="n">_Struct__dtype</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">dtype</span>
         <span class="n">attach_unpacked_groups</span><span class="p">(</span><span class="n">struct</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_unpacked_groups</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">struct</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">field</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
-        <span class="c1"># Tag the returned ``StructField`` with this type&#39;s ``_unpacked_groups`` so ``impl.subscript`` can transfer the</span>
+        <span class="c1"># Tag the returned ``StructField`` with this type's ``_unpacked_groups`` so ``impl.subscript`` can transfer the</span>
         <span class="c1"># metadata onto the ``_IntermediateStruct`` it builds for ``f[i]`` -- without that, ``f[i].r[k]`` on a struct</span>
         <span class="c1"># field whose type was declared with ``unpacked=True`` would fall through to a plain attribute lookup and fail.</span>
         <span class="c1"># Nested cases work transparently because ``Struct.field`` calls ``dtype.field(...)`` for any ``StructType``</span>
@@ -1200,16 +1200,16 @@
         <span class="k">return</span> <span class="n">field</span>
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__str__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Python scope struct type print support.&quot;&quot;&quot;</span>
-        <span class="n">item_str</span> <span class="o">=</span> <span class="s2">&quot;, &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">([</span><span class="nb">str</span><span class="p">(</span><span class="n">k</span><span class="p">)</span> <span class="o">+</span> <span class="s2">&quot;=&quot;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">v</span><span class="p">)</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">members</span><span class="o">.</span><span class="n">items</span><span class="p">()])</span>
-        <span class="n">item_str</span> <span class="o">+=</span> <span class="sa">f</span><span class="s2">&quot;, struct_methods=</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">methods</span><span class="si">}</span><span class="s2">&quot;</span>
-        <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;&lt;qd.StructType </span><span class="si">{</span><span class="n">item_str</span><span class="si">}</span><span class="s2">&gt;&quot;</span>
+<span class="w">        </span><span class="sd">"""Python scope struct type print support."""</span>
+        <span class="n">item_str</span> <span class="o">=</span> <span class="s2">", "</span><span class="o">.</span><span class="n">join</span><span class="p">([</span><span class="nb">str</span><span class="p">(</span><span class="n">k</span><span class="p">)</span> <span class="o">+</span> <span class="s2">"="</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">v</span><span class="p">)</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">members</span><span class="o">.</span><span class="n">items</span><span class="p">()])</span>
+        <span class="n">item_str</span> <span class="o">+=</span> <span class="sa">f</span><span class="s2">", struct_methods=</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">methods</span><span class="si">}</span><span class="s2">"</span>
+        <span class="k">return</span> <span class="sa">f</span><span class="s2">"&lt;qd.StructType </span><span class="si">{</span><span class="n">item_str</span><span class="si">}</span><span class="s2">&gt;"</span>
 
 
 <div class="viewcode-block" id="dataclass">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/struct/index.html#quadrants.lang.struct.dataclass">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">dataclass</span><span class="p">(</span><span class="bp">cls</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Converts a class with field annotations and methods into a quadrants struct type.</span>
+<span class="w">    </span><span class="sd">"""Converts a class with field annotations and methods into a quadrants struct type.</span>
 
 <span class="sd">    This will return a normal custom struct type, with the functions added to it.</span>
 <span class="sd">    Struct fields can be generated in the normal way from the struct type.</span>
@@ -1239,24 +1239,24 @@
 <span class="sd">    Returns:</span>
 <span class="sd">        A quadrants struct with the annotations as fields</span>
 <span class="sd">            and methods from the class attached.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
     <span class="c1"># save the annotation fields for the struct</span>
-    <span class="n">fields</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="s2">&quot;__annotations__&quot;</span><span class="p">,</span> <span class="p">{})</span>
+    <span class="n">fields</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="s2">"__annotations__"</span><span class="p">,</span> <span class="p">{})</span>
     <span class="c1"># raise error if there are default values</span>
     <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">fields</span><span class="o">.</span><span class="n">keys</span><span class="p">():</span>
         <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">k</span><span class="p">):</span>
-            <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">&quot;Default value in @dataclass is not supported.&quot;</span><span class="p">)</span>
+            <span class="k">raise</span> <span class="n">QuadrantsSyntaxError</span><span class="p">(</span><span class="s2">"Default value in @dataclass is not supported."</span><span class="p">)</span>
     <span class="c1"># get the class methods to be attached to the struct types</span>
-    <span class="n">fields</span><span class="p">[</span><span class="s2">&quot;__struct_methods&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="n">fields</span><span class="p">[</span><span class="s2">"__struct_methods"</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
         <span class="n">attribute</span><span class="p">:</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">attribute</span><span class="p">)</span>
         <span class="k">for</span> <span class="n">attribute</span> <span class="ow">in</span> <span class="nb">dir</span><span class="p">(</span><span class="bp">cls</span><span class="p">)</span>
-        <span class="k">if</span> <span class="nb">callable</span><span class="p">(</span><span class="nb">getattr</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">attribute</span><span class="p">))</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">attribute</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;__&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="nb">callable</span><span class="p">(</span><span class="nb">getattr</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">attribute</span><span class="p">))</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">attribute</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">"__"</span><span class="p">)</span>
     <span class="p">}</span>
     <span class="k">return</span> <span class="n">StructType</span><span class="p">(</span><span class="o">**</span><span class="n">fields</span><span class="p">)</span></div>
 
 
 
-<span class="n">__all__</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;Struct&quot;</span><span class="p">,</span> <span class="s2">&quot;StructField&quot;</span><span class="p">,</span> <span class="s2">&quot;dataclass&quot;</span><span class="p">]</span>
+<span class="n">__all__</span> <span class="o">=</span> <span class="p">[</span><span class="s2">"Struct"</span><span class="p">,</span> <span class="s2">"StructField"</span><span class="p">,</span> <span class="s2">"dataclass"</span><span class="p">]</span>
 </pre></div>
 
                 </article>

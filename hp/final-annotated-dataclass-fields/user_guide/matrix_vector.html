@@ -665,7 +665,7 @@
 </pre></div>
 </div>
 <p>Run your kernel once. For each <code class="docutils literal notranslate"><span class="pre">quadrants_kernel_nvptx_NNNN.ptx</span></code> file in the working directory:</p>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>ptxas<span class="w"> </span>--verbose<span class="w"> </span>-arch<span class="o">=</span>sm_86<span class="w"> </span>quadrants_kernel_nvptx_0007.ptx<span class="w"> </span>-o<span class="w"> </span>/dev/null<span class="w"> </span><span class="m">2</span>&gt;<span class="p">&amp;</span><span class="m">1</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-E<span class="w"> </span><span class="s2">&quot;spill|stack&quot;</span>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>ptxas<span class="w"> </span>--verbose<span class="w"> </span>-arch<span class="o">=</span>sm_86<span class="w"> </span>quadrants_kernel_nvptx_0007.ptx<span class="w"> </span>-o<span class="w"> </span>/dev/null<span class="w"> </span><span class="m">2</span>&gt;<span class="p">&amp;</span><span class="m">1</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-E<span class="w"> </span><span class="s2">"spill|stack"</span>
 </pre></div>
 </div>
 <p>Sample output:</p>
@@ -679,7 +679,7 @@
 <section id="inspect-the-ptx-directly-for-local-memory-loads-stores">
 <h3>2. Inspect the PTX directly for local-memory loads / stores<a class="headerlink" href="#inspect-the-ptx-directly-for-local-memory-loads-stores" title="Link to this heading">#</a></h3>
 <p>NVIDIA’s PTX assembly uses the mnemonics <code class="docutils literal notranslate"><span class="pre">ld.local</span></code> and <code class="docutils literal notranslate"><span class="pre">st.local</span></code> for loads and stores against per-thread local memory (off-chip DRAM). Any kernel that spills must contain these mnemonics. Grep the dumped PTX for them:</p>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>grep<span class="w"> </span>-nE<span class="w"> </span><span class="s2">&quot;ld\.local|st\.local&quot;</span><span class="w"> </span>quadrants_kernel_nvptx_0007.ptx<span class="w"> </span><span class="p">|</span><span class="w"> </span>head<span class="w"> </span>-20
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>grep<span class="w"> </span>-nE<span class="w"> </span><span class="s2">"ld\.local|st\.local"</span><span class="w"> </span>quadrants_kernel_nvptx_0007.ptx<span class="w"> </span><span class="p">|</span><span class="w"> </span>head<span class="w"> </span>-20
 </pre></div>
 </div>
 <p>Matches that aren’t from deliberate <code class="docutils literal notranslate"><span class="pre">qd.simt.shared_array</span></code> accesses (those use the shared-memory mnemonics <code class="docutils literal notranslate"><span class="pre">ld.shared</span></code> / <code class="docutils literal notranslate"><span class="pre">st.shared</span></code>, not the <code class="docutils literal notranslate"><span class="pre">.local</span></code> ones) are spill traffic.</p>
@@ -697,7 +697,7 @@
 </pre></div>
 </div>
 <p>Dumps <code class="docutils literal notranslate"><span class="pre">quadrants_kernel_cuda_llvm_ir_optimized_NNNN.ll</span></code>. In LLVM IR, every per-function stack allocation appears as an <code class="docutils literal notranslate"><span class="pre">alloca</span></code> instruction. The optimizer tries to promote each <code class="docutils literal notranslate"><span class="pre">alloca</span></code> into a register-resident value; any <code class="docutils literal notranslate"><span class="pre">alloca</span></code> that survives the optimizer into the post-optimization dump is a stack slot it couldn’t promote, and it will become PTX local memory. Grep for them:</p>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>grep<span class="w"> </span>-nE<span class="w"> </span><span class="s2">&quot;alloca&quot;</span><span class="w"> </span>quadrants_kernel_cuda_llvm_ir_optimized_0007.ll<span class="w"> </span><span class="p">|</span><span class="w"> </span>head
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>grep<span class="w"> </span>-nE<span class="w"> </span><span class="s2">"alloca"</span><span class="w"> </span>quadrants_kernel_cuda_llvm_ir_optimized_0007.ll<span class="w"> </span><span class="p">|</span><span class="w"> </span>head
 </pre></div>
 </div>
 </section>

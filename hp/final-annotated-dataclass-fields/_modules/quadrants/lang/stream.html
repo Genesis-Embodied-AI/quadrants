@@ -344,11 +344,11 @@
 <div class="viewcode-block" id="Stream">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/stream/index.html#quadrants.lang.stream.Stream">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">Stream</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Wraps a backend-specific GPU stream for concurrent kernel execution.</span>
+<span class="w">    </span><span class="sd">"""Wraps a backend-specific GPU stream for concurrent kernel execution.</span>
 
 <span class="sd">    On backends without native streams (e.g. CPU), this is a no-op object. Call destroy() explicitly or use as</span>
 <span class="sd">    a context manager to ensure cleanup.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">handle</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">prog_ref</span><span class="p">:</span> <span class="n">weakref</span><span class="o">.</span><span class="n">ref</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">):</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_handle</span> <span class="o">=</span> <span class="n">handle</span>
@@ -362,7 +362,7 @@
 
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_prog</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Resolve the owning Program, or None if the owner was collected.&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""Resolve the owning Program, or None if the owner was collected."""</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_prog_ref</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
             <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_prog_ref</span><span class="p">()</span>
         <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">prog</span>
@@ -370,19 +370,19 @@
 <div class="viewcode-block" id="Stream.synchronize">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/stream/index.html#quadrants.lang.stream.Stream.synchronize">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">synchronize</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Block until all operations on this stream complete.&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""Block until all operations on this stream complete."""</span>
         <span class="n">prog</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_prog</span><span class="p">()</span>
         <span class="k">if</span> <span class="n">prog</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s2">&quot;Stream&#39;s owning Program has been destroyed (e.g. after qd.reset())&quot;</span><span class="p">)</span>
+            <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s2">"Stream's owning Program has been destroyed (e.g. after qd.reset())"</span><span class="p">)</span>
         <span class="n">prog</span><span class="o">.</span><span class="n">stream_synchronize</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_handle</span><span class="p">)</span></div>
 
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_destroy_prog</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Resolve a Program for resource cleanup.</span>
+<span class="w">        </span><span class="sd">"""Resolve a Program for resource cleanup.</span>
 
 <span class="sd">        Falls back to the current runtime when the owner has been collected, which is safe because CUDAContext is a</span>
 <span class="sd">        singleton so the CUDA stream handle remains valid.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="n">prog</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_prog</span><span class="p">()</span>
         <span class="k">if</span> <span class="n">prog</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
             <span class="k">try</span><span class="p">:</span>
@@ -394,10 +394,10 @@
 <div class="viewcode-block" id="Stream.destroy">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/stream/index.html#quadrants.lang.stream.Stream.destroy">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">destroy</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Explicitly destroy the stream. Safe to call multiple times.</span>
+<span class="w">        </span><span class="sd">"""Explicitly destroy the stream. Safe to call multiple times.</span>
 
 <span class="sd">        No-op for streams wrapping external handles (created via Stream(ptr) without a prog_ref).</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_handle</span> <span class="o">!=</span> <span class="mi">0</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">_prog_ref</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
             <span class="n">prog</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_destroy_prog</span><span class="p">()</span>
             <span class="k">if</span> <span class="n">prog</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
@@ -426,11 +426,11 @@
 <div class="viewcode-block" id="Event">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/stream/index.html#quadrants.lang.stream.Event">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">Event</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Wraps a backend-specific GPU event for stream synchronization.</span>
+<span class="w">    </span><span class="sd">"""Wraps a backend-specific GPU event for stream synchronization.</span>
 
 <span class="sd">    On backends without native events (e.g. CPU), this is a no-op object. Call destroy() explicitly or use as</span>
 <span class="sd">    a context manager to ensure cleanup.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">handle</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">prog_ref</span><span class="p">:</span> <span class="n">weakref</span><span class="o">.</span><span class="n">ref</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">):</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_handle</span> <span class="o">=</span> <span class="n">handle</span>
@@ -444,7 +444,7 @@
 
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_prog</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Resolve the owning Program, or None if the owner was collected.&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""Resolve the owning Program, or None if the owner was collected."""</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_prog_ref</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
             <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_prog_ref</span><span class="p">()</span>
         <span class="k">return</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">prog</span>
@@ -452,13 +452,13 @@
     <span class="k">def</span><span class="w"> </span><span class="nf">_require_prog</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="n">prog</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_prog</span><span class="p">()</span>
         <span class="k">if</span> <span class="n">prog</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s2">&quot;Event&#39;s owning Program has been destroyed (e.g. after qd.reset())&quot;</span><span class="p">)</span>
+            <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s2">"Event's owning Program has been destroyed (e.g. after qd.reset())"</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">prog</span>
 
 <div class="viewcode-block" id="Event.record">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/stream/index.html#quadrants.lang.stream.Event.record">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">record</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">qd_stream</span><span class="p">:</span> <span class="n">Stream</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Record this event on a stream. None means the default stream.&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""Record this event on a stream. None means the default stream."""</span>
         <span class="n">stream_handle</span> <span class="o">=</span> <span class="n">qd_stream</span><span class="o">.</span><span class="n">handle</span> <span class="k">if</span> <span class="n">qd_stream</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="mi">0</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_require_prog</span><span class="p">()</span><span class="o">.</span><span class="n">event_record</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_handle</span><span class="p">,</span> <span class="n">stream_handle</span><span class="p">)</span></div>
 
@@ -466,7 +466,7 @@
 <div class="viewcode-block" id="Event.wait">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/stream/index.html#quadrants.lang.stream.Event.wait">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">wait</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">qd_stream</span><span class="p">:</span> <span class="n">Stream</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Make a stream wait for this event. None means the default stream.&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""Make a stream wait for this event. None means the default stream."""</span>
         <span class="n">stream_handle</span> <span class="o">=</span> <span class="n">qd_stream</span><span class="o">.</span><span class="n">handle</span> <span class="k">if</span> <span class="n">qd_stream</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="mi">0</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_require_prog</span><span class="p">()</span><span class="o">.</span><span class="n">stream_wait_event</span><span class="p">(</span><span class="n">stream_handle</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_handle</span><span class="p">)</span></div>
 
@@ -474,16 +474,16 @@
 <div class="viewcode-block" id="Event.synchronize">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/stream/index.html#quadrants.lang.stream.Event.synchronize">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">synchronize</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Block the host until this event has been reached.&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""Block the host until this event has been reached."""</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_require_prog</span><span class="p">()</span><span class="o">.</span><span class="n">event_synchronize</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_handle</span><span class="p">)</span></div>
 
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_destroy_prog</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Resolve a Program for resource cleanup.</span>
+<span class="w">        </span><span class="sd">"""Resolve a Program for resource cleanup.</span>
 
 <span class="sd">        Falls back to the current runtime when the owner has been collected, which is safe because CUDAContext is a</span>
 <span class="sd">        singleton so the CUDA event handle remains valid.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="n">prog</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_prog</span><span class="p">()</span>
         <span class="k">if</span> <span class="n">prog</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
             <span class="k">try</span><span class="p">:</span>
@@ -495,10 +495,10 @@
 <div class="viewcode-block" id="Event.destroy">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/stream/index.html#quadrants.lang.stream.Event.destroy">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">destroy</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Explicitly destroy the event. Safe to call multiple times.</span>
+<span class="w">        </span><span class="sd">"""Explicitly destroy the event. Safe to call multiple times.</span>
 
 <span class="sd">        No-op for events wrapping external handles (created via Event(ptr) without a prog_ref).</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_handle</span> <span class="o">!=</span> <span class="mi">0</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">_prog_ref</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
             <span class="n">prog</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_destroy_prog</span><span class="p">()</span>
             <span class="k">if</span> <span class="n">prog</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
@@ -527,7 +527,7 @@
 <div class="viewcode-block" id="create_stream">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/stream/index.html#quadrants.lang.stream.create_stream">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">create_stream</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="n">Stream</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Create a new GPU stream for concurrent kernel execution.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""Create a new GPU stream for concurrent kernel execution."""</span>
     <span class="n">prog</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">prog</span>
     <span class="n">handle</span> <span class="o">=</span> <span class="n">prog</span><span class="o">.</span><span class="n">stream_create</span><span class="p">()</span>
     <span class="k">return</span> <span class="n">Stream</span><span class="p">(</span><span class="n">handle</span><span class="p">,</span> <span class="n">_get_prog_weakref</span><span class="p">())</span></div>
@@ -537,7 +537,7 @@
 <div class="viewcode-block" id="create_event">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/stream/index.html#quadrants.lang.stream.create_event">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">create_event</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="n">Event</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Create a new GPU event for stream synchronization.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""Create a new GPU event for stream synchronization."""</span>
     <span class="n">prog</span> <span class="o">=</span> <span class="n">impl</span><span class="o">.</span><span class="n">get_runtime</span><span class="p">()</span><span class="o">.</span><span class="n">prog</span>
     <span class="n">handle</span> <span class="o">=</span> <span class="n">prog</span><span class="o">.</span><span class="n">event_create</span><span class="p">()</span>
     <span class="k">return</span> <span class="n">Event</span><span class="p">(</span><span class="n">handle</span><span class="p">,</span> <span class="n">_get_prog_weakref</span><span class="p">())</span></div>
@@ -548,16 +548,16 @@
 <div class="viewcode-block" id="stream_parallel">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/stream/index.html#quadrants.lang.stream.stream_parallel">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">stream_parallel</span><span class="p">():</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Run top-level for loops in this block on separate GPU streams.</span>
+<span class="w">    </span><span class="sd">"""Run top-level for loops in this block on separate GPU streams.</span>
 
 <span class="sd">    Used inside @qd.kernel. At Python runtime (outside kernels), this is a no-op. During kernel compilation, the AST</span>
 <span class="sd">    transformer calls into the C++ ASTBuilder to tag loops with a stream-parallel group ID.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
     <span class="k">yield</span></div>
 
 
 
-<span class="n">__all__</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;Stream&quot;</span><span class="p">,</span> <span class="s2">&quot;Event&quot;</span><span class="p">,</span> <span class="s2">&quot;create_stream&quot;</span><span class="p">,</span> <span class="s2">&quot;create_event&quot;</span><span class="p">,</span> <span class="s2">&quot;stream_parallel&quot;</span><span class="p">]</span>
+<span class="n">__all__</span> <span class="o">=</span> <span class="p">[</span><span class="s2">"Stream"</span><span class="p">,</span> <span class="s2">"Event"</span><span class="p">,</span> <span class="s2">"create_stream"</span><span class="p">,</span> <span class="s2">"create_event"</span><span class="p">,</span> <span class="s2">"stream_parallel"</span><span class="p">]</span>
 </pre></div>
 
                 </article>
