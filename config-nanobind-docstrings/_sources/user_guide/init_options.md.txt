@@ -19,7 +19,7 @@ When to set it to `False`:
 - Investigating a stale-cache bug or suspected cache corruption.
 - Reproducing first-run behavior in CI matrix runs that would otherwise warm the caches across iterations.
 
-For normal use, leave it at `True`; the caches are the dominant source of fast warm-up.
+For normal use, leave it at `True`; the caches are the main reason a repeated run starts up quickly.
 
 ## Compile-time tuning
 
@@ -33,7 +33,7 @@ Whether to enable relaxed floating-point optimizations (fusing multiply-add oper
 
 ### `num_compile_threads`
 
-Number of host threads used when compiling kernels. Default `4`. Raise on machines with many idle cores compiling many kernels back-to-back; lower (or set to `1`) on memory-pressure-bound systems where many concurrent kernel compilations would thrash memory.
+Number of host threads used to compile a single kernel's internal tasks in parallel. Default `4`. When Quadrants compiles a kernel it first splits it into several tasks (roughly one per parallel loop) and hands them to a pool of this many threads, so a kernel that splits into many tasks compiles faster on a machine with idle cores. (Distinct kernels are still each compiled lazily the first time they run; this option speeds up the compilation of one such kernel, not scheduling across kernels.) Lower it, or set `1`, on memory-constrained systems where many concurrent compilations would thrash memory. Only the LLVM backends (CPU, CUDA, AMDGPU) use it.
 
 ## Reverse-mode autodiff
 
@@ -116,7 +116,9 @@ Metal and Vulkan lack the assertion extension that the field-bounds check relies
 
 ## All options
 
-Most `qd.init` keywords set a compiler-configuration option. Each option below can be passed as a keyword argument to `qd.init(...)`, and after initializing a compiled backend it is also readable and writable as an attribute on the configuration object `qd.cfg` (e.g. `qd.cfg.opt_level`). Most are compiler options that do not apply to the pure-Python `qd.python` backend, for which `qd.cfg` is `None`; a few that configure the frontend, such as `default_fp` and `default_ip`, still take effect there. That dual nature is why each is listed below as a *property* of `qd.cfg`, with its type, default value, and a short description.
+Most `qd.init` keywords set a compiler-configuration option. Each option below can be passed as a keyword argument to `qd.init(...)`, and after initializing a compiled backend it is also readable and writable as an attribute on the configuration object `qd.cfg` (e.g. `qd.cfg.opt_level`). Because each option is both a `qd.init` argument and a `qd.cfg` attribute, the list below documents each as a *property* of `qd.cfg`, with its type, default value, and a short description.
+
+These are compiler settings, so most do not apply to the pure-Python `qd.python` backend, for which `qd.cfg` is `None`. A few instead set language defaults (such as the default numeric types `default_fp` and `default_ip`) and still take effect on `qd.python`.
 
 ```{eval-rst}
 .. autoclass:: quadrants._lib.core.quadrants_python.CompileConfig
