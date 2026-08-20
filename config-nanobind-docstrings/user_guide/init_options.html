@@ -496,7 +496,7 @@
 </section>
 <section id="ad-stack-sparse-threshold-bytes">
 <h3><code class="docutils literal notranslate"><span class="pre">ad_stack_sparse_threshold_bytes</span></code><a class="headerlink" href="#ad-stack-sparse-threshold-bytes" title="Link to this heading">#</a></h3>
-<p>Cutoff (in bytes) below which the gate-passing-count sizing path described in <a class="reference internal" href="autodiff.html#memory-footprint"><span class="std std-ref">Memory footprint</span></a> is skipped in favor of the eager <code class="docutils literal notranslate"><span class="pre">dispatched_threads</span> <span class="pre">*</span> <span class="pre">stride</span></code> heap. Default <code class="docutils literal notranslate"><span class="pre">100</span> <span class="pre">MiB</span></code>. The sparse path saves memory on kernels of the shape <code class="docutils literal notranslate"><span class="pre">for</span> <span class="pre">i</span> <span class="pre">in</span> <span class="pre">range(...):</span> <span class="pre">if</span> <span class="pre">field[i]</span> <span class="pre">cmp</span> <span class="pre">literal:</span> <span class="pre">&lt;adstack</span> <span class="pre">work&gt;</span></code> but pays a per-launch reducer dispatch; below the threshold that overhead outweighs the savings. Set to <code class="docutils literal notranslate"><span class="pre">0</span></code> to always use the sparse path; lower it if the default still skips kernels you want shrunk. No effect when <code class="docutils literal notranslate"><span class="pre">ad_stack_experimental_enabled=False</span></code> or when the kernel has no such gate.</p>
+<p>Cutoff (in bytes) below which the gate-passing-count sizing path described in <a class="reference internal" href="autodiff.html#memory-footprint"><span class="std std-ref">Memory footprint</span></a> is skipped in favor of the eager worst-case heap (sized for the full thread count instead of the gate-passing count). Default <code class="docutils literal notranslate"><span class="pre">100</span> <span class="pre">MiB</span></code>. The sparse path saves memory on kernels of the shape <code class="docutils literal notranslate"><span class="pre">for</span> <span class="pre">i</span> <span class="pre">in</span> <span class="pre">range(...):</span> <span class="pre">if</span> <span class="pre">field[i]</span> <span class="pre">cmp</span> <span class="pre">literal:</span> <span class="pre">&lt;adstack</span> <span class="pre">work&gt;</span></code> but pays a per-launch reducer dispatch; below the threshold that overhead outweighs the savings. Set to <code class="docutils literal notranslate"><span class="pre">0</span></code> to always use the sparse path; lower it if the default still skips kernels you want shrunk. No effect when <code class="docutils literal notranslate"><span class="pre">ad_stack_experimental_enabled=False</span></code> or when the kernel has no such gate.</p>
 </section>
 </section>
 <section id="apple-metal">
@@ -630,7 +630,7 @@
 <dl class="py property">
 <dt class="sig sig-object py" id="quadrants._lib.core.quadrants_python.CompileConfig.auto_mesh_local_default_occupacy">
 <em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">auto_mesh_local_default_occupacy</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">int</span></em><a class="headerlink" href="#quadrants._lib.core.quadrants_python.CompileConfig.auto_mesh_local_default_occupacy" title="Link to this definition">#</a></dt>
-<dd><p>Target occupancy used by the automatic mesh-local optimization.</p>
+<dd><p>Target occupancy used by the automatic mesh-local optimization. Only used on CUDA when experimental_auto_mesh_local is enabled.</p>
 <p>Default: <code class="docutils literal notranslate"><span class="pre">4</span></code>.</p>
 </dd></dl>
 
@@ -665,7 +665,7 @@
 <dl class="py property">
 <dt class="sig sig-object py" id="quadrants._lib.core.quadrants_python.CompileConfig.cpu_max_num_threads">
 <em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">cpu_max_num_threads</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">int</span></em><a class="headerlink" href="#quadrants._lib.core.quadrants_python.CompileConfig.cpu_max_num_threads" title="Link to this definition">#</a></dt>
-<dd><p>Maximum number of CPU threads Quadrants may use.</p>
+<dd><p>Maximum number of CPU threads used to run kernels (the runtime thread pool and CPU parallel-for loops). Compilation threads are governed separately by num_compile_threads.</p>
 <p>Default: the number of available CPU cores.</p>
 </dd></dl>
 
@@ -766,7 +766,7 @@
 <dl class="py property">
 <dt class="sig sig-object py" id="quadrants._lib.core.quadrants_python.CompileConfig.experimental_auto_mesh_local">
 <em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">experimental_auto_mesh_local</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">bool</span></em><a class="headerlink" href="#quadrants._lib.core.quadrants_python.CompileConfig.experimental_auto_mesh_local" title="Link to this definition">#</a></dt>
-<dd><p>Enable the experimental automatic mesh-local optimization.</p>
+<dd><p>Enable the experimental automatic mesh-local optimization. CUDA only.</p>
 <p>Default: <code class="docutils literal notranslate"><span class="pre">False</span></code>.</p>
 </dd></dl>
 
@@ -836,7 +836,7 @@
 <dl class="py property">
 <dt class="sig sig-object py" id="quadrants._lib.core.quadrants_python.CompileConfig.make_block_local">
 <em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">make_block_local</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">bool</span></em><a class="headerlink" href="#quadrants._lib.core.quadrants_python.CompileConfig.make_block_local" title="Link to this definition">#</a></dt>
-<dd><p>Enable the block-local optimization for GPU/mesh accesses.</p>
+<dd><p>Enable the block-local optimization, which stages spatially-local field accesses through GPU shared memory. Mesh attribute localization is a separate pass controlled by make_mesh_block_local.</p>
 <p>Default: <code class="docutils literal notranslate"><span class="pre">True</span></code>.</p>
 </dd></dl>
 
@@ -850,7 +850,7 @@
 <dl class="py property">
 <dt class="sig sig-object py" id="quadrants._lib.core.quadrants_python.CompileConfig.make_mesh_block_local">
 <em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">make_mesh_block_local</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">bool</span></em><a class="headerlink" href="#quadrants._lib.core.quadrants_python.CompileConfig.make_mesh_block_local" title="Link to this definition">#</a></dt>
-<dd><p>Enable the block-local optimization for MeshQuadrants attributes.</p>
+<dd><p>Enable the block-local optimization for MeshQuadrants attributes. CUDA only (the pass runs only when arch is CUDA).</p>
 <p>Default: <code class="docutils literal notranslate"><span class="pre">True</span></code>.</p>
 </dd></dl>
 
@@ -871,21 +871,21 @@
 <dl class="py property">
 <dt class="sig sig-object py" id="quadrants._lib.core.quadrants_python.CompileConfig.mesh_localize_all_attr_mappings">
 <em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">mesh_localize_all_attr_mappings</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">bool</span></em><a class="headerlink" href="#quadrants._lib.core.quadrants_python.CompileConfig.mesh_localize_all_attr_mappings" title="Link to this definition">#</a></dt>
-<dd><p>Localize all mesh attribute mappings, not just the ones detected as beneficial.</p>
+<dd><p>Localize all mesh attribute mappings, not just the ones detected as beneficial. Used by the CUDA-only make_mesh_block_local pass, and ignored when experimental_auto_mesh_local is enabled.</p>
 <p>Default: <code class="docutils literal notranslate"><span class="pre">False</span></code>.</p>
 </dd></dl>
 
 <dl class="py property">
 <dt class="sig sig-object py" id="quadrants._lib.core.quadrants_python.CompileConfig.mesh_localize_from_end_mapping">
 <em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">mesh_localize_from_end_mapping</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">bool</span></em><a class="headerlink" href="#quadrants._lib.core.quadrants_python.CompileConfig.mesh_localize_from_end_mapping" title="Link to this definition">#</a></dt>
-<dd><p>Cache mesh relation from-end mappings in block-local memory.</p>
+<dd><p>Cache mesh relation from-end mappings in block-local memory. Only used by the CUDA-only make_mesh_block_local pass.</p>
 <p>Default: <code class="docutils literal notranslate"><span class="pre">False</span></code>.</p>
 </dd></dl>
 
 <dl class="py property">
 <dt class="sig sig-object py" id="quadrants._lib.core.quadrants_python.CompileConfig.mesh_localize_to_end_mapping">
 <em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">mesh_localize_to_end_mapping</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">bool</span></em><a class="headerlink" href="#quadrants._lib.core.quadrants_python.CompileConfig.mesh_localize_to_end_mapping" title="Link to this definition">#</a></dt>
-<dd><p>Cache mesh relation to-end mappings in block-local memory.</p>
+<dd><p>Cache mesh relation to-end mappings in block-local memory. Only used by the CUDA-only make_mesh_block_local pass.</p>
 <p>Default: <code class="docutils literal notranslate"><span class="pre">True</span></code>.</p>
 </dd></dl>
 
@@ -899,7 +899,7 @@
 <dl class="py property">
 <dt class="sig sig-object py" id="quadrants._lib.core.quadrants_python.CompileConfig.num_compile_threads">
 <em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">num_compile_threads</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">int</span></em><a class="headerlink" href="#quadrants._lib.core.quadrants_python.CompileConfig.num_compile_threads" title="Link to this definition">#</a></dt>
-<dd><p>Number of host threads used to compile kernels.</p>
+<dd><p>Number of host threads used to compile kernels on the LLVM backends (CPU, CUDA, AMDGPU); other backends ignore it, and it is forced to 1 when print_ir is set.</p>
 <p>Default: <code class="docutils literal notranslate"><span class="pre">4</span></code>.</p>
 </dd></dl>
 
@@ -913,7 +913,7 @@
 <dl class="py property">
 <dt class="sig sig-object py" id="quadrants._lib.core.quadrants_python.CompileConfig.offline_cache_cleaning_factor">
 <em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">offline_cache_cleaning_factor</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">float</span></em><a class="headerlink" href="#quadrants._lib.core.quadrants_python.CompileConfig.offline_cache_cleaning_factor" title="Link to this definition">#</a></dt>
-<dd><p>Fraction of the compiled-kernel offline cache to evict when it exceeds the size limit.</p>
+<dd><p>Fraction of the compiled-kernel offline cache to evict once it exceeds the size limit. Applied only under the “lru” and “fifo” cleaning policies; “version” does no size-based eviction.</p>
 <p>Default: <code class="docutils literal notranslate"><span class="pre">0.25</span></code>.</p>
 </dd></dl>
 
@@ -969,7 +969,7 @@
 <dl class="py property">
 <dt class="sig sig-object py" id="quadrants._lib.core.quadrants_python.CompileConfig.print_ir_dbg_info">
 <em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">print_ir_dbg_info</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">bool</span></em><a class="headerlink" href="#quadrants._lib.core.quadrants_python.CompileConfig.print_ir_dbg_info" title="Link to this definition">#</a></dt>
-<dd><p>Include source-line debug info when printing IR.</p>
+<dd><p>Include source-line debug info in the per-pass print_ir output. Has no effect on other IR dumps such as print_preprocessed_ir.</p>
 <p>Default: <code class="docutils literal notranslate"><span class="pre">False</span></code>.</p>
 </dd></dl>
 
