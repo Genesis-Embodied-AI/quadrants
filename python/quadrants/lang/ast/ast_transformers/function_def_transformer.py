@@ -22,11 +22,8 @@ from quadrants.lang import (
     matrix,
 )
 from quadrants.lang import ops as qd_ops
-from quadrants.lang._dataclass_util import (
-    create_flat_name,
-    final_field_names,
-    is_final_annotation,
-)
+from quadrants.lang._dataclass_util import create_flat_name
+from quadrants.lang._final_dataclass_fields import final_field_names, is_final_annotation
 from quadrants.lang.ast.ast_transformer_utils import (
     ASTTransformerFuncContext,
 )

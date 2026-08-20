@@ -11,7 +11,7 @@ from quadrants._tensor_wrapper import _TENSOR_WRAPPER_TYPES
 from quadrants._tensor_wrapper import Tensor as _TensorWrapper
 from quadrants.types.annotations import Template
 
-from .._dataclass_util import final_field_names
+from .._final_dataclass_fields import final_field_names
 from .._ndarray import ScalarNdarray
 from ..field import ScalarField
 from ..kernel_arguments import ArgMetadata

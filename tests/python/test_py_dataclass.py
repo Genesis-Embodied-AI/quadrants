@@ -3498,7 +3498,7 @@ def test_final_field_on_non_frozen_dataclass_is_rejected():
     message. ``frozen=True`` and ``unsafe_hash=True`` are both accepted."""
     from typing import Final
 
-    from quadrants.lang._dataclass_util import final_field_names
+    from quadrants.lang._final_dataclass_fields import final_field_names
 
     @dataclass  # not frozen
     class Mutable:
@@ -3541,7 +3541,7 @@ def test_mutable_ancestor_of_nested_final_field_is_rejected():
     child's baked constant and produce results for the old value. Reject the mutable ancestor instead."""
     from typing import Final
 
-    from quadrants.lang._dataclass_util import final_field_names
+    from quadrants.lang._final_dataclass_fields import final_field_names
 
     @dataclass(frozen=True)
     class Inner:
@@ -3665,7 +3665,7 @@ def test_final_field_rejects_non_bakeable_inner_types():
     import enum
     from typing import Final
 
-    from quadrants.lang._dataclass_util import final_field_names
+    from quadrants.lang._final_dataclass_fields import final_field_names
 
     @dataclass(frozen=True)
     class Leaf:
@@ -3761,7 +3761,7 @@ def test_bare_final_annotation_is_rejected():
     for ``Final[T]``, so it must not be how the unsupported spelling behaves."""
     import typing
 
-    from quadrants.lang._dataclass_util import final_field_names, is_final_annotation
+    from quadrants.lang._final_dataclass_fields import final_field_names, is_final_annotation
 
     # The bare form genuinely is not a subscripted Final...
     assert is_final_annotation(typing.Final) is False
@@ -3827,7 +3827,7 @@ def test_final_field_string_annotation_is_rejected():
     """``from __future__ import annotations`` (or any explicit string annotation) leaves ``field.type`` as an
     unresolved string, so Quadrants cannot see the ``Final`` and would silently lower the field as a *runtime* kernel
     argument - a field the user believes is a compile-time constant. Rather than half-support it, raise."""
-    from quadrants.lang._dataclass_util import final_field_names
+    from quadrants.lang._final_dataclass_fields import final_field_names
 
     @dataclass(frozen=True)
     class StringAnnotated:

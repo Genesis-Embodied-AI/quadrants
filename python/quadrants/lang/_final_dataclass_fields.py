@@ -1,0 +1,274 @@
+"""Helpers for the ``@dataclasses.dataclass`` kernel-arg path, including ``typing.Final[T]`` compile-time template
+fields.
+
+PERF NOTE: everything about ``Final`` resolution - including the validation that rejects mutable carriers - is
+computed **once per dataclass type** and cached (``_final_plan_cache``, ``_final_path_cache``). Callers on the
+per-launch hot path (``_extract_arg``, ``args_hasher.dataclass_to_repr``) do a
+single ``dict.get`` keyed on the dataclass type and then, in the overwhelmingly common no-Final-field case, take a
+branch that is byte-for-byte the pre-existing code path. No ``isinstance`` / ``typing.get_origin`` /
+``dataclasses.fields`` call happens per launch. See the module docstring of ``_template_mapper_hotpath.py`` for why
+that matters (``isinstance`` is a ~100-200ns MRO walk vs a ~10ns pointer comparison for ``type(x) is Y``).
+"""
+
+import dataclasses
+import enum
+import typing
+from typing import Any
+
+# ``T`` values permitted inside ``Final[T]``. A Final field's value is baked into the compiled kernel as a literal and
+# folded into both the in-process template spec key and the cross-process fastcache key, so ``T`` must be something
+# that (a) is meaningful as a compile-time literal in generated code and (b) hashes and ``repr``s by value, stably
+# across processes. ``bool`` precedes ``int`` only for readability - membership is by exact type so ordering is
+# irrelevant.
+#
+# ``enum.Enum`` subclasses are permitted too (resolved separately, since membership here is by exact type): Genesis
+# declares ``integrator: int`` / ``ccd_algorithm: int`` etc. but stores ``IntEnum`` members in them, and an IntEnum
+# member is both a valid literal and stably repr'able.
+_FINAL_SCALAR_TYPES = frozenset({bool, int, float, str})
+
+# Types that are specifically worth a tailored error, because ``Final[T]`` on them is a plausible user mistake with a
+# clear better alternative. Resolved lazily to dodge import cycles (``_ndarray`` imports back into ``lang``).
+_FINAL_REJECT_HINTS: "dict[str, str]" = {
+    "NdarrayType": "arrays are runtime data, not compile-time constants - drop the ``Final`` and annotate the field "
+    "with ``qd.types.NDArray[dtype, ndim]`` as usual",
+    "MatrixType": "matrices are runtime data, not compile-time constants - drop the ``Final``",
+    "StructType": "``qd.dataclass`` structs are runtime data, not compile-time constants - drop the ``Final``",
+    "Tensor": "``qd.Tensor`` is runtime data, not a compile-time constant - drop the ``Final``",
+    # ``qd.Template`` and ``qd.types.annotations.template`` are both named ``Template``.
+    "Template": "``Final[qd.Template]`` is redundant - a ``qd.Template`` field is already compile-time; use "
+    "``Final[<python type>]`` (e.g. ``Final[int]``) instead",
+}
+
+
+def is_final_annotation(annotation: Any) -> bool:
+    """Return True if ``annotation`` is a ``typing.Final[T]`` special form.
+
+    ``typing.Final[T]`` on a field of a frozen ``@dataclasses.dataclass`` kernel argument marks the field's value as a
+    compile-time constant: the value is baked into the compiled kernel (so ``qd.static(config.field)`` is legal), it is
+    folded into the template spec key and the fastcache key (so distinct values compile distinct kernels), and it is
+    NOT declared as a runtime scalar kernel arg.
+
+    Bare ``typing.Final`` (with no ``[T]``) returns False here, because ``typing.get_origin`` yields ``None`` for it.
+    That does NOT make it an ordinary field: ``_build_final_plan`` rejects the bare spelling outright, since Quadrants
+    needs the wrapped type and silently lowering it to a runtime arg dies later in ``cook_dtype``.
+
+    ``typing_extensions.Final`` is the same object as ``typing.Final`` on every Python version Quadrants supports
+    (>=3.10), so it is accepted transparently; ``_build_final_plan`` raises a clear error if a future divergence ever
+    makes that untrue.
+    """
+    return typing.get_origin(annotation) is typing.Final
+
+
+def _describe_annotation(annotation: Any) -> str:
+    return getattr(annotation, "__name__", None) or repr(annotation)
+
+
+def _reject_hint_for(inner: Any) -> str | None:
+    """Return a tailored remediation hint when ``Final[inner]`` names a type we specifically want to reject well.
+
+    Matched on the *type name* rather than by importing the classes themselves, both to avoid import cycles and
+    because the check runs once per dataclass type at compile time, where the cost of a string compare is irrelevant.
+    """
+    for name in (type(inner).__name__, _describe_annotation(inner)):
+        hint = _FINAL_REJECT_HINTS.get(name)
+        if hint is not None:
+            return hint
+    return None
+
+
+def _validate_final_inner_type(dc_type: type, field_name: str, annotation: Any) -> None:
+    """Raise a clear error unless ``Final[annotation]`` names a type we can bake as a compile-time literal.
+
+    Only called once ``is_final_annotation`` has confirmed the annotation is a subscripted ``Final``, so
+    ``typing.get_args`` is guaranteed non-empty here - Python rejects ``Final[()]`` at subscript time, and bare
+    ``Final`` is caught earlier in ``_build_final_plan``.
+    """
+    inner = typing.get_args(annotation)
+    if len(inner) != 1:
+        raise TypeError(
+            f"{dc_type.__name__}.{field_name}: ``typing.Final`` takes exactly one type argument, got "
+            f"``Final[{', '.join(_describe_annotation(a) for a in inner)}]``."
+        )
+    inner_type = inner[0]
+
+    if inner_type in _FINAL_SCALAR_TYPES:
+        return
+    # ``issubclass`` here is fine: this runs once per dataclass type at compile time, never per launch.
+    if isinstance(inner_type, type) and issubclass(inner_type, enum.Enum):
+        return
+
+    hint = _reject_hint_for(inner_type)
+    if hint is None:
+        if isinstance(inner_type, type) and dataclasses.is_dataclass(inner_type):
+            hint = (
+                "nested dataclasses are walked structurally - drop the ``Final`` from this field and mark the "
+                "leaf fields inside it as ``Final[...]`` instead"
+            )
+        else:
+            allowed = ", ".join(sorted(t.__name__ for t in _FINAL_SCALAR_TYPES))
+            hint = f"``Final[T]`` supports T in {{{allowed}}} or an ``enum.Enum`` subclass"
+    raise TypeError(
+        f"{dc_type.__name__}.{field_name}: ``Final[{_describe_annotation(inner_type)}]`` cannot be baked as a "
+        f"Quadrants compile-time constant - {hint}."
+    )
+
+
+def _rebinding_is_prevented(dc_type: type) -> bool:
+    """Return True if ``dc_type`` prevents (or has explicitly disclaimed) rebinding of its fields.
+
+    ``frozen=True`` prevents it outright. ``unsafe_hash=True`` does not, but it is an explicit assertion by the user
+    that instances are value-stable, and the surrounding dataclass machinery already takes them at their word (see the
+    ``is_frozen`` key cache in ``_extract_arg``), so honour it here for consistency.
+
+    Deliberately *not* the codebase-wide ``__hash__ is not None`` proxy: ``@dataclass(eq=False)`` inherits
+    ``object.__hash__``, so that proxy reads a plain mutable class as frozen. For a ``Final`` field that means the
+    baked constant can be reassigned with no error and no recompilation (``TemplateMapper.lookup`` memoises on
+    ``id(arg)``), which is precisely what this check exists to prevent - and unlike ``unsafe_hash=True``, turning off
+    ``__eq__`` is not a statement about value stability.
+    """
+    params = getattr(dc_type, "__dataclass_params__", None)
+    if params is None:
+        return dc_type.__hash__ is not None
+    return params.frozen or params.unsafe_hash
+
+
+# Memo of ``dataclass type -> field path down to some Final leaf`` (``None`` if the subtree holds none), used to reject
+# mutable ancestors. Same once-per-type lifecycle as ``_final_plan_cache``; never consulted per launch.
+_final_path_cache: "dict[type, tuple[str, ...] | None]" = {}
+
+
+def _first_final_path(dc_type: type, visiting: "frozenset[type]") -> "tuple[str, ...] | None":
+    """Return the field path from ``dc_type`` down to some ``Final`` leaf, or None if the subtree contains none.
+
+    Only a witness is needed (to name one offending path in the error), so the first hit wins. Recursing through
+    ``final_field_names`` means every nested type is validated eagerly at the top-level call rather than lazily when
+    the hot path first walks that far down.
+
+    ``visiting`` guards against a self-referential type graph. Quadrants cannot actually lower a recursive dataclass
+    kernel arg, but validation must fail with a real error rather than a ``RecursionError``.
+    """
+    if dc_type in _final_path_cache:
+        return _final_path_cache[dc_type]
+    if dc_type in visiting:
+        return None
+    direct = final_field_names(dc_type)
+    path: "tuple[str, ...] | None" = (min(direct),) if direct else None
+    if path is None:
+        visiting = visiting | {dc_type}
+        for field in dataclasses.fields(dc_type):
+            if isinstance(field.type, type) and dataclasses.is_dataclass(field.type):
+                child = _first_final_path(field.type, visiting)
+                if child is not None:
+                    path = (field.name,) + child
+                    break
+    _final_path_cache[dc_type] = path
+    return path
+
+
+def _build_final_plan(dc_type: type) -> "frozenset[str]":
+    """Validate every ``Final`` field on ``dc_type`` and return the set of Final-annotated field names.
+
+    Called once per dataclass type (memoised in ``_final_plan_cache``), so all of the reflection here - including
+    ``dataclasses.fields``, ``typing.get_origin`` and ``issubclass`` - stays entirely off the per-launch hot path.
+    """
+    final_names = []
+    for field in dataclasses.fields(dc_type):
+        annotation = field.type
+        if isinstance(annotation, str):
+            # ``from __future__ import annotations`` (or an explicit string annotation) leaves ``field.type`` as an
+            # unresolved string. The pre-existing dataclass kernel-arg path already assumes resolved types, so rather
+            # than half-supporting it, flag the one case where silently ignoring it would be a correctness trap: a
+            # field the user believes is a compile-time constant but which we would lower as a runtime arg.
+            if "Final" in annotation:
+                raise TypeError(
+                    f"{dc_type.__name__}.{field.name}: annotation is the unresolved string {annotation!r}. Quadrants "
+                    f"cannot see ``Final`` through a string annotation, so this field would silently become a runtime "
+                    f"kernel argument. Remove ``from __future__ import annotations`` from the module defining "
+                    f"{dc_type.__name__}, or annotate with the real type object."
+                )
+            continue
+        if annotation is typing.Final:
+            # Bare ``Final`` with no ``[T]``. ``typing.get_origin(typing.Final)`` is ``None``, so this does not look
+            # like a Final annotation to ``is_final_annotation`` and the field would otherwise be treated as an
+            # ordinary runtime one - reaching ``decl_scalar_arg`` and dying in ``cook_dtype`` with
+            # ``ValueError: Invalid data type typing.Final``. That is exactly the confusing failure this feature
+            # exists to remove for ``Final[T]``, so reject the unsupported spelling here with a clear message.
+            raise TypeError(
+                f"{dc_type.__name__}.{field.name}: bare ``typing.Final`` is not supported as a Quadrants "
+                f"compile-time template field. Write ``Final[T]`` with a concrete type, e.g. "
+                f"``{field.name}: Final[int]``."
+            )
+        if not is_final_annotation(annotation):
+            # Catch a ``Final``-like special form that is not ``typing.Final`` - e.g. if a future ``typing_extensions``
+            # release stops aliasing the stdlib object. Silently treating such a field as a runtime one would be a
+            # correctness trap of exactly the kind described just above.
+            origin = typing.get_origin(annotation)
+            if origin is not None and "Final" in _describe_annotation(origin):
+                raise TypeError(
+                    f"{dc_type.__name__}.{field.name}: annotation {annotation!r} looks like a ``Final`` special form "
+                    f"but is not ``typing.Final`` (got origin {origin!r}). Use ``typing.Final`` from the standard "
+                    f"library."
+                )
+            continue
+        _validate_final_inner_type(dc_type, field.name, annotation)
+        final_names.append(field.name)
+
+    if final_names and not _rebinding_is_prevented(dc_type):
+        # ``Final`` asserts the value never changes, and Quadrants bakes it into compiled code accordingly - so a
+        # mutable carrier is a contradiction we reject rather than silently tolerate. Rebinding it is not merely
+        # untidy: ``TemplateMapper.lookup`` memoises the specialisation on ``id(arg)``, so re-launching with the same
+        # instance after a reassignment silently reuses the kernel compiled with the old value.
+        raise TypeError(
+            f"{dc_type.__name__} has ``Final`` field(s) {sorted(final_names)} but is not frozen. A ``Final`` field's "
+            f"value is baked into the compiled kernel, so it must not be reassignable - reassigning it would silently "
+            f"keep using the kernel compiled for the old value. Declare the class as "
+            f"``@dataclasses.dataclass(frozen=True)`` (or ``unsafe_hash=True`` if you must keep it mutable and accept "
+            f"responsibility for never reassigning these fields)."
+        )
+
+    # A mutable *ancestor* of a Final field is just as unsound as a mutable carrier, and is not covered by the check
+    # above because ``final_names`` only describes this class's own fields. Given a frozen ``Inner`` holding
+    # ``n: Final[int]``, a mutable ``Outer`` holding ``child: Inner`` still lets ``outer.child = Inner(n=9)`` change a
+    # baked constant, and the ``id(arg)``-keyed lookup cache then hands back the specialisation compiled for the old
+    # child. Reject every mutable dataclass on a path down to a Final leaf.
+    if not _rebinding_is_prevented(dc_type):
+        for field in dataclasses.fields(dc_type):
+            if not (isinstance(field.type, type) and dataclasses.is_dataclass(field.type)):
+                continue
+            nested = _first_final_path(field.type, frozenset({dc_type}))
+            if nested is None:
+                continue
+            leaf = ".".join((dc_type.__name__, field.name) + nested)
+            raise TypeError(
+                f"{dc_type.__name__} is not frozen but reaches the ``Final`` field {leaf} through its field "
+                f"``{field.name}``. A ``Final`` value is baked into the compiled kernel, so no dataclass on the path "
+                f"to it may be reassignable - rebinding ``{dc_type.__name__}.{field.name}`` would silently keep using "
+                f"the kernel compiled for the previous value. Declare {dc_type.__name__} as "
+                f"``@dataclasses.dataclass(frozen=True)`` (or ``unsafe_hash=True`` if you must keep it mutable and "
+                f"accept responsibility for never reassigning ``{field.name}``)."
+            )
+    return frozenset(final_names)
+
+
+# Memo of ``dataclass type -> frozenset of Final field names``. Keyed on the type object, so it is bounded by the
+# number of distinct dataclass types the process ever passes to a kernel. An empty frozenset (the common case) is a
+# meaningful cached result, so callers must distinguish it from a cache miss via ``.get(...) is None``.
+_final_plan_cache: "dict[type, frozenset[str]]" = {}
+
+
+def final_field_names(dc_type: Any) -> "frozenset[str]":
+    """Return the cached set of ``Final``-annotated field names on ``dc_type``, validating on first sighting.
+
+    Hot-path contract: one ``dict.get``. Callers should short-circuit on the empty result so that dataclasses with no
+    ``Final`` fields (the overwhelmingly common case) run the pre-existing code path untouched.
+
+    ``dc_type`` is typed ``Any`` rather than ``type`` because ``_extract_arg`` calls this with its loosely-typed
+    ``annotation`` parameter (a union covering every kernel-arg annotation shape), having already established that it
+    is a dataclass type via the ``__dataclass_fields__`` probe. Narrowing at that call site would need a
+    ``typing.cast``, which is a real function call on a per-launch path.
+    """
+    names = _final_plan_cache.get(dc_type)
+    if names is None:
+        names = _build_final_plan(dc_type)
+        _final_plan_cache[dc_type] = names
+    return names
