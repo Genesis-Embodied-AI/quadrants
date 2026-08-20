@@ -716,7 +716,7 @@
 <dl class="py property">
 <dt class="sig sig-object py" id="quadrants._lib.core.quadrants_python.CompileConfig.demote_dense_struct_fors">
 <em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">demote_dense_struct_fors</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">bool</span></em><a class="headerlink" href="#quadrants._lib.core.quadrants_python.CompileConfig.demote_dense_struct_fors" title="Link to this definition">#</a></dt>
-<dd><p>Lower dense struct-for loops to ordinary range-for loops.</p>
+<dd><p>Lower dense struct-for loops to ordinary range-for loops. Forced on for the Vulkan/Metal (SPIR-V) backends, where the value you pass is ignored.</p>
 <p>Default: <code class="docutils literal notranslate"><span class="pre">True</span></code>.</p>
 </dd></dl>
 
@@ -812,7 +812,7 @@
 <dl class="py property">
 <dt class="sig sig-object py" id="quadrants._lib.core.quadrants_python.CompileConfig.kernel_profiler">
 <em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">kernel_profiler</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">bool</span></em><a class="headerlink" href="#quadrants._lib.core.quadrants_python.CompileConfig.kernel_profiler" title="Link to this definition">#</a></dt>
-<dd><p>Enable the on-device kernel profiler to collect per-kernel timings.</p>
+<dd><p>Enable the on-device kernel profiler to collect per-kernel timings. Only the CPU, CUDA, and AMDGPU backends emit the timing hooks; on Vulkan/Metal it produces no per-kernel timings.</p>
 <p>Default: <code class="docutils literal notranslate"><span class="pre">False</span></code>.</p>
 </dd></dl>
 
