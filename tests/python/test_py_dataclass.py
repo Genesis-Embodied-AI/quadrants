@@ -3923,9 +3923,15 @@ def test_final_scalar_key_distinguishes_signed_zero_and_nan_payloads():
     assert final_scalar_key(ModeA.X) != final_scalar_key(ModeB.Y)  # same value, different enum class
     assert final_scalar_key(ModeA.X) == final_scalar_key(ModeA.X)  # same member is stable
 
-    # Non-float, non-enum ``Final`` value types (including non-floating NumPy scalars) are returned unchanged.
-    for v in (True, 7, "abc", np.int64(7)):
-        assert final_scalar_key(v) == v
+    # Remaining scalars are type-tagged: Python conflates value-equal but distinct-typed constants (True == 1 ==
+    # np.int64(1), with equal hashes), and they bake observably different Python constants, so they must not alias.
+    assert final_scalar_key(True) != final_scalar_key(1)
+    assert final_scalar_key(1) != final_scalar_key(np.int64(1))
+    assert final_scalar_key(7) != final_scalar_key("7")
+    # ...but equal values of the same type stay equal, so legitimate kernel reuse is preserved.
+    assert final_scalar_key(7) == final_scalar_key(7)
+    assert final_scalar_key("abc") == final_scalar_key("abc")
+    assert final_scalar_key(True) == final_scalar_key(True)
 
 
 @test_utils.test()

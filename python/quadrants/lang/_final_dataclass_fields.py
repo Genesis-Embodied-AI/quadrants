@@ -291,36 +291,31 @@ _FLOAT_KEY_TAG = "f64"
 # scalar keys and from same-valued members of other enum classes (see the enum bullet in ``final_scalar_key``).
 _ENUM_KEY_TAG = "enum"
 
+# And for every remaining scalar (``bool`` / ``int`` / ``str`` and their NumPy analogues): tagging with the exact
+# type keeps value-equal but distinct-typed constants apart (``True`` vs ``1`` vs ``np.int64(1)``), which the bare
+# value cannot do because Python gives them equal ``==`` and equal hashes (see the scalar bullet below).
+_SCALAR_KEY_TAG = "scalar"
+
 
 def final_scalar_key(value: Any) -> Any:
     """Return a process-stable, collision-free key component for a baked ``Final`` field value.
 
-    Floating-point values are encoded by their exact IEEE-754 bits (tagged with ``_FLOAT_KEY_TAG``) and ``enum``
-    members by their class + member identity (tagged with ``_ENUM_KEY_TAG``); the remaining permitted ``Final``
-    values (``bool`` / ``int`` / ``str``) are returned unchanged. A builtin ``float`` becomes
-    ``(_FLOAT_KEY_TAG, <bits as int>)``; a NumPy floating scalar becomes ``(_FLOAT_KEY_TAG, <dtype str>, <bytes>)``
-    so distinct widths (float16/32/64/128) never alias. Encoding is needed because Python conflates values that
-    name *distinct* compile-time constants:
+    Every value is turned into a *type-tagged* key component, because Python treats several distinct compile-time
+    constants as equal (with equal hashes) and annotations are not enforced at runtime, so one ``Final`` field can
+    receive any of them across launches. The encodings:
 
-    - ``-0.0 == 0.0`` and ``hash(-0.0) == hash(0.0)`` (for builtin *and* NumPy floats), so the in-process template
-      mapper spec key (a plain tuple used as a ``dict`` key) would reuse one compiled kernel for both, even though
-      the baked constant differs observably (sign bit; ``1.0 / x`` gives ``+inf`` vs ``-inf``).
-    - ``str`` (and ``float.hex``) render every NaN as ``"nan"`` regardless of sign or mantissa payload, so the
-      cross-process fastcache key built from ``str(value)`` would collide distinct NaNs.
-    - Type annotations are not enforced at runtime, so a ``Final[float]`` field can legally be launched with an
-      ``int`` (as ordinary float args are). Without the tag the bare bits of ``1.0`` (``4607182418800017408``)
-      would equal ``final_scalar_key(4607182418800017408)``, so those two launches - which bake *different*
-      constants - would select the same specialization. The tag keeps encoded floats in a disjoint value space.
-    - An ``IntEnum`` / ``IntFlag`` / ``StrEnum`` member inherits value-equality from its mixed-in ``int`` / ``str``:
-      it is ``==`` with an equal hash to the bare scalar *and* to a same-valued member of a different enum class,
-      and on Python >=3.11 ``str(member)`` is just that scalar. Keying on ``(module, qualname, name)`` keeps
-      distinct members (and enum-vs-scalar) in separate specializations - which matters when codegen reads
-      member-specific attributes such as ``config.mode.name``.
+    - builtin ``float`` -> ``(_FLOAT_KEY_TAG, <IEEE-754 bits as int>)``; NumPy floating scalar ->
+      ``(_FLOAT_KEY_TAG, <dtype str>, <raw bytes>)``. Bits (not value) so ``-0.0``/``0.0`` (equal, equal hash) and
+      NaNs differing only in sign/payload (all ``str``-ed to ``"nan"``) stay distinct, and widths never alias.
+    - ``enum`` member -> ``(_ENUM_KEY_TAG, module, qualname, name)``. An ``IntEnum`` / ``StrEnum`` member is ``==``
+      to its bare scalar and to a same-valued member of another enum class (and ``str(member)`` is just the scalar
+      on Python >=3.11), so keying on identity keeps them distinct - relevant when codegen reads e.g. ``mode.name``.
+    - every remaining scalar (``bool`` / ``int`` / ``str`` and NumPy analogues) ->
+      ``(_SCALAR_KEY_TAG, module, qualname, value)``. ``True == 1 == np.int64(1)`` with equal hashes, but they bake
+      observably different Python constants (e.g. ``config.value is True``), so the exact type must be in the key.
 
-    A NumPy scalar and an enum member are handled here (not just builtin ``float``) because they hit exactly the
-    same conflations and Genesis routinely stores both in ``Final`` fields. Everything here runs once per instance
-    (Final keys/reprs are cached), never on the steady-state launch path, so the ``isinstance`` probes are off the
-    hot path.
+    Everything here runs once per instance (Final keys/reprs are cached), never on the steady-state launch path, so
+    the ``isinstance`` probes are off the hot path.
     """
     if type(value) is float:
         return (_FLOAT_KEY_TAG, _unpack_u64(_pack_f64(value))[0])
@@ -334,4 +329,7 @@ def final_scalar_key(value: Any) -> Any:
         # identically-named members of different enums.
         cls = type(value)
         return (_ENUM_KEY_TAG, cls.__module__, cls.__qualname__, value.name)
-    return value
+    # ``bool`` / ``int`` / ``str`` and their NumPy analogues. The exact type completes the tag so value-equal but
+    # distinct-typed constants (``True`` vs ``1``, ``np.int64(1)`` vs ``1``) never share a specialization.
+    cls = type(value)
+    return (_SCALAR_KEY_TAG, cls.__module__, cls.__qualname__, value)
