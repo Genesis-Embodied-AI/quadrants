@@ -469,7 +469,9 @@ def test_atomic_float_ops(op, dtype):
         "min": 0.0,
         "max": (block_dim - 1) * SCALE,
     }
-    rtol = {qd.f16: 1e-3, qd.f64: 1e-10}.get(dtype, 1e-6)
+    # f16 add/sub of 128 concurrent atomics is order-dependent (~1e-2 across interleavings); the per-task module path
+    # changes the order. A real failure (dropped block) would be off by 75, far outside 1e-2.
+    rtol = {qd.f16: 1e-2, qd.f64: 1e-10}.get(dtype, 1e-6)
     assert arr[0] == test_utils.approx(expected[op], rel=rtol)
 
 
