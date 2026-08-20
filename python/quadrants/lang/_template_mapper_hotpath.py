@@ -30,6 +30,8 @@ import weakref
 from dataclasses import _FIELD, _FIELDS
 from typing import Any, Union
 
+import numpy as np
+
 from quadrants import _tensor_wrapper
 from quadrants._lib import core as _qd_core
 from quadrants._tensor import (
@@ -422,10 +424,13 @@ def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: Annotati
                 if field.name in final_names:
                     # ``raise_on_templated_floats`` exists to stop float values from driving kernel specialisation,
                     # since each distinct value compiles another kernel. A ``Final[float]`` field does exactly that,
-                    # so it has to honour the setting like a ``qd.template()`` float does (the check below the
-                    # template branch, ~line 297). ``type(...) is float`` matches that check exactly, both for
-                    # consistency and because it is a pointer compare rather than an MRO walk.
-                    if raise_on_templated_floats and type(field_value) is float:
+                    # so it must honour the setting like a ``qd.template()`` float does. ``final_scalar_key`` below
+                    # specialises on NumPy floating scalars as well as builtin ``float``, so the guard has to reject
+                    # both. ``type(x) is float`` is a fast pointer compare, and the ``isinstance`` only runs when
+                    # that misses *and* the option is enabled (i.e. never on the default hot path).
+                    if raise_on_templated_floats and (
+                        type(field_value) is float or isinstance(field_value, np.floating)
+                    ):
                         raise ValueError(
                             f"Floats not allowed as templated types: {annotation.__name__}.{field.name} is "
                             f"``Final[float]``, so its value is baked into the compiled kernel and each distinct "
