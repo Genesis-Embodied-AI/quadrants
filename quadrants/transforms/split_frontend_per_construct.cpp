@@ -642,6 +642,13 @@ bool maybe_split_frontend_per_construct(IRNode *ir,
   // produce their documented whole-kernel output.
   if (env_is_enabled(DUMP_CFG_ENV) || env_is_enabled(DUMP_IR_ENV))
     return false;
+  // qd.init(print_ir=True) (surfaced here as `verbose`, see codegen_llvm.cpp) prints a whole-kernel IR snapshot
+  // before/after every pipeline stage via make_pass_printer + full_simplify's per-stage prints. The split runs those
+  // stages per construct, so print_ir would emit one isolated construct per snapshot instead of the documented
+  // whole-kernel console dump (docs/source/user_guide/optimization_passes.md). Fall back so print_ir stays the
+  // whole-kernel counterpart of the pipeline-stage dumps.
+  if (verbose || config.print_ir)
+    return false;
   // QD_KERNEL_COVERAGE (python/quadrants/lang/_kernel_coverage.py) rewrites every kernel to store a probe into a global
   // coverage field before each source line. Those probe stores add top-level global-write constructs (so the partition
   // no longer matches the source structure) and, in graph/checkpoint kernels, land between a yield gate and its loop --
