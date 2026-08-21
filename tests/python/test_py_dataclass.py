@@ -4364,6 +4364,17 @@ def test_final_scalar_key_live_uses_object_identity_not_class_equality():
     assert final_scalar_key(first(1), live=True) != final_scalar_key(second(1), live=True)
     assert final_scalar_key(first(1), live=True) == final_scalar_key(first(1), live=True)  # stable for one class
 
+    # The live key also carries the class object as a *strong ref*, so the mapper pins it and its id cannot be recycled
+    # by a later same-named factory class while the specialization is cached (id alone would be reusable after GC).
+    def _flat(x):
+        if isinstance(x, tuple):
+            for e in x:
+                yield from _flat(e)
+        else:
+            yield x
+
+    assert any(e is first for e in _flat(final_scalar_key(first(1), live=True)))  # class object retained in the key
+
 
 @test_utils.test()
 def test_final_scalar_key_offline_dynamic_class_is_process_unique():
@@ -4387,6 +4398,38 @@ def test_final_scalar_key_offline_dynamic_class_is_process_unique():
     other = _make_local_int()
     assert fdf.final_scalar_key(loc(1)) != fdf.final_scalar_key(other(1))
     assert fdf.final_scalar_key(loc(1)) == fdf.final_scalar_key(loc(1))
+
+
+@test_utils.test()
+def test_final_plan_cache_keyed_by_type_identity():
+    """The Final-field plan/path caches key on type *identity* (``id``), not the type object, so a metaclass that
+    makes two distinct dataclass types compare equal with equal hashes cannot make one reuse the other's Final schema.
+    A plain ``dict[type, ...]`` would return the first type's plan for the second - baking a runtime field, or lowering
+    a real ``Final`` field as an ordinary one and failing compilation, depending on lookup order."""
+    import dataclasses as dcs
+    from typing import Final
+
+    from quadrants.lang._final_dataclass_fields import final_field_names
+
+    class DcMeta(type):
+        def __eq__(cls, other):
+            return isinstance(other, DcMeta)  # any two such classes compare equal...
+
+        def __hash__(cls):
+            return 0  # ...with equal hashes, so a plain dict would merge them
+
+    @dcs.dataclass(frozen=True)
+    class HasFinal(metaclass=DcMeta):
+        x: Final[int]
+
+    @dcs.dataclass(frozen=True)
+    class NoFinal(metaclass=DcMeta):
+        x: int
+
+    assert HasFinal == NoFinal and hash(HasFinal) == hash(NoFinal)  # metaclass forces type-level equality
+    # Each type must resolve to its OWN plan, regardless of caching order (identity keys keep them separate).
+    assert final_field_names(HasFinal) == frozenset({"x"})
+    assert final_field_names(NoFinal) == frozenset()
 
 
 @test_utils.test()

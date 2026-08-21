@@ -147,9 +147,11 @@ def _rebinding_is_prevented(dc_type: type) -> bool:
     return params.frozen or params.unsafe_hash
 
 
-# Memo of ``dataclass type -> field path down to some Final leaf`` (``None`` if the subtree holds none), used to reject
-# mutable ancestors. Same once-per-type lifecycle as ``_final_plan_cache``; never consulted per launch.
-_final_path_cache: "dict[type, tuple[str, ...] | None]" = {}
+# Memo of ``id(dataclass type) -> (type, field path down to some Final leaf)`` (path ``None`` if the subtree holds
+# none), used to reject mutable ancestors. Identity-keyed with a strong-ref+``is`` guard for the same reason as
+# ``_final_plan_cache`` (metaclass ``__eq__`` must not merge distinct types). Same once-per-type lifecycle; never
+# consulted per launch.
+_final_path_cache: "dict[int, tuple[type, tuple[str, ...] | None]]" = {}
 
 
 def _first_final_path(dc_type: type, visiting: "frozenset[type]") -> "tuple[str, ...] | None":
@@ -162,8 +164,9 @@ def _first_final_path(dc_type: type, visiting: "frozenset[type]") -> "tuple[str,
     ``visiting`` guards against a self-referential type graph. Quadrants cannot actually lower a recursive dataclass
     kernel arg, but validation must fail with a real error rather than a ``RecursionError``.
     """
-    if dc_type in _final_path_cache:
-        return _final_path_cache[dc_type]
+    entry = _final_path_cache.get(id(dc_type))
+    if entry is not None and entry[0] is dc_type:  # identity check: guard against a recycled ``id`` (belt & braces)
+        return entry[1]
     if dc_type in visiting:
         return None
     direct = final_field_names(dc_type)
@@ -176,7 +179,7 @@ def _first_final_path(dc_type: type, visiting: "frozenset[type]") -> "tuple[str,
                 if child is not None:
                     path = (field.name,) + child
                     break
-    _final_path_cache[dc_type] = path
+    _final_path_cache[id(dc_type)] = (dc_type, path)
     return path
 
 
@@ -265,27 +268,31 @@ def _build_final_plan(dc_type: type) -> "frozenset[str]":
     return frozenset(final_names)
 
 
-# Memo of ``dataclass type -> frozenset of Final field names``. Keyed on the type object, so it is bounded by the
-# number of distinct dataclass types the process ever passes to a kernel. An empty frozenset (the common case) is a
-# meaningful cached result, so callers must distinguish it from a cache miss via ``.get(...) is None``.
-_final_plan_cache: "dict[type, frozenset[str]]" = {}
+# Memo of ``id(dataclass type) -> (type, frozenset of Final field names)``. Keyed on the type's *identity* (its
+# ``id``), never on ``type`` itself, so a metaclass that overrides ``__eq__``/``__hash__`` to make two distinct
+# dataclass types compare equal cannot merge their (possibly different) Final schemas - a plain ``dict[type, ...]``
+# would return the first type's plan for the second. The stored ``type`` is a strong reference: it both pins the type
+# (so its ``id`` cannot be recycled while the entry lives) and lets a lookup verify identity (``entry[0] is dc_type``)
+# before trusting the cached plan. Bounded by the number of distinct dataclass types the process passes to a kernel.
+_final_plan_cache: "dict[int, tuple[type, frozenset[str]]]" = {}
 
 
 def final_field_names(dc_type: Any) -> "frozenset[str]":
     """Return the cached set of ``Final``-annotated field names on ``dc_type``, validating on first sighting.
 
-    Hot-path contract: one ``dict.get``. Callers should short-circuit on the empty result so that dataclasses with no
-    ``Final`` fields (the overwhelmingly common case) run the pre-existing code path untouched.
+    Hot-path contract: one ``dict.get`` + one ``is`` check. Callers should short-circuit on the empty result so that
+    dataclasses with no ``Final`` fields (the overwhelmingly common case) run the pre-existing code path untouched.
 
     ``dc_type`` is typed ``Any`` rather than ``type`` because ``_extract_arg`` calls this with its loosely-typed
     ``annotation`` parameter (a union covering every kernel-arg annotation shape), having already established that it
     is a dataclass type via the ``__dataclass_fields__`` probe. Narrowing at that call site would need a
     ``typing.cast``, which is a real function call on a per-launch path.
     """
-    names = _final_plan_cache.get(dc_type)
-    if names is None:
-        names = _build_final_plan(dc_type)
-        _final_plan_cache[dc_type] = names
+    entry = _final_plan_cache.get(id(dc_type))
+    if entry is not None and entry[0] is dc_type:  # identity check: guard against a recycled ``id`` (belt & braces)
+        return entry[1]
+    names = _build_final_plan(dc_type)
+    _final_plan_cache[id(dc_type)] = (dc_type, names)
     return names
 
 
@@ -561,14 +568,14 @@ def _subclass_identity(cls: type, live: bool) -> tuple:
 
     The two key consumers need different strategies, selected by ``live``:
 
-    - ``live=True`` (the in-process template spec key): the identity component is ``id(cls)``, a pure *object*
-      identity, so any two distinct class objects key apart, including across a reload that transiently shares
-      ``module`` / ``qualname``. ``id`` (not the class object) is deliberate: embedding ``cls`` would compare via
-      ``cls.__eq__``, which a metaclass can override so two distinct classes are ``==`` with equal hashes (the
-      subclass-state validator does not inspect metaclass behavior), collapsing their keys - and it would also pin the
-      class in the mapper. ``id`` sidesteps both. It is not process-stable, so it must never reach the offline key. The
-      instance keeps its own class alive, so ``id(cls)`` is stable and unambiguous for that instance's lifetime; a
-      benign ``id`` reuse can only happen once the class is unreachable, when no live kernel can observe the identity.
+    - ``live=True`` (the in-process template spec key): the identity component is ``(id(cls), cls)``. ``id(cls)`` is a
+      pure *object* identity used for comparison, so any two distinct class objects key apart, including across a reload
+      that transiently shares ``module`` / ``qualname`` and even when a metaclass makes two distinct classes ``==`` with
+      equal hashes (comparison stops at the differing ``id`` before ever touching ``cls.__eq__``; the subclass-state
+      validator does not inspect metaclass behavior). The class object rides along as a *strong reference*: this key
+      lives in the template mapper for the specialization's lifetime, so it pins ``cls`` and its ``id`` cannot be
+      recycled by a later same-named factory class (which would otherwise collide on the recycled address). This
+      component is process-local, so it must never reach the offline key.
     - ``live=False`` (the offline fastcache key, ``str``-ified by ``args_hasher``): the component must make another
       process reuse a *resolvable* class's cached kernel while never wrongly reusing one for a *non-resolvable* class.
       So it is ``None`` for a uniquely resolvable (typically module-level) class - keeping the string stable across
@@ -580,7 +587,7 @@ def _subclass_identity(cls: type, live: bool) -> tuple:
       does not exist in the other process).
     """
     if live:
-        return (cls.__module__, cls.__qualname__, id(cls))
+        return (cls.__module__, cls.__qualname__, (id(cls), cls))
     identity = (_PROCESS_NONCE, id(cls)) if _class_not_uniquely_identified(cls) else None
     return (cls.__module__, cls.__qualname__, identity)
 
@@ -759,11 +766,12 @@ def final_scalar_key(value: Any, live: bool = False) -> Any:
 
     A user *subclass* (of ``float``/``int``/``str`` or a NumPy scalar) or an ``enum`` is keyed by its class identity
     via ``_subclass_identity``, not just its value, since ``cfg.x.__class__`` is observable at compile time. ``live``
-    selects the identity strategy: the in-process spec key (``live=True``) keys on ``id(cls)`` so distinct classes
-    never collide, even across a module reload that rebinds one ``module``/``qualname`` to a fresh class or when a
-    metaclass makes two distinct classes ``==``; the offline fastcache key (``live=False``, the default) uses a
-    process-stable component instead (``None`` for a resolvable class, a per-process ``(nonce, id)`` for a
-    locally/dynamically created one, so it is a guaranteed cross-process miss rather than a possible wrong reuse).
+    selects the identity strategy: the in-process spec key (``live=True``) keys on ``(id(cls), cls)`` so distinct
+    classes never collide - even across a module reload or under a metaclass that makes two classes ``==`` - and the
+    retained class object pins ``cls`` so its ``id`` cannot be recycled while the specialization is cached; the offline
+    fastcache key (``live=False``, the default) uses a process-stable component instead (``None`` for a resolvable
+    class, a per-process ``(nonce, id)`` for a locally/dynamically created one, so it is a guaranteed cross-process
+    miss rather than a possible wrong reuse).
     Annotations are not enforced at runtime, so a
     value that is none of the above (an arbitrary object, or a mutable container) is *rejected* with a clear
     ``TypeError`` rather than keyed by its own ``__eq__`` / ``__hash__``. Such an object could select the wrong
@@ -788,9 +796,9 @@ def final_scalar_key(value: Any, live: bool = False) -> Any:
         # classes built by a factory can share all four yet have distinct members (``First.A`` is not ``Second.A``,
         # and for a plain ``Enum`` ``First.A != Second.A``), and a module-level name can be rebound to a fresh class
         # by a reload - either way a kernel branching on ``cfg.mode == First.A`` needs distinct specializations.
-        # ``_subclass_identity`` keys on ``id(cls)`` in-process (so all such cases stay distinct, even under a
-        # metaclass with a custom ``==``) and on a per-process ``(nonce, id)`` / ``None`` offline. Every supported
-        # value encodes to a hashable key, so the tuple stays hashable.
+        # ``_subclass_identity`` keys on ``(id(cls), cls)`` in-process (so all such cases stay distinct, even under a
+        # metaclass with a custom ``==``, and the retained class pins its ``id``) and on a per-process ``(nonce, id)``
+        # / ``None`` offline. Every supported value encodes to a hashable key, so the tuple stays hashable.
         _reject_stateful_enum_member(value)
         cls = type(value)
         return (_ENUM_KEY_TAG, *_subclass_identity(cls, live), value.name, final_scalar_key(value.value, live))
@@ -850,7 +858,7 @@ def final_scalar_key(value: Any, live: bool = False) -> Any:
     if _is_baked_base_type(cls):  # exact builtin primitive or exact NumPy scalar
         return (_SCALAR_KEY_TAG, cls.__module__, cls.__qualname__, canonical)
     # A behavior-free user subclass (``class Grams(int): pass``): ``module``/``qualname`` do not uniquely identify the
-    # class object, so ``_subclass_identity`` carries ``id(cls)`` (in-process) or a per-process ``(nonce, id)`` / None
-    # (offline) - two distinct same-named subclasses (``cfg.x.__class__ is First``) then key apart, matching the enum
-    # and float-subclass branches above.
+    # class object, so ``_subclass_identity`` carries ``(id(cls), cls)`` (in-process) or a per-process ``(nonce, id)``
+    # / None (offline) - two distinct same-named subclasses (``cfg.x.__class__ is First``) then key apart, matching
+    # the enum and float-subclass branches above.
     return (_SCALAR_KEY_TAG, *_subclass_identity(cls, live), canonical)
