@@ -82,7 +82,7 @@ class SubsetCloner : public IRVisitor {
  public:
   enum Phase { register_operand_map, replace_operand } phase;
 
-  explicit SubsetCloner(IRNode *other) : other_(other), phase(register_operand_map) {
+  explicit SubsetCloner(IRNode *other) : phase(register_operand_map), other_(other) {
     allow_undefined_visitor = true;
     invoke_default_visitor = true;
   }
@@ -237,17 +237,13 @@ bool block_has_mesh_for(Block *block) {
 bool block_has_concurrent_region(Block *block) {
   if (block == nullptr)
     return false;
-  return !gather_stmts_incl_containers(block,
-                                       [](Stmt *s) {
-                                         if (auto *rf = s->cast<RangeForStmt>())
-                                           return rf->stream_parallel_group_id != 0 ||
-                                                  rf->graph_parallel_region_id != 0;
-                                         if (auto *sf = s->cast<StructForStmt>())
-                                           return sf->stream_parallel_group_id != 0 ||
-                                                  sf->graph_parallel_region_id != 0;
-                                         return false;
-                                       })
-              .empty();
+  return !gather_stmts_incl_containers(block, [](Stmt *s) {
+            if (auto *rf = s->cast<RangeForStmt>())
+              return rf->stream_parallel_group_id != 0 || rf->graph_parallel_region_id != 0;
+            if (auto *sf = s->cast<StructForStmt>())
+              return sf->stream_parallel_group_id != 0 || sf->graph_parallel_region_id != 0;
+            return false;
+          }).empty();
 }
 
 // Resolve a local pointer to its base AllocaStmt: an AllocaStmt directly, a MatrixPtrStmt into one (matrix/vector
@@ -638,8 +634,8 @@ bool maybe_split_frontend_per_construct(IRNode *ir,
   // QD_DUMP_CFG and QD_DUMP_IR are whole-kernel diagnostics: QD_DUMP_CFG dumps the whole-kernel CFG (`cfg_optimization`
   // forces the whole-kernel path for it) and QD_DUMP_IR writes a snapshot before/after each simplify stage. The split
   // would run those stages per construct and dump into the same phase filenames, so later constructs overwrite earlier
-  // ones and only a partial graph / a subset of the documented snapshots survives. Fall back so both diagnostics produce
-  // their documented whole-kernel output.
+  // ones and only a partial graph / a subset of the documented snapshots survives. Fall back so both diagnostics
+  // produce their documented whole-kernel output.
   auto dump_env_set = [](std::string_view env) {
     const char *v = std::getenv(env.data());
     return v != nullptr && std::string(v) == "1";
