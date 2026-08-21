@@ -360,7 +360,10 @@ def _is_baked_base_type(klass: type) -> bool:
     """
     if klass in _EXACT_BAKED_TYPES or klass is object:
         return True
-    return issubclass(klass, np.generic) and not (klass.__flags__ & _HEAPTYPE_FLAG)
+    # A genuine NumPy scalar base is a static (C-defined) ``np.generic`` subclass; a user subclass - even one that
+    # spoofs ``__module__ = "numpy"`` - is a ``class``-statement heap type (``Py_TPFLAGS_HEAPTYPE`` set).
+    is_heap_type = bool(klass.__flags__ & _HEAPTYPE_FLAG)
+    return issubclass(klass, np.generic) and not is_heap_type
 
 
 def _reject_stateful_primitive_subclass(value: Any) -> None:
@@ -472,6 +475,13 @@ _FRAMEWORK_ENUM_CLASSES = frozenset(
     c
     for c in (getattr(enum, n, None) for n in ("Enum", "IntEnum", "StrEnum", "Flag", "IntFlag", "ReprEnum"))
     if isinstance(c, type)
+)
+
+# Framework metaclass layers on an enum's *metaclass* MRO. A plain enum's metaclass is exactly ``enum.EnumMeta`` (aka
+# ``EnumType`` on Python >=3.11); only a user-authored ``EnumMeta`` *subclass* sits below it, and only those layers are
+# inspected for observable metaclass-level behavior (see ``_enum_class_behavior_attr``).
+_FRAMEWORK_ENUM_METACLASSES = frozenset(
+    c for c in (type, object, getattr(enum, "EnumMeta", None), getattr(enum, "EnumType", None)) if isinstance(c, type)
 )
 
 # Dunder methods that make an object's *behavior* observable at compile time (comparison, hashing, conversion,
@@ -705,19 +715,42 @@ def _compute_enum_generated_class_attrs() -> "frozenset[str]":
 _ENUM_GENERATED_CLASS_ATTRS = _compute_enum_generated_class_attrs()
 
 
+def _observable_class_dict_attr(klass: type) -> "str | None":
+    """Name of a user-authored observable attribute in ``klass.__dict__`` - a method / property / class var, a
+    genuinely-overridden observable operator dunder, or a user sunder/dunder hook - or None. Enum members/aliases,
+    observable dunders the enum machinery merely copies from a base (Python >=3.11, see ``_dunder_copied_from_base``),
+    and machinery-generated sunder/dunder names (``_member_map_`` / ``__new__`` / ``__doc__`` / 3.13's
+    ``__firstlineno__`` / ...) are skipped. Used for both an enum class's own MRO and its metaclass MRO.
+    """
+    for name, member in vars(klass).items():
+        if isinstance(member, enum.Enum):  # an enum member or alias defined on the class
+            continue
+        if name in _OBSERVABLE_DUNDERS:
+            if _dunder_copied_from_base(klass, name, member):
+                continue  # enum machinery copied a base/data-type dunder (Python >=3.11), not a user override
+            return name  # a genuine user operator/behavior dunder override
+        if name.startswith("_") and name.endswith("_"):
+            if name in _ENUM_GENERATED_CLASS_ATTRS:
+                continue  # machinery/compiler bookkeeping (``_member_map_``, ``__new__``, 3.13 ``__firstlineno__``)
+            return name  # a user-authored sunder/dunder hook (``_missing_`` / ``_repr_html_`` / ...) - observable
+        return name  # a user method / property / class var
+    return None
+
+
 def _enum_class_behavior_attr(enum_cls: type) -> "str | None":
     """Return the name of a user-defined class-level attribute (method / property / class var / operator dunder) on
-    ``enum_cls`` or one of its user-authored bases - *including a non-enum mixin* - or None.
+    ``enum_cls``, one of its user-authored bases - *including a non-enum mixin* - or its *metaclass*, or None.
     ``module``/``qualname``/member-name/value do not uniquely identify a dynamically created enum class, so two
     same-named factory enums whose ``label`` property closes over different strings (or whose ``__eq__`` differs) key
     identically while ``qd.static(cfg.mode.label == "x")`` / ``qd.static(cfg.mode == 1)`` differ. The same holds for
     behavior inherited from a non-enum mixin (``class Mode(Labels, enum.Enum)`` with ``Labels.label``): it is observable
-    as ``cfg.mode.label`` yet absent from the key, so it must be inspected too. Members are skipped; observable dunders
-    the enum machinery merely copies from a base (Python >=3.11, see ``_dunder_copied_from_base``) are skipped; and
-    sunder/dunder names the machinery generates (``_member_map_`` / ``__new__`` / ``__doc__`` / 3.13's
-    ``__firstlineno__`` / ...) are skipped via ``_ENUM_GENERATED_CLASS_ATTRS``. Any remaining member - a plain
-    attribute (method / property / class var), a genuinely overridden observable operator dunder, or a *user-authored*
-    sunder/dunder hook (``_missing_`` / ``_repr_html_`` / an overriding ``_numeric_repr_``) - is user behavior.
+    as ``cfg.mode.label`` yet absent from the key, so it must be inspected too.
+
+    The *metaclass* is inspected as well: ``cfg.mode.__class__.label`` can resolve to ``type(enum_cls).label``, which
+    the plain MRO walk never sees (the metaclass is not on ``enum_cls.__mro__``). A custom ``EnumMeta`` subclass can
+    carry observable state/behavior that two same-named factory metaclasses define differently, again absent from the
+    key. Only user-authored metaclass layers are inspected; the framework metaclass (``EnumMeta`` / ``EnumType``,
+    ``type``, ``object``) is skipped, so a plain enum (whose metaclass is exactly ``EnumMeta``) is unaffected.
     """
     for klass in enum_cls.__mro__:
         # Skip the mixed-in primitive data type (``int``/``str``/... - a baked base), ``object`` / a NumPy base, and
@@ -727,18 +760,15 @@ def _enum_class_behavior_attr(enum_cls: type) -> "str | None":
         # exactly like an attribute on the enum class.
         if _is_baked_base_type(klass) or klass in _FRAMEWORK_ENUM_CLASSES:
             continue
-        for name, member in vars(klass).items():
-            if isinstance(member, enum.Enum):  # an enum member or alias defined on the class
-                continue
-            if name in _OBSERVABLE_DUNDERS:
-                if _dunder_copied_from_base(klass, name, member):
-                    continue  # enum machinery copied a base/data-type dunder (Python >=3.11), not a user override
-                return name  # a genuine user operator/behavior dunder override
-            if name.startswith("_") and name.endswith("_"):
-                if name in _ENUM_GENERATED_CLASS_ATTRS:
-                    continue  # machinery/compiler bookkeeping (``_member_map_``, ``__new__``, 3.13 ``__firstlineno__``)
-                return name  # a user-authored sunder/dunder hook (``_missing_`` / ``_repr_html_`` / ...) - observable
-            return name  # a user method / property / class var
+        attr = _observable_class_dict_attr(klass)
+        if attr is not None:
+            return attr
+    for mcls in type(enum_cls).__mro__:  # user-authored metaclass layers below the framework ``EnumMeta``
+        if mcls in _FRAMEWORK_ENUM_METACLASSES:
+            continue
+        attr = _observable_class_dict_attr(mcls)
+        if attr is not None:
+            return attr
     return None
 
 

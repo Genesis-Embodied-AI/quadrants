@@ -4499,6 +4499,38 @@ def test_final_first_final_path_tracks_visited_by_identity():
 
 
 @test_utils.test()
+def test_final_enum_rejects_observable_metaclass_state():
+    """An enum whose *metaclass* (a custom ``EnumMeta`` subclass) carries observable class-level state/behavior is
+    rejected: a kernel can read ``cfg.mode.__class__.label`` (which resolves to ``type(Mode).label``), and the key -
+    keyed on the enum class's ``module``/``qualname``/member - does not capture it, so two same-named factory
+    metaclasses (or a mutated one) would select the same specialization. A plain enum (framework metaclass) is fine."""
+    import enum as en
+
+    from quadrants.lang._final_dataclass_fields import final_scalar_key
+
+    class LabeledMeta(en.EnumMeta):
+        label = "x"  # observable via ``Mode.label`` / ``cfg.mode.__class__.label``, absent from the key
+
+    class Mode(en.Enum, metaclass=LabeledMeta):
+        A = 1
+        B = 2
+
+    with pytest.raises(TypeError, match="observable class-level behavior"):
+        final_scalar_key(Mode.A)
+
+    class Plain(en.Enum):  # metaclass is the framework ``EnumMeta`` -> not inspected -> accepted
+        A = 1
+        B = 2
+
+    final_scalar_key(Plain.A)  # does not raise
+
+    class Weekday(en.IntEnum):  # IntEnum still uses the framework metaclass -> accepted
+        MON = 0
+
+    final_scalar_key(Weekday.MON)  # does not raise
+
+
+@test_utils.test()
 def test_final_is_baked_base_type_ignores_spoofed_module():
     """``_is_baked_base_type`` identifies NumPy scalar bases by type nature (a static ``np.generic`` subclass), not by
     the mutable ``__module__`` string. A user subclass that spoofs ``__module__ = "numpy"`` is still a heap type, so it
