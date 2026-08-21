@@ -13,11 +13,13 @@
 #include "quadrants/ir/transforms.h"
 #include "quadrants/ir/analysis.h"
 #include "quadrants/ir/visitors.h"
+#include "quadrants/codegen/ir_dump.h"
 #include "quadrants/program/compile_config.h"
 #include "quadrants/program/kernel.h"
 #include "quadrants/program/program.h"
 #include "quadrants/program/per_construct_cache.h"
 
+#include <cstdlib>
 #include <functional>
 #include <mutex>
 #include <set>
@@ -222,6 +224,23 @@ TopLevelSegments segment_top_level(Block *block) {
   return segs;
 }
 
+// The local (alloca) a statement writes, or nullptr if it writes no local. Covers the three ways the frontend writes a
+// function-scope variable: a `LocalStoreStmt`, an `AtomicOpStmt`, and -- easy to miss -- a `qd.append`
+// (`SNodeOpStmt::allocate`), which writes the returned dynamic-node index through its `val` alloca WITHOUT a separate
+// `LocalStoreStmt`. If the append is not counted as a writer, a consuming construct's backward slice pulls a bare
+// zero-initialized alloca (reads 0 instead of the real index) and the effectful-producer gate never sees the append to
+// force a fallback.
+Stmt *stmt_local_write_dest(Stmt *s) {
+  if (auto *st = s->cast<LocalStoreStmt>())
+    return st->dest;
+  if (auto *at = s->cast<AtomicOpStmt>())
+    return at->dest;
+  if (auto *sn = s->cast<SNodeOpStmt>())
+    if (sn->op_type == SNodeOpType::allocate)
+      return sn->val;
+  return nullptr;
+}
+
 // Top-level writers of each local variable, for the backward slice. A `LocalLoadStmt`'s only operand is the alloca (or
 // a `MatrixPtrStmt` into it), never the store that gave it its value, so an operand-closed slice pulls in a bare,
 // zero-initialized alloca and silently reads zeros. `split_is_recompute_safe` has already rejected kernels where a
@@ -232,11 +251,7 @@ std::unordered_map<Stmt *, std::vector<Stmt *>> gather_top_level_alloca_writers(
   const int n = (int)block->statements.size();
   for (int j = 0; j < n; j++) {
     Stmt *s = block->statements[j].get();
-    Stmt *dest = nullptr;
-    if (auto *st = s->cast<LocalStoreStmt>())
-      dest = st->dest;
-    else if (auto *at = s->cast<AtomicOpStmt>())
-      dest = at->dest;
+    Stmt *dest = stmt_local_write_dest(s);
     if (dest == nullptr)
       continue;
     if (Stmt *a = resolve_local_alloca(dest))
@@ -323,9 +338,12 @@ bool split_is_recompute_safe(Block *block) {
   if (block == nullptr)
     return false;
 
-  // (1) Loop-carried locals.
+  // (1) Loop-carried locals. `SNodeOpStmt::allocate` (a `qd.append`) is a local writer too -- it stores the returned
+  // index into its `val` alloca -- so an append nested in a loop whose result another construct reads must be caught
+  // here as well.
   auto accesses = irpass::analysis::gather_statements(block, [](Stmt *s) {
-    return s->is<LocalLoadStmt>() || s->is<LocalStoreStmt>() || s->is<AtomicOpStmt>();
+    return s->is<LocalLoadStmt>() || s->is<LocalStoreStmt>() || s->is<AtomicOpStmt>() ||
+           (s->is<SNodeOpStmt>() && s->as<SNodeOpStmt>()->op_type == SNodeOpType::allocate);
   });
   std::unordered_map<Stmt *, std::set<Stmt *>> read_owners;        // alloca -> top-level constructs that read it
   std::unordered_map<Stmt *, std::set<Stmt *>> loop_write_owners;  // alloca -> constructs that write it inside a loop
@@ -339,6 +357,8 @@ bool split_is_recompute_safe(Block *block) {
     } else if (auto *at = acc->cast<AtomicOpStmt>()) {
       read_ptr = at->dest;  // atomic read-modify-write counts as both a read and a write of dest
       write_ptr = at->dest;
+    } else if (auto *sn = acc->cast<SNodeOpStmt>()) {
+      write_ptr = sn->val;  // append writes the returned index into `val`
     }
     bool inside_container = false;
     Stmt *owner = top_level_owner(acc, block, &inside_container);
@@ -494,6 +514,11 @@ bool maybe_split_frontend_per_construct(IRNode *ir,
     return false;
   auto *block = ir->cast<Block>();
   if (block == nullptr)
+    return false;
+  // QD_DUMP_CFG is documented to dump the WHOLE-kernel CFG (`cfg_optimization` forces the whole-kernel path for it).
+  // Splitting would instead build and dump a CFG per construct into the same phase filename, so later constructs
+  // overwrite earlier ones and only a partial graph survives. Fall back so the documented whole-kernel dump is produced.
+  if (const char *dump_cfg = std::getenv(DUMP_CFG_ENV.data()); dump_cfg != nullptr && std::string(dump_cfg) == "1")
     return false;
   if (block_has_mesh_for(block))
     return false;

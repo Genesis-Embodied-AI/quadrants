@@ -4,11 +4,12 @@
 instead of once over the whole kernel, isolating each construct by its backward slice (in
 `transforms/split_frontend_per_construct.cpp`), and falls back to the whole-kernel path for kernels that are not
 recompute-safe: autodiff, mesh-for, a concurrently-executed region (`qd.stream_parallel()` / `qd.graph.parallel()`,
-whose constructs share one global-temp buffer), a loop-produced local shared across constructs, a non-recomputable
-producer a later construct would clone (an effectful one such as a global atomic, a non-deterministic `qd.random()`,
-or a `qd.volatile_load()`), or a serial field load that a later construct would recompute after an intervening effect
-(a store, atomic, or sparse activate/deactivate) mutated global state. This PR ships the split WITHOUT a
-reuse tier, so it recompiles every construct on every compile; the reuse (a disk manifest keyed by a stable
+whose constructs share one global-temp buffer), a loop-produced local shared across constructs, a `qd.append` index a
+later construct consumes, a non-recomputable producer a later construct would clone (an effectful one such as a global
+atomic, a non-deterministic `qd.random()`, or a `qd.volatile_load()`), or a serial field load that a later construct
+would recompute after an intervening effect (a store, atomic, or sparse activate/deactivate) mutated global state. It
+also declines the split (as a diagnostic) when `QD_DUMP_CFG` asks for a whole-kernel CFG dump. This PR ships the split
+WITHOUT a reuse tier, so it recompiles every construct on every compile; the reuse (a disk manifest keyed by a stable
 per-construct cache key) is added by the cross-process cache PR.
 
 These tests assert the split's STRUCTURE and CORRECTNESS, not reuse:
@@ -328,3 +329,59 @@ def test_per_construct_frontend_split_fallback_sparse_deactivate_shadow() -> Non
     # snap captured the original x[0] == 7.0 before the deactivation, so every y[i] must be 7.0, not the 0 a
     # recomputed-after-deactivate load would read.
     assert np.allclose(y.to_numpy(), 7.0), y.to_numpy()
+
+
+@test_utils.test(arch=[qd.cpu, qd.cuda], offline_cache=False, require=qd.extension.sparse)
+def test_per_construct_frontend_split_fallback_append_result_shared() -> None:
+    # `idx` captures the index returned by a top-level `qd.append` -- an `SNodeOpStmt::allocate` that writes its result
+    # through a local alloca WITHOUT a `LocalStoreStmt`. A later construct reads `idx`. If the append is not tracked as
+    # a local writer, the consumer's backward slice pulls a zero-initialized alloca (reads 0) and the effectful-producer
+    # gate never sees the append; the split must treat the append as a writer, notice the effect crossing constructs,
+    # and fall back.
+    a = qd.field(qd.i32)
+    qd.root.dynamic(qd.i, 256).place(a)
+
+    @qd.kernel
+    def prefill() -> None:
+        for _ in range(3):
+            qd.append(a.parent(), [], 7)
+
+    @qd.kernel
+    def kernel_append(out: qd.types.ndarray()) -> None:
+        idx = qd.append(a.parent(), [], 9)
+        for i in range(_N):
+            out[i] = idx
+
+    out = qd.ndarray(qd.i32, shape=(_N,))
+    prefill()
+    kernel_append(out)
+
+    obs = kernel_append._primal.per_offload_cache_observations
+    assert obs.frontend_constructs_total == -1, obs
+
+    # The append returns the pre-append length (3 elements were prefilled), so every out[i] must be 3 -- not the 0 a
+    # zero-init-alloca slice would read.
+    assert np.all(out.to_numpy() == 3), out.to_numpy()
+
+
+@test_utils.test(arch=[qd.cpu, qd.cuda], offline_cache=False)
+def test_per_construct_frontend_split_fallback_dump_cfg(monkeypatch) -> None:
+    # `QD_DUMP_CFG=1` is documented to dump the WHOLE-kernel CFG. The split would build/dump a CFG per construct into
+    # the same filename (later constructs overwriting earlier ones), so it must decline the split in this diagnostic
+    # mode even for an otherwise split-eligible kernel.
+    monkeypatch.setenv("QD_DUMP_CFG", "1")
+
+    @qd.kernel
+    def kernel_cfg(x: qd.types.ndarray()) -> None:
+        for i in range(_N):
+            x[i] += _C[0]
+        for i in range(_N):
+            x[i] += _C[1]
+
+    arr = qd.ndarray(qd.f32, shape=(_N,))
+    kernel_cfg(arr)
+
+    obs = kernel_cfg._primal.per_offload_cache_observations
+    assert obs.frontend_constructs_total == -1, obs
+
+    assert np.allclose(arr.to_numpy(), _C[0] + _C[1], atol=1.0), arr.to_numpy()
