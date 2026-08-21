@@ -338,10 +338,12 @@ def _reject_stateful_primitive_subclass(value: Any) -> None:
         )
 
 
-# ``enum`` member attribute names that are standard bookkeeping (name / value / sort order / owning class), not
-# user-defined per-member state. Anything else on a member - in its ``__dict__`` *or* a populated slot - is
-# observable state we cannot key on. ``__objclass__`` and other dunders are excluded by the dunder test below.
-_ENUM_INTERNAL_MEMBER_ATTRS = frozenset({"_name_", "_value_", "_sort_order_"})
+# ``enum`` member attribute names that are standard bookkeeping, not user-defined per-member state. Anything else on
+# a member - in its ``__dict__`` *or* a populated slot - is observable state we cannot key on. ``__objclass__`` and
+# other dunders are excluded by the dunder test below. ``_inverted_`` is the value-derived cache CPython lazily
+# stores on a ``Flag`` / ``IntFlag`` member the first time it is inverted (``~Perm.R``, Python >=3.11); a member
+# inverted anywhere before reaching a ``Final`` field must therefore not be misread as carrying user state.
+_ENUM_INTERNAL_MEMBER_ATTRS = frozenset({"_name_", "_value_", "_sort_order_", "_inverted_"})
 
 
 def _enum_member_state_attr(value: Any) -> "str | None":

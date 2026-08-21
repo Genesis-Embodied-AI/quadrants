@@ -3937,6 +3937,13 @@ def test_final_scalar_key_distinguishes_signed_zero_and_nan_payloads():
     assert final_scalar_key(Perm.R | Perm.W) != final_scalar_key(Perm.R | Perm.X)  # values 3 vs 5 (name may be None)
     assert final_scalar_key(Perm.R | Perm.W) == final_scalar_key(Perm.R | Perm.W)  # stable
 
+    # Inverting a flag member caches the value-derived ``_inverted_`` on the member (CPython >=3.11). That is enum
+    # bookkeeping, not user state, so a member that has been inverted anywhere must still be accepted and key the
+    # same as before the inversion.
+    key_before = final_scalar_key(Perm.R)
+    _ = ~Perm.R  # populates ``Perm.R._inverted_`` on 3.11+
+    assert final_scalar_key(Perm.R) == key_before  # not rejected, and the cache does not perturb the key
+
     # A ``float`` subclass must be bit-encoded (signed zero stays distinct) yet tagged with its own type.
     class Meters(float):
         pass
