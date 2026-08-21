@@ -13,10 +13,13 @@ that matters (``isinstance`` is a ~100-200ns MRO walk vs a ~10ns pointer compari
 import dataclasses
 import enum
 import struct
+import sys
 import typing
 from typing import Any
 
 import numpy as np
+
+_MISSING = object()  # sentinel for "attribute not found" while resolving a qualname (``None`` is a legal value)
 
 # ``T`` values permitted inside ``Final[T]``. A Final field's value is baked into the compiled kernel as a literal and
 # folded into both the in-process template spec key and the cross-process fastcache key, so ``T`` must be something
@@ -462,6 +465,27 @@ _OBSERVABLE_DUNDERS = frozenset(
 )
 
 
+def _enum_class_not_uniquely_identified(cls: type) -> bool:
+    """True if ``cls`` cannot be recovered from its ``module``/``qualname`` - i.e. it is locally/dynamically created
+    (its qualname contains ``<locals>``, or ``module.qualname`` does not resolve back to this class object). Such a
+    class shares its identity string with every other class built the same way, so members that are distinct objects
+    (``First.A is not Second.A``; for a plain ``Enum`` also ``First.A != Second.A``) would key identically on
+    ``(module, qualname, name, value)`` alone. Callers add ``id(cls)`` to the key in that case to keep them distinct
+    in-process. Runs once per instance (cached), off the steady-state launch path.
+    """
+    module = sys.modules.get(cls.__module__)
+    if module is None:
+        return True
+    obj: Any = module
+    for part in cls.__qualname__.split("."):
+        if part == "<locals>":
+            return True
+        obj = getattr(obj, part, _MISSING)
+        if obj is _MISSING:
+            return True
+    return obj is not cls
+
+
 def _enum_class_behavior_attr(enum_cls: type) -> "str | None":
     """Return the name of a user-defined class-level attribute (method / property / class var / operator dunder) on
     ``enum_cls`` or one of its user-authored enum bases, or None. ``module``/``qualname``/member-name/value do not
@@ -561,18 +585,26 @@ def final_scalar_key(value: Any) -> Any:
         # Checked before the ``float``/``int`` branches so a mixed-in enum (``IntEnum``/``StrEnum``, or an exotic
         # ``float`` mix-in) keys by identity, not by its value. A member with user-defined per-member state is
         # rejected, since identity alone would not capture that state. The key carries BOTH ``name`` and ``value``:
-        # ``name`` identifies the canonical member (``None`` for an unnamed ``IntFlag`` composite), while ``value``
-        # separates same-named members of two classes that share ``module``/``qualname`` - e.g. an enum rebuilt by a
-        # local factory, whose qualname is ``<factory>.<locals>.Local``. The value is routed through
-        # ``final_scalar_key`` itself, not embedded raw: two factory members named ``A`` valued ``True`` vs ``1``
-        # are ``==`` with equal hashes, so a raw value would still collide - recursing type-tags them apart (and
-        # bit-encodes a float value, etc.). Recursing also rejects a mutable / unsupported member value (e.g. a
-        # ``list``): such a value could otherwise change under the cached ``_qd_spec_key`` after first launch and
-        # so must not be accepted at all. Every supported value encodes to a hashable key, so the tuple stays
-        # hashable.
+        # ``name`` identifies the canonical member (``None`` for an unnamed ``IntFlag`` composite). ``value`` is
+        # routed through ``final_scalar_key`` itself, not embedded raw: two factory members named ``A`` valued
+        # ``True`` vs ``1`` are ``==`` with equal hashes, so a raw value would still collide - recursing type-tags
+        # them apart (and bit-encodes a float value, etc.). Recursing also rejects a mutable / unsupported member
+        # value (e.g. a ``list``), which could otherwise change under the cached ``_qd_spec_key``.
+        #
+        # ``module``/``qualname``/name/value still do not uniquely identify a *dynamically recreated* class: two
+        # plain ``Enum`` classes built by a factory can share all four yet have distinct members (``First.A`` is not
+        # ``Second.A``, and for a plain ``Enum`` ``First.A != Second.A``), so a kernel branching on ``cfg.mode ==
+        # First.A`` needs distinct specializations. For such a class we add ``id(cls)`` to distinguish them
+        # in-process. ``id`` is not process-stable, so it also lands in the offline-cache string: that only costs a
+        # cache *miss* across processes for these (rare) locally-defined enums, never an incorrect reuse. A normal
+        # module-level enum is uniquely identified by ``module``/``qualname`` (``id`` omitted), so its offline key
+        # stays stable. Every supported value encodes to a hashable key, so the tuple stays hashable.
         _reject_stateful_enum_member(value)
         cls = type(value)
-        return (_ENUM_KEY_TAG, cls.__module__, cls.__qualname__, value.name, final_scalar_key(value.value))
+        class_id = id(cls) if _enum_class_not_uniquely_identified(cls) else None
+        return (
+            _ENUM_KEY_TAG, cls.__module__, cls.__qualname__, class_id, value.name, final_scalar_key(value.value)
+        )
     if isinstance(value, np.floating):
         # ``dtype.str`` (e.g. ``"<f4"``) + ``tobytes()`` preserves sign bit, NaN payload and width, and stays in the
         # same tagged space as the builtin-float branch so it can never equal a bare int / str key component. An

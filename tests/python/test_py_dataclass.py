@@ -4088,9 +4088,6 @@ def test_final_scalar_key_distinguishes_signed_zero_and_nan_payloads():
 
     # Enum classes rebuilt by a local factory share module+qualname and can have same-named members with different
     # values; the key includes the value so those stay distinct.
-
-    # Enum classes rebuilt by a local factory share module+qualname and can have same-named members with different
-    # values; the key includes the value so those stay distinct.
     def _make_int_enum(v):
         class Local(enum.IntEnum):
             A = v
@@ -4113,6 +4110,16 @@ def test_final_scalar_key_distinguishes_signed_zero_and_nan_payloads():
     assert type(et.A).__qualname__ == type(eo.A).__qualname__
     assert et.A.value == eo.A.value and hash(et.A.value) == hash(eo.A.value)  # True == 1, equal hashes
     assert final_scalar_key(et.A) != final_scalar_key(eo.A)
+
+    # Even with identical name AND value, two dynamically recreated (behavior-free) classes have genuinely distinct
+    # members - for a plain ``Enum``, ``First.A != Second.A`` - so a kernel branching on ``cfg.mode == First.A``
+    # needs distinct specializations. ``module``/``qualname``/name/value are all identical, so the key adds
+    # ``id(cls)`` for such non-uniquely-identifiable classes to keep them apart in-process.
+    first, second = _make_enum(1), _make_enum(1)
+    assert type(first.A).__qualname__ == type(second.A).__qualname__ and first.A.value == second.A.value
+    assert first.A != second.A  # plain Enum uses identity equality: distinct class objects -> distinct members
+    assert final_scalar_key(first.A) != final_scalar_key(second.A)  # ...kept distinct via id(cls)
+    assert final_scalar_key(first.A) == final_scalar_key(first.A)  # stable for the same class
 
     # A *behavior-free* primitive subclass is accepted and keyed by its true value via the base slot, staying
     # distinct from a plain ``int`` and producing a faithful, process-stable offline (string) key.
