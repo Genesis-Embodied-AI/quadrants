@@ -8,8 +8,8 @@ whose constructs share one global-temp buffer), a loop-produced local shared acr
 producer a later construct would clone (an effectful one such as a global atomic, a non-deterministic `qd.random()`,
 or a `qd.volatile_load()`), or a serial field load that a later construct would recompute after an intervening effect
 (a store, atomic, or sparse activate/deactivate) mutated global state. This PR ships the split WITHOUT a
-reuse tier, so it recompiles every construct on every compile; the reuse (a disk manifest keyed by
-`get_hashed_per_construct_cache_key`) is added by the cross-process cache PR.
+reuse tier, so it recompiles every construct on every compile; the reuse (a disk manifest keyed by a stable
+per-construct cache key) is added by the cross-process cache PR.
 
 These tests assert the split's STRUCTURE and CORRECTNESS, not reuse:
  - the split fires for recompute-safe kernels and enumerates the expected constructs, with

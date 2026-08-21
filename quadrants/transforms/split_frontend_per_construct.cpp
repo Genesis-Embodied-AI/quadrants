@@ -428,7 +428,7 @@ void split_frontend_per_construct(IRNode *ir, const CompileConfig &config, const
 
     // Run the full per-construct frontend on the isolated construct and take its produced tasks. This PR ships the
     // split with NO reuse tier, so every construct is recompiled here; the cross-process manifest PR keys this output
-    // (via `get_hashed_per_construct_cache_key`) and reuses an unchanged construct's tasks instead.
+    // (by a stable per-construct cache key it introduces) and reuses an unchanged construct's tasks instead.
     run_construct_frontend(cb, config, kernel, verbose);
     n_recompiled++;
     while (!cb->statements.empty())

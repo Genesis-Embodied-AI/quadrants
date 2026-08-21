@@ -2,10 +2,7 @@
 
 #include "quadrants/common/core.h"
 #include "quadrants/common/serialization.h"
-#include "quadrants/ir/analysis.h"
-#include "quadrants/ir/offloaded_task_type.h"
 #include "quadrants/ir/snode.h"
-#include "quadrants/ir/statements.h"
 #include "quadrants/ir/transforms.h"
 #include "quadrants/program/compile_config.h"
 #include "quadrants/program/kernel.h"
@@ -13,7 +10,6 @@
 
 #include "picosha2.h"
 
-#include <map>
 #include <vector>
 
 namespace quadrants::lang {
@@ -210,115 +206,6 @@ std::string get_hashed_offline_cache_key_of_device_caps(const DeviceCapabilityCo
   hasher.finish();
   auto res = picosha2::get_hash_hex_string(hasher);
   res.insert(res.begin(), 'T');  // The key must start with a letter
-  return res;
-}
-
-// Snode-root gather for a PRE-offload IR node (covers `StructForStmt`, whose `snode` is the loop domain before
-// `offload` lowers it into a struct_for task). Over-approx (extra trees) only costs dedup precision, never soundness.
-// Deterministic order: keyed by snode-tree id.
-static std::vector<const SNode *> gather_ir_snode_roots(IRNode *node) {
-  std::map<int, const SNode *> roots;  // tree_id -> root (sorted, dedup)
-  auto add = [&roots](const SNode *sn) {
-    if (sn == nullptr) {
-      return;
-    }
-    const SNode *root = sn->get_root();
-    roots[root->get_snode_tree_id()] = root;
-  };
-  // `include_containers`: the two branches below that matter most here, `StructForStmt` and `struct_for`
-  // `OffloadedStmt`, are container statements, and the predicate is not offered those by default.
-  irpass::analysis::gather_statements(
-      node,
-      [&add](Stmt *stmt) {
-        if (auto *s = stmt->cast<GlobalPtrStmt>()) {
-          add(s->snode);
-        } else if (auto *s = stmt->cast<SNodeOpStmt>()) {
-          add(s->snode);
-        } else if (auto *s = stmt->cast<SNodeLookupStmt>()) {
-          add(s->snode);
-        } else if (auto *s = stmt->cast<GetChStmt>()) {
-          add(s->input_snode);
-          add(s->output_snode);
-        } else if (auto *s = stmt->cast<StructForStmt>()) {
-          add(s->snode);
-        } else if (auto *s = stmt->cast<OffloadedStmt>()) {
-          if (s->task_type == OffloadedTaskType::struct_for) {
-            add(s->snode);
-          }
-        }
-        return false;
-      },
-      /*include_containers=*/true);
-  std::vector<const SNode *> out;
-  out.reserve(roots.size());
-  for (const auto &[tree_id, root] : roots) {
-    out.push_back(root);
-  }
-  return out;
-}
-
-std::string get_hashed_per_construct_cache_key(const CompileConfig &config,
-                                               IRNode *construct,
-                                               const Kernel *kernel) {
-  QD_ASSERT(construct);
-  QD_ASSERT(kernel);
-  auto compile_config_key = get_offline_cache_key_of_compile_config(config);
-  // The construct's compiled tasks read args / write returns through the kernel's context struct, whose layout is the
-  // kernel's parameter/return ABI. Same soundness argument as the per-task key: two byte-identical constructs in
-  // kernels with different ABIs must not share a cached frontend result.
-  auto kernel_params_key = get_offline_cache_key_of_parameter_list(kernel->parameter_list);
-  auto kernel_rets_key = get_offline_cache_key_of_rets(kernel->rets);
-  std::string body_string;
-  irpass::print(construct, &body_string, /*print_ir_dbg_info=*/false, /*print_kernel_wrapper=*/false);
-  std::string autodiff_mode_string = std::to_string(static_cast<std::size_t>(kernel->autodiff_mode));
-
-  picosha2::hash256_one_by_one hasher;
-  hasher.process(compile_config_key.begin(), compile_config_key.end());
-  hasher.process(kernel_params_key.begin(), kernel_params_key.end());
-  hasher.process(kernel_rets_key.begin(), kernel_rets_key.end());
-  // Fold only the tree id (a cheap int), NOT the O(tree_size) full-layout hash that
-  // `get_hashed_offline_cache_key_of_snode` computes (doing that per construct on a big genesis tree was a >20x
-  // cold-compile blowup). Device caps are likewise omitted. Both omissions are cost choices whose soundness rests on
-  // the consuming cache's scope; the cross-process manifest that consumes this key is responsible for folding caps
-  // and for handling tree-id recycling.
-  for (const SNode *root : gather_ir_snode_roots(construct)) {
-    std::string tree_id_key = std::to_string(root->get_snode_tree_id());
-    hasher.process(tree_id_key.begin(), tree_id_key.end());
-  }
-  // Fold each statement's graph region tags: graph_do_while_level_id, stream_parallel_group_id,
-  // graph_parallel_region_id, checkpoint_id. These are NOT in the printed IR the body hash uses (the printer emits
-  // `gdw_level` only for post-offload OffloadedStmts), yet `offload` copies them onto the offloaded tasks, and the
-  // runtime rebuilds the graph_do_while level tree (offloads are its leaves) / stream-parallel groups / checkpoint
-  // gating purely from these per-task tags. Two constructs with identical bodies but different tags MUST get distinct
-  // keys, else a cached clone carries the wrong level and the host graph_do_while loop mis-executes (observed as a
-  // non-terminating genesis `_step_kernel`). For statements carry the tags in direct fields; serial statements carry
-  // them in the base `region_tag`. Fold both (redundant folds are harmless); traversal order is deterministic.
-  std::string tag_string;
-  auto fold_tags = [&tag_string](char kind, int lvl, int grp, int reg, int cp) {
-    tag_string += kind;
-    tag_string += std::to_string(lvl) + "," + std::to_string(grp) + "," + std::to_string(reg) + "," +
-                  std::to_string(cp) + ";";
-  };
-  // `include_containers`: the loops whose tags this is folding are themselves container statements.
-  for (Stmt *s : irpass::analysis::gather_statements(
-           construct, [](Stmt *) { return true; }, /*include_containers=*/true)) {
-    auto [lvl, grp, reg, cp] = s->region_tag.cache_key_members();
-    fold_tags('t', lvl, grp, reg, cp);
-    if (auto *r = s->cast<RangeForStmt>()) {
-      fold_tags('r', r->graph_do_while_level_id, r->stream_parallel_group_id, r->graph_parallel_region_id,
-                r->checkpoint_id);
-    } else if (auto *sf = s->cast<StructForStmt>()) {
-      fold_tags('s', sf->graph_do_while_level_id, sf->stream_parallel_group_id, sf->graph_parallel_region_id,
-                sf->checkpoint_id);
-    }
-  }
-  hasher.process(tag_string.begin(), tag_string.end());
-  hasher.process(body_string.begin(), body_string.end());
-  hasher.process(autodiff_mode_string.begin(), autodiff_mode_string.end());
-  hasher.finish();
-
-  auto res = picosha2::get_hash_hex_string(hasher);
-  res.insert(res.begin(), 'C');  // construct-key prefix; distinct from 'K' (task) and 'T' (kernel)
   return res;
 }
 
