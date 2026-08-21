@@ -224,33 +224,15 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
 #undef UNARY_STD
   }
 
-  llvm::Value *optimized_reduction(AtomicOpStmt *stmt) override {
-    if (!stmt->is_reduction) {
-      return nullptr;
-    }
-    QD_ASSERT(stmt->val->ret_type->is<PrimitiveType>());
-    PrimitiveTypeID prim_type = stmt->val->ret_type->cast<PrimitiveType>()->type;
-
-    std::unordered_map<PrimitiveTypeID, std::unordered_map<AtomicOpType, std::string>> fast_reductions;
-
-    fast_reductions[PrimitiveTypeID::i32][AtomicOpType::add] = "reduce_add_i32";
-    fast_reductions[PrimitiveTypeID::f32][AtomicOpType::add] = "reduce_add_f32";
-    fast_reductions[PrimitiveTypeID::i32][AtomicOpType::min] = "reduce_min_i32";
-    fast_reductions[PrimitiveTypeID::f32][AtomicOpType::min] = "reduce_min_f32";
-    fast_reductions[PrimitiveTypeID::i32][AtomicOpType::max] = "reduce_max_i32";
-    fast_reductions[PrimitiveTypeID::f32][AtomicOpType::max] = "reduce_max_f32";
-
-    fast_reductions[PrimitiveTypeID::i32][AtomicOpType::bit_and] = "reduce_and_i32";
-    fast_reductions[PrimitiveTypeID::i32][AtomicOpType::bit_or] = "reduce_or_i32";
-    fast_reductions[PrimitiveTypeID::i32][AtomicOpType::bit_xor] = "reduce_xor_i32";
-
-    AtomicOpType op = stmt->op_type;
-    if (fast_reductions.find(prim_type) == fast_reductions.end()) {
-      return nullptr;
-    }
-    QD_ASSERT(fast_reductions.at(prim_type).find(op) != fast_reductions.at(prim_type).end());
-    return call(fast_reductions.at(prim_type).at(op), {llvm_val[stmt->dest], llvm_val[stmt->val]});
-  }
+  // AMDGPU deliberately does not override optimized_reduction(). Reduction atomics
+  // fall through to real_type_atomic() / integral_type_atomic(), which emit native
+  // LLVM atomics (AtomicRMW / FAdd / FMin / FMax) at "agent" syncscope (see
+  // kernel_atomic_syncscope()); on gfx942 these lower to hardware global_atomic_*.
+  // The previous override routed reductions through the runtime reduce_* helpers,
+  // which take addrspace(0) pointers and so forced a flat-pointer addrspace cast at
+  // the call site. In particular the f32-add helper path defeated the hardware
+  // float atomic, making a contended f32 sum reduction ~1000x slower than the
+  // native agent-scoped atomicrmw fadd.
 
   void visit(RangeForStmt *for_stmt) override {
     create_naive_range_for(for_stmt);
