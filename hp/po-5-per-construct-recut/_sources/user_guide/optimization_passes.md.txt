@@ -92,3 +92,31 @@ Setting `qd.init(print_ir=True)` prints the IR to the console at pipeline stages
 ## Under the hood: per-task scoping
 
 Once the kernel has been split into offloaded tasks, both CSE and the CFG optimization run over **one offloaded task's IR at a time**, never over the whole `qd.kernel` at once. This is both faster to analyze and safe: because each task is a separate device launch, a value held in a register in one task cannot survive into the next one, so there is never anything to deduplicate or forward across a task boundary. Anything written to global memory is treated as potentially read by a later task, so no store another task might need is dropped.
+
+## Per-construct frontend compilation
+
+The frontend stages above - the `simplify -> merge global pointers -> offload` sequence that turns high-level IR into offloaded tasks - can run either once over the whole kernel or, for eligible kernels, separately for each **top-level construct** (each independent top-level loop or serial run in your kernel). Compiling each construct in isolation is what will let a future cross-process cache reuse the unchanged constructs of a kernel you edited; today it produces the same offloaded tasks and the same results as the whole-kernel path, so the split is transparent.
+
+Quadrants automatically falls back to the whole-kernel path whenever per-construct compilation would not be equivalent: autodiff kernels, mesh-for kernels, and kernels where one construct's value depends on state another construct produced in a way that cannot be recomputed in isolation (for example a loop-carried local shared across constructs, or a snapshot of a field that a later construct reads after an intervening write).
+
+### Inspecting the split
+
+You can see whether the split ran, and how many constructs it found, via the `per_offload_cache_observations` attribute on the kernel's primal:
+
+```python
+@qd.kernel
+def my_kernel(x: qd.types.NDArray[qd.f32, 1]) -> None:
+    for i in range(x.shape[0]):
+        x[i] += 1.0
+    for i in range(x.shape[0]):
+        x[i] += 2.0
+
+my_kernel(some_array)
+
+obs = my_kernel._primal.per_offload_cache_observations
+print(obs.frontend_constructs_total)       # number of constructs the split compiled
+print(obs.frontend_constructs_recompiled)  # how many were (re)compiled this time
+print(obs.frontend_constructs_cache_hit)   # how many were reused (0 until the cross-process cache lands)
+```
+
+All three fields are `-1` when the split did not run for this compile - either because the kernel took the whole-kernel fallback above, or because the compiled kernel was served from a cache (the [offline cache](init_options.md#offline_cache) or [fastcache](fastcache.md)) so no frontend ran at all.

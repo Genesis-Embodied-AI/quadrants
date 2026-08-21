@@ -565,6 +565,31 @@
 <h2>Under the hood: per-task scoping<a class="headerlink" href="#under-the-hood-per-task-scoping" title="Link to this heading">#</a></h2>
 <p>Once the kernel has been split into offloaded tasks, both CSE and the CFG optimization run over <strong>one offloaded task’s IR at a time</strong>, never over the whole <code class="docutils literal notranslate"><span class="pre">qd.kernel</span></code> at once. This is both faster to analyze and safe: because each task is a separate device launch, a value held in a register in one task cannot survive into the next one, so there is never anything to deduplicate or forward across a task boundary. Anything written to global memory is treated as potentially read by a later task, so no store another task might need is dropped.</p>
 </section>
+<section id="per-construct-frontend-compilation">
+<h2>Per-construct frontend compilation<a class="headerlink" href="#per-construct-frontend-compilation" title="Link to this heading">#</a></h2>
+<p>The frontend stages above - the <code class="docutils literal notranslate"><span class="pre">simplify</span> <span class="pre">-&gt;</span> <span class="pre">merge</span> <span class="pre">global</span> <span class="pre">pointers</span> <span class="pre">-&gt;</span> <span class="pre">offload</span></code> sequence that turns high-level IR into offloaded tasks - can run either once over the whole kernel or, for eligible kernels, separately for each <strong>top-level construct</strong> (each independent top-level loop or serial run in your kernel). Compiling each construct in isolation is what will let a future cross-process cache reuse the unchanged constructs of a kernel you edited; today it produces the same offloaded tasks and the same results as the whole-kernel path, so the split is transparent.</p>
+<p>Quadrants automatically falls back to the whole-kernel path whenever per-construct compilation would not be equivalent: autodiff kernels, mesh-for kernels, and kernels where one construct’s value depends on state another construct produced in a way that cannot be recomputed in isolation (for example a loop-carried local shared across constructs, or a snapshot of a field that a later construct reads after an intervening write).</p>
+<section id="inspecting-the-split">
+<h3>Inspecting the split<a class="headerlink" href="#inspecting-the-split" title="Link to this heading">#</a></h3>
+<p>You can see whether the split ran, and how many constructs it found, via the <code class="docutils literal notranslate"><span class="pre">per_offload_cache_observations</span></code> attribute on the kernel’s primal:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@qd</span><span class="o">.</span><span class="n">kernel</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">my_kernel</span><span class="p">(</span><span class="n">x</span><span class="p">:</span> <span class="n">qd</span><span class="o">.</span><span class="n">types</span><span class="o">.</span><span class="n">NDArray</span><span class="p">[</span><span class="n">qd</span><span class="o">.</span><span class="n">f32</span><span class="p">,</span> <span class="mi">1</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>
+        <span class="n">x</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">+=</span> <span class="mf">1.0</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>
+        <span class="n">x</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">+=</span> <span class="mf">2.0</span>
+
+<span class="n">my_kernel</span><span class="p">(</span><span class="n">some_array</span><span class="p">)</span>
+
+<span class="n">obs</span> <span class="o">=</span> <span class="n">my_kernel</span><span class="o">.</span><span class="n">_primal</span><span class="o">.</span><span class="n">per_offload_cache_observations</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">obs</span><span class="o">.</span><span class="n">frontend_constructs_total</span><span class="p">)</span>       <span class="c1"># number of constructs the split compiled</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">obs</span><span class="o">.</span><span class="n">frontend_constructs_recompiled</span><span class="p">)</span>  <span class="c1"># how many were (re)compiled this time</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">obs</span><span class="o">.</span><span class="n">frontend_constructs_cache_hit</span><span class="p">)</span>   <span class="c1"># how many were reused (0 until the cross-process cache lands)</span>
+</pre></div>
+</div>
+<p>All three fields are <code class="docutils literal notranslate"><span class="pre">-1</span></code> when the split did not run for this compile - either because the kernel took the whole-kernel fallback above, or because the compiled kernel was served from a cache (the <a class="reference internal" href="init_options.html#offline-cache"><span class="std std-ref">offline cache</span></a> or <a class="reference internal" href="fastcache.html"><span class="std std-doc">fastcache</span></a>) so no frontend ran at all.</p>
+</section>
+</section>
 </section>
 
 
@@ -621,6 +646,10 @@
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#controlling-the-passes">Controlling the passes</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#inspecting-what-the-compiler-did">Inspecting what the compiler did</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#under-the-hood-per-task-scoping">Under the hood: per-task scoping</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#per-construct-frontend-compilation">Per-construct frontend compilation</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#inspecting-the-split">Inspecting the split</a></li>
+</ul>
+</li>
 </ul>
   </nav></div>
 
