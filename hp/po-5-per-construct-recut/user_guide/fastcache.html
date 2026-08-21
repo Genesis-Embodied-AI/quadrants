@@ -538,7 +538,7 @@
 <tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">math</span></code> / <code class="docutils literal notranslate"><span class="pre">numpy</span></code> constants (e.g. <code class="docutils literal notranslate"><span class="pre">math.pi</span></code>)</p></td>
 <td><p>Assumed stable across process runs.</p></td>
 </tr>
-<tr class="row-even"><td><p>Quadrants module attributes (e.g. <code class="docutils literal notranslate"><span class="pre">qd.simt.Tile16x16.SIZE</span></code>)</p></td>
+<tr class="row-even"><td><p>Quadrants module attributes (e.g. <a class="reference internal" href="tile.html"><span class="std std-doc"><code class="docutils literal notranslate"><span class="pre">qd.simt.Tile16x16.SIZE</span></code></span></a>)</p></td>
 <td><p>Part of the compiler’s own API; assumed consistent with the Quadrants version hash.</p></td>
 </tr>
 </tbody>
@@ -612,7 +612,7 @@
 <li><p>The <strong>source code</strong> of the kernel function or any <code class="docutils literal notranslate"><span class="pre">&#64;qd.func</span></code> it calls.</p></li>
 <li><p>The <strong>argument types</strong> (e.g. switching from <code class="docutils literal notranslate"><span class="pre">f32</span></code> to <code class="docutils literal notranslate"><span class="pre">f64</span></code>, or changing ndarray dimensionality).</p></li>
 <li><p>The <strong>compilation-relevant parts of the compiler configuration</strong> (e.g. <code class="docutils literal notranslate"><span class="pre">arch</span></code>, <code class="docutils literal notranslate"><span class="pre">debug</span></code>, <code class="docutils literal notranslate"><span class="pre">opt_level</span></code>, <code class="docutils literal notranslate"><span class="pre">fast_math</span></code>).</p></li>
-<li><p>The <strong>device capabilities</strong> of the target GPU (e.g. whether Vulkan/Metal expose 64-bit integers, atomics, or a given subgroup family), since codegen branches on them. This keeps an entry compiled for one device from being reused on another with different capabilities, for example when a cache directory is shared across machines.</p></li>
+<li><p>The <strong>device capabilities</strong> of the target GPU (e.g. whether Vulkan/Metal expose 64-bit integers, atomics, or a particular family of <a class="reference internal" href="subgroup.html"><span class="std std-doc">subgroup</span></a> operations), since the compiler generates different GPU code depending on them. This keeps an entry compiled for one device from being reused on another with different capabilities, for example when a cache directory is shared across machines.</p></li>
 <li><p><strong>Template parameter values</strong> (since they are baked into the compiled kernel).</p></li>
 </ul>
 <p>When any of these change, the resulting key is different, so a new compilation occurs and a new entry is stored. Previous entries remain on disk - multiple cached versions coexist. You do not need to manually clear the cache when making code changes - the hash mismatch causes a transparent recompilation.</p>
