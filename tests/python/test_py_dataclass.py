@@ -4035,6 +4035,25 @@ def test_final_scalar_key_distinguishes_signed_zero_and_nan_payloads():
     with pytest.raises(TypeError, match="user-defined per-member state"):
         final_scalar_key(DunderStateMode.A)
 
+    # Class-level behavior on the enum class is unkeyable, like for primitive subclasses: a factory can build
+    # same-named enum classes whose ``label`` property closes over different strings, colliding while
+    # ``qd.static(cfg.mode.label == "x")`` differs. A plain member is accepted; one on a class with a user
+    # property/method/class var is rejected.
+    def _labeled_enum(label):
+        class Local(enum.IntEnum):
+            A = 1
+
+            @property
+            def label(self):
+                return label
+
+        return Local
+
+    lab_x, lab_y = _labeled_enum("x"), _labeled_enum("y")
+    assert type(lab_x.A).__qualname__ == type(lab_y.A).__qualname__  # same qualname, distinct classes/behavior
+    with pytest.raises(TypeError, match="observable class-level behavior"):
+        final_scalar_key(lab_x.A)
+
     # Enum classes rebuilt by a local factory share module+qualname and can have same-named members with different
     # values; the key includes the value so those stay distinct.
 
@@ -4063,21 +4082,22 @@ def test_final_scalar_key_distinguishes_signed_zero_and_nan_payloads():
     assert et.A.value == eo.A.value and hash(et.A.value) == hash(eo.A.value)  # True == 1, equal hashes
     assert final_scalar_key(et.A) != final_scalar_key(eo.A)
 
-    # A stateless subclass whose ``__repr__`` does not preserve its value must still produce faithful *offline*
-    # (string) keys, since the fastcache key is built by ``str``-ing the key tuple.
-    class OddInt(int):
+    # A *behavior-free* primitive subclass is accepted and keyed by its true value via the base slot, staying
+    # distinct from a plain ``int`` and producing a faithful, process-stable offline (string) key.
+    class Grams(int):
+        pass
+
+    assert final_scalar_key(Grams(1)) != final_scalar_key(Grams(2))
+    assert final_scalar_key(Grams(1)) != final_scalar_key(1)  # subclass distinct from a plain int
+    assert str(final_scalar_key(Grams(1))) != str(final_scalar_key(Grams(2)))  # faithful offline string
+
+    # But a subclass that overrides an observable dunder (repr / a conversion / an operator) is rejected: two
+    # same-named factory subclasses could override it differently, sharing ``module``/``qualname`` while
+    # a kernel observes the difference via ``repr(cfg.x)`` / ``int(cfg.x)`` / ``cfg.x == 1``.
+    class OddRepr(int):
         def __repr__(self):
             return "odd"
 
-    class OddStr(str):
-        def __repr__(self):
-            return "weird"
-
-    assert str(final_scalar_key(OddInt(1))) != str(final_scalar_key(OddInt(2)))
-    assert str(final_scalar_key(OddStr("x"))) != str(final_scalar_key(OddStr("y")))
-
-    # Canonicalization must read the *underlying* value via the base slot, not the subclass's own conversion dunder:
-    # a subclass whose ``__int__`` returns a constant would otherwise collapse distinct values to one key.
     class ConstInt(int):
         def __int__(self):
             return 0
@@ -4085,9 +4105,16 @@ def test_final_scalar_key_distinguishes_signed_zero_and_nan_payloads():
         def __index__(self):
             return 0
 
-    assert int(ConstInt(1)) == int(ConstInt(2)) == 0  # the override really does collapse ``int(...)``
-    assert final_scalar_key(ConstInt(1)) != final_scalar_key(ConstInt(2))  # ...but the key does not
-    assert str(final_scalar_key(ConstInt(1))) != str(final_scalar_key(ConstInt(2)))  # nor its offline string
+    class WeirdEq(int):
+        def __eq__(self, other):
+            return True
+
+        def __hash__(self):
+            return 0
+
+    for bad in (OddRepr(1), ConstInt(1), WeirdEq(1)):
+        with pytest.raises(TypeError, match="observable class-level behavior/state"):
+            final_scalar_key(bad)
 
     # Remaining scalars are type-tagged: Python conflates value-equal but distinct-typed constants (True == 1 ==
     # np.int64(1), with equal hashes), and they bake observably different Python constants, so they must not alias.

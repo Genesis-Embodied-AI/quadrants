@@ -300,6 +300,23 @@ _SCALAR_KEY_TAG = "scalar"
 # state, so it never needs the stateful-subclass check below.
 _EXACT_BAKED_TYPES = (bool, int, float, str)
 
+# Class-dict names CPython auto-generates for a bare ``class X(base): pass`` (or ``__slots__``-only) subclass. A
+# primitive subclass may carry *only* these; anything else (a method, property, class var, or an overridden dunder
+# such as ``__eq__`` / ``__int__``) is observable class-level behavior we cannot key on - see
+# ``_reject_stateful_primitive_subclass``. ``__firstlineno__`` / ``__static_attributes__`` are auto-added on 3.13+.
+_STRUCTURAL_CLASS_ATTRS = frozenset(
+    {
+        "__module__",
+        "__qualname__",
+        "__doc__",
+        "__dict__",
+        "__weakref__",
+        "__slots__",
+        "__firstlineno__",
+        "__static_attributes__",
+    }
+)
+
 
 def _reject_stateful_primitive_subclass(value: Any) -> None:
     """Reject a ``float`` / ``int`` / ``str`` *subclass* instance that carries observable state a kernel could read
@@ -312,10 +329,11 @@ def _reject_stateful_primitive_subclass(value: Any) -> None:
       numeric value, so two instances with an equal value but different state would bake different kernels yet
       select the same specialization. State can live in ``__dict__`` or a populated ``__slots__`` slot.
     - *Class-level* behavior/state - e.g. a factory returning ``float`` subclasses whose ``unit`` property closes
-      over different values - is not captured either: ``module``/``qualname`` does not uniquely identify a
-      dynamically created class, so two distinct same-named subclasses (whose ``cfg.x.unit`` a kernel could read)
-      would collide. Overriding a value-conversion / repr dunder (``__int__``, ``__repr__``, ...) is fine - the key
-      is built from a base slot, never those - so only *non-dunder* class attributes count.
+      over different values, or that override ``__eq__`` / ``__int__`` / ``__repr__`` differently - is not captured
+      either: ``module``/``qualname`` does not uniquely identify a dynamically created class, so two distinct
+      same-named subclasses (whose ``cfg.x.unit`` or ``cfg.x == 1`` a kernel could read) would collide. Any class
+      member other than the auto-generated structural ones (``_STRUCTURAL_CLASS_ATTRS``) is therefore rejected -
+      including an overridden operator/conversion/repr dunder, since it too is observable.
 
     There is no bounded, process-stable way to serialise arbitrary state/behavior, so we reject rather than silently
     mis-specialise. Exact primitives, NumPy scalars (library internals, not user state) and behavior-free stateless
@@ -349,8 +367,9 @@ def _reject_stateful_primitive_subclass(value: Any) -> None:
         if klass in _EXACT_BAKED_TYPES or klass is object:
             break
         for attr in vars(klass):
-            # Dunders (incl. handled conversion overrides like __int__ / __repr__) are not class-level state.
-            if not (attr.startswith("__") and attr.endswith("__")):
+            # Only the auto-generated structural members are exempt; a method / property / class var, or an
+            # overridden operator / conversion / repr dunder (``__eq__``, ``__int__``, ``__repr__``, ...) all count.
+            if attr not in _STRUCTURAL_CLASS_ATTRS:
                 raise TypeError(
                     f"A ``Final`` field received {cls.__module__}.{cls.__qualname__}, a subclass of a baked "
                     f"primitive that defines observable class-level behavior/state (e.g. attribute {attr!r}). "
@@ -398,24 +417,67 @@ def _enum_member_state_attr(value: Any) -> "str | None":
     return None
 
 
-def _reject_stateful_enum_member(value: Any) -> None:
-    """Reject an ``enum`` member carrying user-defined per-member state, for the same reason as
-    ``_reject_stateful_primitive_subclass``: the key records only the member identity, so per-member state a kernel
-    can read at compile time (``qd.static(cfg.mode.unit == "m")``) - or that differs across processes for the
-    offline key - would not select a distinct specialization. Plain enums (and unnamed ``IntFlag`` composites)
-    carry only name/value bookkeeping and are unaffected. Runs once per instance, off the steady-state launch path.
+# Standard-library enum base classes. A user enum's MRO also contains these (plus the mixed-in primitive and
+# ``object``); only the user-authored enum classes below them are inspected for observable class-level behavior.
+_FRAMEWORK_ENUM_CLASSES = frozenset(
+    c
+    for c in (getattr(enum, n, None) for n in ("Enum", "IntEnum", "StrEnum", "Flag", "IntFlag", "ReprEnum"))
+    if isinstance(c, type)
+)
+
+
+def _enum_class_behavior_attr(enum_cls: type) -> "str | None":
+    """Return the name of a user-defined class-level attribute (method / property / class var) on ``enum_cls`` or
+    one of its user-authored enum bases, or None. ``module``/``qualname``/member-name/value do not uniquely identify
+    a dynamically created enum class, so two same-named factory enums whose e.g. ``label`` property closes over
+    different strings key identically while ``qd.static(cfg.mode.label == "x")`` differs. Members, dunders and enum
+    ``_x_`` bookkeeping are skipped; anything else on a user-authored enum class is observable behavior.
     """
-    extra = _enum_member_state_attr(value)
-    if extra is None:
-        return
+    for klass in enum_cls.__mro__:
+        if not (isinstance(klass, type) and issubclass(klass, enum.Enum)) or klass in _FRAMEWORK_ENUM_CLASSES:
+            continue  # skip the mixed-in primitive / ``object`` and the library's own enum base classes
+        for name, member in vars(klass).items():
+            if name.startswith("_") and name.endswith("_"):  # a dunder or enum-internal (``_member_map_``, ...)
+                continue
+            if isinstance(member, enum.Enum):  # an enum member or alias defined on the class
+                continue
+            return name
+    return None
+
+
+def _reject_stateful_enum_member(value: Any) -> None:
+    """Reject an ``enum`` member that carries observable state the key cannot capture, for the same reason as
+    ``_reject_stateful_primitive_subclass``: the key records only ``module``/``qualname``/name/value, so anything a
+    kernel could additionally read (``qd.static(cfg.mode.unit == "m")``) - or that differs across processes for the
+    offline key - would not select a distinct specialization. Two sources of such state are rejected:
+
+    - *per-member* state (an attribute set on the member, in ``__dict__`` or a populated slot), and
+    - *class-level* behavior (a user method / property / class var on the enum class), which two same-named enum
+      classes built by a factory could define differently while sharing ``module``/``qualname``.
+
+    Plain enums (and unnamed ``IntFlag`` composites) carry only name/value bookkeeping and pass both. Runs once
+    per instance, off the steady-state launch path.
+    """
     cls = type(value)
-    raise TypeError(
-        f"A ``Final`` field received {cls.__module__}.{cls.__qualname__}.{value.name}, an ``enum`` member with "
-        f"user-defined per-member state (e.g. attribute {extra!r}). A ``Final`` value is baked as a compile-time "
-        f"literal keyed by member identity, so per-member state a kernel could read (e.g. ``cfg.mode.unit``) "
-        f"would not select a distinct specialization. Use a plain ``enum`` (state-free members), or bake the "
-        f"needed value as a separate ``Final`` field."
-    )
+    extra = _enum_member_state_attr(value)
+    if extra is not None:
+        raise TypeError(
+            f"A ``Final`` field received {cls.__module__}.{cls.__qualname__}.{value.name}, an ``enum`` member "
+            f"with user-defined per-member state (e.g. attribute {extra!r}). A ``Final`` value is baked as a "
+            f"compile-time literal keyed by member identity, so per-member state a kernel could read (e.g. "
+            f"``cfg.mode.unit``) would not select a distinct specialization. Use a plain ``enum`` (state-free "
+            f"members), or bake the needed value as a separate ``Final`` field."
+        )
+    behavior = _enum_class_behavior_attr(cls)
+    if behavior is not None:
+        raise TypeError(
+            f"A ``Final`` field received a member of {cls.__module__}.{cls.__qualname__}, an ``enum`` class that "
+            f"defines observable class-level behavior (e.g. attribute {behavior!r}). ``module``/``qualname`` does "
+            f"not uniquely identify a dynamically created class, so two same-named enum classes (e.g. from a "
+            f"factory) whose ``{behavior}`` a kernel could read (``cfg.mode.{behavior}``) would select the same "
+            f"specialization. Use a plain ``enum`` (no user methods/properties/class vars), or bake the needed "
+            f"value as a separate ``Final`` field."
+        )
 
 
 def final_scalar_key(value: Any) -> Any:
@@ -440,10 +502,11 @@ def final_scalar_key(value: Any) -> Any:
       per-member state is rejected (identity alone cannot capture that state).
     - every remaining scalar (``bool`` / ``int`` / ``str`` and NumPy analogues) ->
       ``(_SCALAR_KEY_TAG, module, qualname, canonical-value)``. ``True == 1 == np.int64(1)`` with equal hashes, but
-      they bake observably different Python constants (e.g. ``config.value is True``), so the exact type is tagged;
-      the value is coerced to its plain base type via a *base slot* (``int.__int__`` / ``str.__str__``, ``.item()``
-      for NumPy), never the subclass's own dunder, so a subclass with a misleading ``__int__`` / ``__str__`` /
-      ``__repr__`` cannot collapse two distinct values to one key (in-process or in the offline-cache string).
+      they bake observably different Python constants (e.g. ``config.value is True``), so the exact type is tagged.
+      A ``bool`` / ``int`` / ``str`` *subclass* is accepted only if it is behavior-free (see
+      ``_reject_stateful_primitive_subclass``); its value is then coerced to the plain base type via a *base slot*
+      (``int.__int__`` / ``str.__str__``, ``.item()`` for NumPy) so the offline-cache string (built by ``str``-ing
+      this tuple) is faithful and process-stable even if a future/allowed subclass has a nonstandard ``repr``.
 
     Annotations are not enforced at runtime, so a value that is none of the above (an arbitrary object, or a mutable
     container) is *rejected* with a clear ``TypeError`` rather than keyed by its own ``__eq__`` / ``__hash__``. Such
