@@ -92,6 +92,19 @@ void compile_to_offloads(IRNode *ir,
   }
 
   dump_ir("before_simplify_I");
+
+  // For recompute-safe kernels (forward-only, non-mesh), run the remaining pre-offload + offload frontend PER
+  // top-level construct and reassemble, instead of once over the whole kernel. The seam is here, right after
+  // lower_ast + the structural prefix (function inlining, matrix-ptr lowering, bit-loop vectorize) and before the
+  // expensive simplify/merge_global_ptrs/offload passes. The gate + split live in
+  // transforms/split_frontend_per_construct.cpp (AGENTS.md: keep this central pass's contact area small); it returns
+  // true iff it fired. Anything not recompute-safe (autodiff, mesh-for) returns false and falls through to the
+  // whole-kernel path below.
+  if (irpass::maybe_split_frontend_per_construct(ir, config, kernel, verbose, autodiff_mode)) {
+    dump_ir("after_offload");
+    return;
+  }
+
   irpass::full_simplify(
       ir, config,
       {false, /*autodiff_enabled*/ autodiff_mode != AutodiffMode::kNone, kernel->get_name(), verbose, "simplify_I"});

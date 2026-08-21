@@ -67,7 +67,7 @@ Building and analyzing the CFG is the most expensive optimization in the pipelin
 
 ## Controlling the passes
 
-All of these are fields of `CompileConfig`, so you set them at `qd.init(...)` (or via the matching `QD_<UPPERCASE_NAME>` environment variable). See [qd.init options](./init_options.md) for the full list and the environment-variable convention.
+All of these are compile-time options (fields of `CompileConfig`, the object that holds a kernel's compilation settings), so you set them at `qd.init(...)` (or via the matching `QD_<UPPERCASE_NAME>` environment variable). See [qd.init options](./init_options.md) for the full list and the environment-variable convention.
 
 | Option | Default | Effect |
 |--------|---------|--------|
@@ -85,10 +85,42 @@ These environment variables dump the IR so you can see the effect of each pass. 
 
 - `QD_DUMP_IR=1` - writes an IR snapshot at each major pipeline stage (after lowering, before/after each simplify, after offload).
 - `QD_DUMP_SIMPLIFY=1` - writes an IR snapshot after every individual pass on every iteration of the simplify loop. Verbose, but it shows exactly which pass changed what.
-- `QD_DUMP_CFG=1` - writes the control-flow graph itself. (This also forces the CFG pass back onto the whole-kernel path so the complete graph can be dumped.)
+- `QD_DUMP_CFG=1` - writes the control-flow graph itself. (This also forces the CFG pass to run over the whole kernel at once so the complete graph can be dumped.)
 
 Setting `qd.init(print_ir=True)` prints the IR to the console at pipeline stages instead of writing files.
+
+When the per-construct frontend split (see below) is active for a kernel, these frontend diagnostics report **each construct separately**, so the output reflects exactly what was compiled rather than a synthetic whole-kernel view: `QD_DUMP_IR` writes one file set per construct (`<kernel>_construct<i>_<stage>.ll`), `QD_DUMP_SIMPLIFY` writes its usual per-pass files for each construct, and `print_ir` prints each construct's passes under a `[per-construct frontend split] <kernel> construct <i>` banner. `QD_DUMP_CFG` is the exception - it still runs the frontend once over the whole kernel so it can dump the complete control-flow graph.
 
 ## Under the hood: per-task scoping
 
 Once the kernel has been split into offloaded tasks, both CSE and the CFG optimization run over **one offloaded task's IR at a time**, never over the whole `qd.kernel` at once. This is both faster to analyze and safe: because each task is a separate device launch, a value held in a register in one task cannot survive into the next one, so there is never anything to deduplicate or forward across a task boundary. Anything written to global memory is treated as potentially read by a later task, so no store another task might need is dropped.
+
+## Under the hood: per-construct frontend compilation
+
+This section is for the curious; you never have to think about it to write kernels - the behavior below is transparent and on by default.
+
+The frontend stages above - the passes that turn your high-level kernel into offloaded tasks - can run either once over the whole kernel or, for eligible kernels, separately for each **top-level construct** (each independent top-level loop or serial run in your kernel). Compiling each construct in isolation is what will let a future cross-process cache reuse the unchanged constructs of a kernel you edited; today it produces the same offloaded tasks and the same results as the whole-kernel path, so the split is transparent.
+
+Quadrants automatically falls back to the whole-kernel path whenever per-construct compilation would not be equivalent: [autodiff](autodiff.md) kernels, certain specialized kernels, and kernels where one construct's value depends on state another construct produced in a way that cannot be recomputed in isolation (for example a local variable that one top-level loop builds up over its iterations and another construct then reads, or a snapshot of a field that a later construct reads after an intervening write).
+
+### Inspecting the split
+
+You can see whether the split ran, and how many constructs it found, via the `per_offload_cache_observations` attribute on the kernel's compiled [primal](autodiff.md) (the forward kernel object, accessed as `._primal`):
+
+```python
+@qd.kernel
+def my_kernel(x: qd.types.NDArray[qd.f32, 1]) -> None:
+    for i in range(x.shape[0]):
+        x[i] += 1.0
+    for i in range(x.shape[0]):
+        x[i] += 2.0
+
+my_kernel(some_array)
+
+obs = my_kernel._primal.per_offload_cache_observations
+print(obs.frontend_constructs_total)       # number of constructs the split compiled
+print(obs.frontend_constructs_recompiled)  # how many were (re)compiled this time
+print(obs.frontend_constructs_cache_hit)   # how many were reused (0 until the cross-process cache lands)
+```
+
+All three fields are `-1` when the split did not run for this compile - either because the kernel took the whole-kernel fallback above, or because the compiled kernel was served from a cache (the [offline cache](init_options.md#offline_cache) or [fastcache](fastcache.md)) so no frontend ran at all.

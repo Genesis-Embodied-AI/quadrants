@@ -143,6 +143,16 @@ detect_external_ptr_access_in_task(OffloadedStmt *offload);
 std::unordered_map<std::vector<int>, ExternalPtrAccess, hashing::Hasher<std::vector<int>>>
 detect_external_ptr_grad_access_in_task(OffloadedStmt *offload);
 
+// Per-construct FRONTEND split (see transforms/split_frontend_per_construct.cpp). For recompute-safe forward kernels,
+// runs the remaining pre-offload + offload frontend per top-level construct and reassembles, instead of once over the
+// whole kernel. Rewrites `ir` in place and returns true when the split fired; returns false (leaving `ir` untouched)
+// for kernels the caller must send down the whole-kernel path (autodiff, mesh-for, or not recompute-safe).
+bool maybe_split_frontend_per_construct(IRNode *ir,
+                                        const CompileConfig &config,
+                                        const Kernel *kernel,
+                                        bool verbose,
+                                        AutodiffMode autodiff_mode);
+
 // compile_to_offloads does the basic compilation to create all the offloaded
 // tasks of a Quadrants kernel.
 void compile_to_offloads(IRNode *ir,
