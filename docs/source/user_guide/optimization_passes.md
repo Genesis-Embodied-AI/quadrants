@@ -85,7 +85,7 @@ These environment variables dump the IR so you can see the effect of each pass. 
 
 - `QD_DUMP_IR=1` - writes an IR snapshot at each major pipeline stage (after lowering, before/after each simplify, after offload).
 - `QD_DUMP_SIMPLIFY=1` - writes an IR snapshot after every individual pass on every iteration of the simplify loop. Verbose, but it shows exactly which pass changed what.
-- `QD_DUMP_CFG=1` - writes the control-flow graph itself. (This also forces the CFG pass back onto the whole-kernel path so the complete graph can be dumped.)
+- `QD_DUMP_CFG=1` - writes the control-flow graph(s) themselves. It is a pure debugging side effect and does not change which optimization path runs: once the kernel is offloaded it writes one file per offloaded task (`<kernel>_CFG_<phase>_task<N>_before_cfg_opt.txt` / `..._post_cfg_opt.txt`), each being exactly the per-task graph the compiler optimizes; the non-offloaded path (e.g. unit-test IR) writes a single whole-kernel graph.
 
 Setting `qd.init(print_ir=True)` prints the IR to the console at pipeline stages instead of writing files.
 
