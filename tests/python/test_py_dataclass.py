@@ -4468,6 +4468,67 @@ def test_final_plan_cache_keyed_by_type_identity():
 
 
 @test_utils.test()
+def test_final_first_final_path_tracks_visited_by_identity():
+    """The recursive mutable-ancestor walk tracks visited dataclass types by ``id``, not by equality. A metaclass that
+    makes a nested inner type compare equal to its mutable outer type must not make the inner look "already visited"
+    (which would return ``None`` early and let the mutable outer - which could be rebound, changing a baked value -
+    slip past the rejection)."""
+    import dataclasses as dcs
+    from typing import Final
+
+    from quadrants.lang._final_dataclass_fields import final_field_names
+
+    class DcMeta(type):
+        def __eq__(cls, other):
+            return isinstance(other, DcMeta)  # any two such types compare equal (incl. inner == outer)...
+
+        def __hash__(cls):
+            return 0  # ...with equal hashes
+
+    @dcs.dataclass(frozen=True)
+    class Inner(metaclass=DcMeta):
+        x: Final[int]
+
+    @dcs.dataclass  # NOT frozen: a mutable ancestor of the Final leaf ``Inner.x``
+    class Outer(metaclass=DcMeta):
+        inner: Inner
+
+    assert Inner == Outer and hash(Inner) == hash(Outer)  # metaclass makes the inner "equal" to the outer
+    with pytest.raises(TypeError, match="not frozen"):
+        final_field_names(Outer)  # mutable ancestor of a Final leaf must still be rejected
+
+
+@test_utils.test()
+def test_final_is_baked_base_type_ignores_spoofed_module():
+    """``_is_baked_base_type`` identifies NumPy scalar bases by type nature (a static ``np.generic`` subclass), not by
+    the mutable ``__module__`` string. A user subclass that spoofs ``__module__ = "numpy"`` is still a heap type, so it
+    must not masquerade as a trusted base: its state/behavior is inspected (and rejected) and it is keyed by class
+    identity like any other user subclass."""
+    from quadrants.lang._final_dataclass_fields import (
+        _is_baked_base_type,
+        final_scalar_key,
+    )
+
+    class BehaviorSubclass(int):
+        def __eq__(self, other):  # observable class-level behavior a kernel could read (``cfg.x == 1``)
+            return True
+
+        __hash__ = int.__hash__
+
+    BehaviorSubclass.__module__ = "numpy"  # spoof - must not buy trusted-base treatment
+    assert _is_baked_base_type(BehaviorSubclass) is False  # heap type, so not a baked base despite the module string
+    with pytest.raises(TypeError, match="observable class-level behavior"):
+        final_scalar_key(BehaviorSubclass(1))
+
+    class FreeSubclass(int):  # behavior-free, also spoofing the module
+        pass
+
+    FreeSubclass.__module__ = "numpy"
+    assert _is_baked_base_type(FreeSubclass) is False  # still not a base; keyed by identity in the scalar branch
+    final_scalar_key(FreeSubclass(1))  # accepted (does not raise)
+
+
+@test_utils.test()
 def test_final_float_signed_zero_keys_distinct_kernels():
     """``-0.0`` and ``0.0`` are equal under Python ``==``/``hash`` but name different baked constants (the sign
     bit is observable). Encoding Final floats by their IEEE bits keeps them as distinct entries in the template

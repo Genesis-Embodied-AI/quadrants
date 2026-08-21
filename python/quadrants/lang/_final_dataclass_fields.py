@@ -154,7 +154,7 @@ def _rebinding_is_prevented(dc_type: type) -> bool:
 _final_path_cache: "dict[int, tuple[type, tuple[str, ...] | None]]" = {}
 
 
-def _first_final_path(dc_type: type, visiting: "frozenset[type]") -> "tuple[str, ...] | None":
+def _first_final_path(dc_type: type, visiting: "frozenset[int]") -> "tuple[str, ...] | None":
     """Return the field path from ``dc_type`` down to some ``Final`` leaf, or None if the subtree contains none.
 
     Only a witness is needed (to name one offending path in the error), so the first hit wins. Recursing through
@@ -162,17 +162,20 @@ def _first_final_path(dc_type: type, visiting: "frozenset[type]") -> "tuple[str,
     the hot path first walks that far down.
 
     ``visiting`` guards against a self-referential type graph. Quadrants cannot actually lower a recursive dataclass
-    kernel arg, but validation must fail with a real error rather than a ``RecursionError``.
+    kernel arg, but validation must fail with a real error rather than a ``RecursionError``. It holds ``id(type)``,
+    not the types themselves, so a metaclass that makes two distinct nested types compare equal cannot make one look
+    "already visited" - which would return ``None`` early and let a mutable ancestor of a ``Final`` leaf slip past the
+    rejection above. Every type on the current recursion path is held alive by the walk, so its ``id`` is stable.
     """
     entry = _final_path_cache.get(id(dc_type))
     if entry is not None and entry[0] is dc_type:  # identity check: guard against a recycled ``id`` (belt & braces)
         return entry[1]
-    if dc_type in visiting:
+    if id(dc_type) in visiting:
         return None
     direct = final_field_names(dc_type)
     path: "tuple[str, ...] | None" = (min(direct),) if direct else None
     if path is None:
-        visiting = visiting | {dc_type}
+        visiting = visiting | {id(dc_type)}
         for field in dataclasses.fields(dc_type):
             if isinstance(field.type, type) and dataclasses.is_dataclass(field.type):
                 child = _first_final_path(field.type, visiting)
@@ -253,7 +256,7 @@ def _build_final_plan(dc_type: type) -> "frozenset[str]":
         for field in dataclasses.fields(dc_type):
             if not (isinstance(field.type, type) and dataclasses.is_dataclass(field.type)):
                 continue
-            nested = _first_final_path(field.type, frozenset({dc_type}))
+            nested = _first_final_path(field.type, frozenset({id(dc_type)}))
             if nested is None:
                 continue
             leaf = ".".join((dc_type.__name__, field.name) + nested)
@@ -319,6 +322,12 @@ _SCALAR_KEY_TAG = "scalar"
 # state, so it never needs the stateful-subclass check below.
 _EXACT_BAKED_TYPES = (bool, int, float, str)
 
+# ``Py_TPFLAGS_HEAPTYPE`` (``1 << 9``): the interpreter sets this on every type created by a ``class`` statement or a
+# ``type(...)`` call, and leaves it clear on C-defined *static* types (the builtin primitives and NumPy's own scalar
+# types). It is not user-settable, so it distinguishes a library-provided scalar base from a user subclass even one
+# that spoofs ``__module__ = "numpy"`` (see ``_is_baked_base_type``).
+_HEAPTYPE_FLAG = 1 << 9
+
 # Class-dict names CPython auto-generates for a bare ``class X(base): pass`` (or ``__slots__``-only) subclass. A
 # primitive subclass may carry *only* these; anything else (a method, property, class var, or an overridden dunder
 # such as ``__eq__`` / ``__int__``) is observable class-level behavior we cannot key on - see
@@ -338,16 +347,20 @@ _STRUCTURAL_CLASS_ATTRS = frozenset(
 
 
 def _is_baked_base_type(klass: type) -> bool:
-    """True for a library base a baked value can subclass - a builtin primitive, ``object``, or a NumPy-provided
-    type (module ``numpy``). Their own attributes are framework internals, not user state/behavior, so the
-    subclass walk in ``_reject_stateful_primitive_subclass`` stops here and an exact instance needs no checking.
+    """True for a library base a baked value can subclass without adding observable state/behavior: a builtin
+    primitive, ``object``, or a NumPy-provided scalar type (any *static* subclass of ``np.generic``). Their own
+    attributes are framework internals, not user state/behavior, so the subclass walk in
+    ``_reject_stateful_primitive_subclass`` stops here and an exact instance needs no checking.
+
+    A NumPy scalar base is recognised by inheritance plus *type nature* - ``issubclass(klass, np.generic)`` and the
+    absence of ``Py_TPFLAGS_HEAPTYPE`` - never by the mutable ``__module__`` string. NumPy's own scalar types are all
+    C-defined static types, whereas a user subclass (``class Foo(np.float64)``) is always a heap type even if it sets
+    ``__module__ = "numpy"``; keying off the flag rather than the string keeps such a subclass from masquerading as a
+    trusted base (its state/behavior is inspected and it is keyed by class identity like any other user subclass).
     """
-    return (
-        klass in _EXACT_BAKED_TYPES
-        or klass is object
-        or klass.__module__ == "numpy"
-        or klass.__module__.startswith("numpy.")
-    )
+    if klass in _EXACT_BAKED_TYPES or klass is object:
+        return True
+    return issubclass(klass, np.generic) and not (klass.__flags__ & _HEAPTYPE_FLAG)
 
 
 def _reject_stateful_primitive_subclass(value: Any) -> None:
@@ -379,7 +392,7 @@ def _reject_stateful_primitive_subclass(value: Any) -> None:
     if not (isinstance(value, (int, float, str)) or isinstance(value, np.generic)):
         return  # not a baked-primitive / NumPy-scalar value at all
     if isinstance(value, np.generic) and _is_baked_base_type(cls):
-        return  # an exact NumPy library scalar (module ``numpy``): a pure value, no user state/behavior
+        return  # an exact NumPy library scalar (a static ``np.generic`` type): a pure value, no user state/behavior
     if getattr(value, "__dict__", None):
         stateful = True
     else:
