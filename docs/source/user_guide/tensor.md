@@ -289,4 +289,4 @@ ng = qd.tensor(qd.f32, shape=(4,), needs_grad=True)
 ng.has_grad()        # True
 ```
 
-Reading or writing `.grad` on an un-allocated gradient raises `QuadrantsRuntimeError("Field has no allocation. ...")` - the failure is loud, never silent. Use `has_grad()` as the pre-check in generic code paths that may receive either a `needs_grad` tensor or a plain one. `has_dual()` mirrors it for the forward-mode dual companion.
+Reading or writing `.grad` on an un-allocated gradient raises `QuadrantsRuntimeError("Field has no allocation. ...")` - the failure is loud, never silent. Use `has_grad()` as the pre-check in generic code paths that may receive either a `needs_grad` tensor or a plain one. `has_dual()` mirrors it for the [forward-mode dual](autodiff.md#forward-mode-ad-via-qdadfwdmode) companion (the tangent buffer used for forward-mode autodiff, the forward-mode counterpart to `.grad`).
