@@ -244,6 +244,42 @@ def test_tensor_slot_later_wrapper_uses_impl_identity_cache():
     assert len(copy._primal.mapper._mapping_cache) == cache_size
 
 
+@test_utils.test()
+def test_none_argument_populates_spec_key_cache():
+    """A ``None`` in a ``qd.Tensor`` slot must land in the template mapper's spec-key cache.
+
+    ``TemplateMapper.lookup`` skips ``weakref``-tracking any argument whose type is in ``_primitive_types``.
+    ``NoneType`` is in that set, so ``weakref.ref(None)`` - which raises ``TypeError`` - is never attempted and the
+    entry is stored. Were ``NoneType`` absent, the ``TypeError`` would drop the entry and every ``None`` launch would
+    re-run full spec-key extraction instead of hitting the cache.
+    """
+    n = 4
+    a = qd.ndarray(qd.f32, shape=(n,))
+    a.from_numpy(np.arange(n, dtype=np.float32))
+    b = qd.ndarray(qd.f32, shape=(n,))
+    b.from_numpy(np.full(n, 100.0, dtype=np.float32))
+    c = qd.ndarray(qd.f32, shape=(n,))
+
+    @qd.kernel
+    def k(a: qd.types.NDArray[qd.f32, 1], b: qd.Tensor, c: qd.types.NDArray[qd.f32, 1]):
+        for i in range(a.shape[0]):
+            if qd.static(b is not None):
+                c[i] = a[i] + b[i]
+            else:
+                c[i] = a[i]
+
+    # A single launch with the optional slot absent must leave a cache entry behind.
+    k(a, None, c)
+    np.testing.assert_array_equal(c.to_numpy(), np.arange(n, dtype=np.float32))
+    assert len(k._primal.mapper._mapping_cache) == 1
+
+    # The present branch still works and specializes separately; the absent-branch entry is retained.
+    k(a, b, c)
+    np.testing.assert_array_equal(c.to_numpy(), np.arange(n, dtype=np.float32) + 100.0)
+    assert len(k._primal.mapper.mapping) == 2
+    assert len(k._primal.mapper._mapping_cache) == 2
+
+
 # Vector / matrix element types: qd.Tensor must dispatch the compound-element tensors built by qd.Vector.tensor /
 # qd.Matrix.tensor on both backends.
 
