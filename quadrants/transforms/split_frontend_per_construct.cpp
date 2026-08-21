@@ -60,6 +60,31 @@ bool block_has_mesh_for(Block *block) {
               .empty();
 }
 
+// Whether the kernel contains a concurrently-executed region: a `qd.stream_parallel()` block or a
+// `qd.graph.parallel()` section, both of which tag their loops with a nonzero `stream_parallel_group_id` /
+// `graph_parallel_region_id`. Those regions run on separate streams while sharing one kernel context and its single
+// global-temporary buffer. The per-construct split runs `offload` INDEPENDENTLY per construct, and each run restarts
+// global-temporary offset allocation from zero, so two concurrent constructs (e.g. dynamic-bound loops whose bounds
+// flow through a global temp) would alias the same offset and race on the shared buffer -- a loop could consume the
+// other section's bound and skip iterations or read out of bounds. The whole-kernel offload instead assigns unique
+// offsets across all tasks, so fall back for any kernel with a concurrent region. `include_containers` so loops nested
+// inside the region's block are inspected too.
+bool block_has_concurrent_region(Block *block) {
+  if (block == nullptr)
+    return false;
+  return !irpass::analysis::gather_statements(
+              block,
+              [](Stmt *s) {
+                if (auto *rf = s->cast<RangeForStmt>())
+                  return rf->stream_parallel_group_id != 0 || rf->graph_parallel_region_id != 0;
+                if (auto *sf = s->cast<StructForStmt>())
+                  return sf->stream_parallel_group_id != 0 || sf->graph_parallel_region_id != 0;
+                return false;
+              },
+              /*include_containers=*/true)
+              .empty();
+}
+
 // Resolve a local pointer (an AllocaStmt, or a MatrixPtrStmt into one) to its base AllocaStmt. Returns nullptr when the
 // pointer is not alloca-based (e.g. a global pointer / global temporary), in which case it is not a local variable.
 Stmt *resolve_local_alloca(Stmt *ptr) {
@@ -109,6 +134,15 @@ bool stmt_is_task_effect(Stmt *s) {
 // into a later construct -- subject to the shadowing check in `split_is_recompute_safe`.
 bool stmt_is_global_read(Stmt *s) {
   return s->is<GlobalLoadStmt>();
+}
+
+// A volatile global load (`qd.volatile_load`). Volatile semantics require the access to happen exactly once, in place,
+// on every execution -- so, unlike a plain load, it must NEVER be recomputed into another construct: cloning it turns
+// one source-level observation of a concurrently-updated cell into several and reorders it relative to surrounding
+// work.
+bool stmt_is_volatile_load(Stmt *s) {
+  auto *ld = s->cast<GlobalLoadStmt>();
+  return ld != nullptr && ld->is_volatile;
 }
 
 // Segmentation of the top-level block the way `offload` will chunk it into tasks: every container statement
@@ -230,12 +264,14 @@ std::unordered_set<Stmt *> compute_construct_needed(
 //
 //   (2) Non-recomputable producers cloned into a consumer. The backward slice pulls the writers (and operand chains)
 //       of any local a construct reads. Cloning such a producer into a consuming construct is only sound if it is a
-//       pure, deterministic function of recomputed operands. Two kinds are not: an EFFECTFUL statement (e.g. a local
+//       pure, deterministic function of recomputed operands. Three kinds are not: an EFFECTFUL statement (e.g. a local
 //       capturing the return of a global `AtomicOpStmt`, or a sparse op) already emits its own task in its home
 //       segment, so cloning it runs the effect again (`old = atomic_add(counter, 1); for i: out[i] = old` increments
-//       `counter` twice); and a NON-DETERMINISTIC statement (`RandStmt`) resamples and advances the PRNG once per
-//       clone (`r = random(); for i: x[i] = r; for i: y[i] = r` gives the two loops different values). Any statement
-//       the slice would recompute from a DIFFERENT segment must therefore be neither effectful nor a `RandStmt`.
+//       `counter` twice); a NON-DETERMINISTIC statement (`RandStmt`) resamples and advances the PRNG once per clone
+//       (`r = random(); for i: x[i] = r; for i: y[i] = r` gives the two loops different values); and a VOLATILE load
+//       (`qd.volatile_load`) must be observed exactly once in place, so cloning it into several constructs turns one
+//       read of a concurrently-updated cell into several. Any statement the slice would recompute from a DIFFERENT
+//       segment must therefore be none of effectful, a `RandStmt`, or a volatile load.
 //
 //   (3) Field loads snapshotted before a later construct. The backward slice recomputes a serial def -- including a
 //       field/ndarray LOAD -- into every construct that consumes it. That is sound only if no construct BETWEEN the
@@ -331,8 +367,8 @@ bool split_is_recompute_safe(Block *block) {
       if (it == top_index.end())
         continue;
       int pos = it->second;
-      if (segs.seg_id[pos] != k && (stmt_is_task_effect(s) || s->is<RandStmt>()))
-        return false;  // recomputing another segment's effect (or a fresh PRNG draw) would change behavior
+      if (segs.seg_id[pos] != k && (stmt_is_task_effect(s) || s->is<RandStmt>() || stmt_is_volatile_load(s)))
+        return false;  // recomputing another segment's effect, PRNG draw, or volatile load would change behavior
       // (3) Earliest top-level position of a global read this construct RECOMPUTES (one that lives in an earlier
       // segment; reads in the construct's own segment are not moved). If a global write sits strictly between that read
       // and the construct, the recomputed read would observe the mutation -> not safe.
@@ -424,6 +460,8 @@ bool maybe_split_frontend_per_construct(IRNode *ir,
     return false;
   if (block_has_mesh_for(block))
     return false;
+  if (block_has_concurrent_region(block))
+    return false;  // concurrent constructs share one global-temp buffer; per-construct offload would alias offsets
   if (!split_is_recompute_safe(block))
     return false;
   split_frontend_per_construct(ir, config, kernel, verbose);

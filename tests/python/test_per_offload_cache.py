@@ -3,10 +3,11 @@
 `compile_to_offloads` splits the frontend (simplify / merge_global_ptrs / offload) to run per top-level construct
 instead of once over the whole kernel, isolating each construct by its backward slice (in
 `transforms/split_frontend_per_construct.cpp`), and falls back to the whole-kernel path for kernels that are not
-recompute-safe: autodiff, mesh-for, a loop-produced local shared across constructs, a non-recomputable producer a
-later construct would clone (an effectful one such as a global atomic, or a non-deterministic `qd.random()`), or a
-serial field load that a later construct would recompute after an intervening effect (a store, atomic, or sparse
-activate/deactivate) mutated global state. This PR ships the split WITHOUT a
+recompute-safe: autodiff, mesh-for, a concurrently-executed region (`qd.stream_parallel()` / `qd.graph.parallel()`,
+whose constructs share one global-temp buffer), a loop-produced local shared across constructs, a non-recomputable
+producer a later construct would clone (an effectful one such as a global atomic, a non-deterministic `qd.random()`,
+or a `qd.volatile_load()`), or a serial field load that a later construct would recompute after an intervening effect
+(a store, atomic, or sparse activate/deactivate) mutated global state. This PR ships the split WITHOUT a
 reuse tier, so it recompiles every construct on every compile; the reuse (a disk manifest keyed by
 `get_hashed_per_construct_cache_key`) is added by the cross-process cache PR.
 
@@ -239,6 +240,59 @@ def test_per_construct_frontend_split_fallback_random_producer() -> None:
     # Both loops must observe the SAME sample. If the split recomputed qd.random() per construct the two loops would get
     # different draws.
     assert np.allclose(x.to_numpy(), y.to_numpy()), (x.to_numpy(), y.to_numpy())
+
+
+@test_utils.test(arch=[qd.cpu, qd.cuda], offline_cache=False)
+def test_per_construct_frontend_split_fallback_volatile_load() -> None:
+    # `v` snapshots a VOLATILE load, consumed by two later constructs. A volatile load must be observed exactly once, in
+    # place; recomputing it into each construct (as the backward slice would) turns one read of a concurrently-updated
+    # cell into several and reorders it. The gate must reject recomputing a volatile load and fall back.
+    @qd.kernel
+    def kernel_volatile(flags: qd.types.ndarray(), x: qd.types.ndarray(), y: qd.types.ndarray()) -> None:
+        v = qd.volatile_load(flags[0])
+        for i in range(_N):
+            x[i] = v
+        for i in range(_N):
+            y[i] = v
+
+    flags = qd.ndarray(qd.f32, shape=(1,))
+    x = qd.ndarray(qd.f32, shape=(_N,))
+    y = qd.ndarray(qd.f32, shape=(_N,))
+    flags.from_numpy(np.array([5.0], dtype=np.float32))
+    kernel_volatile(flags, x, y)
+
+    obs = kernel_volatile._primal.per_offload_cache_observations
+    assert obs.frontend_constructs_total == -1, obs
+
+    # Both loops observe the single volatile read (5.0).
+    assert np.allclose(x.to_numpy(), 5.0), x.to_numpy()
+    assert np.allclose(y.to_numpy(), 5.0), y.to_numpy()
+
+
+@test_utils.test(arch=[qd.cpu, qd.cuda], offline_cache=False)
+def test_per_construct_frontend_split_fallback_stream_parallel() -> None:
+    # Loops inside separate `qd.stream_parallel()` blocks run concurrently on their own streams while sharing one
+    # kernel context / global-temp buffer. Per-construct offload restarts global-temp offset allocation at 0 for each
+    # construct, so concurrent constructs would alias the same offset and race. The two loops are otherwise
+    # split-eligible (independent, recompute-safe), so the ONLY reason to fall back here is the concurrent region.
+    @qd.kernel
+    def kernel_streams(x: qd.types.ndarray(), y: qd.types.ndarray()) -> None:
+        with qd.stream_parallel():
+            for i in range(_N):
+                x[i] += _C[0]
+        with qd.stream_parallel():
+            for j in range(_N):
+                y[j] += _C[1]
+
+    x = qd.ndarray(qd.f32, shape=(_N,))
+    y = qd.ndarray(qd.f32, shape=(_N,))
+    kernel_streams(x, y)
+
+    obs = kernel_streams._primal.per_offload_cache_observations
+    assert obs.frontend_constructs_total == -1, obs
+
+    assert np.allclose(x.to_numpy(), _C[0], atol=1.0), x.to_numpy()
+    assert np.allclose(y.to_numpy(), _C[1], atol=1.0), y.to_numpy()
 
 
 @test_utils.test(arch=[qd.cpu, qd.cuda], offline_cache=False, require=qd.extension.sparse)
