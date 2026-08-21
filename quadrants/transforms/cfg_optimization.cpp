@@ -33,6 +33,22 @@ std::vector<OffloadedStmt *> collect_offloaded_tasks(IRNode *root) {
   return tasks;
 }
 
+// Suffix for a CFG dump filename. dump_graph_to_file writes "<kernel>_CFG<suffix>.txt", so this yields
+// "_<phase>_before_cfg_opt" / "_<phase>_post_cfg_opt" (the phase segment is dropped when |phase| is empty). For
+// per-task dumps, |task_index| adds a "_task<N>" segment so sibling tasks of the same kernel do not overwrite
+// each other's files.
+std::string cfg_dump_suffix(const std::string &phase, bool post, std::optional<int> task_index = std::nullopt) {
+  std::string suffix;
+  if (!phase.empty()) {
+    suffix += "_" + phase;
+  }
+  if (task_index.has_value()) {
+    suffix += "_task" + std::to_string(task_index.value());
+  }
+  suffix += post ? "_post_cfg_opt" : "_before_cfg_opt";
+  return suffix;
+}
+
 // Build and optimize a control-flow graph for a SINGLE offloaded task, scoped to that task alone.
 //
 // The task is temporarily moved into a throwaway wrapper block and run through the normal Block ->
@@ -51,11 +67,28 @@ std::vector<OffloadedStmt *> collect_offloaded_tasks(IRNode *root) {
 // the CFG spanning only one task, every global address -- fields, external tensors, and the global-temporary
 // buffer that carries scalars between tasks -- is therefore treated as live-in and live-out of the task, so no
 // store a sibling task may read is eliminated and no value is forwarded across a task (device-launch) boundary.
+//
+// QD_DUMP_CFG is observation-only here: when |dump_cfg| is set, the task's scoped CFG is written out before (and,
+// when the optimization runs, after) its per-task analyses, so the dump reflects the exact per-task graph the
+// compiler works on -- it never changes which optimizations run. The |real_matrix_enabled| path runs no per-task
+// analyses (matching the whole-kernel path); when it is set we only build+dump the "before" graph if dumping, and
+// skip entirely when not dumping so the no-op real-matrix behavior is preserved.
 bool optimize_one_task(Block *parent,
                        OffloadedStmt *off,
                        bool after_lower_access,
                        bool autodiff_enabled,
-                       const std::optional<ControlFlowGraph::LiveVarAnalysisConfig> &lva_config_opt) {
+                       bool real_matrix_enabled,
+                       const std::optional<ControlFlowGraph::LiveVarAnalysisConfig> &lva_config_opt,
+                       bool dump_cfg,
+                       const CompileConfig &config,
+                       const std::string &kernel_name,
+                       const std::string &phase,
+                       int task_index) {
+  // Nothing to do when the per-task optimization is disabled (real-matrix path) and we are not dumping: skip the
+  // CFG build so the no-op behavior of the real-matrix post-offload path is preserved exactly.
+  if (real_matrix_enabled && !dump_cfg) {
+    return false;
+  }
   const int location = parent->locate(off);
   QD_ASSERT(location != -1);
   Block wrapper;
@@ -65,12 +98,20 @@ bool optimize_one_task(Block *parent,
     // |cfg| holds raw pointers into |wrapper| (its container nodes) and into the task's own sub-blocks; keep
     // both alive until the analyses are done, then move the task back before |wrapper| leaves scope.
     auto cfg = analysis::build_cfg(&wrapper);
-    cfg->simplify_graph();
-    if (cfg->store_to_load_forwarding(after_lower_access, autodiff_enabled)) {
-      modified = true;
+    if (dump_cfg) {
+      cfg->dump_graph_to_file(config, kernel_name, cfg_dump_suffix(phase, /*post=*/false, task_index));
     }
-    if (cfg->dead_store_elimination(after_lower_access, lva_config_opt)) {
-      modified = true;
+    if (!real_matrix_enabled) {
+      cfg->simplify_graph();
+      if (cfg->store_to_load_forwarding(after_lower_access, autodiff_enabled)) {
+        modified = true;
+      }
+      if (cfg->dead_store_elimination(after_lower_access, lva_config_opt)) {
+        modified = true;
+      }
+      if (dump_cfg) {
+        cfg->dump_graph_to_file(config, kernel_name, cfg_dump_suffix(phase, /*post=*/true, task_index));
+      }
     }
   }
   parent->insert(wrapper.extract(off), location);
@@ -92,6 +133,11 @@ bool cfg_optimization(const CompileConfig &config,
   const char *dump_cfg_env = std::getenv(DUMP_CFG_ENV.data());
   const bool dump_cfg = dump_cfg_env != nullptr && std::string(dump_cfg_env) == "1";
 
+  // QD_DUMP_CFG is observation-only: it must NOT change which path runs or which optimizations run -- it only
+  // controls whether the CFG is written out. So the path selection below is identical with or without the dump,
+  // and the graph is dumped at the granularity the compiler actually uses (per offloaded task post-offload,
+  // whole-kernel otherwise). The dump therefore reflects the real compilation instead of forcing it.
+
   // Per-offloaded-task scoping. Once the kernel is offloaded we optimize each task's CFG independently; and we
   // deliberately DITCH the expensive whole-kernel cfg_optimization in the pre-offload phase, relying on the
   // post-offload per-task cfg below to do the store-to-load forwarding + dead-store elimination once tasks
@@ -99,45 +145,50 @@ bool cfg_optimization(const CompileConfig &config,
   // pre-offload kernel IR -- where there are no tasks to scope to -- and dominate compile time. cfg_optimization
   // is an optimization, not a correctness pass, so dropping it pre-offload is safe; the only thing lost is
   // cross-task forwarding/DSE on the monolithic IR, which is invalid across separate device launches anyway.
-  // QD_DUMP_CFG forces the whole-kernel path so the full graph can still be dumped for debugging.
-  if (!dump_cfg) {
-    auto tasks = collect_offloaded_tasks(root);
-    if (!tasks.empty()) {
-      // Post-offload: per-task store-to-load forwarding + dead-store elimination (skipped for the real-matrix
-      // path, matching the whole-kernel path which runs no analyses there).
-      bool result_modified = false;
-      if (!real_matrix_enabled) {
-        auto *block = root->as<Block>();
-        for (auto *off : tasks) {
-          result_modified |= optimize_one_task(block, off, after_lower_access, autodiff_enabled, lva_config_opt);
-        }
-      }
-      // TODO: implement cfg->dead_instruction_elimination()
-      die(root);  // remove unused allocas across the whole kernel
-      return result_modified;
+  auto tasks = collect_offloaded_tasks(root);
+  if (!tasks.empty()) {
+    // Post-offload: per-task store-to-load forwarding + dead-store elimination (skipped for the real-matrix
+    // path, matching the whole-kernel path which runs no analyses there). With QD_DUMP_CFG each task's CFG is
+    // dumped before/after its own optimization; the "_task<N>" suffix keeps sibling tasks from overwriting.
+    bool result_modified = false;
+    auto *block = root->as<Block>();
+    int task_index = 0;
+    for (auto *off : tasks) {
+      result_modified |= optimize_one_task(block, off, after_lower_access, autodiff_enabled, real_matrix_enabled,
+                                           lva_config_opt, dump_cfg, config, kernel_name, phase, task_index);
+      ++task_index;
     }
-    // No offloaded tasks yet. Within compile_to_offloads these are the pre-offload full_simplify calls on the
-    // monolithic kernel IR (the phases below, all *before* irpass::offload): their whole-kernel cfg is the
-    // (super-linear) reaching-definition / store-to-load analysis that dominates compile time, and it is
-    // redundant because the post-offload per-task cfg ("simplify_III" onward) redoes the intra-task
-    // store-to-load forwarding + dead-store elimination once tasks exist. So for exactly those phases we ditch
-    // cfg, keeping only the cheap dead-alloca cleanup. For ANY other caller of full_simplify on non-offloaded
-    // IR (unit tests, standalone blocks / function bodies that are never offloaded), we must still run the
-    // whole-kernel cfg below, or its forwarding/DSE would be silently lost -- so we fall through.
-    const bool pre_offload_compile_phase =
-        phase == "simplify_I" || phase == "simplify_II" || phase == "pre_autodiff" || phase == "post_autodiff";
-    if (pre_offload_compile_phase) {
-      die(root);
-      return false;
-    }
-    // else: fall through to the whole-kernel cfg path below.
+    // TODO: implement cfg->dead_instruction_elimination()
+    die(root);  // remove unused allocas across the whole kernel
+    return result_modified;
   }
+  // No offloaded tasks yet. Within compile_to_offloads these are the pre-offload full_simplify calls on the
+  // monolithic kernel IR (the phases below, all *before* irpass::offload): their whole-kernel cfg is the
+  // (super-linear) reaching-definition / store-to-load analysis that dominates compile time, and it is
+  // redundant because the post-offload per-task cfg ("simplify_III" onward) redoes the intra-task
+  // store-to-load forwarding + dead-store elimination once tasks exist. So for exactly those phases we ditch
+  // cfg, keeping only the cheap dead-alloca cleanup. For ANY other caller of full_simplify on non-offloaded
+  // IR (unit tests, standalone blocks / function bodies that are never offloaded), we must still run the
+  // whole-kernel cfg below, or its forwarding/DSE would be silently lost -- so we fall through.
+  const bool pre_offload_compile_phase =
+      phase == "simplify_I" || phase == "simplify_II" || phase == "pre_autodiff" || phase == "post_autodiff";
+  if (pre_offload_compile_phase) {
+    // cfg optimization is intentionally not run in these phases. With QD_DUMP_CFG we still build a whole-kernel
+    // CFG purely to dump the "before" graph for debugging: build_cfg does not mutate the IR and no optimization
+    // runs, so this stays observation-only. There is no "post" dump because nothing changes the graph.
+    if (dump_cfg) {
+      auto cfg = analysis::build_cfg(root);
+      cfg->dump_graph_to_file(config, kernel_name, cfg_dump_suffix(phase, /*post=*/false));
+    }
+    die(root);
+    return false;
+  }
+  // else: fall through to the whole-kernel cfg path below.
 
   auto cfg = analysis::build_cfg(root);
 
   if (dump_cfg) {
-    std::string suffix = phase.empty() ? "_before_cfg_opt" : ("_" + phase + "_before_cfg_opt");
-    cfg->dump_graph_to_file(config, kernel_name, suffix);
+    cfg->dump_graph_to_file(config, kernel_name, cfg_dump_suffix(phase, /*post=*/false));
   }
 
   bool result_modified = false;
@@ -152,8 +203,7 @@ bool cfg_optimization(const CompileConfig &config,
     }
 
     if (dump_cfg) {
-      std::string suffix = phase.empty() ? "_post_cfg_opt" : ("_" + phase + "_post_cfg_opt");
-      cfg->dump_graph_to_file(config, kernel_name, suffix);
+      cfg->dump_graph_to_file(config, kernel_name, cfg_dump_suffix(phase, /*post=*/true));
     }
   }
   // TODO: implement cfg->dead_instruction_elimination()
