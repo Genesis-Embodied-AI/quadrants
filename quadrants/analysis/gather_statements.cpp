@@ -7,14 +7,12 @@ namespace quadrants::lang {
 class StmtSearcher : public BasicStmtVisitor {
  private:
   std::function<bool(Stmt *)> test_;
-  bool include_containers_;
   std::vector<Stmt *> results_;
 
  public:
   using BasicStmtVisitor::visit;
 
-  StmtSearcher(std::function<bool(Stmt *)> test, bool include_containers)
-      : test_(test), include_containers_(include_containers) {
+  explicit StmtSearcher(std::function<bool(Stmt *)> test) : test_(test) {
     allow_undefined_visitor = true;
     invoke_default_visitor = true;
   }
@@ -24,23 +22,16 @@ class StmtSearcher : public BasicStmtVisitor {
       results_.push_back(stmt);
   }
 
-  void preprocess_container_stmt(Stmt *stmt) override {
-    if (include_containers_ && test_(stmt))
-      results_.push_back(stmt);
-  }
-
-  static std::vector<Stmt *> run(IRNode *root, const std::function<bool(Stmt *)> &test, bool include_containers) {
-    StmtSearcher searcher(test, include_containers);
+  static std::vector<Stmt *> run(IRNode *root, const std::function<bool(Stmt *)> &test) {
+    StmtSearcher searcher(test);
     root->accept(&searcher);
     return searcher.results_;
   }
 };
 
 namespace irpass::analysis {
-std::vector<Stmt *> gather_statements(IRNode *root,
-                                      const std::function<bool(Stmt *)> &test,
-                                      bool include_containers) {
-  return StmtSearcher::run(root, test, include_containers);
+std::vector<Stmt *> gather_statements(IRNode *root, const std::function<bool(Stmt *)> &test) {
+  return StmtSearcher::run(root, test);
 }
 }  // namespace irpass::analysis
 

@@ -103,14 +103,7 @@ std::unordered_map<Stmt *, std::vector<std::pair<Stmt *, int>>> gather_statement
 std::unordered_set<Stmt *> gather_immutable_local_vars(IRNode *root);
 std::unordered_set<SNode *> gather_deactivations(IRNode *root);
 std::pair<std::unordered_set<SNode *>, std::unordered_set<SNode *>> gather_snode_read_writes(IRNode *root);
-// `test` is run on every statement reached from `root`, except that container statements (`MeshForStmt`,
-// `StructForStmt`, `RangeForStmt`, `IfStmt`, `WhileStmt`, `OffloadedStmt`) are only offered to it when
-// `include_containers` is set. The default is off because `BasicStmtVisitor` claims those types with typed
-// overloads that recurse into the body without consulting the predicate, so that is the behaviour every existing
-// caller was written against; a predicate testing for one of those types matches nothing unless it opts in.
-std::vector<Stmt *> gather_statements(IRNode *root,
-                                      const std::function<bool(Stmt *)> &test,
-                                      bool include_containers = false);
+std::vector<Stmt *> gather_statements(IRNode *root, const std::function<bool(Stmt *)> &test);
 void gather_uniquely_accessed_bit_structs(IRNode *root, AnalysisManager *amgr);
 std::tuple<std::unordered_map<const SNode *, GlobalPtrStmt *>,
            std::unordered_map<std::vector<int>, ExternalPtrStmt *, hashing::Hasher<std::vector<int>>>,

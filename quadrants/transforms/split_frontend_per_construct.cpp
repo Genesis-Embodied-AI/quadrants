@@ -12,11 +12,13 @@
 #include "quadrants/ir/statements.h"
 #include "quadrants/ir/transforms.h"
 #include "quadrants/ir/analysis.h"
+#include "quadrants/ir/visitors.h"
 #include "quadrants/program/compile_config.h"
 #include "quadrants/program/kernel.h"
 #include "quadrants/program/program.h"
 #include "quadrants/program/per_construct_cache.h"
 
+#include <functional>
 #include <mutex>
 #include <set>
 #include <string>
@@ -26,6 +28,45 @@
 
 namespace quadrants::lang {
 namespace {
+
+// Feature-local statement gather that ALSO offers container statements (loops / if / while / offloaded) to the
+// predicate, not just leaf statements. The shared `irpass::analysis::gather_statements` never tests a container
+// itself: `BasicStmtVisitor` claims those types with typed overloads that recurse into the body without consulting
+// the predicate. The split needs the container statements too -- to detect container KINDS (`MeshForStmt`, dynamic
+// -parallel loops) and to walk a construct's whole subtree including nested loops -- so it does that traversal here
+// rather than widening the shared analysis API for this experimental pass (AGENTS.md: minimize contact area).
+class ContainerAwareGatherer : public BasicStmtVisitor {
+ public:
+  using BasicStmtVisitor::visit;
+
+  explicit ContainerAwareGatherer(std::function<bool(Stmt *)> test) : test_(std::move(test)) {
+    allow_undefined_visitor = true;
+    invoke_default_visitor = true;
+  }
+
+  void visit(Stmt *stmt) override {
+    if (test_(stmt))
+      results_.push_back(stmt);
+  }
+
+  void preprocess_container_stmt(Stmt *stmt) override {
+    if (test_(stmt))
+      results_.push_back(stmt);
+  }
+
+  std::vector<Stmt *> results_;
+
+ private:
+  std::function<bool(Stmt *)> test_;
+};
+
+// Like `irpass::analysis::gather_statements` but the predicate also sees container statements. See
+// `ContainerAwareGatherer`.
+std::vector<Stmt *> gather_stmts_incl_containers(IRNode *root, const std::function<bool(Stmt *)> &test) {
+  ContainerAwareGatherer gatherer(test);
+  root->accept(&gatherer);
+  return gatherer.results_;
+}
 
 // Run the whole pre-offload + offload frontend on ONE isolated top-level construct instead of once over the whole
 // kernel. Mirrors the kNone / non-mesh portion of the whole-kernel sequence in `compile_to_offloads` between simplify_I
@@ -53,11 +94,9 @@ void run_construct_frontend(IRNode *cb, const CompileConfig &config, const Kerne
 bool block_has_mesh_for(Block *block) {
   if (block == nullptr)
     return false;
-  // `include_containers` is not optional here: `MeshForStmt` is a container, so without it this guard matches
-  // nothing and silently passes every mesh kernel into the split, which produces IR that segfaults at launch.
-  return !irpass::analysis::gather_statements(
-              block, [](Stmt *s) { return s->is<MeshForStmt>(); }, /*include_containers=*/true)
-              .empty();
+  // Gathering containers is not optional here: `MeshForStmt` is a container, so a leaf-only gather would match
+  // nothing and silently pass every mesh kernel into the split, which produces IR that segfaults at launch.
+  return !gather_stmts_incl_containers(block, [](Stmt *s) { return s->is<MeshForStmt>(); }).empty();
 }
 
 // Whether the kernel contains a concurrently-executed region: a `qd.stream_parallel()` block or a
@@ -67,21 +106,21 @@ bool block_has_mesh_for(Block *block) {
 // global-temporary offset allocation from zero, so two concurrent constructs (e.g. dynamic-bound loops whose bounds
 // flow through a global temp) would alias the same offset and race on the shared buffer -- a loop could consume the
 // other section's bound and skip iterations or read out of bounds. The whole-kernel offload instead assigns unique
-// offsets across all tasks, so fall back for any kernel with a concurrent region. `include_containers` so loops nested
+// offsets across all tasks, so fall back for any kernel with a concurrent region. Gathers containers so loops nested
 // inside the region's block are inspected too.
 bool block_has_concurrent_region(Block *block) {
   if (block == nullptr)
     return false;
-  return !irpass::analysis::gather_statements(
-              block,
-              [](Stmt *s) {
-                if (auto *rf = s->cast<RangeForStmt>())
-                  return rf->stream_parallel_group_id != 0 || rf->graph_parallel_region_id != 0;
-                if (auto *sf = s->cast<StructForStmt>())
-                  return sf->stream_parallel_group_id != 0 || sf->graph_parallel_region_id != 0;
-                return false;
-              },
-              /*include_containers=*/true)
+  return !gather_stmts_incl_containers(block,
+                                       [](Stmt *s) {
+                                         if (auto *rf = s->cast<RangeForStmt>())
+                                           return rf->stream_parallel_group_id != 0 ||
+                                                  rf->graph_parallel_region_id != 0;
+                                         if (auto *sf = s->cast<StructForStmt>())
+                                           return sf->stream_parallel_group_id != 0 ||
+                                                  sf->graph_parallel_region_id != 0;
+                                         return false;
+                                       })
               .empty();
 }
 
@@ -221,10 +260,9 @@ std::unordered_set<Stmt *> compute_construct_needed(
   auto add_with_subtree = [&needed, &worklist](Stmt *s) {
     if (needed.insert(s).second)
       worklist.push_back(s);
-    // `include_containers`: a nested loop or branch has operands of its own (bounds, conditions) that the slice has to
-    // follow, so it has to enter the worklist like any other statement.
-    for (Stmt *sub : irpass::analysis::gather_statements(
-             s, [](Stmt *) { return true; }, /*include_containers=*/true))
+    // Gather containers too: a nested loop or branch has operands of its own (bounds, conditions) that the slice has
+    // to follow, so it has to enter the worklist like any other statement.
+    for (Stmt *sub : gather_stmts_incl_containers(s, [](Stmt *) { return true; }))
       if (needed.insert(sub).second)
         worklist.push_back(sub);
   };
@@ -330,8 +368,7 @@ bool split_is_recompute_safe(Block *block) {
   // Any real effect (`stmt_is_task_effect`) counts as an intervening mutation of global state: global/ndarray stores,
   // global atomics, AND sparse-structure ops (`SNodeOpStmt` activate/deactivate inherit has_global_side_effect==true).
   std::vector<bool> writes_global(n, false);
-  for (Stmt *w : irpass::analysis::gather_statements(
-           block, [](Stmt *s) { return stmt_is_task_effect(s); }, /*include_containers=*/true)) {
+  for (Stmt *w : gather_stmts_incl_containers(block, [](Stmt *s) { return stmt_is_task_effect(s); })) {
     bool inside = false;
     Stmt *owner = top_level_owner(w, block, &inside);
     if (owner == nullptr)
