@@ -15,11 +15,20 @@ import enum
 import struct
 import sys
 import typing
+import uuid
 from typing import Any
 
 import numpy as np
 
 _MISSING = object()  # sentinel for "attribute not found" while resolving a qualname (``None`` is a legal value)
+
+# A random token minted once per interpreter process. It is folded into the *offline* (cross-process) key component of
+# a non-uniquely-resolvable (locally / dynamically created) class - see ``_subclass_identity``. ``id(cls)`` alone is
+# only process-local and can repeat across processes, so two workers building same-named dynamic classes could
+# otherwise serialize identical offline keys and one could load a kernel baked for the other's (distinct) class. The
+# nonce makes such a key unique to this process: a dynamic class is a guaranteed cross-process cache *miss*, never a
+# wrong reuse, matching the documented "dynamic classes don't reuse another process's cached kernel" contract.
+_PROCESS_NONCE = uuid.uuid4().hex
 
 # ``T`` values permitted inside ``Final[T]``. A Final field's value is baked into the compiled kernel as a literal and
 # folded into both the in-process template spec key and the cross-process fastcache key, so ``T`` must be something
@@ -560,14 +569,19 @@ def _subclass_identity(cls: type, live: bool) -> tuple:
       class in the mapper. ``id`` sidesteps both. It is not process-stable, so it must never reach the offline key. The
       instance keeps its own class alive, so ``id(cls)`` is stable and unambiguous for that instance's lifetime; a
       benign ``id`` reuse can only happen once the class is unreachable, when no live kernel can observe the identity.
-    - ``live=False`` (the offline fastcache key, ``str``-ified by ``args_hasher``): the component must be
-      process-stable, so it is ``None`` for a uniquely resolvable (typically module-level) class - keeping the string
-      stable so another process reuses its cached kernel - and ``id(cls)`` for a non-resolvable (locally/dynamically
-      created) one, which only costs a cross-process cache *miss*, never a wrong reuse. This cannot distinguish a
-      reloaded module-level class across processes, which is unavoidable without process-stable identity and is safe
-      (the old class object does not exist in the other process).
+    - ``live=False`` (the offline fastcache key, ``str``-ified by ``args_hasher``): the component must make another
+      process reuse a *resolvable* class's cached kernel while never wrongly reusing one for a *non-resolvable* class.
+      So it is ``None`` for a uniquely resolvable (typically module-level) class - keeping the string stable across
+      processes - and ``(_PROCESS_NONCE, id(cls))`` for a non-resolvable (locally/dynamically created) one:
+      ``id(cls)`` separates distinct dynamic classes *within* this process, and the per-process nonce makes the string
+      unique *across* processes (``id`` alone can repeat at the same address in another process), so a dynamic class is
+      always a cross-process cache miss, never a wrong reuse. This still cannot reuse a reloaded module-level class's
+      kernel across processes, which is unavoidable without process-stable identity and is safe (the old class object
+      does not exist in the other process).
     """
-    identity = id(cls) if live else (id(cls) if _class_not_uniquely_identified(cls) else None)
+    if live:
+        return (cls.__module__, cls.__qualname__, id(cls))
+    identity = (_PROCESS_NONCE, id(cls)) if _class_not_uniquely_identified(cls) else None
     return (cls.__module__, cls.__qualname__, identity)
 
 
@@ -615,16 +629,18 @@ def _compute_enum_generated_class_attrs() -> "frozenset[str]":
         B = 2
 
     probes: list = [_Plain, _E, _IE, _IF]
-    if hasattr(enum, "Flag"):
+    _flag_base = getattr(enum, "Flag", None)
+    if _flag_base is not None:
 
-        class _F(enum.Flag):
+        class _F(_flag_base):
             A = 1
             B = 2
 
         probes.append(_F)
-    if hasattr(enum, "StrEnum"):
+    _str_enum_base = getattr(enum, "StrEnum", None)  # 3.11+; ``getattr`` (not ``enum.StrEnum``) keeps pylint happy
+    if _str_enum_base is not None:
 
-        class _SE(enum.StrEnum):
+        class _SE(_str_enum_base):
             A = "a"
             B = "b"
 
@@ -746,7 +762,8 @@ def final_scalar_key(value: Any, live: bool = False) -> Any:
     selects the identity strategy: the in-process spec key (``live=True``) keys on ``id(cls)`` so distinct classes
     never collide, even across a module reload that rebinds one ``module``/``qualname`` to a fresh class or when a
     metaclass makes two distinct classes ``==``; the offline fastcache key (``live=False``, the default) uses a
-    process-stable component instead (``None`` for a resolvable class, ``id`` for a locally/dynamically created one).
+    process-stable component instead (``None`` for a resolvable class, a per-process ``(nonce, id)`` for a
+    locally/dynamically created one, so it is a guaranteed cross-process miss rather than a possible wrong reuse).
     Annotations are not enforced at runtime, so a
     value that is none of the above (an arbitrary object, or a mutable container) is *rejected* with a clear
     ``TypeError`` rather than keyed by its own ``__eq__`` / ``__hash__``. Such an object could select the wrong
@@ -772,8 +789,8 @@ def final_scalar_key(value: Any, live: bool = False) -> Any:
         # and for a plain ``Enum`` ``First.A != Second.A``), and a module-level name can be rebound to a fresh class
         # by a reload - either way a kernel branching on ``cfg.mode == First.A`` needs distinct specializations.
         # ``_subclass_identity`` keys on ``id(cls)`` in-process (so all such cases stay distinct, even under a
-        # metaclass with a custom ``==``) and on a process-stable id/None offline. Every supported value encodes to a
-        # hashable key, so the tuple stays hashable.
+        # metaclass with a custom ``==``) and on a per-process ``(nonce, id)`` / ``None`` offline. Every supported
+        # value encodes to a hashable key, so the tuple stays hashable.
         _reject_stateful_enum_member(value)
         cls = type(value)
         return (_ENUM_KEY_TAG, *_subclass_identity(cls, live), value.name, final_scalar_key(value.value, live))
@@ -833,7 +850,7 @@ def final_scalar_key(value: Any, live: bool = False) -> Any:
     if _is_baked_base_type(cls):  # exact builtin primitive or exact NumPy scalar
         return (_SCALAR_KEY_TAG, cls.__module__, cls.__qualname__, canonical)
     # A behavior-free user subclass (``class Grams(int): pass``): ``module``/``qualname`` do not uniquely identify the
-    # class object, so ``_subclass_identity`` carries ``id(cls)`` (in-process) or a process-stable id/None (offline) -
-    # two distinct same-named subclasses (``cfg.x.__class__ is First``) then key apart, matching the enum and
-    # float-subclass branches above.
+    # class object, so ``_subclass_identity`` carries ``id(cls)`` (in-process) or a per-process ``(nonce, id)`` / None
+    # (offline) - two distinct same-named subclasses (``cfg.x.__class__ is First``) then key apart, matching the enum
+    # and float-subclass branches above.
     return (_SCALAR_KEY_TAG, *_subclass_identity(cls, live), canonical)

@@ -4366,6 +4366,30 @@ def test_final_scalar_key_live_uses_object_identity_not_class_equality():
 
 
 @test_utils.test()
+def test_final_scalar_key_offline_dynamic_class_is_process_unique():
+    """``id(cls)`` is only process-local and can repeat at the same address in another process. So the *offline*
+    (cross-process) key for a non-resolvable (locally/dynamically created) class also embeds a per-process nonce:
+    its serialized string is unique to this process, guaranteeing a dynamic class is a cross-process cache miss (never
+    a wrong reuse of a kernel baked for a distinct class in another worker). The *in-process* (``live=True``) key is
+    process-local anyway, so it stays nonce-free."""
+    from quadrants.lang import _final_dataclass_fields as fdf
+
+    def _make_local_int():
+        class Local(int):
+            pass
+
+        return Local
+
+    loc = _make_local_int()
+    assert fdf._PROCESS_NONCE in str(fdf.final_scalar_key(loc(1)))  # dynamic-class offline key -> process-unique
+    assert fdf._PROCESS_NONCE not in str(fdf.final_scalar_key(loc(1), live=True))  # live key never carries the nonce
+    # Distinct dynamic classes still separate within this process (same nonce, different id); the same class is stable.
+    other = _make_local_int()
+    assert fdf.final_scalar_key(loc(1)) != fdf.final_scalar_key(other(1))
+    assert fdf.final_scalar_key(loc(1)) == fdf.final_scalar_key(loc(1))
+
+
+@test_utils.test()
 def test_final_float_signed_zero_keys_distinct_kernels():
     """``-0.0`` and ``0.0`` are equal under Python ``==``/``hash`` but name different baked constants (the sign
     bit is observable). Encoding Final floats by their IEEE bits keeps them as distinct entries in the template
