@@ -203,7 +203,7 @@ fill(a)   # field branch
 fill(b)   # ndarray branch
 ```
 
-The kernel argument is unwrapped to the bare impl before the template-mapper / AST sees it, so kernel bodies still write `x[i, j]` and pay no per-call cost for the wrapper.
+Inside the kernel the argument is the bare impl rather than the wrapper, so kernel bodies still write `x[i, j]` and pay no per-call cost for the wrapper.
 
 For a parameter annotated `qd.Tensor`, calls to the same kernel may alternate among a wrapper, its bare field or ndarray implementation, and `None`. If callers can pass `None`, guard tensor operations with [`qd.static()`](static.md), for example `if qd.static(x is not None):`; the guarded operations are not traced for the `None` specialization. The parameter remains annotated `qd.Tensor`, and `None` must be passed explicitly.
 
