@@ -559,6 +559,35 @@ def _class_not_uniquely_identified(cls: type) -> bool:
     return obj is not cls
 
 
+class _ClassRef:
+    """A strong reference to a class that hashes and compares by *object identity*, never delegating to the class's
+    metaclass. Embedded in the in-process (``live``) spec key, it serves two ends that a bare ``cls`` cannot serve at
+    once:
+
+    - It pins ``cls`` for as long as the key lives in the template mapper, so the class object cannot be garbage
+      collected and its ``id`` cannot be recycled by a later same-named factory class (which would otherwise collide).
+    - Its ``__hash__`` / ``__eq__`` use ``object`` identity, so a metaclass with a custom ``__eq__`` cannot merge two
+      distinct classes and, crucially, a metaclass with ``__hash__ = None`` cannot make the whole spec key unhashable
+      (``self.mapping[key]`` would otherwise raise ``TypeError`` instead of compiling the valid ``Final`` value).
+
+    ``object.__hash__(self.cls)`` is the identity hash regardless of the metaclass; ``is`` gives identity equality.
+    """
+
+    __slots__ = ("cls",)
+
+    def __init__(self, cls: type) -> None:
+        self.cls = cls
+
+    def __hash__(self) -> int:
+        return object.__hash__(self.cls)
+
+    def __eq__(self, other: Any) -> bool:
+        return isinstance(other, _ClassRef) and self.cls is other.cls
+
+    def __repr__(self) -> str:
+        return f"<_ClassRef 0x{id(self.cls):x}>"  # identity only; the live key is never serialized
+
+
 def _subclass_identity(cls: type, live: bool) -> tuple:
     """Key component identifying a user *subclass* of a baked base type (a ``float``/``int``/``str`` or NumPy scalar
     subclass), or an ``enum`` class. ``module``/``qualname`` name it, but they never uniquely identify the *class
@@ -568,14 +597,13 @@ def _subclass_identity(cls: type, live: bool) -> tuple:
 
     The two key consumers need different strategies, selected by ``live``:
 
-    - ``live=True`` (the in-process template spec key): the identity component is ``(id(cls), cls)``. ``id(cls)`` is a
-      pure *object* identity used for comparison, so any two distinct class objects key apart, including across a reload
-      that transiently shares ``module`` / ``qualname`` and even when a metaclass makes two distinct classes ``==`` with
-      equal hashes (comparison stops at the differing ``id`` before ever touching ``cls.__eq__``; the subclass-state
-      validator does not inspect metaclass behavior). The class object rides along as a *strong reference*: this key
-      lives in the template mapper for the specialization's lifetime, so it pins ``cls`` and its ``id`` cannot be
-      recycled by a later same-named factory class (which would otherwise collide on the recycled address). This
-      component is process-local, so it must never reach the offline key.
+    - ``live=True`` (the in-process template spec key): the identity component is a ``_ClassRef(cls)`` token. It holds a
+      *strong reference* to ``cls`` (so this key, living in the template mapper for the specialization's lifetime, pins
+      the class and its ``id`` cannot be recycled by a later same-named factory class) yet hashes and compares purely by
+      object identity - so distinct class objects key apart even across a reload that transiently shares ``module`` /
+      ``qualname``, a metaclass with a custom ``__eq__`` cannot merge two classes, and a metaclass with ``__hash__ =
+      None`` cannot make the whole spec key unhashable. This token is process-local, so it must never reach the offline
+      key.
     - ``live=False`` (the offline fastcache key, ``str``-ified by ``args_hasher``): the component must make another
       process reuse a *resolvable* class's cached kernel while never wrongly reusing one for a *non-resolvable* class.
       So it is ``None`` for a uniquely resolvable (typically module-level) class - keeping the string stable across
@@ -587,7 +615,7 @@ def _subclass_identity(cls: type, live: bool) -> tuple:
       does not exist in the other process).
     """
     if live:
-        return (cls.__module__, cls.__qualname__, (id(cls), cls))
+        return (cls.__module__, cls.__qualname__, _ClassRef(cls))
     identity = (_PROCESS_NONCE, id(cls)) if _class_not_uniquely_identified(cls) else None
     return (cls.__module__, cls.__qualname__, identity)
 
@@ -766,12 +794,12 @@ def final_scalar_key(value: Any, live: bool = False) -> Any:
 
     A user *subclass* (of ``float``/``int``/``str`` or a NumPy scalar) or an ``enum`` is keyed by its class identity
     via ``_subclass_identity``, not just its value, since ``cfg.x.__class__`` is observable at compile time. ``live``
-    selects the identity strategy: the in-process spec key (``live=True``) keys on ``(id(cls), cls)`` so distinct
-    classes never collide - even across a module reload or under a metaclass that makes two classes ``==`` - and the
-    retained class object pins ``cls`` so its ``id`` cannot be recycled while the specialization is cached; the offline
-    fastcache key (``live=False``, the default) uses a process-stable component instead (``None`` for a resolvable
-    class, a per-process ``(nonce, id)`` for a locally/dynamically created one, so it is a guaranteed cross-process
-    miss rather than a possible wrong reuse).
+    selects the identity strategy: the in-process spec key (``live=True``) keys on a ``_ClassRef(cls)`` identity token
+    so distinct classes never collide - even across a module reload or under a metaclass that makes two classes ``==``
+    (or one with ``__hash__ = None``) - while its retained class object pins ``cls`` so its ``id`` cannot be recycled
+    while the specialization is cached; the offline fastcache key (``live=False``, the default) uses a process-stable
+    component instead (``None`` for a resolvable class, a per-process ``(nonce, id)`` for a locally/dynamically created
+    one, so it is a guaranteed cross-process miss rather than a possible wrong reuse).
     Annotations are not enforced at runtime, so a
     value that is none of the above (an arbitrary object, or a mutable container) is *rejected* with a clear
     ``TypeError`` rather than keyed by its own ``__eq__`` / ``__hash__``. Such an object could select the wrong
@@ -796,9 +824,10 @@ def final_scalar_key(value: Any, live: bool = False) -> Any:
         # classes built by a factory can share all four yet have distinct members (``First.A`` is not ``Second.A``,
         # and for a plain ``Enum`` ``First.A != Second.A``), and a module-level name can be rebound to a fresh class
         # by a reload - either way a kernel branching on ``cfg.mode == First.A`` needs distinct specializations.
-        # ``_subclass_identity`` keys on ``(id(cls), cls)`` in-process (so all such cases stay distinct, even under a
-        # metaclass with a custom ``==``, and the retained class pins its ``id``) and on a per-process ``(nonce, id)``
-        # / ``None`` offline. Every supported value encodes to a hashable key, so the tuple stays hashable.
+        # ``_subclass_identity`` keys on a ``_ClassRef(cls)`` identity token in-process (so all such cases stay
+        # distinct, even under a metaclass with a custom ``==`` / ``__hash__ = None``, and the retained class pins its
+        # ``id``) and on a per-process ``(nonce, id)`` / ``None`` offline. Every supported value encodes to a hashable
+        # key, so the tuple stays hashable.
         _reject_stateful_enum_member(value)
         cls = type(value)
         return (_ENUM_KEY_TAG, *_subclass_identity(cls, live), value.name, final_scalar_key(value.value, live))
@@ -858,7 +887,7 @@ def final_scalar_key(value: Any, live: bool = False) -> Any:
     if _is_baked_base_type(cls):  # exact builtin primitive or exact NumPy scalar
         return (_SCALAR_KEY_TAG, cls.__module__, cls.__qualname__, canonical)
     # A behavior-free user subclass (``class Grams(int): pass``): ``module``/``qualname`` do not uniquely identify the
-    # class object, so ``_subclass_identity`` carries ``(id(cls), cls)`` (in-process) or a per-process ``(nonce, id)``
-    # / None (offline) - two distinct same-named subclasses (``cfg.x.__class__ is First``) then key apart, matching
-    # the enum and float-subclass branches above.
+    # class object, so ``_subclass_identity`` carries a ``_ClassRef(cls)`` token (in-process) or a per-process
+    # ``(nonce, id)`` / None (offline) - two distinct same-named subclasses (``cfg.x.__class__ is First``) then key
+    # apart, matching the enum and float-subclass branches above.
     return (_SCALAR_KEY_TAG, *_subclass_identity(cls, live), canonical)

@@ -4364,12 +4364,17 @@ def test_final_scalar_key_live_uses_object_identity_not_class_equality():
     assert final_scalar_key(first(1), live=True) != final_scalar_key(second(1), live=True)
     assert final_scalar_key(first(1), live=True) == final_scalar_key(first(1), live=True)  # stable for one class
 
-    # The live key also carries the class object as a *strong ref*, so the mapper pins it and its id cannot be recycled
-    # by a later same-named factory class while the specialization is cached (id alone would be reusable after GC).
+    # The live key also carries the class object as a *strong ref* (inside a ``_ClassRef`` identity token), so the
+    # mapper pins it and its id cannot be recycled by a later same-named factory class while the specialization is
+    # cached (id alone would be reusable after GC).
+    from quadrants.lang import _final_dataclass_fields as _fdf
+
     def _flat(x):
         if isinstance(x, tuple):
             for e in x:
                 yield from _flat(e)
+        elif isinstance(x, _fdf._ClassRef):
+            yield x.cls
         else:
             yield x
 
@@ -4398,6 +4403,36 @@ def test_final_scalar_key_offline_dynamic_class_is_process_unique():
     other = _make_local_int()
     assert fdf.final_scalar_key(loc(1)) != fdf.final_scalar_key(other(1))
     assert fdf.final_scalar_key(loc(1)) == fdf.final_scalar_key(loc(1))
+
+
+@test_utils.test()
+def test_final_scalar_key_live_hashable_under_unhashable_metaclass():
+    """A metaclass may set ``__hash__ = None`` (making the *class* itself unhashable). The live spec key retains the
+    class via a ``_ClassRef`` token that hashes/compares by object identity, so the whole key stays hashable - the
+    mapper's ``self.mapping[key]`` would otherwise raise ``TypeError`` instead of compiling the valid ``Final`` value -
+    and distinct classes still key apart."""
+    from quadrants.lang._final_dataclass_fields import final_scalar_key
+
+    class Unhashable(type):
+        __hash__ = None  # the classes this metaclass produces are themselves unhashable
+
+        def __eq__(cls, other):
+            return cls is other
+
+    def _make():
+        class Local(int, metaclass=Unhashable):
+            pass
+
+        return Local
+
+    a, b = _make(), _make()
+    with pytest.raises(TypeError):
+        hash(a)  # the class object is unhashable...
+
+    ka = final_scalar_key(a(1), live=True)
+    assert hash(ka) == hash(final_scalar_key(a(1), live=True))  # ...yet the live key is hashable and stable
+    assert {ka: 1}[final_scalar_key(a(1), live=True)] == 1  # usable as a dict key, exactly what the mapper does
+    assert ka != final_scalar_key(b(1), live=True)  # distinct classes still key apart
 
 
 @test_utils.test()
