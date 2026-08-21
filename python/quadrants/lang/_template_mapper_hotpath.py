@@ -85,16 +85,6 @@ _np_ndarray = np.ndarray
 
 
 def _is_external_array(arg: Any) -> bool:
-    """Whether ``arg`` is an external array (numpy / torch) that a ``qd.Tensor`` slot should route through the
-    ndarray feature path instead of the template path.
-
-    Positive allowlist of exactly ``numpy.ndarray`` and ``torch.Tensor``: these are the only external array types
-    the launch path (``FuncBase._recursive_set_args``) can actually bind, so anything else would specialize here
-    only to raise there. A looser duck-typed check on ``.shape`` / ``.dtype`` is unsafe because quadrants-native
-    ``Field`` and ``SNode`` both expose those attributes and must keep taking the template path. ``torch`` is
-    resolved via ``sys.modules`` so this stays free of a hard torch dependency and costs nothing when torch was
-    never imported.
-    """
     if isinstance(arg, _np_ndarray):
         return True
     torch = sys.modules.get("torch")

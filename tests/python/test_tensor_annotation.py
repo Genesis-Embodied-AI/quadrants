@@ -484,13 +484,7 @@ def test_qd_tensor_across_reset_and_reinit(req_arch, req_options):
 
 
 # ----------------------------------------------------------------------------
-# External arrays (numpy / torch) at a qd.Tensor slot (issue #856, W3).
-#
-# A ``qd.Tensor`` slot routes numpy arrays and torch tensors through the ndarray feature path (keyed by dtype/ndim),
-# exactly like ``qd.types.ndarray()`` already does, instead of falling through to the template path. Before this,
-# torch produced one specialization per tensor instance and numpy raised ``TypeError: unhashable type:
-# 'numpy.ndarray'``. Field and scalar template values must be unaffected: Field also exposes ``.shape`` / ``.dtype``,
-# so the predicate is a positive numpy/torch allowlist rather than a duck-typed check.
+# External arrays (numpy / torch) at a qd.Tensor slot.
 # ----------------------------------------------------------------------------
 
 
