@@ -411,8 +411,9 @@ def final_scalar_key(value: Any) -> Any:
     - every remaining scalar (``bool`` / ``int`` / ``str`` and NumPy analogues) ->
       ``(_SCALAR_KEY_TAG, module, qualname, canonical-value)``. ``True == 1 == np.int64(1)`` with equal hashes, but
       they bake observably different Python constants (e.g. ``config.value is True``), so the exact type is tagged;
-      the value is coerced to its plain base type so a subclass with a misleading ``__repr__`` cannot collapse two
-      distinct values to one string in the offline cache key.
+      the value is coerced to its plain base type via a *base slot* (``int.__int__`` / ``str.__str__``, ``.item()``
+      for NumPy), never the subclass's own dunder, so a subclass with a misleading ``__int__`` / ``__str__`` /
+      ``__repr__`` cannot collapse two distinct values to one key (in-process or in the offline-cache string).
 
     Annotations are not enforced at runtime, so a value that is none of the above (an arbitrary object, or a mutable
     container) is *rejected* with a clear ``TypeError`` rather than keyed by its own ``__eq__`` / ``__hash__``. Such
@@ -463,9 +464,9 @@ def final_scalar_key(value: Any) -> Any:
     if cls in _EXACT_BAKED_TYPES:
         canonical = value
     elif isinstance(value, int):  # a Python ``int`` subclass (``bool`` cannot be subclassed)
-        canonical = int(value)
-    elif isinstance(value, np.integer):  # NumPy integer scalar (not a Python ``int`` subclass)
-        canonical = int(value)
+        canonical = int.__int__(value)  # base slot: bypass an overridden ``__int__`` / ``__index__``
+    elif isinstance(value, np.integer):  # NumPy integer scalar (not a Python ``int`` subclass, so no base int slot)
+        canonical = value.item()  # native, override-proof extraction of the underlying Python ``int``
     elif isinstance(value, str):  # a ``str`` subclass, including ``np.str_``; bypass any ``__str__`` override
         canonical = str.__str__(value)
     elif isinstance(value, np.bool_):  # NumPy boolean scalar -> plain ``bool``

@@ -4031,6 +4031,19 @@ def test_final_scalar_key_distinguishes_signed_zero_and_nan_payloads():
     assert str(final_scalar_key(OddInt(1))) != str(final_scalar_key(OddInt(2)))
     assert str(final_scalar_key(OddStr("x"))) != str(final_scalar_key(OddStr("y")))
 
+    # Canonicalization must read the *underlying* value via the base slot, not the subclass's own conversion dunder:
+    # a subclass whose ``__int__`` returns a constant would otherwise collapse distinct values to one key.
+    class ConstInt(int):
+        def __int__(self):
+            return 0
+
+        def __index__(self):
+            return 0
+
+    assert int(ConstInt(1)) == int(ConstInt(2)) == 0  # the override really does collapse ``int(...)``
+    assert final_scalar_key(ConstInt(1)) != final_scalar_key(ConstInt(2))  # ...but the key does not
+    assert str(final_scalar_key(ConstInt(1))) != str(final_scalar_key(ConstInt(2)))  # nor its offline string
+
     # Remaining scalars are type-tagged: Python conflates value-equal but distinct-typed constants (True == 1 ==
     # np.int64(1), with equal hashes), and they bake observably different Python constants, so they must not alias.
     assert final_scalar_key(True) != final_scalar_key(1)
