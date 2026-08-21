@@ -4561,6 +4561,42 @@ def test_final_is_baked_base_type_ignores_spoofed_module():
 
 
 @test_utils.test()
+def test_final_primitive_subclass_rejects_observable_metaclass_state():
+    """A primitive subclass whose *metaclass* carries observable state/behavior is rejected: a kernel can read
+    ``cfg.x.__class__.label`` (which resolves to ``type(cls).label``), which the subclass-MRO walk never sees and the
+    key - keyed on the subclass ``module``/``qualname`` - does not capture, so mutating it (or two factory metaclasses
+    differing) would reuse a stale specialization. Identity dunders on the metaclass are exempt (the class-identity key
+    is already immune to them), so a metaclass overriding only ``__eq__`` / ``__hash__`` stays accepted."""
+    from quadrants.lang._final_dataclass_fields import final_scalar_key
+
+    class UnitMeta(type):
+        label = "m"  # observable via ``cfg.x.__class__.label``, absent from the key
+
+    class Unit(int, metaclass=UnitMeta):
+        pass
+
+    with pytest.raises(TypeError, match="metaclass defines observable"):
+        final_scalar_key(Unit(1))
+
+    class Plain(int):  # plain metaclass (``type``) -> accepted
+        pass
+
+    final_scalar_key(Plain(1))  # does not raise
+
+    class EqMeta(type):  # metaclass overriding only the key-neutralized identity dunders -> still accepted
+        def __eq__(cls, other):
+            return cls is other
+
+        def __hash__(cls):
+            return id(cls)
+
+    class Tagged(int, metaclass=EqMeta):
+        pass
+
+    final_scalar_key(Tagged(1))  # does not raise (``_ClassRef`` keys by identity, immune to metaclass ==/hash)
+
+
+@test_utils.test()
 def test_final_float_signed_zero_keys_distinct_kernels():
     """``-0.0`` and ``0.0`` are equal under Python ``==``/``hash`` but name different baked constants (the sign
     bit is observable). Encoding Final floats by their IEEE bits keeps them as distinct entries in the template

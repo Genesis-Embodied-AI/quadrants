@@ -345,6 +345,32 @@ _STRUCTURAL_CLASS_ATTRS = frozenset(
     }
 )
 
+# Framework metaclass layers on a primitive subclass's *metaclass* MRO. A plain subclass's metaclass is exactly
+# ``type``; only a user-authored ``type`` subclass sits below it, so only those layers are inspected for observable
+# metaclass-level behavior (see the metaclass walk in ``_reject_stateful_primitive_subclass``).
+_FRAMEWORK_PRIMITIVE_METACLASSES = frozenset({type, object})
+
+# Metaclass-level dunders the class-identity key already neutralizes: that key uses ``id`` / ``is`` /
+# ``object.__hash__`` (see ``_ClassRef``), so a metaclass ``__eq__`` / ``__ne__`` / ``__hash__`` can neither collapse
+# two distinct classes nor make the key unhashable. They are therefore *not* observable in a key-breaking way and are
+# exempt when inspecting a metaclass layer; any *other* attribute (data like ``label``, a property, a method, another
+# dunder) is not neutralized and is rejected (see ``_observable_metaclass_attr``).
+_KEY_NEUTRALIZED_METACLASS_DUNDERS = frozenset({"__eq__", "__ne__", "__hash__"})
+
+
+def _observable_metaclass_attr(mcls: type) -> "str | None":
+    """Name of a user-authored observable attribute in a metaclass layer's ``__dict__`` - readable at compile time as
+    ``cfg.x.__class__.<attr>`` - or None. Auto-generated structural names (``_STRUCTURAL_CLASS_ATTRS``, since a
+    metaclass is an ordinary ``type`` subclass) and the key-neutralized identity dunders
+    (``_KEY_NEUTRALIZED_METACLASS_DUNDERS``) are exempt; anything else is state/behavior the fixed class-identity key
+    cannot capture. Shared by the enum and primitive-subclass metaclass walks.
+    """
+    for name in vars(mcls):
+        if name in _STRUCTURAL_CLASS_ATTRS or name in _KEY_NEUTRALIZED_METACLASS_DUNDERS:
+            continue
+        return name
+    return None
+
 
 def _is_baked_base_type(klass: type) -> bool:
     """True for a library base a baked value can subclass without adding observable state/behavior: a builtin
@@ -382,7 +408,9 @@ def _reject_stateful_primitive_subclass(value: Any) -> None:
       either: ``module``/``qualname`` does not uniquely identify a dynamically created class, so two distinct
       same-named subclasses (whose ``cfg.x.unit`` or ``cfg.x == 1`` a kernel could read) would collide. Any class
       member other than the auto-generated structural ones (``_STRUCTURAL_CLASS_ATTRS``) is therefore rejected -
-      including an overridden operator/conversion/repr dunder, since it too is observable.
+      including an overridden operator/conversion/repr dunder, since it too is observable. The subclass's *metaclass*
+      is inspected the same way (``cfg.x.__class__.label`` resolves to ``type(cls).label``, invisible to the subclass
+      MRO walk), skipping the framework ``type`` / ``object`` layers - mirroring ``_enum_class_behavior_attr``.
 
     There is no bounded, process-stable way to serialise arbitrary state/behavior, so we reject rather than silently
     mis-specialise. Exact primitives, exact NumPy library scalars (their attrs are library internals, not user
@@ -431,6 +459,23 @@ def _reject_stateful_primitive_subclass(value: Any) -> None:
                     f"specialization. Pass a plain ``bool`` / ``int`` / ``float`` / ``str`` (or an ``enum`` "
                     f"member) instead."
                 )
+    for mcls in type(cls).__mro__:  # user-authored metaclass layers below ``type`` (``class Unit(int, metaclass=M)``)
+        # ``cfg.x.__class__.label`` resolves to ``type(cls).label``, which the subclass MRO walk never sees. A custom
+        # metaclass can carry observable state/behavior that two same-named factory subclasses define differently, or
+        # that is mutated between launches, while the key (keyed only on the subclass ``module``/``qualname``) stays
+        # fixed - so it must be inspected too, exactly as ``_enum_class_behavior_attr`` does for enums.
+        if mcls in _FRAMEWORK_PRIMITIVE_METACLASSES:
+            continue
+        attr = _observable_metaclass_attr(mcls)
+        if attr is not None:
+            raise TypeError(
+                f"A ``Final`` field received {cls.__module__}.{cls.__qualname__}, a subclass of a baked "
+                f"primitive whose metaclass defines observable class-level behavior/state (e.g. attribute "
+                f"{attr!r}, readable as ``cfg.x.__class__.{attr}``). ``module``/``qualname`` does not uniquely "
+                f"identify a dynamically created class, so two same-named subclasses (e.g. from a factory) whose "
+                f"metaclass ``{attr}`` a kernel could read would select the same specialization. Pass a plain "
+                f"``bool`` / ``int`` / ``float`` / ``str`` (or an ``enum`` member) instead."
+            )
 
 
 # Exhaustive allowlist of ``enum`` member attribute names that are standard bookkeeping, NOT user-defined per-member
@@ -766,7 +811,7 @@ def _enum_class_behavior_attr(enum_cls: type) -> "str | None":
     for mcls in type(enum_cls).__mro__:  # user-authored metaclass layers below the framework ``EnumMeta``
         if mcls in _FRAMEWORK_ENUM_METACLASSES:
             continue
-        attr = _observable_class_dict_attr(mcls)
+        attr = _observable_metaclass_attr(mcls)
         if attr is not None:
             return attr
     return None
