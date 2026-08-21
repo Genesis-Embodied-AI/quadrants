@@ -693,10 +693,11 @@ importantly, it sets the backend used throughout the program.</p>
 <li><p><strong>default_fp</strong> (<em>Optional</em><em>[</em><em>type</em><em>]</em>) – Default floating-point type.</p></li>
 <li><p><strong>default_ip</strong> (<em>Optional</em><em>[</em><em>type</em><em>]</em>) – Default integral type.</p></li>
 <li><p><strong>require_version</strong> – A version string.</p></li>
-<li><p><strong>print_non_pure</strong> – Print the names of kernels, at the time they are executed, which are not annotated with
-&#64;qd.pure</p></li>
+<li><p><strong>print_non_pure</strong> – Print the names of kernels, at the time they are executed, which are not declared with
+&#64;qd.kernel(fastcache=True) (or the deprecated &#64;qd.kernel(pure=True))</p></li>
 <li><p><strong>src_ll_cache</strong> – enable SRC-LL-CACHE, which will accelerate loading from cache, across all architectures,
-for pure kernels (i.e. kernels declared as &#64;qd.pure)</p></li>
+for pure kernels (i.e. kernels declared with &#64;qd.kernel(fastcache=True), or the deprecated
+&#64;qd.kernel(pure=True))</p></li>
 <li><p><strong>**kwargs</strong> – <p>Quadrants provides highly customizable compilation through
 <code class="docutils literal notranslate"><span class="pre">kwargs</span></code>, which allows for fine grained control of Quadrants compiler
 behavior. Below we list some of the most frequently used ones. For a
