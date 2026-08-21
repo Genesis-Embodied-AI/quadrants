@@ -76,7 +76,11 @@ AnnotationType = Union[
 
 _ExprCxx = _qd_core.ExprCxx
 _composite_mutable_types = {list, dict, set}
-_primitive_types = {int, float, bool}
+# ``type(None)`` belongs here so ``None`` arguments are treated like other primitives and excluded from the
+# weakref-based spec-key cache tracker in ``TemplateMapper.lookup``: ``weakref.ref(None)`` raises ``TypeError``, and
+# ``None`` is an immortal singleton that never needs lifetime tracking. Without it, the spec-key cache entry for a
+# ``None`` argument is dropped and every such launch re-runs full spec-key extraction.
+_primitive_types = {int, float, bool, type(None)}
 
 
 # Per-instance ndarray-path cache, stored OFF-instance in a module-level ``id(arg) -> list[paths]`` dict and cleaned
