@@ -4023,6 +4023,29 @@ def test_final_scalar_key_distinguishes_signed_zero_and_nan_payloads():
     assert final_scalar_key("abc") == final_scalar_key("abc")
     assert final_scalar_key(True) == final_scalar_key(True)
 
+    # Annotations are not enforced at runtime: an arbitrary object (whose ``__eq__``/``__hash__`` we cannot trust to
+    # capture all observable state) is rejected rather than keyed by identity/value.
+    class Arbitrary:
+        def __init__(self, tag):
+            self.tag = tag
+
+        def __eq__(self, other):
+            return isinstance(other, Arbitrary)
+
+        def __hash__(self):
+            return 0
+
+    with pytest.raises(TypeError, match="not a supported compile-time constant"):
+        final_scalar_key(Arbitrary("a"))
+
+    # An enum whose member value is mutable/unsupported (e.g. a ``list``) is rejected too, since the value is routed
+    # through ``final_scalar_key`` and a mutable value could silently change under the cached spec key.
+    class ListValued(enum.Enum):
+        A = [1, 2, 3]
+
+    with pytest.raises(TypeError, match="not a supported compile-time constant"):
+        final_scalar_key(ListValued.A)
+
 
 @test_utils.test()
 def test_final_float_signed_zero_keys_distinct_kernels():

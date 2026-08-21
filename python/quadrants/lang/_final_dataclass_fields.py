@@ -384,13 +384,17 @@ def final_scalar_key(value: Any) -> Any:
       and the member value are kept: ``name`` (``None`` for an unnamed ``IntFlag`` composite) plus the value
       separates same-named members of two classes that share ``module``/``qualname`` (e.g. an enum rebuilt by a
       local factory). The value is itself run through ``final_scalar_key`` so a raw ``True`` vs ``1`` (``==``, equal
-      hash) cannot collide. A member carrying user-defined per-member state is rejected (identity alone cannot
-      capture that state).
+      hash) cannot collide and so an unsupported / mutable member value is rejected. A member carrying user-defined
+      per-member state is rejected (identity alone cannot capture that state).
     - every remaining scalar (``bool`` / ``int`` / ``str`` and NumPy analogues) ->
       ``(_SCALAR_KEY_TAG, module, qualname, canonical-value)``. ``True == 1 == np.int64(1)`` with equal hashes, but
       they bake observably different Python constants (e.g. ``config.value is True``), so the exact type is tagged;
       the value is coerced to its plain base type so a subclass with a misleading ``__repr__`` cannot collapse two
       distinct values to one string in the offline cache key.
+
+    Annotations are not enforced at runtime, so a value that is none of the above (an arbitrary object, or a mutable
+    container) is *rejected* with a clear ``TypeError`` rather than keyed by its own ``__eq__`` / ``__hash__``. Such
+    an object could select the wrong specialization or change under the cached ``_qd_spec_key`` after first launch.
 
     Everything here runs once per instance (Final keys/reprs are cached), never on the steady-state launch path, so
     the ``isinstance`` probes are off the hot path.
@@ -406,16 +410,13 @@ def final_scalar_key(value: Any) -> Any:
         # local factory, whose qualname is ``<factory>.<locals>.Local``. The value is routed through
         # ``final_scalar_key`` itself, not embedded raw: two factory members named ``A`` valued ``True`` vs ``1``
         # are ``==`` with equal hashes, so a raw value would still collide - recursing type-tags them apart (and
-        # bit-encodes a float value, etc.). Fall back to ``repr`` if the encoded value is unhashable (an enum whose
-        # value is e.g. a ``list``) so the in-process tuple key stays hashable.
+        # bit-encodes a float value, etc.). Recursing also rejects a mutable / unsupported member value (e.g. a
+        # ``list``): such a value could otherwise change under the cached ``_qd_spec_key`` after first launch and
+        # so must not be accepted at all. Every supported value encodes to a hashable key, so the tuple stays
+        # hashable.
         _reject_stateful_enum_member(value)
         cls = type(value)
-        member_value = final_scalar_key(value.value)
-        try:
-            hash(member_value)
-        except TypeError:
-            member_value = repr(member_value)
-        return (_ENUM_KEY_TAG, cls.__module__, cls.__qualname__, value.name, member_value)
+        return (_ENUM_KEY_TAG, cls.__module__, cls.__qualname__, value.name, final_scalar_key(value.value))
     if isinstance(value, np.floating):
         # ``dtype.str`` (e.g. ``"<f4"``) + ``tobytes()`` preserves sign bit, NaN payload and width, and stays in the
         # same tagged space as the builtin-float branch so it can never equal a bare int / str key component.
@@ -445,6 +446,21 @@ def final_scalar_key(value: Any) -> Any:
         canonical = int(value)
     elif isinstance(value, str):  # a ``str`` subclass, including ``np.str_``; bypass any ``__str__`` override
         canonical = str.__str__(value)
+    elif isinstance(value, np.bool_):  # NumPy boolean scalar -> plain ``bool``
+        canonical = bool(value)
     else:
-        canonical = value  # other NumPy scalars (e.g. ``np.bool_``): distinct values already have distinct reprs
+        # Annotations are not enforced at runtime, so a ``Final`` field - or an ``enum`` member's value, routed here
+        # by the enum branch - can be an object of any type. Everything above is a supported baked primitive (or its
+        # NumPy analogue) whose value fully determines the key. An arbitrary object is not: two instances that are
+        # ``==`` with equal hashes but carry differing attributes would select the same specialization while
+        # compile-time code (``qd.static(cfg.x.tag == 1)``) reads the difference, and a mutable value (e.g. a
+        # ``list``) could even change under the cached ``_qd_spec_key``. Reject rather than let an unsupported
+        # object's ``__eq__`` / ``__hash__`` control key equality.
+        raise TypeError(
+            f"A ``Final`` field received {cls.__module__}.{cls.__qualname__}, which is not a supported "
+            f"compile-time constant. A ``Final`` value - or an ``enum`` member's underlying value - must be a "
+            f"``bool`` / ``int`` / ``float`` / ``str`` (or a NumPy scalar analogue), or an ``enum`` member; an "
+            f"arbitrary object cannot be keyed by value alone. Bake the specific scalar you need as a ``Final`` "
+            f"field instead."
+        )
     return (_SCALAR_KEY_TAG, cls.__module__, cls.__qualname__, canonical)
