@@ -35,6 +35,10 @@ Whether to enable relaxed floating-point optimizations (fusing multiply-add oper
 
 Number of host threads used to compile a single kernel's internal tasks in parallel. Default `4`. When Quadrants compiles a kernel it first splits it into several tasks (roughly one per parallel loop) and hands them to a pool of this many threads, so a kernel that splits into many tasks compiles faster on a machine with idle cores. (Distinct kernels are still each compiled lazily the first time they run; this option speeds up the compilation of one such kernel, not scheduling across kernels.) Lower it, or set `1`, on memory-constrained systems where many concurrent compilations would thrash memory. Only the LLVM backends (CPU, CUDA, AMDGPU) use it.
 
+### `raise_on_templated_floats`
+
+Default `False`. Some kernel arguments make Quadrants compile a separate, specialized copy of the kernel for each distinct *value* it sees (rather than one copy per distinct *type*) - notably a plain Python `float` passed as a `qd.Template` argument, or a [`Final[float]`](./compound_types.md#compile-time-constant-fields-typingfinal) field on a dataclass argument. Because two floats are rarely exactly equal, letting a `float` drive this per-value specialization can quietly recompile the kernel on almost every launch and inflate both compile time and on-disk cache size. Set `raise_on_templated_floats=True` to make Quadrants raise an error whenever a `float` value would be used this way, turning that silent trap into an explicit failure; leave it at the default `False` to allow float-valued templates.
+
 ## Reverse-mode autodiff
 
 See [Autodiff](./autodiff.md) for the reverse-mode pipeline overview.
