@@ -21,7 +21,6 @@ std::string get_hashed_offline_cache_key(const CompileConfig &config,
 // get_hashed_offline_cache_key. Exposed to the Python fast-cache so its checksum can distinguish devices whose caps
 // change the generated code (e.g. SPIR-V int64 / atomics families), matching the caps-awareness of the native cache.
 std::string get_hashed_offline_cache_key_of_device_caps(const DeviceCapabilityConfig &caps);
-
 void gen_offline_cache_key(IRNode *ast, std::ostream *os);
 
 }  // namespace quadrants::lang
