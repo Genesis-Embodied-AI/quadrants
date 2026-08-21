@@ -565,8 +565,9 @@
 <h2>Under the hood: per-task scoping<a class="headerlink" href="#under-the-hood-per-task-scoping" title="Link to this heading">#</a></h2>
 <p>Once the kernel has been split into offloaded tasks, both CSE and the CFG optimization run over <strong>one offloaded task’s IR at a time</strong>, never over the whole <code class="docutils literal notranslate"><span class="pre">qd.kernel</span></code> at once. This is both faster to analyze and safe: because each task is a separate device launch, a value held in a register in one task cannot survive into the next one, so there is never anything to deduplicate or forward across a task boundary. Anything written to global memory is treated as potentially read by a later task, so no store another task might need is dropped.</p>
 </section>
-<section id="per-construct-frontend-compilation">
-<h2>Per-construct frontend compilation<a class="headerlink" href="#per-construct-frontend-compilation" title="Link to this heading">#</a></h2>
+<section id="under-the-hood-per-construct-frontend-compilation">
+<h2>Under the hood: per-construct frontend compilation<a class="headerlink" href="#under-the-hood-per-construct-frontend-compilation" title="Link to this heading">#</a></h2>
+<p>This section is for the curious; you never have to think about it to write kernels - the behavior below is transparent and on by default.</p>
 <p>The frontend stages above - the passes that turn your high-level kernel into offloaded tasks - can run either once over the whole kernel or, for eligible kernels, separately for each <strong>top-level construct</strong> (each independent top-level loop or serial run in your kernel). Compiling each construct in isolation is what will let a future cross-process cache reuse the unchanged constructs of a kernel you edited; today it produces the same offloaded tasks and the same results as the whole-kernel path, so the split is transparent.</p>
 <p>Quadrants automatically falls back to the whole-kernel path whenever per-construct compilation would not be equivalent: <a class="reference internal" href="autodiff.html"><span class="std std-doc">autodiff</span></a> kernels, certain specialized kernels, and kernels where one construct’s value depends on state another construct produced in a way that cannot be recomputed in isolation (for example a local variable that one top-level loop builds up over its iterations and another construct then reads, or a snapshot of a field that a later construct reads after an intervening write).</p>
 <section id="inspecting-the-split">
@@ -646,7 +647,7 @@
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#controlling-the-passes">Controlling the passes</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#inspecting-what-the-compiler-did">Inspecting what the compiler did</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#under-the-hood-per-task-scoping">Under the hood: per-task scoping</a></li>
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#per-construct-frontend-compilation">Per-construct frontend compilation</a><ul class="nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#under-the-hood-per-construct-frontend-compilation">Under the hood: per-construct frontend compilation</a><ul class="nav section-nav flex-column">
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#inspecting-the-split">Inspecting the split</a></li>
 </ul>
 </li>
