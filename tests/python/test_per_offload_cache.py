@@ -23,6 +23,8 @@ Counts are exposed as `kernel._primal.per_offload_cache_observations`. `offline_
 whole-kernel cache never short-circuits codegen and the split always runs on the (cold) compile.
 """
 
+import os
+
 import numpy as np
 import pytest
 
@@ -30,6 +32,15 @@ import quadrants as qd
 from quadrants.lang.util import has_clangpp
 
 from tests import test_utils
+
+# Kernel coverage (QD_KERNEL_COVERAGE=1) rewrites every kernel with per-line probe stores to a global coverage field,
+# which adds top-level global-write constructs (changing the split's construct partition) and makes the split fall back
+# to the whole-kernel path. Both defeat these observation assertions, so CI runs this file in a separate no-coverage
+# phase (see .github/workflows/scripts_new/linux/4_test.sh), mirroring test_offline_cache.py.
+pytestmark = pytest.mark.skipif(
+    os.environ.get("QD_KERNEL_COVERAGE") == "1",
+    reason="Kernel coverage instrumentation disables the per-construct split and changes construct counts",
+)
 
 _N = 8
 _C = (61001.0, 61002.0, 61003.0, 61004.0)

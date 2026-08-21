@@ -631,16 +631,23 @@ bool maybe_split_frontend_per_construct(IRNode *ir,
   auto *block = ir->cast<Block>();
   if (block == nullptr)
     return false;
+  auto env_is_enabled = [](std::string_view env) {
+    const char *v = std::getenv(env.data());
+    return v != nullptr && std::string(v) == "1";
+  };
   // QD_DUMP_CFG and QD_DUMP_IR are whole-kernel diagnostics: QD_DUMP_CFG dumps the whole-kernel CFG (`cfg_optimization`
   // forces the whole-kernel path for it) and QD_DUMP_IR writes a snapshot before/after each simplify stage. The split
   // would run those stages per construct and dump into the same phase filenames, so later constructs overwrite earlier
   // ones and only a partial graph / a subset of the documented snapshots survives. Fall back so both diagnostics
   // produce their documented whole-kernel output.
-  auto dump_env_set = [](std::string_view env) {
-    const char *v = std::getenv(env.data());
-    return v != nullptr && std::string(v) == "1";
-  };
-  if (dump_env_set(DUMP_CFG_ENV) || dump_env_set(DUMP_IR_ENV))
+  if (env_is_enabled(DUMP_CFG_ENV) || env_is_enabled(DUMP_IR_ENV))
+    return false;
+  // QD_KERNEL_COVERAGE (python/quadrants/lang/_kernel_coverage.py) rewrites every kernel to store a probe into a global
+  // coverage field before each source line. Those probe stores add top-level global-write constructs (so the partition
+  // no longer matches the source structure) and, in graph/checkpoint kernels, land between a yield gate and its loop --
+  // per-construct reassembly then moves them and corrupts both the coverage signal and yield/resume behavior. Coverage
+  // is a measurement mode, so keep the split transparent by falling back to the whole-kernel path.
+  if (env_is_enabled("QD_KERNEL_COVERAGE"))
     return false;
   if (block_has_mesh_for(block))
     return false;
