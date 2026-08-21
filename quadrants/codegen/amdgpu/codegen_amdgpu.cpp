@@ -3,6 +3,7 @@
 #include <vector>
 #include <set>
 #include <functional>
+#include <cstdlib>
 
 #include "quadrants/common/core.h"
 #include "quadrants/util/io.h"
@@ -352,6 +353,73 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
         load->setVolatile(true);
       }
       llvm_val[stmt] = load;
+    }
+  }
+
+  // QD_AMDGPU_GLOBAL_AS gate. When unset, every address-space-at-source
+  // override below defers to the base LLVM codegen, so AMDGPU output is
+  // byte-identical to upstream and the flag is a clean A/B switch.
+  static bool amdgpu_global_as_enabled() {
+    static const bool enabled = std::getenv("QD_AMDGPU_GLOBAL_AS") != nullptr;
+    return enabled;
+  }
+
+  void visit(ExternalPtrStmt *stmt) override {
+    // Ndarray data lives in hipMalloc'd global memory. Base produces the
+    // pointer in addrspace(0); tag it as addrspace(1) at the source so
+    // downstream loads/stores emit global_load/store via InferAddressSpaces.
+    TaskCodeGenLLVM::visit(stmt);
+    if (!amdgpu_global_as_enabled()) {
+      return;
+    }
+    auto *current = llvm_val[stmt];
+    if (current && current->getType()->isPointerTy() && current->getType()->getPointerAddressSpace() != 1) {
+      auto *ptr_as1 = llvm::PointerType::get(*llvm_context, 1);
+      llvm_val[stmt] = builder->CreateAddrSpaceCast(current, ptr_as1);
+    }
+  }
+
+  void visit(GlobalTemporaryStmt *stmt) override {
+    // Global temporaries live in the runtime's global temporary buffer
+    // (hipMalloc'd, used by reductions / atomics). Same source-tagging
+    // pattern as ExternalPtrStmt.
+    TaskCodeGenLLVM::visit(stmt);
+    if (!amdgpu_global_as_enabled()) {
+      return;
+    }
+    auto *current = llvm_val[stmt];
+    if (current && current->getType()->isPointerTy() && current->getType()->getPointerAddressSpace() != 1) {
+      auto *ptr_as1 = llvm::PointerType::get(*llvm_context, 1);
+      llvm_val[stmt] = builder->CreateAddrSpaceCast(current, ptr_as1);
+    }
+  }
+
+  void visit(MatrixPtrStmt *stmt) override {
+    if (!amdgpu_global_as_enabled()) {
+      TaskCodeGenLLVM::visit(stmt);
+      return;
+    }
+    // Base codegen unconditionally bitcasts/inttoptrs the origin into
+    // addrspace(0), which strips any addrspace tag applied at the source.
+    // Preserve the origin address space here so matrix-element accesses on
+    // global-backed origins keep landing in global memory.
+    auto *origin_ptr = llvm_val[stmt->origin];
+    unsigned origin_as = origin_ptr->getType()->isPointerTy() ? origin_ptr->getType()->getPointerAddressSpace() : 0;
+    if (stmt->offset_used_as_index()) {
+      auto *origin_pointee_ty = tlctx->get_data_type(stmt->origin->ret_type.ptr_removed());
+      auto *casted_ptr = builder->CreateBitCast(origin_ptr, llvm::PointerType::get(origin_pointee_ty, origin_as));
+      llvm_val[stmt] =
+          builder->CreateGEP(origin_pointee_ty, casted_ptr, {tlctx->get_constant(0), llvm_val[stmt->offset]});
+    } else {
+      // Byte-offset GEP preserves pointer provenance and address space,
+      // avoiding the PtrToInt/IntToPtr round-trip that breaks addrspace
+      // tagging and confuses InferAddressSpaces.
+      auto *byte_ptr =
+          builder->CreateBitCast(origin_ptr, llvm::PointerType::get(llvm::Type::getInt8Ty(*llvm_context), origin_as));
+      auto *address_offset = builder->CreateSExt(llvm_val[stmt->offset], llvm::Type::getInt64Ty(*llvm_context));
+      auto *offset_ptr = builder->CreateGEP(llvm::Type::getInt8Ty(*llvm_context), byte_ptr, address_offset);
+      auto pointee_ty = tlctx->get_data_type(stmt->ret_type.ptr_removed());
+      llvm_val[stmt] = builder->CreateBitCast(offset_ptr, llvm::PointerType::get(pointee_ty, origin_as));
     }
   }
 
