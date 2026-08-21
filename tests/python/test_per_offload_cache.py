@@ -5,8 +5,9 @@ instead of once over the whole kernel, isolating each construct by its backward 
 `transforms/split_frontend_per_construct.cpp`), and falls back to the whole-kernel path for kernels that are not
 recompute-safe: autodiff, mesh-for, a concurrently-executed region (`qd.stream_parallel()` / `qd.graph.parallel()`,
 whose constructs share one global-temp buffer), a loop-produced local shared across constructs, a `qd.append` index a
-later construct consumes, a local a later construct reads that a `@qd.real_func` mutated through a `qd.ref` argument, a
-non-recomputable producer a later construct would clone (an effectful one such as a global atomic, a non-deterministic
+later construct consumes, a local a later construct reads that a `@qd.real_func` (via a `qd.ref` argument) or an
+external / bitcode call wrote to, a non-recomputable producer a later construct would clone (an effectful one such as a
+global atomic, a non-deterministic
 `qd.random()`, or a `qd.volatile_load()`), or a serial field load that a later construct would recompute after an
 intervening effect (a store, atomic, or sparse activate/deactivate) mutated global state. It also declines the split
 (as a diagnostic) when `QD_DUMP_CFG` / `QD_DUMP_IR` ask for whole-kernel diagnostic dumps. This PR ships the split
@@ -24,8 +25,10 @@ whole-kernel cache never short-circuits codegen and the split always runs on the
 """
 
 import numpy as np
+import pytest
 
 import quadrants as qd
+from quadrants.lang.util import has_clangpp
 
 from tests import test_utils
 
@@ -437,6 +440,40 @@ def test_per_construct_frontend_split_fallback_realfunc_ref_write() -> None:
     # The real_func wrote _C[0] into `a` before the loop, so every out[i] must be _C[0] -- not the initial 5.0 a slice
     # that dropped the FuncCallStmt writer would recompute.
     assert np.allclose(out.to_numpy(), _C[0], atol=1.0), out.to_numpy()
+
+
+@pytest.mark.skipif(not has_clangpp(), reason="Clang not installed.")
+@test_utils.test(arch=[qd.x64, qd.cuda], offline_cache=False)
+def test_per_construct_frontend_split_fallback_external_func_write() -> None:
+    # An external (SourceBuilder/bitcode) call mutates a local through a pointer output arg -- an `ExternalFuncCallStmt`
+    # whose get_store_destination() reports the output alloca, surfaced by the generic writer analysis. A later loop
+    # reads that local; the call must be counted as a writer, otherwise the consumer's slice keeps the stale init. Since
+    # the external call is effectful, the split falls back.
+    sb = qd.lang.source_builder.SourceBuilder.from_source(
+        """
+    extern "C" {
+        void plus_one(float *a, float *out) { *out = (*a) + 1.0f; }
+    }
+    """
+    )
+
+    @qd.kernel
+    def kernel_ext(out: qd.types.ndarray()) -> None:
+        v = 5.0
+        r = 0.0
+        sb.plus_one(v, r)
+        for i in range(_N):
+            out[i] = r
+
+    arr = qd.ndarray(qd.f32, shape=(_N,))
+    kernel_ext(arr)
+
+    obs = kernel_ext._primal.per_offload_cache_observations
+    assert obs.frontend_constructs_total == -1, obs
+
+    # The external call wrote 6.0 into `r` before the loop, so every out[i] must be 6.0, not the initial 0.0 a slice
+    # that dropped the ExternalFuncCallStmt writer would recompute.
+    assert np.allclose(arr.to_numpy(), 6.0, atol=1e-3), arr.to_numpy()
 
 
 @test_utils.test(arch=[qd.cpu, qd.cuda], offline_cache=False)

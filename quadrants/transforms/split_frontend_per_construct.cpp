@@ -21,6 +21,7 @@
 
 #include <cstdlib>
 #include <functional>
+#include <memory>
 #include <mutex>
 #include <set>
 #include <string>
@@ -69,6 +70,123 @@ std::vector<Stmt *> gather_stmts_incl_containers(IRNode *root, const std::functi
   ContainerAwareGatherer gatherer(test);
   root->accept(&gatherer);
   return gatherer.results_;
+}
+
+// Two-phase operand-remapping cloner for a SUBSET of a block's top-level statements. Kept local to this experimental
+// pass (AGENTS.md: minimize contact area) rather than widening the shared cloner in analysis/clone.cpp, since only the
+// split needs subset cloning. Mirrors that file's `IRCloner`: phase 1 records original->clone for every statement
+// (including nested ones, by walking container bodies in lockstep), phase 2 rewrites each clone's operands to the clone
+// when the referent is in the subset and leaves it pointing at the original otherwise -- so a caller that needs a
+// self-contained block must pass a subset closed under operands.
+class SubsetCloner : public IRVisitor {
+ public:
+  enum Phase { register_operand_map, replace_operand } phase;
+
+  explicit SubsetCloner(IRNode *other) : other_(other), phase(register_operand_map) {
+    allow_undefined_visitor = true;
+    invoke_default_visitor = true;
+  }
+
+  void set_other(IRNode *n) {
+    other_ = n;
+  }
+
+  void generic_visit(Stmt *stmt) {
+    if (phase == register_operand_map) {
+      operand_map_[stmt] = other_->as<Stmt>();
+    } else {
+      auto *other_stmt = other_->as<Stmt>();
+      QD_ASSERT(stmt->num_operands() == other_stmt->num_operands());
+      for (int i = 0; i < stmt->num_operands(); i++) {
+        auto it = operand_map_.find(stmt->operand(i));
+        other_stmt->set_operand(i, it == operand_map_.end() ? stmt->operand(i) : it->second);
+      }
+    }
+  }
+
+  void visit(Stmt *stmt) override {
+    generic_visit(stmt);
+  }
+
+  void visit(IfStmt *stmt) override {
+    generic_visit(stmt);
+    auto *other = other_->as<IfStmt>();
+    if (stmt->true_statements) {
+      other_ = other->true_statements.get();
+      stmt->true_statements->accept(this);
+      other_ = other;
+    }
+    if (stmt->false_statements) {
+      other_ = other->false_statements.get();
+      stmt->false_statements->accept(this);
+      other_ = other;
+    }
+  }
+
+  void visit(WhileStmt *stmt) override {
+    generic_visit(stmt);
+    auto *other = other_->as<WhileStmt>();
+    other_ = other->body.get();
+    stmt->body->accept(this);
+    other_ = other;
+  }
+
+  void visit(RangeForStmt *stmt) override {
+    generic_visit(stmt);
+    auto *other = other_->as<RangeForStmt>();
+    other_ = other->body.get();
+    stmt->body->accept(this);
+    other_ = other;
+  }
+
+  void visit(StructForStmt *stmt) override {
+    generic_visit(stmt);
+    auto *other = other_->as<StructForStmt>();
+    other_ = other->body.get();
+    stmt->body->accept(this);
+    other_ = other;
+  }
+
+  void visit(Block *block) override {
+    auto *other = other_->as<Block>();
+    for (int i = 0; i < (int)block->size(); i++) {
+      other_ = other->statements[i].get();
+      block->statements[i]->accept(this);
+    }
+    other_ = other;
+  }
+
+ private:
+  IRNode *other_;
+  std::unordered_map<Stmt *, Stmt *> operand_map_;
+};
+
+// Clone only the listed top-level statements (in the given order) into a fresh Block. The per-construct frontend split
+// needs one isolated copy per construct, and cloning the entire block each time is O(constructs x block size) -- ~5.9 s
+// on a 130-construct / 2685-statement kernel; the slice a construct actually needs is tiny by comparison. Offload has
+// not run at the split seam, so the top-level statements are leaves or serial/for/if/while containers (mesh-for kernels
+// fall back before this point), which `SubsetCloner` handles.
+std::unique_ptr<Block> clone_block_subset(Block *block, const std::vector<int> &indices) {
+  auto nb = std::make_unique<Block>();
+  nb->set_parent_callable(block->parent_callable());
+  std::vector<Stmt *> srcs;
+  srcs.reserve(indices.size());
+  for (int i : indices) {
+    Stmt *s = block->statements[i].get();
+    srcs.push_back(s);
+    nb->insert(s->clone());  // deep-clones nested blocks; operands still point at the originals until remapped below
+  }
+  // Same two-phase walk as analysis/clone.cpp's IRCloner, driven per statement pair because the source and target
+  // blocks no longer line up index-for-index.
+  SubsetCloner cloner(nb.get());
+  for (int p = 0; p < 2; p++) {
+    cloner.phase = (p == 0) ? SubsetCloner::register_operand_map : SubsetCloner::replace_operand;
+    for (std::size_t j = 0; j < srcs.size(); j++) {
+      cloner.set_other(nb->statements[j].get());
+      srcs[j]->accept(&cloner);
+    }
+  }
+  return nb;
 }
 
 // Run the whole pre-offload + offload frontend on ONE isolated top-level construct instead of once over the whole
@@ -342,15 +460,13 @@ bool split_is_recompute_safe(Block *block) {
   if (block == nullptr)
     return false;
 
-  // (1) Loop-carried locals. Writes are taken from the shared `Store` trait (`stmt_local_write_allocas`), so besides
-  // `LocalStoreStmt` this also catches a `qd.append` (`SNodeOpStmt::allocate`, writing its `val` alloca) and a
-  // `@qd.real_func` mutating a local through a `qd.ref` argument (`FuncCallStmt`) nested in a loop whose result another
-  // construct reads. An `AtomicOpStmt` (read-modify-write) and a `FuncCallStmt` ref argument (in/out) also READ the
-  // local they write.
-  auto accesses = irpass::analysis::gather_statements(block, [](Stmt *s) {
-    return s->is<LocalLoadStmt>() || s->is<LocalStoreStmt>() || s->is<AtomicOpStmt>() || s->is<SNodeOpStmt>() ||
-           s->is<FuncCallStmt>();
-  });
+  // (1) Loop-carried locals. Writers are found generically via the shared `Store` trait (`stmt_local_write_allocas`),
+  // so any statement that mutates a local counts -- `LocalStoreStmt`, `AtomicOpStmt`, a `qd.append`
+  // (`SNodeOpStmt::allocate`), a `@qd.real_func` writing through a `qd.ref` arg (`FuncCallStmt`), and an external /
+  // bitcode call (`ExternalFuncCallStmt`) -- without enumerating statement types. A read-modify-write / call with
+  // in-out args (`AtomicOpStmt`, `FuncCallStmt`, `ExternalFuncCallStmt`) also READS the local it writes.
+  auto accesses = irpass::analysis::gather_statements(
+      block, [](Stmt *s) { return s->is<LocalLoadStmt>() || !stmt_local_write_allocas(s).empty(); });
   std::unordered_map<Stmt *, std::set<Stmt *>> read_owners;        // alloca -> top-level constructs that read it
   std::unordered_map<Stmt *, std::set<Stmt *>> loop_write_owners;  // alloca -> constructs that write it inside a loop
   for (Stmt *acc : accesses) {
@@ -365,8 +481,8 @@ bool split_is_recompute_safe(Block *block) {
     if (auto *ld = acc->cast<LocalLoadStmt>()) {
       if (Stmt *a = resolve_local_alloca(ld->src))
         read_owners[a].insert(owner);
-    } else if (acc->is<AtomicOpStmt>() || acc->is<FuncCallStmt>()) {
-      for (Stmt *a : writes)  // atomic rmw / `qd.ref` in-out arg reads the same local it writes
+    } else if (acc->is<AtomicOpStmt>() || acc->is<FuncCallStmt>() || acc->is<ExternalFuncCallStmt>()) {
+      for (Stmt *a : writes)  // atomic rmw / call in-out arg reads the same local it writes
         read_owners[a].insert(owner);
     }
   }
@@ -477,7 +593,7 @@ void split_frontend_per_construct(IRNode *ir, const CompileConfig &config, const
       if (needed.find(block->statements[j].get()) != needed.end())
         keep_indices.push_back(j);
     }
-    auto cloned = irpass::analysis::clone_block_subset(block, keep_indices);
+    auto cloned = clone_block_subset(block, keep_indices);
     auto *cb = cloned.get();
     irpass::die(cb);  // clean up anything left dead after slicing (recompute per construct)
     irpass::re_id(cb);

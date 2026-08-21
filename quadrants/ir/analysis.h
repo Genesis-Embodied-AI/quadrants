@@ -76,11 +76,6 @@ std::unique_ptr<ControlFlowGraph> build_cfg(IRNode *root);
 void check_fields_registered(IRNode *root);
 std::unique_ptr<IRNode> clone(IRNode *root);
 std::unique_ptr<Stmt> clone(Stmt *root);
-// Clone only the listed top-level statements of `block` into a fresh Block, remapping operands among them. Operands
-// referring outside the subset keep pointing at the original statements, so pass a subset closed under operands if a
-// self-contained block is required. Used by the per-construct frontend split, where cloning the whole block per
-// construct is O(constructs x block size).
-std::unique_ptr<Block> clone_block_subset(Block *block, const std::vector<int> &indices);
 int count_statements(IRNode *root);
 
 /**
