@@ -12,6 +12,7 @@ walk vs a ~10ns pointer comparison for ``type(x) is Y``).
 
 import dataclasses
 import enum
+import os
 import struct
 import sys
 import typing
@@ -28,7 +29,21 @@ _MISSING = object()  # sentinel for "attribute not found" while resolving a qual
 # otherwise serialize identical offline keys and one could load a kernel baked for the other's (distinct) class. The
 # nonce makes such a key unique to this process: a dynamic class is a guaranteed cross-process cache *miss*, never a
 # wrong reuse, matching the documented "dynamic classes don't reuse another process's cached kernel" contract.
+#
+# It MUST be reseeded in a ``fork``ed child: the child inherits the parent's string *and* its allocator state, so
+# same-qualified dynamic classes can land at the same ``id(cls)`` and serialize an identical offline key to a sibling's
+# distinct class. ``os.register_at_fork`` mints a fresh token in every child (``uuid4`` re-reads OS entropy, so each
+# child - and the parent - differ), restoring the guarantee. ``spawn`` re-imports this module, so it reseeds anyway.
 _PROCESS_NONCE = uuid.uuid4().hex
+
+
+def _reseed_process_nonce() -> None:
+    global _PROCESS_NONCE
+    _PROCESS_NONCE = uuid.uuid4().hex
+
+
+if hasattr(os, "register_at_fork"):  # POSIX only; ``spawn``/Windows re-import the module and reseed on their own
+    os.register_at_fork(after_in_child=_reseed_process_nonce)
 
 # ``T`` values permitted inside ``Final[T]``. A Final field's value is baked into the compiled kernel as a literal and
 # folded into both the in-process template spec key and the cross-process fastcache key, so ``T`` must be something
@@ -350,25 +365,23 @@ _STRUCTURAL_CLASS_ATTRS = frozenset(
 # metaclass-level behavior (see the metaclass walk in ``_reject_stateful_primitive_subclass``).
 _FRAMEWORK_PRIMITIVE_METACLASSES = frozenset({type, object})
 
-# Metaclass-level dunders the class-identity key already neutralizes: that key uses ``id`` / ``is`` /
-# ``object.__hash__`` (see ``_ClassRef``), so a metaclass ``__eq__`` / ``__ne__`` / ``__hash__`` can neither collapse
-# two distinct classes nor make the key unhashable. They are therefore *not* observable in a key-breaking way and are
-# exempt when inspecting a metaclass layer; any *other* attribute (data like ``label``, a property, a method, another
-# dunder) is not neutralized and is rejected (see ``_observable_metaclass_attr``).
-_KEY_NEUTRALIZED_METACLASS_DUNDERS = frozenset({"__eq__", "__ne__", "__hash__"})
-
 
 def _observable_metaclass_attr(mcls: type) -> "str | None":
     """Name of a user-authored observable attribute in a metaclass layer's ``__dict__`` - readable at compile time as
-    ``cfg.x.__class__.<attr>`` - or None. Auto-generated structural names (``_STRUCTURAL_CLASS_ATTRS``, since a
-    metaclass is an ordinary ``type`` subclass) and the key-neutralized identity dunders
-    (``_KEY_NEUTRALIZED_METACLASS_DUNDERS``) are exempt; anything else is state/behavior the fixed class-identity key
-    cannot capture. Shared by the enum and primitive-subclass metaclass walks.
+    ``cfg.x.__class__.<attr>`` - or None. Only the auto-generated structural names (``_STRUCTURAL_CLASS_ATTRS``, since a
+    metaclass is an ordinary ``type`` subclass) are exempt; anything else is state/behavior the fixed class-identity
+    key cannot capture. Shared by the enum and primitive-subclass metaclass walks.
+
+    Note that even a metaclass ``__eq__`` / ``__ne__`` / ``__hash__`` is rejected. The class-identity key uses
+    ``id`` / ``is`` / ``object.__hash__`` (see ``_ClassRef``), so those operators cannot collapse two distinct classes
+    or make the key unhashable - but a kernel can still *observe* them via ``qd.static(cfg.x.__class__ == Expected)``,
+    and mutating the state they consult after the first launch would leave the (fixed) key unchanged and reuse the
+    stale specialization. Identity-safe keying only prevents dict collisions; it does not make the operators
+    unobservable, so equality/hash behavior on the metaclass is not exempt.
     """
     for name in vars(mcls):
-        if name in _STRUCTURAL_CLASS_ATTRS or name in _KEY_NEUTRALIZED_METACLASS_DUNDERS:
-            continue
-        return name
+        if name not in _STRUCTURAL_CLASS_ATTRS:
+            return name
     return None
 
 
@@ -635,8 +648,10 @@ class _ClassRef:
     - It pins ``cls`` for as long as the key lives in the template mapper, so the class object cannot be garbage
       collected and its ``id`` cannot be recycled by a later same-named factory class (which would otherwise collide).
     - Its ``__hash__`` / ``__eq__`` use ``object`` identity, so a metaclass with a custom ``__eq__`` cannot merge two
-      distinct classes and, crucially, a metaclass with ``__hash__ = None`` cannot make the whole spec key unhashable
-      (``self.mapping[key]`` would otherwise raise ``TypeError`` instead of compiling the valid ``Final`` value).
+      distinct classes and a metaclass with ``__hash__ = None`` cannot make the whole spec key unhashable
+      (``self.mapping[key]`` would otherwise raise ``TypeError``). A value whose (meta)class carries such observable
+      behavior is in fact rejected upstream (see ``_observable_metaclass_attr``); this identity-based hashing is
+      defense-in-depth and is what also keeps a normal module-reload rebind (same ``qualname``, new ``id``) distinct.
 
     ``object.__hash__(self.cls)`` is the identity hash regardless of the metaclass; ``is`` gives identity equality.
     """

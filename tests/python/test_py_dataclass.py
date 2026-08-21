@@ -4337,12 +4337,12 @@ def test_final_scalar_key_live_preserves_class_identity_across_module_rebind():
 
 @test_utils.test()
 def test_final_scalar_key_live_uses_object_identity_not_class_equality():
-    """The in-process spec key (``live=True``) keys a subclass on ``id(cls)``, not the class object, so a *metaclass*
-    that makes two distinct classes ``==`` with equal hashes cannot collapse their keys. The subclass-state validator
-    inspects the class dict / MRO, not metaclass behavior, so such classes are accepted - yet ``cfg.x.__class__ is
-    First`` is observable at compile time, so the two must key apart. Embedding ``cls`` (compared via the metaclass's
-    ``__eq__``) would collide; ``id(cls)`` does not."""
-    from quadrants.lang._final_dataclass_fields import final_scalar_key
+    """The class-identity key component (``_subclass_identity``/``_ClassRef``) keys by *object identity*, not the class
+    object's ``==``, so a metaclass that makes two distinct classes ``==`` with equal hashes cannot collapse their
+    keys - ``cfg.x.__class__ is First`` is observable, so distinct classes must key apart, and the component also
+    retains the class as a strong ref (pinning its ``id``). This identity behavior is defense-in-depth: such a
+    metaclass carries observable equality behavior, so ``final_scalar_key`` itself now *rejects* the value."""
+    from quadrants.lang import _final_dataclass_fields as _fdf
 
     class EqMeta(type):
         # Distinct classes with the same qualname compare equal with equal hashes (a pathological metaclass).
@@ -4360,14 +4360,13 @@ def test_final_scalar_key_live_uses_object_identity_not_class_equality():
 
     first, second = _make(), _make()
     assert first is not second and first == second and hash(first) == hash(second)  # metaclass forces class ==
-    # Accepted (behavior-free at the class-dict level), but must not share a specialization: id(cls) keeps them apart.
-    assert final_scalar_key(first(1), live=True) != final_scalar_key(second(1), live=True)
-    assert final_scalar_key(first(1), live=True) == final_scalar_key(first(1), live=True)  # stable for one class
 
-    # The live key also carries the class object as a *strong ref* (inside a ``_ClassRef`` identity token), so the
-    # mapper pins it and its id cannot be recycled by a later same-named factory class while the specialization is
-    # cached (id alone would be reusable after GC).
-    from quadrants.lang import _final_dataclass_fields as _fdf
+    # The identity component keys the two distinct classes apart (by ``id``/``is``), is stable/hashable for one class,
+    # and retains the class object as a strong ref - all immune to the metaclass's ``==``/``hash``.
+    id_first = _fdf._subclass_identity(first, live=True)
+    assert id_first != _fdf._subclass_identity(second, live=True)  # not collapsed by the metaclass ``==``
+    assert id_first == _fdf._subclass_identity(first, live=True)
+    assert hash(id_first) == hash(_fdf._subclass_identity(first, live=True))
 
     def _flat(x):
         if isinstance(x, tuple):
@@ -4378,7 +4377,12 @@ def test_final_scalar_key_live_uses_object_identity_not_class_equality():
         else:
             yield x
 
-    assert any(e is first for e in _flat(final_scalar_key(first(1), live=True)))  # class object retained in the key
+    assert any(e is first for e in _flat(id_first))  # class object retained (strong ref) in the identity component
+
+    # But a metaclass ``__eq__``/``__hash__`` is observable (``qd.static(cfg.x.__class__ == Expected)``) and the key
+    # cannot capture a later mutation of the state it consults, so the value itself is rejected.
+    with pytest.raises(TypeError, match="metaclass defines observable"):
+        _fdf.final_scalar_key(first(1))
 
 
 @test_utils.test()
@@ -4407,11 +4411,11 @@ def test_final_scalar_key_offline_dynamic_class_is_process_unique():
 
 @test_utils.test()
 def test_final_scalar_key_live_hashable_under_unhashable_metaclass():
-    """A metaclass may set ``__hash__ = None`` (making the *class* itself unhashable). The live spec key retains the
-    class via a ``_ClassRef`` token that hashes/compares by object identity, so the whole key stays hashable - the
-    mapper's ``self.mapping[key]`` would otherwise raise ``TypeError`` instead of compiling the valid ``Final`` value -
-    and distinct classes still key apart."""
-    from quadrants.lang._final_dataclass_fields import final_scalar_key
+    """A metaclass may set ``__hash__ = None`` (making the *class* itself unhashable). The class-identity key component
+    retains the class via a ``_ClassRef`` token that hashes/compares by object identity, so the whole key stays
+    hashable - a mapper's ``self.mapping[key]`` would otherwise raise ``TypeError``. This is defense-in-depth: such a
+    metaclass carries observable behavior, so ``final_scalar_key`` itself rejects the value."""
+    from quadrants.lang import _final_dataclass_fields as _fdf
 
     class Unhashable(type):
         __hash__ = None  # the classes this metaclass produces are themselves unhashable
@@ -4427,12 +4431,18 @@ def test_final_scalar_key_live_hashable_under_unhashable_metaclass():
 
     a, b = _make(), _make()
     with pytest.raises(TypeError):
-        hash(a)  # the class object is unhashable...
+        hash(a)  # the class object is itself unhashable...
 
-    ka = final_scalar_key(a(1), live=True)
-    assert hash(ka) == hash(final_scalar_key(a(1), live=True))  # ...yet the live key is hashable and stable
-    assert {ka: 1}[final_scalar_key(a(1), live=True)] == 1  # usable as a dict key, exactly what the mapper does
-    assert ka != final_scalar_key(b(1), live=True)  # distinct classes still key apart
+    # ...yet the identity component (via ``_ClassRef.object.__hash__``) stays hashable, stable, and usable as a dict
+    # key, and keeps distinct classes apart.
+    ka = _fdf._subclass_identity(a, live=True)
+    assert hash(ka) == hash(_fdf._subclass_identity(a, live=True))
+    assert {ka: 1}[_fdf._subclass_identity(a, live=True)] == 1
+    assert ka != _fdf._subclass_identity(b, live=True)
+
+    # But the value itself is rejected: the metaclass carries observable ``__hash__``/``__eq__`` behavior.
+    with pytest.raises(TypeError, match="metaclass defines observable"):
+        _fdf.final_scalar_key(a(1))
 
 
 @test_utils.test()
@@ -4565,8 +4575,9 @@ def test_final_primitive_subclass_rejects_observable_metaclass_state():
     """A primitive subclass whose *metaclass* carries observable state/behavior is rejected: a kernel can read
     ``cfg.x.__class__.label`` (which resolves to ``type(cls).label``), which the subclass-MRO walk never sees and the
     key - keyed on the subclass ``module``/``qualname`` - does not capture, so mutating it (or two factory metaclasses
-    differing) would reuse a stale specialization. Identity dunders on the metaclass are exempt (the class-identity key
-    is already immune to them), so a metaclass overriding only ``__eq__`` / ``__hash__`` stays accepted."""
+    differing) would reuse a stale specialization. Even a metaclass ``__eq__`` / ``__hash__`` is rejected: identity-safe
+    keying stops dict collisions but the operator is still observable via ``qd.static(cfg.x.__class__ == Expected)``.
+    A metaclass that is a bare ``type`` subclass (no observable attrs) stays accepted."""
     from quadrants.lang._final_dataclass_fields import final_scalar_key
 
     class UnitMeta(type):
@@ -4583,7 +4594,15 @@ def test_final_primitive_subclass_rejects_observable_metaclass_state():
 
     final_scalar_key(Plain(1))  # does not raise
 
-    class EqMeta(type):  # metaclass overriding only the key-neutralized identity dunders -> still accepted
+    class BareMeta(type):  # a custom metaclass with no observable attrs of its own -> accepted
+        pass
+
+    class Bare(int, metaclass=BareMeta):
+        pass
+
+    final_scalar_key(Bare(1))  # does not raise
+
+    class EqMeta(type):  # metaclass equality behavior is observable (``cfg.x.__class__ == Expected``) -> rejected
         def __eq__(cls, other):
             return cls is other
 
@@ -4593,7 +4612,8 @@ def test_final_primitive_subclass_rejects_observable_metaclass_state():
     class Tagged(int, metaclass=EqMeta):
         pass
 
-    final_scalar_key(Tagged(1))  # does not raise (``_ClassRef`` keys by identity, immune to metaclass ==/hash)
+    with pytest.raises(TypeError, match="metaclass defines observable"):
+        final_scalar_key(Tagged(1))
 
 
 @test_utils.test()
