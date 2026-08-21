@@ -33,7 +33,7 @@ assert isinstance(a, qd.Tensor)
 assert isinstance(b, qd.Tensor)
 ```
 
-`qd.tensor()` (and the `qd.Vector.tensor` / `qd.Matrix.tensor` siblings) returns a `qd.Tensor` wrapper that uniformly forwards a fixed surface (`shape`, `dtype`, `layout`, `to_numpy`, `from_numpy`, `to_torch`, `from_torch`, `to_dlpack`, `fill`, `copy_from`, `grad`, host-side `__getitem__` / `__setitem__`, pickle) regardless of which backend it wraps. Drop down to the bare impl with `t._unwrap()` (returns the underlying object that `qd.ndarray` or `qd.field` created — a `qd.Ndarray` or `qd.ScalarField` instance respectively) only if you need a backend-specific knob.
+`qd.tensor()` (and the `qd.Vector.tensor` / `qd.Matrix.tensor` siblings) returns a `qd.Tensor` wrapper that uniformly forwards a fixed surface (`shape`, `dtype`, `layout`, `to_numpy`, `from_numpy`, `to_torch`, `from_torch`, `to_dlpack`, `fill`, `copy_from`, `grad`, host-side `__getitem__` / `__setitem__`, pickle) regardless of which backend it wraps. Drop down to the bare impl with `t._unwrap()` (returns the underlying object that `qd.ndarray` or `qd.field` created - a `qd.Ndarray` or `qd.ScalarField` instance respectively) only if you need a backend-specific knob.
 
 The default backend is `qd.Backend.NDARRAY`: it avoids recompilation when sizes change.
 
