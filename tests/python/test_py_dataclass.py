@@ -3970,6 +3970,29 @@ def test_final_scalar_key_distinguishes_signed_zero_and_nan_payloads():
     with pytest.raises(TypeError, match="extra per-instance state"):
         final_scalar_key(TaggedInt(1, "m"))
 
+    # A subclass need not carry *instance* state to be unkeyable: ``module``/``qualname`` cannot tell apart two
+    # distinct classes a factory builds under the same name, so class-level behavior/state (a property/method/class
+    # var a kernel could read) is rejected too - else ``UnitFloat("m")(1.0)`` and ``UnitFloat("ft")(1.0)`` would
+    # share a specialization while ``qd.static(cfg.x.unit == "m")`` observes different results.
+    def _unit_float_cls(unit):
+        class UnitFloat(float):
+            @property
+            def unit(self):
+                return unit
+
+        return UnitFloat
+
+    cls_m, cls_ft = _unit_float_cls("m"), _unit_float_cls("ft")
+    assert type(cls_m(1.0)).__qualname__ == type(cls_ft(1.0)).__qualname__  # same qualname, distinct classes
+    with pytest.raises(TypeError, match="observable class-level behavior/state"):
+        final_scalar_key(cls_m(1.0))
+
+    class ScaledFloat(float):  # a class variable is observable class-level state as well
+        scale = 2
+
+    with pytest.raises(TypeError, match="observable class-level behavior/state"):
+        final_scalar_key(ScaledFloat(1.0))
+
     # Enum members follow the same rule: user-defined per-member state (attributes set in ``__init__``) is rejected,
     # while plain members and unnamed ``IntFlag`` composites (name/value bookkeeping only) are accepted above.
     class StatefulMode(enum.Enum):
@@ -3999,6 +4022,21 @@ def test_final_scalar_key_distinguishes_signed_zero_and_nan_payloads():
     assert SlottedMode.A.unit == "m"
     with pytest.raises(TypeError, match="user-defined per-member state"):
         final_scalar_key(SlottedMode.A)
+
+    # State stashed under a *dunder-looking* name is still observable (``cfg.mode.__unit__``), so the allowlist is
+    # exact rather than "skip every dunder" - only the known enum bookkeeping dunders (e.g. ``__objclass__``) pass.
+    class DunderStateMode(enum.Enum):
+        A = 1
+
+        def __init__(self, _v):
+            self.__unit__ = "m"
+
+    assert DunderStateMode.A.__unit__ == "m"  # a genuine dunder-named per-member attribute
+    with pytest.raises(TypeError, match="user-defined per-member state"):
+        final_scalar_key(DunderStateMode.A)
+
+    # Enum classes rebuilt by a local factory share module+qualname and can have same-named members with different
+    # values; the key includes the value so those stay distinct.
 
     # Enum classes rebuilt by a local factory share module+qualname and can have same-named members with different
     # values; the key includes the value so those stay distinct.

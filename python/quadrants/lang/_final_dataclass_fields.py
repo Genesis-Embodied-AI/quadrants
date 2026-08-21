@@ -302,20 +302,30 @@ _EXACT_BAKED_TYPES = (bool, int, float, str)
 
 
 def _reject_stateful_primitive_subclass(value: Any) -> None:
-    """Reject a ``float`` / ``int`` / ``str`` *subclass* instance that carries extra observable per-instance state.
+    """Reject a ``float`` / ``int`` / ``str`` *subclass* instance that carries observable state a kernel could read
+    but the key cannot capture - either per-instance state or class-level behavior/state.
 
-    A ``Final`` value is baked as a compile-time literal and keyed by its (typed) value. A subclass that also
-    carries per-instance state - e.g. ``class TaggedFloat(float)`` with a ``unit`` attribute - is not fully
-    described by that value: compile-time code can read the extra state (``qd.static(cfg.x.unit == "m")``), so two
-    instances with an equal numeric value but different state would bake different kernels yet select the same
-    specialization. There is no bounded, process-stable way to serialise arbitrary state (it may live in
-    ``__dict__``, ``__slots__``, properties, ...), so we reject rather than silently mis-specialise.
+    A ``Final`` value is baked as a compile-time literal keyed by its (typed) value plus the subclass
+    ``module``/``qualname``. That is not enough when a subclass carries more than its value:
 
-    Exact primitives, NumPy scalars (not Python-primitive subclasses) and stateless subclasses (e.g.
-    ``class Meters(float): pass``) are unaffected. Runs once per instance, off the steady-state launch path.
+    - *Per-instance* state - e.g. ``class TaggedFloat(float)`` with a ``unit`` attribute - is not described by the
+      numeric value, so two instances with an equal value but different state would bake different kernels yet
+      select the same specialization. State can live in ``__dict__`` or a populated ``__slots__`` slot.
+    - *Class-level* behavior/state - e.g. a factory returning ``float`` subclasses whose ``unit`` property closes
+      over different values - is not captured either: ``module``/``qualname`` does not uniquely identify a
+      dynamically created class, so two distinct same-named subclasses (whose ``cfg.x.unit`` a kernel could read)
+      would collide. Overriding a value-conversion / repr dunder (``__int__``, ``__repr__``, ...) is fine - the key
+      is built from a base slot, never those - so only *non-dunder* class attributes count.
+
+    There is no bounded, process-stable way to serialise arbitrary state/behavior, so we reject rather than silently
+    mis-specialise. Exact primitives, NumPy scalars (library internals, not user state) and behavior-free stateless
+    subclasses (``class Meters(float): pass``) are unaffected. Runs once per instance, off the steady-state path.
     """
     if type(value) in _EXACT_BAKED_TYPES or not isinstance(value, (int, float, str)):
         return
+    if isinstance(value, np.generic):  # NumPy scalar (e.g. ``np.str_``); its class attrs are library internals
+        return
+    cls = type(value)
     if getattr(value, "__dict__", None):
         stateful = True
     else:
@@ -328,7 +338,6 @@ def _reject_stateful_primitive_subclass(value: Any) -> None:
                 stateful = True
                 break
     if stateful:
-        cls = type(value)
         raise TypeError(
             f"A ``Final`` field received {cls.__module__}.{cls.__qualname__}, a subclass of a baked primitive that "
             f"carries extra per-instance state. A ``Final`` value is baked as a compile-time literal keyed by its "
@@ -336,34 +345,53 @@ def _reject_stateful_primitive_subclass(value: Any) -> None:
             f"distinct specialization. Pass a plain ``bool`` / ``int`` / ``float`` / ``str`` (or an ``enum`` "
             f"member) instead."
         )
+    for klass in cls.__mro__:  # subclass chain above the base primitive; stop at the base (its own attrs are fine)
+        if klass in _EXACT_BAKED_TYPES or klass is object:
+            break
+        for attr in vars(klass):
+            # Dunders (incl. handled conversion overrides like __int__ / __repr__) are not class-level state.
+            if not (attr.startswith("__") and attr.endswith("__")):
+                raise TypeError(
+                    f"A ``Final`` field received {cls.__module__}.{cls.__qualname__}, a subclass of a baked "
+                    f"primitive that defines observable class-level behavior/state (e.g. attribute {attr!r}). "
+                    f"The key identifies the subclass only by ``module``/``qualname``, which does not uniquely "
+                    f"identify a dynamically created class, so two distinct same-named subclasses (e.g. from a "
+                    f"factory) whose ``{attr}`` a kernel could read at compile time would select the same "
+                    f"specialization. Pass a plain ``bool`` / ``int`` / ``float`` / ``str`` (or an ``enum`` "
+                    f"member) instead."
+                )
 
 
-# ``enum`` member attribute names that are standard bookkeeping, not user-defined per-member state. Anything else on
-# a member - in its ``__dict__`` *or* a populated slot - is observable state we cannot key on. ``__objclass__`` and
-# other dunders are excluded by the dunder test below. ``_inverted_`` is the value-derived cache CPython lazily
-# stores on a ``Flag`` / ``IntFlag`` member the first time it is inverted (``~Perm.R``, Python >=3.11); a member
-# inverted anywhere before reaching a ``Final`` field must therefore not be misread as carrying user state.
-_ENUM_INTERNAL_MEMBER_ATTRS = frozenset({"_name_", "_value_", "_sort_order_", "_inverted_"})
+# Exhaustive allowlist of ``enum`` member attribute names that are standard bookkeeping, NOT user-defined per-member
+# state. This is a strict allowlist rather than a "skip all dunders" test on purpose: a user can stash observable
+# state under a dunder-looking name (``self.__unit__``, read as ``cfg.mode.__unit__``), so only these exact names
+# are exempt. ``_name_`` / ``_value_`` / ``_sort_order_`` and the ``__objclass__`` back-pointer are the member
+# fields; ``_inverted_`` is the value-derived cache CPython lazily stores on a ``Flag`` / ``IntFlag`` member the
+# first time it is inverted (``~Perm.R``, Python >=3.11), so a member inverted before reaching a ``Final`` field is
+# still accepted. ``__dict__`` / ``__weakref__`` are structural slot names (containers, not state).
+_ENUM_INTERNAL_MEMBER_ATTRS = frozenset(
+    {"_name_", "_value_", "_sort_order_", "_inverted_", "__objclass__", "__dict__", "__weakref__"}
+)
 
 
 def _enum_member_state_attr(value: Any) -> "str | None":
     """Return the name of a user-defined per-member state attribute on ``value``, or None if it carries only enum
-    bookkeeping. State can live in the member's ``__dict__`` or, when the enum declares ``__slots__``, in a
-    populated slot that never appears in ``__dict__``; both are inspected (as the primitive-subclass check does),
-    since checking only one would miss the other.
+    bookkeeping (see ``_ENUM_INTERNAL_MEMBER_ATTRS``). State can live in the member's ``__dict__`` or, when the enum
+    declares ``__slots__``, in a populated slot that never appears in ``__dict__``; both are inspected (as the
+    primitive-subclass check does), since checking only one would miss the other. Any name not on the allowlist -
+    including a user-defined dunder like ``__unit__`` - is treated as observable state.
     """
     d = getattr(value, "__dict__", None)
     if d:
         for k in d:
-            if (k.startswith("__") and k.endswith("__")) or k in _ENUM_INTERNAL_MEMBER_ATTRS:
-                continue
-            return k
+            if k not in _ENUM_INTERNAL_MEMBER_ATTRS:
+                return k
     for klass in type(value).__mro__:
         slots = getattr(klass, "__slots__", ())
         if isinstance(slots, str):
             slots = (slots,)
         for slot in slots:
-            if (slot.startswith("__") and slot.endswith("__")) or slot in _ENUM_INTERNAL_MEMBER_ATTRS:
+            if slot in _ENUM_INTERNAL_MEMBER_ATTRS:
                 continue
             if hasattr(value, slot):  # a declared-but-unset slot raises on access, so only *populated* slots count
                 return slot
