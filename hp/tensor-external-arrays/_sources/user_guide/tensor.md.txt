@@ -2,7 +2,7 @@
 
 Quadrants offers two underlying tensor implementations, [`qd.field` and `qd.ndarray`](tensor_types.md). They have different runtime/compile-time trade-offs, and different physical memory layouts can suit different kernels.
 
-The tensor API lets you pick both the **backend** and the **physical memory layout** on a per-tensor basis at allocation time. The rest of the system (kernels, fastcache, autograd) stays out of the way.
+The tensor API lets you pick both the **backend** and the **physical memory layout** on a per-tensor basis at allocation time. The rest of the system (kernels, [fastcache](fastcache.md), autograd) stays out of the way.
 
 See [`tensor_types`](tensor_types.md), [`scalar_tensors`](scalar_tensors.md), and [`matrix_vector`](matrix_vector.md) for the underlying tensor primitives.
 
@@ -33,7 +33,7 @@ assert isinstance(a, qd.Tensor)
 assert isinstance(b, qd.Tensor)
 ```
 
-`qd.tensor()` (and the `qd.Vector.tensor` / `qd.Matrix.tensor` siblings) returns a `qd.Tensor` wrapper that uniformly forwards a fixed surface (`shape`, `dtype`, `layout`, `to_numpy`, `from_numpy`, `to_torch`, `from_torch`, `to_dlpack`, `fill`, `copy_from`, `grad`, host-side `__getitem__` / `__setitem__`, pickle) regardless of which backend it wraps. Drop down to the bare impl with `t._unwrap()` (returns the underlying `qd.Ndarray` or `qd.ScalarField`) only if you need a backend-specific knob.
+`qd.tensor()` (and the `qd.Vector.tensor` / `qd.Matrix.tensor` siblings) returns a `qd.Tensor` wrapper that uniformly forwards a fixed surface (`shape`, `dtype`, `layout`, `to_numpy`, `from_numpy`, `to_torch`, `from_torch`, `to_dlpack`, `fill`, `copy_from`, `grad`, host-side `__getitem__` / `__setitem__`, pickle) regardless of which backend it wraps. Drop down to the bare impl with `t._unwrap()` (returns the underlying object that `qd.ndarray` or `qd.field` created - a `qd.Ndarray` or `qd.ScalarField` instance respectively) only if you need a backend-specific knob.
 
 The default backend is `qd.Backend.NDARRAY`: it avoids recompilation when sizes change.
 
@@ -87,7 +87,7 @@ Gradient buffers always share the canonical shape of the primal, on both backend
 
 ## Controlling physical layout
 
-Tweaking the memory layout on a per-tensor basis is commonly used to improve runtime performance. In practice, tuning axis order is sufficient in most cases. For advanced users seeking finer-grained control over the memory layout, see the SNode API (`qd.root`).
+Tweaking the memory layout on a per-tensor basis is commonly used to improve runtime performance. In practice, tuning axis order is sufficient in most cases. For advanced users seeking finer-grained control over the memory layout, see the SNode API (`qd.root`), the lower-level interface for describing how a tensor's storage is hierarchically nested in memory (an SNode is one level of that nesting).
 
 The `layout=` keyword lets you pick per-tensor:
 
@@ -111,7 +111,7 @@ assert b.shape == (N, B)        # canonical shape, unchanged
 b[i, j] = ...                   # canonical indexing in kernels still works
 ```
 
-Any permutation is supported, up to Quadrants' `quadrants_max_num_indices` (currently 12). `layout=None` and the identity permutation (`(0, 1, ..., N-1)`) are equivalent and forward no permutation to the underlying allocator.
+Any permutation is supported, up to Quadrants' maximum number of tensor dimensions (`quadrants_max_num_indices`, a compile-time constant currently equal to 12). `layout=None` and the identity permutation (`(0, 1, ..., N-1)`) are equivalent and forward no permutation to the underlying allocator.
 
 For best performance, pair `qd.tensor(..., layout=...)` with a matching iteration order via `qd.ndrange(..., axes=...)` (see [`parallelization`](parallelization.md#controlling-iteration-order-with-axes)): the permutation has the same meaning in both APIs (canonical axis index at each successive nesting level, outermost first), and using the same value on both lines adjacent flat threads up with adjacent physical memory slots.
 
@@ -203,7 +203,7 @@ fill(a)   # field branch
 fill(b)   # ndarray branch
 ```
 
-The kernel argument is unwrapped to the bare impl before the template-mapper / AST sees it, so kernel bodies still write `x[i, j]` and pay no per-call cost for the wrapper.
+Inside the kernel the argument is the bare impl rather than the wrapper, so kernel bodies still write `x[i, j]` and pay no per-call cost for the wrapper.
 
 For a parameter annotated `qd.Tensor`, calls to the same kernel may alternate among a wrapper, its bare field or ndarray implementation, and `None`. If callers can pass `None`, guard tensor operations with [`qd.static()`](static.md), for example `if qd.static(x is not None):`; the guarded operations are not traced for the `None` specialization. The parameter remains annotated `qd.Tensor`, and `None` must be passed explicitly.
 
@@ -291,4 +291,4 @@ ng = qd.tensor(qd.f32, shape=(4,), needs_grad=True)
 ng.has_grad()        # True
 ```
 
-Reading or writing `.grad` on an un-allocated gradient raises `QuadrantsRuntimeError("Field has no allocation. ...")` - the failure is loud, never silent. Use `has_grad()` as the pre-check in generic code paths that may receive either a `needs_grad` tensor or a plain one. `has_dual()` mirrors it for the forward-mode dual companion.
+Reading or writing `.grad` on an un-allocated gradient raises `QuadrantsRuntimeError("Field has no allocation. ...")` - the failure is loud, never silent. Use `has_grad()` as the pre-check in generic code paths that may receive either a `needs_grad` tensor or a plain one. `has_dual()` mirrors it for the [forward-mode dual](autodiff.md#forward-mode-ad-via-qdadfwdmode) companion (the tangent buffer used for forward-mode autodiff, the forward-mode counterpart to `.grad`).
