@@ -374,10 +374,11 @@ def init(
         default_fp (Optional[type]): Default floating-point type.
         default_ip (Optional[type]): Default integral type.
         require_version: A version string.
-        print_non_pure: Print the names of kernels, at the time they are executed, which are not annotated with
-                        @qd.pure
+        print_non_pure: Print the names of kernels, at the time they are executed, which are not declared with
+                        @qd.kernel(fastcache=True) (or the deprecated @qd.kernel(pure=True))
         src_ll_cache: enable SRC-LL-CACHE, which will accelerate loading from cache, across all architectures,
-                      for pure kernels (i.e. kernels declared as @qd.pure)
+                      for pure kernels (i.e. kernels declared with @qd.kernel(fastcache=True), or the deprecated
+                      @qd.kernel(pure=True))
         **kwargs: Quadrants provides highly customizable compilation through
             ``kwargs``, which allows for fine grained control of Quadrants compiler
             behavior. Below we list some of the most frequently used ones. For a
