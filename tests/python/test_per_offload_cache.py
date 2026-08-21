@@ -415,8 +415,8 @@ def test_per_construct_frontend_split_fallback_dump_cfg(monkeypatch) -> None:
 def test_per_construct_frontend_split_dump_ir_observation_only(monkeypatch) -> None:
     # `QD_DUMP_IR=1` is observation-only under the split: rather than declining, the split still runs and dumps each
     # construct's IR to `<kernel>_construct<i>_<stage>.ll`, so the snapshots reflect what was actually compiled.
-    if os.path.isdir(_IR_DUMP_DIR):
-        shutil.rmtree(_IR_DUMP_DIR)
+    shutil.rmtree(_IR_DUMP_DIR, ignore_errors=True)
+    os.makedirs(_IR_DUMP_DIR, exist_ok=True)
     monkeypatch.setenv("QD_DUMP_IR", "1")
 
     @qd.kernel
@@ -445,8 +445,10 @@ def test_per_construct_frontend_split_dump_ir_observation_only(monkeypatch) -> N
 def test_per_construct_frontend_split_dump_simplify_observation_only(monkeypatch) -> None:
     # `QD_DUMP_SIMPLIFY=1` is observation-only under the split too: simplify.cpp keys its dump filenames off a global
     # call counter, so each construct's simplify passes already land in distinct files. The split keeps running.
-    if os.path.isdir(_SIMPLIFY_DUMP_DIR):
-        shutil.rmtree(_SIMPLIFY_DUMP_DIR)
+    # simplify.cpp's QD_DUMP_SIMPLIFY writer does not create the dump directory itself, so make sure it exists (in
+    # normal use /tmp/ir already does); create it after clearing so the assertion sees only this run's files.
+    shutil.rmtree(_SIMPLIFY_DUMP_DIR, ignore_errors=True)
+    os.makedirs(_SIMPLIFY_DUMP_DIR, exist_ok=True)
     monkeypatch.setenv("QD_DUMP_SIMPLIFY", "1")
 
     @qd.kernel
