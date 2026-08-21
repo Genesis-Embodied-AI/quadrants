@@ -98,9 +98,6 @@ LLVMCompiledKernel KernelCodeGen::compile_kernel_to_module() {
   auto llvm_compiled_kernel = tlctx_.link_compiled_tasks(std::move(data));
   optimize_module(llvm_compiled_kernel.module.get());
   llvm_compiled_kernel.per_construct_artifacts = std::move(per_construct_artifacts);
-  // The per-construct frontend split records its cache stats on the program-scoped construct-stats record
-  // (`split_frontend_per_construct`); they are read back backend-agnostically in
-  // `KernelCompilationManager::load_or_compile`, so nothing to surface through the compiled data here.
   return llvm_compiled_kernel;
 }
 
