@@ -201,20 +201,30 @@ std::unique_ptr<Block> clone_block_subset(Block *block, const std::vector<int> &
 // by `split_frontend_per_construct`.
 void run_construct_frontend(IRNode *cb, const CompileConfig &config, const Kernel *kernel, bool verbose) {
   const std::string &name = kernel->get_name();
+  // Mirror the whole-kernel path's `verify_if_debug` after each stage (compile_to_offloads.cpp). It is a no-op unless
+  // config.debug, so it is free in release builds; under debug=True it keeps the per-construct path catching malformed
+  // IR at the responsible pass instead of letting it slip through to codegen.
   irpass::full_simplify(cb, config, {false, /*autodiff_enabled*/ false, name, verbose, "simplify_I"});
+  irpass::analysis::verify_if_debug(cb, config);
   irpass::handle_external_ptr_boundary(cb, config);
   if (config.check_out_of_bound) {
     irpass::check_out_of_bound(cb, config, {name});
+    irpass::analysis::verify_if_debug(cb, config);
   }
   irpass::merge_global_ptrs(cb);
+  irpass::analysis::verify_if_debug(cb, config);
   irpass::flag_access(cb);
+  irpass::analysis::verify_if_debug(cb, config);
   irpass::full_simplify(cb, config, {false, /*autodiff_enabled*/ false, name, verbose, "simplify_II"});
+  irpass::analysis::verify_if_debug(cb, config);
   irpass::offload(cb, config);
+  irpass::analysis::verify_if_debug(cb, config);
   if (config.opt_level > 0) {
     irpass::cse_offloaded_tasks(cb);
   }
   irpass::flag_access(cb);
   irpass::full_simplify(cb, config, {false, /*autodiff_enabled*/ false, name, verbose, "simplify_III"});
+  irpass::analysis::verify_if_debug(cb, config);
 }
 
 bool block_has_mesh_for(Block *block) {
