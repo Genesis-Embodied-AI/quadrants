@@ -3,11 +3,11 @@ fields.
 
 PERF NOTE: everything about ``Final`` resolution - including the validation that rejects mutable carriers - is
 computed **once per dataclass type** and cached (``_final_plan_cache``, ``_final_path_cache``). Callers on the
-per-launch hot path (``_extract_arg``, ``args_hasher.dataclass_to_repr``) do a
-single ``dict.get`` keyed on the dataclass type and then, in the overwhelmingly common no-Final-field case, take a
-branch that is byte-for-byte the pre-existing code path. No ``isinstance`` / ``typing.get_origin`` /
-``dataclasses.fields`` call happens per launch. See the module docstring of ``_template_mapper_hotpath.py`` for why
-that matters (``isinstance`` is a ~100-200ns MRO walk vs a ~10ns pointer comparison for ``type(x) is Y``).
+per-launch hot path (``_extract_arg``, ``args_hasher.dataclass_to_repr``) do a single ``dict.get`` keyed on the
+dataclass type and then, in the overwhelmingly common no-Final-field case, take a branch that is byte-for-byte the
+pre-existing code path. No ``isinstance`` / ``typing.get_origin`` / ``dataclasses.fields`` call happens per launch.
+See the module docstring of ``_template_mapper_hotpath.py`` for why that matters (``isinstance`` is a ~100-200ns MRO
+walk vs a ~10ns pointer comparison for ``type(x) is Y``).
 """
 
 import dataclasses
@@ -446,21 +446,77 @@ _FRAMEWORK_ENUM_CLASSES = frozenset(
 )
 
 # Dunder methods that make an object's *behavior* observable at compile time (comparison, hashing, conversion,
-# container / callable / arithmetic protocols). The enum machinery injects only ``__new__`` / ``__doc__`` /
-# ``__module__`` / ``__qualname__`` into a user enum's own class dict, never any of these, so one appearing there is
-# a user override that two same-named factory enums could define differently (``cfg.mode == 1``) - hence rejected.
+# container / callable / arithmetic protocols). One appearing in a user enum's own class dict is a *candidate* user
+# override that two same-named factory enums could define differently (``cfg.mode == 1``). NOTE: on Python >=3.11 the
+# enum machinery itself copies the mixed-in data type's ``__str__`` / ``__format__`` / ``__repr__`` onto an
+# ``IntEnum`` / ``StrEnum`` / ``IntFlag`` subclass's dict, so presence alone is not enough:
+# ``_dunder_copied_from_base`` filters those base-copied entries out, and only a genuine (fresh) override is rejected.
 _OBSERVABLE_DUNDERS = frozenset(
     {
-        "__eq__", "__ne__", "__lt__", "__le__", "__gt__", "__ge__", "__hash__",
-        "__bool__", "__int__", "__index__", "__float__", "__complex__", "__str__", "__repr__", "__format__",
-        "__bytes__", "__len__", "__length_hint__", "__contains__", "__iter__", "__next__", "__reversed__",
-        "__getitem__", "__setitem__", "__delitem__", "__getattr__", "__getattribute__", "__call__",
-        "__add__", "__radd__", "__sub__", "__rsub__", "__mul__", "__rmul__", "__matmul__", "__rmatmul__",
-        "__truediv__", "__rtruediv__", "__floordiv__", "__rfloordiv__", "__mod__", "__rmod__", "__divmod__",
-        "__rdivmod__", "__pow__", "__rpow__", "__neg__", "__pos__", "__abs__", "__invert__",
-        "__and__", "__rand__", "__or__", "__ror__", "__xor__", "__rxor__",
-        "__lshift__", "__rlshift__", "__rshift__", "__rrshift__",
-        "__round__", "__trunc__", "__floor__", "__ceil__",
+        "__eq__",
+        "__ne__",
+        "__lt__",
+        "__le__",
+        "__gt__",
+        "__ge__",
+        "__hash__",
+        "__bool__",
+        "__int__",
+        "__index__",
+        "__float__",
+        "__complex__",
+        "__str__",
+        "__repr__",
+        "__format__",
+        "__bytes__",
+        "__len__",
+        "__length_hint__",
+        "__contains__",
+        "__iter__",
+        "__next__",
+        "__reversed__",
+        "__getitem__",
+        "__setitem__",
+        "__delitem__",
+        "__getattr__",
+        "__getattribute__",
+        "__call__",
+        "__add__",
+        "__radd__",
+        "__sub__",
+        "__rsub__",
+        "__mul__",
+        "__rmul__",
+        "__matmul__",
+        "__rmatmul__",
+        "__truediv__",
+        "__rtruediv__",
+        "__floordiv__",
+        "__rfloordiv__",
+        "__mod__",
+        "__rmod__",
+        "__divmod__",
+        "__rdivmod__",
+        "__pow__",
+        "__rpow__",
+        "__neg__",
+        "__pos__",
+        "__abs__",
+        "__invert__",
+        "__and__",
+        "__rand__",
+        "__or__",
+        "__ror__",
+        "__xor__",
+        "__rxor__",
+        "__lshift__",
+        "__rlshift__",
+        "__rshift__",
+        "__rrshift__",
+        "__round__",
+        "__trunc__",
+        "__floor__",
+        "__ceil__",
     }
 )
 
@@ -501,6 +557,20 @@ def _subclass_identity(cls: type) -> tuple:
     return (cls.__module__, cls.__qualname__, class_id)
 
 
+def _dunder_copied_from_base(klass: type, name: str, value: Any) -> bool:
+    """True if ``klass.__dict__[name]`` is the *exact same object* as the attribute in one of ``klass``'s strict
+    bases. On Python >=3.11 the enum machinery copies the mixed-in data type's ``__str__`` / ``__format__`` /
+    ``__repr__`` onto an ``IntEnum`` / ``StrEnum`` / ``IntFlag`` subclass's own ``__dict__`` (so members format like
+    the bare value) - e.g. ``CcdAlgorithm.__dict__["__format__"] is IntEnum.__dict__["__format__"]``. That copy is a
+    base method verbatim, not user-authored behavior, so it must not be treated as a class-level override. A genuine
+    user override is a fresh object that appears in no base's ``__dict__``.
+    """
+    for base in klass.__mro__[1:]:
+        if base.__dict__.get(name, _MISSING) is value:
+            return True
+    return False
+
+
 def _enum_class_behavior_attr(enum_cls: type) -> "str | None":
     """Return the name of a user-defined class-level attribute (method / property / class var / operator dunder) on
     ``enum_cls`` or one of its user-authored enum bases, or None. ``module``/``qualname``/member-name/value do not
@@ -508,7 +578,9 @@ def _enum_class_behavior_attr(enum_cls: type) -> "str | None":
     closes over different strings (or whose ``__eq__`` differs) key identically while
     ``qd.static(cfg.mode.label == "x")`` / ``qd.static(cfg.mode == 1)`` differ. Members and the enum-generated
     structural attrs (``_x_`` bookkeeping, ``__new__`` / ``__doc__`` / ``__module__`` / ``__qualname__``) are
-    skipped; any other member - a non-dunder attribute or an observable operator dunder - is user behavior.
+    skipped, as are observable dunders the enum machinery merely copies from a base (Python >=3.11, see
+    ``_dunder_copied_from_base``); any remaining member - a non-dunder attribute or a genuinely overridden observable
+    operator dunder - is user behavior.
     """
     for klass in enum_cls.__mro__:
         if not (isinstance(klass, type) and issubclass(klass, enum.Enum)) or klass in _FRAMEWORK_ENUM_CLASSES:
@@ -516,8 +588,10 @@ def _enum_class_behavior_attr(enum_cls: type) -> "str | None":
         for name, member in vars(klass).items():
             if isinstance(member, enum.Enum):  # an enum member or alias defined on the class
                 continue
-            if name in _OBSERVABLE_DUNDERS:  # a user operator/behavior dunder (framework never injects these)
-                return name
+            if name in _OBSERVABLE_DUNDERS:
+                if _dunder_copied_from_base(klass, name, member):
+                    continue  # enum machinery copied a base/data-type dunder (Python >=3.11), not a user override
+                return name  # a genuine user operator/behavior dunder override
             if name.startswith("_") and name.endswith("_"):  # other dunder / enum-internal (``_member_map_``, ...)
                 continue
             return name  # a user method / property / class var

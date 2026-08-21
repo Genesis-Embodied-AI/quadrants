@@ -3761,7 +3761,10 @@ def test_bare_final_annotation_is_rejected():
     for ``Final[T]``, so it must not be how the unsupported spelling behaves."""
     import typing
 
-    from quadrants.lang._final_dataclass_fields import final_field_names, is_final_annotation
+    from quadrants.lang._final_dataclass_fields import (
+        final_field_names,
+        is_final_annotation,
+    )
 
     # The bare form genuinely is not a subscripted Final...
     assert is_final_annotation(typing.Final) is False
@@ -3824,8 +3827,9 @@ def test_final_numpy_float_field_honors_raise_on_templated_floats():
     ``final_scalar_key`` specialises on exactly like a builtin ``float``. So ``raise_on_templated_floats`` must
     reject those too, not only a builtin one - otherwise the option's guarantee (no float value drives kernel
     specialisation) is bypassed."""
-    import numpy as np
     from typing import Final
+
+    import numpy as np
 
     arch_name = qd.lang.impl.current_cfg().arch.name
 
