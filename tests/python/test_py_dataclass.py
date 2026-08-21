@@ -3987,6 +3987,19 @@ def test_final_scalar_key_distinguishes_signed_zero_and_nan_payloads():
     assert type(e1.A).__qualname__ == type(e2.A).__qualname__  # identical qualname across the two factory enums
     assert final_scalar_key(e1.A) != final_scalar_key(e2.A)  # but different values -> distinct keys
 
+    # The member value is itself routed through ``final_scalar_key``, so two factory members named ``A`` whose raw
+    # values are ``True`` vs ``1`` (``==`` with equal hashes) stay distinct rather than collapsing to one key.
+    def _make_enum(v):
+        class Local(enum.Enum):
+            A = v
+
+        return Local
+
+    et, eo = _make_enum(True), _make_enum(1)
+    assert type(et.A).__qualname__ == type(eo.A).__qualname__
+    assert et.A.value == eo.A.value and hash(et.A.value) == hash(eo.A.value)  # True == 1, equal hashes
+    assert final_scalar_key(et.A) != final_scalar_key(eo.A)
+
     # A stateless subclass whose ``__repr__`` does not preserve its value must still produce faithful *offline*
     # (string) keys, since the fastcache key is built by ``str``-ing the key tuple.
     class OddInt(int):

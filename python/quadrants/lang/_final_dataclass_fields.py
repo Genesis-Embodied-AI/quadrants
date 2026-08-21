@@ -378,12 +378,14 @@ def final_scalar_key(value: Any) -> Any:
       a NumPy scalar uses ``(_FLOAT_KEY_TAG, <dtype str>, <raw bytes>)``). Bits (not value) so ``-0.0``/``0.0``
       (equal, equal hash) and NaNs differing only in sign/payload (all ``str``-ed to ``"nan"``) stay distinct, and
       widths never alias.
-    - an ``enum`` member -> ``(_ENUM_KEY_TAG, module, qualname, name, value)``. An ``IntEnum`` / ``StrEnum`` member
-      is ``==`` to its bare scalar and to a same-valued member of another enum class (and ``str(member)`` is just
-      the scalar on Python >=3.11), so keying on identity keeps them distinct. Both ``name`` and ``value`` are kept:
-      ``name`` (``None`` for an unnamed ``IntFlag`` composite) plus ``value`` separates same-named members of two
-      classes that share ``module``/``qualname`` (e.g. an enum rebuilt by a local factory). A member carrying
-      user-defined per-member state is rejected (identity alone cannot capture that state).
+    - an ``enum`` member -> ``(_ENUM_KEY_TAG, module, qualname, name, final_scalar_key(value))``. An ``IntEnum`` /
+      ``StrEnum`` member is ``==`` to its bare scalar and to a same-valued member of another enum class (and
+      ``str(member)`` is just the scalar on Python >=3.11), so keying on identity keeps them distinct. Both ``name``
+      and the member value are kept: ``name`` (``None`` for an unnamed ``IntFlag`` composite) plus the value
+      separates same-named members of two classes that share ``module``/``qualname`` (e.g. an enum rebuilt by a
+      local factory). The value is itself run through ``final_scalar_key`` so a raw ``True`` vs ``1`` (``==``, equal
+      hash) cannot collide. A member carrying user-defined per-member state is rejected (identity alone cannot
+      capture that state).
     - every remaining scalar (``bool`` / ``int`` / ``str`` and NumPy analogues) ->
       ``(_SCALAR_KEY_TAG, module, qualname, canonical-value)``. ``True == 1 == np.int64(1)`` with equal hashes, but
       they bake observably different Python constants (e.g. ``config.value is True``), so the exact type is tagged;
@@ -401,11 +403,14 @@ def final_scalar_key(value: Any) -> Any:
         # rejected, since identity alone would not capture that state. The key carries BOTH ``name`` and ``value``:
         # ``name`` identifies the canonical member (``None`` for an unnamed ``IntFlag`` composite), while ``value``
         # separates same-named members of two classes that share ``module``/``qualname`` - e.g. an enum rebuilt by a
-        # local factory, whose qualname is ``<factory>.<locals>.Local``. Fall back to ``repr`` for an unhashable
-        # value so the in-process tuple key stays hashable.
+        # local factory, whose qualname is ``<factory>.<locals>.Local``. The value is routed through
+        # ``final_scalar_key`` itself, not embedded raw: two factory members named ``A`` valued ``True`` vs ``1``
+        # are ``==`` with equal hashes, so a raw value would still collide - recursing type-tags them apart (and
+        # bit-encodes a float value, etc.). Fall back to ``repr`` if the encoded value is unhashable (an enum whose
+        # value is e.g. a ``list``) so the in-process tuple key stays hashable.
         _reject_stateful_enum_member(value)
         cls = type(value)
-        member_value = value.value
+        member_value = final_scalar_key(value.value)
         try:
             hash(member_value)
         except TypeError:
