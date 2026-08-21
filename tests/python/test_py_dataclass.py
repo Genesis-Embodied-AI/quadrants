@@ -3857,6 +3857,47 @@ def test_final_numpy_float_field_honors_raise_on_templated_floats():
 
 
 @test_utils.test()
+def test_final_float_cached_spec_key_revalidated_after_reinit():
+    """The per-instance ``_qd_spec_key`` cache is populated on a frozen config's first launch. If it were served
+    unconditionally, a config first used while ``raise_on_templated_floats`` was off and then reused after
+    re-initialising with the option on would skip the ``Final[float]`` guard and keep silently specialising on the
+    float. The cache is only served while the option is off, so reuse after enabling it still raises."""
+    from typing import Final
+
+    arch_name = qd.lang.impl.current_cfg().arch.name
+
+    @dataclass(frozen=True)
+    class Cfg:
+        dt: Final[float]
+        n: Final[int]
+
+    def run(cfg):
+        @qd.kernel
+        def k(config: Cfg, out: qd.types.NDArray[qd.i32, 1]):
+            v = qd.static(config.n)
+            for i in out:
+                out[i] = v
+
+        k(cfg, qd.ndarray(qd.i32, shape=(2,)))
+
+    cfg = Cfg(dt=0.5, n=3)
+
+    # First launch with the option OFF: compiles fine and caches the spec key on this very instance.
+    qd.init(arch=getattr(qd, arch_name))
+    run(cfg)
+    assert hasattr(cfg, "_qd_spec_key")  # the cache is now populated, so the next launch could short-circuit on it
+
+    # Re-initialise with the option ON and reuse the SAME instance: the cached key must not bypass the guard.
+    qd.init(arch=getattr(qd, arch_name), raise_on_templated_floats=True)
+    with pytest.raises(ValueError, match="Floats not allowed as templated types"):
+        run(cfg)
+
+    # Turning the option back off serves the still-valid cached key again (the key value was never setting-dependent).
+    qd.init(arch=getattr(qd, arch_name))
+    run(cfg)
+
+
+@test_utils.test()
 def test_final_field_string_annotation_is_rejected():
     """``from __future__ import annotations`` (or any explicit string annotation) leaves ``field.type`` as an
     unresolved string, so Quadrants cannot see the ``Final`` and would silently lower the field as a *runtime* kernel
@@ -4129,6 +4170,32 @@ def test_final_scalar_key_distinguishes_signed_zero_and_nan_payloads():
     assert final_scalar_key(Grams(1)) != final_scalar_key(Grams(2))
     assert final_scalar_key(Grams(1)) != final_scalar_key(1)  # subclass distinct from a plain int
     assert str(final_scalar_key(Grams(1))) != str(final_scalar_key(Grams(2)))  # faithful offline string
+
+    # Like recreated enums, two behavior-free primitive subclasses built by a local factory share module+qualname
+    # and value yet are distinct class objects (``cfg.x.__class__ is First`` is observable at compile time), so the
+    # key adds ``id(cls)`` for such non-uniquely-identifiable classes to keep an instance of the second from reusing
+    # the first's specialization. This applies to ``int``/``str`` subclasses (generic branch) and ``float``
+    # subclasses (dedicated branch) alike.
+    def _make_int_subclass():
+        class Local(int):
+            pass
+
+        return Local
+
+    ci1, ci2 = _make_int_subclass(), _make_int_subclass()
+    assert ci1 is not ci2 and ci1.__qualname__ == ci2.__qualname__  # distinct classes, identical qualname
+    assert final_scalar_key(ci1(1)) != final_scalar_key(ci2(1))  # kept distinct via id(cls)
+    assert final_scalar_key(ci1(1)) == final_scalar_key(ci1(1))  # stable for the same class
+
+    def _make_float_subclass():
+        class Local(float):
+            pass
+
+        return Local
+
+    cf1, cf2 = _make_float_subclass(), _make_float_subclass()
+    assert cf1 is not cf2 and cf1.__qualname__ == cf2.__qualname__
+    assert final_scalar_key(cf1(1.0)) != final_scalar_key(cf2(1.0))  # kept distinct via id(cls)
 
     # But a subclass that overrides an observable dunder (repr / a conversion / an operator) is rejected: two
     # same-named factory subclasses could override it differently, sharing ``module``/``qualname`` while

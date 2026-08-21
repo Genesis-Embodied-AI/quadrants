@@ -391,7 +391,15 @@ def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: Annotati
         # is hashable, but a user can enforce a dataclass to be consider frozen for a user perspective without being
         # truly frozen by specifying 'unsafe_hash=True'. If a user is doing this on purpose, it makes sense to honor it.
         is_frozen = annotation.__hash__ is not None
-        if is_frozen:
+        # The ``_qd_spec_key`` cache is only served when ``raise_on_templated_floats`` is OFF (its default). The
+        # cached key *value* is a pure function of the frozen field values and never setting-dependent, but the
+        # ``Final[float]`` guard below IS: a cache stored under one ``qd.init`` could be reused after a ``qd.reset``
+        # + re-init that turns the option on, and serving it would bypass the guard for this arg *and every nested
+        # frozen dataclass it contains* (the early return also skips the recursion). So when the option is on we
+        # recompute instead, which re-runs the guard at every level of the arg tree each launch. This only forgoes
+        # the cache in the opt-in strict mode; the default hot path is unchanged. (The recompute still writes the
+        # cache below, so it stays warm if the option is later turned off.)
+        if is_frozen and not raise_on_templated_floats:
             try:
                 # Note that it is necessary to store the key at instance-level instead of class-level because
                 # multiple instances of the same class may have different memory layout (although unusual).
@@ -429,7 +437,8 @@ def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: Annotati
                     # - so the guard must reject them all. ``type(x) is float`` is a fast pointer compare for the
                     # common exact-float case, and the ``isinstance`` only runs when that misses *and* the option is
                     # enabled (i.e. never on the default hot path). ``bool`` is not a ``float`` subclass, so a
-                    # ``Final[bool]`` value is correctly left alone here.
+                    # ``Final[bool]`` value is correctly left alone here. When the option is on the cache read above
+                    # is skipped, so this guard re-runs each launch (and, via the recursion below, at every level).
                     if raise_on_templated_floats and (
                         type(field_value) is float or isinstance(field_value, (float, np.floating))
                     ):

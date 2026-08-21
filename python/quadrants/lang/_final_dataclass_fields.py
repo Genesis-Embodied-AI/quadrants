@@ -465,13 +465,14 @@ _OBSERVABLE_DUNDERS = frozenset(
 )
 
 
-def _enum_class_not_uniquely_identified(cls: type) -> bool:
+def _class_not_uniquely_identified(cls: type) -> bool:
     """True if ``cls`` cannot be recovered from its ``module``/``qualname`` - i.e. it is locally/dynamically created
     (its qualname contains ``<locals>``, or ``module.qualname`` does not resolve back to this class object). Such a
-    class shares its identity string with every other class built the same way, so members that are distinct objects
-    (``First.A is not Second.A``; for a plain ``Enum`` also ``First.A != Second.A``) would key identically on
-    ``(module, qualname, name, value)`` alone. Callers add ``id(cls)`` to the key in that case to keep them distinct
-    in-process. Runs once per instance (cached), off the steady-state launch path.
+    class shares its identity string with every other class built the same way, so distinct class objects would key
+    identically on ``(module, qualname, ...)`` alone: two recreated enum classes have distinct members
+    (``First.A is not Second.A``; for a plain ``Enum`` also ``First.A != Second.A``), and two recreated primitive
+    subclasses are still observably distinct (``cfg.x.__class__ is First``). Callers add ``id(cls)`` to the key in
+    that case to keep them distinct in-process. Runs once per instance (cached), off the steady-state launch path.
     """
     module = sys.modules.get(cls.__module__)
     if module is None:
@@ -484,6 +485,20 @@ def _enum_class_not_uniquely_identified(cls: type) -> bool:
         if obj is _MISSING:
             return True
     return obj is not cls
+
+
+def _subclass_identity(cls: type) -> tuple:
+    """Key component identifying a user *subclass* of a baked base type (a ``float``/``int``/``str`` or NumPy scalar
+    subclass), or an ``enum`` class. ``module``/``qualname`` name it, but they do not uniquely identify a
+    *dynamically recreated* class: two behavior-free subclasses built by the same factory share both yet are
+    distinct objects, and ``cfg.x.__class__ is First`` is observable at compile time. So a non-uniquely-resolvable
+    class (see ``_class_not_uniquely_identified``) additionally carries ``id(cls)`` to keep such classes distinct
+    in-process. ``id`` is not process-stable, so it also lands in the offline-cache string - that only costs a cache
+    *miss* across processes for these (rare) locally-defined classes, never an incorrect reuse. A module-level class
+    is uniquely identified (``class_id`` ``None``) so its offline key stays stable.
+    """
+    class_id = id(cls) if _class_not_uniquely_identified(cls) else None
+    return (cls.__module__, cls.__qualname__, class_id)
 
 
 def _enum_class_behavior_attr(enum_cls: type) -> "str | None":
@@ -552,11 +567,11 @@ def final_scalar_key(value: Any) -> Any:
     receive any of them across launches. The encodings:
 
     - a ``float`` (builtin, a subclass, or a NumPy floating scalar) -> its exact IEEE-754 bits under
-      ``_FLOAT_KEY_TAG`` (builtin ``(_FLOAT_KEY_TAG, <bits as int>)``; a subclass adds its ``module``/``qualname``;
-      a NumPy scalar uses ``(_FLOAT_KEY_TAG, <dtype str>, <raw bytes>)``). Bits (not value) so ``-0.0``/``0.0``
-      (equal, equal hash) and NaNs differing only in sign/payload (all ``str``-ed to ``"nan"``) stay distinct, and
-      widths never alias.
-    - an ``enum`` member -> ``(_ENUM_KEY_TAG, module, qualname, name, final_scalar_key(value))``. An ``IntEnum`` /
+      ``_FLOAT_KEY_TAG`` (builtin ``(_FLOAT_KEY_TAG, <bits as int>)``; a subclass adds its class identity - see
+      ``_subclass_identity``; a NumPy scalar uses ``(_FLOAT_KEY_TAG, <dtype str>, <raw bytes>)``). Bits (not value)
+      so ``-0.0``/``0.0`` (equal, equal hash) and NaNs differing only in sign/payload (all ``str``-ed to ``"nan"``)
+      stay distinct, and widths never alias.
+    - an ``enum`` member -> ``(_ENUM_KEY_TAG, *class-identity, name, final_scalar_key(value))``. An ``IntEnum`` /
       ``StrEnum`` member is ``==`` to its bare scalar and to a same-valued member of another enum class (and
       ``str(member)`` is just the scalar on Python >=3.11), so keying on identity keeps them distinct. Both ``name``
       and the member value are kept: ``name`` (``None`` for an unnamed ``IntFlag`` composite) plus the value
@@ -572,9 +587,13 @@ def final_scalar_key(value: Any) -> Any:
       (``int.__int__`` / ``str.__str__``, ``.item()`` for NumPy) so the offline-cache string (built by ``str``-ing
       this tuple) is faithful and process-stable even if a future/allowed subclass has a nonstandard ``repr``.
 
-    Annotations are not enforced at runtime, so a value that is none of the above (an arbitrary object, or a mutable
-    container) is *rejected* with a clear ``TypeError`` rather than keyed by its own ``__eq__`` / ``__hash__``. Such
-    an object could select the wrong specialization or change under the cached ``_qd_spec_key`` after first launch.
+    A user *subclass* (of ``float``/``int``/``str`` or a NumPy scalar) or a locally-defined ``enum`` is keyed by its
+    class identity via ``_subclass_identity``, not just its value, since ``cfg.x.__class__`` is observable at
+    compile time; a dynamically recreated such class additionally carries ``id(cls)`` so two same-named factory
+    classes stay distinct in-process. Annotations are not enforced at runtime, so a value that is none of the above
+    (an arbitrary object, or a mutable container) is *rejected* with a clear ``TypeError`` rather than keyed by its
+    own ``__eq__`` / ``__hash__``. Such an object could select the wrong specialization or change under the cached
+    ``_qd_spec_key`` after first launch.
 
     Everything here runs once per instance (Final keys/reprs are cached), never on the steady-state launch path, so
     the ``isinstance`` probes are off the hot path.
@@ -594,32 +613,31 @@ def final_scalar_key(value: Any) -> Any:
         # ``module``/``qualname``/name/value still do not uniquely identify a *dynamically recreated* class: two
         # plain ``Enum`` classes built by a factory can share all four yet have distinct members (``First.A`` is not
         # ``Second.A``, and for a plain ``Enum`` ``First.A != Second.A``), so a kernel branching on ``cfg.mode ==
-        # First.A`` needs distinct specializations. For such a class we add ``id(cls)`` to distinguish them
-        # in-process. ``id`` is not process-stable, so it also lands in the offline-cache string: that only costs a
-        # cache *miss* across processes for these (rare) locally-defined enums, never an incorrect reuse. A normal
-        # module-level enum is uniquely identified by ``module``/``qualname`` (``id`` omitted), so its offline key
-        # stays stable. Every supported value encodes to a hashable key, so the tuple stays hashable.
+        # First.A`` needs distinct specializations. ``_subclass_identity`` adds ``id(cls)`` for such a class to keep
+        # it distinct in-process (a module-level enum stays offline-stable). Every supported value encodes to a
+        # hashable key, so the tuple stays hashable.
         _reject_stateful_enum_member(value)
         cls = type(value)
-        class_id = id(cls) if _enum_class_not_uniquely_identified(cls) else None
-        return (
-            _ENUM_KEY_TAG, cls.__module__, cls.__qualname__, class_id, value.name, final_scalar_key(value.value)
-        )
+        return (_ENUM_KEY_TAG, *_subclass_identity(cls), value.name, final_scalar_key(value.value))
     if isinstance(value, np.floating):
         # ``dtype.str`` (e.g. ``"<f4"``) + ``tobytes()`` preserves sign bit, NaN payload and width, and stays in the
         # same tagged space as the builtin-float branch so it can never equal a bare int / str key component. An
-        # exact NumPy float is a pure value; a *user subclass* carrying state/behavior is rejected here (this
-        # branch precedes the generic one, which is where builtin/int/str subclasses hit the same check).
-        _reject_stateful_primitive_subclass(value)
-        return (_FLOAT_KEY_TAG, value.dtype.str, value.tobytes())
-    if isinstance(value, float):
-        # A ``float`` subclass (the exact builtin ``float`` took the fast path above). Bit-encode like a plain float
-        # so signed zeros stay distinct, but keep the subclass ``module``/``qualname`` so it is not confused with a
-        # plain ``float`` of the same value. A subclass carrying extra observable state is not fully described by
-        # its numeric value, so it is rejected rather than silently mis-specialised.
+        # exact NumPy float is a pure value keyed by dtype+bytes alone; a *user subclass* carrying state/behavior is
+        # rejected here, and an accepted (behavior-free) subclass additionally carries its class identity so two
+        # distinct same-named factory subclasses do not collide (as for the builtin-float / scalar branches below).
         _reject_stateful_primitive_subclass(value)
         cls = type(value)
-        return (_FLOAT_KEY_TAG, cls.__module__, cls.__qualname__, _unpack_u64(_pack_f64(value))[0])
+        if _is_baked_base_type(cls):  # an exact NumPy float scalar (``np.float32``/``np.float64``/...)
+            return (_FLOAT_KEY_TAG, value.dtype.str, value.tobytes())
+        return (_FLOAT_KEY_TAG, *_subclass_identity(cls), value.dtype.str, value.tobytes())
+    if isinstance(value, float):
+        # A ``float`` subclass (the exact builtin ``float`` took the fast path above). Bit-encode like a plain float
+        # so signed zeros stay distinct, but keep the subclass identity so it is not confused with a plain ``float``
+        # of the same value (nor with another same-named factory subclass). A subclass carrying extra observable
+        # state is not fully described by its numeric value, so it is rejected rather than silently mis-specialised.
+        _reject_stateful_primitive_subclass(value)
+        cls = type(value)
+        return (_FLOAT_KEY_TAG, *_subclass_identity(cls), _unpack_u64(_pack_f64(value))[0])
     # ``bool`` / ``int`` / ``str`` and their NumPy analogues. The exact type completes the tag so value-equal but
     # distinct-typed constants (``True`` vs ``1``, ``np.int64(1)`` vs ``1``) never share a specialization. As with
     # float subclasses, an ``int`` / ``str`` subclass carrying extra observable state is rejected.
@@ -654,4 +672,10 @@ def final_scalar_key(value: Any) -> Any:
             f"arbitrary object cannot be keyed by value alone. Bake the specific scalar you need as a ``Final`` "
             f"field instead."
         )
-    return (_SCALAR_KEY_TAG, cls.__module__, cls.__qualname__, canonical)
+    if _is_baked_base_type(cls):  # exact builtin primitive or exact NumPy scalar
+        return (_SCALAR_KEY_TAG, cls.__module__, cls.__qualname__, canonical)
+    # A behavior-free user subclass (``class Grams(int): pass``): ``module``/``qualname`` do not uniquely identify a
+    # dynamically recreated class, so ``_subclass_identity`` adds ``id(cls)`` for a non-resolvable one - two distinct
+    # same-named factory subclasses (``cfg.x.__class__ is First``) then key apart in-process, matching the enum and
+    # float-subclass branches above.
+    return (_SCALAR_KEY_TAG, *_subclass_identity(cls), canonical)
