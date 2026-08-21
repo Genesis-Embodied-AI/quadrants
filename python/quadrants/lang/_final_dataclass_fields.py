@@ -338,9 +338,34 @@ def _reject_stateful_primitive_subclass(value: Any) -> None:
         )
 
 
-# ``enum`` member instance-dict keys that are standard bookkeeping (name / value / sort order / owning class), not
-# user-defined per-member state. Anything else in a member's ``__dict__`` is observable state we cannot key on.
+# ``enum`` member attribute names that are standard bookkeeping (name / value / sort order / owning class), not
+# user-defined per-member state. Anything else on a member - in its ``__dict__`` *or* a populated slot - is
+# observable state we cannot key on. ``__objclass__`` and other dunders are excluded by the dunder test below.
 _ENUM_INTERNAL_MEMBER_ATTRS = frozenset({"_name_", "_value_", "_sort_order_"})
+
+
+def _enum_member_state_attr(value: Any) -> "str | None":
+    """Return the name of a user-defined per-member state attribute on ``value``, or None if it carries only enum
+    bookkeeping. State can live in the member's ``__dict__`` or, when the enum declares ``__slots__``, in a
+    populated slot that never appears in ``__dict__``; both are inspected (as the primitive-subclass check does),
+    since checking only one would miss the other.
+    """
+    d = getattr(value, "__dict__", None)
+    if d:
+        for k in d:
+            if (k.startswith("__") and k.endswith("__")) or k in _ENUM_INTERNAL_MEMBER_ATTRS:
+                continue
+            return k
+    for klass in type(value).__mro__:
+        slots = getattr(klass, "__slots__", ())
+        if isinstance(slots, str):
+            slots = (slots,)
+        for slot in slots:
+            if (slot.startswith("__") and slot.endswith("__")) or slot in _ENUM_INTERNAL_MEMBER_ATTRS:
+                continue
+            if hasattr(value, slot):  # a declared-but-unset slot raises on access, so only *populated* slots count
+                return slot
+    return None
 
 
 def _reject_stateful_enum_member(value: Any) -> None:
@@ -350,20 +375,17 @@ def _reject_stateful_enum_member(value: Any) -> None:
     offline key - would not select a distinct specialization. Plain enums (and unnamed ``IntFlag`` composites)
     carry only name/value bookkeeping and are unaffected. Runs once per instance, off the steady-state launch path.
     """
-    d = getattr(value, "__dict__", None)
-    if not d:
+    extra = _enum_member_state_attr(value)
+    if extra is None:
         return
-    for k in d:
-        if (k.startswith("__") and k.endswith("__")) or k in _ENUM_INTERNAL_MEMBER_ATTRS:
-            continue
-        cls = type(value)
-        raise TypeError(
-            f"A ``Final`` field received {cls.__module__}.{cls.__qualname__}.{value.name}, an ``enum`` member with "
-            f"user-defined per-member state (e.g. attribute {k!r}). A ``Final`` value is baked as a compile-time "
-            f"literal keyed by member identity, so per-member state a kernel could read (e.g. ``cfg.mode.unit``) "
-            f"would not select a distinct specialization. Use a plain ``enum`` (state-free members), or bake the "
-            f"needed value as a separate ``Final`` field."
-        )
+    cls = type(value)
+    raise TypeError(
+        f"A ``Final`` field received {cls.__module__}.{cls.__qualname__}.{value.name}, an ``enum`` member with "
+        f"user-defined per-member state (e.g. attribute {extra!r}). A ``Final`` value is baked as a compile-time "
+        f"literal keyed by member identity, so per-member state a kernel could read (e.g. ``cfg.mode.unit``) "
+        f"would not select a distinct specialization. Use a plain ``enum`` (state-free members), or bake the "
+        f"needed value as a separate ``Final`` field."
+    )
 
 
 def final_scalar_key(value: Any) -> Any:

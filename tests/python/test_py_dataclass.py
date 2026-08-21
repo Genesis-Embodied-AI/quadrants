@@ -3975,6 +3975,24 @@ def test_final_scalar_key_distinguishes_signed_zero_and_nan_payloads():
     with pytest.raises(TypeError, match="user-defined per-member state"):
         final_scalar_key(StatefulMode.A)
 
+    # Per-member state stored in a ``__slots__`` slot never appears in ``__dict__``, so the rejection must inspect
+    # populated slots too (otherwise the slot stays observable by kernel code while the Final key ignores it).
+    class SlottedMode(enum.Enum):
+        __slots__ = ("unit",)
+        A = 1
+
+        def __init__(self, _v):
+            self.unit = "m"
+
+    assert not {k for k in vars(SlottedMode.A) if not (k.startswith("__") and k.endswith("__"))} - {
+        "_name_",
+        "_value_",
+        "_sort_order_",
+    }  # __dict__ carries only enum bookkeeping; the state lives in the ``unit`` slot
+    assert SlottedMode.A.unit == "m"
+    with pytest.raises(TypeError, match="user-defined per-member state"):
+        final_scalar_key(SlottedMode.A)
+
     # Enum classes rebuilt by a local factory share module+qualname and can have same-named members with different
     # values; the key includes the value so those stay distinct.
     def _make_int_enum(v):
