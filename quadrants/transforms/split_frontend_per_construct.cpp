@@ -92,10 +92,15 @@ class SubsetCloner : public IRVisitor {
   }
 
   void generic_visit(Stmt *stmt) {
+    auto *other_stmt = other_->as<Stmt>();
     if (phase == register_operand_map) {
-      operand_map_[stmt] = other_->as<Stmt>();
+      operand_map_[stmt] = other_stmt;
+      // `Stmt::clone()` (and the hand-written container clones) do not carry `region_tag` over, so restore it here for
+      // every cloned statement. It marks the graph region (`qd.graph.do_while`) a serial statement belongs to; losing
+      // it makes the serial offloader tag the task at level -1 so a conditional/loop nested in a host loop runs once
+      // instead of once per host-loop iteration.
+      other_stmt->region_tag = stmt->region_tag;
     } else {
-      auto *other_stmt = other_->as<Stmt>();
       QD_ASSERT(stmt->num_operands() == other_stmt->num_operands());
       for (int i = 0; i < stmt->num_operands(); i++) {
         auto it = operand_map_.find(stmt->operand(i));

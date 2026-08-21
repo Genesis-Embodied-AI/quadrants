@@ -476,6 +476,32 @@ def test_per_construct_frontend_split_fallback_external_func_write() -> None:
     assert np.allclose(arr.to_numpy(), 6.0, atol=1e-3), arr.to_numpy()
 
 
+@test_utils.test(arch=qd.cuda, offline_cache=False)
+def test_per_construct_frontend_split_graph_do_while_correct() -> None:
+    # A split-eligible `qd.graph.do_while` kernel must stay correct through the split-and-reassemble path: its body runs
+    # once per host-loop iteration. This exercises `SubsetCloner`'s `region_tag` copy -- `Stmt::clone()` drops the graph
+    # region tag, and the subset clone restores it so the reassembled do_while body keeps its host-loop level. The
+    # do_while runs 3 times and increments x each time, so x must end at 3.
+    @qd.kernel(graph=True)
+    def run(x: qd.types.ndarray(qd.i32, ndim=1), counter: qd.types.ndarray(qd.i32, ndim=0)) -> None:
+        while qd.graph.do_while(counter):
+            for i in range(_N):
+                if x[i] < 100:
+                    x[i] = x[i] + 1
+            counter[()] = counter[()] - 1
+
+    x = qd.ndarray(qd.i32, shape=(_N,))
+    x.from_numpy(np.zeros(_N, dtype=np.int32))
+    counter = qd.ndarray(qd.i32, shape=())
+    counter.from_numpy(np.array(3, dtype=np.int32))
+    run(x, counter)
+
+    obs = run._primal.per_offload_cache_observations
+    assert obs.frontend_constructs_total >= 1, obs  # the split fired (so the clone / region-tag path was exercised)
+
+    assert np.all(x.to_numpy() == 3), x.to_numpy()
+
+
 @test_utils.test(arch=[qd.cpu, qd.cuda], offline_cache=False)
 def test_per_construct_frontend_split_struct_member_recomputed() -> None:
     # A local `qd.Struct` member is written at top level -- lowered to `LocalStoreStmt(GetElementStmt(alloca), ...)` --
