@@ -126,14 +126,22 @@ bool block_has_concurrent_region(Block *block) {
               .empty();
 }
 
-// Resolve a local pointer (an AllocaStmt, or a MatrixPtrStmt into one) to its base AllocaStmt. Returns nullptr when the
-// pointer is not alloca-based (e.g. a global pointer / global temporary), in which case it is not a local variable.
+// Resolve a local pointer to its base AllocaStmt: an AllocaStmt directly, a MatrixPtrStmt into one (matrix/vector
+// element), or a GetElementStmt into one (`qd.Struct` member). Returns nullptr when the pointer is not alloca-based
+// (e.g. a global pointer / global temporary), in which case it is not a local variable. Chasing GetElementStmt matters
+// for the cross-construct analyses: a struct member is stored via `LocalStoreStmt(GetElementStmt(alloca), ...)`, so
+// without following `src` the member's writer (and any producing loop) is dropped from a consumer's slice and it reads
+// the stale value.
 Stmt *resolve_local_alloca(Stmt *ptr) {
   while (ptr != nullptr) {
     if (ptr->is<AllocaStmt>())
       return ptr;
     if (auto *mp = ptr->cast<MatrixPtrStmt>()) {
       ptr = mp->origin;
+      continue;
+    }
+    if (auto *ge = ptr->cast<GetElementStmt>()) {
+      ptr = ge->src;
       continue;
     }
     return nullptr;

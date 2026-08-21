@@ -385,3 +385,34 @@ def test_per_construct_frontend_split_fallback_dump_cfg(monkeypatch) -> None:
     assert obs.frontend_constructs_total == -1, obs
 
     assert np.allclose(arr.to_numpy(), _C[0] + _C[1], atol=1.0), arr.to_numpy()
+
+
+@test_utils.test(arch=[qd.cpu, qd.cuda], offline_cache=False)
+def test_per_construct_frontend_split_struct_member_recomputed() -> None:
+    # A local `qd.Struct` member is written at top level -- lowered to `LocalStoreStmt(GetElementStmt(alloca), ...)` --
+    # and read by two later loop constructs. `resolve_local_alloca` must chase `GetElementStmt::src` to the base alloca;
+    # otherwise the member store is not recognized as a writer, each consumer's backward slice keeps only the
+    # zero-initialized struct alloca, and both loops read the stale 0 instead of the assigned value. With the member
+    # writer visible, the store is pure/recomputable, so the split still fires (2 constructs) and stays correct.
+    S = qd.types.struct(a=qd.f32, b=qd.f32)
+
+    @qd.kernel
+    def kernel_struct(out1: qd.types.ndarray(), out2: qd.types.ndarray()) -> None:
+        s = S(a=0.0, b=0.0)
+        s.a = _C[0]
+        for i in range(_N):
+            out1[i] = s.a
+        for i in range(_N):
+            out2[i] = s.a
+
+    out1 = qd.ndarray(qd.f32, shape=(_N,))
+    out2 = qd.ndarray(qd.f32, shape=(_N,))
+    kernel_struct(out1, out2)
+
+    obs = kernel_struct._primal.per_offload_cache_observations
+    assert obs.frontend_constructs_total == 2, obs
+
+    # Both loops must observe the member store (`s.a = _C[0]`) recomputed into their construct, not the 0 a slice that
+    # dropped the GetElementStmt writer would read.
+    assert np.allclose(out1.to_numpy(), _C[0], atol=1.0), out1.to_numpy()
+    assert np.allclose(out2.to_numpy(), _C[0], atol=1.0), out2.to_numpy()
