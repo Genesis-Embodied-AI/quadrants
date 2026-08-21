@@ -7,11 +7,9 @@
 #include "quadrants/program/extension.h"
 #include "quadrants/program/function.h"
 #include "quadrants/program/kernel.h"
-#include "quadrants/program/program.h"
 #include "quadrants/util/lang_util.h"
 #include "quadrants/codegen/ir_dump.h"
 #include <fstream>
-#include <string>
 
 namespace quadrants::lang {
 
