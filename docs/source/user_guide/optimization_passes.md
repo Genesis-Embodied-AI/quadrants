@@ -95,13 +95,13 @@ Once the kernel has been split into offloaded tasks, both CSE and the CFG optimi
 
 ## Per-construct frontend compilation
 
-The frontend stages above - the `simplify -> merge global pointers -> offload` sequence that turns high-level IR into offloaded tasks - can run either once over the whole kernel or, for eligible kernels, separately for each **top-level construct** (each independent top-level loop or serial run in your kernel). Compiling each construct in isolation is what will let a future cross-process cache reuse the unchanged constructs of a kernel you edited; today it produces the same offloaded tasks and the same results as the whole-kernel path, so the split is transparent.
+The frontend stages above - the passes that turn your high-level kernel into offloaded tasks - can run either once over the whole kernel or, for eligible kernels, separately for each **top-level construct** (each independent top-level loop or serial run in your kernel). Compiling each construct in isolation is what will let a future cross-process cache reuse the unchanged constructs of a kernel you edited; today it produces the same offloaded tasks and the same results as the whole-kernel path, so the split is transparent.
 
-Quadrants automatically falls back to the whole-kernel path whenever per-construct compilation would not be equivalent: autodiff kernels, mesh-for kernels, and kernels where one construct's value depends on state another construct produced in a way that cannot be recomputed in isolation (for example a loop-carried local shared across constructs, or a snapshot of a field that a later construct reads after an intervening write).
+Quadrants automatically falls back to the whole-kernel path whenever per-construct compilation would not be equivalent: [autodiff](autodiff.md) kernels, certain specialized kernels, and kernels where one construct's value depends on state another construct produced in a way that cannot be recomputed in isolation (for example a loop-carried local shared across constructs, or a snapshot of a field that a later construct reads after an intervening write).
 
 ### Inspecting the split
 
-You can see whether the split ran, and how many constructs it found, via the `per_offload_cache_observations` attribute on the kernel's primal:
+You can see whether the split ran, and how many constructs it found, via the `per_offload_cache_observations` attribute on the kernel's compiled [primal](autodiff.md) (the forward kernel object, accessed as `._primal`):
 
 ```python
 @qd.kernel
