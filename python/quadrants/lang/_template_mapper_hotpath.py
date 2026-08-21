@@ -454,9 +454,10 @@ def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: Annotati
                         )
                     # Encode floats by IEEE bits so ``-0.0``/``0.0`` (equal under ``==`` and ``hash``) do not
                     # collapse onto one compiled kernel here. ``live=True``: this is the in-process spec key, so a
-                    # subclass/enum value is keyed by its live class object (distinguishing a class rebound by a
-                    # module reload). The offline fastcache uses ``final_scalar_key`` without ``live`` (in
-                    # ``args_hasher``) for a process-stable string. See ``final_scalar_key``.
+                    # subclass/enum value is keyed by its class *identity* (``id(cls)``), distinguishing a class
+                    # rebound by a module reload or two distinct classes a metaclass makes ``==``. The offline
+                    # fastcache uses ``final_scalar_key`` without ``live`` (in ``args_hasher``) for a process-stable
+                    # string. See ``final_scalar_key``.
                     key_parts.append(final_scalar_key(field_value, live=True))
                 else:
                     key_parts.append(

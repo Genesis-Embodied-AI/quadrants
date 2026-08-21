@@ -4266,8 +4266,8 @@ def test_final_scalar_key_live_preserves_class_identity_across_module_rebind():
     transiently share ``module``/``qualname`` - e.g. a module-level enum or primitive subclass redefined by a module
     reload, each resolvable to its own definition while bound. In the offline (``live=False``) form
     ``final_scalar_key`` keys a resolvable class by ``module``/``qualname`` alone (process-stable, so it cannot tell
-    the rebinding apart - a safe cross-process strategy, never a wrong reuse), but the in-process key embeds the live
-    class object so a second launch with the fresh class does not reuse the kernel baked for the first
+    the rebinding apart - a safe cross-process strategy, never a wrong reuse), but the in-process key keys on
+    ``id(cls)`` so a second launch with the fresh class does not reuse the kernel baked for the first
     (``cfg.x.__class__ is SavedOldClass`` is observable at compile time)."""
     import sys
     import types
@@ -4294,12 +4294,42 @@ def test_final_scalar_key_live_preserves_class_identity_across_module_rebind():
         # Offline: both resolvable while bound, so both carry a None id component and collide. That is the safe,
         # process-stable strategy - it only fails to distinguish a (rare) reload, and never causes a wrong reuse.
         assert old_offline == new_offline
-        # In-process: the live class object keeps the two distinct classes apart.
+        # In-process: ``id(cls)`` keeps the two distinct classes apart.
         assert old_live != new_live
         # Same class -> stable in-process key across launches, so legitimate kernel reuse is preserved.
         assert final_scalar_key(old(1), live=True) == old_live
     finally:
         del sys.modules[mod_name]
+
+
+@test_utils.test()
+def test_final_scalar_key_live_uses_object_identity_not_class_equality():
+    """The in-process spec key (``live=True``) keys a subclass on ``id(cls)``, not the class object, so a *metaclass*
+    that makes two distinct classes ``==`` with equal hashes cannot collapse their keys. The subclass-state validator
+    inspects the class dict / MRO, not metaclass behavior, so such classes are accepted - yet ``cfg.x.__class__ is
+    First`` is observable at compile time, so the two must key apart. Embedding ``cls`` (compared via the metaclass's
+    ``__eq__``) would collide; ``id(cls)`` does not."""
+    from quadrants.lang._final_dataclass_fields import final_scalar_key
+
+    class EqMeta(type):
+        # Distinct classes with the same qualname compare equal with equal hashes (a pathological metaclass).
+        def __eq__(cls, other):
+            return isinstance(other, EqMeta) and cls.__qualname__ == other.__qualname__
+
+        def __hash__(cls):
+            return hash(cls.__qualname__)
+
+    def _make():
+        class Local(int, metaclass=EqMeta):
+            pass
+
+        return Local
+
+    first, second = _make(), _make()
+    assert first is not second and first == second and hash(first) == hash(second)  # metaclass forces class ==
+    # Accepted (behavior-free at the class-dict level), but must not share a specialization: id(cls) keeps them apart.
+    assert final_scalar_key(first(1), live=True) != final_scalar_key(second(1), live=True)
+    assert final_scalar_key(first(1), live=True) == final_scalar_key(first(1), live=True)  # stable for one class
 
 
 @test_utils.test()
