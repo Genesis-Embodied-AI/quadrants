@@ -318,16 +318,30 @@ _STRUCTURAL_CLASS_ATTRS = frozenset(
 )
 
 
+def _is_baked_base_type(klass: type) -> bool:
+    """True for a library base a baked value can subclass - a builtin primitive, ``object``, or a NumPy-provided
+    type (module ``numpy``). Their own attributes are framework internals, not user state/behavior, so the
+    subclass walk in ``_reject_stateful_primitive_subclass`` stops here and an exact instance needs no checking.
+    """
+    return (
+        klass in _EXACT_BAKED_TYPES
+        or klass is object
+        or klass.__module__ == "numpy"
+        or klass.__module__.startswith("numpy.")
+    )
+
+
 def _reject_stateful_primitive_subclass(value: Any) -> None:
-    """Reject a ``float`` / ``int`` / ``str`` *subclass* instance that carries observable state a kernel could read
-    but the key cannot capture - either per-instance state or class-level behavior/state.
+    """Reject a *subclass* of a baked scalar type (``bool``/``int``/``float``/``str`` or a NumPy scalar) whose
+    instance carries observable state a kernel could read but the key cannot capture - per-instance or class-level.
 
     A ``Final`` value is baked as a compile-time literal keyed by its (typed) value plus the subclass
     ``module``/``qualname``. That is not enough when a subclass carries more than its value:
 
-    - *Per-instance* state - e.g. ``class TaggedFloat(float)`` with a ``unit`` attribute - is not described by the
-      numeric value, so two instances with an equal value but different state would bake different kernels yet
-      select the same specialization. State can live in ``__dict__`` or a populated ``__slots__`` slot.
+    - *Per-instance* state - e.g. ``class TaggedFloat(float)`` with a ``unit`` attribute (or the same over
+      ``np.float64``) - is not described by the numeric value, so two instances with an equal value but different
+      state would bake different kernels yet select the same specialization. State can live in ``__dict__`` or a
+      populated ``__slots__`` slot.
     - *Class-level* behavior/state - e.g. a factory returning ``float`` subclasses whose ``unit`` property closes
       over different values, or that override ``__eq__`` / ``__int__`` / ``__repr__`` differently - is not captured
       either: ``module``/``qualname`` does not uniquely identify a dynamically created class, so two distinct
@@ -336,19 +350,22 @@ def _reject_stateful_primitive_subclass(value: Any) -> None:
       including an overridden operator/conversion/repr dunder, since it too is observable.
 
     There is no bounded, process-stable way to serialise arbitrary state/behavior, so we reject rather than silently
-    mis-specialise. Exact primitives, NumPy scalars (library internals, not user state) and behavior-free stateless
-    subclasses (``class Meters(float): pass``) are unaffected. Runs once per instance, off the steady-state path.
+    mis-specialise. Exact primitives, exact NumPy library scalars (their attrs are library internals, not user
+    state) and behavior-free stateless subclasses (``class Meters(float): pass``) are unaffected. Runs once per
+    instance, off the steady-state path.
     """
-    if type(value) in _EXACT_BAKED_TYPES or not isinstance(value, (int, float, str)):
-        return
-    if isinstance(value, np.generic):  # NumPy scalar (e.g. ``np.str_``); its class attrs are library internals
-        return
     cls = type(value)
+    if cls in _EXACT_BAKED_TYPES:
+        return
+    if not (isinstance(value, (int, float, str)) or isinstance(value, np.generic)):
+        return  # not a baked-primitive / NumPy-scalar value at all
+    if isinstance(value, np.generic) and _is_baked_base_type(cls):
+        return  # an exact NumPy library scalar (module ``numpy``): a pure value, no user state/behavior
     if getattr(value, "__dict__", None):
         stateful = True
     else:
         stateful = False
-        for klass in type(value).__mro__:
+        for klass in cls.__mro__:
             slots = getattr(klass, "__slots__", ())
             if isinstance(slots, str):
                 slots = (slots,)
@@ -363,8 +380,8 @@ def _reject_stateful_primitive_subclass(value: Any) -> None:
             f"distinct specialization. Pass a plain ``bool`` / ``int`` / ``float`` / ``str`` (or an ``enum`` "
             f"member) instead."
         )
-    for klass in cls.__mro__:  # subclass chain above the base primitive; stop at the base (its own attrs are fine)
-        if klass in _EXACT_BAKED_TYPES or klass is object:
+    for klass in cls.__mro__:  # subclass chain above the base type; stop at the library base (its attrs are fine)
+        if _is_baked_base_type(klass):
             break
         for attr in vars(klass):
             # Only the auto-generated structural members are exempt; a method / property / class var, or an
@@ -425,23 +442,46 @@ _FRAMEWORK_ENUM_CLASSES = frozenset(
     if isinstance(c, type)
 )
 
+# Dunder methods that make an object's *behavior* observable at compile time (comparison, hashing, conversion,
+# container / callable / arithmetic protocols). The enum machinery injects only ``__new__`` / ``__doc__`` /
+# ``__module__`` / ``__qualname__`` into a user enum's own class dict, never any of these, so one appearing there is
+# a user override that two same-named factory enums could define differently (``cfg.mode == 1``) - hence rejected.
+_OBSERVABLE_DUNDERS = frozenset(
+    {
+        "__eq__", "__ne__", "__lt__", "__le__", "__gt__", "__ge__", "__hash__",
+        "__bool__", "__int__", "__index__", "__float__", "__complex__", "__str__", "__repr__", "__format__",
+        "__bytes__", "__len__", "__length_hint__", "__contains__", "__iter__", "__next__", "__reversed__",
+        "__getitem__", "__setitem__", "__delitem__", "__getattr__", "__getattribute__", "__call__",
+        "__add__", "__radd__", "__sub__", "__rsub__", "__mul__", "__rmul__", "__matmul__", "__rmatmul__",
+        "__truediv__", "__rtruediv__", "__floordiv__", "__rfloordiv__", "__mod__", "__rmod__", "__divmod__",
+        "__rdivmod__", "__pow__", "__rpow__", "__neg__", "__pos__", "__abs__", "__invert__",
+        "__and__", "__rand__", "__or__", "__ror__", "__xor__", "__rxor__",
+        "__lshift__", "__rlshift__", "__rshift__", "__rrshift__",
+        "__round__", "__trunc__", "__floor__", "__ceil__",
+    }
+)
+
 
 def _enum_class_behavior_attr(enum_cls: type) -> "str | None":
-    """Return the name of a user-defined class-level attribute (method / property / class var) on ``enum_cls`` or
-    one of its user-authored enum bases, or None. ``module``/``qualname``/member-name/value do not uniquely identify
-    a dynamically created enum class, so two same-named factory enums whose e.g. ``label`` property closes over
-    different strings key identically while ``qd.static(cfg.mode.label == "x")`` differs. Members, dunders and enum
-    ``_x_`` bookkeeping are skipped; anything else on a user-authored enum class is observable behavior.
+    """Return the name of a user-defined class-level attribute (method / property / class var / operator dunder) on
+    ``enum_cls`` or one of its user-authored enum bases, or None. ``module``/``qualname``/member-name/value do not
+    uniquely identify a dynamically created enum class, so two same-named factory enums whose ``label`` property
+    closes over different strings (or whose ``__eq__`` differs) key identically while
+    ``qd.static(cfg.mode.label == "x")`` / ``qd.static(cfg.mode == 1)`` differ. Members and the enum-generated
+    structural attrs (``_x_`` bookkeeping, ``__new__`` / ``__doc__`` / ``__module__`` / ``__qualname__``) are
+    skipped; any other member - a non-dunder attribute or an observable operator dunder - is user behavior.
     """
     for klass in enum_cls.__mro__:
         if not (isinstance(klass, type) and issubclass(klass, enum.Enum)) or klass in _FRAMEWORK_ENUM_CLASSES:
             continue  # skip the mixed-in primitive / ``object`` and the library's own enum base classes
         for name, member in vars(klass).items():
-            if name.startswith("_") and name.endswith("_"):  # a dunder or enum-internal (``_member_map_``, ...)
-                continue
             if isinstance(member, enum.Enum):  # an enum member or alias defined on the class
                 continue
-            return name
+            if name in _OBSERVABLE_DUNDERS:  # a user operator/behavior dunder (framework never injects these)
+                return name
+            if name.startswith("_") and name.endswith("_"):  # other dunder / enum-internal (``_member_map_``, ...)
+                continue
+            return name  # a user method / property / class var
     return None
 
 
@@ -535,7 +575,10 @@ def final_scalar_key(value: Any) -> Any:
         return (_ENUM_KEY_TAG, cls.__module__, cls.__qualname__, value.name, final_scalar_key(value.value))
     if isinstance(value, np.floating):
         # ``dtype.str`` (e.g. ``"<f4"``) + ``tobytes()`` preserves sign bit, NaN payload and width, and stays in the
-        # same tagged space as the builtin-float branch so it can never equal a bare int / str key component.
+        # same tagged space as the builtin-float branch so it can never equal a bare int / str key component. An
+        # exact NumPy float is a pure value; a *user subclass* carrying state/behavior is rejected here (this
+        # branch precedes the generic one, which is where builtin/int/str subclasses hit the same check).
+        _reject_stateful_primitive_subclass(value)
         return (_FLOAT_KEY_TAG, value.dtype.str, value.tobytes())
     if isinstance(value, float):
         # A ``float`` subclass (the exact builtin ``float`` took the fast path above). Bit-encode like a plain float

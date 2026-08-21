@@ -3914,6 +3914,23 @@ def test_final_scalar_key_distinguishes_signed_zero_and_nan_payloads():
     assert final_scalar_key(np.float64(0.0)) != final_scalar_key(np.float64(-0.0))
     assert final_scalar_key(np.float32(1.0)) != final_scalar_key(np.float64(1.0))
 
+    # A *subclass* of a NumPy float takes the ``np.floating`` branch (which precedes the generic one), so it must
+    # run the same state/behavior rejection there: an exact NumPy scalar is a pure value, but a subclass carrying
+    # per-instance state (or class-level behavior) is not captured by dtype+bytes and must be rejected.
+    try:
+
+        class TaggedNPFloat(np.float64):
+            def __new__(cls, v, unit):
+                obj = super().__new__(cls, v)
+                obj.unit = unit
+                return obj
+
+    except TypeError:
+        pass  # some NumPy builds forbid subclassing this scalar; nothing to test then
+    else:
+        with pytest.raises(TypeError, match="extra per-instance state"):
+            final_scalar_key(TaggedNPFloat(1.0, "m"))
+
     # ``IntEnum`` / ``StrEnum`` members are ``==`` (with equal hashes) to their bare scalar value and to same-valued
     # members of other enum classes; keying on class + member identity must keep all of these distinct.
     import enum
@@ -4053,6 +4070,21 @@ def test_final_scalar_key_distinguishes_signed_zero_and_nan_payloads():
     assert type(lab_x.A).__qualname__ == type(lab_y.A).__qualname__  # same qualname, distinct classes/behavior
     with pytest.raises(TypeError, match="observable class-level behavior"):
         final_scalar_key(lab_x.A)
+
+    # An overridden operator dunder on the enum class is observable behavior too (``qd.static(cfg.mode == 1)``),
+    # and the enum machinery never injects e.g. ``__eq__`` into a user enum's own class dict, so it is rejected -
+    # unlike the structural ``__new__`` / ``__doc__`` the machinery does inject (which must stay accepted).
+    class EqEnum(enum.IntEnum):
+        A = 1
+
+        def __eq__(self, other):
+            return True
+
+        def __hash__(self):
+            return 0
+
+    with pytest.raises(TypeError, match="observable class-level behavior"):
+        final_scalar_key(EqEnum.A)
 
     # Enum classes rebuilt by a local factory share module+qualname and can have same-named members with different
     # values; the key includes the value so those stay distinct.
