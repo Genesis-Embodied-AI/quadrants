@@ -222,9 +222,6 @@ def stringify_obj_type(
         return f"enum-{obj.name}-{obj.value}"
     if obj is None:
         # ``None`` is a singleton, so its type fully determines its value and a constant tag is a complete cache key.
-        # This keeps an absent optional argument (a ``qd.Tensor`` or ``qd.template()`` slot passed ``None``) eligible
-        # for fast cache; without it ``None`` reaches the PARAM_INVALID catch-all below and disables fast cache for the
-        # whole call.
         return "None"
     _mark_should_warn()
     # The bit in caps should not be modified without updating corresponding test
