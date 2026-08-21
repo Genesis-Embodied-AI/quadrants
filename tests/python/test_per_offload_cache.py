@@ -9,8 +9,10 @@ later construct consumes, a local a later construct reads that a `@qd.real_func`
 external / bitcode call wrote to, a non-recomputable producer a later construct would clone (an effectful one such as a
 global atomic, a non-deterministic `qd.random()`, or a `qd.volatile_load()`), or a serial field load that a later
 construct would recompute after an intervening effect (a store, atomic, or sparse activate/deactivate) mutated global
-state. It also declines the split (as a diagnostic) when `QD_DUMP_CFG` / `QD_DUMP_IR` ask for whole-kernel diagnostic
-dumps. This PR ships the split WITHOUT a reuse tier, so it recompiles every construct on every compile; the reuse (a
+state. It also declines the split when `QD_DUMP_CFG` asks for a whole-kernel CFG dump (cfg_optimization, a pre-existing
+pass, forces the whole-kernel path under it); `QD_DUMP_IR` / `QD_DUMP_SIMPLIFY` / `print_ir` are observation-only and
+keep the split active, emitting their output per construct. This PR ships the split WITHOUT a reuse tier, so it
+recompiles every construct on every compile; the reuse (a
 disk manifest keyed by a stable per-construct cache key) is added by the cross-process cache PR.
 
 These tests assert the split's STRUCTURE and CORRECTNESS, not reuse:
@@ -23,7 +25,10 @@ Counts are exposed as `kernel._primal.per_offload_cache_observations`. `offline_
 whole-kernel cache never short-circuits codegen and the split always runs on the (cold) compile.
 """
 
+import glob
 import os
+import shutil
+import tempfile
 
 import numpy as np
 import pytest
@@ -32,6 +37,11 @@ import quadrants as qd
 from quadrants.lang.util import has_clangpp
 
 from tests import test_utils
+
+# Dedicated IR-dump directories for the observation-only diagnostic tests below, so their assertions don't race the
+# default /tmp/ir shared with other runs. Each test clears its own directory at the start of every arch run.
+_IR_DUMP_DIR = os.path.join(tempfile.gettempdir(), "qd_test_per_construct_dump_ir")
+_SIMPLIFY_DUMP_DIR = os.path.join(tempfile.gettempdir(), "qd_test_per_construct_dump_simplify")
 
 # Kernel coverage (QD_KERNEL_COVERAGE=1) rewrites every kernel with per-line probe stores to a global coverage field,
 # which adds top-level global-write constructs (changing the split's construct partition) and makes the split fall back
@@ -401,11 +411,12 @@ def test_per_construct_frontend_split_fallback_dump_cfg(monkeypatch) -> None:
     assert np.allclose(arr.to_numpy(), _C[0] + _C[1], atol=1.0), arr.to_numpy()
 
 
-@test_utils.test(arch=[qd.cpu, qd.cuda], offline_cache=False)
-def test_per_construct_frontend_split_fallback_dump_ir(monkeypatch) -> None:
-    # `QD_DUMP_IR=1` is documented to write a whole-kernel IR snapshot before/after each simplify stage. The split runs
-    # simplify per construct and would dump into the same phase filenames, so it must decline the split in this
-    # diagnostic mode even for an otherwise split-eligible kernel.
+@test_utils.test(arch=[qd.cpu, qd.cuda], offline_cache=False, debug_dump_path=_IR_DUMP_DIR)
+def test_per_construct_frontend_split_dump_ir_observation_only(monkeypatch) -> None:
+    # `QD_DUMP_IR=1` is observation-only under the split: rather than declining, the split still runs and dumps each
+    # construct's IR to `<kernel>_construct<i>_<stage>.ll`, so the snapshots reflect what was actually compiled.
+    if os.path.isdir(_IR_DUMP_DIR):
+        shutil.rmtree(_IR_DUMP_DIR)
     monkeypatch.setenv("QD_DUMP_IR", "1")
 
     @qd.kernel
@@ -419,7 +430,60 @@ def test_per_construct_frontend_split_fallback_dump_ir(monkeypatch) -> None:
     kernel_ir(arr)
 
     obs = kernel_ir._primal.per_offload_cache_observations
-    assert obs.frontend_constructs_total == -1, obs
+    # The diagnostic did NOT disable the split; it ran and enumerated both constructs.
+    assert obs.frontend_constructs_total == 2, obs
+    # One per-construct IR snapshot per construct was written, so the dump reflects the split rather than a synthetic
+    # whole-kernel view.
+    per_construct_dumps = glob.glob(os.path.join(_IR_DUMP_DIR, "*_construct*_after_simplify_I.ll"))
+    listing = sorted(os.listdir(_IR_DUMP_DIR)) if os.path.isdir(_IR_DUMP_DIR) else "<no dump dir>"
+    assert len(per_construct_dumps) >= 2, listing
+
+    assert np.allclose(arr.to_numpy(), _C[0] + _C[1], atol=1.0), arr.to_numpy()
+
+
+@test_utils.test(arch=[qd.cpu, qd.cuda], offline_cache=False, debug_dump_path=_SIMPLIFY_DUMP_DIR)
+def test_per_construct_frontend_split_dump_simplify_observation_only(monkeypatch) -> None:
+    # `QD_DUMP_SIMPLIFY=1` is observation-only under the split too: simplify.cpp keys its dump filenames off a global
+    # call counter, so each construct's simplify passes already land in distinct files. The split keeps running.
+    if os.path.isdir(_SIMPLIFY_DUMP_DIR):
+        shutil.rmtree(_SIMPLIFY_DUMP_DIR)
+    monkeypatch.setenv("QD_DUMP_SIMPLIFY", "1")
+
+    @qd.kernel
+    def kernel_simplify(x: qd.types.ndarray()) -> None:
+        for i in range(_N):
+            x[i] += _C[0]
+        for i in range(_N):
+            x[i] += _C[1]
+
+    arr = qd.ndarray(qd.f32, shape=(_N,))
+    kernel_simplify(arr)
+
+    obs = kernel_simplify._primal.per_offload_cache_observations
+    assert obs.frontend_constructs_total == 2, obs
+    simplify_dumps = glob.glob(os.path.join(_SIMPLIFY_DUMP_DIR, "*.ir"))
+    listing = sorted(os.listdir(_SIMPLIFY_DUMP_DIR)) if os.path.isdir(_SIMPLIFY_DUMP_DIR) else "<no dump dir>"
+    assert len(simplify_dumps) >= 2, listing
+
+    assert np.allclose(arr.to_numpy(), _C[0] + _C[1], atol=1.0), arr.to_numpy()
+
+
+@test_utils.test(arch=[qd.cpu, qd.cuda], offline_cache=False, print_ir=True)
+def test_per_construct_frontend_split_print_ir_observation_only() -> None:
+    # `qd.init(print_ir=True)` is observation-only under the split: each construct's passes print (under a per-construct
+    # banner) instead of the split declining. Assert the split still ran (the console output is per construct).
+    @qd.kernel
+    def kernel_print(x: qd.types.ndarray()) -> None:
+        for i in range(_N):
+            x[i] += _C[0]
+        for i in range(_N):
+            x[i] += _C[1]
+
+    arr = qd.ndarray(qd.f32, shape=(_N,))
+    kernel_print(arr)
+
+    obs = kernel_print._primal.per_offload_cache_observations
+    assert obs.frontend_constructs_total == 2, obs
 
     assert np.allclose(arr.to_numpy(), _C[0] + _C[1], atol=1.0), arr.to_numpy()
 

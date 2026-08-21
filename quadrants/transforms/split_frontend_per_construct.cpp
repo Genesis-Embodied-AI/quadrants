@@ -20,7 +20,10 @@
 #include "quadrants/program/per_construct_cache.h"
 
 #include <cstdlib>
+#include <filesystem>
+#include <fstream>
 #include <functional>
+#include <iostream>
 #include <memory>
 #include <mutex>
 #include <set>
@@ -199,13 +202,40 @@ std::unique_ptr<Block> clone_block_subset(Block *block, const std::vector<int> &
 // and simplify_III, in the same order, so a per-construct compile produces the same tasks the whole-kernel path would
 // for that construct. `cb` is a construct already isolated + recomputed (other constructs dropped, shared defs DIE'd)
 // by `split_frontend_per_construct`.
-void run_construct_frontend(IRNode *cb, const CompileConfig &config, const Kernel *kernel, bool verbose) {
+void run_construct_frontend(IRNode *cb,
+                            const CompileConfig &config,
+                            const Kernel *kernel,
+                            bool verbose,
+                            int construct_index) {
   const std::string &name = kernel->get_name();
+  // print_ir / QD_DUMP_IR are observation-only under the split: instead of forcing the whole-kernel path, we let the
+  // split run and make its console prints / IR dumps reflect what was actually compiled -- one set per construct.
+  // print_ir already flows through `verbose` into each pass printer below; this banner just labels whose IR follows.
+  if (verbose)
+    std::cout << "[per-construct frontend split] " << name << " construct " << construct_index << std::endl;
+  // QD_DUMP_IR: dump this construct's IR to <kernel>_construct<i>_<stage>.ll, the per-construct counterpart of the
+  // whole-kernel snapshots compile_to_offloads.cpp writes. The construct index keeps constructs from colliding on one
+  // filename. No-op unless QD_DUMP_IR=1.
+  const char *dump_ir_env = std::getenv(DUMP_IR_ENV.data());
+  const bool dump_ir = dump_ir_env != nullptr && std::string(dump_ir_env) == "1";
+  auto dump_stage = [&](const std::string &stage) {
+    if (!dump_ir)
+      return;
+    std::filesystem::path dir = config.debug_dump_path;
+    std::filesystem::create_directories(dir);
+    std::filesystem::path filename = dir / (name + "_construct" + std::to_string(construct_index) + "_" + stage + ".ll");
+    std::string ir_str;
+    irpass::print(cb, &ir_str);
+    std::ofstream ofs(filename.string());
+    if (ofs.good())
+      ofs << ir_str;
+  };
   // Mirror the whole-kernel path's `verify_if_debug` after each stage (compile_to_offloads.cpp). It is a no-op unless
   // config.debug, so it is free in release builds; under debug=True it keeps the per-construct path catching malformed
   // IR at the responsible pass instead of letting it slip through to codegen.
   irpass::full_simplify(cb, config, {false, /*autodiff_enabled*/ false, name, verbose, "simplify_I"});
   irpass::analysis::verify_if_debug(cb, config);
+  dump_stage("after_simplify_I");
   irpass::handle_external_ptr_boundary(cb, config);
   if (config.check_out_of_bound) {
     irpass::check_out_of_bound(cb, config, {name});
@@ -225,6 +255,7 @@ void run_construct_frontend(IRNode *cb, const CompileConfig &config, const Kerne
   irpass::flag_access(cb);
   irpass::full_simplify(cb, config, {false, /*autodiff_enabled*/ false, name, verbose, "simplify_III"});
   irpass::analysis::verify_if_debug(cb, config);
+  dump_stage("after_offload");
 }
 
 bool block_has_mesh_for(Block *block) {
@@ -612,7 +643,7 @@ void split_frontend_per_construct(IRNode *ir, const CompileConfig &config, const
     // Run the full per-construct frontend on the isolated construct and take its produced tasks. This PR ships the
     // split with NO reuse tier, so every construct is recompiled here; the cross-process manifest PR keys this output
     // (by a stable per-construct cache key it introduces) and reuses an unchanged construct's tasks instead.
-    run_construct_frontend(cb, config, kernel, verbose);
+    run_construct_frontend(cb, config, kernel, verbose, /*construct_index=*/n_constructs - 1);
     n_recompiled++;
     while (!cb->statements.empty())
       tasks.push_back(cb->extract(0));
@@ -645,20 +676,19 @@ bool maybe_split_frontend_per_construct(IRNode *ir,
     const char *v = std::getenv(env.data());
     return v != nullptr && std::string(v) == "1";
   };
-  // QD_DUMP_CFG, QD_DUMP_IR and QD_DUMP_SIMPLIFY are whole-kernel diagnostics: QD_DUMP_CFG dumps the whole-kernel CFG
-  // (`cfg_optimization` forces the whole-kernel path for it), QD_DUMP_IR writes a snapshot before/after each simplify
-  // stage, and QD_DUMP_SIMPLIFY (simplify.cpp) writes a snapshot after every pass inside each full_simplify loop. The
-  // split runs those stages per construct on a per-construct block, so every snapshot shows only one isolated construct
-  // and no dump captures the complete kernel being transformed -- the documented whole-kernel diagnostic
-  // (docs/source/user_guide/optimization_passes.md) is lost. Fall back so all three produce their whole-kernel output.
-  if (env_is_enabled(DUMP_CFG_ENV) || env_is_enabled(DUMP_IR_ENV) || env_is_enabled(DUMP_SIMPLIFY_ENV))
-    return false;
-  // qd.init(print_ir=True) (surfaced here as `verbose`, see codegen_llvm.cpp) prints a whole-kernel IR snapshot
-  // before/after every pipeline stage via make_pass_printer + full_simplify's per-stage prints. The split runs those
-  // stages per construct, so print_ir would emit one isolated construct per snapshot instead of the documented
-  // whole-kernel console dump (docs/source/user_guide/optimization_passes.md). Fall back so print_ir stays the
-  // whole-kernel counterpart of the pipeline-stage dumps.
-  if (verbose || config.print_ir)
+  // QD_DUMP_CFG still forces the whole-kernel path. Unlike the other dump flags it is NOT observation-only under the
+  // split: cfg_optimization (a pre-existing pass, not touched by this PR) both changes its own scope under QD_DUMP_CFG
+  // (dumping the whole-kernel CFG instead of the per-task CFGs a normal build uses) and names its dump files by phase,
+  // not construct -- so running the split under it would collide every construct's CFG into one filename. Making
+  // QD_DUMP_CFG observation-only means reworking cfg_optimization, which is deferred to a separate PR; until then keep
+  // the whole-kernel fallback for it so its dump matches the whole graph.
+  //
+  // QD_DUMP_IR, QD_DUMP_SIMPLIFY and print_ir, by contrast, are observation-only: the split still runs and their output
+  // is emitted PER CONSTRUCT, reflecting what the split actually compiled rather than perturbing it. QD_DUMP_IR ->
+  // run_construct_frontend writes <kernel>_construct<i>_*.ll; QD_DUMP_SIMPLIFY -> simplify.cpp keys its filenames off a
+  // global call counter, so each construct's passes already land in distinct files; print_ir -> each construct's pass
+  // printer prints under a per-construct banner. See docs/source/user_guide/optimization_passes.md.
+  if (env_is_enabled(DUMP_CFG_ENV))
     return false;
   // QD_KERNEL_COVERAGE (python/quadrants/lang/_kernel_coverage.py) rewrites every kernel to store a probe into a global
   // coverage field before each source line. Those probe stores add top-level global-write constructs (so the partition
