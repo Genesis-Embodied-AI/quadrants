@@ -11,8 +11,6 @@
 #include "quadrants/util/lang_util.h"
 #include "quadrants/codegen/ir_dump.h"
 #include <fstream>
-#include <unordered_map>
-#include <unordered_set>
 #include <string>
 
 namespace quadrants::lang {

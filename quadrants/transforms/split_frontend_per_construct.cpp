@@ -24,6 +24,7 @@
 #include <mutex>
 #include <set>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -232,21 +233,19 @@ TopLevelSegments segment_top_level(Block *block) {
   return segs;
 }
 
-// The local (alloca) a statement writes, or nullptr if it writes no local. Covers the three ways the frontend writes a
-// function-scope variable: a `LocalStoreStmt`, an `AtomicOpStmt`, and -- easy to miss -- a `qd.append`
-// (`SNodeOpStmt::allocate`), which writes the returned dynamic-node index through its `val` alloca WITHOUT a separate
-// `LocalStoreStmt`. If the append is not counted as a writer, a consuming construct's backward slice pulls a bare
-// zero-initialized alloca (reads 0 instead of the real index) and the effectful-producer gate never sees the append to
-// force a fallback.
-Stmt *stmt_local_write_dest(Stmt *s) {
-  if (auto *st = s->cast<LocalStoreStmt>())
-    return st->dest;
-  if (auto *at = s->cast<AtomicOpStmt>())
-    return at->dest;
-  if (auto *sn = s->cast<SNodeOpStmt>())
-    if (sn->op_type == SNodeOpType::allocate)
-      return sn->val;
-  return nullptr;
+// The locals (allocas) a statement writes. Reads the shared `Store` trait (`get_store_destination`) so it covers EVERY
+// way the frontend mutates a function-scope variable without enumerating statement types: a `LocalStoreStmt`, an
+// `AtomicOpStmt`, a `qd.append` (`SNodeOpStmt::allocate`, which writes the returned index into its `val` alloca WITHOUT
+// a `LocalStoreStmt`), and a `@qd.real_func` call that mutates a local through a `qd.ref` argument (`FuncCallStmt`).
+// Non-local destinations (global pointers, ndarrays, snode roots) resolve to nullptr and are dropped. Missing any of
+// these would let a consuming construct's backward slice keep a bare zero-initialized alloca (reading the stale value)
+// while the effectful-producer gate never sees the writer to force a fallback.
+std::vector<Stmt *> stmt_local_write_allocas(Stmt *s) {
+  std::vector<Stmt *> out;
+  for (Stmt *dest : irpass::analysis::get_store_destination(s))
+    if (Stmt *a = resolve_local_alloca(dest))
+      out.push_back(a);
+  return out;
 }
 
 // Top-level writers of each local variable, for the backward slice. A `LocalLoadStmt`'s only operand is the alloca (or
@@ -259,10 +258,7 @@ std::unordered_map<Stmt *, std::vector<Stmt *>> gather_top_level_alloca_writers(
   const int n = (int)block->statements.size();
   for (int j = 0; j < n; j++) {
     Stmt *s = block->statements[j].get();
-    Stmt *dest = stmt_local_write_dest(s);
-    if (dest == nullptr)
-      continue;
-    if (Stmt *a = resolve_local_alloca(dest))
+    for (Stmt *a : stmt_local_write_allocas(s))
       alloca_writers[a].push_back(s);
   }
   return alloca_writers;
@@ -346,37 +342,32 @@ bool split_is_recompute_safe(Block *block) {
   if (block == nullptr)
     return false;
 
-  // (1) Loop-carried locals. `SNodeOpStmt::allocate` (a `qd.append`) is a local writer too -- it stores the returned
-  // index into its `val` alloca -- so an append nested in a loop whose result another construct reads must be caught
-  // here as well.
+  // (1) Loop-carried locals. Writes are taken from the shared `Store` trait (`stmt_local_write_allocas`), so besides
+  // `LocalStoreStmt` this also catches a `qd.append` (`SNodeOpStmt::allocate`, writing its `val` alloca) and a
+  // `@qd.real_func` mutating a local through a `qd.ref` argument (`FuncCallStmt`) nested in a loop whose result another
+  // construct reads. An `AtomicOpStmt` (read-modify-write) and a `FuncCallStmt` ref argument (in/out) also READ the
+  // local they write.
   auto accesses = irpass::analysis::gather_statements(block, [](Stmt *s) {
-    return s->is<LocalLoadStmt>() || s->is<LocalStoreStmt>() || s->is<AtomicOpStmt>() ||
-           (s->is<SNodeOpStmt>() && s->as<SNodeOpStmt>()->op_type == SNodeOpType::allocate);
+    return s->is<LocalLoadStmt>() || s->is<LocalStoreStmt>() || s->is<AtomicOpStmt>() || s->is<SNodeOpStmt>() ||
+           s->is<FuncCallStmt>();
   });
   std::unordered_map<Stmt *, std::set<Stmt *>> read_owners;        // alloca -> top-level constructs that read it
   std::unordered_map<Stmt *, std::set<Stmt *>> loop_write_owners;  // alloca -> constructs that write it inside a loop
   for (Stmt *acc : accesses) {
-    Stmt *read_ptr = nullptr;
-    Stmt *write_ptr = nullptr;
-    if (auto *ld = acc->cast<LocalLoadStmt>()) {
-      read_ptr = ld->src;
-    } else if (auto *st = acc->cast<LocalStoreStmt>()) {
-      write_ptr = st->dest;
-    } else if (auto *at = acc->cast<AtomicOpStmt>()) {
-      read_ptr = at->dest;  // atomic read-modify-write counts as both a read and a write of dest
-      write_ptr = at->dest;
-    } else if (auto *sn = acc->cast<SNodeOpStmt>()) {
-      write_ptr = sn->val;  // append writes the returned index into `val`
-    }
     bool inside_container = false;
     Stmt *owner = top_level_owner(acc, block, &inside_container);
     if (owner == nullptr)
       continue;
-    if (Stmt *a = resolve_local_alloca(read_ptr))
-      read_owners[a].insert(owner);
-    if (Stmt *a = resolve_local_alloca(write_ptr)) {
+    auto writes = stmt_local_write_allocas(acc);
+    for (Stmt *a : writes)
       if (inside_container)
         loop_write_owners[a].insert(owner);
+    if (auto *ld = acc->cast<LocalLoadStmt>()) {
+      if (Stmt *a = resolve_local_alloca(ld->src))
+        read_owners[a].insert(owner);
+    } else if (acc->is<AtomicOpStmt>() || acc->is<FuncCallStmt>()) {
+      for (Stmt *a : writes)  // atomic rmw / `qd.ref` in-out arg reads the same local it writes
+        read_owners[a].insert(owner);
     }
   }
   for (auto &kv : loop_write_owners) {
@@ -523,10 +514,16 @@ bool maybe_split_frontend_per_construct(IRNode *ir,
   auto *block = ir->cast<Block>();
   if (block == nullptr)
     return false;
-  // QD_DUMP_CFG is documented to dump the WHOLE-kernel CFG (`cfg_optimization` forces the whole-kernel path for it).
-  // Splitting would instead build and dump a CFG per construct into the same phase filename, so later constructs
-  // overwrite earlier ones and only a partial graph survives. Fall back so the documented whole-kernel dump is produced.
-  if (const char *dump_cfg = std::getenv(DUMP_CFG_ENV.data()); dump_cfg != nullptr && std::string(dump_cfg) == "1")
+  // QD_DUMP_CFG and QD_DUMP_IR are whole-kernel diagnostics: QD_DUMP_CFG dumps the whole-kernel CFG (`cfg_optimization`
+  // forces the whole-kernel path for it) and QD_DUMP_IR writes a snapshot before/after each simplify stage. The split
+  // would run those stages per construct and dump into the same phase filenames, so later constructs overwrite earlier
+  // ones and only a partial graph / a subset of the documented snapshots survives. Fall back so both diagnostics produce
+  // their documented whole-kernel output.
+  auto dump_env_set = [](std::string_view env) {
+    const char *v = std::getenv(env.data());
+    return v != nullptr && std::string(v) == "1";
+  };
+  if (dump_env_set(DUMP_CFG_ENV) || dump_env_set(DUMP_IR_ENV))
     return false;
   if (block_has_mesh_for(block))
     return false;

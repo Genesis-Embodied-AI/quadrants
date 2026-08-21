@@ -5,10 +5,11 @@ instead of once over the whole kernel, isolating each construct by its backward 
 `transforms/split_frontend_per_construct.cpp`), and falls back to the whole-kernel path for kernels that are not
 recompute-safe: autodiff, mesh-for, a concurrently-executed region (`qd.stream_parallel()` / `qd.graph.parallel()`,
 whose constructs share one global-temp buffer), a loop-produced local shared across constructs, a `qd.append` index a
-later construct consumes, a non-recomputable producer a later construct would clone (an effectful one such as a global
-atomic, a non-deterministic `qd.random()`, or a `qd.volatile_load()`), or a serial field load that a later construct
-would recompute after an intervening effect (a store, atomic, or sparse activate/deactivate) mutated global state. It
-also declines the split (as a diagnostic) when `QD_DUMP_CFG` asks for a whole-kernel CFG dump. This PR ships the split
+later construct consumes, a local a later construct reads that a `@qd.real_func` mutated through a `qd.ref` argument, a
+non-recomputable producer a later construct would clone (an effectful one such as a global atomic, a non-deterministic
+`qd.random()`, or a `qd.volatile_load()`), or a serial field load that a later construct would recompute after an
+intervening effect (a store, atomic, or sparse activate/deactivate) mutated global state. It also declines the split
+(as a diagnostic) when `QD_DUMP_CFG` / `QD_DUMP_IR` ask for whole-kernel diagnostic dumps. This PR ships the split
 WITHOUT a reuse tier, so it recompiles every construct on every compile; the reuse (a disk manifest keyed by a stable
 per-construct cache key) is added by the cross-process cache PR.
 
@@ -385,6 +386,57 @@ def test_per_construct_frontend_split_fallback_dump_cfg(monkeypatch) -> None:
     assert obs.frontend_constructs_total == -1, obs
 
     assert np.allclose(arr.to_numpy(), _C[0] + _C[1], atol=1.0), arr.to_numpy()
+
+
+@test_utils.test(arch=[qd.cpu, qd.cuda], offline_cache=False)
+def test_per_construct_frontend_split_fallback_dump_ir(monkeypatch) -> None:
+    # `QD_DUMP_IR=1` is documented to write a whole-kernel IR snapshot before/after each simplify stage. The split runs
+    # simplify per construct and would dump into the same phase filenames, so it must decline the split in this
+    # diagnostic mode even for an otherwise split-eligible kernel.
+    monkeypatch.setenv("QD_DUMP_IR", "1")
+
+    @qd.kernel
+    def kernel_ir(x: qd.types.ndarray()) -> None:
+        for i in range(_N):
+            x[i] += _C[0]
+        for i in range(_N):
+            x[i] += _C[1]
+
+    arr = qd.ndarray(qd.f32, shape=(_N,))
+    kernel_ir(arr)
+
+    obs = kernel_ir._primal.per_offload_cache_observations
+    assert obs.frontend_constructs_total == -1, obs
+
+    assert np.allclose(arr.to_numpy(), _C[0] + _C[1], atol=1.0), arr.to_numpy()
+
+
+@test_utils.test(arch=[qd.cpu, qd.cuda], offline_cache=False)
+def test_per_construct_frontend_split_fallback_realfunc_ref_write() -> None:
+    # A `@qd.real_func` mutates a local through a `qd.ref` argument -- a `FuncCallStmt` writer, reported via the shared
+    # `get_store_destination` trait, not a `LocalStoreStmt`. A later loop reads that local. If the call is not tracked
+    # as a writer, the consumer's backward slice keeps only the earlier initialization and reads the stale value; since
+    # a real_func call is effectful, the split must fall back rather than clone the call into the consumer.
+    @qd.real_func
+    def assign_c0(a: qd.ref(qd.f32)):
+        a = _C[0]
+
+    @qd.kernel
+    def kernel_ref(out: qd.types.ndarray()) -> None:
+        a = 5.0
+        assign_c0(a)
+        for i in range(_N):
+            out[i] = a
+
+    out = qd.ndarray(qd.f32, shape=(_N,))
+    kernel_ref(out)
+
+    obs = kernel_ref._primal.per_offload_cache_observations
+    assert obs.frontend_constructs_total == -1, obs
+
+    # The real_func wrote _C[0] into `a` before the loop, so every out[i] must be _C[0] -- not the initial 5.0 a slice
+    # that dropped the FuncCallStmt writer would recompute.
+    assert np.allclose(out.to_numpy(), _C[0], atol=1.0), out.to_numpy()
 
 
 @test_utils.test(arch=[qd.cpu, qd.cuda], offline_cache=False)
