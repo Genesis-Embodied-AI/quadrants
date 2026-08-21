@@ -34,6 +34,13 @@ namespace cpu {
 class CpuDevice;
 }  // namespace cpu
 
+#if defined(QD_WITH_AMDGPU)
+// Declared in quadrants/rhi/amdgpu/amdgpu_driver.h. Forward-declared here (instead of pulling in
+// the RHI header) so pre_finalize() can open the teardown window before Program::finalize() runs
+// its teardown synchronize() calls on a possibly dead HIP context.
+void amdgpu_set_device_in_teardown(bool in_teardown);
+#endif
+
 class LlvmProgramImpl : public ProgramImpl {
  public:
   LlvmProgramImpl(CompileConfig &config, KernelProfilerBase *profiler);
@@ -106,6 +113,16 @@ class LlvmProgramImpl : public ProgramImpl {
   // user can still call `qd.sync()` explicitly before finalize to observe the raise.
   void pre_finalize() override {
     finalizing_ = true;
+#if defined(QD_WITH_AMDGPU)
+    // Program::finalize() issues two teardown synchronize() calls *before* runtime_exec_->finalize()
+    // sets this flag. A prior in-kernel assert leaves the HIP context dead, so those syncs would
+    // return hipErrorLaunchFailure and AMDGPUFunction::operator() would throw into the ~Program()
+    // path (std::terminate). Open the teardown window here so dead-context launch failures are
+    // swallowed during teardown; materialize_runtime() clears it again on the next init.
+    if (config->arch == Arch::amdgpu) {
+      amdgpu_set_device_in_teardown(true);
+    }
+#endif
   }
 
   void finalize() override {

@@ -103,6 +103,15 @@ struct PreallocatedMemoryChunk {
   std::size_t preallocated_size = 0;
 };
 
+// AMDGPU debug-only pinned assert mirror. Host allocates via hipHostMalloc(Coherent); device publishes
+// here before `__builtin_trap()` so the host can format QuadrantsAssertionError after the HIP context dies.
+// See `LLVMRuntime::assert_error_state_dev_ptr`.
+struct AmdgpuAssertErrorState {
+  i64 error_code;
+  char error_message_template[quadrants_error_message_max_length];
+  uint64 error_message_arguments[quadrants_error_message_max_num_arguments];
+};
+
 struct LLVMRuntime {
   PreallocatedMemoryChunk runtime_objects_chunk;
   PreallocatedMemoryChunk runtime_memory_chunk;
@@ -143,6 +152,10 @@ struct LLVMRuntime {
   uint64 error_message_arguments[quadrants_error_message_max_num_arguments];
   i32 error_message_lock = 0;
   i64 error_code = 0;
+  // AMDGPU debug-only: device-mapped pointer to pinned `AmdgpuAssertErrorState` (see struct doc above).
+  // nullptr on non-AMDGPU / non-debug; nullptr-guarded in `quadrants_assert_format`.
+  AmdgpuAssertErrorState *assert_error_state_dev_ptr = nullptr;
+
   // Dedicated overflow signal. Pointer to a 64-bit slot in pinned host memory (CUDA `cuMemAllocHost_v2`,
   // HIP `hipHostMalloc`; CPU plain malloc; on this struct stored as the device-mapped address obtained via
   // `cuMemHostGetDevicePointer` / HIP equivalent). The kernel-side `stack_push` writes via a system-wide

@@ -717,6 +717,21 @@ std::unique_ptr<llvm::Module> QuadrantsLLVMContext::module_from_file(const std::
       patch_fence("block_mem_fence", "workgroup");
       patch_fence("grid_mem_fence", "agent");
 
+      // System-scope fence for the AMDGPU in-kernel assert path: publish pinned assert state to the
+      // host before `__builtin_trap()`. Default LLVM syncscope is system (includes host memory).
+      {
+        auto func = module->getFunction("amdgpu_system_mem_fence");
+        if (func) {
+          func->deleteBody();
+          auto bb = llvm::BasicBlock::Create(*ctx, "entry", func);
+          IRBuilder<> builder(*ctx);
+          builder.SetInsertPoint(bb);
+          builder.CreateFence(llvm::AtomicOrdering::SequentiallyConsistent);
+          builder.CreateRetVoid();
+          QuadrantsLLVMContext::mark_inline(func);
+        }
+      }
+
       link_module_with_amdgpu_libdevice(module);
       patch_amdgpu_kernel_dim("block_dim", llvm::ConstantInt::get(llvm::Type::getInt32Ty(*ctx), 0));
       patch_amdgpu_kernel_dim("grid_dim", llvm::ConstantInt::get(llvm::Type::getInt32Ty(*ctx), 0));
