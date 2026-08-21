@@ -61,6 +61,36 @@ def test_per_construct_frontend_split_enumerates_all_constructs() -> None:
 
 
 @test_utils.test(arch=[qd.cpu, qd.cuda], offline_cache=False)
+def test_per_construct_frontend_split_observations_reset_on_cached_relaunch() -> None:
+    # `per_offload_cache_observations` is a single per-Kernel attribute describing the MOST RECENT compile. A relaunch
+    # served from a cached artifact runs no frontend split, so the counts must reset to the no-split sentinel (-1)
+    # instead of leaking the previous split's counts. This exercises the in-process compiled-kernel reuse path; the
+    # fastcache-restore path Codex flagged is the same code -- both hand `launch_kernel` a ready artifact and skip
+    # `prog.compile_kernel`, so the reset covers both.
+    @qd.kernel
+    def kernel_relaunch(x: qd.types.ndarray()) -> None:
+        for i in range(_N):
+            x[i] += _C[0]
+        for i in range(_N):
+            x[i] += _C[1]
+
+    arr = qd.ndarray(qd.f32, shape=(_N,))
+    kernel_relaunch(arr)
+
+    obs = kernel_relaunch._primal.per_offload_cache_observations
+    assert obs.frontend_constructs_total == 2, obs
+    assert obs.frontend_constructs_cache_hit == 0, obs
+
+    # Second launch reuses the compiled artifact (no split runs), so the observation reports the no-split sentinel
+    # rather than the 2 constructs the first compile recorded.
+    kernel_relaunch(arr)
+    obs = kernel_relaunch._primal.per_offload_cache_observations
+    assert obs.frontend_constructs_total == -1, obs
+
+    assert np.allclose(arr.to_numpy(), 2.0 * (_C[0] + _C[1]), atol=1.0), arr.to_numpy()
+
+
+@test_utils.test(arch=[qd.cpu, qd.cuda], offline_cache=False)
 def test_per_construct_frontend_split_correct_with_shared_serial_def() -> None:
     # A serial prologue defines `base`, consumed by two later loop constructs. The backward slice must recompute the
     # defining stores into each consuming construct (an operand-only slice would drop them and read zeros). Asserts the

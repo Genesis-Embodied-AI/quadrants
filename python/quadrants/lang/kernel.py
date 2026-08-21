@@ -741,6 +741,14 @@ class Kernel(FuncBase):
                         checkpoint_user_labels_by_cp_id=list(self.checkpoint_user_labels_by_cp_id),
                     )
                     self.src_ll_cache_observations.cache_stored = True
+            else:
+                # No frontend ran this launch: `compiled_kernel_data` was served from a cache -- either an
+                # already-compiled specialization on this Kernel object, or a fastcache restore
+                # (`_try_load_fastcache`) that supplies the artifact directly and bypasses `prog.compile_kernel`.
+                # Report the per-construct split's no-split sentinel (-1) rather than leaving a previous
+                # specialization's counts visible; this matches the C++ cache-hit path, which also reports -1 in
+                # `KernelCompilationManager::load_or_compile`.
+                self.per_offload_cache_observations = PerOffloadCacheObservations()
             self._last_compiled_kernel_data = compiled_kernel_data
             launch_ctx.use_graph = self.use_graph and _GRAPH_ENABLED
             if self.use_graph and qd_stream is not None:
