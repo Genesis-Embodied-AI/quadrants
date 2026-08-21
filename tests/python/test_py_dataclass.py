@@ -4261,6 +4261,48 @@ def test_final_scalar_key_distinguishes_signed_zero_and_nan_payloads():
 
 
 @test_utils.test()
+def test_final_scalar_key_live_preserves_class_identity_across_module_rebind():
+    """The in-process spec key (``live=True``) must distinguish two *distinct* class objects even when they
+    transiently share ``module``/``qualname`` - e.g. a module-level enum or primitive subclass redefined by a module
+    reload, each resolvable to its own definition while bound. In the offline (``live=False``) form
+    ``final_scalar_key`` keys a resolvable class by ``module``/``qualname`` alone (process-stable, so it cannot tell
+    the rebinding apart - a safe cross-process strategy, never a wrong reuse), but the in-process key embeds the live
+    class object so a second launch with the fresh class does not reuse the kernel baked for the first
+    (``cfg.x.__class__ is SavedOldClass`` is observable at compile time)."""
+    import sys
+    import types
+
+    from quadrants.lang._final_dataclass_fields import final_scalar_key
+
+    mod_name = "qd_reload_identity_probe"
+    mod = types.ModuleType(mod_name)
+    sys.modules[mod_name] = mod
+    try:
+        # Bind a class so it is uniquely resolvable via ``module``/``qualname`` (offline id component is None).
+        old = type("Foo", (int,), {"__module__": mod_name, "__qualname__": "Foo"})
+        mod.Foo = old
+        old_offline = final_scalar_key(old(1))
+        old_live = final_scalar_key(old(1), live=True)
+
+        # "Reload": rebind the same name to a fresh, equally resolvable class object.
+        new = type("Foo", (int,), {"__module__": mod_name, "__qualname__": "Foo"})
+        mod.Foo = new
+        new_offline = final_scalar_key(new(1))
+        new_live = final_scalar_key(new(1), live=True)
+
+        assert old is not new
+        # Offline: both resolvable while bound, so both carry a None id component and collide. That is the safe,
+        # process-stable strategy - it only fails to distinguish a (rare) reload, and never causes a wrong reuse.
+        assert old_offline == new_offline
+        # In-process: the live class object keeps the two distinct classes apart.
+        assert old_live != new_live
+        # Same class -> stable in-process key across launches, so legitimate kernel reuse is preserved.
+        assert final_scalar_key(old(1), live=True) == old_live
+    finally:
+        del sys.modules[mod_name]
+
+
+@test_utils.test()
 def test_final_float_signed_zero_keys_distinct_kernels():
     """``-0.0`` and ``0.0`` are equal under Python ``==``/``hash`` but name different baked constants (the sign
     bit is observable). Encoding Final floats by their IEEE bits keeps them as distinct entries in the template
