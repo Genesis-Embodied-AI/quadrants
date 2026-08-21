@@ -587,18 +587,25 @@ def _dunder_copied_from_base(klass: type, name: str, value: Any) -> bool:
 
 def _enum_class_behavior_attr(enum_cls: type) -> "str | None":
     """Return the name of a user-defined class-level attribute (method / property / class var / operator dunder) on
-    ``enum_cls`` or one of its user-authored enum bases, or None. ``module``/``qualname``/member-name/value do not
-    uniquely identify a dynamically created enum class, so two same-named factory enums whose ``label`` property
-    closes over different strings (or whose ``__eq__`` differs) key identically while
-    ``qd.static(cfg.mode.label == "x")`` / ``qd.static(cfg.mode == 1)`` differ. Members and the enum-generated
+    ``enum_cls`` or one of its user-authored bases - *including a non-enum mixin* - or None.
+    ``module``/``qualname``/member-name/value do not uniquely identify a dynamically created enum class, so two
+    same-named factory enums whose ``label`` property closes over different strings (or whose ``__eq__`` differs) key
+    identically while ``qd.static(cfg.mode.label == "x")`` / ``qd.static(cfg.mode == 1)`` differ. The same holds for
+    behavior inherited from a non-enum mixin (``class Mode(Labels, enum.Enum)`` with ``Labels.label``): it is observable
+    as ``cfg.mode.label`` yet absent from the key, so it must be inspected too. Members and the enum-generated
     structural attrs (``_x_`` bookkeeping, ``__new__`` / ``__doc__`` / ``__module__`` / ``__qualname__``) are
     skipped, as are observable dunders the enum machinery merely copies from a base (Python >=3.11, see
     ``_dunder_copied_from_base``); any remaining member - a non-dunder attribute or a genuinely overridden observable
     operator dunder - is user behavior.
     """
     for klass in enum_cls.__mro__:
-        if not (isinstance(klass, type) and issubclass(klass, enum.Enum)) or klass in _FRAMEWORK_ENUM_CLASSES:
-            continue  # skip the mixed-in primitive / ``object`` and the library's own enum base classes
+        # Skip the mixed-in primitive data type (``int``/``str``/... - a baked base), ``object`` / a NumPy base, and
+        # the library's own enum base classes; their attributes are framework internals, not user behavior. Every
+        # *user-authored* base is inspected whether or not it is itself an ``Enum``: a non-enum mixin can add
+        # observable behavior/state (``cfg.mode.label``) that two same-named factory mixins could define differently,
+        # exactly like an attribute on the enum class.
+        if _is_baked_base_type(klass) or klass in _FRAMEWORK_ENUM_CLASSES:
+            continue
         for name, member in vars(klass).items():
             if isinstance(member, enum.Enum):  # an enum member or alias defined on the class
                 continue

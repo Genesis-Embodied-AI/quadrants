@@ -4131,6 +4131,23 @@ def test_final_scalar_key_distinguishes_signed_zero_and_nan_payloads():
     with pytest.raises(TypeError, match="observable class-level behavior"):
         final_scalar_key(EqEnum.A)
 
+    # An enum can also inherit observable behavior/state from a *non-enum* mixin (``class Mode(Labels, enum.Enum)``).
+    # ``cfg.mode.label`` is then observable at compile time but absent from the key (which records only
+    # class/name/value), so mutating ``Labels.label`` after compilation would reuse a stale kernel - and two
+    # same-named factory mixins could define ``label`` differently. The class-behavior scan must inspect user mixins,
+    # not only ``Enum`` bases, so such an enum is rejected while a plain enum (with only a builtin data-type mixin like
+    # ``int``) is still accepted.
+    class Labels:
+        label = "x"
+
+    class MixinMode(Labels, enum.Enum):
+        A = 1
+        B = 2
+
+    assert MixinMode.A.label == "x"  # observable via cfg.mode.label, not captured by the key
+    with pytest.raises(TypeError, match="observable class-level behavior"):
+        final_scalar_key(MixinMode.A)
+
     # Enum classes rebuilt by a local factory share module+qualname and can have same-named members with different
     # values; the key includes the value so those stay distinct.
     def _make_int_enum(v):
