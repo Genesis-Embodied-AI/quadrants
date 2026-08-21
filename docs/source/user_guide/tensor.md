@@ -87,7 +87,7 @@ Gradient buffers always share the canonical shape of the primal, on both backend
 
 ## Controlling physical layout
 
-Tweaking the memory layout on a per-tensor basis is commonly used to improve runtime performance. In practice, tuning axis order is sufficient in most cases. For advanced users seeking finer-grained control over the memory layout, see the SNode API (`qd.root`).
+Tweaking the memory layout on a per-tensor basis is commonly used to improve runtime performance. In practice, tuning axis order is sufficient in most cases. For advanced users seeking finer-grained control over the memory layout, see the SNode API (`qd.root`), the lower-level interface for describing how a tensor's storage is hierarchically nested in memory (an SNode is one level of that nesting).
 
 The `layout=` keyword lets you pick per-tensor:
 
