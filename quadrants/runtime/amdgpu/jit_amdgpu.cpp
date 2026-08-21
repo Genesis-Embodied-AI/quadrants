@@ -31,6 +31,27 @@ std::string JITSessionAMDGPU::compile_module_to_hsaco(std::unique_ptr<llvm::Modu
     function_pass_manager_addrcast.run(*func);
   function_pass_manager_addrcast.doFinalization();
 
+  // Apply amdgpu-ieee and amdgpu-dx10-clamp to ALL functions, not just
+  // AMDGPU_KERNEL entries. LLVM's inliner refuses to inline a callee into a
+  // caller when they carry mismatching target-specific attributes, so setting
+  // these on kernels only prevents internal runtime device functions (e.g.
+  // gpu_parallel_range_for and the body functions it dispatches) from being
+  // inlined into the kernel entry. Without that inlining, InferAddressSpaces
+  // cannot see the full pointer chain from kernel params to field data and
+  // cannot promote flat_load/flat_store/flat_atomic to global_*, which causes
+  // flat-atomic coherency issues and a throughput regression on gfx942
+  // (MI300X). Applying them uniformly keeps every function's attribute set
+  // consistent so inlining and address-space inference run as intended. The
+  // hasFnAttribute guard keeps each write idempotent.
+  for (auto &F : *llvm_module) {
+    if (!F.hasFnAttribute("amdgpu-ieee")) {
+      F.addFnAttr("amdgpu-ieee", "false");
+    }
+    if (!F.hasFnAttribute("amdgpu-dx10-clamp")) {
+      F.addFnAttr("amdgpu-dx10-clamp", "false");
+    }
+  }
+
   if (llvm::verifyModule(*llvm_module, &llvm::errs())) {
     llvm_module->print(llvm::errs(), nullptr);
     QD_WARN("Module broken");
