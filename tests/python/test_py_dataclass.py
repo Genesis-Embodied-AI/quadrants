@@ -4148,6 +4148,22 @@ def test_final_scalar_key_distinguishes_signed_zero_and_nan_payloads():
     with pytest.raises(TypeError, match="observable class-level behavior"):
         final_scalar_key(MixinMode.A)
 
+    # A user-defined enum *sunder hook* (``_missing_`` on any version; ``_repr_html_`` on 3.13+) is observable
+    # behavior on the baked member, but a blanket "skip every ``_x_`` name" would mistake it for enum bookkeeping.
+    # Only machinery-generated names are exempt (``_ENUM_GENERATED_CLASS_ATTRS``, computed from the running Python),
+    # so a user hook is rejected while a plain enum - whose only ``_x_`` names are machinery bookkeeping - is accepted.
+    class MissingHook(enum.Enum):
+        A = 1
+        B = 2
+
+        @classmethod
+        def _missing_(cls, value):
+            return cls.A
+
+    assert "_missing_" in vars(MissingHook)  # the user hook lands in the class's own dict, not merely inherited
+    with pytest.raises(TypeError, match="observable class-level behavior"):
+        final_scalar_key(MissingHook.A)
+
     # Enum classes rebuilt by a local factory share module+qualname and can have same-named members with different
     # values; the key includes the value so those stay distinct.
     def _make_int_enum(v):

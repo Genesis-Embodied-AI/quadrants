@@ -585,6 +585,62 @@ def _dunder_copied_from_base(klass: type, name: str, value: Any) -> bool:
     return False
 
 
+def _compute_enum_generated_class_attrs() -> "frozenset[str]":
+    """Names the class machinery (generic ``type`` + enum) puts in a *user* class's own ``__dict__``: generic
+    bookkeeping (``__doc__`` / ``__module__`` / ``__qualname__`` / ``__dict__`` / ``__weakref__``, and on Python 3.13+
+    ``__firstlineno__`` / ``__static_attributes__``) plus enum-generated bookkeeping (``_member_map_`` /
+    ``_value2member_map_`` / ``_generate_next_value_`` / ``__new__`` / version-specific ``_hashable_values_`` / ...).
+
+    Computed once by probing a plain class and each framework enum kind with real ``class`` syntax, so the set tracks
+    the *running* Python version rather than a hand-maintained list that silently drifts (3.13 added several dunders).
+    A sunder/dunder in a user enum's own dict that is NOT here is therefore a user-authored hook (``_missing_``,
+    ``_repr_html_`` on 3.13+, an overriding ``_numeric_repr_``, ...): observable behavior the Final key cannot capture,
+    so ``_enum_class_behavior_attr`` rejects it. (Machinery-copied *operator* dunders like ``IntFlag.__and__`` are
+    handled earlier via ``_OBSERVABLE_DUNDERS`` + ``_dunder_copied_from_base`` and never reach that check.)
+    """
+
+    class _Plain:
+        pass
+
+    class _E(enum.Enum):
+        A = 1
+        B = 2
+
+    class _IE(enum.IntEnum):
+        A = 1
+        B = 2
+
+    class _IF(enum.IntFlag):
+        A = 1
+        B = 2
+
+    probes: list = [_Plain, _E, _IE, _IF]
+    if hasattr(enum, "Flag"):
+
+        class _F(enum.Flag):
+            A = 1
+            B = 2
+
+        probes.append(_F)
+    if hasattr(enum, "StrEnum"):
+
+        class _SE(enum.StrEnum):
+            A = "a"
+            B = "b"
+
+        probes.append(_SE)
+
+    names: "set[str]" = set()
+    for probe in probes:
+        names.update(n for n, v in vars(probe).items() if not isinstance(v, enum.Enum))
+    return frozenset(names)
+
+
+# Sunder/dunder names the machinery itself puts in a user enum/class dict; anything else sunder/dunder in that dict is
+# a user hook (see ``_compute_enum_generated_class_attrs``). Computed once at import so it matches the running Python.
+_ENUM_GENERATED_CLASS_ATTRS = _compute_enum_generated_class_attrs()
+
+
 def _enum_class_behavior_attr(enum_cls: type) -> "str | None":
     """Return the name of a user-defined class-level attribute (method / property / class var / operator dunder) on
     ``enum_cls`` or one of its user-authored bases - *including a non-enum mixin* - or None.
@@ -592,11 +648,12 @@ def _enum_class_behavior_attr(enum_cls: type) -> "str | None":
     same-named factory enums whose ``label`` property closes over different strings (or whose ``__eq__`` differs) key
     identically while ``qd.static(cfg.mode.label == "x")`` / ``qd.static(cfg.mode == 1)`` differ. The same holds for
     behavior inherited from a non-enum mixin (``class Mode(Labels, enum.Enum)`` with ``Labels.label``): it is observable
-    as ``cfg.mode.label`` yet absent from the key, so it must be inspected too. Members and the enum-generated
-    structural attrs (``_x_`` bookkeeping, ``__new__`` / ``__doc__`` / ``__module__`` / ``__qualname__``) are
-    skipped, as are observable dunders the enum machinery merely copies from a base (Python >=3.11, see
-    ``_dunder_copied_from_base``); any remaining member - a non-dunder attribute or a genuinely overridden observable
-    operator dunder - is user behavior.
+    as ``cfg.mode.label`` yet absent from the key, so it must be inspected too. Members are skipped; observable dunders
+    the enum machinery merely copies from a base (Python >=3.11, see ``_dunder_copied_from_base``) are skipped; and
+    sunder/dunder names the machinery generates (``_member_map_`` / ``__new__`` / ``__doc__`` / 3.13's
+    ``__firstlineno__`` / ...) are skipped via ``_ENUM_GENERATED_CLASS_ATTRS``. Any remaining member - a plain
+    attribute (method / property / class var), a genuinely overridden observable operator dunder, or a *user-authored*
+    sunder/dunder hook (``_missing_`` / ``_repr_html_`` / an overriding ``_numeric_repr_``) - is user behavior.
     """
     for klass in enum_cls.__mro__:
         # Skip the mixed-in primitive data type (``int``/``str``/... - a baked base), ``object`` / a NumPy base, and
@@ -613,8 +670,10 @@ def _enum_class_behavior_attr(enum_cls: type) -> "str | None":
                 if _dunder_copied_from_base(klass, name, member):
                     continue  # enum machinery copied a base/data-type dunder (Python >=3.11), not a user override
                 return name  # a genuine user operator/behavior dunder override
-            if name.startswith("_") and name.endswith("_"):  # other dunder / enum-internal (``_member_map_``, ...)
-                continue
+            if name.startswith("_") and name.endswith("_"):
+                if name in _ENUM_GENERATED_CLASS_ATTRS:
+                    continue  # machinery/compiler bookkeeping (``_member_map_``, ``__new__``, 3.13 ``__firstlineno__``)
+                return name  # a user-authored sunder/dunder hook (``_missing_`` / ``_repr_html_`` / ...) - observable
             return name  # a user method / property / class var
     return None
 
