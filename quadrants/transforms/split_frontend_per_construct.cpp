@@ -635,12 +635,13 @@ bool maybe_split_frontend_per_construct(IRNode *ir,
     const char *v = std::getenv(env.data());
     return v != nullptr && std::string(v) == "1";
   };
-  // QD_DUMP_CFG and QD_DUMP_IR are whole-kernel diagnostics: QD_DUMP_CFG dumps the whole-kernel CFG (`cfg_optimization`
-  // forces the whole-kernel path for it) and QD_DUMP_IR writes a snapshot before/after each simplify stage. The split
-  // would run those stages per construct and dump into the same phase filenames, so later constructs overwrite earlier
-  // ones and only a partial graph / a subset of the documented snapshots survives. Fall back so both diagnostics
-  // produce their documented whole-kernel output.
-  if (env_is_enabled(DUMP_CFG_ENV) || env_is_enabled(DUMP_IR_ENV))
+  // QD_DUMP_CFG, QD_DUMP_IR and QD_DUMP_SIMPLIFY are whole-kernel diagnostics: QD_DUMP_CFG dumps the whole-kernel CFG
+  // (`cfg_optimization` forces the whole-kernel path for it), QD_DUMP_IR writes a snapshot before/after each simplify
+  // stage, and QD_DUMP_SIMPLIFY (simplify.cpp) writes a snapshot after every pass inside each full_simplify loop. The
+  // split runs those stages per construct on a per-construct block, so every snapshot shows only one isolated construct
+  // and no dump captures the complete kernel being transformed -- the documented whole-kernel diagnostic
+  // (docs/source/user_guide/optimization_passes.md) is lost. Fall back so all three produce their whole-kernel output.
+  if (env_is_enabled(DUMP_CFG_ENV) || env_is_enabled(DUMP_IR_ENV) || env_is_enabled(DUMP_SIMPLIFY_ENV))
     return false;
   // qd.init(print_ir=True) (surfaced here as `verbose`, see codegen_llvm.cpp) prints a whole-kernel IR snapshot
   // before/after every pipeline stage via make_pass_printer + full_simplify's per-stage prints. The split runs those
