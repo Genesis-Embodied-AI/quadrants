@@ -23,13 +23,20 @@ class ArgMetadata:
     Metadata about an argument to a function
     """
 
-    def __init__(self, annotation, name, default=inspect.Parameter.empty):
+    def __init__(self, annotation, name, default=inspect.Parameter.empty, optional=False):
         self.annotation = annotation
         self.name = name
         self.default = default
+        # True when the parameter was spelled ``T | None`` (or ``Optional[T]``). ``annotation`` holds the unwrapped
+        # ``T``; ``optional`` records that ``None`` is an accepted value for this slot. Consumed by the dual-nature
+        # ndarray slot handling (design.md W5); Tensor/Template slots already accept ``None`` regardless.
+        self.optional = optional
 
     def __repr__(self) -> str:
-        return f"{self.__class__.__name__}(annotation={self.annotation}, name={self.name}, default={self.default})"
+        return (
+            f"{self.__class__.__name__}(annotation={self.annotation}, name={self.name}, default={self.default}, "
+            f"optional={self.optional})"
+        )
 
 
 class SparseMatrixEntry:

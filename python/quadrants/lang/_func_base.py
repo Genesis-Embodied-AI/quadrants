@@ -167,6 +167,33 @@ def _get_frozen_dc_unwrapped(v: Any, fields_dict: dict) -> dict[str, Any]:
     return unwrapped
 
 
+_NoneType = type(None)
+
+
+def _split_optional(annotation):
+    """Normalize a kernel-arg annotation, unwrapping the optional (``T | None`` / ``Optional[T]``) form.
+
+    Returns ``(inner, optional)``. For a non-optional annotation this is ``(annotation, False)``. For the optional
+    form it is ``(T, True)`` with the ``None`` stripped, so the caller can run ``inner`` through the existing
+    per-family validation unchanged and separately record that the slot accepts ``None``.
+
+    The three annotation families reach this uniformly for the ``|`` spelling: ``qd.Tensor`` and ``qd.types.Template``
+    are classes, so ``T | None`` (and ``typing.Optional[T]``) build a real union; ``qd.types.NDArray[...]`` is an
+    instance whose ``__or__`` shim yields an ``_OptionalNdarray`` marker. See design.md W4 and quadrants#831.
+    """
+    if isinstance(annotation, ndarray_type._OptionalNdarray):
+        return annotation.inner, True
+    if isinstance(annotation, types.UnionType) or typing.get_origin(annotation) is typing.Union:
+        args = typing.get_args(annotation)
+        non_none = tuple(a for a in args if a is not _NoneType)
+        if _NoneType not in args or len(non_none) != 1:
+            raise QuadrantsSyntaxError(
+                f"Quadrants kernels only support optional annotations of the form 'T | None', got: {annotation}"
+            )
+        return non_none[0], True
+    return annotation, False
+
+
 class FuncBase:
     """
     Base class for Kernels and Funcs
@@ -240,12 +267,14 @@ class FuncBase:
             if param.kind != inspect.Parameter.POSITIONAL_OR_KEYWORD:
                 raise QuadrantsSyntaxError('Quadrants kernels only support "positional or keyword" parameters')
             annotation = param.annotation
+            optional = False
             if param.annotation is inspect.Parameter.empty:
                 if i == 0 and (self.is_classkernel or self.is_classfunc):  # The |self| parameter
                     annotation = template()
                 elif self.is_kernel or self.is_real_function:
                     raise QuadrantsSyntaxError("Quadrants kernels parameters must be type annotated")
             else:
+                annotation, optional = _split_optional(annotation)
                 annotation_type = type(annotation)
                 if annotation_type is ndarray_type.NdarrayType:
                     pass
@@ -282,8 +311,8 @@ class FuncBase:
                     raise QuadrantsSyntaxError(
                         f"Invalid type annotation (argument {i}) of Quadrants kernel: {annotation}"
                     )
-            self.arg_metas.append(ArgMetadata(annotation, param.name, param.default))
-            self.orig_arguments.append(ArgMetadata(annotation, param.name, param.default))
+            self.arg_metas.append(ArgMetadata(annotation, param.name, param.default, optional=optional))
+            self.orig_arguments.append(ArgMetadata(annotation, param.name, param.default, optional=optional))
 
         self.template_slot_locations: list[int] = []
         for i, arg in enumerate(self.arg_metas):
