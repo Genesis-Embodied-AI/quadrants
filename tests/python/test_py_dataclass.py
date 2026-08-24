@@ -4968,6 +4968,52 @@ def test_final_enum_rejects_user_added_enum_valued_class_attribute():
 
 
 @test_utils.test()
+def test_final_enum_key_incorporates_full_member_map():
+    """A baked ``Final`` enum member keys on the *entire* member map, not only the selected member: a kernel can read a
+    sibling at compile time (``cfg.mode.__class__.OTHER.value``), so changing another member's value must invalidate
+    the key. This matters most for a *resolvable* (module-level) enum, whose class-identity component is ``None`` (keyed
+    by ``module``/``qualname``): without the member map, redefining the module's enum with a different sibling value -
+    in-process, or in a separate ``fastcache`` process that otherwise only hashes kernel source - would reuse the stale
+    specialization. Identical definitions still key identically (legitimate reuse preserved), and an unsupported/mutable
+    sibling value is rejected even when the selected member is a plain scalar."""
+    import enum
+    import sys
+    import types
+
+    from quadrants.lang._final_dataclass_fields import final_scalar_key
+
+    mod_name = "qd_member_map_probe"
+    mod = types.ModuleType(mod_name)
+    sys.modules[mod_name] = mod
+    try:
+
+        def define(b_value):
+            class Mode(enum.Enum):
+                A = 1
+                B = b_value
+
+            Mode.__module__ = mod_name
+            Mode.__qualname__ = "Mode"
+            mod.Mode = Mode  # resolvable via module+qualname -> None class-identity component (member map is the guard)
+            return Mode
+
+        key_b2 = final_scalar_key(define(2).A)
+        assert final_scalar_key(define(2).A) == key_b2  # identical resolvable definition -> identical key (reuse kept)
+        changed = define(3)  # a changed *sibling* value, selected member A and class name unchanged
+        assert final_scalar_key(changed.A) != key_b2  # in-process key flips
+        assert str(final_scalar_key(changed.A)) != str(key_b2)  # and the offline (fastcache) string flips too
+
+        class Bad(enum.Enum):
+            A = 1
+            B = [1, 2]  # a mutable, unkeyable sibling - observable as cfg.mode.__class__.B.value
+
+        with pytest.raises(TypeError, match="not a supported"):
+            final_scalar_key(Bad.A)
+    finally:
+        del sys.modules[mod_name]
+
+
+@test_utils.test()
 def test_final_outer_mapping_cache_disabled_for_final_bearing_arg():
     """``TemplateMapper.lookup`` keeps an instance-keyed ``(count, key)`` cache that returns the prior result for the
     same live argument *before* calling ``extract()``. For a Final-bearing argument that would bypass

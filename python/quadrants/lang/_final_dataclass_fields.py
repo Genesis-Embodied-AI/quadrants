@@ -1131,6 +1131,23 @@ def _reject_stateful_enum_member(value: Any) -> None:
         )
 
 
+def _enum_member_map_key(cls: type, live: bool) -> tuple:
+    """A hashable digest of ``cls``'s *entire* member map - every member/alias name paired with its value, each value
+    routed through ``final_scalar_key`` (so a raw ``True`` vs ``1`` cannot collide and an unsupported/mutable member
+    value is rejected). A baked ``Final`` member keys on this, not only the selected member, because a *sibling* is
+    observable at compile time (``cfg.mode.__class__.OTHER.value``): without it, changing another member's value would
+    leave the key unchanged and reuse a stale specialization - in-process, or across a ``fastcache=True`` process that
+    otherwise only hashes kernel source. Preserves ``_member_map_`` insertion order, so it is stable for a fixed enum
+    definition and differs the moment the definition does.
+
+    Returns ``()`` if ``cls`` exposes no member map (defensive: the selected-member components of the key still apply);
+    off the steady-state hot path (Final-bearing configs only), so re-walking the small map each launch is cheap."""
+    member_map = getattr(cls, "_member_map_", None)
+    if not isinstance(member_map, dict):
+        return ()
+    return tuple((name, final_scalar_key(member.value, live)) for name, member in member_map.items())
+
+
 def final_scalar_key(value: Any, live: bool = False) -> Any:
     """Return a collision-free key component for a baked ``Final`` field value.
 
@@ -1143,14 +1160,16 @@ def final_scalar_key(value: Any, live: bool = False) -> Any:
       ``_subclass_identity``; a NumPy scalar uses ``(_FLOAT_KEY_TAG, <dtype str>, <raw bytes>)``). Bits (not value)
       so ``-0.0``/``0.0`` (equal, equal hash) and NaNs differing only in sign/payload (all ``str``-ed to ``"nan"``)
       stay distinct, and widths never alias.
-    - an ``enum`` member -> ``(_ENUM_KEY_TAG, *class-identity, name, final_scalar_key(value))``. An ``IntEnum`` /
-      ``StrEnum`` member is ``==`` to its bare scalar and to a same-valued member of another enum class (and
-      ``str(member)`` is just the scalar on Python >=3.11), so keying on identity keeps them distinct. Both ``name``
-      and the member value are kept: ``name`` (``None`` for an unnamed ``IntFlag`` composite) plus the value
+    - an ``enum`` member -> ``(_ENUM_KEY_TAG, *class-identity, name, final_scalar_key(value), member-map)``. An
+      ``IntEnum`` / ``StrEnum`` member is ``==`` to its bare scalar and to a same-valued member of another enum class
+      (and ``str(member)`` is just the scalar on Python >=3.11), so keying on identity keeps them distinct. Both
+      ``name`` and the member value are kept: ``name`` (``None`` for an unnamed ``IntFlag`` composite) plus the value
       separates same-named members of two classes that share ``module``/``qualname`` (e.g. an enum rebuilt by a
       local factory). The value is itself run through ``final_scalar_key`` so a raw ``True`` vs ``1`` (``==``, equal
       hash) cannot collide and so an unsupported / mutable member value is rejected. A member carrying user-defined
-      per-member state is rejected (identity alone cannot capture that state).
+      per-member state is rejected (identity alone cannot capture that state). The ``member-map`` component
+      (``_enum_member_map_key``) folds in *every* member name+value, since a kernel can read a sibling
+      (``cfg.mode.__class__.OTHER.value``) that the selected member alone would not track.
     - every remaining scalar (``bool`` / ``int`` / ``str`` and NumPy analogues) ->
       ``(_SCALAR_KEY_TAG, module, qualname, canonical-value)``. ``True == 1 == np.int64(1)`` with equal hashes, but
       they bake observably different Python constants (e.g. ``config.value is True``), so the exact type is tagged.
@@ -1197,9 +1216,22 @@ def final_scalar_key(value: Any, live: bool = False) -> Any:
         # distinct, even under a metaclass with a custom ``==`` / ``__hash__ = None``, and the retained class pins its
         # ``id``) and on a per-process ``(nonce, serial)`` / ``None`` offline. Every supported value encodes to a
         # hashable key, so the tuple stays hashable.
+        #
+        # The *whole* member map is folded in (``_enum_member_map_key``), not just the selected member: a kernel can
+        # read any sibling at compile time (``cfg.mode.__class__.OTHER.value``), so changing another member's value
+        # must invalidate the key - otherwise an in-process reuse, or a ``fastcache`` process that only hashes kernel
+        # source, would serve a specialization baked for the old definition. A resolvable class carries a ``None``
+        # identity component (keyed by ``module``/``qualname``), so for it the member map is the *only* guard against a
+        # changed sibling; it is essential, not merely redundant with identity.
         _reject_stateful_enum_member(value)
         cls = type(value)
-        return (_ENUM_KEY_TAG, *_subclass_identity(cls, live), value.name, final_scalar_key(value.value, live))
+        return (
+            _ENUM_KEY_TAG,
+            *_subclass_identity(cls, live),
+            value.name,
+            final_scalar_key(value.value, live),
+            _enum_member_map_key(cls, live),
+        )
     if isinstance(value, np.floating):
         # ``dtype.str`` (e.g. ``"<f4"``) + ``tobytes()`` preserves sign bit, NaN payload and width, and stays in the
         # same tagged space as the builtin-float branch so it can never equal a bare int / str key component. An
