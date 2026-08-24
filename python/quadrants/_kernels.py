@@ -327,7 +327,7 @@ def scan_add_inclusive(
 
         # Inter-warp scan, use the first thread in the first warp
         if warp_id == 0 and lane_id == 0:
-            for k in range(1, BLOCK_SZ / WARP_SZ):  # type: ignore
+            for k in range(1, BLOCK_SZ // WARP_SZ):  # type: ignore
                 pad_shared[k] += pad_shared[k - 1]  # type: ignore
         block.sync()
 
