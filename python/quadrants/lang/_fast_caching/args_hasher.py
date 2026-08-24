@@ -93,8 +93,8 @@ def dataclass_to_repr(raise_on_templated_floats: bool, path: tuple[str, ...], ar
     # key. Without this, a kernel compiled with ``offset=7`` baked in is loaded from the offline cache for a config
     # carrying ``offset=100`` and silently produces the first config's results (regression test:
     # ``test_final_field_value_is_part_of_offline_fastcache_key``). The in-process template mapper spec key already
-    # discriminates on the value; this covers the cross-process offline cache. Treated identically to an explicit
-    # ``FIELD_METADATA_CACHE_VALUE`` marker.
+    # discriminates on the value; this covers the cross-process offline cache. Serialized directly via
+    # ``final_scalar_key`` in the loop below (not via ``stringify_obj_type``, which has no ``str`` case).
     #
     # PERF: one ``dict.get`` keyed on the dataclass type; empty for every dataclass not using the feature. For a
     # Final-free frozen dataclass the ``is_frozen`` repr cache above means this whole function runs once per instance.
@@ -109,6 +109,15 @@ def dataclass_to_repr(raise_on_templated_floats: bool, path: tuple[str, ...], ar
     repr_l = []
     for field in dataclasses.fields(arg):
         child_value = getattr(arg, field.name)
+        if field.name in final_names:
+            # A ``Final`` field is baked into the kernel as a compile-time constant, so its *value* is the cache key,
+            # and ``final_scalar_key`` already gives a collision-safe, type-tagged, process-stable representation
+            # (floats by their IEEE bits, so NaNs differing only in sign/payload stay distinct here). Serialize it
+            # directly and skip ``stringify_obj_type``: that type serializer has no case for a bare ``str``, so routing
+            # a ``Final[str]`` - an explicitly supported field type - through it would return None and wrongly disable
+            # the offline cache for the whole argument (and log a spurious PARAM_INVALID warning).
+            repr_l.append(f"{field.name}: (final) = {final_scalar_key(child_value)}")
+            continue
         _repr = stringify_obj_type(raise_on_templated_floats, path + (field.name,), child_value, arg_meta=None)
         if _repr is None:
             if isinstance(child_value, _FIELD_TYPES) and field.type is not _TensorWrapper:
@@ -120,13 +129,9 @@ def dataclass_to_repr(raise_on_templated_floats: bool, path: tuple[str, ...], ar
                     pass
             return None
         full_repr = f"{field.name}: ({_repr})"
-        is_final = field.name in final_names
-        if is_final or field.metadata.get(FIELD_METADATA_CACHE_VALUE, False):
-            # Final floats are encoded by their IEEE bits so NaNs that differ only in sign or payload are not all
-            # collapsed to ``str`` "nan" in this cross-process key. The pre-existing ``FIELD_METADATA_CACHE_VALUE``
-            # path is left byte-for-byte unchanged.
-            value_repr = final_scalar_key(child_value) if is_final else child_value
-            full_repr += f" = {value_repr}"
+        if field.metadata.get(FIELD_METADATA_CACHE_VALUE, False):
+            # The pre-existing ``FIELD_METADATA_CACHE_VALUE`` path is left byte-for-byte unchanged.
+            full_repr += f" = {child_value}"
         repr_l.append(full_repr)
     result = "[" + ",".join(repr_l) + "]"
     if cacheable:

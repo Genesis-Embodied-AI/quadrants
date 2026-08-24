@@ -4760,6 +4760,30 @@ def test_final_offline_repr_not_cached_on_final_bearing_config():
 
 
 @test_utils.test()
+def test_final_str_field_does_not_disable_offline_fastcache():
+    """A ``Final[str]`` field must not disable the *offline* fastcache. ``stringify_obj_type`` has no case for a bare
+    ``str`` (it returns None and logs a PARAM_INVALID warning), so routing the Final field's value through it would make
+    ``dataclass_to_repr`` return None and force a recompile in every process for an explicitly supported field type.
+    Final fields are serialized directly via ``final_scalar_key``, which yields a non-None, value-distinguishing repr;
+    the neighbouring non-Final field confirms the ordinary type-only path still works alongside it."""
+    from typing import Final
+
+    from quadrants.lang._fast_caching.args_hasher import dataclass_to_repr
+
+    @dataclass(frozen=True)
+    class Cfg:
+        name: Final[str]
+        scale: int
+
+    r_a = dataclass_to_repr(False, (), Cfg(name="a", scale=1))
+    r_a2 = dataclass_to_repr(False, (), Cfg(name="a", scale=1))
+    r_b = dataclass_to_repr(False, (), Cfg(name="b", scale=1))
+    assert r_a is not None, "a Final[str] field must not disable the offline fastcache"
+    assert r_a == r_a2, "equal Final[str] values must produce equal offline keys"
+    assert r_a != r_b, "distinct Final[str] values must produce distinct offline keys"
+
+
+@test_utils.test()
 def test_final_exact_baked_type_membership_is_identity_not_equality():
     """A ``Final`` scalar recognises an *exact* builtin (``bool``/``int``/``float``/``str``) by class *identity*, never
     ``==``. A subclass whose metaclass makes the class compare equal to a builtin (``X == int``) must not be mistaken
