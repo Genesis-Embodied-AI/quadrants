@@ -269,7 +269,7 @@ If you genuinely need to move data across backends, route it through Torch: `a.f
 
 ## Known asymmetry: real-dtype `.grad` placeholder on the field backend
 
-For tensors of a real (`f32` / `f64`) dtype allocated **without** `needs_grad=True`, the field backend exposes `t.grad` as a wrapper around an un-placed gradient placeholder, allowing for late manual allocation via `qd.root.place(t.grad)` / `qd.root.lazy_grad()`. The ndarray backend reports `t.grad is None` in the same case:
+For tensors of a real (`f32` / `f64`) dtype allocated **without** `needs_grad=True`, the field backend exposes `t.grad` as a wrapper around an un-placed gradient placeholder - a gradient field whose storage has not been allocated yet. You can allocate it later with the `qd.root` placement calls: `qd.root.place(t.grad)` allocates storage for that one gradient field, while `qd.root.lazy_grad()` allocates it for every gradient field declared so far. The ndarray backend reports `t.grad is None` in the same case:
 
 ```python
 t_field = qd.tensor(qd.f32, shape=(4,), backend=qd.Backend.FIELD)
