@@ -61,11 +61,14 @@ std::string cfg_dump_suffix(const std::string &phase, bool post, std::optional<i
 // conservative across it: reaching-definition seeds every global pointer live-in and live-variable seeds every
 // global store destination live-out, so nothing is forwarded or eliminated across the launch boundary.
 //
-// QD_DUMP_CFG only gates the dumps (before/after this task's optimization); it never changes what runs here.
+// |run_optimization| (false on the real-matrix path, which supports no CFG optimization) gates the optimization
+// only; |dump_cfg| gates only the dumps. They are independent: QD_DUMP_CFG never changes what optimization runs,
+// and when optimization is off the CFG is still built and its "before" graph dumped for observation.
 bool optimize_one_task(Block *parent,
                        OffloadedStmt *off,
                        bool after_lower_access,
                        bool autodiff_enabled,
+                       bool run_optimization,
                        const std::optional<ControlFlowGraph::LiveVarAnalysisConfig> &lva_config_opt,
                        bool dump_cfg,
                        const CompileConfig &config,
@@ -84,15 +87,17 @@ bool optimize_one_task(Block *parent,
     if (dump_cfg) {
       cfg->dump_graph_to_file(config, kernel_name, cfg_dump_suffix(phase, /*post=*/false, task_id));
     }
-    cfg->simplify_graph();
-    if (cfg->store_to_load_forwarding(after_lower_access, autodiff_enabled)) {
-      modified = true;
-    }
-    if (cfg->dead_store_elimination(after_lower_access, lva_config_opt)) {
-      modified = true;
-    }
-    if (dump_cfg) {
-      cfg->dump_graph_to_file(config, kernel_name, cfg_dump_suffix(phase, /*post=*/true, task_id));
+    if (run_optimization) {
+      cfg->simplify_graph();
+      if (cfg->store_to_load_forwarding(after_lower_access, autodiff_enabled)) {
+        modified = true;
+      }
+      if (cfg->dead_store_elimination(after_lower_access, lva_config_opt)) {
+        modified = true;
+      }
+      if (dump_cfg) {
+        cfg->dump_graph_to_file(config, kernel_name, cfg_dump_suffix(phase, /*post=*/true, task_id));
+      }
     }
   }
   parent->insert(wrapper.extract(off), location);
@@ -133,20 +138,25 @@ bool cfg_optimization(const CompileConfig &config,
   // the intra-task forwarding + DSE once tasks exist.
   auto tasks = collect_offloaded_tasks(root);
   if (!tasks.empty()) {
-    // Per-task store-to-load forwarding + dead-store elimination, skipped for the real-matrix path (matching the
-    // whole-kernel path, which runs no analyses there).
+    // Per-task store-to-load forwarding + dead-store elimination. The real-matrix path supports no CFG
+    // optimization (matching the whole-kernel path, which runs no analyses there), but QD_DUMP_CFG still dumps
+    // each task's "before" graph so the dump stays complete and observation-only.
+    const bool run_optimization = !real_matrix_enabled;
     bool result_modified = false;
-    if (!real_matrix_enabled) {
-      auto *block = root->as<Block>();
-      int task_index = 0;
-      for (auto *off : tasks) {
-        // During isolated per-task codegen the block holds one task and its kernel-wide index is only known via
-        // t_task_codegen_id; in whole-kernel contexts the tasks are in order, so the loop index is that index.
-        const int dump_task_id = t_task_codegen_id.value_or(task_index);
-        result_modified |= optimize_one_task(block, off, after_lower_access, autodiff_enabled, lva_config_opt, dump_cfg,
-                                             config, kernel_name, phase, dump_task_id);
-        ++task_index;
+    auto *block = root->as<Block>();
+    int task_index = 0;
+    for (auto *off : tasks) {
+      // During isolated per-task codegen the block holds one task and its kernel-wide index is only known via
+      // t_task_codegen_id; in whole-kernel contexts the tasks are in order, so the loop index is that index.
+      const int dump_task_id = t_task_codegen_id.value_or(task_index);
+      ++task_index;
+      // Nothing to do for this task when we neither optimize nor dump: skip the CFG build so QD_DUMP_CFG stays
+      // zero-cost when off.
+      if (!run_optimization && !dump_cfg) {
+        continue;
       }
+      result_modified |= optimize_one_task(block, off, after_lower_access, autodiff_enabled, run_optimization,
+                                           lva_config_opt, dump_cfg, config, kernel_name, phase, dump_task_id);
     }
     // TODO: implement cfg->dead_instruction_elimination()
     die(root);  // remove unused allocas across the whole kernel
