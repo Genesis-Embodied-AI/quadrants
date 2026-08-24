@@ -3457,7 +3457,7 @@ llvm::Value *TaskCodeGenLLVM::get_struct_arg(const std::vector<int> &index, bool
   if (!create_load) {
     return gep;
   }
-  auto *loaded = builder->CreateLoad(tlctx->get_data_type(arg_type), gep);
+  llvm::Value *loaded = builder->CreateLoad(tlctx->get_data_type(arg_type), gep);
   // args -> field level: tag the loaded ndarray struct base pointer, but only
   // for the top-level kernel. A Function (@qd.real_func) callee receives its
   // args -- including qd.ref(...) reference parameters -- through a caller-local
