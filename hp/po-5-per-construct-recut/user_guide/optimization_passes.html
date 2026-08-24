@@ -560,7 +560,6 @@
 <li><p><code class="docutils literal notranslate"><span class="pre">QD_DUMP_CFG=1</span></code> - writes the control-flow graph itself. (This also forces the CFG pass to run over the whole kernel at once so the complete graph can be dumped.)</p></li>
 </ul>
 <p>Setting <code class="docutils literal notranslate"><span class="pre">qd.init(print_ir=True)</span></code> prints the IR to the console at pipeline stages instead of writing files.</p>
-<p>When the per-construct frontend split (see below) is active for a kernel, these frontend diagnostics report <strong>each construct separately</strong>, so the output reflects exactly what was compiled rather than a synthetic whole-kernel view: <code class="docutils literal notranslate"><span class="pre">QD_DUMP_IR</span></code> writes one file set per construct (<code class="docutils literal notranslate"><span class="pre">&lt;kernel&gt;_construct&lt;i&gt;_&lt;stage&gt;.ll</span></code>), <code class="docutils literal notranslate"><span class="pre">QD_DUMP_SIMPLIFY</span></code> writes its usual per-pass files for each construct, and <code class="docutils literal notranslate"><span class="pre">print_ir</span></code> prints each construct’s passes under a <code class="docutils literal notranslate"><span class="pre">[per-construct</span> <span class="pre">frontend</span> <span class="pre">split]</span> <span class="pre">&lt;kernel&gt;</span> <span class="pre">construct</span> <span class="pre">&lt;i&gt;</span></code> banner. <code class="docutils literal notranslate"><span class="pre">QD_DUMP_CFG</span></code> is the exception - it still runs the frontend once over the whole kernel so it can dump the complete control-flow graph.</p>
 </section>
 <section id="under-the-hood-per-task-scoping">
 <h2>Under the hood: per-task scoping<a class="headerlink" href="#under-the-hood-per-task-scoping" title="Link to this heading">#</a></h2>
@@ -590,6 +589,10 @@
 </pre></div>
 </div>
 <p>All three fields are <code class="docutils literal notranslate"><span class="pre">-1</span></code> when the split did not run for this compile - either because the kernel took the whole-kernel fallback above, or because the compiled kernel was served from a cache (the <a class="reference internal" href="init_options.html#offline-cache"><span class="std std-ref">offline cache</span></a> or <a class="reference internal" href="fastcache.html"><span class="std std-doc">fastcache</span></a>) so no frontend ran at all.</p>
+</section>
+<section id="diagnostics-under-the-split">
+<h3>Diagnostics under the split<a class="headerlink" href="#diagnostics-under-the-split" title="Link to this heading">#</a></h3>
+<p>The IR-inspection flags from <a class="reference internal" href="#inspecting-what-the-compiler-did">Inspecting what the compiler did</a> stay observation-only when the split runs: they never change which path is taken, they just report each construct separately for the intermediate stages so the output reflects exactly what was compiled. <code class="docutils literal notranslate"><span class="pre">QD_DUMP_IR</span></code> writes each construct’s post-simplify snapshot to <code class="docutils literal notranslate"><span class="pre">&lt;kernel&gt;_construct&lt;i&gt;_after_simplify_I.ll</span></code> (the final <code class="docutils literal notranslate"><span class="pre">&lt;kernel&gt;_after_offload.ll</span></code> stays whole-kernel - it is the reassembled result of all constructs), <code class="docutils literal notranslate"><span class="pre">QD_DUMP_SIMPLIFY</span></code> writes its usual per-pass files for each construct, and <code class="docutils literal notranslate"><span class="pre">print_ir</span></code> prints each construct’s passes under a <code class="docutils literal notranslate"><span class="pre">[per-construct</span> <span class="pre">frontend</span> <span class="pre">split]</span> <span class="pre">&lt;kernel&gt;</span> <span class="pre">construct</span> <span class="pre">&lt;i&gt;</span></code> banner. <code class="docutils literal notranslate"><span class="pre">QD_DUMP_CFG</span></code> is the exception - it still runs the frontend once over the whole kernel so it can dump the complete control-flow graph.</p>
 </section>
 </section>
 </section>
@@ -650,6 +653,7 @@
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#under-the-hood-per-task-scoping">Under the hood: per-task scoping</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#under-the-hood-per-construct-frontend-compilation">Under the hood: per-construct frontend compilation</a><ul class="nav section-nav flex-column">
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#inspecting-the-split">Inspecting the split</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#diagnostics-under-the-split">Diagnostics under the split</a></li>
 </ul>
 </li>
 </ul>

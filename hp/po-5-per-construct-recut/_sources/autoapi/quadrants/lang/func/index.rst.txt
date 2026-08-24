@@ -56,10 +56,10 @@ Module Contents
 
 
 
-   .. py:method:: func_call_rvalue(key: quadrants._lib.core.quadrants_python.FunctionKey, args: tuple[Any, Ellipsis]) -> Any
+   .. py:method:: func_call_rvalue(key: quadrants._lib.core.quadrants_python.FunctionKey, args: tuple[Any, ...]) -> Any
 
 
-   .. py:method:: do_compile(key: quadrants._lib.core.quadrants_python.FunctionKey, args: tuple[Any, Ellipsis], arg_features: tuple[Any, Ellipsis]) -> None
+   .. py:method:: do_compile(key: quadrants._lib.core.quadrants_python.FunctionKey, args: tuple[Any, ...], arg_features: tuple[Any, ...]) -> None
 
       only for real func
 

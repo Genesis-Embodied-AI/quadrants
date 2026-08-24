@@ -89,8 +89,6 @@ These environment variables dump the IR so you can see the effect of each pass. 
 
 Setting `qd.init(print_ir=True)` prints the IR to the console at pipeline stages instead of writing files.
 
-When the per-construct frontend split (see below) is active for a kernel, these frontend diagnostics report **each construct separately**, so the output reflects exactly what was compiled rather than a synthetic whole-kernel view: `QD_DUMP_IR` writes one file set per construct (`<kernel>_construct<i>_<stage>.ll`), `QD_DUMP_SIMPLIFY` writes its usual per-pass files for each construct, and `print_ir` prints each construct's passes under a `[per-construct frontend split] <kernel> construct <i>` banner. `QD_DUMP_CFG` is the exception - it still runs the frontend once over the whole kernel so it can dump the complete control-flow graph.
-
 ## Under the hood: per-task scoping
 
 Once the kernel has been split into offloaded tasks, both CSE and the CFG optimization run over **one offloaded task's IR at a time**, never over the whole `qd.kernel` at once. This is both faster to analyze and safe: because each task is a separate device launch, a value held in a register in one task cannot survive into the next one, so there is never anything to deduplicate or forward across a task boundary. Anything written to global memory is treated as potentially read by a later task, so no store another task might need is dropped.
@@ -124,3 +122,7 @@ print(obs.frontend_constructs_cache_hit)   # how many were reused (0 until the c
 ```
 
 All three fields are `-1` when the split did not run for this compile - either because the kernel took the whole-kernel fallback above, or because the compiled kernel was served from a cache (the [offline cache](init_options.md#offline_cache) or [fastcache](fastcache.md)) so no frontend ran at all.
+
+### Diagnostics under the split
+
+The IR-inspection flags from [Inspecting what the compiler did](#inspecting-what-the-compiler-did) stay observation-only when the split runs: they never change which path is taken, they just report each construct separately for the intermediate stages so the output reflects exactly what was compiled. `QD_DUMP_IR` writes each construct's post-simplify snapshot to `<kernel>_construct<i>_after_simplify_I.ll` (the final `<kernel>_after_offload.ll` stays whole-kernel - it is the reassembled result of all constructs), `QD_DUMP_SIMPLIFY` writes its usual per-pass files for each construct, and `print_ir` prints each construct's passes under a `[per-construct frontend split] <kernel> construct <i>` banner. `QD_DUMP_CFG` is the exception - it still runs the frontend once over the whole kernel so it can dump the complete control-flow graph.
