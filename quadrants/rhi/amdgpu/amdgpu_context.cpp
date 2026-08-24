@@ -8,10 +8,22 @@
 #include "quadrants/system/threading.h"
 #include "quadrants/rhi/amdgpu/amdgpu_driver.h"
 #include "quadrants/rhi/amdgpu/amdgpu_profiler.h"
+#include "quadrants/util/environ_config.h"
 #include "quadrants/util/offline_cache.h"
 
 namespace quadrants {
 namespace lang {
+
+namespace {
+
+// Drivers on some APUs advertise hipDeviceAttributeMemoryPoolsSupported while hipMallocAsync never returns.
+// Do not probe by calling hipMallocAsync in-process: a wedged call can leave the HIP runtime unusable for later
+// hipMalloc in the same process. Gate known-bad targets here instead; expand when more mcpu ids are confirmed.
+bool is_hip_malloc_async_unreliable(const std::string &mcpu) {
+  return mcpu == "gfx90c";
+}
+
+}  // namespace
 
 thread_local void *AMDGPUContext::stream_ = nullptr;
 
@@ -84,19 +96,31 @@ AMDGPUContext::AMDGPUContext() : driver_(AMDGPUDriver::get_instance_without_cont
   // device_memory_GB preallocation, the same way the CUDA backend does via cuMemAllocAsync. This feature requires
   // ROCm >= 5.2; earlier runtimes are not supported by quadrants. Use the non-throwing .call() variant so a future
   // hipDeviceAttribute_t reshuffle degrades to "no pool" rather than aborting init.
-  int device_supports_mem_pool = 0;
-  uint32 attr_err = driver_.device_get_attribute.call(
-      &device_supports_mem_pool, HIP_DEVICE_ATTRIBUTE_MEMORY_POOLS_SUPPORTED, 0 /*device ordinal*/);
+  //
+  // QD_ENABLE_HIP_MEMPOOL=0 forces the sync hipMalloc path. Known-unreliable mcpu ids (see
+  // is_hip_malloc_async_unreliable) also force the sync path even when the driver advertises pool support.
+  if (get_environ_config("QD_ENABLE_HIP_MEMPOOL", 1) == 0) {
+    QD_TRACE("HIP memory pools disabled by QD_ENABLE_HIP_MEMPOOL=0.");
+  } else if (is_hip_malloc_async_unreliable(mcpu_)) {
+    QD_WARN(
+        "HIP memory pools disabled on {}: hipMallocAsync hangs despite MEMORY_POOLS_SUPPORTED. "
+        "Using hipMalloc.",
+        mcpu_);
+  } else {
+    int device_supports_mem_pool = 0;
+    uint32 attr_err = driver_.device_get_attribute.call(
+        &device_supports_mem_pool, HIP_DEVICE_ATTRIBUTE_MEMORY_POOLS_SUPPORTED, 0 /*device ordinal*/);
 
-  if (attr_err == HIP_SUCCESS && device_supports_mem_pool) {
-    supports_mem_pool_ = true;
-    void *default_mem_pool = nullptr;
-    driver_.device_get_default_mem_pool(&default_mem_pool, 0 /*device ordinal*/);
-    // Match CUDAContext: keep up to 128 MiB cached in the pool between alloc cycles. Larger workloads are served by the
-    // pool growing on demand.
-    constexpr uint64 kMemPoolReleaseThreshold = 128ull * 1024 * 1024;
-    driver_.mem_pool_set_attribute(default_mem_pool, HIP_MEMPOOL_ATTR_RELEASE_THRESHOLD,
-                                   (void *)&kMemPoolReleaseThreshold);
+    if (attr_err == HIP_SUCCESS && device_supports_mem_pool) {
+      supports_mem_pool_ = true;
+      void *default_mem_pool = nullptr;
+      driver_.device_get_default_mem_pool(&default_mem_pool, 0 /*device ordinal*/);
+      // Match CUDAContext: keep up to 128 MiB cached in the pool between alloc cycles. Larger workloads are served by
+      // the pool growing on demand.
+      constexpr uint64 kMemPoolReleaseThreshold = 128ull * 1024 * 1024;
+      driver_.mem_pool_set_attribute(default_mem_pool, HIP_MEMPOOL_ATTR_RELEASE_THRESHOLD,
+                                     (void *)&kMemPoolReleaseThreshold);
+    }
   }
 }
 

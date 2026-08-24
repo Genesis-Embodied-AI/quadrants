@@ -86,7 +86,7 @@ The same holds for a [`dataclasses.dataclass`](compound_types.md#dataclassesdata
 |---|---|
 | `enum.Enum` values (e.g. `MyEnum.VALUE`) | Named constants that are assumed not to vary between process runs. |
 | `math` / `numpy` constants (e.g. `math.pi`) | Assumed stable across process runs. |
-| Quadrants module attributes (e.g. `qd.simt.Tile16x16.SIZE`) | Part of the compiler's own API; assumed consistent with the Quadrants version hash. |
+| Quadrants module attributes (e.g. [`qd.simt.Tile16x16.SIZE`](tile.md)) | Part of the compiler's own API; assumed consistent with the Quadrants version hash. |
 
 Other named constants (non-enum, non-module) captured from scope will raise a `QuadrantsCompilationError`, except for `UPPERCASE` names which emit a warning instead.
 
@@ -106,6 +106,7 @@ Fastcache supports the following parameter types:
 | `qd.Template` primitives (int, float, bool) | Yes | type and value (baked into kernel) |
 | Non-template primitives (int, float, bool) | Yes | type only |
 | `enum.Enum` | Yes | name and value |
+| `None` (absent optional [`qd.Tensor`](tensor.md) / `qd.Template` argument) | Yes | a constant tag (the singleton fully determines the specialization) |
 | `qd.field` / [`ScalarField`](matrix_vector.md#vector-and-matrix-fields) / [`MatrixField`](matrix_vector.md#vector-and-matrix-fields) | **No** | - |
 
 If any parameter is of an unsupported type, fastcache is disabled for that call and the kernel falls back to normal compilation. For `qd.field` / [`ScalarField`](matrix_vector.md#vector-and-matrix-fields) / [`MatrixField`](matrix_vector.md#vector-and-matrix-fields) arriving through a [qd.Tensor](tensor.md)-annotated parameter, this is silent - no warning is emitted. For other unsupported types, a warning is logged at the `warn` level identifying the offending parameter.
@@ -121,7 +122,8 @@ Each compiled artifact is stored under a key derived from all of the following:
 - The **Quadrants version** (`quadrants.__version__`).
 - The **source code** of the kernel function or any `@qd.func` it calls.
 - The **argument types** (e.g. switching from `f32` to `f64`, or changing ndarray dimensionality).
-- The **compiler configuration** (e.g. `arch`, `debug`, `opt_level`, `fast_math`).
+- The **compilation-relevant parts of the compiler configuration** (e.g. `arch`, `debug`, `opt_level`, `fast_math`).
+- The **device capabilities** of the target GPU (e.g. whether Vulkan/Metal expose 64-bit integers, atomics, or a particular family of [subgroup](subgroup.md) operations), since the compiler generates different GPU code depending on them. This keeps an entry compiled for one device from being reused on another with different capabilities, for example when a cache directory is shared across machines.
 - **Template parameter values** (since they are baked into the compiled kernel).
 
 When any of these change, the resulting key is different, so a new compilation occurs and a new entry is stored. Previous entries remain on disk - multiple cached versions coexist. You do not need to manually clear the cache when making code changes - the hash mismatch causes a transparent recompilation.

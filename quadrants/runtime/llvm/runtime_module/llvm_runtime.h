@@ -132,6 +132,9 @@ struct LLVMRuntime {
 
   // Allocate from preallocated memory (CUDA, AMDGPU)
   Ptr allocate_from_reserved_memory(PreallocatedMemoryChunk &memory_chunk, std::size_t size, std::size_t alignment);
+
+  // qd.init(device_memory_fraction=...) and qd.init(device_memory_GB=...) size only the runtime-memory chunk.
+  bool sized_by_device_memory_config(const PreallocatedMemoryChunk &memory_chunk) const;
   Ptr profiler;
   void (*profiler_start)(Ptr, Ptr);
   void (*profiler_stop)(Ptr);
