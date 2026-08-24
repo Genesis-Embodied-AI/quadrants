@@ -328,6 +328,31 @@ def _install_python_backend_dtype_call():
     DataTypeCxx.__call__ = _dtype_call  # type: ignore[assignment]
 
 
+def _check_ir_load_envs_against_caching(cfg, src_ll_cache: bool) -> None:
+    """Reject QD_LOAD_IR / QUADRANTS_LOAD_PTX when caching could stop codegen from ever reading the files.
+
+    A cached kernel skips codegen, so edited IR / PTX in ``debug_dump_path`` is silently ignored. Call after arch
+    selection: each variable is read by only some backends, and ``adaptive_arch_select`` may not have picked the
+    requested arch.
+    """
+    active = []
+    # codegen_llvm.cpp reads QD_LOAD_IR via get_environ_config, which parses the value as an int, so "0" leaves it off.
+    # It lives in the LLVM codegen, so the SPIR-V backends (Vulkan, Metal) never read it.
+    if os.getenv("QD_LOAD_IR", "0") not in ("", "0") and _qd_core.arch_uses_llvm(cfg.arch):
+        active.append("QD_LOAD_IR")
+    # jit_cuda.cpp reads QUADRANTS_LOAD_PTX the same way, but it lives in the CUDA JIT, so only CUDA reads it.
+    if os.getenv("QUADRANTS_LOAD_PTX", "0") not in ("", "0") and cfg.arch == _qd_core.cuda:
+        active.append("QUADRANTS_LOAD_PTX")
+    if not active or not (cfg.offline_cache or src_ll_cache):
+        return
+    names = " and ".join(active)
+    raise ValueError(
+        f"Caching must be disabled when using {names}: replacement IR/PTX is read from debug_dump_path only for a "
+        "kernel that is actually compiled, and cached kernels are returned without running codegen, so the files would "
+        f"be silently ignored. Pass offline_cache=False and src_ll_cache=False to qd.init, or unset {names}."
+    )
+
+
 def init(
     arch=None,
     default_fp=None,
@@ -349,10 +374,11 @@ def init(
         default_fp (Optional[type]): Default floating-point type.
         default_ip (Optional[type]): Default integral type.
         require_version: A version string.
-        print_non_pure: Print the names of kernels, at the time they are executed, which are not annotated with
-                        @qd.pure
+        print_non_pure: Print the names of kernels, at the time they are executed, which are not declared with
+                        @qd.kernel(fastcache=True) (or the deprecated @qd.kernel(pure=True))
         src_ll_cache: enable SRC-LL-CACHE, which will accelerate loading from cache, across all architectures,
-                      for pure kernels (i.e. kernels declared as @qd.pure)
+                      for pure kernels (i.e. kernels declared with @qd.kernel(fastcache=True), or the deprecated
+                      @qd.kernel(pure=True))
         **kwargs: Quadrants provides highly customizable compilation through
             ``kwargs``, which allows for fine grained control of Quadrants compiler
             behavior. Below we list some of the most frequently used ones. For a
@@ -364,7 +390,8 @@ def init(
             * ``print_ir`` (bool): Prints the CHI IR of the Quadrants kernels.
             *``offline_cache`` (bool): Enables offline cache of the compiled kernels. Default to True. When this is enabled Quadrants will cache compiled kernel on your local disk to accelerate future calls.
             *``random_seed`` (int): Sets the seed of the random generator. The default is 0.
-            *``debug_dump_path`` (str): used as the base path for QD_DUMP_IR and similar
+            *``debug_dump_path`` (str): base path for QD_DUMP_IR and similar. QD_LOAD_IR and QUADRANTS_LOAD_PTX read
+              replacement IR / PTX from this directory, and require ``offline_cache=False`` and ``src_ll_cache=False``.
     """
     # FIXME(https://github.com/taichi-dev/taichi/issues/4811): save the current working directory since it may be
     # changed by the Vulkan backend initialization on OS X.
@@ -473,6 +500,8 @@ def init(
 
     if cfg.arch == _qd_core.amdgpu and get_os_name() == "win":
         _logging.warn("AMDGPU support on Windows is experimental and may not work as expected.")
+
+    _check_ir_load_envs_against_caching(cfg, src_ll_cache)
 
     if _test_mode:
         return spec_cfg

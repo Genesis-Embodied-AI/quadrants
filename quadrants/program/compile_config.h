@@ -19,7 +19,7 @@ struct CompileConfig {
   bool print_preprocessed_ir;
   bool print_ir;
   bool print_accessor_ir;
-  bool print_ir_dbg_info;
+  bool print_ir_dbg_info{false};
   bool serial_schedule;
   bool simplify_before_lower_access;
   bool lower_access;
@@ -50,7 +50,6 @@ struct CompileConfig {
   DataType default_fp;
   DataType default_ip;
   DataType default_up;
-  std::string extra_flags;
   int default_cpu_block_dim;
   bool cpu_block_dim_adaptive;
   int default_gpu_block_dim;
