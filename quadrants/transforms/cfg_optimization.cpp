@@ -33,10 +33,6 @@ std::vector<OffloadedStmt *> collect_offloaded_tasks(IRNode *root) {
   return tasks;
 }
 
-// Suffix for a CFG dump filename. dump_graph_to_file writes "<kernel>_CFG<suffix>.txt", so this yields
-// "_<phase>_before_cfg_opt" / "_<phase>_post_cfg_opt" (the phase segment is dropped when |phase| is empty). For
-// per-task dumps, |task_index| adds a "_task<N>" segment so sibling tasks of the same kernel do not overwrite
-// each other's files.
 std::string cfg_dump_suffix(const std::string &phase, bool post, std::optional<int> task_index = std::nullopt) {
   std::string suffix;
   if (!phase.empty()) {
