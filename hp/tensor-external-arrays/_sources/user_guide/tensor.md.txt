@@ -207,7 +207,7 @@ Inside the kernel the argument is the bare impl rather than the wrapper, so kern
 
 For a parameter annotated `qd.Tensor`, calls to the same kernel may alternate among a wrapper, its bare field or ndarray implementation, and `None`. If callers can pass `None`, guard tensor operations with [`qd.static()`](static.md), for example `if qd.static(x is not None):`; the guarded operations are not traced for the `None` specialization. The parameter remains annotated `qd.Tensor`, and `None` must be passed explicitly.
 
-A `qd.Tensor` parameter also accepts **external arrays** - `numpy.ndarray` and `torch.Tensor`. The kernel is specialized by an external array's dtype, rank and gradient state rather than by the identity of the array object, so two distinct arrays that share those properties reuse the same compiled kernel, while any difference between them - including a torch tensor's `requires_grad` - compiles a separate one. Only `numpy.ndarray` and `torch.Tensor` count as external arrays; other objects that merely expose `.shape` / `.dtype` (such as a `qd.field`) do not, and are handled like any other `qd.Tensor` argument.
+A `qd.Tensor` parameter also accepts **external arrays** - `numpy.ndarray` and `torch.Tensor` - in addition to the `qd.field` / `qd.ndarray` tensors and `None`. An external array is specialized by its dtype, rank and gradient state rather than by the identity of the array object, so two distinct arrays that share those properties reuse the same compiled kernel, while any difference between them - including a torch tensor's `requires_grad` - compiles a separate one.
 
 `qd.Tensor` is also the right annotation when storing a tensor as a `dataclasses.dataclass` member:
 
