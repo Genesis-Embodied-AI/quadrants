@@ -201,12 +201,27 @@ def _first_final_path(dc_type: type, visiting: "frozenset[int]") -> "tuple[str, 
     return path
 
 
+def _resolved_type_hints(dc_type: Any) -> "dict[str, Any] | None":
+    """``typing.get_type_hints(dc_type)`` (real objects, with ``Final`` preserved) or None if the annotations cannot be
+    resolved. Lets ``_build_final_plan`` detect an *aliased* ``Final`` hidden behind a string annotation -
+    ``from typing import Final as F; x: F[int]`` under ``from __future__ import annotations`` stores ``"F[int]"``,
+    which a substring test for the literal name ``Final`` would miss. Off the hot path (``_build_final_plan`` is
+    memoised per type). Any resolution failure (an unresolvable forward reference, an exotic annotation object, ...)
+    falls back to None so the caller can apply its best-effort substring check instead of crashing."""
+    try:
+        return typing.get_type_hints(dc_type)
+    except Exception:
+        return None
+
+
 def _build_final_plan(dc_type: type) -> "frozenset[str]":
     """Validate every ``Final`` field on ``dc_type`` and return the set of Final-annotated field names.
 
     Called once per dataclass type (memoised in ``_final_plan_cache``), so all of the reflection here - including
     ``dataclasses.fields``, ``typing.get_origin`` and ``issubclass`` - stays entirely off the per-launch hot path.
     """
+    resolved_hints: "dict[str, Any] | None" = None
+    resolved_computed = False
     final_names = []
     for field in dataclasses.fields(dc_type):
         annotation = field.type
@@ -214,8 +229,15 @@ def _build_final_plan(dc_type: type) -> "frozenset[str]":
             # ``from __future__ import annotations`` (or an explicit string annotation) leaves ``field.type`` as an
             # unresolved string. The pre-existing dataclass kernel-arg path already assumes resolved types, so rather
             # than half-supporting it, flag the one case where silently ignoring it would be a correctness trap: a
-            # field the user believes is a compile-time constant but which we would lower as a runtime arg.
-            if "Final" in annotation:
+            # field the user believes is a compile-time constant but which we would lower as a runtime arg. Resolve the
+            # class's hints (once, lazily) so an *aliased* ``Final`` (``Final as F`` -> ``"F[int]"``) is caught, not
+            # just the literal name; fall back to the substring test only when the annotations cannot be resolved.
+            if not resolved_computed:
+                resolved_hints = _resolved_type_hints(dc_type)
+                resolved_computed = True
+            resolved = resolved_hints.get(field.name) if resolved_hints is not None else None
+            looks_final = is_final_annotation(resolved) if resolved is not None else ("Final" in annotation)
+            if looks_final:
                 raise TypeError(
                     f"{dc_type.__name__}.{field.name}: annotation is the unresolved string {annotation!r}. Quadrants "
                     f"cannot see ``Final`` through a string annotation, so this field would silently become a runtime "

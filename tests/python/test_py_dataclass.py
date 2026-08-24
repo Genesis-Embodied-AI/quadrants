@@ -3925,6 +3925,32 @@ def test_final_field_string_annotation_is_rejected():
 
 
 @test_utils.test()
+def test_final_field_aliased_string_annotation_is_rejected():
+    """A substring test for the literal name ``Final`` misses an *aliased* spelling: with
+    ``from __future__ import annotations`` and ``from typing import Final as F``, ``x: F[int]`` is stored as the string
+    ``"F[int]"``. ``final_field_names`` resolves the class's hints (which sees the alias in the module globals) so the
+    field is recognised as ``Final`` and rejected, rather than silently lowered as an ordinary runtime argument."""
+    import sys
+    import types
+    from typing import Final
+
+    from quadrants.lang._final_dataclass_fields import final_field_names
+
+    # A real module whose globals carry the ``Final as F`` alias, so ``typing.get_type_hints`` can resolve ``"F[int]"``
+    # (a function-local class would not expose the alias to the resolver).
+    mod = types.ModuleType("_qd_final_alias_test_mod")
+    mod.F = Final
+    mod.dc = dataclasses
+    sys.modules[mod.__name__] = mod
+    try:
+        exec("@dc.dataclass(frozen=True)\nclass Cfg:\n    x: 'F[int]'\n", mod.__dict__)
+        with pytest.raises(TypeError, match="unresolved string"):
+            final_field_names(mod.Cfg)
+    finally:
+        sys.modules.pop(mod.__name__, None)
+
+
+@test_utils.test()
 def test_final_scalar_key_distinguishes_signed_zero_and_nan_payloads():
     """``final_scalar_key`` encodes floats by their IEEE-754 bits so values that Python conflates stay distinct
     in both the in-process spec key and the on-disk fastcache key: ``-0.0`` vs ``0.0`` (equal under ``==`` with
