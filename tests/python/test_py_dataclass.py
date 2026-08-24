@@ -4731,3 +4731,70 @@ def test_final_offline_repr_not_cached_on_final_bearing_config():
     fcfg = FinalCfg(x=1)
     dataclass_to_repr(False, (), fcfg)
     assert not hasattr(fcfg, "_qd_dc_repr")  # Final-bearing config is never repr-cached; it recomputes+revalidates
+
+
+@test_utils.test()
+def test_final_exact_baked_type_membership_is_identity_not_equality():
+    """A ``Final`` scalar recognises an *exact* builtin (``bool``/``int``/``float``/``str``) by class *identity*, never
+    ``==``. A subclass whose metaclass makes the class compare equal to a builtin (``X == int``) must not be mistaken
+    for an exact builtin: equality-based membership would skip subclass/metaclass validation and canonicalize ``X`` as
+    a builtin, collapsing two distinct same-qualified factory classes onto one live key while ``cfg.x.__class__ is
+    First`` is observable. Such a metaclass carries observable equality behavior, so the value is rejected outright."""
+    from quadrants.lang._final_dataclass_fields import (
+        _is_exact_baked_type,
+        final_scalar_key,
+    )
+
+    class EqIntMeta(type):
+        # Make the class compare (and hash) as the builtin ``int`` - a hostile spoof of exact-builtin-ness.
+        def __eq__(cls, other):
+            return other is int or cls is other
+
+        def __hash__(cls):
+            return hash(int)
+
+    class Spoof(int, metaclass=EqIntMeta):
+        pass
+
+    assert Spoof == int  # equality is spoofed...
+    assert not _is_exact_baked_type(Spoof)  # ...but identity membership is not fooled
+    assert _is_exact_baked_type(int) and _is_exact_baked_type(bool)  # exact builtins still recognised
+    # A metaclass ``__eq__``/``__hash__`` is observable, so the value is rejected rather than keyed as an exact int.
+    with pytest.raises(TypeError, match="metaclass defines observable"):
+        final_scalar_key(Spoof(1))
+
+
+@test_utils.test()
+def test_final_enum_rejects_user_override_of_generated_hook():
+    """The enum machinery *copies* ``enum.Enum._generate_next_value_`` into every subclass's own dict, so the name
+    alone appears even on a plain enum. A user override (defined or monkey-patched later) is a distinct object a kernel
+    could observe through the baked member, and mutating it would leave the member's class/name/value key unchanged -
+    so it must be rejected. A clean enum (still the inherited default) is accepted."""
+    import enum
+
+    from quadrants.lang._final_dataclass_fields import final_scalar_key
+
+    class Clean(enum.Enum):
+        A = 1
+        B = 2
+
+    final_scalar_key(Clean.A)  # inherited ``_generate_next_value_`` default -> accepted
+
+    class Overridden(enum.Enum):
+        def _generate_next_value_(name, start, count, last_values):  # observable custom auto-value policy
+            return name
+
+        A = enum.auto()
+        B = enum.auto()
+
+    with pytest.raises(TypeError, match="observable class-level behavior"):
+        final_scalar_key(Overridden.A)
+
+    # Monkey-patching the hook onto a previously-clean enum must flip it from accepted to rejected on the next key.
+    class Patched(enum.Enum):
+        A = 1
+
+    final_scalar_key(Patched.A)  # accepted while it holds the inherited default
+    Patched._generate_next_value_ = staticmethod(lambda name, start, count, last_values: name)
+    with pytest.raises(TypeError, match="observable class-level behavior"):
+        final_scalar_key(Patched.A)

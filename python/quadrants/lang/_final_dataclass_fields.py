@@ -357,6 +357,16 @@ _SCALAR_KEY_TAG = "scalar"
 # state, so it never needs the stateful-subclass check below.
 _EXACT_BAKED_TYPES = (bool, int, float, str)
 
+
+def _is_exact_baked_type(cls: type) -> bool:
+    """``cls`` *is* one of ``_EXACT_BAKED_TYPES`` - an identity test, never equality. A *subclass* whose metaclass makes
+    it compare ``==`` to a builtin (``class X(int, metaclass=M)`` with ``M.__eq__`` returning ``X == int``) must not be
+    mistaken for an exact builtin: equality-based ``in`` membership would then skip the subclass / metaclass validation
+    *and* canonicalize ``X`` as an exact builtin, collapsing two distinct same-qualified factory classes onto one live
+    key even though ``cfg.x.__class__ is First`` is observable at compile time. ``is`` cannot be spoofed."""
+    return any(cls is t for t in _EXACT_BAKED_TYPES)
+
+
 # ``Py_TPFLAGS_HEAPTYPE`` (``1 << 9``): the interpreter sets this on every type created by a ``class`` statement or a
 # ``type(...)`` call, and leaves it clear on C-defined *static* types (the builtin primitives and NumPy's own scalar
 # types). It is not user-settable, so it distinguishes a library-provided scalar base from a user subclass even one
@@ -417,7 +427,7 @@ def _is_baked_base_type(klass: type) -> bool:
     ``__module__ = "numpy"``; keying off the flag rather than the string keeps such a subclass from masquerading as a
     trusted base (its state/behavior is inspected and it is keyed by class identity like any other user subclass).
     """
-    if klass in _EXACT_BAKED_TYPES or klass is object:
+    if _is_exact_baked_type(klass) or klass is object:
         return True
     # A genuine NumPy scalar base is a static (C-defined) ``np.generic`` subclass; a user subclass - even one that
     # spoofs ``__module__ = "numpy"`` - is a ``class``-statement heap type (``Py_TPFLAGS_HEAPTYPE`` set).
@@ -451,7 +461,7 @@ def _reject_stateful_primitive_subclass(value: Any) -> None:
     instance, off the steady-state path.
     """
     cls = type(value)
-    if cls in _EXACT_BAKED_TYPES:
+    if _is_exact_baked_type(cls):
         return
     if not (isinstance(value, (int, float, str)) or isinstance(value, np.generic)):
         return  # not a baked-primitive / NumPy-scalar value at all
@@ -796,6 +806,24 @@ def _compute_enum_generated_class_attrs() -> "frozenset[str]":
 # a user hook (see ``_compute_enum_generated_class_attrs``). Computed once at import so it matches the running Python.
 _ENUM_GENERATED_CLASS_ATTRS = _compute_enum_generated_class_attrs()
 
+# Machinery names a user can nonetheless *override* with behavior a kernel could reach through a baked member
+# (``qd.static(cfg.mode._generate_next_value_(...))``). The enum machinery *copies* the inherited default of these into
+# every subclass's own dict, so the name alone appears even on a plain enum and cannot distinguish a user override - so
+# these are exempted only when the stored object *is* the inherited default (see ``_dict_entry_is_inherited_default``).
+_ENUM_OVERRIDABLE_HOOK_NAMES = frozenset({"_generate_next_value_"})
+
+
+def _dict_entry_is_inherited_default(klass: type, name: str, member: Any) -> bool:
+    """True if ``klass.__dict__[name]`` (``member``) is object-identical to what ``klass`` *inherits* for ``name`` from
+    its bases - i.e. the machinery merely copied an inherited default into the class dict, rather than the class
+    introducing a distinct (user-authored) object under a machinery name. A user override defines a fresh object, so it
+    is not identical to the inherited default and this returns False (the caller then treats it as observable)."""
+    for base in klass.__mro__[1:]:
+        base_member = vars(base).get(name, _MISSING)
+        if base_member is not _MISSING:
+            return base_member is member
+    return False
+
 
 def _observable_class_dict_attr(klass: type) -> "str | None":
     """Name of a user-authored observable attribute in ``klass.__dict__`` - a method / property / class var, a
@@ -813,6 +841,10 @@ def _observable_class_dict_attr(klass: type) -> "str | None":
             return name  # a genuine user operator/behavior dunder override
         if name.startswith("_") and name.endswith("_"):
             if name in _ENUM_GENERATED_CLASS_ATTRS:
+                # A machinery name a user can override (``_generate_next_value_``) is only exempt when it still holds
+                # the inherited default; a distinct object is a user hook (observable), not machinery bookkeeping.
+                if name in _ENUM_OVERRIDABLE_HOOK_NAMES and not _dict_entry_is_inherited_default(klass, name, member):
+                    return name
                 continue  # machinery/compiler bookkeeping (``_member_map_``, ``__new__``, 3.13 ``__firstlineno__``)
             return name  # a user-authored sunder/dunder hook (``_missing_`` / ``_repr_html_`` / ...) - observable
         return name  # a user method / property / class var
@@ -988,7 +1020,7 @@ def final_scalar_key(value: Any, live: bool = False) -> Any:
     # this tuple (args_hasher), so a subclass (or NumPy scalar) whose ``__repr__`` does not preserve its value
     # (e.g. ``OddInt.__repr__`` returning a constant) would otherwise serialize two distinct values to one string.
     # Coercing to the plain base type keeps the in-process key correct and makes the string faithful and stable.
-    if cls in _EXACT_BAKED_TYPES:
+    if _is_exact_baked_type(cls):
         canonical = value
     elif isinstance(value, int):  # a Python ``int`` subclass (``bool`` cannot be subclassed)
         canonical = int.__int__(value)  # base slot: bypass an overridden ``__int__`` / ``__index__``
