@@ -98,11 +98,16 @@ class SubsetCloner : public IRVisitor {
     auto *other_stmt = other_->as<Stmt>();
     if (phase == register_operand_map) {
       operand_map_[stmt] = other_stmt;
-      // `Stmt::clone()` (and the hand-written container clones) do not carry `region_tag` over, so restore it here for
-      // every cloned statement. It marks the graph region (`qd.graph.do_while`) a serial statement belongs to; losing
-      // it makes the serial offloader tag the task at level -1 so a conditional/loop nested in a host loop runs once
-      // instead of once per host-loop iteration.
+      // The hand-written container clones (IfStmt / RangeForStmt / StructForStmt / WhileStmt) rebuild via a typed
+      // constructor, not the copy ctor, so they drop two fields the whole-kernel path keeps; restore both here for
+      // every cloned statement (a no-op re-copy for leaf stmts, whose QD_DEFINE_CLONE copy-ctor clone already has
+      // them). region_tag marks the graph region (`qd.graph.do_while`) a serial statement belongs to; losing it makes
+      // the serial offloader tag the task at level -1 so a conditional/loop nested in a host loop runs once instead of
+      // once per host-loop iteration. dbg_info carries the source traceback; losing it empties `get_tb()` so later
+      // per-construct diagnostics (e.g. offload.cpp's block-dim-too-large warning on a cloned StructForStmt) print
+      // without a source location.
       other_stmt->region_tag = stmt->region_tag;
+      other_stmt->dbg_info = stmt->dbg_info;
     } else {
       QD_ASSERT(stmt->num_operands() == other_stmt->num_operands());
       for (int i = 0; i < stmt->num_operands(); i++) {
