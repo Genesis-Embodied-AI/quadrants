@@ -128,8 +128,8 @@ bool cfg_optimization(const CompileConfig &config,
       auto *block = root->as<Block>();
       int task_index = 0;
       for (auto *off : tasks) {
-        result_modified |= optimize_one_task(block, off, after_lower_access, autodiff_enabled, lva_config_opt,
-                                             dump_cfg, config, kernel_name, phase, task_index);
+        result_modified |= optimize_one_task(block, off, after_lower_access, autodiff_enabled, lva_config_opt, dump_cfg,
+                                             config, kernel_name, phase, task_index);
         ++task_index;
       }
     }
