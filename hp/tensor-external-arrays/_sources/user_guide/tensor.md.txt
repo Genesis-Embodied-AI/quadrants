@@ -281,7 +281,7 @@ t_nd.grad      # None
 
 Pass `needs_grad=True` at tensor creation to automatically allocate gradient storage with default memory layout if needed: floating-point tensors get a grad buffer of the same shape and dtype as the primal, whereas integer-dtype tensors never get a grad buffer - `needs_grad=True` is a no-op there.
 
-Use `Tensor.has_grad()` to check whether the gradient storage (`.grad`) is actually allocated, regardless of whether the allocation came from `needs_grad=True` or a manual `qd.root.place(field.grad)`. `Tensor.has_dual()` is the same check for the forward-mode *dual* (tangent) buffer covered at the end of this section:
+Use `Tensor.has_grad()` to check whether the gradient storage (`.grad`) is actually allocated, regardless of whether the allocation came from `needs_grad=True` or a manual `qd.root.place(field.grad)`:
 
 ```python
 t_field.has_grad()   # False -- the placeholder has not been placed
