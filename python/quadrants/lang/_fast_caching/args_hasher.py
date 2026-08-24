@@ -11,7 +11,11 @@ from quadrants._tensor_wrapper import _TENSOR_WRAPPER_TYPES
 from quadrants._tensor_wrapper import Tensor as _TensorWrapper
 from quadrants.types.annotations import Template
 
-from .._final_dataclass_fields import final_field_names, final_scalar_key
+from .._final_dataclass_fields import (
+    final_field_names,
+    final_scalar_key,
+    subtree_has_final_fields,
+)
 from .._ndarray import ScalarNdarray
 from ..field import ScalarField
 from ..kernel_arguments import ArgMetadata
@@ -92,9 +96,16 @@ def dataclass_to_repr(raise_on_templated_floats: bool, path: tuple[str, ...], ar
     # discriminates on the value; this covers the cross-process offline cache. Treated identically to an explicit
     # ``FIELD_METADATA_CACHE_VALUE`` marker.
     #
-    # PERF: one ``dict.get`` keyed on the dataclass type; empty for every dataclass not using the feature. The
-    # ``is_frozen`` repr cache above means this whole function runs once per instance anyway.
+    # PERF: one ``dict.get`` keyed on the dataclass type; empty for every dataclass not using the feature. For a
+    # Final-free frozen dataclass the ``is_frozen`` repr cache above means this whole function runs once per instance.
     final_names = final_field_names(type(arg))
+    # A dataclass whose subtree bakes a ``Final`` value must NOT cache its repr: the cached string cannot notice a
+    # ``Final`` value's *class* turning behaviorful between launches (e.g. a plain enum whose ``__eq__`` is
+    # monkey-patched), so it must recompute each launch to re-run ``final_scalar_key``'s validation. We achieve that by
+    # never *storing* a cache for it, so the read above misses and falls through here every launch (transitive: an
+    # early cache hit would also skip the recursion into a nested Final leaf). ``subtree_has_final_fields`` is a single
+    # ``dict.get`` after first sighting, and is only reached off the cached steady state.
+    cacheable = is_frozen and not subtree_has_final_fields(type(arg))
     repr_l = []
     for field in dataclasses.fields(arg):
         child_value = getattr(arg, field.name)
@@ -102,7 +113,7 @@ def dataclass_to_repr(raise_on_templated_floats: bool, path: tuple[str, ...], ar
         if _repr is None:
             if isinstance(child_value, _FIELD_TYPES) and field.type is not _TensorWrapper:
                 _mark_should_warn()
-            if is_frozen:
+            if cacheable:
                 try:
                     object.__setattr__(arg, "_qd_dc_repr", _DC_REPR_NONE)
                 except AttributeError:
@@ -118,7 +129,7 @@ def dataclass_to_repr(raise_on_templated_floats: bool, path: tuple[str, ...], ar
             full_repr += f" = {value_repr}"
         repr_l.append(full_repr)
     result = "[" + ",".join(repr_l) + "]"
-    if is_frozen:
+    if cacheable:
         try:
             object.__setattr__(arg, "_qd_dc_repr", result)
         except AttributeError:

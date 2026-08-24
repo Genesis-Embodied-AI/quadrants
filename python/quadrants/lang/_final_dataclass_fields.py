@@ -314,6 +314,26 @@ def final_field_names(dc_type: Any) -> "frozenset[str]":
     return names
 
 
+def subtree_has_final_fields(dc_type: Any) -> bool:
+    """True if ``dc_type`` - or any dataclass nested (transitively) beneath it - declares a ``Final`` field.
+
+    Gates the per-instance caches the launch hot path keeps on frozen dataclasses (``_qd_spec_key`` for the in-process
+    spec key, ``_qd_dc_repr`` for the offline fastcache repr): both are served verbatim on later launches, which is
+    sound only when nothing about the baked key can change after the first launch. A ``Final`` value's *class behavior*
+    can: a plain ``enum`` accepted on launch one can have ``Mode.__eq__`` monkey-patched before launch two - a kernel
+    observes that via ``qd.static(cfg.mode == 1)`` but the cached key cannot notice it (the class identity is
+    unchanged). So a dataclass whose subtree bakes any ``Final`` value must recompute each launch, re-running
+    ``final_scalar_key``'s validation (which then rejects the now-behaviorful class). The cache *writers* gate on this:
+    they simply never store a cache for such a dataclass, so the read always misses and falls through to the
+    revalidating recompute - leaving the steady-state cost of Final-free dataclasses untouched.
+
+    Transitive because an early cache hit also skips the recursion into nested dataclasses: a ``Final`` leaf nested
+    under an otherwise-Final-free ancestor still has to disable that ancestor's cache. Answered by ``_first_final_path``
+    (memoised per type), so after first sighting this is a single ``dict.get`` + ``is`` check.
+    """
+    return _first_final_path(dc_type, frozenset()) is not None
+
+
 # Precomputed packers for encoding a ``float`` by its exact IEEE-754 bits (see ``final_scalar_key``).
 _pack_f64 = struct.Struct("<d").pack
 _unpack_u64 = struct.Struct("<Q").unpack
@@ -472,11 +492,13 @@ def _reject_stateful_primitive_subclass(value: Any) -> None:
                     f"specialization. Pass a plain ``bool`` / ``int`` / ``float`` / ``str`` (or an ``enum`` "
                     f"member) instead."
                 )
-    for mcls in type(cls).__mro__:  # user-authored metaclass layers below ``type`` (``class Unit(int, metaclass=M)``)
-        # ``cfg.x.__class__.label`` resolves to ``type(cls).label``, which the subclass MRO walk never sees. A custom
-        # metaclass can carry observable state/behavior that two same-named factory subclasses define differently, or
-        # that is mutated between launches, while the key (keyed only on the subclass ``module``/``qualname``) stays
-        # fixed - so it must be inspected too, exactly as ``_enum_class_behavior_attr`` does for enums.
+    # ``cfg.x.__class__.label`` resolves to ``type(cls).label``, which the subclass MRO walk never sees. A custom
+    # metaclass can carry observable state/behavior that two same-named factory subclasses define differently, or
+    # that is mutated between launches, while the key (keyed only on the subclass ``module``/``qualname``) stays
+    # fixed - so it must be inspected too, exactly as ``_enum_class_behavior_attr`` does for enums. The ``: type``
+    # annotation keeps the ``__mro__`` access an instance read (a class *object*), not a read of the descriptor.
+    metacls: type = type(cls)  # user-authored layers sit below ``type`` (``class Unit(int, metaclass=M)``)
+    for mcls in metacls.__mro__:
         if mcls in _FRAMEWORK_PRIMITIVE_METACLASSES:
             continue
         attr = _observable_metaclass_attr(mcls)
@@ -823,7 +845,9 @@ def _enum_class_behavior_attr(enum_cls: type) -> "str | None":
         attr = _observable_class_dict_attr(klass)
         if attr is not None:
             return attr
-    for mcls in type(enum_cls).__mro__:  # user-authored metaclass layers below the framework ``EnumMeta``
+    # ``: type`` keeps ``__mro__`` an instance read (a class object), not a read of the ``type.__mro__`` descriptor.
+    enum_metacls: type = type(enum_cls)  # user-authored metaclass layers below the framework ``EnumMeta``
+    for mcls in enum_metacls.__mro__:
         if mcls in _FRAMEWORK_ENUM_METACLASSES:
             continue
         attr = _observable_metaclass_attr(mcls)
@@ -902,14 +926,16 @@ def final_scalar_key(value: Any, live: bool = False) -> Any:
     (or one with ``__hash__ = None``) - while its retained class object pins ``cls`` so its ``id`` cannot be recycled
     while the specialization is cached; the offline fastcache key (``live=False``, the default) uses a process-stable
     component instead (``None`` for a resolvable class, a per-process ``(nonce, id)`` for a locally/dynamically created
-    one, so it is a guaranteed cross-process miss rather than a possible wrong reuse).
-    Annotations are not enforced at runtime, so a
-    value that is none of the above (an arbitrary object, or a mutable container) is *rejected* with a clear
-    ``TypeError`` rather than keyed by its own ``__eq__`` / ``__hash__``. Such an object could select the wrong
+    one, so it is a guaranteed cross-process miss rather than a possible wrong reuse). Annotations are not enforced at
+    runtime, so a value that is none of the above (an arbitrary object, or a mutable container) is *rejected* with a
+    clear ``TypeError`` rather than keyed by its own ``__eq__`` / ``__hash__``. Such an object could select the wrong
     specialization or change under the cached ``_qd_spec_key`` after first launch.
 
-    Everything here runs once per instance (Final keys/reprs are cached), never on the steady-state launch path, so
-    the ``isinstance`` probes are off the hot path.
+    This is off the steady-state hot path for Final-free dataclasses (which serve a cached ``_qd_spec_key`` /
+    ``_qd_dc_repr`` and never reach here), so the ``isinstance`` probes cost nothing there. A dataclass whose subtree
+    bakes a ``Final`` value deliberately does *not* cache (see ``subtree_has_final_fields``): it recomputes each launch
+    so this validation re-runs, catching a value whose class turned behaviorful (e.g. a monkey-patched enum) after the
+    first launch. So for Final-bearing configs this runs per launch by design, not once per instance.
     """
     if type(value) is float:
         return (_FLOAT_KEY_TAG, _unpack_u64(_pack_f64(value))[0])

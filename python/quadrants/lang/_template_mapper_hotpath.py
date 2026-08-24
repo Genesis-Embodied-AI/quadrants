@@ -41,7 +41,11 @@ from quadrants._tensor import (
 from quadrants._tensor_wrapper import _TENSOR_WRAPPER_TYPES
 from quadrants._tensor_wrapper import Tensor as _TensorClass
 from quadrants.lang._dataclass_util import create_flat_name
-from quadrants.lang._final_dataclass_fields import final_field_names, final_scalar_key
+from quadrants.lang._final_dataclass_fields import (
+    final_field_names,
+    final_scalar_key,
+    subtree_has_final_fields,
+)
 from quadrants.lang._ndarray import Ndarray
 from quadrants.lang.any_array import AnyArray
 from quadrants.lang.buffer_view import BufferView as BufferViewInstance
@@ -403,6 +407,14 @@ def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: Annotati
         # recompute instead, which re-runs the guard at every level of the arg tree each launch. This only forgoes
         # the cache in the opt-in strict mode; the default hot path is unchanged. (The recompute still writes the
         # cache below, so it stays warm if the option is later turned off.)
+        #
+        # A dataclass whose subtree bakes a ``Final`` value is likewise never served here - but there is no read gate
+        # for it: the write below refuses to *store* a cache for such a dataclass (``subtree_has_final_fields``), so
+        # this read simply misses and falls through to the recompute, which re-runs ``final_scalar_key``'s validation.
+        # That matters because the cached key cannot notice a ``Final`` value's *class* turning behaviorful between
+        # launches (e.g. a plain enum whose ``__eq__`` is monkey-patched, observed by ``qd.static(cfg.mode == 1)``);
+        # recomputing rejects it. Transitive: a Final leaf nested under a Final-free ancestor disables the ancestor's
+        # cache too, since serving it would skip the recursion that reaches the leaf.
         if is_frozen and not raise_on_templated_floats:
             try:
                 # Note that it is necessary to store the key at instance-level instead of class-level because
@@ -482,7 +494,10 @@ def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: Annotati
                     if field._field_type is _FIELD
                 ]
             )
-        if is_frozen:
+        # Cache only when the whole subtree is ``Final``-free: a Final-bearing subtree must recompute every launch so
+        # its validation re-runs (see the read-gate note above and ``subtree_has_final_fields``), so we never store a
+        # cache for it - which is what makes the un-gated read above miss and fall through.
+        if is_frozen and not subtree_has_final_fields(annotation):
             try:
                 object.__setattr__(arg, "_qd_spec_key", key)
             except AttributeError:

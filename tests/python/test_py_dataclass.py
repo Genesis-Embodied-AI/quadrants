@@ -3862,10 +3862,10 @@ def test_final_numpy_float_field_honors_raise_on_templated_floats():
 
 @test_utils.test()
 def test_final_float_cached_spec_key_revalidated_after_reinit():
-    """The per-instance ``_qd_spec_key`` cache is populated on a frozen config's first launch. If it were served
-    unconditionally, a config first used while ``raise_on_templated_floats`` was off and then reused after
-    re-initialising with the option on would skip the ``Final[float]`` guard and keep silently specialising on the
-    float. The cache is only served while the option is off, so reuse after enabling it still raises."""
+    """A frozen config whose subtree bakes a ``Final`` value is never spec-key-cached on its instance (see
+    ``subtree_has_final_fields``): it recomputes each launch so validation-sensitive guards re-run. Here the
+    ``Final[float]`` guard must fire when the same instance is reused after re-initialising with
+    ``raise_on_templated_floats`` on - a stale cached key would otherwise silently keep specialising on the float."""
     from typing import Final
 
     arch_name = qd.lang.impl.current_cfg().arch.name
@@ -3886,12 +3886,13 @@ def test_final_float_cached_spec_key_revalidated_after_reinit():
 
     cfg = Cfg(dt=0.5, n=3)
 
-    # First launch with the option OFF: compiles fine and caches the spec key on this very instance.
+    # First launch with the option OFF: compiles fine. A Final-bearing config is deliberately never cached, so the
+    # instance carries no ``_qd_spec_key`` to short-circuit (and thus bypass a guard) on later launches.
     qd.init(arch=getattr(qd, arch_name))
     run(cfg)
-    assert hasattr(cfg, "_qd_spec_key")  # the cache is now populated, so the next launch could short-circuit on it
+    assert not hasattr(cfg, "_qd_spec_key")  # Final-bearing config is never cached; every launch recomputes+revalidates
 
-    # Re-initialise with the option ON and reuse the SAME instance: the cached key must not bypass the guard.
+    # Re-initialise with the option ON and reuse the SAME instance: the recompute must re-run the guard.
     qd.init(arch=getattr(qd, arch_name), raise_on_templated_floats=True)
     with pytest.raises(ValueError, match="Floats not allowed as templated types"):
         run(cfg)
@@ -4642,10 +4643,10 @@ def test_final_float_signed_zero_keys_distinct_kernels():
 
 @test_utils.test()
 def test_final_key_field_name_does_not_shadow_internal_spec_key_cache():
-    """A frozen dataclass may legitimately declare a field named ``_key``. The internal per-instance spec-key cache
-    lives under the ``_qd_``-namespaced ``_qd_spec_key`` attribute precisely so a user ``_key`` field cannot shadow
-    it - otherwise the early ``return arg._qd_spec_key`` would hand back the user's field value and Final fields
-    would stop driving specialization, silently reusing the kernel baked with the first value."""
+    """A frozen dataclass may legitimately declare a field named ``_key``. Any internal per-instance attribute lives in
+    the reserved ``_qd_`` namespace (here ``_qd_spec_key``) precisely so a user ``_key`` field can never be mistaken for
+    it. This config also bakes a ``Final`` value, so it recomputes its spec key each launch (never caching) - the
+    distinct ``Final`` values must therefore drive distinct kernels regardless of the equal user ``_key`` fields."""
     from typing import Final
 
     @dataclass(frozen=True)
@@ -4666,3 +4667,67 @@ def test_final_key_field_name_does_not_shadow_internal_spec_key_cache():
     bump(Config(_key=0, value=2), out)  # same user _key, different Final value
     assert out[0] == 2, "distinct Final values must not share a compiled kernel despite equal user ``_key`` fields"
     assert len(bump._primal.mapper.mapping) == 2
+
+
+@test_utils.test()
+def test_final_subtree_has_final_fields_predicate():
+    """``subtree_has_final_fields`` gates the per-instance spec-key / offline-repr caches. It must report a ``Final``
+    field anywhere in the *transitive* dataclass subtree, so a Final-free dataclass keeps caching (untouched hot path)
+    while any Final-bearing one - even one reaching a ``Final`` leaf only through a nested dataclass - is forced to
+    recompute and revalidate each launch."""
+    from typing import Final
+
+    from quadrants.lang._final_dataclass_fields import subtree_has_final_fields as shf
+
+    @dataclass(frozen=True)
+    class PlainLeaf:
+        a: int
+
+    @dataclass(frozen=True)
+    class DirectFinal:
+        x: Final[int]
+
+    @dataclass(frozen=True)
+    class Inner:
+        n: Final[int]
+
+    @dataclass(frozen=True)
+    class OuterViaInner:  # no own Final field; reaches one only through the nested ``Inner``
+        child: Inner
+
+    @dataclass(frozen=True)
+    class OuterPlain:  # no Final anywhere in the subtree
+        leaf: PlainLeaf
+
+    assert not shf(PlainLeaf)
+    assert shf(DirectFinal)
+    assert shf(Inner)
+    assert shf(OuterViaInner), "a Final leaf nested under a Final-free ancestor must still disable the ancestor's cache"
+    assert not shf(OuterPlain)
+
+
+@test_utils.test()
+def test_final_offline_repr_not_cached_on_final_bearing_config():
+    """The offline fastcache repr is cached on a frozen instance as ``_qd_dc_repr`` - but never on a Final-bearing one.
+    A cached repr could not notice a ``Final`` value's class turning behaviorful between launches (e.g. an enum whose
+    ``__eq__`` is monkey-patched), so such a config recomputes each launch to re-run ``final_scalar_key`` validation.
+    A Final-free frozen dataclass still caches, keeping the offline hot path intact."""
+    from typing import Final
+
+    from quadrants.lang._fast_caching.args_hasher import dataclass_to_repr
+
+    @dataclass(frozen=True)
+    class PlainCfg:
+        a: int
+
+    @dataclass(frozen=True)
+    class FinalCfg:
+        x: Final[int]
+
+    plain = PlainCfg(a=1)
+    dataclass_to_repr(False, (), plain)
+    assert hasattr(plain, "_qd_dc_repr")  # Final-free frozen dataclass caches its repr (result or the NONE sentinel)
+
+    fcfg = FinalCfg(x=1)
+    dataclass_to_repr(False, (), fcfg)
+    assert not hasattr(fcfg, "_qd_dc_repr")  # Final-bearing config is never repr-cached; it recomputes+revalidates
