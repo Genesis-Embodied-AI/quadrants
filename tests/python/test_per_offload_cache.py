@@ -6,7 +6,8 @@ instead of once over the whole kernel, isolating each construct by its backward 
 recompute-safe: autodiff, mesh-for, a concurrently-executed region (`qd.stream_parallel()` / `qd.graph.parallel()`,
 whose constructs share one global-temp buffer), a loop-produced local shared across constructs, a `qd.append` index a
 later construct consumes, a local a later construct reads that a `@qd.real_func` (via a `qd.ref` argument) or an
-external / bitcode call wrote to, a non-recomputable producer a later construct would clone (an effectful one such as a
+external / bitcode call wrote to, a loop-carried local a later construct reads read-only through a `qd.ref` argument, a
+non-recomputable producer a later construct would clone (an effectful one such as a
 global atomic, a non-deterministic `qd.random()`, or a `qd.volatile_load()`), or a serial field load that a later
 construct would recompute after an intervening effect (a store, atomic, or sparse activate/deactivate) mutated global
 state. It also declines the split when `QD_DUMP_CFG` asks for a whole-kernel CFG dump (cfg_optimization, a pre-existing
@@ -543,6 +544,37 @@ def test_per_construct_frontend_split_fallback_realfunc_ref_write() -> None:
     # The real_func wrote _C[0] into `a` before the loop, so every out[i] must be _C[0] -- not the initial 5.0 a slice
     # that dropped the FuncCallStmt writer would recompute.
     assert np.allclose(out.to_numpy(), _C[0], atol=1.0), out.to_numpy()
+
+
+@test_utils.test(arch=[qd.cpu, qd.cuda], offline_cache=False)
+def test_per_construct_frontend_split_fallback_realfunc_ref_read() -> None:
+    # A local ACCUMULATED inside one top-level loop (loop-carried) is then read -- READ-ONLY -- by a `@qd.real_func`
+    # through a `qd.ref` argument in a LATER loop. That read reaches the callee as a `ReferenceStmt` (the shared `Load`
+    # trait) with no store destination, so a store-only scan of the consumer misses it. The loop-carried-local gate must
+    # still see the read via `get_load_pointers`; otherwise it accepts the split, isolates the second loop, drops the
+    # producing loop (whose write is inside a container, so it is not a top-level writer the slice recomputes), and the
+    # callee reads the 0.0 initialization instead of the accumulated value.
+    @qd.real_func
+    def read_a(a: qd.ref(qd.f32)) -> qd.f32:
+        return a
+
+    @qd.kernel
+    def kernel_ref_read(out: qd.types.ndarray()) -> None:
+        acc = 0.0
+        for i in range(_N):
+            acc += 1.0
+        for i in range(_N):
+            out[i] = read_a(acc)
+
+    out = qd.ndarray(qd.f32, shape=(_N,))
+    kernel_ref_read(out)
+
+    obs = kernel_ref_read._primal.per_offload_cache_observations
+    assert obs.frontend_constructs_total == -1, obs
+
+    # `acc` accumulates to _N over the first loop, so every out[i] must be _N -- not the 0.0 initialization a slice that
+    # dropped the producing loop would recompute.
+    assert np.allclose(out.to_numpy(), float(_N)), out.to_numpy()
 
 
 @pytest.mark.skipif(not has_clangpp(), reason="Clang not installed.")

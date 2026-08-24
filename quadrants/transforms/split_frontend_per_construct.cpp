@@ -417,6 +417,22 @@ std::vector<Stmt *> stmt_local_write_allocas(Stmt *s) {
   return out;
 }
 
+// The locals (allocas) a statement reads. Mirrors `stmt_local_write_allocas` but reads the shared `Load` trait
+// (`get_load_pointers`), so it covers EVERY way a construct observes a function-scope variable without enumerating
+// statement types: a `LocalLoadStmt`, an `AtomicOpStmt` (read-modify-write), and -- crucially -- a `ReferenceStmt`,
+// which is how a `qd.ref` argument to a `@qd.real_func` reaches the callee even when the callee only READS it. A
+// read-only ref has a `Load` `ReferenceStmt` but no store destination, so a store-only scan misses it; the
+// loop-carried-local gate below would then not see the read and could wrongly accept a split whose consuming construct
+// reads a local produced inside another construct's loop. Non-local pointers (global loads, ndarrays) resolve to
+// nullptr and are dropped.
+std::vector<Stmt *> stmt_local_read_allocas(Stmt *s) {
+  std::vector<Stmt *> out;
+  for (Stmt *ptr : irpass::analysis::get_load_pointers(s))
+    if (Stmt *a = resolve_local_alloca(ptr))
+      out.push_back(a);
+  return out;
+}
+
 // Top-level writers of each local variable, for the backward slice. A `LocalLoadStmt`'s only operand is the alloca (or
 // a `MatrixPtrStmt` into it), never the store that gave it its value, so an operand-closed slice pulls in a bare,
 // zero-initialized alloca and silently reads zeros. `split_is_recompute_safe` has already rejected kernels where a
@@ -520,13 +536,14 @@ bool split_is_recompute_safe(Block *block) {
   if (block == nullptr)
     return false;
 
-  // (1) Loop-carried locals. Writers are found generically via the shared `Store` trait (`stmt_local_write_allocas`),
-  // so any statement that mutates a local counts -- `LocalStoreStmt`, `AtomicOpStmt`, a `qd.append`
+  // (1) Loop-carried locals. Writers are found generically via the shared `Store` trait (`stmt_local_write_allocas`)
+  // and readers via the shared `Load` trait (`stmt_local_read_allocas`), so any statement that touches a local counts
+  // without enumerating statement types: writers include `LocalStoreStmt`, `AtomicOpStmt`, a `qd.append`
   // (`SNodeOpStmt::allocate`), a `@qd.real_func` writing through a `qd.ref` arg (`FuncCallStmt`), and an external /
-  // bitcode call (`ExternalFuncCallStmt`) -- without enumerating statement types. A read-modify-write / call with
-  // in-out args (`AtomicOpStmt`, `FuncCallStmt`, `ExternalFuncCallStmt`) also READS the local it writes.
+  // bitcode call (`ExternalFuncCallStmt`); readers include `LocalLoadStmt`, `AtomicOpStmt` (read-modify-write), and the
+  // `ReferenceStmt` that carries a `qd.ref` arg into a `@qd.real_func` even when the callee only READS the local.
   auto accesses = irpass::analysis::gather_statements(
-      block, [](Stmt *s) { return s->is<LocalLoadStmt>() || !stmt_local_write_allocas(s).empty(); });
+      block, [](Stmt *s) { return !stmt_local_read_allocas(s).empty() || !stmt_local_write_allocas(s).empty(); });
   std::unordered_map<Stmt *, std::set<Stmt *>> read_owners;        // alloca -> top-level constructs that read it
   std::unordered_map<Stmt *, std::set<Stmt *>> loop_write_owners;  // alloca -> constructs that write it inside a loop
   for (Stmt *acc : accesses) {
@@ -534,17 +551,11 @@ bool split_is_recompute_safe(Block *block) {
     Stmt *owner = top_level_owner(acc, block, &inside_container);
     if (owner == nullptr)
       continue;
-    auto writes = stmt_local_write_allocas(acc);
-    for (Stmt *a : writes)
-      if (inside_container)
+    if (inside_container)
+      for (Stmt *a : stmt_local_write_allocas(acc))
         loop_write_owners[a].insert(owner);
-    if (auto *ld = acc->cast<LocalLoadStmt>()) {
-      if (Stmt *a = resolve_local_alloca(ld->src))
-        read_owners[a].insert(owner);
-    } else if (acc->is<AtomicOpStmt>() || acc->is<FuncCallStmt>() || acc->is<ExternalFuncCallStmt>()) {
-      for (Stmt *a : writes)  // atomic rmw / call in-out arg reads the same local it writes
-        read_owners[a].insert(owner);
-    }
+    for (Stmt *a : stmt_local_read_allocas(acc))
+      read_owners[a].insert(owner);
   }
   for (auto &kv : loop_write_owners) {
     std::set<Stmt *> owners = kv.second;  // constructs that loop-write this local ...
