@@ -176,7 +176,7 @@ clone = a.to_torch(copy=True)    # independent copy (default)
 
 The difference between `False` and `None`: `copy=False` raises `ValueError` when zero-copy is not supported (e.g. unsupported dtype or GPU-to-numpy), while `copy=None` silently falls back to a kernel copy in those cases. Use `copy=None` when you want zero-copy as a best-effort optimization without having to handle exceptions.
 
-The tradeoff of zero-copy is lifetime coupling: the view is invalidated on `qd.reset()` or `qd.init()`, and on GPU you must be mindful of stream synchronization when both frameworks write to the same buffer.
+The tradeoff of zero-copy is lifetime coupling: the view is invalidated on `qd.reset()` or `qd.init()` (both of which release the current Quadrants runtime allocations), and on GPU you must be mindful of stream synchronization when both frameworks write to the same buffer.
 
 This works identically on both backends. For the full support matrix (which backends/dtypes qualify, lifetime caveats, Metal synchronization) see [`interop`](interop.md#zero-copy-interop-via-dlpack).
 
@@ -281,7 +281,7 @@ t_nd.grad      # None
 
 Pass `needs_grad=True` at tensor creation to automatically allocate gradient storage with default memory layout if needed: floating-point tensors get a grad buffer of the same shape and dtype as the primal, whereas integer-dtype tensors never get a grad buffer - `needs_grad=True` is a no-op there.
 
-Use `Tensor.has_grad()` / `Tensor.has_dual()` to check whether the gradient storage is actually allocated, regardless of whether the allocation came from `needs_grad=True` or a manual `qd.root.place(field.grad)`:
+Use `Tensor.has_grad()` to check whether the gradient storage (`.grad`) is actually allocated, regardless of whether the allocation came from `needs_grad=True` or a manual `qd.root.place(field.grad)`. `Tensor.has_dual()` is the same check for the forward-mode *dual* (tangent) buffer covered at the end of this section:
 
 ```python
 t_field.has_grad()   # False -- the placeholder has not been placed
