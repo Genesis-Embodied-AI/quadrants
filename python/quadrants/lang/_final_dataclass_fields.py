@@ -12,11 +12,13 @@ walk vs a ~10ns pointer comparison for ``type(x) is Y``).
 
 import dataclasses
 import enum
+import itertools
 import os
 import struct
 import sys
 import typing
 import uuid
+import weakref
 from typing import Any
 
 import numpy as np
@@ -24,16 +26,18 @@ import numpy as np
 _MISSING = object()  # sentinel for "attribute not found" while resolving a qualname (``None`` is a legal value)
 
 # A random token minted once per interpreter process. It is folded into the *offline* (cross-process) key component of
-# a non-uniquely-resolvable (locally / dynamically created) class - see ``_subclass_identity``. ``id(cls)`` alone is
-# only process-local and can repeat across processes, so two workers building same-named dynamic classes could
-# otherwise serialize identical offline keys and one could load a kernel baked for the other's (distinct) class. The
-# nonce makes such a key unique to this process: a dynamic class is a guaranteed cross-process cache *miss*, never a
-# wrong reuse, matching the documented "dynamic classes don't reuse another process's cached kernel" contract.
+# a non-uniquely-resolvable (locally / dynamically created) class - see ``_subclass_identity``. The per-class serial
+# that accompanies it (see ``_dynamic_class_serial``) is only process-local and restarts from zero in every process,
+# so two workers building same-named dynamic classes would otherwise serialize identical offline keys and one could
+# load a kernel baked for the other's (distinct) class. The nonce makes such a key unique to this process: a dynamic
+# class is a guaranteed cross-process cache *miss*, never a wrong reuse, matching the documented "dynamic classes
+# don't reuse another process's cached kernel" contract.
 #
-# It MUST be reseeded in a ``fork``ed child: the child inherits the parent's string *and* its allocator state, so
-# same-qualified dynamic classes can land at the same ``id(cls)`` and serialize an identical offline key to a sibling's
-# distinct class. ``os.register_at_fork`` mints a fresh token in every child (``uuid4`` re-reads OS entropy, so each
-# child - and the parent - differ), restoring the guarantee. ``spawn`` re-imports this module, so it reseeds anyway.
+# It MUST be reseeded in a ``fork``ed child: the child inherits the parent's string *and* its serial counter, so a
+# fresh dynamic class in one child can draw the same serial as a same-qualified one in a sibling and serialize an
+# identical offline key. ``os.register_at_fork`` mints a fresh token in every child (``uuid4`` re-reads OS entropy, so
+# each child - and the parent - differ), restoring the guarantee. ``spawn`` re-imports this module, so it reseeds
+# anyway.
 _PROCESS_NONCE = uuid.uuid4().hex
 
 
@@ -678,8 +682,9 @@ def _class_not_uniquely_identified(cls: type) -> bool:
     class shares its identity string with every other class built the same way, so distinct class objects would key
     identically on ``(module, qualname, ...)`` alone: two recreated enum classes have distinct members
     (``First.A is not Second.A``; for a plain ``Enum`` also ``First.A != Second.A``), and two recreated primitive
-    subclasses are still observably distinct (``cfg.x.__class__ is First``). Callers add ``id(cls)`` to the key in
-    that case to keep them distinct in-process. Runs once per instance (cached), off the steady-state launch path.
+    subclasses are still observably distinct (``cfg.x.__class__ is First``). Callers add a class-identity token to the
+    key in that case to keep them distinct (a ``_ClassRef`` in-process, a ``_dynamic_class_serial`` offline). Runs once
+    per instance (cached), off the steady-state launch path.
     """
     module = sys.modules.get(cls.__module__)
     if module is None:
@@ -725,6 +730,41 @@ class _ClassRef:
         return f"<_ClassRef 0x{id(self.cls):x}>"  # identity only; the live key is never serialized
 
 
+# Monotonic, never-reused serial numbers for locally/dynamically created classes, used only in the *offline*
+# fastcache key (see ``_subclass_identity``). ``id(cls)`` is unusable there: it identifies the class only while the
+# class is alive, but the on-disk artifact keyed by it outlives the class. Once ``qd.reset()`` drops the live spec key
+# whose ``_ClassRef`` pinned such a class, the class can be collected while its artifact remains, and CPython can hand
+# the freed address to the *next* same-qualified factory class in this process - which would then serialize an
+# identical ``(nonce, id)`` offline key and load the dead class's kernel, even though ``qd.static(cfg.x.__class__ is
+# First)`` distinguishes them at compile time. A serial drawn from an ever-increasing counter is never handed out
+# twice, so a later class keys distinctly even at a recycled address. The map holds classes *weakly* (unlike the live
+# ``_ClassRef``, this component must pin nothing), so a collected class's entry simply disappears; the counter only
+# advances, so its slot is never reissued. Classes reaching here have already passed the stateful-subclass /
+# observable-metaclass rejection, so ``cls`` hashes and compares by object identity (``type``'s defaults) - safe as a
+# ``WeakKeyDictionary`` key.
+_dynamic_class_serials: "weakref.WeakKeyDictionary[type, int]" = weakref.WeakKeyDictionary()
+_dynamic_class_serial_counter = itertools.count()
+
+
+def _dynamic_class_serial(cls: type) -> int:
+    """A process-unique, non-recyclable serial for a locally/dynamically created ``cls``, stable for its lifetime.
+
+    Distinct class objects always get distinct serials (the counter only advances), even if one is collected and the
+    next is allocated at the same address, so the offline key can never mistake a later same-qualified class for a
+    dead one. A class that cannot be weakly referenced (a pathological metaclass, already rejected upstream) draws a
+    fresh serial each call - never a stale reuse, only a redundant cross-process miss.
+    """
+    serial = _dynamic_class_serials.get(cls)
+    if serial is not None:
+        return serial
+    serial = next(_dynamic_class_serial_counter)
+    try:
+        _dynamic_class_serials[cls] = serial
+    except TypeError:
+        pass
+    return serial
+
+
 def _subclass_identity(cls: type, live: bool) -> tuple:
     """Key component identifying a user *subclass* of a baked base type (a ``float``/``int``/``str`` or NumPy scalar
     subclass), or an ``enum`` class. ``module``/``qualname`` name it, but they never uniquely identify the *class
@@ -744,16 +784,18 @@ def _subclass_identity(cls: type, live: bool) -> tuple:
     - ``live=False`` (the offline fastcache key, ``str``-ified by ``args_hasher``): the component must make another
       process reuse a *resolvable* class's cached kernel while never wrongly reusing one for a *non-resolvable* class.
       So it is ``None`` for a uniquely resolvable (typically module-level) class - keeping the string stable across
-      processes - and ``(_PROCESS_NONCE, id(cls))`` for a non-resolvable (locally/dynamically created) one:
-      ``id(cls)`` separates distinct dynamic classes *within* this process, and the per-process nonce makes the string
-      unique *across* processes (``id`` alone can repeat at the same address in another process), so a dynamic class is
-      always a cross-process cache miss, never a wrong reuse. This still cannot reuse a reloaded module-level class's
-      kernel across processes, which is unavoidable without process-stable identity and is safe (the old class object
-      does not exist in the other process).
+      processes - and ``(_PROCESS_NONCE, _dynamic_class_serial(cls))`` for a non-resolvable (locally/dynamically
+      created) one: the serial separates distinct dynamic classes *within* this process and is never recycled (unlike
+      ``id(cls)``, which the allocator can reissue to a later same-qualified class once the original is collected after
+      ``qd.reset()`` - see ``_dynamic_class_serial``), while the per-process nonce makes the string unique *across*
+      processes (serials restart from zero in each process), so a dynamic class is always a cross-process cache miss,
+      never a wrong reuse. This still cannot reuse a reloaded module-level class's kernel across processes, which is
+      unavoidable without process-stable identity and is safe (the old class object does not exist in the other
+      process).
     """
     if live:
         return (cls.__module__, cls.__qualname__, _ClassRef(cls))
-    identity = (_PROCESS_NONCE, id(cls)) if _class_not_uniquely_identified(cls) else None
+    identity = (_PROCESS_NONCE, _dynamic_class_serial(cls)) if _class_not_uniquely_identified(cls) else None
     return (cls.__module__, cls.__qualname__, identity)
 
 
@@ -984,11 +1026,11 @@ def final_scalar_key(value: Any, live: bool = False) -> Any:
     so distinct classes never collide - even across a module reload or under a metaclass that makes two classes ``==``
     (or one with ``__hash__ = None``) - while its retained class object pins ``cls`` so its ``id`` cannot be recycled
     while the specialization is cached; the offline fastcache key (``live=False``, the default) uses a process-stable
-    component instead (``None`` for a resolvable class, a per-process ``(nonce, id)`` for a locally/dynamically created
-    one, so it is a guaranteed cross-process miss rather than a possible wrong reuse). Annotations are not enforced at
-    runtime, so a value that is none of the above (an arbitrary object, or a mutable container) is *rejected* with a
-    clear ``TypeError`` rather than keyed by its own ``__eq__`` / ``__hash__``. Such an object could select the wrong
-    specialization or change under the cached ``_qd_spec_key`` after first launch.
+    component instead (``None`` for a resolvable class, a per-process ``(nonce, serial)`` for a locally/dynamically
+    created one, so it is a guaranteed cross-process miss rather than a possible wrong reuse). Annotations are not
+    enforced at runtime, so a value that is none of the above (an arbitrary object, or a mutable container) is
+    *rejected* with a clear ``TypeError`` rather than keyed by its own ``__eq__`` / ``__hash__``. Such an object could
+    select the wrong specialization or change under the cached ``_qd_spec_key`` after first launch.
 
     This is off the steady-state hot path for Final-free dataclasses (which serve a cached ``_qd_spec_key`` /
     ``_qd_dc_repr`` and never reach here), so the ``isinstance`` probes cost nothing there. A dataclass whose subtree
@@ -1014,8 +1056,8 @@ def final_scalar_key(value: Any, live: bool = False) -> Any:
         # by a reload - either way a kernel branching on ``cfg.mode == First.A`` needs distinct specializations.
         # ``_subclass_identity`` keys on a ``_ClassRef(cls)`` identity token in-process (so all such cases stay
         # distinct, even under a metaclass with a custom ``==`` / ``__hash__ = None``, and the retained class pins its
-        # ``id``) and on a per-process ``(nonce, id)`` / ``None`` offline. Every supported value encodes to a hashable
-        # key, so the tuple stays hashable.
+        # ``id``) and on a per-process ``(nonce, serial)`` / ``None`` offline. Every supported value encodes to a
+        # hashable key, so the tuple stays hashable.
         _reject_stateful_enum_member(value)
         cls = type(value)
         return (_ENUM_KEY_TAG, *_subclass_identity(cls, live), value.name, final_scalar_key(value.value, live))
@@ -1076,6 +1118,6 @@ def final_scalar_key(value: Any, live: bool = False) -> Any:
         return (_SCALAR_KEY_TAG, cls.__module__, cls.__qualname__, canonical)
     # A behavior-free user subclass (``class Grams(int): pass``): ``module``/``qualname`` do not uniquely identify the
     # class object, so ``_subclass_identity`` carries a ``_ClassRef(cls)`` token (in-process) or a per-process
-    # ``(nonce, id)`` / None (offline) - two distinct same-named subclasses (``cfg.x.__class__ is First``) then key
+    # ``(nonce, serial)`` / None (offline) - two distinct same-named subclasses (``cfg.x.__class__ is First``) then key
     # apart, matching the enum and float-subclass branches above.
     return (_SCALAR_KEY_TAG, *_subclass_identity(cls, live), canonical)

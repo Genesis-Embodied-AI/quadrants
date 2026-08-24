@@ -4430,10 +4430,49 @@ def test_final_scalar_key_offline_dynamic_class_is_process_unique():
     loc = _make_local_int()
     assert fdf._PROCESS_NONCE in str(fdf.final_scalar_key(loc(1)))  # dynamic-class offline key -> process-unique
     assert fdf._PROCESS_NONCE not in str(fdf.final_scalar_key(loc(1), live=True))  # live key never carries the nonce
-    # Distinct dynamic classes still separate within this process (same nonce, different id); the same class is stable.
+    # Distinct dynamic classes still separate within this process (same nonce, different serial); the class is stable.
     other = _make_local_int()
     assert fdf.final_scalar_key(loc(1)) != fdf.final_scalar_key(other(1))
     assert fdf.final_scalar_key(loc(1)) == fdf.final_scalar_key(loc(1))
+
+
+@test_utils.test()
+def test_final_offline_dynamic_class_serial_is_monotonic_not_recyclable():
+    """The *offline* key for a locally/dynamically created class must survive ``id(cls)`` recycling. Once ``qd.reset()``
+    drops the live ``_ClassRef`` that pinned such a class, the class can be collected while its on-disk fastcache
+    artifact remains, and CPython can hand its freed address to the next same-qualified factory class - an ``id``-based
+    offline key would then serialize identically and load the dead class's kernel, even though ``cfg.x.__class__ is
+    First`` is observable at compile time. The offline component uses a monotonic, never-reused serial instead: a
+    distinct class object always keys apart, the serial is stable for a class's lifetime, and a collected class frees
+    its (weak) registry slot without pinning it and without ever having its serial reissued."""
+    import gc
+    import weakref as _weakref
+
+    from quadrants.lang import _final_dataclass_fields as fdf
+
+    def _make():
+        class Local(int):
+            pass
+
+        return Local
+
+    a = _make()
+    sa = fdf._dynamic_class_serial(a)
+    assert fdf._dynamic_class_serial(a) == sa  # stable for the class's lifetime
+
+    b = _make()
+    sb = fdf._dynamic_class_serial(b)
+    assert sb > sa  # a distinct class object never reuses an earlier serial (monotonic counter)
+
+    # A collected class frees its weak registry slot (the offline key pins nothing, unlike the live ``_ClassRef``),
+    # and the counter only advances - so the next class, even were it allocated at ``a``'s recycled address, draws a
+    # fresh, higher serial rather than colliding.
+    ref = _weakref.ref(a)
+    del a
+    gc.collect()
+    assert ref() is None  # the serial registry did not pin the collected class
+    c = _make()
+    assert fdf._dynamic_class_serial(c) > sb  # still monotonic after a collection; never a recycled serial
 
 
 @test_utils.test()
