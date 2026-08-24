@@ -12,8 +12,8 @@ namespace irpass {
 
 namespace {
 
-// Kernel-wide index of the offloaded task whose lowering is running on this thread, or nullopt in whole-kernel
-// contexts. Set via ScopedTaskCodegenId; read only to disambiguate QD_DUMP_CFG per-task dump filenames.
+// Kernel-wide id of the task being lowered on this thread (nullopt off codegen workers); set by
+// ScopedTaskCodegenId, used only to name QD_DUMP_CFG per-task dumps.
 thread_local std::optional<int> t_task_codegen_id = std::nullopt;
 
 // Collect the top-level offloaded tasks of |root| iff |root| is an already-offloaded kernel body, i.e. a Block
@@ -63,9 +63,8 @@ std::string cfg_dump_suffix(const std::string &phase, bool post, std::optional<i
 // conservative across it: reaching-definition seeds every global pointer live-in and live-variable seeds every
 // global store destination live-out, so nothing is forwarded or eliminated across the launch boundary.
 //
-// |run_optimization| (false on the real-matrix path, which supports no CFG optimization) gates the optimization
-// only; |dump_cfg| gates only the dumps. They are independent: QD_DUMP_CFG never changes what optimization runs,
-// and when optimization is off the CFG is still built and its "before" graph dumped for observation.
+// |run_optimization| gates the optimization, |dump_cfg| the dumps, independently: with optimization off
+// (real-matrix path) the "before" graph is still dumped, and QD_DUMP_CFG never changes what runs.
 bool optimize_one_task(Block *parent,
                        OffloadedStmt *off,
                        bool after_lower_access,
@@ -129,9 +128,8 @@ bool cfg_optimization(const CompileConfig &config,
   const char *dump_cfg_env = std::getenv(DUMP_CFG_ENV.data());
   const bool dump_cfg = dump_cfg_env != nullptr && std::string(dump_cfg_env) == "1";
 
-  // QD_DUMP_CFG is observation-only: it only controls whether the CFG is written, never which path or which
-  // optimizations run. The graph is dumped at the granularity actually used (per offloaded task post-offload,
-  // whole-kernel otherwise), so it reflects real compilation instead of forcing it.
+  // QD_DUMP_CFG is observation-only: it never changes the path or which optimizations run, only whether the CFG
+  // is written -- at the granularity actually used (per task post-offload, whole-kernel otherwise).
 
   // Post-offload we optimize each task's CFG independently; pre-offload (no tasks yet) we DITCH the whole-kernel
   // cfg_optimization, whose super-linear reaching-definition / forwarding analyses on the monolithic IR dominate
@@ -140,20 +138,18 @@ bool cfg_optimization(const CompileConfig &config,
   // the intra-task forwarding + DSE once tasks exist.
   auto tasks = collect_offloaded_tasks(root);
   if (!tasks.empty()) {
-    // Per-task store-to-load forwarding + dead-store elimination. The real-matrix path supports no CFG
-    // optimization (matching the whole-kernel path, which runs no analyses there), but QD_DUMP_CFG still dumps
-    // each task's "before" graph so the dump stays complete and observation-only.
+    // Per-task store-to-load forwarding + dead-store elimination, skipped on the real-matrix path (like the
+    // whole-kernel path) -- but QD_DUMP_CFG still dumps each task's "before" graph there.
     const bool run_optimization = !real_matrix_enabled;
     bool result_modified = false;
     auto *block = root->as<Block>();
     int task_index = 0;
     for (auto *off : tasks) {
-      // During isolated per-task codegen the block holds one task and its kernel-wide index is only known via
-      // t_task_codegen_id; in whole-kernel contexts the tasks are in order, so the loop index is that index.
+      // Kernel-wide task id: t_task_codegen_id during isolated per-task codegen (one-task block), else the
+      // loop index (whole-kernel, tasks in order).
       const int dump_task_id = t_task_codegen_id.value_or(task_index);
       ++task_index;
-      // Nothing to do for this task when we neither optimize nor dump: skip the CFG build so QD_DUMP_CFG stays
-      // zero-cost when off.
+      // Nothing to optimize or dump: skip the CFG build (keeps QD_DUMP_CFG zero-cost when off).
       if (!run_optimization && !dump_cfg) {
         continue;
       }
@@ -171,8 +167,8 @@ bool cfg_optimization(const CompileConfig &config,
   const bool pre_offload_compile_phase =
       phase == "simplify_I" || phase == "simplify_II" || phase == "pre_autodiff" || phase == "post_autodiff";
   if (pre_offload_compile_phase) {
-    // cfg optimization is intentionally skipped here; QD_DUMP_CFG still builds a whole-kernel CFG only to dump the
-    // "before" graph (build_cfg does not mutate IR, no optimization runs). No "post" dump: nothing changes it.
+    // Optimization is skipped here; QD_DUMP_CFG still builds the CFG only to dump the "before" graph (build_cfg
+    // does not mutate IR). No "post" dump -- nothing changed it.
     if (dump_cfg) {
       auto cfg = analysis::build_cfg(root);
       cfg->dump_graph_to_file(config, kernel_name, cfg_dump_suffix(phase, /*post=*/false, t_task_codegen_id));
@@ -182,9 +178,8 @@ bool cfg_optimization(const CompileConfig &config,
   }
   // else: fall through to the whole-kernel cfg path below.
 
-  // This path also handles a bare OffloadedStmt root (not a Block), e.g. make_block_local's full_simplify, which
-  // runs on the per-task codegen worker; t_task_codegen_id then scopes the dump name so concurrent tasks do not
-  // collide. It is nullopt (no suffix) for genuine whole-kernel / function-body roots off the codegen threads.
+  // Also handles a bare OffloadedStmt root (e.g. make_block_local's full_simplify on a codegen worker): there
+  // t_task_codegen_id scopes the dump name so concurrent tasks do not collide; nullopt for whole-kernel roots.
   auto cfg = analysis::build_cfg(root);
 
   if (dump_cfg) {

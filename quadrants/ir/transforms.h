@@ -43,11 +43,9 @@ bool cfg_optimization(const CompileConfig &config,
                       const std::string &kernel_name = "unknown",
                       const std::string &phase = "");
 
-// Records, for the current thread, the kernel-wide index of the offloaded task being compiled in isolation.
-// KernelCodeGen::compile_kernel_to_module lowers each task on its own worker thread with the IR being a one-task
-// block, so cfg_optimization cannot derive the task's kernel-wide index itself. QD_DUMP_CFG reads this to name
-// per-task CFG dumps by real index, so concurrent tasks don't all collide on the "_task0" file. No effect unless
-// QD_DUMP_CFG is set; nullopt (its default) in whole-kernel contexts, where the index is taken from the block.
+// RAII: records this thread's task id while KernelCodeGen::compile_kernel_to_module lowers one task in isolation
+// (a one-task block), so cfg_optimization can name QD_DUMP_CFG per-task dumps by real index instead of colliding
+// on "_task0". No effect unless QD_DUMP_CFG is set.
 class ScopedTaskCodegenId {
  public:
   explicit ScopedTaskCodegenId(int task_id);
