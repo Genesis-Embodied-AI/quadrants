@@ -7,14 +7,13 @@ recompute-safe: autodiff, mesh-for, a concurrently-executed region (`qd.stream_p
 whose constructs share one global-temp buffer), a loop-produced local shared across constructs, a `qd.append` index a
 later construct consumes, a local a later construct reads that a `@qd.real_func` (via a `qd.ref` argument) or an
 external / bitcode call wrote to, a loop-carried local a later construct reads read-only through a `qd.ref` argument, a
-non-recomputable producer a later construct would clone (an effectful one such as a
-global atomic, a non-deterministic `qd.random()`, or a `qd.volatile_load()`), or a serial field load that a later
-construct would recompute after an intervening effect (a store, atomic, or sparse activate/deactivate) mutated global
-state. It also declines the split when `QD_DUMP_CFG` asks for a whole-kernel CFG dump (cfg_optimization, a pre-existing
-pass, forces the whole-kernel path under it); `QD_DUMP_IR` / `QD_DUMP_SIMPLIFY` / `print_ir` are observation-only and
-keep the split active, emitting their output per construct. This PR ships the split WITHOUT a reuse tier, so it
-recompiles every construct on every compile; the reuse (a disk manifest keyed by a stable per-construct cache key) is
-added by the cross-process cache PR.
+non-recomputable producer a later construct would clone (an effectful one such as a global atomic, a non-deterministic
+`qd.random()`, or a `qd.volatile_load()`), or a serial field load that a later construct would recompute after an
+intervening effect (a store, atomic, or sparse activate/deactivate) mutated global state. It also declines the split
+when `QD_DUMP_CFG` asks for a whole-kernel CFG dump (cfg_optimization, a pre-existing pass, forces the whole-kernel path
+under it); `QD_DUMP_IR` / `QD_DUMP_SIMPLIFY` / `print_ir` are observation-only and keep the split active, emitting their
+output per construct. This PR ships the split WITHOUT a reuse tier, so it recompiles every construct on every compile;
+the reuse (a disk manifest keyed by a stable per-construct cache key) is added by the cross-process cache PR.
 
 These tests assert the split's STRUCTURE and CORRECTNESS, not reuse:
  - the split fires for recompute-safe kernels and enumerates the expected constructs, with
