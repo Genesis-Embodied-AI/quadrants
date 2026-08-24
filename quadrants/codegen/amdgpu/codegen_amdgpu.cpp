@@ -524,7 +524,15 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
       if (ret_quadrants_type->is_primitive(PrimitiveTypeID::f16)) {
         llvm_val[stmt] = call("__ocml_pow_f16", {lhs, rhs});
       } else if (ret_quadrants_type->is_primitive(PrimitiveTypeID::f32)) {
-        llvm_val[stmt] = call("__ocml_pow_f32", {lhs, rhs});
+        // __ocml_pow_f32 is exp2(z * log2(y)); the log2 rounding error is
+        // scaled by the exponent, so its relative error (~1e-3) is far looser
+        // than CUDA's __nv_powf. Compute in f64 and round back to f32 so the
+        // result is effectively correctly-rounded and matches CPU/CUDA within
+        // the default test tolerance. Mirrors the i32 path below.
+        auto lhs_f64 = builder->CreateFPExt(lhs, llvm::Type::getDoubleTy(*llvm_context));
+        auto rhs_f64 = builder->CreateFPExt(rhs, llvm::Type::getDoubleTy(*llvm_context));
+        auto ret_f64 = call("__ocml_pow_f64", {lhs_f64, rhs_f64});
+        llvm_val[stmt] = builder->CreateFPTrunc(ret_f64, llvm::Type::getFloatTy(*llvm_context));
       } else if (ret_quadrants_type->is_primitive(PrimitiveTypeID::f64)) {
         llvm_val[stmt] = call("__ocml_pow_f64", {lhs, rhs});
       } else if (ret_quadrants_type->is_primitive(PrimitiveTypeID::i32)) {
