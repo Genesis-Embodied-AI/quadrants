@@ -52,10 +52,12 @@ std::string cfg_dump_suffix(const std::string &phase, bool post, std::optional<i
 // Build and optimize the CFG for a SINGLE offloaded task, scoped to that task alone.
 //
 // The task is moved into a throwaway wrapper block, run through the normal Block -> OffloadedStmt CFG
-// construction, then moved back (IR shape unchanged). The wrapper build yields byte-for-byte the slice the
-// whole-kernel CFG would build for this task -- notably the offloaded for-body's implicit-loop `continue` edges,
-// whose loss would wrongly dead-store-eliminate a global store preceding a `continue` (regression:
-// test_cfg_continue).
+// construction, then moved back (IR shape unchanged). Building through a wrapper -- instead of stitching
+// together per-sub-block CFGs -- yields byte-for-byte the slice the whole-kernel CFG would build for this task:
+// the offloaded for-body's implicit-loop `continue` edges (wired by visit(OffloadedStmt), not visit(Block)), the
+// prologue/body/epilogue chaining, and the body's is_parallel_executed flag. Optimizing each sub-block in
+// isolation would drop the `continue` loop-back edges and wrongly dead-store-eliminate a global store preceding
+// a `continue` (regression: test_cfg_continue).
 //
 // Scoping to one task is safe because each task is a separate device launch and CFG boundary seeding is
 // conservative across it: reaching-definition seeds every global pointer live-in and live-variable seeds every
