@@ -58,7 +58,7 @@ m = qd.Matrix.tensor(2, 2, qd.f32, shape=(3,))
 
 ## Gradients
 
-`needs_grad=True` works on every tensor factory and on every backend, by passing the keyword through to the underlying `qd.field` / `qd.ndarray` call:
+`needs_grad=True` works on every tensor factory and on every backend, by passing the keyword through to the underlying `qd.field` / `qd.ndarray` call. Enabling it allocates a matching gradient buffer, reachable as `.grad`, alongside the tensor's own forward values (the *primal*):
 
 ```python
 import quadrants as qd
