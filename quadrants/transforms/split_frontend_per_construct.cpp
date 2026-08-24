@@ -421,27 +421,29 @@ std::vector<Stmt *> stmt_local_write_allocas(Stmt *s) {
 // a `MatrixPtrStmt` into it), never the store that gave it its value, so an operand-closed slice pulls in a bare,
 // zero-initialized alloca and silently reads zeros. `split_is_recompute_safe` has already rejected kernels where a
 // local is produced *inside* another construct's loop, so every writer that matters here is top-level and safe to
-// recompute into the consuming construct.
-std::unordered_map<Stmt *, std::vector<Stmt *>> gather_top_level_alloca_writers(Block *block) {
-  std::unordered_map<Stmt *, std::vector<Stmt *>> alloca_writers;
+// recompute into the consuming construct. Each writer is paired with its top-level source index so the slice can keep
+// only the writers that PRECEDE the consuming construct (see `compute_construct_needed`).
+std::unordered_map<Stmt *, std::vector<std::pair<int, Stmt *>>> gather_top_level_alloca_writers(Block *block) {
+  std::unordered_map<Stmt *, std::vector<std::pair<int, Stmt *>>> alloca_writers;
   const int n = (int)block->statements.size();
   for (int j = 0; j < n; j++) {
     Stmt *s = block->statements[j].get();
     for (Stmt *a : stmt_local_write_allocas(s))
-      alloca_writers[a].push_back(s);
+      alloca_writers[a].push_back({j, s});
   }
   return alloca_writers;
 }
 
 // Backward slice of construct `k`: segment k's whole subtree plus the transitive operand-def chain it reads
 // (const/arg/binop/pointer/field-load chains from earlier segments, recomputed into this construct), including the
-// top-level writers of any local it loads. Computed on the ORIGINAL block; returns the set of original statements the
-// construct needs (no cloning -- callers clone the surviving statements themselves).
+// top-level writers -- from earlier segments only, in source order -- of any local it loads. Computed on the ORIGINAL
+// block; returns the set of original statements the construct needs (no cloning -- callers clone the surviving
+// statements themselves).
 std::unordered_set<Stmt *> compute_construct_needed(
     Block *block,
     const std::vector<int> &seg_id,
     int k,
-    const std::unordered_map<Stmt *, std::vector<Stmt *>> &alloca_writers) {
+    const std::unordered_map<Stmt *, std::vector<std::pair<int, Stmt *>>> &alloca_writers) {
   const int n = (int)block->statements.size();
   std::unordered_set<Stmt *> needed;
   std::vector<Stmt *> worklist;
@@ -466,12 +468,19 @@ std::unordered_set<Stmt *> compute_construct_needed(
       if (op != nullptr && needed.insert(op).second)
         worklist.push_back(op);
     // Reaching an alloca means this construct reads the local; bring its top-level writers (and their own operand
-    // chains) along, or the construct compiles against an uninitialized variable.
+    // chains) along, or the construct compiles against an uninitialized variable. Only writers that PRECEDE construct k
+    // in source order (an earlier segment) can supply the value it reads: cloning in a writer from k's own segment or a
+    // LATER one is wrong -- in `a = 1; loop0; a = 2; loop1`, pulling `a = 2` into loop0's slice would make the isolated
+    // loop0 read 2 instead of 1. Writers inside construct k itself are already in `needed` via the segment loop above,
+    // so restricting to `seg_id < k` loses nothing.
     if (s->is<AllocaStmt>()) {
       auto it = alloca_writers.find(s);
       if (it != alloca_writers.end()) {
-        for (Stmt *w : it->second)
+        for (const auto &[w_pos, w] : it->second) {
+          if (seg_id[w_pos] >= k)
+            continue;
           add_with_subtree(w);
+        }
       }
     }
   }

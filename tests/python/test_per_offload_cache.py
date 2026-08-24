@@ -143,6 +143,33 @@ def test_per_construct_frontend_split_correct_with_shared_serial_def() -> None:
 
 
 @test_utils.test(arch=[qd.cpu, qd.cuda], offline_cache=False)
+def test_per_construct_frontend_split_scalar_reassigned_between_constructs() -> None:
+    # A top-level scalar is REASSIGNED between two constructs, so each loop must observe the store that precedes IT in
+    # source order (loop0 -> 1, loop1 -> 2). The backward slice may pull a local's writers only from EARLIER segments;
+    # cloning the later `a = 2` into loop0's slice would make the isolated loop0 read 2 instead of 1. Regression test
+    # for the source-order restriction on local writers in the slice.
+    @qd.kernel
+    def kernel_reassign(a_out: qd.types.ndarray(), b_out: qd.types.ndarray()) -> None:
+        a = 1
+        for i in range(_N):
+            a_out[i] = a
+        a = 2
+        for i in range(_N):
+            b_out[i] = a
+
+    a_arr = qd.ndarray(qd.i32, shape=(_N,))
+    b_arr = qd.ndarray(qd.i32, shape=(_N,))
+    kernel_reassign(a_arr, b_arr)
+
+    obs = kernel_reassign._primal.per_offload_cache_observations
+    # The scalar is written at top level (not loop-carried), so the kernel is recompute-safe and the split fires.
+    assert obs.frontend_constructs_total == 2, obs
+    # Each loop reads the value assigned immediately before it, NOT the later reassignment.
+    assert (a_arr.to_numpy() == 1).all(), a_arr.to_numpy()
+    assert (b_arr.to_numpy() == 2).all(), b_arr.to_numpy()
+
+
+@test_utils.test(arch=[qd.cpu, qd.cuda], offline_cache=False)
 def test_per_construct_frontend_split_fallback_not_recompute_safe() -> None:
     # `s` is written INSIDE the first loop (one construct) and read by the second loop (another construct), so the
     # kernel is not recompute-safe: the split must fall back to the whole-kernel path and NOT run, leaving the
