@@ -3,7 +3,6 @@
 #include <vector>
 #include <set>
 #include <functional>
-#include <cstdlib>
 
 #include "quadrants/common/core.h"
 #include "quadrants/util/io.h"
@@ -356,37 +355,19 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
     }
   }
 
-  // QD_AMDGPU_GLOBAL_AS gate. When unset, every address-space-at-source
-  // override below defers to the base LLVM codegen, so AMDGPU output is
-  // byte-identical to upstream and the flag is a clean A/B switch.
-  static bool amdgpu_global_as_enabled() {
-    static const bool enabled = std::getenv("QD_AMDGPU_GLOBAL_AS") != nullptr;
-    return enabled;
-  }
-
-  void visit(ExternalPtrStmt *stmt) override {
-    // Ndarray data lives in hipMalloc'd global memory. Base produces the
-    // pointer in addrspace(0); tag it as addrspace(1) at the source so
-    // downstream loads/stores emit global_load/store via InferAddressSpaces.
-    TaskCodeGenLLVM::visit(stmt);
-    if (!amdgpu_global_as_enabled()) {
-      return;
-    }
-    auto *current = llvm_val[stmt];
-    if (current && current->getType()->isPointerTy() && current->getType()->getPointerAddressSpace() != 1) {
-      auto *ptr_as1 = llvm::PointerType::get(*llvm_context, 1);
-      llvm_val[stmt] = builder->CreateAddrSpaceCast(current, ptr_as1);
-    }
-  }
+  // AMDGPU address-space-at-source: ndarray data and global temporaries live in
+  // hipMalloc'd global memory, so their pointers are tagged addrspace(1) at the
+  // point they are materialized. InferAddressSpaces then propagates the tag and
+  // dependent loads/stores lower to global_load/global_store/global_atomic
+  // instead of generic flat_*. ndarray data pointers (ExternalPtrStmt) are
+  // tagged by the shared base codegen (maybe_tag_amdgpu_global_ptr), so only
+  // the AMDGPU-specific sources (global temporaries, matrix-element GEPs) are
+  // overridden here.
 
   void visit(GlobalTemporaryStmt *stmt) override {
     // Global temporaries live in the runtime's global temporary buffer
-    // (hipMalloc'd, used by reductions / atomics). Same source-tagging
-    // pattern as ExternalPtrStmt.
+    // (hipMalloc'd, used by reductions / atomics).
     TaskCodeGenLLVM::visit(stmt);
-    if (!amdgpu_global_as_enabled()) {
-      return;
-    }
     auto *current = llvm_val[stmt];
     if (current && current->getType()->isPointerTy() && current->getType()->getPointerAddressSpace() != 1) {
       auto *ptr_as1 = llvm::PointerType::get(*llvm_context, 1);
@@ -395,10 +376,6 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
   }
 
   void visit(MatrixPtrStmt *stmt) override {
-    if (!amdgpu_global_as_enabled()) {
-      TaskCodeGenLLVM::visit(stmt);
-      return;
-    }
     // Base codegen unconditionally bitcasts/inttoptrs the origin into
     // addrspace(0), which strips any addrspace tag applied at the source.
     // Preserve the origin address space here so matrix-element accesses on

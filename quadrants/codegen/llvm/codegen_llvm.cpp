@@ -1,7 +1,6 @@
 #include "quadrants/codegen/llvm/codegen_llvm.h"
 
 #include <algorithm>
-#include <cstdlib>
 
 #ifdef QD_WITH_LLVM
 #include "llvm/Bitcode/BitcodeReader.h"
@@ -3432,11 +3431,12 @@ void TaskCodeGenLLVM::set_struct_to_buffer(const StructType *struct_type,
 }
 
 llvm::Value *TaskCodeGenLLVM::maybe_tag_amdgpu_global_ptr(llvm::Value *ptr) {
-  // Single choke point for AMDGPU address-space-at-source tagging. Off unless
-  // QD_AMDGPU_GLOBAL_AS is set; a no-op on CPU/CUDA and on values that are not
-  // non-addrspace(1) pointers, so those backends emit byte-identical IR.
-  static const bool gate = std::getenv("QD_AMDGPU_GLOBAL_AS") != nullptr;
-  if (!gate || current_arch() != Arch::amdgpu || ptr == nullptr || !ptr->getType()->isPointerTy() ||
+  // Single choke point for AMDGPU address-space-at-source tagging: tag an
+  // argument-walk pointer as addrspace(1) so InferAddressSpaces can collapse
+  // the per-access re-casts into global_load/global_store. A no-op on CPU/CUDA
+  // (arch guard) and on values that are already addrspace(1) or not pointers,
+  // so those backends emit byte-identical IR.
+  if (current_arch() != Arch::amdgpu || ptr == nullptr || !ptr->getType()->isPointerTy() ||
       ptr->getType()->getPointerAddressSpace() == 1) {
     return ptr;
   }
@@ -3457,8 +3457,19 @@ llvm::Value *TaskCodeGenLLVM::get_struct_arg(const std::vector<int> &index, bool
   if (!create_load) {
     return gep;
   }
-  // args -> field level: tag the loaded ndarray struct base pointer.
-  return maybe_tag_amdgpu_global_ptr(builder->CreateLoad(tlctx->get_data_type(arg_type), gep));
+  auto *loaded = builder->CreateLoad(tlctx->get_data_type(arg_type), gep);
+  // args -> field level: tag the loaded ndarray struct base pointer, but only
+  // for the top-level kernel. A Function (@qd.real_func) callee receives its
+  // args -- including qd.ref(...) reference parameters -- through a caller-local
+  // alloca buffer (see visit(FuncCallStmt)), so those pointers reference private
+  // storage; tagging them addrspace(1) would make the callee read/write private
+  // data through global memory. Top-level ndarray-data promotion is unaffected,
+  // and ndarray data pointers used inside a callee are still tagged where their
+  // global-backed data pointer is loaded (visit(ExternalPtrStmt)).
+  if (dynamic_cast<const Function *>(current_callable) == nullptr) {
+    loaded = maybe_tag_amdgpu_global_ptr(loaded);
+  }
+  return loaded;
 }
 
 llvm::Value *TaskCodeGenLLVM::get_args_ptr(const Callable *callable, llvm::Value *context) {
