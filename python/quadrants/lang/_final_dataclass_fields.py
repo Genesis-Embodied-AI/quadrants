@@ -813,22 +813,13 @@ def _dunder_copied_from_base(klass: type, name: str, value: Any) -> bool:
     return False
 
 
-def _compute_enum_generated_class_attrs() -> "frozenset[str]":
-    """Names the class machinery (generic ``type`` + enum) puts in a *user* class's own ``__dict__``: generic
-    bookkeeping (``__doc__`` / ``__module__`` / ``__qualname__`` / ``__dict__`` / ``__weakref__``, and on Python 3.13+
-    ``__firstlineno__`` / ``__static_attributes__``) plus enum-generated bookkeeping (``_member_map_`` /
-    ``_value2member_map_`` / ``_generate_next_value_`` / ``__new__`` / version-specific ``_hashable_values_`` / ...).
-
-    Computed once by probing a plain class and each framework enum kind with real ``class`` syntax, so the set tracks
-    the *running* Python version rather than a hand-maintained list that silently drifts (3.13 added several dunders).
-    A sunder/dunder in a user enum's own dict that is NOT here is therefore a user-authored hook (``_missing_``,
-    ``_repr_html_`` on 3.13+, an overriding ``_numeric_repr_``, ...): observable behavior the Final key cannot capture,
-    so ``_enum_class_behavior_attr`` rejects it. (Machinery-copied *operator* dunders like ``IntFlag.__and__`` are
-    handled earlier via ``_OBSERVABLE_DUNDERS`` + ``_dunder_copied_from_base`` and never reach that check.)
-    """
-
-    class _Plain:
-        pass
+def _enum_probe_classes() -> "list[type]":
+    """One freshly-built enum of each framework kind (plain / ``IntEnum`` / ``IntFlag`` / ``Flag`` / ``StrEnum``) plus a
+    *direct* ``int`` / ``str`` mix-in, used to learn - on the *running* Python, not a hand-maintained list that drifts -
+    which sunder/dunder names the machinery injects into a user enum's own dict and which of those track the bases /
+    mix-in rather than the members. The direct-mix-in probes matter: a hook like ``_value_repr_`` holds the mix-in's
+    value, not a copy from any enum base, so a probe set of framework subclasses alone would misjudge a user's
+    ``class M(int, enum.Enum)``."""
 
     class _E(enum.Enum):
         A = 1
@@ -842,7 +833,11 @@ def _compute_enum_generated_class_attrs() -> "frozenset[str]":
         A = 1
         B = 2
 
-    probes: list = [_Plain, _E, _IE, _IF]
+    class _DMI(int, enum.Enum):  # a hand-written ``IntEnum`` (direct ``int`` mix-in)
+        A = 1
+        B = 2
+
+    probes: list = [_E, _IE, _IF, _DMI]
     _flag_base = getattr(enum, "Flag", None)
     if _flag_base is not None:
 
@@ -860,21 +855,12 @@ def _compute_enum_generated_class_attrs() -> "frozenset[str]":
 
         probes.append(_SE)
 
-    names: "set[str]" = set()
-    for probe in probes:
-        names.update(n for n, v in vars(probe).items() if not isinstance(v, enum.Enum))
-    return frozenset(names)
+        class _DMS(str, enum.Enum):  # a hand-written ``StrEnum`` (direct ``str`` mix-in)
+            A = "a"
+            B = "b"
 
-
-# Sunder/dunder names the machinery itself puts in a user enum/class dict; anything else sunder/dunder in that dict is
-# a user hook (see ``_compute_enum_generated_class_attrs``). Computed once at import so it matches the running Python.
-_ENUM_GENERATED_CLASS_ATTRS = _compute_enum_generated_class_attrs()
-
-# Machinery names a user can nonetheless *override* with behavior a kernel could reach through a baked member
-# (``qd.static(cfg.mode._generate_next_value_(...))``). The enum machinery *copies* the inherited default of these into
-# every subclass's own dict, so the name alone appears even on a plain enum and cannot distinguish a user override - so
-# these are exempted only when the stored object *is* the inherited default (see ``_dict_entry_is_inherited_default``).
-_ENUM_OVERRIDABLE_HOOK_NAMES = frozenset({"_generate_next_value_"})
+        probes.append(_DMS)
+    return probes
 
 
 def _dict_entry_is_inherited_default(klass: type, name: str, member: Any) -> bool:
@@ -894,13 +880,139 @@ def _dict_entry_is_inherited_default(klass: type, name: str, member: Any) -> boo
     return False
 
 
+def _enum_machinery_class_dict(cls: type) -> "dict[str, Any] | None":
+    """The own ``__dict__`` the enum machinery would produce for a *member-free* class with ``cls``'s exact bases and
+    metaclass: every sunder/dunder the machinery injects (``_value_repr_`` / ``__new__`` / ``_member_type_`` /
+    ``_new_member_`` / ``_generate_next_value_`` / ...) already set to its value for *this* mix-in shape, with no user
+    members and no user hooks. Comparing ``cls``'s own entry against this is how ``_observable_class_dict_attr`` tells a
+    user override of a machinery hook (``Mode._value_repr_ = ...``, observable and unkeyable) from untouched machinery
+    bookkeeping - even for mix-in-dependent hooks whose value is *not* a verbatim base copy, which
+    ``_dict_entry_is_inherited_default`` therefore cannot judge (a direct ``class M(int, enum.Enum)`` legitimately
+    carries ``int``'s ``_value_repr_``, which appears in no enum base).
+
+    Built through the metaclass's own ``__prepare__`` namespace, since ``EnumMeta`` rejects a plain ``dict`` body.
+    Returns ``None`` if the reference cannot be built (a base that refuses re-subclassing, a mix-in
+    ``__init_subclass__`` that objects, an exotic metaclass, ...); the caller then falls back to the
+    ``_ENUM_OVERRIDABLE_HOOK_NAMES`` allowlist. Off the steady-state hot path (only Final-bearing configs reach here,
+    and they deliberately re-validate per launch), built at most once per class per validation."""
+    mcls = type(cls)
+    try:
+        # ``__prepare__`` returns the metaclass's own namespace (``EnumMeta`` -> ``_EnumDict``), which must be passed
+        # through verbatim - wrapping it in a plain ``dict`` is exactly what ``EnumMeta`` rejects. Pyright types it as
+        # a ``MutableMapping`` rather than the ``dict`` the class-creation call expects, hence the local ignore.
+        namespace = mcls.__prepare__("_qd_enum_probe", cls.__bases__)
+        reference = mcls("_qd_enum_probe", cls.__bases__, namespace)  # pyright: ignore[reportArgumentType]
+    except Exception:  # pylint: disable=broad-except  # any build failure -> conservative allowlist fallback
+        return None
+    return dict(vars(reference))
+
+
+def _compute_enum_generated_class_attrs() -> "frozenset[str]":
+    """Names the class machinery (generic ``type`` + enum) puts in a *user* class's own ``__dict__``: generic
+    bookkeeping (``__doc__`` / ``__module__`` / ``__qualname__`` / ``__dict__`` / ``__weakref__``, and on Python 3.13+
+    ``__firstlineno__`` / ``__static_attributes__``) plus enum-generated bookkeeping (``_member_map_`` /
+    ``_value2member_map_`` / ``_generate_next_value_`` / ``__new__`` / version-specific ``_hashable_values_`` / ...).
+
+    Computed once by probing a plain class and each framework enum kind with real ``class`` syntax, so the set tracks
+    the *running* Python version rather than a hand-maintained list that silently drifts (3.13 added several dunders).
+    A sunder/dunder in a user enum's own dict that is NOT here is therefore a user-authored hook (``_missing_``,
+    ``_repr_html_`` on 3.13+, an overriding ``_numeric_repr_``, ...): observable behavior the Final key cannot capture,
+    so ``_enum_class_behavior_attr`` rejects it. (Machinery-copied *operator* dunders like ``IntFlag.__and__`` are
+    handled earlier via ``_OBSERVABLE_DUNDERS`` + ``_dunder_copied_from_base`` and never reach that check.)
+    """
+
+    class _Plain:
+        pass
+
+    names: "set[str]" = {n for n, v in vars(_Plain).items() if not isinstance(v, enum.Enum)}
+    for probe in _enum_probe_classes():
+        names.update(n for n, v in vars(probe).items() if not isinstance(v, enum.Enum))
+    return frozenset(names)
+
+
+def _compute_enum_reference_checked_attrs() -> "frozenset[str]":
+    """The subset of machinery-generated sunder/dunder names whose value is fixed by an enum's *bases / mix-in* rather
+    than its members: ``_value_repr_`` / ``__new__`` / ``_member_type_`` / ``_new_member_`` / ``_generate_next_value_``
+    / copied operator dunders / ... For these a clean enum's own entry equals the value in a *member-free* rebuild of
+    the same bases (``_enum_machinery_class_dict``), so ``_observable_class_dict_attr`` can flag a user override by
+    comparing against that reference.
+
+    Member-*derived* bookkeeping (``_member_map_`` / ``_value2member_map_`` / ``_member_names_`` / version-specific
+    ``_hashable_values_`` / ``_flag_mask_`` / ...) differs from the member-free reference even for a clean enum, so it
+    is deliberately *excluded*: it is a function of the (already keyed) members, never a user hook. Structural names
+    (``__module__`` / ``__qualname__`` / ``__doc__`` / ...) vary legitimately per class and are excluded too.
+
+    A name qualifies only if, in *every* probe whose own dict carries it, the stored object *is* (unwrapped) the
+    member-free reference's - so the set tracks the running Python (3.11 added ``_value_repr_`` / ``_use_args_`` / ...)
+    and never mistakes member-derived data for a hook."""
+    appears: "dict[str, int]" = {}
+    matches: "dict[str, int]" = {}
+    for probe in _enum_probe_classes():
+        reference = _enum_machinery_class_dict(probe)
+        if reference is None:
+            continue
+        for name, member in vars(probe).items():
+            if isinstance(member, enum.Enum) or not (name.startswith("_") and name.endswith("_")):
+                continue
+            appears[name] = appears.get(name, 0) + 1
+            default = reference.get(name, _MISSING)
+            if default is not _MISSING and getattr(member, "__func__", member) is getattr(default, "__func__", default):
+                matches[name] = matches.get(name, 0) + 1
+    return frozenset(name for name, count in appears.items() if matches.get(name, 0) == count) - _STRUCTURAL_CLASS_ATTRS
+
+
+# Sunder/dunder names the machinery itself puts in a user enum/class dict; anything else sunder/dunder in that dict is
+# a user hook (see ``_compute_enum_generated_class_attrs``). Computed once at import so it matches the running Python.
+_ENUM_GENERATED_CLASS_ATTRS = _compute_enum_generated_class_attrs()
+
+# The generated names whose value is set from an enum's bases/mix-in (not its members), so a user *override* is caught
+# by comparing against a member-free machinery reference (see ``_compute_enum_reference_checked_attrs`` and
+# ``_observable_class_dict_attr``). The complementary generated names (member-derived data + structural) stay exempt.
+_ENUM_REFERENCE_CHECKED_ATTRS = _compute_enum_reference_checked_attrs()
+
+# Fallback allowlist of machinery names a user can nonetheless *override* with behavior a kernel could reach through a
+# baked member (``qd.static(cfg.mode._generate_next_value_(...))``), used only when the member-free machinery reference
+# (see ``_enum_machinery_class_dict``) cannot be built. The machinery *copies* the inherited default of these into every
+# subclass's own dict, so the name alone appears even on a plain enum and cannot distinguish a user override - so these
+# are exempted only when the stored object *is* the inherited default (see ``_dict_entry_is_inherited_default``). The
+# preferred path compares against the reference and so also catches mix-in-dependent hooks this allowlist omits.
+_ENUM_OVERRIDABLE_HOOK_NAMES = frozenset({"_generate_next_value_"})
+
+
+def _generated_attr_is_user_override(klass: type, name: str, member: Any, reference: "dict[str, Any] | None") -> bool:
+    """True if ``klass.__dict__[name]`` (a reference-checked machinery sunder/dunder) is a *user* override rather than
+    the machinery's own value, comparing unwrapped callable identity (``staticmethod`` / ``classmethod`` ->
+    ``__func__``, as the enum metaclass wraps ``_generate_next_value_`` afresh per class - see
+    ``_dict_entry_is_inherited_default``).
+
+    Against the member-free machinery ``reference``: a present name is an override iff its unwrapped object differs from
+    the reference's; a name absent from the reference is treated as not-an-override (a member-free rebuild simply did
+    not produce it for this shape). If ``reference`` is ``None`` (unbuildable) the check degrades to the
+    inherited-default allowlist, which still catches ``_generate_next_value_``."""
+    if reference is None:
+        return name in _ENUM_OVERRIDABLE_HOOK_NAMES and not _dict_entry_is_inherited_default(klass, name, member)
+    default = reference.get(name, _MISSING)
+    if default is _MISSING:
+        return False
+    return getattr(member, "__func__", member) is not getattr(default, "__func__", default)
+
+
 def _observable_class_dict_attr(klass: type) -> "str | None":
     """Name of a user-authored observable attribute in ``klass.__dict__`` - a method / property / class var, a
-    genuinely-overridden observable operator dunder, or a user sunder/dunder hook - or None. Enum members/aliases,
-    observable dunders the enum machinery merely copies from a base (Python >=3.11, see ``_dunder_copied_from_base``),
-    and machinery-generated sunder/dunder names (``_member_map_`` / ``__new__`` / ``__doc__`` / 3.13's
-    ``__firstlineno__`` / ...) are skipped. Used for both an enum class's own MRO and its metaclass MRO.
+    genuinely-overridden observable operator dunder, or a user sunder/dunder hook (including a user *override* of a
+    machinery-generated hook such as ``_value_repr_`` / ``__new__`` / ``_generate_next_value_``) - or None. Enum
+    members/aliases, observable dunders the enum machinery merely copies from a base (Python >=3.11, see
+    ``_dunder_copied_from_base``), and *untouched* machinery-generated sunder/dunder names (``_member_map_`` /
+    ``__new__`` / ``__doc__`` / 3.13's ``__firstlineno__`` / ...) are skipped. Used for an enum class's own MRO and its
+    metaclass MRO.
+
+    A machinery-generated name is not exempted by name alone: the machinery *copies* several overridable hooks
+    (``_value_repr_``, ``_generate_next_value_``, ...) into every enum's own dict, so a user reassignment (observable as
+    ``cfg.mode._value_repr_`` yet invisible to the fixed Final key) would otherwise slip through. Each such entry is
+    compared against a member-free machinery reference (``_enum_machinery_class_dict``) built once per class, so only a
+    genuine user override is reported while mix-in-derived defaults and member-derived bookkeeping stay exempt.
     """
+    reference: Any = _MISSING  # member-free machinery reference; built lazily, at most once per call
     for name, member in vars(klass).items():
         if isinstance(member, enum.Enum):  # an enum member or alias defined on the class
             continue
@@ -910,11 +1022,15 @@ def _observable_class_dict_attr(klass: type) -> "str | None":
             return name  # a genuine user operator/behavior dunder override
         if name.startswith("_") and name.endswith("_"):
             if name in _ENUM_GENERATED_CLASS_ATTRS:
-                # A machinery name a user can override (``_generate_next_value_``) is only exempt when it still holds
-                # the inherited default; a distinct object is a user hook (observable), not machinery bookkeeping.
-                if name in _ENUM_OVERRIDABLE_HOOK_NAMES and not _dict_entry_is_inherited_default(klass, name, member):
-                    return name
-                continue  # machinery/compiler bookkeeping (``_member_map_``, ``__new__``, 3.13 ``__firstlineno__``)
+                if name in _ENUM_REFERENCE_CHECKED_ATTRS:
+                    if reference is _MISSING:
+                        reference = _enum_machinery_class_dict(klass)
+                    # A bases/mix-in-fixed hook (``_value_repr_``, ``__new__``, ...) is exempt only while it still
+                    # holds the machinery's own value for this class; a user override (a distinct object) is
+                    # observable behavior the fixed Final key cannot capture.
+                    if _generated_attr_is_user_override(klass, name, member, reference):
+                        return name
+                continue  # untouched bookkeeping: member-derived data (``_member_map_``), structural, or matched hook
             return name  # a user-authored sunder/dunder hook (``_missing_`` / ``_repr_html_`` / ...) - observable
         return name  # a user method / property / class var
     return None

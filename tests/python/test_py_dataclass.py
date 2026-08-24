@@ -4218,12 +4218,13 @@ def test_final_scalar_key_distinguishes_signed_zero_and_nan_payloads():
 
     # Even with identical name AND value, two dynamically recreated (behavior-free) classes have genuinely distinct
     # members - for a plain ``Enum``, ``First.A != Second.A`` - so a kernel branching on ``cfg.mode == First.A``
-    # needs distinct specializations. ``module``/``qualname``/name/value are all identical, so the key adds
-    # ``id(cls)`` for such non-uniquely-identifiable classes to keep them apart in-process.
+    # needs distinct specializations. ``module``/``qualname``/name/value are all identical, so the key adds a per-class
+    # identity token (a ``_ClassRef`` in-process, a non-recyclable ``_dynamic_class_serial`` offline) for such
+    # non-uniquely-identifiable classes to keep them apart.
     first, second = _make_enum(1), _make_enum(1)
     assert type(first.A).__qualname__ == type(second.A).__qualname__ and first.A.value == second.A.value
     assert first.A != second.A  # plain Enum uses identity equality: distinct class objects -> distinct members
-    assert final_scalar_key(first.A) != final_scalar_key(second.A)  # ...kept distinct via id(cls)
+    assert final_scalar_key(first.A) != final_scalar_key(second.A)  # ...kept distinct via the per-class identity token
     assert final_scalar_key(first.A) == final_scalar_key(first.A)  # stable for the same class
 
     # A *behavior-free* primitive subclass is accepted and keyed by its true value via the base slot, staying
@@ -4237,9 +4238,9 @@ def test_final_scalar_key_distinguishes_signed_zero_and_nan_payloads():
 
     # Like recreated enums, two behavior-free primitive subclasses built by a local factory share module+qualname
     # and value yet are distinct class objects (``cfg.x.__class__ is First`` is observable at compile time), so the
-    # key adds ``id(cls)`` for such non-uniquely-identifiable classes to keep an instance of the second from reusing
-    # the first's specialization. This applies to ``int``/``str`` subclasses (generic branch) and ``float``
-    # subclasses (dedicated branch) alike.
+    # key adds a per-class identity token for such non-uniquely-identifiable classes to keep an instance of the second
+    # from reusing the first's specialization. This applies to ``int``/``str`` subclasses (generic branch) and
+    # ``float`` subclasses (dedicated branch) alike.
     def _make_int_subclass():
         class Local(int):
             pass
@@ -4248,7 +4249,7 @@ def test_final_scalar_key_distinguishes_signed_zero_and_nan_payloads():
 
     ci1, ci2 = _make_int_subclass(), _make_int_subclass()
     assert ci1 is not ci2 and ci1.__qualname__ == ci2.__qualname__  # distinct classes, identical qualname
-    assert final_scalar_key(ci1(1)) != final_scalar_key(ci2(1))  # kept distinct via id(cls)
+    assert final_scalar_key(ci1(1)) != final_scalar_key(ci2(1))  # kept distinct via the per-class identity token
     assert final_scalar_key(ci1(1)) == final_scalar_key(ci1(1))  # stable for the same class
 
     def _make_float_subclass():
@@ -4259,7 +4260,7 @@ def test_final_scalar_key_distinguishes_signed_zero_and_nan_payloads():
 
     cf1, cf2 = _make_float_subclass(), _make_float_subclass()
     assert cf1 is not cf2 and cf1.__qualname__ == cf2.__qualname__
-    assert final_scalar_key(cf1(1.0)) != final_scalar_key(cf2(1.0))  # kept distinct via id(cls)
+    assert final_scalar_key(cf1(1.0)) != final_scalar_key(cf2(1.0))  # kept distinct via the per-class identity token
 
     # But a subclass that overrides an observable dunder (repr / a conversion / an operator) is rejected: two
     # same-named factory subclasses could override it differently, sharing ``module``/``qualname`` while
@@ -4414,11 +4415,12 @@ def test_final_scalar_key_live_uses_object_identity_not_class_equality():
 
 @test_utils.test()
 def test_final_scalar_key_offline_dynamic_class_is_process_unique():
-    """``id(cls)`` is only process-local and can repeat at the same address in another process. So the *offline*
-    (cross-process) key for a non-resolvable (locally/dynamically created) class also embeds a per-process nonce:
-    its serialized string is unique to this process, guaranteeing a dynamic class is a cross-process cache miss (never
-    a wrong reuse of a kernel baked for a distinct class in another worker). The *in-process* (``live=True``) key is
-    process-local anyway, so it stays nonce-free."""
+    """The per-class serial that distinguishes dynamic classes offline (``_dynamic_class_serial``) is only
+    process-local and restarts from zero in every process. So the *offline* (cross-process) key for a non-resolvable
+    (locally/dynamically created) class also embeds a per-process nonce: its serialized string is unique to this
+    process, guaranteeing a dynamic class is a cross-process cache miss (never a wrong reuse of a kernel baked for a
+    distinct class in another worker). The *in-process* (``live=True``) key is process-local anyway, so it stays
+    nonce-free."""
     from quadrants.lang import _final_dataclass_fields as fdf
 
     def _make_local_int():
@@ -4895,6 +4897,35 @@ def test_final_enum_rejects_user_override_of_generated_hook():
 
     final_scalar_key(Patched.A)  # accepted while it holds the inherited default
     Patched._generate_next_value_ = staticmethod(lambda name, start, count, last_values: name)
+    with pytest.raises(TypeError, match="observable class-level behavior"):
+        final_scalar_key(Patched.A)
+
+
+@test_utils.test()
+def test_final_enum_rejects_user_override_of_mixin_dependent_hook():
+    """A user override of a machinery hook whose default is *mix-in dependent* must also be rejected - not just
+    ``_generate_next_value_`` (whose default is a verbatim base copy). ``_value_repr_`` is the example Codex flagged: a
+    plain ``enum.Enum`` sets it to ``None`` while an ``int`` mix-in sets it to ``int``'s repr, so a nearest-base
+    identity test cannot judge it (the mix-in value is a copy of no *enum* base). Overriding it is observable as
+    ``cfg.mode._value_repr_`` yet leaves the member's class/name/value key unchanged, so it must flip an accepted enum
+    to rejected. Acceptance is decided against a member-free rebuild of the enum's own bases, so a legitimate mix-in
+    default - including a direct ``class M(int, enum.Enum)`` - is *not* mistaken for a user override."""
+    import enum
+
+    from quadrants.lang._final_dataclass_fields import final_scalar_key
+
+    class DirectIntMixin(int, enum.Enum):  # a hand-written IntEnum: its _value_repr_/_new_member_ are int's, not Enum's
+        A = 1
+        B = 2
+
+    final_scalar_key(DirectIntMixin.A)  # a legitimate mix-in default must not be flagged as a user override
+
+    class Patched(enum.Enum):
+        A = 1
+        B = 2
+
+    final_scalar_key(Patched.A)  # accepted while it holds the machinery default
+    Patched._value_repr_ = staticmethod(lambda value: "custom")  # observable as cfg.mode._value_repr_
     with pytest.raises(TypeError, match="observable class-level behavior"):
         final_scalar_key(Patched.A)
 
