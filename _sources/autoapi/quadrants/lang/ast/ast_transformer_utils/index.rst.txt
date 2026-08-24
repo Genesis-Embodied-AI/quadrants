@@ -223,7 +223,7 @@ Module Contents
 
 
 
-.. py:class:: ASTTransformerFuncContext(global_context: ASTTransformerGlobalContext, template_slot_locations, end_lineno: int, is_kernel: bool, func: quadrants.lang._func_base.FuncBase, arg_features: list[tuple[Any, Ellipsis]] | None, global_vars: dict[str, Any], template_vars: dict[str, Any], is_pure: bool, py_args: tuple[Any, Ellipsis], file: str, src: list[str], start_lineno: int, ast_builder: quadrants._lib.core.quadrants_python.ASTBuilder | None, is_real_function: bool, autodiff_mode: AutodiffMode, raise_on_templated_floats: bool)
+.. py:class:: ASTTransformerFuncContext(global_context: ASTTransformerGlobalContext, template_slot_locations, end_lineno: int, is_kernel: bool, func: quadrants.lang._func_base.FuncBase, arg_features: list[tuple[Any, ...]] | None, global_vars: dict[str, Any], template_vars: dict[str, Any], is_pure: bool, py_args: tuple[Any, ...], file: str, src: list[str], start_lineno: int, ast_builder: quadrants._lib.core.quadrants_python.ASTBuilder | None, is_real_function: bool, autodiff_mode: AutodiffMode, raise_on_templated_floats: bool)
 
    .. py:attribute:: global_context
       :type:  ASTTransformerGlobalContext
@@ -253,7 +253,7 @@ Module Contents
 
 
    .. py:attribute:: arg_features
-      :type:  list[tuple[Any, Ellipsis]]
+      :type:  list[tuple[Any, ...]]
 
 
    .. py:attribute:: returns
@@ -274,11 +274,11 @@ Module Contents
 
 
    .. py:attribute:: py_args
-      :type:  tuple[Any, Ellipsis]
+      :type:  tuple[Any, ...]
 
 
    .. py:attribute:: return_data
-      :type:  tuple[Any, Ellipsis] | Any | None
+      :type:  tuple[Any, ...] | Any | None
       :value: None
 
 

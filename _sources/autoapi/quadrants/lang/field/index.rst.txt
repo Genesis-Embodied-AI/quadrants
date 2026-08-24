@@ -56,7 +56,7 @@ Module Contents
 
 
    .. py:property:: shape
-      :type: tuple[int, Ellipsis]
+      :type: tuple[int, ...]
 
 
 
