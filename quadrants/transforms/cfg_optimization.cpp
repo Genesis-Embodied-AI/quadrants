@@ -63,12 +63,6 @@ std::string cfg_dump_suffix(const std::string &phase, bool post, std::optional<i
 // the CFG spanning only one task, every global address -- fields, external tensors, and the global-temporary
 // buffer that carries scalars between tasks -- is therefore treated as live-in and live-out of the task, so no
 // store a sibling task may read is eliminated and no value is forwarded across a task (device-launch) boundary.
-//
-// QD_DUMP_CFG is observation-only here: when |dump_cfg| is set, the task's scoped CFG is written out before (and,
-// when the optimization runs, after) its per-task analyses, so the dump reflects the exact per-task graph the
-// compiler works on -- it never changes which optimizations run. The |real_matrix_enabled| path runs no per-task
-// analyses (matching the whole-kernel path); when it is set we only build+dump the "before" graph if dumping, and
-// skip entirely when not dumping so the no-op real-matrix behavior is preserved.
 bool optimize_one_task(Block *parent,
                        OffloadedStmt *off,
                        bool after_lower_access,
