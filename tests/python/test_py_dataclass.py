@@ -4798,3 +4798,47 @@ def test_final_enum_rejects_user_override_of_generated_hook():
     Patched._generate_next_value_ = staticmethod(lambda name, start, count, last_values: name)
     with pytest.raises(TypeError, match="observable class-level behavior"):
         final_scalar_key(Patched.A)
+
+
+@test_utils.test()
+def test_final_outer_mapping_cache_disabled_for_final_bearing_arg():
+    """``TemplateMapper.lookup`` keeps an instance-keyed ``(count, key)`` cache that returns the prior result for the
+    same live argument *before* calling ``extract()``. For a Final-bearing argument that would bypass
+    ``final_scalar_key``'s per-launch revalidation - so a launch could reuse the specialization compiled before a
+    ``Final`` value's class was monkey-patched behaviorful. This cache is therefore disabled for any mapper carrying a
+    Final-bearing argument: it stores nothing and revalidates every launch. A Final-free mapper still caches, so the
+    common hot path is untouched."""
+    import enum
+    from typing import Final
+
+    from quadrants.lang._template_mapper import TemplateMapper
+    from quadrants.lang.kernel_arguments import ArgMetadata
+
+    @dataclass(frozen=True)
+    class Plain:
+        a: int
+
+    plain_mapper = TemplateMapper([ArgMetadata(Plain, "p")], [])
+    p = Plain(a=1)
+    plain_mapper.lookup(False, (p,))
+    plain_mapper.lookup(False, (p,))
+    assert plain_mapper._mapping_cache, "a Final-free mapper must keep its instance-keyed (count, key) cache"
+
+    class Mode(enum.Enum):
+        A = 0
+        B = 1
+
+    @dataclass(frozen=True)
+    class Cfg:
+        mode: Final[Mode]
+
+    final_mapper = TemplateMapper([ArgMetadata(Cfg, "cfg")], [])
+    cfg = Cfg(mode=Mode.A)
+    final_mapper.lookup(False, (cfg,))  # clean enum accepted on the first launch
+    assert not final_mapper._mapping_cache, "a Final-bearing mapper must not populate the instance-keyed cache"
+
+    # Monkey-patch the enum class behaviorful; the SAME live instance must now be re-rejected, proving the second
+    # lookup re-ran extract()+validation rather than returning a cached key.
+    Mode._generate_next_value_ = staticmethod(lambda name, start, count, last_values: name)
+    with pytest.raises(TypeError, match="observable class-level behavior"):
+        final_mapper.lookup(False, (cfg,))

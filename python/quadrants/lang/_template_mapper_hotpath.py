@@ -78,6 +78,21 @@ AnnotationType = Union[
 ]
 
 
+def annotation_has_final_subtree(annotation: Any) -> bool:
+    """True iff ``annotation`` is a dataclass type whose (transitive) subtree declares a ``Final`` field. The
+    ``_FIELDS`` probe - the same one ``_extract_arg`` uses to recognise a dataclass annotation - guards
+    ``subtree_has_final_fields``, whose ``dataclasses.fields`` call would otherwise raise on the non-dataclass
+    annotation shapes a kernel arg can carry (``template`` / ``NdarrayType`` / a bare primitive type / ...).
+
+    ``TemplateMapper.lookup`` uses this to disable its instance-keyed ``(count, key)`` cache for any mapper carrying a
+    Final-bearing argument. That cache returns the prior key for the same live argument without re-running
+    ``extract()``, which would bypass the per-launch revalidation a ``Final`` value needs: its class can turn
+    behaviorful between launches (e.g. an accepted enum whose ``__eq__`` is monkey-patched), which the baked key
+    cannot notice - so ``final_scalar_key`` must re-run and reject it. See ``subtree_has_final_fields``.
+    """
+    return getattr(annotation, _FIELDS, None) is not None and subtree_has_final_fields(annotation)
+
+
 _ExprCxx = _qd_core.ExprCxx
 _composite_mutable_types = {list, dict, set}
 # ``type(None)`` belongs here so ``None`` arguments are treated like other primitives and excluded from the
