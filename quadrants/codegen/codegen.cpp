@@ -65,6 +65,9 @@ LLVMCompiledKernel KernelCodeGen::compile_kernel_to_module() {
   for (int i = 0; i < offloads.size(); i++) {
     auto compile_func = [&, i] {
       tlctx_.fetch_this_thread_struct_module();
+      // This task is lowered in isolation on a worker thread with a one-task block, so record its kernel-wide
+      // index for QD_DUMP_CFG so per-task CFG dumps from these concurrent tasks don't collide on the same file.
+      irpass::ScopedTaskCodegenId dump_task_id_guard(i);
       auto offload = irpass::analysis::clone(offloads[i].get());
       irpass::re_id(offload.get());
 

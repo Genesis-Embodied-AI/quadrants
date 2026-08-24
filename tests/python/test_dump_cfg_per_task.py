@@ -1,4 +1,5 @@
 import pathlib
+import re
 
 import pytest
 
@@ -50,3 +51,10 @@ def test_dump_cfg_is_per_task(tmp_path: pathlib.Path, monkeypatch: pytest.Monkey
     # Each optimized task is dumped both before and after its own per-task optimization.
     assert any("_task0_before_cfg_opt" in f for f in cfg_files), cfg_files
     assert any("_task0_post_cfg_opt" in f for f in cfg_files), cfg_files
+
+    # The per-task codegen phases (before_lower_access, simplify_IV, ...) lower each task in isolation on its own
+    # worker thread, where the local task index is always 0. If the dump used that local index, only the
+    # whole-kernel post-offload phase would emit a task1 file and every codegen phase would collide on task0.
+    # Requiring task1 dumps from more than one distinct phase pins that the kernel-wide task id is used instead.
+    phases_with_task1 = {m.group(1) for f in cfg_files if (m := re.search(r"_CFG_(.+)_task1_", f))}
+    assert len(phases_with_task1) >= 2, f"Expected task1 dumps from multiple phases, got {sorted(phases_with_task1)}"

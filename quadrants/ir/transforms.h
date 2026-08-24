@@ -42,6 +42,22 @@ bool cfg_optimization(const CompileConfig &config,
                       const std::optional<ControlFlowGraph::LiveVarAnalysisConfig> &lva_config_opt = std::nullopt,
                       const std::string &kernel_name = "unknown",
                       const std::string &phase = "");
+
+// Records, for the current thread, the kernel-wide index of the offloaded task being compiled in isolation.
+// KernelCodeGen::compile_kernel_to_module lowers each task on its own worker thread with the IR being a one-task
+// block, so cfg_optimization cannot derive the task's kernel-wide index itself. QD_DUMP_CFG reads this to name
+// per-task CFG dumps by real index, so concurrent tasks don't all collide on the "_task0" file. No effect unless
+// QD_DUMP_CFG is set; nullopt (its default) in whole-kernel contexts, where the index is taken from the block.
+class ScopedTaskCodegenId {
+ public:
+  explicit ScopedTaskCodegenId(int task_id);
+  ~ScopedTaskCodegenId();
+  ScopedTaskCodegenId(const ScopedTaskCodegenId &) = delete;
+  ScopedTaskCodegenId &operator=(const ScopedTaskCodegenId &) = delete;
+
+ private:
+  std::optional<int> prev_;
+};
 bool alg_simp(IRNode *root, const CompileConfig &config);
 bool demote_operations(IRNode *root, const CompileConfig &config);
 bool binary_op_simplify(IRNode *root, const CompileConfig &config);

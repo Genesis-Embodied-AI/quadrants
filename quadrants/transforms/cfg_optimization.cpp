@@ -12,6 +12,10 @@ namespace irpass {
 
 namespace {
 
+// Kernel-wide index of the offloaded task whose lowering is running on this thread, or nullopt in whole-kernel
+// contexts. Set via ScopedTaskCodegenId; read only to disambiguate QD_DUMP_CFG per-task dump filenames.
+thread_local std::optional<int> t_task_codegen_id = std::nullopt;
+
 // Collect the top-level offloaded tasks of |root| iff |root| is an already-offloaded kernel body, i.e. a Block
 // whose statements are all OffloadedStmt. Returns an empty vector otherwise (pre-offload IR, function bodies,
 // non-Block roots). This is what lets the caller tell "post-offload" (run per-task cfg) from "pre-offload /
@@ -67,7 +71,7 @@ bool optimize_one_task(Block *parent,
                        const CompileConfig &config,
                        const std::string &kernel_name,
                        const std::string &phase,
-                       int task_index) {
+                       int task_id) {
   const int location = parent->locate(off);
   QD_ASSERT(location != -1);
   Block wrapper;
@@ -78,7 +82,7 @@ bool optimize_one_task(Block *parent,
     // both alive until the analyses are done, then move the task back before |wrapper| leaves scope.
     auto cfg = analysis::build_cfg(&wrapper);
     if (dump_cfg) {
-      cfg->dump_graph_to_file(config, kernel_name, cfg_dump_suffix(phase, /*post=*/false, task_index));
+      cfg->dump_graph_to_file(config, kernel_name, cfg_dump_suffix(phase, /*post=*/false, task_id));
     }
     cfg->simplify_graph();
     if (cfg->store_to_load_forwarding(after_lower_access, autodiff_enabled)) {
@@ -88,7 +92,7 @@ bool optimize_one_task(Block *parent,
       modified = true;
     }
     if (dump_cfg) {
-      cfg->dump_graph_to_file(config, kernel_name, cfg_dump_suffix(phase, /*post=*/true, task_index));
+      cfg->dump_graph_to_file(config, kernel_name, cfg_dump_suffix(phase, /*post=*/true, task_id));
     }
   }
   parent->insert(wrapper.extract(off), location);
@@ -96,6 +100,14 @@ bool optimize_one_task(Block *parent,
 }
 
 }  // namespace
+
+ScopedTaskCodegenId::ScopedTaskCodegenId(int task_id) : prev_(t_task_codegen_id) {
+  t_task_codegen_id = task_id;
+}
+
+ScopedTaskCodegenId::~ScopedTaskCodegenId() {
+  t_task_codegen_id = prev_;
+}
 
 bool cfg_optimization(const CompileConfig &config,
                       IRNode *root,
@@ -128,8 +140,11 @@ bool cfg_optimization(const CompileConfig &config,
       auto *block = root->as<Block>();
       int task_index = 0;
       for (auto *off : tasks) {
+        // During isolated per-task codegen the block holds one task and its kernel-wide index is only known via
+        // t_task_codegen_id; in whole-kernel contexts the tasks are in order, so the loop index is that index.
+        const int dump_task_id = t_task_codegen_id.value_or(task_index);
         result_modified |= optimize_one_task(block, off, after_lower_access, autodiff_enabled, lva_config_opt, dump_cfg,
-                                             config, kernel_name, phase, task_index);
+                                             config, kernel_name, phase, dump_task_id);
         ++task_index;
       }
     }
