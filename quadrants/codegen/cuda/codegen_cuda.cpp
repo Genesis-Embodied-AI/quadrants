@@ -162,6 +162,10 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
       size_t shared_array_bytes = tensor_type->get_num_elements() * data_type_size(tensor_type->get_element_type());
 
       llvm::Type *shared_array_type;
+      // Emit static shared scratch as an internal *definition* so each per-task module is self-contained, instead of
+      // an `.extern .shared` declaration that only resolves via ptxas's whole-module "ignore extern qualifier"
+      // fallback. Dynamic shared mem (runtime-sized) is inherently `extern __shared__` and stays external.
+      llvm::GlobalValue::LinkageTypes shared_linkage = llvm::GlobalValue::InternalLinkage;
       if (shared_array_bytes > cuda_dynamic_shared_array_threshold_bytes) {
         if (dynamic_shared_array_bytes > 0) {
           /* Current version only allows one dynamic shared array allocation,
@@ -193,13 +197,16 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
         auto element_type = tlctx->get_data_type(tensor_type->get_element_type());
         shared_array_type = llvm::ArrayType::get(element_type, 0);
         dynamic_shared_array_bytes += shared_array_bytes;
+        shared_linkage = llvm::GlobalValue::ExternalLinkage;  // dynamic shared mem: inherently extern
       } else {
         shared_array_type = tlctx->get_data_type(tensor_type);
       }
 
-      auto base = new llvm::GlobalVariable(*module, shared_array_type, false, llvm::GlobalValue::ExternalLinkage,
-                                           nullptr, fmt::format("shared_array_t{}_s{}", task_codegen_id, stmt->id),
-                                           nullptr, llvm::GlobalVariable::NotThreadLocal, 3 /*addrspace=shared*/);
+      llvm::Constant *shared_init =
+          (shared_linkage == llvm::GlobalValue::InternalLinkage) ? llvm::UndefValue::get(shared_array_type) : nullptr;
+      auto base = new llvm::GlobalVariable(*module, shared_array_type, false, shared_linkage, shared_init,
+                                           fmt::format("shared_array_t{}_s{}", task_codegen_id, stmt->id), nullptr,
+                                           llvm::GlobalVariable::NotThreadLocal, 3 /*addrspace=shared*/);
       base->setAlignment(llvm::MaybeAlign(8));
       auto ptr_shared_array_type = llvm::PointerType::get(shared_array_type, 0);
       llvm_val[stmt] = builder->CreatePointerCast(base, ptr_shared_array_type);
@@ -611,8 +618,12 @@ class TaskCodeGenCUDA : public TaskCodeGenLLVM {
 
   void create_bls_buffer(OffloadedStmt *stmt) {
     auto type = llvm::ArrayType::get(llvm::Type::getInt8Ty(*llvm_context), stmt->bls_size);
-    bls_buffer = new GlobalVariable(*module, type, false, llvm::GlobalValue::ExternalLinkage, nullptr, "bls_buffer",
-                                    nullptr, llvm::GlobalVariable::NotThreadLocal, 3 /*addrspace=shared*/);
+    // Internal definition, like the static shared scratch above, so each per-task module self-contains its BLS
+    // storage rather than leaning on the `.extern .shared` fallback. BLS is always statically sized, so it never
+    // needs the runtime-sized `extern __shared__` form.
+    bls_buffer =
+        new GlobalVariable(*module, type, false, llvm::GlobalValue::InternalLinkage, llvm::UndefValue::get(type),
+                           "bls_buffer", nullptr, llvm::GlobalVariable::NotThreadLocal, 3 /*addrspace=shared*/);
     bls_buffer->setAlignment(llvm::MaybeAlign(8));
   }
 
