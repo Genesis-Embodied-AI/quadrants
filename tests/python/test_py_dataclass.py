@@ -4769,7 +4769,9 @@ def test_final_enum_rejects_user_override_of_generated_hook():
     """The enum machinery *copies* ``enum.Enum._generate_next_value_`` into every subclass's own dict, so the name
     alone appears even on a plain enum. A user override (defined or monkey-patched later) is a distinct object a kernel
     could observe through the baked member, and mutating it would leave the member's class/name/value key unchanged -
-    so it must be rejected. A clean enum (still the inherited default) is accepted."""
+    so it must be rejected. A clean enum (still the inherited default) is accepted - across every enum kind and Python
+    version: CPython 3.12+ copies the inherited hook as a *fresh* ``staticmethod`` wrapper, so acceptance must compare
+    the unwrapped function identity rather than the wrapper's."""
     import enum
 
     from quadrants.lang._final_dataclass_fields import final_scalar_key
@@ -4778,7 +4780,15 @@ def test_final_enum_rejects_user_override_of_generated_hook():
         A = 1
         B = 2
 
-    final_scalar_key(Clean.A)  # inherited ``_generate_next_value_`` default -> accepted
+    class CleanInt(enum.IntEnum):
+        A = 1
+
+    class CleanFlag(enum.IntFlag):
+        A = 1
+
+    final_scalar_key(Clean.A)  # inherited ``_generate_next_value_`` default -> accepted (plain Enum)
+    final_scalar_key(CleanInt.A)  # ... IntEnum
+    final_scalar_key(CleanFlag.A)  # ... IntFlag (all three would fail on 3.12+ under a wrapper-identity check)
 
     class Overridden(enum.Enum):
         def _generate_next_value_(name, start, count, last_values):  # observable custom auto-value policy

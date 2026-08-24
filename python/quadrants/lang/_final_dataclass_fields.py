@@ -814,14 +814,19 @@ _ENUM_OVERRIDABLE_HOOK_NAMES = frozenset({"_generate_next_value_"})
 
 
 def _dict_entry_is_inherited_default(klass: type, name: str, member: Any) -> bool:
-    """True if ``klass.__dict__[name]`` (``member``) is object-identical to what ``klass`` *inherits* for ``name`` from
-    its bases - i.e. the machinery merely copied an inherited default into the class dict, rather than the class
-    introducing a distinct (user-authored) object under a machinery name. A user override defines a fresh object, so it
-    is not identical to the inherited default and this returns False (the caller then treats it as observable)."""
+    """True if ``klass.__dict__[name]`` (``member``) is the inherited default for ``name`` - i.e. the machinery merely
+    copied an inherited hook into the class dict, rather than the class introducing a distinct (user-authored) one.
+
+    Compares the *unwrapped* callable identity (``staticmethod`` / ``classmethod`` expose it as ``__func__``): CPython
+    3.12+ ``EnumMeta`` copies ``_generate_next_value_`` into every enum as a *fresh* ``staticmethod`` wrapper around the
+    same inherited function, so a wrapper-identity (``is``) test would see every plain enum as a user override and
+    wrongly reject it. A genuine user override supplies a different underlying function, so this still returns False for
+    it (the caller then treats it as observable)."""
+    target = getattr(member, "__func__", member)
     for base in klass.__mro__[1:]:
         base_member = vars(base).get(name, _MISSING)
         if base_member is not _MISSING:
-            return base_member is member
+            return getattr(base_member, "__func__", base_member) is target
     return False
 
 
