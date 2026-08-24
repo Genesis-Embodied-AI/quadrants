@@ -213,9 +213,13 @@ void run_construct_frontend(IRNode *cb,
   // print_ir already flows through `verbose` into each pass printer below; this banner just labels whose IR follows.
   if (verbose)
     std::cout << "[per-construct frontend split] " << name << " construct " << construct_index << std::endl;
-  // QD_DUMP_IR: dump this construct's IR to <kernel>_construct<i>_<stage>.ll, the per-construct counterpart of the
-  // whole-kernel snapshots compile_to_offloads.cpp writes. The construct index keeps constructs from colliding on one
-  // filename. No-op unless QD_DUMP_IR=1.
+  // QD_DUMP_IR: dump this construct's post-simplify_I IR to <kernel>_construct<i>_after_simplify_I.ll -- the
+  // intermediate stage the whole-kernel path can no longer show once the split runs the simplify stages per construct
+  // (the construct index keeps constructs from colliding on one filename). We deliberately do NOT emit a per-construct
+  // after_offload dump: compile_to_offloads.cpp still writes the whole-kernel reassembled <kernel>_after_offload.ll
+  // (every construct's offloaded tasks), so a per-construct copy would only duplicate it -- and would double-count in
+  // consumers that glob "*after_offload*" (e.g. test_loop_config_name, test_stable_gtmp_offsets). No-op unless
+  // QD_DUMP_IR=1.
   const char *dump_ir_env = std::getenv(DUMP_IR_ENV.data());
   const bool dump_ir = dump_ir_env != nullptr && std::string(dump_ir_env) == "1";
   auto dump_stage = [&](const std::string &stage) {
@@ -223,7 +227,8 @@ void run_construct_frontend(IRNode *cb,
       return;
     std::filesystem::path dir = config.debug_dump_path;
     std::filesystem::create_directories(dir);
-    std::filesystem::path filename = dir / (name + "_construct" + std::to_string(construct_index) + "_" + stage + ".ll");
+    std::filesystem::path filename =
+        dir / (name + "_construct" + std::to_string(construct_index) + "_" + stage + ".ll");
     std::string ir_str;
     irpass::print(cb, &ir_str);
     std::ofstream ofs(filename.string());
@@ -255,7 +260,6 @@ void run_construct_frontend(IRNode *cb,
   irpass::flag_access(cb);
   irpass::full_simplify(cb, config, {false, /*autodiff_enabled*/ false, name, verbose, "simplify_III"});
   irpass::analysis::verify_if_debug(cb, config);
-  dump_stage("after_offload");
 }
 
 bool block_has_mesh_for(Block *block) {

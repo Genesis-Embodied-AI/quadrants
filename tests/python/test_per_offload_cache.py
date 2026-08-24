@@ -12,8 +12,8 @@ construct would recompute after an intervening effect (a store, atomic, or spars
 state. It also declines the split when `QD_DUMP_CFG` asks for a whole-kernel CFG dump (cfg_optimization, a pre-existing
 pass, forces the whole-kernel path under it); `QD_DUMP_IR` / `QD_DUMP_SIMPLIFY` / `print_ir` are observation-only and
 keep the split active, emitting their output per construct. This PR ships the split WITHOUT a reuse tier, so it
-recompiles every construct on every compile; the reuse (a
-disk manifest keyed by a stable per-construct cache key) is added by the cross-process cache PR.
+recompiles every construct on every compile; the reuse (a disk manifest keyed by a stable per-construct cache key) is
+added by the cross-process cache PR.
 
 These tests assert the split's STRUCTURE and CORRECTNESS, not reuse:
  - the split fires for recompute-safe kernels and enumerates the expected constructs, with
