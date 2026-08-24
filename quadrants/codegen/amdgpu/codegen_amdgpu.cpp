@@ -224,16 +224,6 @@ class TaskCodeGenAMDGPU : public TaskCodeGenLLVM {
 #undef UNARY_STD
   }
 
-  // AMDGPU deliberately does not override optimized_reduction(). Reduction atomics
-  // fall through to real_type_atomic() / integral_type_atomic(), which emit native
-  // LLVM atomics (AtomicRMW / FAdd / FMin / FMax) at "agent" syncscope (see
-  // kernel_atomic_syncscope()); on gfx942 these lower to hardware global_atomic_*.
-  // The previous override routed reductions through the runtime reduce_* helpers,
-  // which take addrspace(0) pointers and so forced a flat-pointer addrspace cast at
-  // the call site. In particular the f32-add helper path defeated the hardware
-  // float atomic, making a contended f32 sum reduction ~1000x slower than the
-  // native agent-scoped atomicrmw fadd.
-
   void visit(RangeForStmt *for_stmt) override {
     create_naive_range_for(for_stmt);
   }
