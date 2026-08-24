@@ -62,9 +62,6 @@ std::string cfg_dump_suffix(const std::string &phase, bool post, std::optional<i
 // Scoping to one task is safe because each task is a separate device launch and CFG boundary seeding is
 // conservative across it: reaching-definition seeds every global pointer live-in and live-variable seeds every
 // global store destination live-out, so nothing is forwarded or eliminated across the launch boundary.
-//
-// |run_optimization| gates the optimization, |dump_cfg| the dumps, independently: with optimization off
-// (real-matrix path) the "before" graph is still dumped, and QD_DUMP_CFG never changes what runs.
 bool optimize_one_task(Block *parent,
                        OffloadedStmt *off,
                        bool after_lower_access,
@@ -128,25 +125,18 @@ bool cfg_optimization(const CompileConfig &config,
   const char *dump_cfg_env = std::getenv(DUMP_CFG_ENV.data());
   const bool dump_cfg = dump_cfg_env != nullptr && std::string(dump_cfg_env) == "1";
 
-  // QD_DUMP_CFG is observation-only: it never changes the path or which optimizations run, only whether the CFG
-  // is written -- at the granularity actually used (per task post-offload, whole-kernel otherwise).
-
   // Post-offload we optimize each task's CFG independently; pre-offload (no tasks yet) we DITCH the whole-kernel
   // cfg_optimization, whose super-linear reaching-definition / forwarding analyses on the monolithic IR dominate
-  // compile time. Safe because cfg_optimization is an optimization, not correctness, and cross-task forwarding/DSE
-  // on the monolithic IR is invalid across separate device launches anyway; the post-offload per-task cfg redoes
-  // the intra-task forwarding + DSE once tasks exist.
+  // compile time.
   auto tasks = collect_offloaded_tasks(root);
   if (!tasks.empty()) {
     // Per-task store-to-load forwarding + dead-store elimination, skipped on the real-matrix path (like the
-    // whole-kernel path) -- but QD_DUMP_CFG still dumps each task's "before" graph there.
+    // whole-kernel path).
     const bool run_optimization = !real_matrix_enabled;
     bool result_modified = false;
     auto *block = root->as<Block>();
     int task_index = 0;
     for (auto *off : tasks) {
-      // Kernel-wide task id: t_task_codegen_id during isolated per-task codegen (one-task block), else the
-      // loop index (whole-kernel, tasks in order).
       const int dump_task_id = t_task_codegen_id.value_or(task_index);
       ++task_index;
       // Nothing to optimize or dump: skip the CFG build (keeps QD_DUMP_CFG zero-cost when off).
