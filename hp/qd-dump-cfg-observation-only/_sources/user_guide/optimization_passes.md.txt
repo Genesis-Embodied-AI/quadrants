@@ -67,7 +67,7 @@ Building and analyzing the CFG is the most expensive optimization in the pipelin
 
 ## Controlling the passes
 
-All of these are fields of `CompileConfig`, so you set them at `qd.init(...)` (or via the matching `QD_<UPPERCASE_NAME>` environment variable). See [qd.init options](./init_options.md) for the full list and the environment-variable convention.
+All of these are fields of `CompileConfig` (the Quadrants compiler-configuration object built from your `qd.init(...)` arguments), so you set them at `qd.init(...)` (or via the matching `QD_<UPPERCASE_NAME>` environment variable). See [qd.init options](./init_options.md) for the full list and the environment-variable convention.
 
 | Option | Default | Effect |
 |--------|---------|--------|
