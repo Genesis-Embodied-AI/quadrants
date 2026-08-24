@@ -4931,6 +4931,43 @@ def test_final_enum_rejects_user_override_of_mixin_dependent_hook():
 
 
 @test_utils.test()
+def test_final_enum_rejects_user_added_enum_valued_class_attribute():
+    """Skipping every enum-valued class attribute would let a user-added one that is *not* a machinery member/alias
+    through - e.g. ``Mode.X = Mode.A``, later reassignable to ``Mode.B``. That is observable as
+    ``cfg.mode.__class__.X`` yet absent from the member's class/name/value key, so relaunching a Final config after
+    rebinding ``X`` would silently reuse the stale specialization. Only names present under their own key in
+    ``_member_map_`` (canonical members and aliases, whose identity the key captures) are exempt; a user-added
+    attribute - even one holding a real member - is rejected. Machinery sunders that merely *hold* an enum value
+    (``IntFlag._boundary_`` is a ``FlagBoundary`` member) must stay exempt, so an ordinary ``IntFlag`` is unaffected."""
+    import enum
+
+    from quadrants.lang._final_dataclass_fields import final_scalar_key
+
+    class WithAlias(enum.Enum):
+        A = 1
+        B = 2
+        ALIAS = 1  # a machinery-defined alias for A - keyed by member identity, must stay accepted
+
+    final_scalar_key(WithAlias.A)  # a plain enum carrying a canonical alias is accepted
+    final_scalar_key(WithAlias.ALIAS)  # the alias resolves to A and is likewise accepted
+
+    class Flags(enum.IntFlag):  # carries the enum-valued machinery sunder ``_boundary_`` (a FlagBoundary member)
+        A = 1
+        B = 2
+
+    final_scalar_key(Flags.A)  # a plain IntFlag must not be rejected for its ``_boundary_`` bookkeeping
+
+    class Mode(enum.Enum):
+        A = 1
+        B = 2
+
+    final_scalar_key(Mode.A)  # clean, accepted
+    Mode.X = Mode.A  # a user-added enum-valued class attribute (not an official member), observable and unkeyed
+    with pytest.raises(TypeError, match="observable class-level behavior"):
+        final_scalar_key(Mode.A)
+
+
+@test_utils.test()
 def test_final_outer_mapping_cache_disabled_for_final_bearing_arg():
     """``TemplateMapper.lookup`` keeps an instance-keyed ``(count, key)`` cache that returns the prior result for the
     same live argument *before* calling ``extract()``. For a Final-bearing argument that would bypass

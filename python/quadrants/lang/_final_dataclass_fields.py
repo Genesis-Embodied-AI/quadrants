@@ -924,9 +924,16 @@ def _compute_enum_generated_class_attrs() -> "frozenset[str]":
     class _Plain:
         pass
 
-    names: "set[str]" = {n for n, v in vars(_Plain).items() if not isinstance(v, enum.Enum)}
+    def _generated(probe: type) -> "set[str]":
+        # Exclude enum *members* / aliases (enum-valued, always a plain name) but keep enum-valued *machinery sunders*
+        # such as ``_boundary_`` (a ``FlagBoundary`` member on ``IntFlag``): those are bookkeeping, not user members.
+        return {
+            n for n, v in vars(probe).items() if not isinstance(v, enum.Enum) or (n.startswith("_") and n.endswith("_"))
+        }
+
+    names: "set[str]" = _generated(_Plain)
     for probe in _enum_probe_classes():
-        names.update(n for n, v in vars(probe).items() if not isinstance(v, enum.Enum))
+        names.update(_generated(probe))
     return frozenset(names)
 
 
@@ -997,30 +1004,46 @@ def _generated_attr_is_user_override(klass: type, name: str, member: Any, refere
     return getattr(member, "__func__", member) is not getattr(default, "__func__", default)
 
 
+def _is_official_enum_member(klass: type, name: str, member: Any) -> bool:
+    """True if ``klass.__dict__[name]`` (an ``enum`` member instance) is a machinery-defined member or *alias* of
+    ``klass`` - i.e. ``name`` is that member's own name in ``klass._member_map_`` - rather than a user-added
+    enum-valued class attribute (``Mode.X = Mode.A``, later reassignable to ``Mode.B``). A canonical member and an
+    alias both live in ``_member_map_`` under their own name and are captured by the member's class/name/value key; a
+    user-added attribute never enters ``_member_map_``, yet is observable as ``cfg.mode.__class__.X`` and absent from
+    the key, so it must be reported. A missing/non-dict ``_member_map_`` (e.g. ``klass`` is a *metaclass* carrying an
+    enum-valued attribute) yields False, so that attribute is reported too."""
+    member_map = klass.__dict__.get("_member_map_")
+    return isinstance(member_map, dict) and member_map.get(name, _MISSING) is member
+
+
 def _observable_class_dict_attr(klass: type) -> "str | None":
     """Name of a user-authored observable attribute in ``klass.__dict__`` - a method / property / class var, a
-    genuinely-overridden observable operator dunder, or a user sunder/dunder hook (including a user *override* of a
-    machinery-generated hook such as ``_value_repr_`` / ``__new__`` / ``_generate_next_value_``) - or None. Enum
-    members/aliases, observable dunders the enum machinery merely copies from a base (Python >=3.11, see
-    ``_dunder_copied_from_base``), and *untouched* machinery-generated sunder/dunder names (``_member_map_`` /
-    ``__new__`` / ``__doc__`` / 3.13's ``__firstlineno__`` / ...) are skipped. Used for an enum class's own MRO and its
-    metaclass MRO.
+    genuinely-overridden observable operator dunder, a user sunder/dunder hook (including a user *override* of a
+    machinery-generated hook such as ``_value_repr_`` / ``__new__`` / ``_generate_next_value_``), or a user-added
+    enum-valued class attribute - or None. Machinery-defined enum members/aliases (see ``_is_official_enum_member``),
+    observable dunders the enum machinery merely copies from a base (Python >=3.11, see ``_dunder_copied_from_base``),
+    and *untouched* machinery-generated sunder/dunder names (``_member_map_`` / ``__new__`` / ``__doc__`` / 3.13's
+    ``__firstlineno__`` / ...) are skipped. Used for an enum class's own MRO and its metaclass MRO.
 
     A machinery-generated name is not exempted by name alone: the machinery *copies* several overridable hooks
     (``_value_repr_``, ``_generate_next_value_``, ...) into every enum's own dict, so a user reassignment (observable as
     ``cfg.mode._value_repr_`` yet invisible to the fixed Final key) would otherwise slip through. Each such entry is
     compared against a member-free machinery reference (``_enum_machinery_class_dict``) built once per class, so only a
-    genuine user override is reported while mix-in-derived defaults and member-derived bookkeeping stay exempt.
+    genuine user override is reported while mix-in-derived defaults and member-derived bookkeeping stay exempt. An
+    enum-*valued* attribute is likewise exempt only when it is a real member/alias, not a user-added ``Mode.X``.
     """
     reference: Any = _MISSING  # member-free machinery reference; built lazily, at most once per call
     for name, member in vars(klass).items():
-        if isinstance(member, enum.Enum):  # an enum member or alias defined on the class
-            continue
+        is_sunder_dunder = name.startswith("_") and name.endswith("_")
+        if isinstance(member, enum.Enum) and not is_sunder_dunder:  # a member name holding an enum value
+            if _is_official_enum_member(klass, name, member):
+                continue  # a machinery-defined member/alias - keyed by member identity, not extra observable state
+            return name  # a user-added enum-valued attribute (``Mode.X = Mode.A``) - observable, absent from the key
         if name in _OBSERVABLE_DUNDERS:
             if _dunder_copied_from_base(klass, name, member):
                 continue  # enum machinery copied a base/data-type dunder (Python >=3.11), not a user override
             return name  # a genuine user operator/behavior dunder override
-        if name.startswith("_") and name.endswith("_"):
+        if is_sunder_dunder:  # ``_boundary_`` (an enum-valued *machinery* sunder) is exempted here, not above
             if name in _ENUM_GENERATED_CLASS_ATTRS:
                 if name in _ENUM_REFERENCE_CHECKED_ATTRS:
                     if reference is _MISSING:
