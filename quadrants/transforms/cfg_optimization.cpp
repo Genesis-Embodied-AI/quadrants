@@ -173,17 +173,20 @@ bool cfg_optimization(const CompileConfig &config,
     // "before" graph (build_cfg does not mutate IR, no optimization runs). No "post" dump: nothing changes it.
     if (dump_cfg) {
       auto cfg = analysis::build_cfg(root);
-      cfg->dump_graph_to_file(config, kernel_name, cfg_dump_suffix(phase, /*post=*/false));
+      cfg->dump_graph_to_file(config, kernel_name, cfg_dump_suffix(phase, /*post=*/false, t_task_codegen_id));
     }
     die(root);
     return false;
   }
   // else: fall through to the whole-kernel cfg path below.
 
+  // This path also handles a bare OffloadedStmt root (not a Block), e.g. make_block_local's full_simplify, which
+  // runs on the per-task codegen worker; t_task_codegen_id then scopes the dump name so concurrent tasks do not
+  // collide. It is nullopt (no suffix) for genuine whole-kernel / function-body roots off the codegen threads.
   auto cfg = analysis::build_cfg(root);
 
   if (dump_cfg) {
-    cfg->dump_graph_to_file(config, kernel_name, cfg_dump_suffix(phase, /*post=*/false));
+    cfg->dump_graph_to_file(config, kernel_name, cfg_dump_suffix(phase, /*post=*/false, t_task_codegen_id));
   }
 
   bool result_modified = false;
@@ -198,7 +201,7 @@ bool cfg_optimization(const CompileConfig &config,
     }
 
     if (dump_cfg) {
-      cfg->dump_graph_to_file(config, kernel_name, cfg_dump_suffix(phase, /*post=*/true));
+      cfg->dump_graph_to_file(config, kernel_name, cfg_dump_suffix(phase, /*post=*/true, t_task_codegen_id));
     }
   }
   // TODO: implement cfg->dead_instruction_elimination()
