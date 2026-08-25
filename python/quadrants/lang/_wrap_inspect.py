@@ -19,6 +19,7 @@ import atexit
 import inspect
 import os
 import tempfile
+import tokenize
 from typing import Callable
 
 import dill
@@ -148,22 +149,56 @@ def _REPL_findsource(obj):
     return dill.source.findsource(obj)
 
 
+def _direct_file_findsource(obj):
+    """Locate an object's source by reading its file directly, bypassing linecache.
+
+    ``inspect.findsource`` relies on ``linecache.getlines``, which can transiently
+    return an empty list under memory or filesystem pressure: a ``MemoryError``
+    makes ``linecache.getlines`` call ``linecache.clearcache()`` and return ``[]``,
+    and a transient ``os.stat``/``open`` failure in ``linecache.updatecache`` has
+    the same effect. Because Quadrants materializes kernels by re-reading their
+    ``.py`` source at runtime, such a transient turns a perfectly readable file
+    into a fatal "cannot find source" error. Re-reading the file directly recovers
+    from that transient. Returns ``(lines, lineno)`` in the same shape as
+    ``inspect.findsource`` so it is a drop-in last-resort fallback.
+    """
+    code = getattr(obj, "__code__", None)
+    if code is None:
+        raise IOError(f"No __code__ to locate source for {obj}")
+    file = _builtin_getfile(obj)
+    with tokenize.open(file) as fp:  # honor the file's PEP 263 encoding cookie
+        lines = fp.readlines()
+    if not lines:
+        raise IOError(f"Empty or unreadable source file for {obj}: {file}")
+    return lines, code.co_firstlineno - 1
+
+
 def _custom_findsource(obj):
     try:
         return _Python_IPython_findsource(obj)
     except IOError:
-        try:
-            return _REPL_findsource(obj)
-        except:
-            try:
-                return _blender_findsource(obj)
-            except:
-                raise IOError(
-                    f"Cannot find source code for Object: {obj}, this \
-is possibly because of you are running Quadrants in an environment that Quadrants's own \
-inspect module cannot find the source. Please report an issue to help us fix: \
-https://github.com/Genesis-Embodied-AI/quadrants/issues"
-                )
+        pass
+    try:
+        return _REPL_findsource(obj)
+    except Exception:
+        pass
+    try:
+        return _blender_findsource(obj)
+    except Exception:
+        pass
+    # Last resort: bypass linecache and read the source file directly. This
+    # recovers from a transient empty ``linecache.getlines`` (see
+    # ``_direct_file_findsource``) instead of failing kernel compilation.
+    try:
+        return _direct_file_findsource(obj)
+    except Exception:
+        pass
+    raise IOError(
+        f"Cannot find source code for Object: {obj}, this is possibly because of "
+        "you are running Quadrants in an environment that Quadrants's own inspect "
+        "module cannot find the source. Please report an issue to help us fix: "
+        "https://github.com/Genesis-Embodied-AI/quadrants/issues"
+    )
 
 
 class _InspectContextManager:
