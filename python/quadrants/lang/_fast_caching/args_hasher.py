@@ -88,23 +88,18 @@ def dataclass_to_repr(raise_on_templated_floats: bool, path: tuple[str, ...], ar
             return None
         if cached is not None:
             return cached
-    # A ``Final[T]`` field is baked into the kernel, so its *value* (not just its type) must be part of the offline
-    # cache key - else a kernel baked with ``offset=7`` loads for a config carrying ``offset=100`` and silently
-    # produces the wrong results (test: ``test_final_field_value_is_part_of_offline_fastcache_key``). The in-process
-    # spec key already discriminates on value; this covers the cross-process cache. PERF: one ``dict.get``, empty for
-    # every dataclass not using the feature.
+    # A baked ``Final[T]`` field's *value* must be in the offline cache key too, else a kernel baked with one value
+    # loads for a config carrying another. Test: ``test_final_field_value_is_part_of_offline_fastcache_key``.
     final_names = final_field_names(type(arg))
-    # A Final-bearing subtree must NOT cache its repr: the cached string cannot notice a ``Final`` value's class
-    # turning behaviorful between launches, so it must recompute to re-run ``final_scalar_key``'s validation. We never
-    # *store* a cache for it, so the read above misses and falls through (transitive to a nested Final leaf).
+    # Never cache a Final-bearing subtree's repr: it must recompute each launch to re-run ``final_scalar_key``'s
+    # validation, so we never store one (the read above then falls through).
     cacheable = is_frozen and not subtree_has_final_fields(type(arg))
     repr_l = []
     for field in dataclasses.fields(arg):
         child_value = getattr(arg, field.name)
         if field.name in final_names:
-            # Serialize the baked value directly via ``final_scalar_key`` (collision-safe, type-tagged,
-            # process-stable; floats by IEEE bits) and skip ``stringify_obj_type``: it has no case for a bare ``str``,
-            # so a ``Final[str]`` would return None there and wrongly disable the offline cache for the whole argument.
+            # Serialize via ``final_scalar_key`` (collision-safe, process-stable) and skip ``stringify_obj_type``: it
+            # has no bare-``str`` case, so a ``Final[str]`` would return None and disable the cache for the whole arg.
             repr_l.append(f"{field.name}: (final) = {final_scalar_key(child_value)}")
             continue
         _repr = stringify_obj_type(raise_on_templated_floats, path + (field.name,), child_value, arg_meta=None)
@@ -119,7 +114,6 @@ def dataclass_to_repr(raise_on_templated_floats: bool, path: tuple[str, ...], ar
             return None
         full_repr = f"{field.name}: ({_repr})"
         if field.metadata.get(FIELD_METADATA_CACHE_VALUE, False):
-            # The pre-existing ``FIELD_METADATA_CACHE_VALUE`` path is left byte-for-byte unchanged.
             full_repr += f" = {child_value}"
         repr_l.append(full_repr)
     result = "[" + ",".join(repr_l) + "]"

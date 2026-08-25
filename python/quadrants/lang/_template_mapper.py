@@ -69,9 +69,8 @@ class TemplateMapper:
         self._mapping_cache: dict[ArgsHash, tuple[int, Key]] = {}
         self._mapping_cache_tracker: dict[ArgsHash, list[ReferenceType | None]] = {}
         self._prog_weakref: ReferenceType[Program] | None = None
-        # True if a Final-bearing argument forces every launch to recompute+revalidate (see
-        # ``annotation_has_final_subtree``), disabling the instance-keyed ``_mapping_cache``. ``None`` until first
-        # ``lookup``: computed lazily so its ``Final`` validation fires on the first-launch path, not at construction.
+        # Whether a Final-bearing argument disables the instance-keyed ``_mapping_cache`` (see
+        # ``annotation_has_final_subtree``). Computed lazily on first ``lookup`` so its ``Final`` validation runs then.
         self._mapping_cache_disabled: bool | None = None
 
     def extract(self, raise_on_templated_floats: bool, args: tuple[Any, ...]) -> Key:
@@ -135,9 +134,8 @@ class TemplateMapper:
                 nd_ids.append(id(v))
         if nd_ids:
             args_hash = args_hash + tuple(nd_ids)
-        # Disable this cache when a Final-bearing argument is present: serving a prior ``(count, key)`` would skip
-        # ``extract()`` and thus ``final_scalar_key``'s per-launch revalidation. Computed once; Final-free mappers are
-        # unaffected.
+        # A Final-bearing argument disables this cache: serving a prior ``(count, key)`` would skip ``extract()`` and
+        # its per-launch ``final_scalar_key`` revalidation. Final-free mappers are unaffected.
         cache_disabled = self._mapping_cache_disabled
         if cache_disabled is None:
             cache_disabled = self._mapping_cache_disabled = any(
@@ -158,8 +156,7 @@ class TemplateMapper:
         except KeyError:
             count = self.mapping[key] = len(self.mapping)
 
-        # Skip the store too when disabled: no entry is kept, so the read above always misses and every launch
-        # recomputes+revalidates (also avoids the ``_evict_callback`` closure allocation).
+        # Skip the store too when disabled, so the read above always misses and every launch revalidates.
         if not cache_disabled:
             # Note that it is important to prepend the cache tracker with 'None' to avoid misclassifying no argument with
             # expired cache entry caused by deallocated argument.
