@@ -911,7 +911,15 @@ def _observable_class_dict_attr(klass: type) -> "str | None":
                     klass, name, member, reference
                 ):
                     return name
-                continue  # untouched bookkeeping for this shape: member-derived data, structural, or a matched hook
+                # Otherwise this is untouched machinery bookkeeping for this shape - member-derived data
+                # (``_member_map_`` / ``_member_names_`` / ``_value2member_map_`` / ``_flag_mask_`` / ...) or a matched
+                # hook - and is exempt. Member-derived data is a pure function of the member map, which the spec/offline
+                # keys already fold in via ``_enum_member_map_key``, so a legitimately-defined enum keys correctly.
+                # Directly *reassigning* one of these CPython enum sunder internals (e.g. ``Mode._member_names_ =
+                # [...]``) is unsupported: they are the enum machinery's private bookkeeping, not a public API, so like
+                # the ``_qd_``-prefixed names reserved for Quadrants they must not be mutated by user code. We do not
+                # spend a per-launch digest defending against that (it cannot arise from ordinary enum definition).
+                continue
             # Reference unbuildable: best-effort fallback to the global-union allowlist.
             if name in _ENUM_GENERATED_CLASS_ATTRS:
                 if _generated_attr_is_user_override(klass, name, member, None):
