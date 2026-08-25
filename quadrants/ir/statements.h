@@ -1427,6 +1427,11 @@ class OffloadedStmt : public Stmt {
   // launch-context level table to rebuild nested graph_do_while loops.
   int graph_do_while_level_id{-1};
 
+  // Kernel-wide index of this task among the kernel's offloaded tasks (`-1` until numbered). Set unconditionally
+  // by `compile_kernel_to_module` before per-task codegen; currently read only to give QD_DUMP_CFG per-task CFG
+  // dumps a stable, collision-free `_task<N>` suffix. Pure metadata: never affects the compiled result.
+  int task_index{-1};
+
   // Pre-chunking loop trip-count `SizeExpr` captured by `determine_ad_stack_size`. Set on adstack-bearing
   // range-for tasks before `make_cpu_multithreaded_range_for` rewrites the loop into per-thread chunks, so the
   // SizeExpr still describes the original user-loop bound (handles both compile-time constants and

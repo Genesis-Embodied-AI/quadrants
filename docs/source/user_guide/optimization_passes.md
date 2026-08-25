@@ -67,7 +67,7 @@ Building and analyzing the CFG is the most expensive optimization in the pipelin
 
 ## Controlling the passes
 
-All of these are fields of `CompileConfig`, so you set them at `qd.init(...)` (or via the matching `QD_<UPPERCASE_NAME>` environment variable). See [qd.init options](./init_options.md) for the full list and the environment-variable convention.
+All of these are fields of `CompileConfig` (the Quadrants compiler-configuration object built from your `qd.init(...)` arguments), so you set them at `qd.init(...)` (or via the matching `QD_<UPPERCASE_NAME>` environment variable). See [qd.init options](./init_options.md) for the full list and the environment-variable convention.
 
 | Option | Default | Effect |
 |--------|---------|--------|
@@ -85,7 +85,7 @@ These environment variables dump the IR so you can see the effect of each pass. 
 
 - `QD_DUMP_IR=1` - writes an IR snapshot at each major pipeline stage (after lowering, before/after each simplify, after offload).
 - `QD_DUMP_SIMPLIFY=1` - writes an IR snapshot after every individual pass on every iteration of the simplify loop. Verbose, but it shows exactly which pass changed what.
-- `QD_DUMP_CFG=1` - writes the control-flow graph itself. (This also forces the CFG pass back onto the whole-kernel path so the complete graph can be dumped.)
+- `QD_DUMP_CFG=1` - writes the control-flow graph itself, at the granularity the compiler actually uses: one graph per offloaded task once the kernel has been offloaded (files suffixed `_task<N>`), and the whole-kernel graph before offload and for kernels that are never offloaded.
 
 Setting `qd.init(print_ir=True)` prints the IR to the console at pipeline stages instead of writing files.
 
