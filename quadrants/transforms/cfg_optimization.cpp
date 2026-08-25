@@ -80,6 +80,11 @@ bool optimize_one_task(Block *parent,
                        const std::string &kernel_name,
                        const std::string &phase,
                        int task_id) {
+  // Neither optimizing nor dumping: the CFG would be pure throwaway work, so bail before touching the IR. Past
+  // this point |dump_cfg| only ever gates the dump calls.
+  if (!run_optimization && !dump_cfg) {
+    return false;
+  }
   const int location = parent->locate(off);
   QD_ASSERT(location != -1);
   Block wrapper;
@@ -126,7 +131,8 @@ bool cfg_optimization(const CompileConfig &config,
 
   // Post-offload we optimize each task's CFG independently; pre-offload (no tasks yet) we DITCH the whole-kernel
   // cfg_optimization, whose super-linear reaching-definition / forwarding analyses on the monolithic IR dominate
-  // compile time.
+  // compile time. Safe to ditch: cross-task forwarding/DSE on the monolithic IR is invalid across the separate
+  // device launches anyway.
   auto tasks = collect_offloaded_tasks(root);
   if (!tasks.empty()) {
     // Per-task store-to-load forwarding + dead-store elimination, skipped on the real-matrix path (like the
@@ -140,10 +146,6 @@ bool cfg_optimization(const CompileConfig &config,
       // holds one task); before codegen numbers them the tasks sit here in kernel order, so the loop index fits.
       const int dump_task_id = off->task_index >= 0 ? off->task_index : task_index;
       ++task_index;
-      // Nothing to optimize or dump: skip the CFG build (keeps QD_DUMP_CFG zero-cost when off).
-      if (!run_optimization && !dump_cfg) {
-        continue;
-      }
       result_modified |= optimize_one_task(block, off, after_lower_access, autodiff_enabled, run_optimization,
                                            lva_config_opt, dump_cfg, config, kernel_name, phase, dump_task_id);
     }
