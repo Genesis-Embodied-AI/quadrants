@@ -12,10 +12,6 @@ namespace irpass {
 
 namespace {
 
-// Kernel-wide id of the task being lowered on this thread (nullopt off codegen workers); set by
-// ScopedTaskCodegenId, used only to name QD_DUMP_CFG per-task dumps.
-thread_local std::optional<int> t_task_codegen_id = std::nullopt;
-
 // Collect the top-level offloaded tasks of |root| iff |root| is an already-offloaded kernel body, i.e. a Block
 // whose statements are all OffloadedStmt. Returns an empty vector otherwise (pre-offload IR, function bodies,
 // non-Block roots). This is what lets the caller tell "post-offload" (run per-task cfg) from "pre-offload /
@@ -47,6 +43,17 @@ std::string cfg_dump_suffix(const std::string &phase, bool post, std::optional<i
   }
   suffix += post ? "_post_cfg_opt" : "_before_cfg_opt";
   return suffix;
+}
+
+// Kernel-wide task index for naming |root|'s CFG dump, or nullopt when |root| has none. Set only when |root| is a
+// bare offloaded task (make_block_local's per-task full_simplify runs on a clone that carries OffloadedStmt::
+// task_index); a Block or never-offloaded root has no index, so its dump keeps the unsuffixed whole-kernel name.
+std::optional<int> root_task_index(IRNode *root) {
+  auto *off = root->cast<OffloadedStmt>();
+  if (off != nullptr && off->task_index >= 0) {
+    return off->task_index;
+  }
+  return std::nullopt;
 }
 
 // Build and optimize the CFG for a SINGLE offloaded task, scoped to that task alone.
@@ -104,14 +111,6 @@ bool optimize_one_task(Block *parent,
 
 }  // namespace
 
-ScopedTaskCodegenId::ScopedTaskCodegenId(int task_id) : prev_(t_task_codegen_id) {
-  t_task_codegen_id = task_id;
-}
-
-ScopedTaskCodegenId::~ScopedTaskCodegenId() {
-  t_task_codegen_id = prev_;
-}
-
 bool cfg_optimization(const CompileConfig &config,
                       IRNode *root,
                       bool after_lower_access,
@@ -137,7 +136,9 @@ bool cfg_optimization(const CompileConfig &config,
     auto *block = root->as<Block>();
     int task_index = 0;
     for (auto *off : tasks) {
-      const int dump_task_id = t_task_codegen_id.value_or(task_index);
+      // Prefer the task's own kernel-wide index (set for the isolated per-task codegen path, where the block
+      // holds one task); before codegen numbers them the tasks sit here in kernel order, so the loop index fits.
+      const int dump_task_id = off->task_index >= 0 ? off->task_index : task_index;
       ++task_index;
       // Nothing to optimize or dump: skip the CFG build (keeps QD_DUMP_CFG zero-cost when off).
       if (!run_optimization && !dump_cfg) {
@@ -161,19 +162,19 @@ bool cfg_optimization(const CompileConfig &config,
     // does not mutate IR). No "post" dump -- nothing changed it.
     if (dump_cfg) {
       auto cfg = analysis::build_cfg(root);
-      cfg->dump_graph_to_file(config, kernel_name, cfg_dump_suffix(phase, /*post=*/false, t_task_codegen_id));
+      cfg->dump_graph_to_file(config, kernel_name, cfg_dump_suffix(phase, /*post=*/false, root_task_index(root)));
     }
     die(root);
     return false;
   }
   // else: fall through to the whole-kernel cfg path below.
 
-  // Also handles a bare OffloadedStmt root (e.g. make_block_local's full_simplify on a codegen worker): there
-  // t_task_codegen_id scopes the dump name so concurrent tasks do not collide; nullopt for whole-kernel roots.
+  // Also handles a bare OffloadedStmt root (e.g. make_block_local's full_simplify on a codegen worker): its
+  // task_index scopes the dump name so concurrent tasks do not collide; nullopt for whole-kernel roots.
   auto cfg = analysis::build_cfg(root);
 
   if (dump_cfg) {
-    cfg->dump_graph_to_file(config, kernel_name, cfg_dump_suffix(phase, /*post=*/false, t_task_codegen_id));
+    cfg->dump_graph_to_file(config, kernel_name, cfg_dump_suffix(phase, /*post=*/false, root_task_index(root)));
   }
 
   bool result_modified = false;
@@ -188,7 +189,7 @@ bool cfg_optimization(const CompileConfig &config,
     }
 
     if (dump_cfg) {
-      cfg->dump_graph_to_file(config, kernel_name, cfg_dump_suffix(phase, /*post=*/true, t_task_codegen_id));
+      cfg->dump_graph_to_file(config, kernel_name, cfg_dump_suffix(phase, /*post=*/true, root_task_index(root)));
     }
   }
   // TODO: implement cfg->dead_instruction_elimination()
