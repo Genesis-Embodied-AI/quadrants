@@ -67,7 +67,7 @@ Building and analyzing the CFG is the most expensive optimization in the pipelin
 
 ## Controlling the passes
 
-All of these are compile-time options (fields of `CompileConfig`, the object that holds a kernel's compilation settings), so you set them at `qd.init(...)` (or via the matching `QD_<UPPERCASE_NAME>` environment variable). See [qd.init options](./init_options.md) for the full list and the environment-variable convention.
+All of these are fields of `CompileConfig` (the Quadrants compiler-configuration object built from your `qd.init(...)` arguments), so you set them at `qd.init(...)` (or via the matching `QD_<UPPERCASE_NAME>` environment variable). See [qd.init options](./init_options.md) for the full list and the environment-variable convention.
 
 | Option | Default | Effect |
 |--------|---------|--------|
@@ -85,7 +85,7 @@ These environment variables dump the IR so you can see the effect of each pass. 
 
 - `QD_DUMP_IR=1` - writes an IR snapshot at each major pipeline stage (after lowering, before/after each simplify, after offload).
 - `QD_DUMP_SIMPLIFY=1` - writes an IR snapshot after every individual pass on every iteration of the simplify loop. Verbose, but it shows exactly which pass changed what.
-- `QD_DUMP_CFG=1` - writes the control-flow graph itself. (This also forces the CFG pass to run over the whole kernel at once so the complete graph can be dumped.)
+- `QD_DUMP_CFG=1` - writes the control-flow graph itself, at the granularity the compiler actually uses: one graph per offloaded task once the kernel has been offloaded (files suffixed `_task<N>`), and the whole-kernel graph before offload and for kernels that are never offloaded.
 
 Setting `qd.init(print_ir=True)` prints the IR to the console at pipeline stages instead of writing files.
 
@@ -139,4 +139,4 @@ All three fields are `-1` when the split did not run for this compile - either b
 
 ### Diagnostics under the split
 
-The IR-inspection flags from [Inspecting what the compiler did](#inspecting-what-the-compiler-did) stay observation-only when the split runs: they never change which path is taken, they just report each construct separately for the intermediate stages so the output reflects exactly what was compiled. `QD_DUMP_IR` writes each construct's post-simplify snapshot to `<kernel>_construct<i>_after_simplify_I.ll` (the final `<kernel>_after_offload.ll` stays whole-kernel - it is the reassembled result of all constructs), `QD_DUMP_SIMPLIFY` writes its usual per-pass files for each construct, and `print_ir` prints each construct's passes under a `[per-construct frontend split] <kernel> construct <i>` banner. `QD_DUMP_CFG` is the exception - it still runs the frontend once over the whole kernel so it can dump the complete control-flow graph.
+The IR-inspection flags from [Inspecting what the compiler did](#inspecting-what-the-compiler-did) stay observation-only when the split runs: they never change which path is taken, they just report each construct separately for the intermediate stages so the output reflects exactly what was compiled. `QD_DUMP_IR` writes each construct's post-simplify snapshot to `<kernel>_construct<i>_after_simplify_I.ll` (the final `<kernel>_after_offload.ll` stays whole-kernel - it is the reassembled result of all constructs), `QD_DUMP_SIMPLIFY` writes its usual per-pass files for each construct, and `print_ir` prints each construct's passes under a `[per-construct frontend split] <kernel> construct <i>` banner. `QD_DUMP_CFG` is the exception - the split still declines when it is set, so the frontend runs once over the whole kernel.
