@@ -514,33 +514,38 @@ _OBSERVABLE_DUNDERS = frozenset(
 )
 
 
-def _class_not_uniquely_identified(cls: type) -> bool:
-    """True if ``cls`` cannot be recovered from ``module``/``qualname`` (a ``<locals>`` qualname, or it does not
-    resolve back): such a class shares its identity string with every other built the same way, yet is observably
-    distinct (``cfg.x.__class__ is First``), so callers add a class-identity token to the key.
+def _class_not_uniquely_identified(obj: Any) -> bool:
+    """True if ``obj`` (a class, metaclass, or a callable/class bound as an attr value) cannot be recovered from its
+    module + ``__qualname__`` (a ``<locals>`` qualname, a missing name, or it does not resolve back): it then shares
+    its identity string with every sibling built the same way, yet is observably distinct (``cfg.x.__class__ is
+    First``), so callers add an identity token to the key.
     """
-    module = sys.modules.get(cls.__module__)
+    module_name = getattr(obj, "__module__", None)
+    qualname = getattr(obj, "__qualname__", None)
+    if not isinstance(module_name, str) or not isinstance(qualname, str):
+        return True
+    module = sys.modules.get(module_name)
     if module is None:
         return True
-    obj: Any = module
-    for part in cls.__qualname__.split("."):
+    resolved: Any = module
+    for part in qualname.split("."):
         if part == "<locals>":
             return True
-        obj = getattr(obj, part, _MISSING)
-        if obj is _MISSING:
+        resolved = getattr(resolved, part, _MISSING)
+        if resolved is _MISSING:
             return True
-    return obj is not cls
+    return resolved is not obj
 
 
 class _ClassRef:
-    """A strong ref to a class that hashes/compares by *object identity* (never via the metaclass), for the in-process
-    spec key: it pins ``cls`` so its ``id`` cannot be recycled, and stays distinct even under a metaclass ``__eq__`` /
-    ``__hash__ = None`` (rejected upstream anyway) or a module reload.
+    """A strong ref to an object (a class, or a callable/class bound as an attr value) that hashes/compares by *object
+    identity* (never via a metaclass ``__eq__``/``__hash__``), for the in-process spec key: it pins the object so its
+    ``id`` cannot be recycled, and stays distinct under a metaclass ``__eq__`` (rejected upstream anyway) or a reload.
     """
 
     __slots__ = ("cls",)
 
-    def __init__(self, cls: type) -> None:
+    def __init__(self, cls: Any) -> None:
         self.cls = cls
 
     def __hash__(self) -> int:
@@ -553,27 +558,38 @@ class _ClassRef:
         return f"<_ClassRef 0x{id(self.cls):x}>"  # identity only; the live key is never serialized
 
 
-# Monotonic, never-reused serials for dynamically created classes, used only in the *offline* key. ``id(cls)`` is
-# unsafe there: after ``qd.reset()`` frees a class, CPython can reuse its address for the next same-qualified class,
-# which would serialize an identical ``(nonce, id)`` and load the dead class's kernel. Held weakly (pins nothing).
-_dynamic_class_serials: "weakref.WeakKeyDictionary[type, int]" = weakref.WeakKeyDictionary()
+# Monotonic, never-reused serials for dynamically created objects (classes, or callables bound as attr values), used
+# only in the *offline* key. ``id`` is unsafe there: after ``qd.reset()`` frees an object, CPython can reuse its
+# address for the next same-qualified one, which would serialize an identical ``(nonce, id)`` and load the dead
+# object's kernel. Held weakly (pins nothing).
+_dynamic_class_serials: "weakref.WeakKeyDictionary[Any, int]" = weakref.WeakKeyDictionary()
 _dynamic_class_serial_counter = itertools.count()
 
 
-def _dynamic_class_serial(cls: type) -> int:
-    """A process-unique, non-recyclable serial for a dynamically created ``cls``, stable for its lifetime. A class
-    that cannot be weakly referenced (rejected upstream) draws a fresh serial each call - a redundant miss, never a
+def _dynamic_class_serial(obj: Any) -> int:
+    """A process-unique, non-recyclable serial for a dynamically created ``obj`` (class or callable), stable for its
+    lifetime. An object that cannot be weakly referenced draws a fresh serial each call - a redundant miss, never a
     stale reuse.
     """
-    serial = _dynamic_class_serials.get(cls)
+    serial = _dynamic_class_serials.get(obj)
     if serial is not None:
         return serial
     serial = next(_dynamic_class_serial_counter)
     try:
-        _dynamic_class_serials[cls] = serial
+        _dynamic_class_serials[obj] = serial
     except TypeError:
         pass
     return serial
+
+
+def _identity_component(obj: Any, live: bool):
+    """Identity token separating objects (classes, metaclasses, or user callables/classes bound as attr values) that
+    share a module/qualname - factory-built, reload-rebound, or ``<locals>``. ``live``: an id-pinning ``_ClassRef``
+    (never serialized). offline: ``None`` when ``obj`` is uniquely recoverable from its module (stable cross-process),
+    else ``(_PROCESS_NONCE, serial)`` - a guaranteed cross-process miss rather than a wrong reuse."""
+    if live:
+        return _ClassRef(obj)
+    return (_PROCESS_NONCE, _dynamic_class_serial(obj)) if _class_not_uniquely_identified(obj) else None
 
 
 # Structural attrs (from ``_STRUCTURAL_CLASS_ATTRS``) that are user-writable *and* readable at compile time
@@ -583,16 +599,20 @@ def _dynamic_class_serial(cls: type) -> int:
 _KEYED_STRUCTURAL_ATTRS = ("__doc__", "__slots__", "__weakref__")
 _ATTR_ABSENT = "<qd:attr-absent>"  # not a valid identifier, so it can never equal a real ``__slots__`` name/value
 
-# Non-data types whose only stable, address-free observable content is ``(type, __name__)``: an auto-generated
-# ``__dict__``/``__weakref__`` slot descriptor (the common case, on a base's own dict) and, defensively, any callable
-# or class a user might bind. These are *tokenized* rather than value-serialized (a per-process pointer repr would
-# poison the offline key); anything outside this set that is not plain data is rejected as unrepresentable.
-_TOKENIZED_ATTR_TYPES = (
+# Auto-generated slot descriptors (the common case: a class's own ``__dict__``/``__weakref__``). Their only stable,
+# address-free content is ``(type, __name__)``; the owning class - separately keyed with its own identity - already
+# separates two classes' same-named descriptors, so no per-value identity is needed.
+_DESCRIPTOR_ATTR_TYPES = (
     types.GetSetDescriptorType,
     types.MemberDescriptorType,
     types.WrapperDescriptorType,
     types.MethodWrapperType,
     types.BuiltinFunctionType,
+)
+
+# User-bound classes/callables: two distinct ``<locals>`` objects share ``(type, __name__)`` yet are observably
+# distinct (``cfg.x.__class__.<attr> is First``), so they also carry an identity component (``_identity_component``).
+_IDENTIFIED_ATTR_TYPES = (
     types.FunctionType,
     types.MethodType,
     classmethod,
@@ -602,25 +622,29 @@ _TOKENIZED_ATTR_TYPES = (
 )
 
 
-def _canonical_attr_value(val: Any):
+def _canonical_attr_value(val: Any, live: bool):
     """A deterministic, hashable, *lossless* snapshot of a class-dict value read at compile time
-    (``cfg.x.__class__.<attr>``). Scalars/str/bytes/None by value; tuples/lists/dicts recursively and sets
-    order-independently, each keeping its container type (``()`` vs ``[]`` compare unequal); slot descriptors /
-    callables / classes reduce to an address-free ``(type, name)`` token (their only stable observable content). An
-    arbitrary object we cannot represent faithfully is rejected rather than collapsed to a lossy token that could
+    (``cfg.x.__class__.<attr>``). Scalars/str/bytes/None by value (type-tagged, so ``True``/``1``/``1.0`` differ);
+    tuples/lists/dicts recursively and sets order-independently, each keeping its container type (``()`` vs ``[]``
+    compare unequal); an auto-generated slot descriptor reduces to an address-free ``(type, name)`` token (the owning
+    class carries identity); a user-bound class/callable also carries an identity component so distinct same-named
+    ``<locals>`` objects never collide. Anything else is rejected rather than collapsed to a lossy token that could
     reuse a stale specialization after the value changes."""
     if val is None:
         return None
     if isinstance(val, (bool, int, float, complex, str, bytes)):
         return (type(val).__qualname__, val)  # tag the exact type: ``True``/``1``/``1.0`` compare equal but differ
     if isinstance(val, (tuple, list)):
-        return (type(val).__qualname__, tuple(_canonical_attr_value(v) for v in val))
+        return (type(val).__qualname__, tuple(_canonical_attr_value(v, live) for v in val))
     if isinstance(val, (set, frozenset)):
-        return (type(val).__qualname__, frozenset(_canonical_attr_value(v) for v in val))
+        return (type(val).__qualname__, frozenset(_canonical_attr_value(v, live) for v in val))
     if isinstance(val, dict):
-        return ("dict", tuple((_canonical_attr_value(k), _canonical_attr_value(v)) for k, v in val.items()))
-    if isinstance(val, _TOKENIZED_ATTR_TYPES):
+        items = tuple((_canonical_attr_value(k, live), _canonical_attr_value(v, live)) for k, v in val.items())
+        return ("dict", items)
+    if isinstance(val, _DESCRIPTOR_ATTR_TYPES):
         return (type(val).__qualname__, getattr(val, "__name__", None))
+    if isinstance(val, _IDENTIFIED_ATTR_TYPES):
+        return (type(val).__qualname__, getattr(val, "__name__", None), _identity_component(val, live))
     raise TypeError(
         f"A ``Final``-baked class carries a structural attribute holding {val!r} (type {type(val).__qualname__}), "
         f"which cannot be keyed faithfully. A kernel can read it at compile time (``cfg.x.__class__.<attr>``), so "
@@ -629,62 +653,52 @@ def _canonical_attr_value(val: Any):
     )
 
 
-def _attr_kind(klass: type, name: str):
+def _attr_kind(klass: type, name: str, live: bool):
     """Keyed value of one structural attr on ``klass`` itself, or ``_ATTR_ABSENT`` if it is not in the class dict
     (Python lets it be added/deleted after creation, and ``name in cls.__dict__`` is observable)."""
     if name not in klass.__dict__:
         return _ATTR_ABSENT
-    return _canonical_attr_value(klass.__dict__[name])
+    return _canonical_attr_value(klass.__dict__[name], live)
 
 
-def _kind_entry(klass: type) -> tuple:
-    """``(module, qualname, name, *keyed-structural-attr-values)`` for one MRO entry - but only for a heap (Python)
-    class; a static/builtin base's values are immutable, so they are omitted to avoid bloating the key (e.g. ``int``'s
-    doc). ``__name__`` is a ``type`` getset (not in ``vars(cls)``, so the behavior scan misses it) that is independently
-    reassignable from ``__qualname__`` and observable as ``cfg.x.__class__.__name__``, so it is keyed too."""
+def _kind_entry(klass: type, live: bool) -> tuple:
+    """``(module, qualname, name, *keyed-structural-attr-values, identity)`` for one MRO entry - but only for a heap
+    (Python) class; a static/builtin base's values are immutable, so they are omitted to avoid bloating the key (e.g.
+    ``int``'s doc). ``__name__`` is a ``type`` getset (not in ``vars(cls)``, so the behavior scan misses it) that is
+    independently reassignable from ``__qualname__``, and the trailing identity separates a factory-built base or
+    metaclass that shares a module/qualname with its siblings - both observable (``cfg.x.__class__.__name__``,
+    ``cfg.x.__class__.__class__ is ExpectedMeta``)."""
     if not klass.__flags__ & _HEAPTYPE_FLAG:
         return (klass.__module__, klass.__qualname__)
     return (
         klass.__module__,
         klass.__qualname__,
         klass.__name__,
-        *(_attr_kind(klass, name) for name in _KEYED_STRUCTURAL_ATTRS),
+        *(_attr_kind(klass, name, live) for name in _KEYED_STRUCTURAL_ATTRS),
+        _identity_component(klass, live),
     )
 
 
-def _class_kind(cls: type) -> tuple:
-    """The class's compile-time-observable *kind* as ``(base MRO, metaclass MRO)``, each entry
-    ``(module, qualname, name, *structural-attr-values)`` (see ``_kind_entry``/``_KEYED_STRUCTURAL_ATTRS``). Redefining
-    a resolvable subclass's primitive/enum base (``class Unit(int)`` -> ``np.int64``, ``enum.Enum`` -> ``enum.IntEnum``)
-    or its metaclass (``metaclass=EmptyMeta``), or mutating a user class's ``__name__``/``__doc__``/``__slots__``/
-    ``__weakref__``, keeps module/qualname/canonical unchanged yet is observable (``cfg.x.__class__.__mro__[1]``,
-    ``cfg.x.__class__.__class__``, ``cfg.x.__class__.<attr>``), so the offline key must separate them."""
+def _class_kind(cls: type, live: bool) -> tuple:
+    """The class's compile-time-observable *kind* as ``(base MRO, metaclass MRO)``, each entry from ``_kind_entry``.
+    Redefining a resolvable subclass's primitive/enum base (``class Unit(int)`` -> ``np.int64``, ``enum.Enum`` ->
+    ``enum.IntEnum``) or its metaclass (``metaclass=EmptyMeta``, or a distinct factory-built one), or mutating a user
+    class's ``__name__``/``__doc__``/``__slots__``/``__weakref__``, keeps module/qualname/canonical unchanged yet is
+    observable (``cfg.x.__class__.__mro__[1]``, ``cfg.x.__class__.__class__``, ``cfg.x.__class__.<attr>``), so the key
+    must separate them."""
     metaclass: type = type(cls)  # annotate as instance so ``.__mro__`` is the tuple, not the descriptor (pyright)
-    base_kind = tuple(_kind_entry(base) for base in cls.__mro__)
-    meta_kind = tuple(_kind_entry(meta) for meta in metaclass.__mro__)
+    base_kind = tuple(_kind_entry(base, live) for base in cls.__mro__)
+    meta_kind = tuple(_kind_entry(meta, live) for meta in metaclass.__mro__)
     return (base_kind, meta_kind)
 
 
 def _subclass_identity(cls: type, live: bool) -> tuple:
-    """Class-identity component for a subclass of a baked type or an ``enum``. ``module``/``qualname`` do not identify
-    the class *object* (factory-built, or reload-rebound) yet ``cfg.x.__class__ is First`` is observable, so distinct
-    objects must key apart:
-
-    - ``live=True`` (in-process): a ``_ClassRef`` identity token (pins the ``id``); must never reach the offline key.
-    - ``live=False`` (offline, ``str``-ified): ``None`` for a resolvable class (stable cross-process), else
-      ``(_PROCESS_NONCE, serial)`` - the serial separates dynamic classes here, the nonce forces a cross-process miss.
-
-    Both carry the class *kind* (``_class_kind``: base + metaclass MRO). A resolvable subclass redefined with a
-    different base or metaclass keeps the same module/qualname and canonical value but flips compile-time behavior
-    (``cfg.x.__class__.__mro__[1]``, ``cfg.x.__class__.__class__``), so the offline key must separate them; the live
-    key already does via ``_ClassRef``. Over-separating behaviour-equal kinds only costs a cache miss, never a wrong
-    reuse.
-    """
-    kind = _class_kind(cls)
-    if live:
-        return (cls.__module__, cls.__qualname__, kind, _ClassRef(cls))
-    identity = (_PROCESS_NONCE, _dynamic_class_serial(cls)) if _class_not_uniquely_identified(cls) else None
-    return (cls.__module__, cls.__qualname__, kind, identity)
+    """Class-identity component for a subclass of a baked type or an ``enum``: ``(module, qualname, kind, identity)``.
+    ``module``/``qualname`` do not identify the class *object* (factory-built, or reload-rebound) yet
+    ``cfg.x.__class__ is First`` is observable, so ``identity`` (see ``_identity_component``) separates distinct
+    objects. ``kind`` (``_class_kind``: base + metaclass MRO) separates a resolvable subclass redefined with a
+    different base or metaclass. Over-separating behaviour-equal kinds only costs a cache miss, never a wrong reuse."""
+    return (cls.__module__, cls.__qualname__, _class_kind(cls, live), _identity_component(cls, live))
 
 
 def _dunder_copied_from_base(klass: type, name: str, value: Any) -> bool:

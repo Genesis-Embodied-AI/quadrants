@@ -5190,6 +5190,62 @@ def test_final_subclass_metaclass_kind_in_offline_key():
 
 
 @test_utils.test()
+def test_final_subclass_dynamic_metaclass_identity_in_offline_key():
+    """A metaclass entry in the class kind also carries a dynamic-identity component: a *resolvable* subclass whose
+    metaclass is a factory-built ``<locals>`` type shares module/qualname/structural values with every sibling
+    metaclass, yet ``cfg.x.__class__.__class__ is ExpectedMeta`` is observable. Two builds with distinct metaclasses
+    must not share an offline key, else fastcache could load a kernel baked for the other metaclass."""
+    import sys
+    import types
+
+    from quadrants.lang._final_dataclass_fields import final_scalar_key
+
+    def make_meta():
+        class M(type):  # <locals> -> a distinct object each call, same qualname
+            pass
+
+        return M
+
+    def offline_key():
+        meta = make_meta()
+        mod = types.ModuleType("qd_dynamic_metaclass_probe")
+        sys.modules[mod.__name__] = mod
+        try:
+            mod.Meta = meta  # the subclass below is module-level (resolvable); only its metaclass is dynamic
+            exec("class Unit(int, metaclass=Meta):\n    pass\n", mod.__dict__)
+            return str(final_scalar_key(mod.Unit(1), live=False))
+        finally:
+            sys.modules.pop(mod.__name__, None)
+
+    assert offline_key() != offline_key()  # distinct <locals> metaclasses key apart despite a resolvable subclass
+
+
+@test_utils.test()
+def test_final_subclass_structural_attr_holds_identified_object():
+    """A user class/callable bound into a keyed structural attr (here ``__doc__``) is tokenized as ``(type, __name__)``
+    plus an identity component, so two distinct ``<locals>`` objects sharing a ``__name__`` do not collapse to one
+    token: the in-process key uses object identity, the offline key a dynamic serial (auto-generated slot descriptors
+    stay bare ``(type, name)`` since the owning class already carries identity)."""
+    from quadrants.lang._final_dataclass_fields import final_scalar_key
+
+    def make_payload():
+        class Payload:  # <locals>, same qualname each call, distinct object
+            pass
+
+        return Payload
+
+    class Unit(int):
+        pass
+
+    Unit.__doc__ = make_payload()
+    live_before = final_scalar_key(Unit(1), live=True)
+    offline_before = str(final_scalar_key(Unit(1), live=False))
+    Unit.__doc__ = make_payload()  # distinct class object, identical __name__ 'Payload'
+    assert final_scalar_key(Unit(1), live=True) != live_before  # identity-safe live token
+    assert str(final_scalar_key(Unit(1), live=False)) != offline_before  # dynamic serial -> distinct offline
+
+
+@test_utils.test()
 def test_final_subclass_docstring_in_key():
     """``__doc__`` is the one structural class attr that is user-writable and readable at compile time
     (``cfg.x.__class__.__doc__``), so mutating it between launches must change both the in-process and offline keys
