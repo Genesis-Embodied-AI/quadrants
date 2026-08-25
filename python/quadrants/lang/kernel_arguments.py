@@ -27,9 +27,7 @@ class ArgMetadata:
         self.annotation = annotation
         self.name = name
         self.default = default
-        # True when the parameter was spelled ``T | None`` (or ``Optional[T]``). ``annotation`` holds the unwrapped
-        # ``T``; ``optional`` records that ``None`` is an accepted value for this slot. Consumed by the dual-nature
-        # ndarray slot handling (design.md W5); Tensor/Template slots already accept ``None`` regardless.
+        # ``None`` is an accepted value for this slot (spelled ``T | None``); ``annotation`` is the unwrapped ``T``.
         self.optional = optional
 
     def __repr__(self) -> str:

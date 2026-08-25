@@ -100,13 +100,9 @@ class NdarrayType:
         return cls(*args)
 
     def __or__(self, other):
-        # Shim so ``qd.types.NDArray[...] | None`` forms an optional-ndarray annotation. Needed only because
-        # ``NDArray[...]`` currently evaluates to an *instance* (see ``__class_getitem__`` above), so the interpreter
-        # cannot build a ``types.UnionType`` from it the way it can for the class-style ``qd.Tensor`` /
-        # ``qd.types.Template`` annotations. The kernel annotation validator recognizes the returned marker.
-        #
-        # TODO(quadrants#831): delete this shim once ``NDArray[...]`` evaluates to a type rather than an instance, at
-        # which point ``NDArray[...] | None`` yields a real ``types.UnionType`` handled by the generic union path.
+        # ``NDArray[...]`` is an instance, not a class, so ``|`` cannot build a ``types.UnionType`` the way it does
+        # for class-style annotations; hand back a marker the annotation validator understands instead.
+        # TODO(quadrants#831): drop this once ``NDArray[...]`` evaluates to a type.
         if other is None or other is type(None):
             return _OptionalNdarray(self)
         return NotImplemented
@@ -168,11 +164,7 @@ class NdarrayType:
 
 
 class _OptionalNdarray:
-    """Marker produced by ``qd.types.NDArray[...] | None``; see ``NdarrayType.__or__``.
-
-    Wraps the underlying :class:`NdarrayType` instance so the kernel annotation validator can unwrap it and record the
-    slot as optional. Superseded by quadrants#831 (delete alongside ``NdarrayType.__or__``).
-    """
+    """Marks ``NDArray[...] | None``; the validator unwraps ``.inner`` and records the slot as optional."""
 
     def __init__(self, inner: "NdarrayType"):
         self.inner = inner

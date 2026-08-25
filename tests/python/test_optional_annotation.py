@@ -1,11 +1,4 @@
-"""Tests for the ``T | None`` optional kernel-argument spelling (design.md W4).
-
-W4 makes ``T | None`` parse uniformly for the three annotation families (``qd.Tensor``, ``qd.types.Template``,
-``qd.types.NDArray[...]``) and records the slot as optional on its ``ArgMetadata``. ``qd.Tensor`` and
-``qd.types.Template`` slots already accept ``None`` at runtime, so for those two the union spelling works end to end
-here. ``qd.types.NDArray[...] | None`` parses and still works when a value is present; making ``None`` actually launch
-against an ndarray slot is W5, and the boundary is pinned below.
-"""
+"""Tests for the ``T | None`` optional kernel-argument spelling."""
 
 import typing
 
@@ -18,10 +11,7 @@ from quadrants.types.ndarray_type import NdarrayType
 
 from tests import test_utils
 
-# ----------------------------------------------------------------------------
-# Parse + normalization: the union spelling is accepted and the slot is marked optional.
-# These run at @qd.kernel decoration time and need no qd.init().
-# ----------------------------------------------------------------------------
+# Parse + normalization (decoration-time, no qd.init()): the union spelling is accepted and marks the slot optional.
 
 
 def _arg0(kernel):
@@ -35,7 +25,7 @@ def test_tensor_union_parses_and_marks_optional():
 
     meta = _arg0(k)
     assert meta.optional is True
-    # None is stripped; the stored annotation is the bare qd.Tensor class, so downstream dispatch is unchanged.
+    # None is stripped: the stored annotation is the bare qd.Tensor, so downstream dispatch is unchanged.
     assert meta.annotation is qd.Tensor
 
 
@@ -56,15 +46,15 @@ def test_ndarray_union_parses_and_preserves_spec():
 
     meta = _arg0(k)
     assert meta.optional is True
-    # The dtype/ndim carried by the subscripted instance must survive the __or__ shim unwrap.
+    # The dtype/ndim on the subscripted instance must survive the __or__ unwrap.
     assert isinstance(meta.annotation, NdarrayType)
     assert meta.annotation.ndim == 1
     assert meta.annotation.dtype == qd.f32
 
 
 def test_optional_typing_form_parses_for_class_families():
-    """``typing.Optional[T]`` is equivalent to ``T | None`` for the two class-style families (design.md D1: the
-    ndarray family stays ``|``-only until issue 831, because ``Optional[instance]`` fails ``typing._type_check``)."""
+    """``typing.Optional[T]`` works for the class-style families; ndarray stays ``|``-only because ``NDArray[...]`` is
+    an instance and ``typing.Optional`` rejects instances."""
 
     @qd.kernel
     def kt(x: typing.Optional[qd.Tensor]):
@@ -107,9 +97,8 @@ def test_multi_member_optional_union_is_rejected():
 
 
 def test_optional_unsupported_family_is_rejected():
-    """`T | None` is only for qd.Tensor / qd.types.Template / qd.types.NDArray. A family with no absent-value path
-    (here a dataclass) must be rejected at registration, not silently recorded as optional and left to crash with an
-    internal AttributeError when `None` reaches the dataclass launch branch."""
+    """A family with no absent-value path (here a dataclass) must be rejected at registration, not silently recorded
+    as optional."""
     import dataclasses
 
     @dataclasses.dataclass
@@ -123,9 +112,7 @@ def test_optional_unsupported_family_is_rejected():
             pass
 
 
-# ----------------------------------------------------------------------------
 # Runtime: qd.Tensor | None works end to end (both branches), just like the bare spelling.
-# ----------------------------------------------------------------------------
 
 
 @test_utils.test()
@@ -170,9 +157,7 @@ def test_template_union_none_and_present_run():
     assert out.to_numpy()[0] == 7
 
 
-# ----------------------------------------------------------------------------
-# Runtime: qd.types.NDArray[...] | None. Present value works now; None is the W5 boundary.
-# ----------------------------------------------------------------------------
+# Runtime: qd.types.NDArray[...] | None. Present value works now; None is not supported yet.
 
 
 @test_utils.test()
@@ -190,8 +175,7 @@ def test_ndarray_union_present_value_runs():
 
 @test_utils.test()
 def test_ndarray_union_none_not_yet_supported():
-    """W4/W5 boundary: an optional ndarray slot parses, but launching it with ``None`` still fails until W5 makes the
-    slot dual-nature. W5 will flip this test from raises to passes."""
+    """An optional ndarray slot parses, but launching it with ``None`` is not supported yet."""
     a = qd.ndarray(qd.f32, shape=(4,))
 
     @qd.kernel
