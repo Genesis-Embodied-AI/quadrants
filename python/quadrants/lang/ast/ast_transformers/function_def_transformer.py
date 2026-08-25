@@ -153,20 +153,17 @@ class FunctionDefTransformer:
         func_id = ctx.func.func_id
         if dataclasses.is_dataclass(argument_type):
             ctx.create_variable(argument_name, argument_type)
-            # ``typing.Final[T]`` fields are baked as compile-time constants rather than declared as runtime kernel
-            # args. Cached + validated once per dataclass type; empty for every dataclass not using the feature.
+            # ``Final[T]`` fields are baked as compile-time constants, not runtime args. Cached + validated once per
+            # type; empty for every dataclass not using the feature.
             final_names = final_field_names(argument_type)
             for field_idx, field in enumerate(dataclasses.fields(argument_type)):
                 flat_name = create_flat_name(argument_name, field.name)
                 if pruning.enforcing and flat_name not in pruning.used_vars_by_func_id[func_id]:
                     continue
-                # Bind ``flat_name`` to the actual Python value off the passed-in instance, so that
-                # ``FlattenAttributeNameTransformer``-rewritten ``config.field`` -> ``Name(__qd_config__qd_field)``
-                # resolves to a Python constant in ``build_Name``. That is what makes ``qd.static(config.field)`` legal
-                # on a plain frozen dataclass without opting the class into ``@qd.data_oriented``. The value is folded
-                # into the template spec key (``_extract_arg``) and the fastcache key
-                # (``args_hasher.dataclass_to_repr``) so distinct values compile distinct kernels, and the launch path
-                # (``_recursive_set_args``) skips these fields since they own no runtime arg slot.
+                # Bind ``flat_name`` to the actual Python value off the instance, so a rewritten ``config.field``
+                # resolves to a Python constant in ``build_Name`` - what makes ``qd.static(config.field)`` legal on a
+                # plain frozen dataclass without ``@qd.data_oriented``. The value drives the spec + fastcache keys, and
+                # the launch path skips these fields (no runtime arg slot).
                 if field.name in final_names:
                     assert arg_value is not None, (
                         f"Final-annotated dataclass field {field.name!r} needs the runtime dataclass instance to "
@@ -347,11 +344,9 @@ class FunctionDefTransformer:
         argument_type: Any,
         data: Any,
     ) -> None:
-        # ``typing.Final[T]`` field of a caller's dataclass, flattened by ``expand_func_arguments`` into a leaf @qd.func
-        # arg with annotation ``Final[T]``. The caller's ``_transform_kernel_arg`` already bound the caller-side flat
-        # name to the actual Python value, and ``build_Name`` propagated that value into ``data`` as the resolved
-        # py-arg. Bind it directly (compile-time) so ``qd.static(cfg.field)`` inside the @qd.func body sees a Python
-        # constant rather than an ``Expr``. Handled ahead of the ``annotations.template`` check below because
+        # A ``Final[T]`` field flattened into a leaf @qd.func arg: ``data`` already carries the resolved Python value
+        # (bound by the caller's ``_transform_kernel_arg`` and propagated by ``build_Name``). Bind it directly so
+        # ``qd.static(cfg.field)`` sees a constant. Handled before the ``annotations.template`` check since
         # ``isinstance(Final[T], annotations.template)`` is ``False``.
         if is_final_annotation(argument_type):
             ctx.create_variable(argument_name, data)

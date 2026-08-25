@@ -124,11 +124,8 @@ def _get_frozen_dc_plan(
     # check so a stale plan from a different kernel specialization is never returned.
     if entry is not None and entry[0] is used_params:
         return entry[1]
-    # ``typing.Final[T]`` fields are baked as compile-time constants in the kernel body (see
-    # ``FunctionDefTransformer._transform_kernel_arg``) and folded into the template spec key (see ``_extract_arg``),
-    # so they own no runtime arg slot. Excluding them from the plan keeps the launch loop and the underlying kernel
-    # argument count consistent, and costs nothing per launch since the plan itself is already cached per
-    # (used_params, class, basename) triple.
+    # ``Final[T]`` fields are baked as compile-time constants and own no runtime arg slot, so excluding them from the
+    # plan keeps the launch loop and kernel arg count consistent. The plan is cached, so this costs nothing per launch.
     final_names = final_field_names(struct_cls)
     entries: list[tuple[str, str, Any]] = []
     for field in fields_dict.values():
@@ -659,14 +656,11 @@ class FuncBase:
         if needed_arg_fields is not None:
             if provided_arg_type is not needed_arg_type:
                 raise QuadrantsRuntimeError("needed", needed_arg_type, "!= provided", provided_arg_type)
-            # Frozen detection must agree with the compile-time gate (``_rebinding_is_prevented`` in
-            # ``_final_dataclass_fields``), which keys off the dataclass ``frozen`` / ``unsafe_hash`` parameters.
-            # ``__hash__ is not None`` alone disagrees for the legal-but-rare ``@dataclass(frozen=True)`` that
-            # also sets ``__hash__ = None`` by hand: the compile path treats that as frozen and bakes its
-            # ``Final`` fields (omitting them from the runtime arg list), so launch must take the same frozen
-            # plan below rather than the runtime-arg loop, which would otherwise try to submit a baked
-            # ``Final[T]`` field as a real argument. The ``or`` only runs when ``__hash__ is None``, so the
-            # common frozen path pays nothing.
+            # Frozen detection must agree with the compile-time gate (``_rebinding_is_prevented``), which keys off the
+            # ``frozen`` / ``unsafe_hash`` parameters. ``__hash__ is not None`` alone disagrees for the rare
+            # ``@dataclass(frozen=True)`` that also sets ``__hash__ = None`` by hand: the compile path treats it as
+            # frozen and bakes its ``Final`` fields, so launch must take the frozen plan too (else it would submit a
+            # baked field as a real arg). The ``or`` only runs when ``__hash__ is None``, so the common path is free.
             is_frozen = needed_arg_type.__hash__ is not None
             if not is_frozen:
                 params = getattr(needed_arg_type, "__dataclass_params__", None)
@@ -697,11 +691,9 @@ class FuncBase:
                     )
                     idx += num_args_
                 return idx, True
-            # Non-frozen dataclass: original path with full iteration and filtering. No ``Final`` handling is
-            # needed here - a class only reaches this branch when it is neither ``frozen`` nor ``unsafe_hash``
-            # (the detection above now matches the compile-time ``_rebinding_is_prevented`` gate), and
-            # ``final_field_names`` rejects ``Final`` fields on such a class outright, so that validation has
-            # already failed during template mapping by the time we get here.
+            # Non-frozen dataclass: original path with full iteration and filtering. No ``Final`` handling needed - such
+            # a class is neither ``frozen`` nor ``unsafe_hash``, and ``final_field_names`` rejects ``Final`` fields on
+            # it outright, so that validation already failed during template mapping.
             is_launch_ctx_cacheable = False
             for field in needed_arg_fields.values():
                 if field._field_type is not _FIELD:

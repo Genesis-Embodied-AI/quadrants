@@ -88,34 +88,23 @@ def dataclass_to_repr(raise_on_templated_floats: bool, path: tuple[str, ...], ar
             return None
         if cached is not None:
             return cached
-    # A ``typing.Final[T]`` field is baked into the compiled kernel as a compile-time constant (see
-    # ``FunctionDefTransformer._transform_kernel_arg``), so its *value* - not just its type - must be part of the cache
-    # key. Without this, a kernel compiled with ``offset=7`` baked in is loaded from the offline cache for a config
-    # carrying ``offset=100`` and silently produces the first config's results (regression test:
-    # ``test_final_field_value_is_part_of_offline_fastcache_key``). The in-process template mapper spec key already
-    # discriminates on the value; this covers the cross-process offline cache. Serialized directly via
-    # ``final_scalar_key`` in the loop below (not via ``stringify_obj_type``, which has no ``str`` case).
-    #
-    # PERF: one ``dict.get`` keyed on the dataclass type; empty for every dataclass not using the feature. For a
-    # Final-free frozen dataclass the ``is_frozen`` repr cache above means this whole function runs once per instance.
+    # A ``Final[T]`` field is baked into the kernel, so its *value* (not just its type) must be part of the offline
+    # cache key - else a kernel baked with ``offset=7`` loads for a config carrying ``offset=100`` and silently
+    # produces the wrong results (test: ``test_final_field_value_is_part_of_offline_fastcache_key``). The in-process
+    # spec key already discriminates on value; this covers the cross-process cache. PERF: one ``dict.get``, empty for
+    # every dataclass not using the feature.
     final_names = final_field_names(type(arg))
-    # A dataclass whose subtree bakes a ``Final`` value must NOT cache its repr: the cached string cannot notice a
-    # ``Final`` value's *class* turning behaviorful between launches (e.g. a plain enum whose ``__eq__`` is
-    # monkey-patched), so it must recompute each launch to re-run ``final_scalar_key``'s validation. We achieve that by
-    # never *storing* a cache for it, so the read above misses and falls through here every launch (transitive: an
-    # early cache hit would also skip the recursion into a nested Final leaf). ``subtree_has_final_fields`` is a single
-    # ``dict.get`` after first sighting, and is only reached off the cached steady state.
+    # A Final-bearing subtree must NOT cache its repr: the cached string cannot notice a ``Final`` value's class
+    # turning behaviorful between launches, so it must recompute to re-run ``final_scalar_key``'s validation. We never
+    # *store* a cache for it, so the read above misses and falls through (transitive to a nested Final leaf).
     cacheable = is_frozen and not subtree_has_final_fields(type(arg))
     repr_l = []
     for field in dataclasses.fields(arg):
         child_value = getattr(arg, field.name)
         if field.name in final_names:
-            # A ``Final`` field is baked into the kernel as a compile-time constant, so its *value* is the cache key,
-            # and ``final_scalar_key`` already gives a collision-safe, type-tagged, process-stable representation
-            # (floats by their IEEE bits, so NaNs differing only in sign/payload stay distinct here). Serialize it
-            # directly and skip ``stringify_obj_type``: that type serializer has no case for a bare ``str``, so routing
-            # a ``Final[str]`` - an explicitly supported field type - through it would return None and wrongly disable
-            # the offline cache for the whole argument (and log a spurious PARAM_INVALID warning).
+            # Serialize the baked value directly via ``final_scalar_key`` (collision-safe, type-tagged,
+            # process-stable; floats by IEEE bits) and skip ``stringify_obj_type``: it has no case for a bare ``str``,
+            # so a ``Final[str]`` would return None there and wrongly disable the offline cache for the whole argument.
             repr_l.append(f"{field.name}: (final) = {final_scalar_key(child_value)}")
             continue
         _repr = stringify_obj_type(raise_on_templated_floats, path + (field.name,), child_value, arg_meta=None)

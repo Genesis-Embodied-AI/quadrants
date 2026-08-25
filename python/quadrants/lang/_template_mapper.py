@@ -69,11 +69,9 @@ class TemplateMapper:
         self._mapping_cache: dict[ArgsHash, tuple[int, Key]] = {}
         self._mapping_cache_tracker: dict[ArgsHash, list[ReferenceType | None]] = {}
         self._prog_weakref: ReferenceType[Program] | None = None
-        # Whether this mapper carries an argument whose dataclass subtree bakes a ``Final`` value, which forces every
-        # launch to recompute+revalidate (its class can turn behaviorful between launches - see
-        # ``annotation_has_final_subtree``), so the instance-keyed ``_mapping_cache`` must be disabled for it. ``None``
-        # until first ``lookup``: computed lazily so the ``Final`` validation it triggers stays on the first-launch
-        # path (matching the pre-existing ``extract()`` timing) rather than firing at kernel-construction time.
+        # True if a Final-bearing argument forces every launch to recompute+revalidate (see
+        # ``annotation_has_final_subtree``), disabling the instance-keyed ``_mapping_cache``. ``None`` until first
+        # ``lookup``: computed lazily so its ``Final`` validation fires on the first-launch path, not at construction.
         self._mapping_cache_disabled: bool | None = None
 
     def extract(self, raise_on_templated_floats: bool, args: tuple[Any, ...]) -> Key:
@@ -137,10 +135,9 @@ class TemplateMapper:
                 nd_ids.append(id(v))
         if nd_ids:
             args_hash = args_hash + tuple(nd_ids)
-        # Disable this instance-keyed cache entirely when a Final-bearing argument is present: serving a prior
-        # ``(count, key)`` for the same live instance would skip ``extract()`` and thus ``final_scalar_key``'s
-        # per-launch revalidation, letting a launch reuse the specialization compiled before a ``Final`` value's class
-        # was monkey-patched behaviorful. Computed once (fixed per mapper); the common Final-free mapper is unaffected.
+        # Disable this cache when a Final-bearing argument is present: serving a prior ``(count, key)`` would skip
+        # ``extract()`` and thus ``final_scalar_key``'s per-launch revalidation. Computed once; Final-free mappers are
+        # unaffected.
         cache_disabled = self._mapping_cache_disabled
         if cache_disabled is None:
             cache_disabled = self._mapping_cache_disabled = any(
@@ -161,9 +158,8 @@ class TemplateMapper:
         except KeyError:
             count = self.mapping[key] = len(self.mapping)
 
-        # Skip the store too when the cache is disabled for this mapper (Final-bearing arg): no entry is kept, so the
-        # (also-skipped) read above always misses and every launch recomputes+revalidates. Also avoids the per-call
-        # ``_evict_callback`` closure allocation on that path.
+        # Skip the store too when disabled: no entry is kept, so the read above always misses and every launch
+        # recomputes+revalidates (also avoids the ``_evict_callback`` closure allocation).
         if not cache_disabled:
             # Note that it is important to prepend the cache tracker with 'None' to avoid misclassifying no argument with
             # expired cache entry caused by deallocated argument.

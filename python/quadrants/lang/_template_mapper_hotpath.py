@@ -79,16 +79,13 @@ AnnotationType = Union[
 
 
 def annotation_has_final_subtree(annotation: Any) -> bool:
-    """True iff ``annotation`` is a dataclass type whose (transitive) subtree declares a ``Final`` field. The
-    ``_FIELDS`` probe - the same one ``_extract_arg`` uses to recognise a dataclass annotation - guards
-    ``subtree_has_final_fields``, whose ``dataclasses.fields`` call would otherwise raise on the non-dataclass
-    annotation shapes a kernel arg can carry (``template`` / ``NdarrayType`` / a bare primitive type / ...).
+    """True iff ``annotation`` is a dataclass type whose transitive subtree declares a ``Final`` field. The ``_FIELDS``
+    probe guards ``subtree_has_final_fields``, whose ``dataclasses.fields`` would otherwise raise on the non-dataclass
+    annotation shapes a kernel arg can carry.
 
-    ``TemplateMapper.lookup`` uses this to disable its instance-keyed ``(count, key)`` cache for any mapper carrying a
-    Final-bearing argument. That cache returns the prior key for the same live argument without re-running
-    ``extract()``, which would bypass the per-launch revalidation a ``Final`` value needs: its class can turn
-    behaviorful between launches (e.g. an accepted enum whose ``__eq__`` is monkey-patched), which the baked key
-    cannot notice - so ``final_scalar_key`` must re-run and reject it. See ``subtree_has_final_fields``.
+    ``TemplateMapper.lookup`` uses this to disable its instance-keyed cache for a Final-bearing mapper: serving the
+    prior key without re-running ``extract()`` would bypass the per-launch revalidation a ``Final`` value needs (its
+    class can turn behaviorful between launches, invisible to the baked key). See ``subtree_has_final_fields``.
     """
     return getattr(annotation, _FIELDS, None) is not None and subtree_has_final_fields(annotation)
 
@@ -414,45 +411,28 @@ def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: Annotati
         # is hashable, but a user can enforce a dataclass to be consider frozen for a user perspective without being
         # truly frozen by specifying 'unsafe_hash=True'. If a user is doing this on purpose, it makes sense to honor it.
         is_frozen = annotation.__hash__ is not None
-        # The ``_qd_spec_key`` cache is only served when ``raise_on_templated_floats`` is OFF (its default). The
-        # cached key *value* is a pure function of the frozen field values and never setting-dependent, but the
-        # ``Final[float]`` guard below IS: a cache stored under one ``qd.init`` could be reused after a ``qd.reset``
-        # + re-init that turns the option on, and serving it would bypass the guard for this arg *and every nested
-        # frozen dataclass it contains* (the early return also skips the recursion). So when the option is on we
-        # recompute instead, which re-runs the guard at every level of the arg tree each launch. This only forgoes
-        # the cache in the opt-in strict mode; the default hot path is unchanged. (The recompute still writes the
-        # cache below, so it stays warm if the option is later turned off.)
+        # The ``_qd_spec_key`` cache is served only when ``raise_on_templated_floats`` is OFF (default): the cached key
+        # value is setting-independent, but the ``Final[float]`` guard below is not, and serving a cache stored under a
+        # prior ``qd.init`` would bypass the guard for this arg and every nested frozen dataclass (the early return
+        # also skips the recursion). So in strict mode we recompute, re-running the guard at every level; the default
+        # hot path is unchanged (and the recompute still writes the cache, keeping it warm).
         #
-        # A dataclass whose subtree bakes a ``Final`` value is likewise never served here - but there is no read gate
-        # for it: the write below refuses to *store* a cache for such a dataclass (``subtree_has_final_fields``), so
-        # this read simply misses and falls through to the recompute, which re-runs ``final_scalar_key``'s validation.
-        # That matters because the cached key cannot notice a ``Final`` value's *class* turning behaviorful between
-        # launches (e.g. a plain enum whose ``__eq__`` is monkey-patched, observed by ``qd.static(cfg.mode == 1)``);
-        # recomputing rejects it. Transitive: a Final leaf nested under a Final-free ancestor disables the ancestor's
-        # cache too, since serving it would skip the recursion that reaches the leaf.
+        # A Final-bearing subtree is likewise never served, but has no read gate: the write below refuses to *store* a
+        # cache for it (``subtree_has_final_fields``), so this read misses and falls through to the recompute, which
+        # re-runs ``final_scalar_key``'s validation - catching a ``Final`` value's class turning behaviorful between
+        # launches. Transitive: a Final leaf disables its Final-free ancestor's cache too.
         if is_frozen and not raise_on_templated_floats:
             try:
-                # Note that it is necessary to store the key at instance-level instead of class-level because
-                # multiple instances of the same class may have different memory layout (although unusual).
-                # The attribute lives in the reserved ``_qd_`` namespace (documented in the dataclass user guide,
-                # and already relied on throughout Quadrants: ``_qd_layout``, ``_qd_dc_repr``, and more),
-                # so a user dataclass field must not begin with ``_qd_`` and therefore cannot shadow it. A bare
-                # name like ``_key`` (a legal user field) would instead be read as that field's value here, letting
-                # this early return hand back the user's value instead of the real spec key. One limitation is that
-                # storing ``_qd_spec_key`` is impossible for dataclasses enforcing 'slots=True', but that is not
-                # the default and almost never used in practice.
+                # Store at instance level (not class level) since instances of one class may differ in memory layout.
+                # The attribute lives in the reserved ``_qd_`` namespace (documented, used throughout Quadrants), so no
+                # user field can shadow it - a bare ``_key`` (a legal user field) would instead be read as its value
+                # here. Impossible under ``slots=True``, but that is rare.
                 return arg._qd_spec_key
             except AttributeError:
                 pass
-        # ``typing.Final[T]`` fields are baked into the compiled kernel as compile-time constants, so their *values*
-        # must drive the spec key (distinct values => distinct kernels). Non-Final fields keep the existing behavior:
-        # recursive ``_extract_arg``, which for plain primitive types returns the ``"#"`` placeholder and so does not
-        # participate in templatisation.
-        #
-        # PERF: ``final_field_names`` is a single ``dict.get`` keyed on the dataclass type (validated + computed once
-        # per type, never per launch). When it is empty - every dataclass that does not use the feature, i.e. all
-        # pre-existing code - we take the original comprehension verbatim, so this costs one dict lookup and nothing
-        # else. Frozen dataclasses short-circuit even that via the ``arg._qd_spec_key`` cache above.
+        # ``Final[T]`` fields drive the spec key by *value* (distinct values => distinct kernels); non-Final fields
+        # keep the existing recursive ``_extract_arg``. PERF: ``final_field_names`` is one ``dict.get`` (computed once
+        # per type); when empty - every dataclass not using the feature - we take the original comprehension verbatim.
         final_names = final_field_names(annotation)
         if final_names:
             key_parts = []
@@ -461,15 +441,11 @@ def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: Annotati
                     continue
                 field_value = getattr(arg, field.name)
                 if field.name in final_names:
-                    # ``raise_on_templated_floats`` exists to stop float values from driving kernel specialisation,
-                    # since each distinct value compiles another kernel. A ``Final[float]`` field does exactly that,
-                    # so it must honour the setting like a ``qd.template()`` float does. ``final_scalar_key`` below
-                    # specialises on anything float-like - builtin ``float``, a subclass, or a NumPy floating scalar
-                    # - so the guard must reject them all. ``type(x) is float`` is a fast pointer compare for the
-                    # common exact-float case, and the ``isinstance`` only runs when that misses *and* the option is
-                    # enabled (i.e. never on the default hot path). ``bool`` is not a ``float`` subclass, so a
-                    # ``Final[bool]`` value is correctly left alone here. When the option is on the cache read above
-                    # is skipped, so this guard re-runs each launch (and, via the recursion below, at every level).
+                    # A ``Final[float]`` value drives specialisation, so it must honour ``raise_on_templated_floats``
+                    # like a ``qd.template()`` float. Reject anything float-like (builtin/subclass/NumPy); ``type(x) is
+                    # float`` fast-paths the common case and the ``isinstance`` runs only when the option is enabled
+                    # (never on the default hot path). ``bool`` is not a ``float`` subclass, so ``Final[bool]`` is left
+                    # alone.
                     if raise_on_templated_floats and (
                         type(field_value) is float or isinstance(field_value, (float, np.floating))
                     ):
@@ -479,12 +455,10 @@ def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: Annotati
                             f"value compiles a separate kernel. Drop the ``Final`` to make it an ordinary runtime "
                             f"field, or unset ``raise_on_templated_floats``."
                         )
-                    # Encode floats by IEEE bits so ``-0.0``/``0.0`` (equal under ``==`` and ``hash``) do not
-                    # collapse onto one compiled kernel here. ``live=True``: this is the in-process spec key, so a
-                    # subclass/enum value is keyed by its class *identity* (``id(cls)``), distinguishing a class
-                    # rebound by a module reload or two distinct classes a metaclass makes ``==``. The offline
-                    # fastcache uses ``final_scalar_key`` without ``live`` (in ``args_hasher``) for a process-stable
-                    # string. See ``final_scalar_key``.
+                    # ``live=True``: the in-process spec key, so a subclass/enum value is keyed by class identity
+                    # (distinguishing a reload-rebound class or two classes a metaclass makes ``==``); the offline
+                    # fastcache uses ``live=False`` in ``args_hasher`` for a process-stable string. See
+                    # ``final_scalar_key``.
                     key_parts.append(final_scalar_key(field_value, live=True))
                 else:
                     key_parts.append(
@@ -509,9 +483,8 @@ def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: Annotati
                     if field._field_type is _FIELD
                 ]
             )
-        # Cache only when the whole subtree is ``Final``-free: a Final-bearing subtree must recompute every launch so
-        # its validation re-runs (see the read-gate note above and ``subtree_has_final_fields``), so we never store a
-        # cache for it - which is what makes the un-gated read above miss and fall through.
+        # Cache only when the whole subtree is ``Final``-free: a Final-bearing subtree must recompute every launch (so
+        # its validation re-runs), so we never store a cache for it - which makes the un-gated read above fall through.
         if is_frozen and not subtree_has_final_fields(annotation):
             try:
                 object.__setattr__(arg, "_qd_spec_key", key)
