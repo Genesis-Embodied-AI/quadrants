@@ -207,6 +207,27 @@ Inside the kernel the argument is the bare impl rather than the wrapper, so kern
 
 For a parameter annotated `qd.Tensor`, calls to the same kernel may alternate among a wrapper, its bare field or ndarray implementation, and `None`. If callers can pass `None`, guard tensor operations with [`qd.static()`](static.md), for example `if qd.static(x is not None):`; the guarded operations are not traced for the `None` specialization. The parameter remains annotated `qd.Tensor`, and `None` must be passed explicitly.
 
+### Declaring that an argument may be `None`: `T | None`
+
+To make it explicit in the signature that an argument accepts `None`, spell it `T | None` (equivalently `typing.Optional[T]`). This is supported for three annotation families: `qd.Tensor`, `qd.types.Template`, and `qd.types.NDArray`. Guard the present-only operations with `qd.static(x is not None)` exactly as above:
+
+```python
+@qd.kernel
+def add_bias(out: qd.types.NDArray[qd.f32, 1], bias: qd.Tensor | None):
+    for i in range(out.shape[0]):
+        if qd.static(bias is not None):
+            out[i] = qd.f32(i) + bias[i]
+        else:
+            out[i] = qd.f32(i)
+
+add_bias(out, None)          # absent: the bias branch is specialized away
+add_bias(out, qd.wrap(bias)) # present
+```
+
+The bare `qd.Tensor` spelling (above) keeps accepting `None`, so `x: qd.Tensor` and `x: qd.Tensor | None` behave the same at runtime; `T | None` is the form to prefer when you want the optionality visible in the signature. Only the two-member `T | None` union is accepted - other unions (`A | B`, `A | B | None`) and `| None` on any other annotation family are rejected at kernel-registration time.
+
+Support is not yet uniform at launch: `qd.Tensor | None` and `qd.types.Template | None` accept `None` now, but `qd.types.NDArray[...] | None` currently accepts only a present array - passing `None` raises at launch until optional ndarray slots land. The annotation parses either way, so signatures can already be written in the target form.
+
 `qd.Tensor` is also the right annotation when storing a tensor as a `dataclasses.dataclass` member:
 
 ```python
