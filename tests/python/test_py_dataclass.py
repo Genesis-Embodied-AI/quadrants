@@ -5188,6 +5188,34 @@ def test_final_subclass_docstring_in_key():
 
 
 @test_utils.test()
+def test_final_subclass_slots_in_key():
+    """``__slots__`` is likewise structural yet readable at compile time (``cfg.x.__class__.__slots__ == ()``).
+    Reassigning it after class creation only rebinds the attribute (no new descriptors -> no state to reject), so the
+    observed value changes with the state-scan none the wiser; the key must fold it in so a stale specialization is not
+    reused."""
+    import enum
+
+    from quadrants.lang._final_dataclass_fields import final_scalar_key
+
+    class Unit(int):
+        __slots__ = ()
+
+    live_before = final_scalar_key(Unit(1), live=True)
+    offline_before = str(final_scalar_key(Unit(1), live=False))
+    Unit.__slots__ = ("relabeled",)  # rebinds the observable value without adding a real slot descriptor
+    assert final_scalar_key(Unit(1), live=True) != live_before
+    assert str(final_scalar_key(Unit(1), live=False)) != offline_before
+
+    class Mode(enum.Enum):
+        A = 1
+        B = 2
+
+    enum_before = final_scalar_key(Mode.A, live=True)
+    Mode.__slots__ = ("relabeled",)
+    assert final_scalar_key(Mode.A, live=True) != enum_before
+
+
+@test_utils.test()
 def test_final_enum_key_incorporates_full_member_map():
     """A baked ``Final`` enum member keys on the *entire* member map, not only the selected member: a kernel can read a
     sibling at compile time (``cfg.mode.__class__.OTHER.value``), so changing another member's value must invalidate

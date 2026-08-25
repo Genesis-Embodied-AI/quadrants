@@ -569,20 +569,37 @@ def _dynamic_class_serial(cls: type) -> int:
     return serial
 
 
+def _slots_kind(klass: type):
+    """A hashable, order-preserving snapshot of a class's own ``__slots__`` value (``None`` if undeclared), so the key
+    can fold in the value a kernel could read via ``cfg.x.__class__.__slots__``. Note reassigning ``__slots__`` after
+    class creation only rebinds this attribute (no new descriptors), so it changes the observed value without adding
+    state - hence it must be keyed rather than relying on the state-rejection scan."""
+    slots = klass.__dict__.get("__slots__")
+    if slots is None or isinstance(slots, str):
+        return slots
+    try:
+        return tuple(slots)
+    except TypeError:
+        return repr(slots)
+
+
 def _kind_entry(klass: type) -> tuple:
-    """``(module, qualname, doc)`` for one MRO entry. ``__doc__`` is the lone structural attr that is user-writable
-    *and* readable at compile time (``cfg.x.__class__.__doc__``), so it must be keyed - but only for a heap (Python)
-    class; a static/builtin base's doc is immutable, so it is omitted to avoid bloating the key with e.g. ``int``'s."""
-    doc = klass.__doc__ if klass.__flags__ & _HEAPTYPE_FLAG else None
-    return (klass.__module__, klass.__qualname__, doc)
+    """``(module, qualname, doc, slots)`` for one MRO entry. ``__doc__``/``__slots__`` are the structural attrs that are
+    user-writable *and* readable at compile time (``cfg.x.__class__.__doc__`` / ``.__slots__``), so they must be keyed -
+    but only for a heap (Python) class; a static/builtin base's values are immutable, so they are omitted to avoid
+    bloating the key with e.g. ``int``'s docstring."""
+    if not klass.__flags__ & _HEAPTYPE_FLAG:
+        return (klass.__module__, klass.__qualname__, None, None)
+    return (klass.__module__, klass.__qualname__, klass.__doc__, _slots_kind(klass))
 
 
 def _class_kind(cls: type) -> tuple:
     """The class's compile-time-observable *kind* as ``(base MRO, metaclass MRO)``, each entry ``(module, qualname,
-    doc)`` (see ``_kind_entry``). Redefining a resolvable subclass's primitive/enum base (``class Unit(int)`` ->
+    doc, slots)`` (see ``_kind_entry``). Redefining a resolvable subclass's primitive/enum base (``class Unit(int)`` ->
     ``np.int64``, ``enum.Enum`` -> ``enum.IntEnum``) or its metaclass (``metaclass=EmptyMeta``), or mutating a user
-    class's ``__doc__``, keeps module/qualname/canonical unchanged yet is observable (``cfg.x.__class__.__mro__[1]``,
-    ``cfg.x.__class__.__class__``, ``cfg.x.__class__.__doc__``), so the offline key must separate them."""
+    class's ``__doc__``/``__slots__``, keeps module/qualname/canonical unchanged yet is observable
+    (``cfg.x.__class__.__mro__[1]``, ``cfg.x.__class__.__class__``, ``cfg.x.__class__.__doc__``/``.__slots__``), so the
+    offline key must separate them."""
     metaclass: type = type(cls)  # annotate as instance so ``.__mro__`` is the tuple, not the descriptor (pyright)
     base_kind = tuple(_kind_entry(base) for base in cls.__mro__)
     meta_kind = tuple(_kind_entry(meta) for meta in metaclass.__mro__)
