@@ -211,7 +211,7 @@ A `qd.Tensor` parameter also accepts **external arrays** - `numpy.ndarray` and `
 
 ### Declaring that an argument may be `None`: `T | None`
 
-To make it explicit in the signature that an argument accepts `None`, spell it `T | None`. This is supported for three annotation families: `qd.Tensor`, `qd.types.Template`, and `qd.types.NDArray`. The `typing.Optional[T]` spelling is equivalent for the two class-style families (`qd.Tensor`, `qd.types.Template`) but not for `qd.types.NDArray[...]`: a subscripted ndarray annotation evaluates to an instance that `typing.Optional[...]` cannot wrap (it raises `TypeError` while the annotation is being constructed), so ndarray arguments must use the `T | None` spelling. Guard the present-only operations with `qd.static(x is not None)` exactly as above:
+To make it explicit in the signature that an argument accepts `None`, spell it `T | None`. This is supported for three annotation families: `qd.Tensor`, `qd.types.Template`, and [`qd.types.NDArray`](tensor_types.md). The `typing.Optional[T]` spelling is equivalent for the two class-style families (`qd.Tensor`, `qd.types.Template`) but not for `qd.types.NDArray[...]`: a subscripted ndarray annotation evaluates to an instance that `typing.Optional[...]` cannot wrap (it raises `TypeError` while the annotation is being constructed), so ndarray arguments must use the `T | None` spelling. Guard the present-only operations with `qd.static(x is not None)` exactly as above:
 
 ```python
 @qd.kernel
