@@ -517,7 +517,7 @@
 </section>
 <section id="controlling-the-passes">
 <h2>Controlling the passes<a class="headerlink" href="#controlling-the-passes" title="Link to this heading">#</a></h2>
-<p>All of these are fields of <code class="docutils literal notranslate"><span class="pre">CompileConfig</span></code>, so you set them at <code class="docutils literal notranslate"><span class="pre">qd.init(...)</span></code> (or via the matching <code class="docutils literal notranslate"><span class="pre">QD_&lt;UPPERCASE_NAME&gt;</span></code> environment variable). See <a class="reference internal" href="init_options.html"><span class="std std-doc">qd.init options</span></a> for the full list and the environment-variable convention.</p>
+<p>All of these are fields of <code class="docutils literal notranslate"><span class="pre">CompileConfig</span></code> (the Quadrants compiler-configuration object built from your <code class="docutils literal notranslate"><span class="pre">qd.init(...)</span></code> arguments), so you set them at <code class="docutils literal notranslate"><span class="pre">qd.init(...)</span></code> (or via the matching <code class="docutils literal notranslate"><span class="pre">QD_&lt;UPPERCASE_NAME&gt;</span></code> environment variable). See <a class="reference internal" href="init_options.html"><span class="std std-doc">qd.init options</span></a> for the full list and the environment-variable convention.</p>
 <div class="pst-scrollable-table-container"><table class="table">
 <thead>
 <tr class="row-odd"><th class="head"><p>Option</p></th>
@@ -557,7 +557,7 @@
 <ul class="simple">
 <li><p><code class="docutils literal notranslate"><span class="pre">QD_DUMP_IR=1</span></code> - writes an IR snapshot at each major pipeline stage (after lowering, before/after each simplify, after offload).</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">QD_DUMP_SIMPLIFY=1</span></code> - writes an IR snapshot after every individual pass on every iteration of the simplify loop. Verbose, but it shows exactly which pass changed what.</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">QD_DUMP_CFG=1</span></code> - writes the control-flow graph itself. (This also forces the CFG pass back onto the whole-kernel path so the complete graph can be dumped.)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">QD_DUMP_CFG=1</span></code> - writes the control-flow graph itself, at the granularity the compiler actually uses: one graph per offloaded task once the kernel has been offloaded (files suffixed <code class="docutils literal notranslate"><span class="pre">_task&lt;N&gt;</span></code>), and the whole-kernel graph before offload and for kernels that are never offloaded.</p></li>
 </ul>
 <p>Setting <code class="docutils literal notranslate"><span class="pre">qd.init(print_ir=True)</span></code> prints the IR to the console at pipeline stages instead of writing files.</p>
 </section>
