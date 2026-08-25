@@ -3903,6 +3903,35 @@ def test_final_float_cached_spec_key_revalidated_after_reinit():
 
 
 @test_utils.test()
+def test_final_unsafe_hash_ordinary_field_reread_each_launch():
+    """A ``Final``-bearing ``unsafe_hash=True`` config is re-read on every launch: its per-instance caches (spec key,
+    offline repr, mapper, *and* the frozen unwrapped-value cache ``_qd_dc_unwrapped``) are all disabled, so mutating an
+    ordinary (runtime) field between launches sends the new value rather than a stale first-launch snapshot."""
+    from typing import Final
+
+    @dataclass(unsafe_hash=True)
+    class Cfg:
+        scale: Final[int]  # baked compile-time constant
+        n: int  # ordinary runtime field, mutable via unsafe_hash
+
+    @qd.kernel
+    def k(config: Cfg, out: qd.types.NDArray[qd.i32, 1]):
+        s = qd.static(config.scale)
+        for i in out:
+            out[i] = config.n * s
+
+    cfg = Cfg(scale=10, n=3)
+    out = qd.ndarray(qd.i32, shape=(2,))
+    k(cfg, out)
+    assert out.to_numpy()[0] == 30  # 3 * 10
+
+    cfg.n = 7  # mutate an ordinary field on the same instance (same Final -> same specialization)
+    k(cfg, out)
+    assert out.to_numpy()[0] == 70  # 7 * 10 - the new value, not a stale 30 from a cached unwrap
+    assert not hasattr(cfg, "_qd_dc_unwrapped")  # Final-bearing configs never cache unwrapped field values
+
+
+@test_utils.test()
 def test_final_field_string_annotation_is_rejected():
     """``from __future__ import annotations`` (or any explicit string annotation) leaves ``field.type`` as an
     unresolved string, so Quadrants cannot see the ``Final`` and would silently lower the field as a *runtime* kernel
@@ -5271,7 +5300,7 @@ def test_final_subclass_name_in_key():
 
     live_before = final_scalar_key(Unit(1), live=True)
     offline_before = str(final_scalar_key(Unit(1), live=False))
-    Unit.__name__ = "Renamed"  # __qualname__ stays "…​.Unit", so only a __name__-aware key separates them
+    Unit.__name__ = "Renamed"  # __qualname__ still ends in ".Unit", so only a __name__-aware key separates them
     assert final_scalar_key(Unit(1), live=True) != live_before
     assert str(final_scalar_key(Unit(1), live=False)) != offline_before
 

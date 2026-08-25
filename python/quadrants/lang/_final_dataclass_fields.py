@@ -609,8 +609,10 @@ def _canonical_attr_value(val: Any):
     callables / classes reduce to an address-free ``(type, name)`` token (their only stable observable content). An
     arbitrary object we cannot represent faithfully is rejected rather than collapsed to a lossy token that could
     reuse a stale specialization after the value changes."""
-    if val is None or isinstance(val, (bool, int, float, complex, str, bytes)):
-        return val
+    if val is None:
+        return None
+    if isinstance(val, (bool, int, float, complex, str, bytes)):
+        return (type(val).__qualname__, val)  # tag the exact type: ``True``/``1``/``1.0`` compare equal but differ
     if isinstance(val, (tuple, list)):
         return (type(val).__qualname__, tuple(_canonical_attr_value(v) for v in val))
     if isinstance(val, (set, frozenset)):
