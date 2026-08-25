@@ -5214,12 +5214,48 @@ def test_final_subclass_slots_in_key():
     Empty.__slots__ = []
     assert final_scalar_key(Empty(1), live=True) != empty_tuple
 
+    # Absent __slots__ must stay distinct from an explicit ``__slots__ = None`` ('__slots__' in cls.__dict__ differs).
+    class Absent(int):
+        pass
+
+    absent_key = final_scalar_key(Absent(1), live=True)
+    Absent.__slots__ = None
+    assert final_scalar_key(Absent(1), live=True) != absent_key
+
     class Mode(enum.Enum):
         A = 1
         B = 2
 
     enum_before = final_scalar_key(Mode.A, live=True)
     Mode.__slots__ = ("relabeled",)
+    assert final_scalar_key(Mode.A, live=True) != enum_before
+
+
+@test_utils.test()
+def test_final_subclass_weakref_in_key():
+    """``__weakref__`` is structural-exempt yet user-rebindable and observable (``cfg.x.__class__.__weakref__``); the
+    baked scalar/enum subclasses do not carry it in their own dict, so binding it is observable class state the scan
+    ignores. It is keyed (auto-generated slot descriptors reduce to an address-free token so offline keys stay stable;
+    a user value like ``None`` is kept), not rejected."""
+    import enum
+
+    from quadrants.lang._final_dataclass_fields import final_scalar_key
+
+    class Unit(int):
+        pass
+
+    live_before = final_scalar_key(Unit(1), live=True)
+    offline_before = str(final_scalar_key(Unit(1), live=False))
+    Unit.__weakref__ = None  # rebinding an exempt machinery attr to an observable value
+    assert final_scalar_key(Unit(1), live=True) != live_before
+    assert str(final_scalar_key(Unit(1), live=False)) != offline_before
+
+    class Mode(enum.Enum):
+        A = 1
+        B = 2
+
+    enum_before = final_scalar_key(Mode.A, live=True)
+    Mode.__weakref__ = None
     assert final_scalar_key(Mode.A, live=True) != enum_before
 
 

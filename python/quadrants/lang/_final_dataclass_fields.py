@@ -328,6 +328,18 @@ def _is_baked_base_type(klass: type) -> bool:
     return issubclass(klass, np.generic) and not is_heap_type
 
 
+def _slot_names(klass: type) -> tuple:
+    """Slot names declared by ``klass`` via ``__slots__`` (a tuple of strings). Robust to a post-creation rebind of
+    ``__slots__`` to a non-iterable (e.g. ``None``) or to non-string entries: those create no real slot descriptors, so
+    they contribute no names here (the rebind itself is captured by the class-kind key)."""
+    slots = getattr(klass, "__slots__", ())
+    if isinstance(slots, str):
+        return (slots,)
+    if not hasattr(slots, "__iter__"):
+        return ()
+    return tuple(s for s in slots if isinstance(s, str))
+
+
 def _reject_stateful_primitive_subclass(value: Any) -> None:
     """Reject a subclass of a baked scalar (or NumPy scalar) that carries observable state the key cannot capture:
     per-instance state (``__dict__`` or a populated slot), or class-level behavior/state (a method/property/class var
@@ -347,10 +359,7 @@ def _reject_stateful_primitive_subclass(value: Any) -> None:
     else:
         stateful = False
         for klass in cls.__mro__:
-            slots = getattr(klass, "__slots__", ())
-            if isinstance(slots, str):
-                slots = (slots,)
-            if any(slot not in ("__dict__", "__weakref__") and hasattr(value, slot) for slot in slots):
+            if any(slot not in ("__dict__", "__weakref__") and hasattr(value, slot) for slot in _slot_names(klass)):
                 stateful = True
                 break
     if stateful:
@@ -411,10 +420,7 @@ def _enum_member_state_attr(value: Any) -> "str | None":
             if k not in _ENUM_INTERNAL_MEMBER_ATTRS:
                 return k
     for klass in type(value).__mro__:
-        slots = getattr(klass, "__slots__", ())
-        if isinstance(slots, str):
-            slots = (slots,)
-        for slot in slots:
+        for slot in _slot_names(klass):
             if slot in _ENUM_INTERNAL_MEMBER_ATTRS:
                 continue
             if hasattr(value, slot):  # a declared-but-unset slot raises on access, so only *populated* slots count
@@ -569,39 +575,52 @@ def _dynamic_class_serial(cls: type) -> int:
     return serial
 
 
-def _slots_kind(klass: type):
-    """A hashable, order-preserving snapshot of a class's own ``__slots__`` value (``None`` if undeclared), so the key
-    can fold in the value a kernel could read via ``cfg.x.__class__.__slots__``. Note reassigning ``__slots__`` after
-    class creation only rebinds this attribute (no new descriptors), so it changes the observed value without adding
-    state - hence it must be keyed rather than relying on the state-rejection scan. The container type is retained
-    (``()`` vs ``[]`` compare unequal, so a kernel observes them differently) rather than normalized away."""
-    slots = klass.__dict__.get("__slots__")
-    if slots is None or isinstance(slots, str):
-        return slots
-    type_tag = type(slots).__qualname__
-    try:
-        return (type_tag, tuple(slots))
-    except TypeError:
-        return (type_tag, repr(slots))
+# Structural attrs (from ``_STRUCTURAL_CLASS_ATTRS``) that are user-writable *and* readable at compile time
+# (``cfg.x.__class__.<attr>``), so their *value* is folded into the class kind rather than exempted. ``__module__`` /
+# ``__qualname__`` are omitted (already the entry's leading elements). Absence is itself observable, so it is kept
+# distinct from an explicit ``None`` via ``_ATTR_ABSENT``.
+_KEYED_STRUCTURAL_ATTRS = ("__doc__", "__slots__", "__weakref__")
+_ATTR_ABSENT = "<qd:attr-absent>"  # not a valid identifier, so it can never equal a real ``__slots__`` name/value
+
+
+def _canonical_attr_value(val: Any):
+    """A deterministic, hashable snapshot of a class-dict value. Plain scalars/strings are kept by value; containers
+    keep their type tag (``()`` vs ``[]`` compare unequal, so a kernel observes them differently); descriptors,
+    functions and other objects reduce to an address-free ``(type, name)`` token so an auto-generated
+    ``__dict__``/``__weakref__`` slot does not perturb the offline key with a per-process pointer repr."""
+    if val is None or isinstance(val, (bool, int, float, complex, str, bytes)):
+        return val
+    if isinstance(val, (tuple, list, set, frozenset)):
+        try:
+            return (type(val).__qualname__, tuple(val))
+        except TypeError:
+            return (type(val).__qualname__, repr(val))
+    return (type(val).__qualname__, getattr(val, "__name__", None))
+
+
+def _attr_kind(klass: type, name: str):
+    """Keyed value of one structural attr on ``klass`` itself, or ``_ATTR_ABSENT`` if it is not in the class dict
+    (Python lets it be added/deleted after creation, and ``name in cls.__dict__`` is observable)."""
+    if name not in klass.__dict__:
+        return _ATTR_ABSENT
+    return _canonical_attr_value(klass.__dict__[name])
 
 
 def _kind_entry(klass: type) -> tuple:
-    """``(module, qualname, doc, slots)`` for one MRO entry. ``__doc__``/``__slots__`` are the structural attrs that are
-    user-writable *and* readable at compile time (``cfg.x.__class__.__doc__`` / ``.__slots__``), so they must be keyed -
-    but only for a heap (Python) class; a static/builtin base's values are immutable, so they are omitted to avoid
-    bloating the key with e.g. ``int``'s docstring."""
+    """``(module, qualname, *keyed-structural-attr-values)`` for one MRO entry - but only for a heap (Python) class; a
+    static/builtin base's values are immutable, so they are omitted to avoid bloating the key (e.g. ``int``'s doc)."""
     if not klass.__flags__ & _HEAPTYPE_FLAG:
-        return (klass.__module__, klass.__qualname__, None, None)
-    return (klass.__module__, klass.__qualname__, klass.__doc__, _slots_kind(klass))
+        return (klass.__module__, klass.__qualname__)
+    return (klass.__module__, klass.__qualname__, *(_attr_kind(klass, name) for name in _KEYED_STRUCTURAL_ATTRS))
 
 
 def _class_kind(cls: type) -> tuple:
-    """The class's compile-time-observable *kind* as ``(base MRO, metaclass MRO)``, each entry ``(module, qualname,
-    doc, slots)`` (see ``_kind_entry``). Redefining a resolvable subclass's primitive/enum base (``class Unit(int)`` ->
-    ``np.int64``, ``enum.Enum`` -> ``enum.IntEnum``) or its metaclass (``metaclass=EmptyMeta``), or mutating a user
-    class's ``__doc__``/``__slots__``, keeps module/qualname/canonical unchanged yet is observable
-    (``cfg.x.__class__.__mro__[1]``, ``cfg.x.__class__.__class__``, ``cfg.x.__class__.__doc__``/``.__slots__``), so the
-    offline key must separate them."""
+    """The class's compile-time-observable *kind* as ``(base MRO, metaclass MRO)``, each entry
+    ``(module, qualname, *structural-attr-values)`` (see ``_kind_entry``/``_KEYED_STRUCTURAL_ATTRS``). Redefining a
+    resolvable subclass's primitive/enum base (``class Unit(int)`` -> ``np.int64``, ``enum.Enum`` -> ``enum.IntEnum``)
+    or its metaclass (``metaclass=EmptyMeta``), or mutating a user class's ``__doc__``/``__slots__``/``__weakref__``,
+    keeps module/qualname/canonical unchanged yet is observable (``cfg.x.__class__.__mro__[1]``,
+    ``cfg.x.__class__.__class__``, ``cfg.x.__class__.<attr>``), so the offline key must separate them."""
     metaclass: type = type(cls)  # annotate as instance so ``.__mro__`` is the tuple, not the descriptor (pyright)
     base_kind = tuple(_kind_entry(base) for base in cls.__mro__)
     meta_kind = tuple(_kind_entry(meta) for meta in metaclass.__mro__)
