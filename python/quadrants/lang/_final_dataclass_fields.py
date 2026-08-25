@@ -144,8 +144,8 @@ def _first_final_path(dc_type: type, visiting: "frozenset[int]") -> "tuple[str, 
 
 
 def _resolved_type_hints(dc_type: Any) -> "dict[str, Any] | None":
-    """``typing.get_type_hints(dc_type)`` or None. Lets ``_build_final_plan`` see an *aliased* ``Final`` behind a
-    string annotation (``Final as F`` -> ``"F[int]"``) that a substring test would miss."""
+    """Resolve hints so ``_build_final_plan`` can see an *aliased* ``Final`` behind a string annotation (``Final as
+    F`` -> ``"F[int]"``) that a substring test would miss. None on failure."""
     try:
         return typing.get_type_hints(dc_type)
     except Exception:

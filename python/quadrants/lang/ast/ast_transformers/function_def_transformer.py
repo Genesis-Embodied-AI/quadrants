@@ -153,7 +153,6 @@ class FunctionDefTransformer:
         func_id = ctx.func.func_id
         if dataclasses.is_dataclass(argument_type):
             ctx.create_variable(argument_name, argument_type)
-            # ``Final[T]`` fields are baked as compile-time constants, not runtime args (cached, validated once/type).
             final_names = final_field_names(argument_type)
             for field_idx, field in enumerate(dataclasses.fields(argument_type)):
                 flat_name = create_flat_name(argument_name, field.name)
