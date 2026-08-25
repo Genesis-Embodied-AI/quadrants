@@ -5206,6 +5206,14 @@ def test_final_subclass_slots_in_key():
     assert final_scalar_key(Unit(1), live=True) != live_before
     assert str(final_scalar_key(Unit(1), live=False)) != offline_before
 
+    # Container type is retained: () and [] compare unequal, so they must not collapse to the same key.
+    class Empty(int):
+        __slots__ = ()
+
+    empty_tuple = final_scalar_key(Empty(1), live=True)
+    Empty.__slots__ = []
+    assert final_scalar_key(Empty(1), live=True) != empty_tuple
+
     class Mode(enum.Enum):
         A = 1
         B = 2

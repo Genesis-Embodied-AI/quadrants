@@ -573,14 +573,16 @@ def _slots_kind(klass: type):
     """A hashable, order-preserving snapshot of a class's own ``__slots__`` value (``None`` if undeclared), so the key
     can fold in the value a kernel could read via ``cfg.x.__class__.__slots__``. Note reassigning ``__slots__`` after
     class creation only rebinds this attribute (no new descriptors), so it changes the observed value without adding
-    state - hence it must be keyed rather than relying on the state-rejection scan."""
+    state - hence it must be keyed rather than relying on the state-rejection scan. The container type is retained
+    (``()`` vs ``[]`` compare unequal, so a kernel observes them differently) rather than normalized away."""
     slots = klass.__dict__.get("__slots__")
     if slots is None or isinstance(slots, str):
         return slots
+    type_tag = type(slots).__qualname__
     try:
-        return tuple(slots)
+        return (type_tag, tuple(slots))
     except TypeError:
-        return repr(slots)
+        return (type_tag, repr(slots))
 
 
 def _kind_entry(klass: type) -> tuple:
