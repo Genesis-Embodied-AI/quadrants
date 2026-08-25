@@ -26,6 +26,7 @@ a consequence of inlining 'is_dataclass' and 'fields'.
 """
 
 import dataclasses
+import sys
 import weakref
 from dataclasses import _FIELD, _FIELDS
 from typing import Any, Union
@@ -93,6 +94,16 @@ _composite_mutable_types = {list, dict, set}
 # ``None`` is an immortal singleton that never needs lifetime tracking. Without it, the spec-key cache entry for a
 # ``None`` argument is dropped and every such launch re-runs full spec-key extraction.
 _primitive_types = {int, float, bool, type(None)}
+_np_ndarray = np.ndarray
+
+
+def _is_external_array(arg: Any) -> bool:
+    if isinstance(arg, _np_ndarray):
+        return True
+    torch = sys.modules.get("torch")
+    if torch is not None:
+        return isinstance(arg, torch.Tensor)
+    return False
 
 
 # Per-instance ndarray-path cache, stored OFF-instance in a module-level ``id(arg) -> list[paths]`` dict and cleaned
@@ -258,7 +269,7 @@ def _extract_arg(raise_on_templated_floats: bool, arg: Any, annotation: Annotati
         if type(arg) in _TENSOR_WRAPPER_TYPES:
             arg = arg._unwrap()
         arg_type = type(arg)
-        if issubclass(arg_type, (Ndarray, AnyArray)):
+        if issubclass(arg_type, (Ndarray, AnyArray)) or _is_external_array(arg):
             return (_TENSOR_T_NDARRAY_MARKER,) + tuple(
                 _extract_arg(
                     raise_on_templated_floats,

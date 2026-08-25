@@ -75,6 +75,7 @@ _TENSOR_T_NDARRAY_LAUNCH_ANNOTATION = ndarray_type.NdarrayType()
 
 from ._kernel_types import KernelBatchedArgType
 from ._template_mapper import TemplateMapper
+from ._template_mapper_hotpath import _is_external_array
 
 MAX_ARG_NUM = 512
 
@@ -625,7 +626,7 @@ class FuncBase:
         if needed_arg_type is _TensorClass:
             if type(v) in _TENSOR_WRAPPER_TYPES:
                 v = v._unwrap()
-            if isinstance(v, Ndarray):
+            if isinstance(v, Ndarray) or _is_external_array(v):
                 needed_arg_type = cast(Type, _TENSOR_T_NDARRAY_LAUNCH_ANNOTATION)
                 needed_arg_type_id = id(needed_arg_type)
                 needed_arg_basetype = type(needed_arg_type)
