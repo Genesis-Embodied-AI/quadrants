@@ -150,10 +150,9 @@ def _REPL_findsource(obj):
 
 
 def _direct_file_findsource(obj):
-    # Fallback for when linecache.getlines() transiently returns [] for a readable
-    # file (MemoryError -> linecache.clearcache(), or a transient os.stat/open
-    # failure), which would otherwise abort kernel compilation. Returns
-    # (lines, lineno) like inspect.findsource.
+    # Fallback for when linecache.getlines() transiently returns [] for a readable file (MemoryError ->
+    # linecache.clearcache(), or a transient os.stat/open failure), which would otherwise abort kernel compilation.
+    # Returns (lines, lineno) like inspect.findsource.
     code = getattr(obj, "__code__", None)
     if code is None:
         raise IOError(f"No __code__ to locate source for {obj}")

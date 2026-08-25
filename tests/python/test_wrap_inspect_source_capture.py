@@ -1,7 +1,7 @@
 """Kernel source capture must survive a transient empty linecache.getlines().
 
-Guards against the OSError seen when linecache.getlines() transiently returns []
-for quadrants/_kernels.py under load, which aborted kernel compilation. CPU-only.
+Guards against the OSError seen when linecache.getlines() transiently returns [] for quadrants/_kernels.py under load,
+which aborted kernel compilation. CPU-only.
 """
 
 import linecache
