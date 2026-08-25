@@ -143,32 +143,41 @@ def _first_final_path(dc_type: type, visiting: "frozenset[int]") -> "tuple[str, 
     return path
 
 
-def _resolved_type_hints(dc_type: Any) -> "dict[str, Any] | None":
-    """Resolve hints so ``_build_final_plan`` can see an *aliased* ``Final`` behind a string annotation (``Final as
-    F`` -> ``"F[int]"``) that a substring test would miss. None on failure."""
-    try:
-        return typing.get_type_hints(dc_type)
-    except Exception:
-        return None
+def _string_annotation_looks_final(dc_type: type, field_name: str, annotation: str) -> bool:
+    """Best-effort: does the string annotation for ``field_name`` name ``typing.Final`` (possibly aliased)?
+
+    Resolved per field, in the module + class that *define* it - not whole-class ``typing.get_type_hints``, which is
+    all-or-nothing: one unresolvable sibling (e.g. a ``TYPE_CHECKING``-only import) would blind us to an aliased
+    ``Final`` here. Tries the whole annotation, then (if only its inner type is unresolvable) the head symbol alone
+    (``F[Bad]`` -> ``F`` -> ``Final``); falls back to a literal substring test if nothing resolves. ``eval`` carries
+    the same trust as ``get_type_hints`` - both execute the defining module's own annotation expressions.
+    """
+    globalns: dict = {}
+    localns: dict = {}
+    for klass in dc_type.__mro__:
+        if field_name in getattr(klass, "__annotations__", {}):
+            module = sys.modules.get(klass.__module__)
+            globalns = getattr(module, "__dict__", None) or {}
+            localns = dict(vars(klass))
+            break
+    for expr in (annotation.strip(), annotation.split("[", 1)[0].strip()):
+        try:
+            resolved = eval(expr, globalns, localns)
+        except Exception:
+            continue
+        return resolved is typing.Final or is_final_annotation(resolved)
+    return "Final" in annotation
 
 
 def _build_final_plan(dc_type: type) -> "frozenset[str]":
     """Validate every ``Final`` field on ``dc_type`` and return their names. Once per type (memoised)."""
-    resolved_hints: "dict[str, Any] | None" = None
-    resolved_computed = False
     final_names = []
     for field in dataclasses.fields(dc_type):
         annotation = field.type
         if isinstance(annotation, str):
-            # ``from __future__ import annotations`` leaves ``field.type`` a string; we cannot see ``Final`` through
-            # it, so such a field would silently become a runtime arg. Resolve hints to catch an aliased ``Final``,
-            # else fall back to a substring test.
-            if not resolved_computed:
-                resolved_hints = _resolved_type_hints(dc_type)
-                resolved_computed = True
-            resolved = resolved_hints.get(field.name) if resolved_hints is not None else None
-            looks_final = is_final_annotation(resolved) if resolved is not None else ("Final" in annotation)
-            if looks_final:
+            # ``from __future__ import annotations`` stringizes ``field.type``; we cannot see ``Final`` through it, so
+            # such a field would silently become a runtime arg. Detect a (possibly aliased) ``Final`` and reject.
+            if _string_annotation_looks_final(dc_type, field.name, annotation):
                 raise TypeError(
                     f"{dc_type.__name__}.{field.name}: annotation is the unresolved string {annotation!r}. Quadrants "
                     f"cannot see ``Final`` through a string annotation, so this field would silently become a runtime "

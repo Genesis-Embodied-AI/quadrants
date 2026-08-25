@@ -3951,6 +3951,35 @@ def test_final_field_aliased_string_annotation_is_rejected():
 
 
 @test_utils.test()
+def test_final_aliased_string_detected_despite_unresolvable_sibling():
+    """Whole-class ``typing.get_type_hints`` is all-or-nothing: an unrelated field whose annotation cannot be resolved
+    (e.g. a ``TYPE_CHECKING``-only import) makes it fail for the *entire* class, so the fallback substring test would
+    then miss an aliased ``Final`` on a sibling and silently lower it as a runtime arg. Per-field resolution must still
+    catch it."""
+    import sys
+    import types
+    from typing import Final
+
+    from quadrants.lang._final_dataclass_fields import final_field_names
+
+    mod = types.ModuleType("_qd_final_alias_unresolvable_mod")
+    mod.F = Final
+    mod.dc = dataclasses
+    sys.modules[mod.__name__] = mod
+    try:
+        # ``y``'s annotation names a type never defined in the module, so class-wide ``get_type_hints`` raises; the
+        # aliased ``Final`` on ``x`` must still be seen.
+        exec(
+            "@dc.dataclass(frozen=True)\nclass Cfg:\n    x: 'F[int]'\n    y: 'OnlyUnderTypeChecking'\n",
+            mod.__dict__,
+        )
+        with pytest.raises(TypeError, match="unresolved string"):
+            final_field_names(mod.Cfg)
+    finally:
+        sys.modules.pop(mod.__name__, None)
+
+
+@test_utils.test()
 def test_final_scalar_key_distinguishes_signed_zero_and_nan_payloads():
     """``final_scalar_key`` encodes floats by their IEEE-754 bits so values that Python conflates stay distinct
     in both the in-process spec key and the on-disk fastcache key: ``-0.0`` vs ``0.0`` (equal under ``==`` with
