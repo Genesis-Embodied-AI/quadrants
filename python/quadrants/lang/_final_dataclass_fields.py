@@ -583,8 +583,9 @@ def _class_kind(cls: type) -> tuple:
     ``np.int64``, ``enum.Enum`` -> ``enum.IntEnum``) or its metaclass (``metaclass=EmptyMeta``), or mutating a user
     class's ``__doc__``, keeps module/qualname/canonical unchanged yet is observable (``cfg.x.__class__.__mro__[1]``,
     ``cfg.x.__class__.__class__``, ``cfg.x.__class__.__doc__``), so the offline key must separate them."""
+    metaclass: type = type(cls)  # annotate as instance so ``.__mro__`` is the tuple, not the descriptor (pyright)
     base_kind = tuple(_kind_entry(base) for base in cls.__mro__)
-    meta_kind = tuple(_kind_entry(meta) for meta in type(cls).__mro__)
+    meta_kind = tuple(_kind_entry(meta) for meta in metaclass.__mro__)
     return (base_kind, meta_kind)
 
 
