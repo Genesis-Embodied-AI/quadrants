@@ -58,7 +58,7 @@ m = qd.Matrix.tensor(2, 2, qd.f32, shape=(3,))
 
 ## Gradients
 
-`needs_grad=True` works on every tensor factory and on every backend, by passing the keyword through to the underlying `qd.field` / `qd.ndarray` call:
+`needs_grad=True` works on every tensor factory and on every backend, by passing the keyword through to the underlying `qd.field` / `qd.ndarray` call. Enabling it allocates a matching gradient buffer, reachable as `.grad`, alongside the tensor's own forward values (the *primal*):
 
 ```python
 import quadrants as qd
@@ -176,7 +176,7 @@ clone = a.to_torch(copy=True)    # independent copy (default)
 
 The difference between `False` and `None`: `copy=False` raises `ValueError` when zero-copy is not supported (e.g. unsupported dtype or GPU-to-numpy), while `copy=None` silently falls back to a kernel copy in those cases. Use `copy=None` when you want zero-copy as a best-effort optimization without having to handle exceptions.
 
-The tradeoff of zero-copy is lifetime coupling: the view is invalidated on `qd.reset()` or `qd.init()`, and on GPU you must be mindful of stream synchronization when both frameworks write to the same buffer.
+The tradeoff of zero-copy is lifetime coupling: the view is invalidated on `qd.reset()` or `qd.init()` (both of which release the current Quadrants runtime allocations), and on GPU you must be mindful of stream synchronization when both frameworks write to the same buffer.
 
 This works identically on both backends. For the full support matrix (which backends/dtypes qualify, lifetime caveats, Metal synchronization) see [`interop`](interop.md#zero-copy-interop-via-dlpack).
 
@@ -206,6 +206,29 @@ fill(b)   # ndarray branch
 Inside the kernel the argument is the bare impl rather than the wrapper, so kernel bodies still write `x[i, j]` and pay no per-call cost for the wrapper.
 
 For a parameter annotated `qd.Tensor`, calls to the same kernel may alternate among a wrapper, its bare field or ndarray implementation, and `None`. If callers can pass `None`, guard tensor operations with [`qd.static()`](static.md), for example `if qd.static(x is not None):`; the guarded operations are not traced for the `None` specialization. The parameter remains annotated `qd.Tensor`, and `None` must be passed explicitly.
+
+A `qd.Tensor` parameter also accepts **external arrays** - `numpy.ndarray` and `torch.Tensor` - in addition to the `qd.field` / `qd.ndarray` tensors and `None`. An external array is specialized by its dtype, rank and gradient state rather than by the identity of the array object, so two distinct arrays that share those properties reuse the same compiled kernel, while any difference between them - including a torch tensor's `requires_grad` - compiles a separate one.
+
+### Declaring that an argument may be `None`: `T | None`
+
+To make it explicit in the signature that an argument accepts `None`, spell it `T | None`. This is supported for three annotation families: `qd.Tensor`, `qd.types.Template`, and `qd.types.NDArray`. The `typing.Optional[T]` spelling is equivalent for the two class-style families (`qd.Tensor`, `qd.types.Template`) but not for `qd.types.NDArray[...]`: a subscripted ndarray annotation evaluates to an instance that `typing.Optional[...]` cannot wrap (it raises `TypeError` while the annotation is being constructed), so ndarray arguments must use the `T | None` spelling. Guard the present-only operations with `qd.static(x is not None)` exactly as above:
+
+```python
+@qd.kernel
+def add_bias(out: qd.types.NDArray[qd.f32, 1], bias: qd.Tensor | None):
+    for i in range(out.shape[0]):
+        if qd.static(bias is not None):
+            out[i] = qd.f32(i) + bias[i]
+        else:
+            out[i] = qd.f32(i)
+
+add_bias(out, None)          # absent: the bias branch is specialized away
+add_bias(out, qd.wrap(bias)) # present
+```
+
+The bare `qd.Tensor` spelling (above) keeps accepting `None`, so `x: qd.Tensor` and `x: qd.Tensor | None` behave the same at runtime; `T | None` is the form to prefer when you want the optionality visible in the signature. Only the two-member `T | None` union is accepted - other unions (`A | B`, `A | B | None`) and `| None` on any other annotation family are rejected at kernel-registration time.
+
+Support is not yet uniform at launch: `qd.Tensor | None` and `qd.types.Template | None` accept `None` now, but `qd.types.NDArray[...] | None` currently accepts only a present array - passing `None` raises at launch until optional ndarray slots land. The annotation parses either way, so signatures can already be written in the target form.
 
 `qd.Tensor` is also the right annotation when storing a tensor as a `dataclasses.dataclass` member:
 
@@ -267,7 +290,7 @@ If you genuinely need to move data across backends, route it through Torch: `a.f
 
 ## Known asymmetry: real-dtype `.grad` placeholder on the field backend
 
-For tensors of a real (`f32` / `f64`) dtype allocated **without** `needs_grad=True`, the field backend exposes `t.grad` as a wrapper around an un-placed gradient placeholder, allowing for late manual allocation via `qd.root.place(t.grad)` / `qd.root.lazy_grad()`. The ndarray backend reports `t.grad is None` in the same case:
+For tensors of a real (`f32` / `f64`) dtype allocated **without** `needs_grad=True`, the field backend exposes `t.grad` as a wrapper around an un-placed gradient placeholder - a gradient field whose storage has not been allocated yet. You can allocate it later with the `qd.root` placement calls: `qd.root.place(t.grad)` allocates storage for that one gradient field, while `qd.root.lazy_grad()` allocates it for every gradient field declared so far. The ndarray backend reports `t.grad is None` in the same case:
 
 ```python
 t_field = qd.tensor(qd.f32, shape=(4,), backend=qd.Backend.FIELD)
@@ -279,7 +302,7 @@ t_nd.grad      # None
 
 Pass `needs_grad=True` at tensor creation to automatically allocate gradient storage with default memory layout if needed: floating-point tensors get a grad buffer of the same shape and dtype as the primal, whereas integer-dtype tensors never get a grad buffer - `needs_grad=True` is a no-op there.
 
-Use `Tensor.has_grad()` / `Tensor.has_dual()` to check whether the gradient storage is actually allocated, regardless of whether the allocation came from `needs_grad=True` or a manual `qd.root.place(field.grad)`:
+Use `Tensor.has_grad()` to check whether the gradient storage (`.grad`) is actually allocated, regardless of whether the allocation came from `needs_grad=True` or a manual `qd.root.place(field.grad)`:
 
 ```python
 t_field.has_grad()   # False -- the placeholder has not been placed
