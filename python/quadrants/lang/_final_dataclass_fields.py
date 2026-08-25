@@ -569,6 +569,16 @@ def _dynamic_class_serial(cls: type) -> int:
     return serial
 
 
+def _class_kind(cls: type) -> tuple:
+    """The class's compile-time-observable *kind* as ``(base MRO, metaclass MRO)``, each a ``(module, qualname)``
+    chain. Redefining a resolvable subclass's primitive/enum base (``class Unit(int)`` -> ``np.int64``, ``enum.Enum``
+    -> ``enum.IntEnum``) or its metaclass (``metaclass=EmptyMeta``) keeps module/qualname/canonical unchanged yet flips
+    ``cfg.x.__class__.__mro__[1]`` / ``cfg.x.__class__.__class__``, so the offline key must separate them."""
+    base_kind = tuple((base.__module__, base.__qualname__) for base in cls.__mro__)
+    meta_kind = tuple((meta.__module__, meta.__qualname__) for meta in type(cls).__mro__)
+    return (base_kind, meta_kind)
+
+
 def _subclass_identity(cls: type, live: bool) -> tuple:
     """Class-identity component for a subclass of a baked type or an ``enum``. ``module``/``qualname`` do not identify
     the class *object* (factory-built, or reload-rebound) yet ``cfg.x.__class__ is First`` is observable, so distinct
@@ -578,17 +588,17 @@ def _subclass_identity(cls: type, live: bool) -> tuple:
     - ``live=False`` (offline, ``str``-ified): ``None`` for a resolvable class (stable cross-process), else
       ``(_PROCESS_NONCE, serial)`` - the serial separates dynamic classes here, the nonce forces a cross-process miss.
 
-    Both carry the *base kind* - the MRO as a ``(module, qualname)`` chain. A resolvable subclass redefined with a
-    different primitive/enum base (``class Unit(int)`` -> ``class Unit(np.int64)``, ``enum.Enum`` -> ``enum.IntEnum``)
-    keeps the same module/qualname and canonical value, but its compile-time behavior differs
-    (``cfg.x.__class__.__mro__[1] is int``, ``cfg.mode == 1``), so the offline key must separate them; the live key
-    already does via ``_ClassRef``. Over-separating behaviour-equal kinds only costs a cache miss, never a wrong reuse.
+    Both carry the class *kind* (``_class_kind``: base + metaclass MRO). A resolvable subclass redefined with a
+    different base or metaclass keeps the same module/qualname and canonical value but flips compile-time behavior
+    (``cfg.x.__class__.__mro__[1]``, ``cfg.x.__class__.__class__``), so the offline key must separate them; the live
+    key already does via ``_ClassRef``. Over-separating behaviour-equal kinds only costs a cache miss, never a wrong
+    reuse.
     """
-    base_kind = tuple((base.__module__, base.__qualname__) for base in cls.__mro__)
+    kind = _class_kind(cls)
     if live:
-        return (cls.__module__, cls.__qualname__, base_kind, _ClassRef(cls))
+        return (cls.__module__, cls.__qualname__, kind, _ClassRef(cls))
     identity = (_PROCESS_NONCE, _dynamic_class_serial(cls)) if _class_not_uniquely_identified(cls) else None
-    return (cls.__module__, cls.__qualname__, base_kind, identity)
+    return (cls.__module__, cls.__qualname__, kind, identity)
 
 
 def _dunder_copied_from_base(klass: type, name: str, value: Any) -> bool:
@@ -874,9 +884,9 @@ def final_scalar_key(value: Any, live: bool = False) -> Any:
       value coerced via a base slot so the offline string is faithful under a nonstandard ``repr``.
 
     A subclass/enum carries class identity via ``_subclass_identity`` (``live`` = ``_ClassRef``, offline =
-    process-stable), including the base kind so redefining the primitive/enum base keys apart offline. An
-    unsupported/arbitrary value is *rejected*, not keyed by its own ``__eq__``. Re-runs per launch for Final subtrees
-    (not cached), catching a class turned behaviorful after launch one.
+    process-stable), including the class kind (base + metaclass) so redefining the base or metaclass keys apart
+    offline. An unsupported/arbitrary value is *rejected*, not keyed by its own ``__eq__``. Re-runs per launch for
+    Final subtrees (not cached), catching a class turned behaviorful after launch one.
     """
     if type(value) is float:
         return (_FLOAT_KEY_TAG, _unpack_u64(_pack_f64(value))[0])

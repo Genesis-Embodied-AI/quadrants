@@ -5132,6 +5132,35 @@ def test_final_scalar_subclass_base_kind_in_offline_key():
 
 
 @test_utils.test()
+def test_final_subclass_metaclass_kind_in_offline_key():
+    """The class kind in ``_subclass_identity`` also covers the *metaclass*: a resolvable behavior-free subclass moved
+    from the default metaclass to an empty custom one (``metaclass=EmptyMeta``) keeps module/qualname/base/canonical
+    but ``cfg.x.__class__.__class__ is type`` flips, so the offline key must differ. An empty metaclass stays accepted
+    (no observable behavior); only the key identity changes."""
+    import sys
+    import types
+
+    from quadrants.lang._final_dataclass_fields import final_scalar_key
+
+    def offline_key(use_meta):
+        mod = types.ModuleType("qd_metaclass_kind_probe")
+        sys.modules[mod.__name__] = mod
+        try:
+            src = (
+                "class EmptyMeta(type):\n    pass\nclass Unit(int, metaclass=EmptyMeta):\n    pass\n"
+                if use_meta
+                else "class Unit(int):\n    pass\n"
+            )
+            exec(src, mod.__dict__)
+            return str(final_scalar_key(mod.Unit(1), live=False))
+        finally:
+            sys.modules.pop(mod.__name__, None)
+
+    assert offline_key(False) != offline_key(True)  # default metaclass vs empty custom metaclass
+    assert offline_key(True) == offline_key(True)  # same custom metaclass -> stable reuse
+
+
+@test_utils.test()
 def test_final_enum_key_incorporates_full_member_map():
     """A baked ``Final`` enum member keys on the *entire* member map, not only the selected member: a kernel can read a
     sibling at compile time (``cfg.mode.__class__.OTHER.value``), so changing another member's value must invalidate
