@@ -488,20 +488,17 @@
         <span class="n">func_id</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">func</span><span class="o">.</span><span class="n">func_id</span>
         <span class="k">if</span> <span class="n">dataclasses</span><span class="o">.</span><span class="n">is_dataclass</span><span class="p">(</span><span class="n">argument_type</span><span class="p">):</span>
             <span class="n">ctx</span><span class="o">.</span><span class="n">create_variable</span><span class="p">(</span><span class="n">argument_name</span><span class="p">,</span> <span class="n">argument_type</span><span class="p">)</span>
-            <span class="c1"># ``typing.Final[T]`` fields are baked as compile-time constants rather than declared as runtime kernel</span>
-            <span class="c1"># args. Cached + validated once per dataclass type; empty for every dataclass not using the feature.</span>
+            <span class="c1"># ``Final[T]`` fields are baked as compile-time constants, not runtime args. Cached + validated once per</span>
+            <span class="c1"># type; empty for every dataclass not using the feature.</span>
             <span class="n">final_names</span> <span class="o">=</span> <span class="n">final_field_names</span><span class="p">(</span><span class="n">argument_type</span><span class="p">)</span>
             <span class="k">for</span> <span class="n">field_idx</span><span class="p">,</span> <span class="n">field</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">dataclasses</span><span class="o">.</span><span class="n">fields</span><span class="p">(</span><span class="n">argument_type</span><span class="p">)):</span>
                 <span class="n">flat_name</span> <span class="o">=</span> <span class="n">create_flat_name</span><span class="p">(</span><span class="n">argument_name</span><span class="p">,</span> <span class="n">field</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
                 <span class="k">if</span> <span class="n">pruning</span><span class="o">.</span><span class="n">enforcing</span> <span class="ow">and</span> <span class="n">flat_name</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">pruning</span><span class="o">.</span><span class="n">used_vars_by_func_id</span><span class="p">[</span><span class="n">func_id</span><span class="p">]:</span>
                     <span class="k">continue</span>
-                <span class="c1"># Bind ``flat_name`` to the actual Python value off the passed-in instance, so that</span>
-                <span class="c1"># ``FlattenAttributeNameTransformer``-rewritten ``config.field`` -&gt; ``Name(__qd_config__qd_field)``</span>
-                <span class="c1"># resolves to a Python constant in ``build_Name``. That is what makes ``qd.static(config.field)`` legal</span>
-                <span class="c1"># on a plain frozen dataclass without opting the class into ``@qd.data_oriented``. The value is folded</span>
-                <span class="c1"># into the template spec key (``_extract_arg``) and the fastcache key</span>
-                <span class="c1"># (``args_hasher.dataclass_to_repr``) so distinct values compile distinct kernels, and the launch path</span>
-                <span class="c1"># (``_recursive_set_args``) skips these fields since they own no runtime arg slot.</span>
+                <span class="c1"># Bind ``flat_name`` to the actual Python value off the instance, so a rewritten ``config.field``</span>
+                <span class="c1"># resolves to a Python constant in ``build_Name`` - what makes ``qd.static(config.field)`` legal on a</span>
+                <span class="c1"># plain frozen dataclass without ``@qd.data_oriented``. The value drives the spec + fastcache keys, and</span>
+                <span class="c1"># the launch path skips these fields (no runtime arg slot).</span>
                 <span class="k">if</span> <span class="n">field</span><span class="o">.</span><span class="n">name</span> <span class="ow">in</span> <span class="n">final_names</span><span class="p">:</span>
                     <span class="k">assert</span> <span class="n">arg_value</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">,</span> <span class="p">(</span>
                         <span class="sa">f</span><span class="s2">"Final-annotated dataclass field </span><span class="si">{</span><span class="n">field</span><span class="o">.</span><span class="n">name</span><span class="si">!r}</span><span class="s2"> needs the runtime dataclass instance to "</span>
@@ -682,11 +679,9 @@
         <span class="n">argument_type</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
         <span class="n">data</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-        <span class="c1"># ``typing.Final[T]`` field of a caller's dataclass, flattened by ``expand_func_arguments`` into a leaf @qd.func</span>
-        <span class="c1"># arg with annotation ``Final[T]``. The caller's ``_transform_kernel_arg`` already bound the caller-side flat</span>
-        <span class="c1"># name to the actual Python value, and ``build_Name`` propagated that value into ``data`` as the resolved</span>
-        <span class="c1"># py-arg. Bind it directly (compile-time) so ``qd.static(cfg.field)`` inside the @qd.func body sees a Python</span>
-        <span class="c1"># constant rather than an ``Expr``. Handled ahead of the ``annotations.template`` check below because</span>
+        <span class="c1"># A ``Final[T]`` field flattened into a leaf @qd.func arg: ``data`` already carries the resolved Python value</span>
+        <span class="c1"># (bound by the caller's ``_transform_kernel_arg`` and propagated by ``build_Name``). Bind it directly so</span>
+        <span class="c1"># ``qd.static(cfg.field)`` sees a constant. Handled before the ``annotations.template`` check since</span>
         <span class="c1"># ``isinstance(Final[T], annotations.template)`` is ``False``.</span>
         <span class="k">if</span> <span class="n">is_final_annotation</span><span class="p">(</span><span class="n">argument_type</span><span class="p">):</span>
             <span class="n">ctx</span><span class="o">.</span><span class="n">create_variable</span><span class="p">(</span><span class="n">argument_name</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span>
