@@ -106,6 +106,23 @@ def test_multi_member_optional_union_is_rejected():
             pass
 
 
+def test_optional_unsupported_family_is_rejected():
+    """`T | None` is only for qd.Tensor / qd.types.Template / qd.types.NDArray. A family with no absent-value path
+    (here a dataclass) must be rejected at registration, not silently recorded as optional and left to crash with an
+    internal AttributeError when `None` reaches the dataclass launch branch."""
+    import dataclasses
+
+    @dataclasses.dataclass
+    class State:
+        a: qd.Tensor
+
+    with pytest.raises(QuadrantsSyntaxError, match="only supported for qd.Tensor"):
+
+        @qd.kernel
+        def k(s: State | None):
+            pass
+
+
 # ----------------------------------------------------------------------------
 # Runtime: qd.Tensor | None works end to end (both branches), just like the bare spelling.
 # ----------------------------------------------------------------------------
