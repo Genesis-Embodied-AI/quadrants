@@ -799,13 +799,15 @@ def _compute_enum_generated_class_attrs() -> "frozenset[str]":
 def _compute_enum_reference_checked_attrs() -> "frozenset[str]":
     """The subset of machinery-generated sunder/dunder names whose value is fixed by an enum's *bases / mix-in* (not
     its members): ``_value_repr_`` / ``__new__`` / ``_new_member_`` / ``_generate_next_value_`` / copied operator
-    dunders / ... For these a clean enum's own entry equals a *member-free* rebuild of the same bases
-    (``_enum_machinery_class_dict``), so ``_observable_class_dict_attr`` can flag a user override by comparison.
+    dunders / the enum-valued ``_boundary_`` on ``Flag``/``IntFlag`` / ... For these a clean enum's own entry equals a
+    *member-free* rebuild of the same bases (``_enum_machinery_class_dict``), so ``_observable_class_dict_attr`` can
+    flag a user override by comparison (including a changed ``_boundary_``).
 
-    Member-*derived* bookkeeping (``_member_map_`` / ``_value2member_map_`` / ...) differs from the reference even for
-    a clean enum and is a function of the already-keyed members, so it is excluded; structural names too. A name
-    qualifies only if in *every* probe carrying it the stored object *is* (unwrapped) the reference's, so the set
-    tracks the running Python and never mistakes member data for a hook."""
+    Member-*derived* bookkeeping (``_member_map_`` / ``_value2member_map_`` / ``_flag_mask_`` / ...) differs from the
+    reference even for a clean enum and is a function of the already-keyed members, so it is excluded (its stored
+    object is a distinct container, failing the identity match); structural names too. A name qualifies only if in
+    *every* probe carrying it the stored object *is* (unwrapped) the reference's, so the set tracks the running
+    Python."""
     appears: "dict[str, int]" = {}
     matches: "dict[str, int]" = {}
     for probe in _enum_probe_classes():
@@ -813,7 +815,7 @@ def _compute_enum_reference_checked_attrs() -> "frozenset[str]":
         if reference is None:
             continue
         for name, member in vars(probe).items():
-            if isinstance(member, enum.Enum) or not (name.startswith("_") and name.endswith("_")):
+            if not (name.startswith("_") and name.endswith("_")):  # members/aliases are non-sunder -> skipped here
                 continue
             appears[name] = appears.get(name, 0) + 1
             default = reference.get(name, _MISSING)
@@ -822,8 +824,9 @@ def _compute_enum_reference_checked_attrs() -> "frozenset[str]":
     return frozenset(name for name, count in appears.items() if matches.get(name, 0) == count) - _STRUCTURAL_CLASS_ATTRS
 
 
-# Sunder/dunder names the machinery puts in a user enum/class dict; anything else sunder/dunder there is a user hook.
-# Computed once at import so it matches the running Python.
+# Union (across all enum kinds) of sunder/dunder names the machinery puts in a user enum/class dict. Used only as a
+# fallback when the per-class member-free reference cannot be built; the primary path checks names against that
+# per-class reference instead, so a name generated only for another kind cannot exempt a user attribute here.
 _ENUM_GENERATED_CLASS_ATTRS = _compute_enum_generated_class_attrs()
 
 # The generated names fixed by an enum's bases/mix-in, so a user override is caught by comparing against a member-free
@@ -871,8 +874,10 @@ def _observable_class_dict_attr(klass: type) -> "str | None":
 
     A machinery name is not exempt by name alone: the machinery copies overridable hooks (``_value_repr_``, ...) into
     every enum dict, so a user reassignment would slip through; each is compared against a member-free reference
-    (``_enum_machinery_class_dict``), reporting only a genuine override. An enum-valued attribute is exempt only when a
-    real member/alias, not a user-added ``Mode.X``.
+    (``_enum_machinery_class_dict``), reporting only a genuine override. Whether a sunder/dunder is machinery-generated
+    is judged against *this* class's reference, not the global union across enum kinds, so a name generated only for
+    another kind (``_boundary_`` on ``Flag``) cannot exempt a user-added attribute of that name on an unrelated enum.
+    An enum-valued attribute is exempt only when a real member/alias, not a user-added ``Mode.X``.
     """
     reference: Any = _MISSING  # member-free machinery reference; built lazily, at most once per call
     for name, member in vars(klass).items():
@@ -885,16 +890,33 @@ def _observable_class_dict_attr(klass: type) -> "str | None":
             if _dunder_copied_from_base(klass, name, member):
                 continue  # base/data-type dunder copied by the machinery (>=3.11), not a user override
             return name  # a genuine user operator/behavior dunder override
-        if is_sunder_dunder:  # ``_boundary_`` (enum-valued *machinery* sunder) is exempted here, not above
+        if is_sunder_dunder:  # ``_member_map_`` bookkeeping, ``_boundary_`` on a ``Flag``/``IntFlag``, ...
+            if name in _STRUCTURAL_CLASS_ATTRS:
+                # Generic structural bookkeeping (``__module__`` / ``__doc__`` / ``__slots__`` / 3.13's
+                # ``__firstlineno__`` / ``__static_attributes__`` / ...); always exempt, and some are absent from the
+                # programmatic member-free reference (CPython fills them from the class's source), so skip before it.
+                continue
+            if reference is _MISSING:
+                reference = _enum_machinery_class_dict(klass)
+            if reference is not None:
+                # Machinery-generated for THIS enum's shape iff a member-free rebuild of ``klass``'s own bases and
+                # metaclass carries ``name``. Using the per-class reference (not the global union across kinds) stops a
+                # name generated only for another kind - ``_boundary_``, made for ``Flag``/``IntFlag`` - from exempting
+                # ``Mode._boundary_ = 1`` on a plain ``Enum``, whose value a kernel can observe yet the key ignores.
+                if name not in reference:
+                    return name  # a user-added sunder/dunder the machinery does not generate for this shape
+                # A bases/mix-in-fixed hook (incl. ``_boundary_``) is exempt only while it still holds the machinery's
+                # value; a user override (distinct object) is observable behavior the fixed key cannot capture.
+                if name in _ENUM_REFERENCE_CHECKED_ATTRS and _generated_attr_is_user_override(
+                    klass, name, member, reference
+                ):
+                    return name
+                continue  # untouched bookkeeping for this shape: member-derived data, structural, or a matched hook
+            # Reference unbuildable: best-effort fallback to the global-union allowlist.
             if name in _ENUM_GENERATED_CLASS_ATTRS:
-                if name in _ENUM_REFERENCE_CHECKED_ATTRS:
-                    if reference is _MISSING:
-                        reference = _enum_machinery_class_dict(klass)
-                    # A bases/mix-in-fixed hook is exempt only while it still holds the machinery's value; a user
-                    # override (distinct object) is observable behavior the fixed key cannot capture.
-                    if _generated_attr_is_user_override(klass, name, member, reference):
-                        return name
-                continue  # untouched bookkeeping: member-derived data, structural, or a matched hook
+                if _generated_attr_is_user_override(klass, name, member, None):
+                    return name
+                continue
             return name  # a user sunder/dunder hook (``_missing_`` / ``_repr_html_`` / ...)
         return name  # a user method / property / class var
     return None

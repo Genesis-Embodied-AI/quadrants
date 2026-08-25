@@ -4968,6 +4968,43 @@ def test_final_enum_rejects_user_added_enum_valued_class_attribute():
 
 
 @test_utils.test()
+def test_final_enum_rejects_cross_kind_machinery_sunder():
+    """Whether a sunder/dunder in an enum's own dict is machinery bookkeeping (exempt) or a user hook (rejected) is
+    judged against a member-free rebuild of *that enum's* bases/metaclass - not the union of names generated across
+    every enum kind. Otherwise a name the machinery emits only for one kind - ``_boundary_``, generated for
+    ``Flag``/``IntFlag`` - would wrongly exempt a user-added attribute of the same name on an unrelated enum:
+    ``Mode._boundary_ = 1`` on a plain ``enum.Enum`` is observable as ``cfg.mode.__class__._boundary_`` yet leaves the
+    member's class/name/value key unchanged, so rebinding it (``1`` -> ``2``) would silently reuse the stale
+    specialization. A plain ``IntFlag`` (whose ``_boundary_`` is genuine machinery) stays accepted; overriding that
+    ``_boundary_`` to a different value is itself observable and must flip it to rejected."""
+    import enum
+
+    from quadrants.lang._final_dataclass_fields import final_scalar_key
+
+    class Mode(enum.Enum):
+        A = 1
+        B = 2
+
+    final_scalar_key(Mode.A)  # clean, accepted
+    Mode._boundary_ = 1  # a name generated only for Flag/IntFlag, added by a user to a plain Enum (not this shape)
+    with pytest.raises(TypeError, match="observable class-level behavior"):
+        final_scalar_key(Mode.A)
+
+    if hasattr(enum, "IntFlag") and hasattr(enum, "FlagBoundary"):
+
+        class Flags(enum.IntFlag):
+            A = 1
+            B = 2
+
+        final_scalar_key(Flags.A)  # ``_boundary_`` here is genuine machinery for this kind -> accepted
+        default_boundary = Flags._boundary_
+        other = next(b for b in enum.FlagBoundary if b is not default_boundary)
+        Flags._boundary_ = other  # override the machinery value -> observable as cfg.mode.__class__._boundary_
+        with pytest.raises(TypeError, match="observable class-level behavior"):
+            final_scalar_key(Flags.A)
+
+
+@test_utils.test()
 def test_final_enum_key_incorporates_full_member_map():
     """A baked ``Final`` enum member keys on the *entire* member map, not only the selected member: a kernel can read a
     sibling at compile time (``cfg.mode.__class__.OTHER.value``), so changing another member's value must invalidate
