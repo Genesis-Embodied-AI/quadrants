@@ -1,9 +1,7 @@
 """Helpers for the ``@dataclasses.dataclass`` kernel-arg path, including ``typing.Final[T]`` compile-time fields.
 
-Perf: all ``Final`` resolution/validation runs once per dataclass type and is cached (``_final_plan_cache``,
-``_final_path_cache``). The per-launch hot path does a single ``dict.get`` on the type and, in the common no-Final
-case, takes the pre-existing path with no per-launch reflection (an ``isinstance`` is a ~100-200ns MRO walk vs a
-~10ns ``type(x) is Y`` pointer compare).
+All ``Final`` resolution/validation is cached per dataclass type (``_final_plan_cache``, ``_final_path_cache``); the
+per-launch hot path is a single ``dict.get`` and, with no ``Final`` fields, is untouched.
 """
 
 import dataclasses
@@ -19,14 +17,11 @@ from typing import Any
 
 import numpy as np
 
-_MISSING = object()  # sentinel for "attribute not found" while resolving a qualname (``None`` is a legal value)
+_MISSING = object()  # sentinel distinct from ``None`` (a legal attribute value) while resolving a qualname
 
-# Random per-process token folded into the *offline* key of a non-resolvable (locally/dynamically created) class (see
-# ``_subclass_identity``). Its companion serial (``_dynamic_class_serial``) is only process-local, so without the
-# nonce two workers building same-named dynamic classes would serialize identical offline keys and one could load the
-# other's kernel; the nonce makes a dynamic class a guaranteed cross-process miss, never a wrong reuse. Must be
-# reseeded in a ``fork``ed child (which inherits the string *and* the serial counter); ``spawn`` re-imports and
-# reseeds anyway.
+# Per-process token mixed into the *offline* key of a dynamically created class (see ``_subclass_identity``): its
+# serial is only process-local, so the nonce makes such a class a guaranteed cross-process miss rather than a wrong
+# reuse. Reseeded after ``fork`` (the child inherits the string); ``spawn`` re-imports and reseeds on its own.
 _PROCESS_NONCE = uuid.uuid4().hex
 
 
@@ -35,17 +30,14 @@ def _reseed_process_nonce() -> None:
     _PROCESS_NONCE = uuid.uuid4().hex
 
 
-if hasattr(os, "register_at_fork"):  # POSIX only; ``spawn``/Windows re-import and reseed on their own
+if hasattr(os, "register_at_fork"):  # POSIX only; ``spawn``/Windows re-import and reseed
     os.register_at_fork(after_in_child=_reseed_process_nonce)
 
-# ``T`` values permitted inside ``Final[T]``: baked into the kernel as a literal and folded into both key spaces, so
-# ``T`` must be meaningful as a compile-time literal and hash/``repr`` by value stably across processes. Membership is
-# by exact type. ``enum.Enum`` subclasses are also permitted (resolved separately): Genesis stores ``IntEnum`` members
-# in ``int``-annotated fields, and an enum member is a valid, stably-repr'able literal.
+# Types allowed inside ``Final[T]``: baked as a literal, so ``T`` must be a stable-by-value compile-time constant.
+# ``enum.Enum`` subclasses are allowed too (handled separately).
 _FINAL_SCALAR_TYPES = frozenset({bool, int, float, str})
 
-# Types worth a tailored error, because ``Final[T]`` on them is a plausible mistake with a clear better alternative.
-# Resolved lazily to dodge import cycles (``_ndarray`` imports back into ``lang``).
+# Tailored hints for types where ``Final[T]`` is a likely mistake. Matched by name to avoid import cycles.
 _FINAL_REJECT_HINTS: "dict[str, str]" = {
     "NdarrayType": "arrays are runtime data, not compile-time constants - drop the ``Final`` and annotate the field "
     "with ``qd.types.NDArray[dtype, ndim]`` as usual",
@@ -59,15 +51,10 @@ _FINAL_REJECT_HINTS: "dict[str, str]" = {
 
 
 def is_final_annotation(annotation: Any) -> bool:
-    """Return True if ``annotation`` is a ``typing.Final[T]`` special form.
+    """True if ``annotation`` is a subscripted ``typing.Final[T]``.
 
-    On a frozen dataclass kernel arg this marks the field's value as a compile-time constant: baked into the kernel
-    (``qd.static(config.field)`` is legal), folded into the spec + fastcache keys (distinct values => distinct
-    kernels), and not declared as a runtime scalar arg.
-
-    Bare ``typing.Final`` returns False (``typing.get_origin`` is ``None``) but is still not an ordinary field:
-    ``_build_final_plan`` rejects it outright. ``typing_extensions.Final`` is the same object on all supported Pythons
-    (>=3.10) so it is accepted transparently.
+    Bare ``typing.Final`` returns False (no origin) but is rejected by ``_build_final_plan``, not treated as a field.
+    ``typing_extensions.Final`` is the same object (>=3.10).
     """
     return typing.get_origin(annotation) is typing.Final
 
@@ -77,10 +64,7 @@ def _describe_annotation(annotation: Any) -> str:
 
 
 def _reject_hint_for(inner: Any) -> str | None:
-    """Return a tailored remediation hint when ``Final[inner]`` names a type we want to reject well, else None.
-
-    Matched on the *type name* (not by importing the classes) to avoid import cycles; runs once per dataclass type.
-    """
+    """Tailored remediation hint if ``Final[inner]`` names a rejectable type, else None (matched by name, no import)."""
     for name in (type(inner).__name__, _describe_annotation(inner)):
         hint = _FINAL_REJECT_HINTS.get(name)
         if hint is not None:
@@ -89,10 +73,7 @@ def _reject_hint_for(inner: Any) -> str | None:
 
 
 def _validate_final_inner_type(dc_type: type, field_name: str, annotation: Any) -> None:
-    """Raise a clear error unless ``Final[annotation]`` names a type we can bake as a compile-time literal.
-
-    Only called after ``is_final_annotation`` confirmed a subscripted ``Final``, so ``typing.get_args`` is non-empty.
-    """
+    """Raise unless ``Final[annotation]`` names a bakeable compile-time type. Only for a subscripted ``Final``."""
     inner = typing.get_args(annotation)
     if len(inner) != 1:
         raise TypeError(
@@ -103,7 +84,6 @@ def _validate_final_inner_type(dc_type: type, field_name: str, annotation: Any) 
 
     if inner_type in _FINAL_SCALAR_TYPES:
         return
-    # ``issubclass`` is fine here: once per dataclass type, never per launch.
     if isinstance(inner_type, type) and issubclass(inner_type, enum.Enum):
         return
 
@@ -124,12 +104,10 @@ def _validate_final_inner_type(dc_type: type, field_name: str, annotation: Any) 
 
 
 def _rebinding_is_prevented(dc_type: type) -> bool:
-    """Return True if ``dc_type`` prevents (or has explicitly disclaimed) rebinding of its fields.
+    """True if ``dc_type`` forbids field rebinding: ``frozen=True`` or ``unsafe_hash=True``.
 
-    True for ``frozen=True`` (prevents it outright) and ``unsafe_hash=True`` (an explicit value-stability assertion the
-    machinery already honours). Deliberately *not* the ``__hash__ is not None`` proxy: ``@dataclass(eq=False)`` inherits
-    ``object.__hash__`` and would read a plain mutable class as frozen, letting a baked ``Final`` constant be
-    reassigned with no recompilation - exactly what this check prevents.
+    Not the ``__hash__ is not None`` proxy: ``@dataclass(eq=False)`` inherits ``object.__hash__`` and would look
+    frozen, letting a baked ``Final`` constant be silently reassigned.
     """
     params = getattr(dc_type, "__dataclass_params__", None)
     if params is None:
@@ -137,22 +115,17 @@ def _rebinding_is_prevented(dc_type: type) -> bool:
     return params.frozen or params.unsafe_hash
 
 
-# Memo of ``id(dataclass type) -> (type, field path down to some Final leaf)`` (path ``None`` if none), used to reject
-# mutable ancestors. Identity-keyed with a strong-ref+``is`` guard like ``_final_plan_cache`` (metaclass ``__eq__``
-# must not merge distinct types). Once per type; never per launch.
+# ``id(type) -> (type, path to a Final leaf or None)``. Identity-keyed with a strong-ref+``is`` guard (a metaclass
+# ``__eq__`` must not merge distinct types); the stored type pins the ``id`` against recycling.
 _final_path_cache: "dict[int, tuple[type, tuple[str, ...] | None]]" = {}
 
 
 def _first_final_path(dc_type: type, visiting: "frozenset[int]") -> "tuple[str, ...] | None":
-    """Return the field path from ``dc_type`` down to some ``Final`` leaf, or None if the subtree contains none.
-
-    First hit wins (only a witness is needed to name one offending path). Recursing eagerly validates every nested
-    type at the top-level call. ``visiting`` holds ``id(type)`` (not the types) to guard a self-referential graph
-    without a metaclass ``__eq__`` making distinct types look "already visited"; the walk keeps each on-path type
-    alive so its ``id`` is stable.
+    """Field path from ``dc_type`` down to some ``Final`` leaf, or None. First hit wins; recursing eagerly validates
+    every nested type. ``visiting`` holds ``id``s (not types) so a metaclass ``__eq__`` cannot fake "already visited".
     """
     entry = _final_path_cache.get(id(dc_type))
-    if entry is not None and entry[0] is dc_type:  # identity check: guard against a recycled ``id``
+    if entry is not None and entry[0] is dc_type:  # identity guard against a recycled ``id``
         return entry[1]
     if id(dc_type) in visiting:
         return None
@@ -171,10 +144,8 @@ def _first_final_path(dc_type: type, visiting: "frozenset[int]") -> "tuple[str, 
 
 
 def _resolved_type_hints(dc_type: Any) -> "dict[str, Any] | None":
-    """``typing.get_type_hints(dc_type)`` (real objects, ``Final`` preserved), or None if unresolvable. Lets
-    ``_build_final_plan`` detect an *aliased* ``Final`` behind a string annotation (``Final as F; x: F[int]`` stores
-    ``"F[int]"``, which a substring test for ``Final`` misses). Off the hot path; on any failure returns None so the
-    caller falls back to its substring check."""
+    """``typing.get_type_hints(dc_type)`` or None. Lets ``_build_final_plan`` see an *aliased* ``Final`` behind a
+    string annotation (``Final as F`` -> ``"F[int]"``) that a substring test would miss."""
     try:
         return typing.get_type_hints(dc_type)
     except Exception:
@@ -182,20 +153,16 @@ def _resolved_type_hints(dc_type: Any) -> "dict[str, Any] | None":
 
 
 def _build_final_plan(dc_type: type) -> "frozenset[str]":
-    """Validate every ``Final`` field on ``dc_type`` and return the set of Final-annotated field names.
-
-    Called once per dataclass type (memoised in ``_final_plan_cache``), so all reflection here stays off the hot path.
-    """
+    """Validate every ``Final`` field on ``dc_type`` and return their names. Once per type (memoised)."""
     resolved_hints: "dict[str, Any] | None" = None
     resolved_computed = False
     final_names = []
     for field in dataclasses.fields(dc_type):
         annotation = field.type
         if isinstance(annotation, str):
-            # ``from __future__ import annotations`` leaves ``field.type`` a string. The kernel-arg path assumes
-            # resolved types, so rather than half-support it, flag the correctness trap: a field the user believes is a
-            # compile-time constant that we would lower as a runtime arg. Resolve hints (lazily) to catch an *aliased*
-            # ``Final`` (``Final as F`` -> ``"F[int]"``), falling back to a substring test if resolution fails.
+            # ``from __future__ import annotations`` leaves ``field.type`` a string; we cannot see ``Final`` through
+            # it, so such a field would silently become a runtime arg. Resolve hints to catch an aliased ``Final``,
+            # else fall back to a substring test.
             if not resolved_computed:
                 resolved_hints = _resolved_type_hints(dc_type)
                 resolved_computed = True
@@ -210,17 +177,14 @@ def _build_final_plan(dc_type: type) -> "frozenset[str]":
                 )
             continue
         if annotation is typing.Final:
-            # Bare ``Final`` with no ``[T]``: ``is_final_annotation`` returns False for it, so it would otherwise be
-            # lowered as a runtime arg and die later in ``cook_dtype``. Reject the unsupported spelling with a clear
-            # message.
+            # Bare ``Final`` (no ``[T]``): ``is_final_annotation`` is False for it, so reject explicitly.
             raise TypeError(
                 f"{dc_type.__name__}.{field.name}: bare ``typing.Final`` is not supported as a Quadrants "
                 f"compile-time template field. Write ``Final[T]`` with a concrete type, e.g. "
                 f"``{field.name}: Final[int]``."
             )
         if not is_final_annotation(annotation):
-            # Catch a ``Final``-like special form that is not ``typing.Final`` (e.g. a future ``typing_extensions`` that
-            # stops aliasing the stdlib object); silently lowering it to a runtime arg is the same correctness trap.
+            # A ``Final``-like form that is not ``typing.Final`` would also silently become a runtime arg.
             origin = typing.get_origin(annotation)
             if origin is not None and "Final" in _describe_annotation(origin):
                 raise TypeError(
@@ -233,8 +197,7 @@ def _build_final_plan(dc_type: type) -> "frozenset[str]":
         final_names.append(field.name)
 
     if final_names and not _rebinding_is_prevented(dc_type):
-        # A mutable carrier contradicts ``Final``: ``TemplateMapper.lookup`` memoises on ``id(arg)``, so relaunching
-        # the same instance after a reassignment would silently reuse the kernel baked with the old value.
+        # ``lookup`` memoises on ``id(arg)``, so a reassignment after launch one would reuse the stale kernel.
         raise TypeError(
             f"{dc_type.__name__} has ``Final`` field(s) {sorted(final_names)} but is not frozen. A ``Final`` field's "
             f"value is baked into the compiled kernel, so it must not be reassignable - reassigning it would silently "
@@ -243,9 +206,8 @@ def _build_final_plan(dc_type: type) -> "frozenset[str]":
             f"responsibility for never reassigning these fields)."
         )
 
-    # A mutable *ancestor* of a Final leaf is just as unsound (a mutable ``Outer`` holding a frozen ``Inner`` with a
-    # ``Final`` field still lets ``outer.child = Inner(...)`` swap a baked constant), and ``final_names`` covers only
-    # this class's own fields. Reject every mutable dataclass on a path down to a Final leaf.
+    # A mutable *ancestor* of a Final leaf is equally unsound (``outer.child = Inner(...)`` swaps a baked constant);
+    # ``final_names`` covers only own fields, so reject every mutable dataclass on a path to a Final leaf.
     if not _rebinding_is_prevented(dc_type):
         for field in dataclasses.fields(dc_type):
             if not (isinstance(field.type, type) and dataclasses.is_dataclass(field.type)):
@@ -265,22 +227,16 @@ def _build_final_plan(dc_type: type) -> "frozenset[str]":
     return frozenset(final_names)
 
 
-# Memo of ``id(dataclass type) -> (type, frozenset of Final field names)``. Keyed on ``id`` (not ``type``), so a
-# metaclass ``__eq__``/``__hash__`` making two distinct types compare equal cannot merge their (possibly different)
-# Final schemas. The stored ``type`` is a strong ref: it pins the type (so its ``id`` cannot be recycled) and lets a
-# lookup verify identity (``entry[0] is dc_type``) before trusting the plan.
+# ``id(type) -> (type, frozenset of Final field names)``. Identity-keyed (a metaclass ``__eq__`` must not merge
+# distinct types' schemas); the stored type is a strong ref pinning the ``id`` and verifying identity on lookup.
 _final_plan_cache: "dict[int, tuple[type, frozenset[str]]]" = {}
 
 
 def final_field_names(dc_type: Any) -> "frozenset[str]":
-    """Return the cached set of ``Final``-annotated field names on ``dc_type``, validating on first sighting.
-
-    Hot-path contract: one ``dict.get`` + one ``is`` check; callers short-circuit on the empty result so Final-free
-    dataclasses run the pre-existing path untouched. Typed ``Any`` because ``_extract_arg`` calls it with its
-    loosely-typed ``annotation`` (already known to be a dataclass type) and narrowing would need a per-launch ``cast``.
-    """
+    """Cached set of ``Final`` field names on ``dc_type`` (validated on first sighting). Hot path: one ``dict.get`` +
+    ``is``; callers short-circuit on the empty result. ``Any`` avoids a per-launch ``cast`` at the call site."""
     entry = _final_plan_cache.get(id(dc_type))
-    if entry is not None and entry[0] is dc_type:  # identity check: guard against a recycled ``id``
+    if entry is not None and entry[0] is dc_type:  # identity guard against a recycled ``id``
         return entry[1]
     names = _build_final_plan(dc_type)
     _final_plan_cache[id(dc_type)] = (dc_type, names)
@@ -288,52 +244,42 @@ def final_field_names(dc_type: Any) -> "frozenset[str]":
 
 
 def subtree_has_final_fields(dc_type: Any) -> bool:
-    """True if ``dc_type`` - or any dataclass nested transitively beneath it - declares a ``Final`` field.
+    """True if ``dc_type`` or any transitively nested dataclass has a ``Final`` field.
 
-    Gates the per-instance launch caches (``_qd_spec_key``, ``_qd_dc_repr``): serving them verbatim is sound only when
-    the baked key cannot change after launch one, but a ``Final`` value's *class behavior* can (a plain ``enum``
-    accepted first can have ``Mode.__eq__`` monkey-patched before launch two, observable via ``qd.static(cfg.mode ==
-    1)`` yet invisible to the fixed key). So the cache *writers* never store a cache for such a dataclass; the read
-    then misses and falls through to a revalidating recompute, leaving Final-free dataclasses untouched.
-
-    Transitive because an early cache hit also skips the recursion into a nested Final leaf. Answered by
-    ``_first_final_path`` (memoised), so after first sighting this is one ``dict.get`` + ``is`` check.
+    Gates the per-instance launch caches (``_qd_spec_key``, ``_qd_dc_repr``): a ``Final`` value's class *behavior* can
+    change after launch one (a plain ``enum`` later monkey-patched), so cache writers skip such dataclasses and the
+    read falls through to a revalidating recompute. Transitive, since a cache hit also skips recursion into a leaf.
     """
     return _first_final_path(dc_type, frozenset()) is not None
 
 
-# Precomputed packers for encoding a ``float`` by its exact IEEE-754 bits (see ``final_scalar_key``).
+# Pack/unpack a ``float`` as its exact IEEE-754 bits (see ``final_scalar_key``).
 _pack_f64 = struct.Struct("<d").pack
 _unpack_u64 = struct.Struct("<Q").unpack
 
-# Type tags that keep the three key spaces disjoint. Python treats several distinct constants as ``==`` with equal
-# hashes, so bare values would collide: a float's bit-encoding vs a bare int (``_FLOAT_KEY_TAG``); an ``IntEnum`` /
-# ``StrEnum`` member vs its bare scalar or a same-valued member of another enum (``_ENUM_KEY_TAG``); ``True`` vs ``1``
-# vs ``np.int64(1)`` (``_SCALAR_KEY_TAG``, which also tags the exact type). Any short, process-stable marker works.
+# Type tags keeping the key spaces disjoint: Python treats distinct constants as ``==`` with equal hashes (a float's
+# bits vs an int; an ``IntEnum`` member vs its bare scalar; ``True`` vs ``1`` vs ``np.int64(1)``), so bare values
+# would collide.
 _FLOAT_KEY_TAG = "f64"
 _ENUM_KEY_TAG = "enum"
 _SCALAR_KEY_TAG = "scalar"
 
-# Exact baked primitive types: an instance of exactly one is a pure literal, so it skips the stateful-subclass check.
+# Exact baked primitives; an exact instance is a pure literal and skips the stateful-subclass check.
 _EXACT_BAKED_TYPES = (bool, int, float, str)
 
 
 def _is_exact_baked_type(cls: type) -> bool:
-    """``cls`` *is* one of ``_EXACT_BAKED_TYPES`` - identity, never equality. A subclass whose metaclass makes it
-    compare ``==`` to a builtin must not be mistaken for an exact builtin: equality-based ``in`` would skip its
-    validation *and* canonicalize it, collapsing two distinct same-qualified factory classes even though
-    ``cfg.x.__class__ is First`` is observable. ``is`` cannot be spoofed."""
+    """``cls`` *is* one of ``_EXACT_BAKED_TYPES`` (identity, never ``==``): a subclass whose metaclass fakes ``==`` to
+    a builtin must not skip validation or be canonicalized, collapsing two distinct same-qualified factory classes."""
     return any(cls is t for t in _EXACT_BAKED_TYPES)
 
 
-# ``Py_TPFLAGS_HEAPTYPE`` (``1 << 9``): set by the interpreter on every ``class``/``type(...)`` type, clear on
-# C-defined *static* types (builtin primitives, NumPy's own scalars). Not user-settable, so it tells a library scalar
-# base from a user subclass even one spoofing ``__module__ = "numpy"`` (see ``_is_baked_base_type``).
+# ``Py_TPFLAGS_HEAPTYPE``: clear on C static types (builtins, NumPy scalars), set on any Python-defined type and not
+# user-settable, so it tells a library scalar base from a user subclass spoofing ``__module__`` (see below).
 _HEAPTYPE_FLAG = 1 << 9
 
-# Class-dict names CPython auto-generates for a bare ``class X(base): pass`` subclass. A primitive subclass may carry
-# *only* these; anything else (method, property, class var, overridden dunder) is observable behavior we cannot key on
-# (see ``_reject_stateful_primitive_subclass``). ``__firstlineno__`` / ``__static_attributes__`` are 3.13+.
+# Names CPython auto-generates for a bare ``class X(base): pass``. A primitive subclass may carry only these; anything
+# else is observable behavior we cannot key on. ``__firstlineno__`` / ``__static_attributes__`` are 3.13+.
 _STRUCTURAL_CLASS_ATTRS = frozenset(
     {
         "__module__",
@@ -347,19 +293,14 @@ _STRUCTURAL_CLASS_ATTRS = frozenset(
     }
 )
 
-# Framework metaclass layers on a primitive subclass's *metaclass* MRO (a plain subclass's metaclass is exactly
-# ``type``); only user-authored ``type`` subclasses below it are inspected for observable behavior.
+# Framework layers on a primitive subclass's metaclass MRO; only user ``type`` subclasses below them are inspected.
 _FRAMEWORK_PRIMITIVE_METACLASSES = frozenset({type, object})
 
 
 def _observable_metaclass_attr(mcls: type) -> "str | None":
-    """Name of a user-authored observable attribute in a metaclass layer's ``__dict__`` (readable as
-    ``cfg.x.__class__.<attr>``), or None; only ``_STRUCTURAL_CLASS_ATTRS`` are exempt. Shared by the enum and
-    primitive-subclass metaclass walks.
-
-    Even ``__eq__`` / ``__ne__`` / ``__hash__`` are rejected: the identity key (``_ClassRef``) prevents them from
-    collapsing classes or unhashing the key, but a kernel can still *observe* them (``qd.static(cfg.x.__class__ ==
-    Expected)``) and mutating their state after launch one would reuse a stale specialization under the fixed key.
+    """Name of a user attribute on a metaclass layer (readable as ``cfg.x.__class__.<attr>``), or None; only
+    ``_STRUCTURAL_CLASS_ATTRS`` are exempt. Even ``__eq__`` / ``__hash__`` count: the identity key stops them
+    collapsing classes, but a kernel can still observe them.
     """
     for name in vars(mcls):
         if name not in _STRUCTURAL_CLASS_ATTRS:
@@ -368,35 +309,22 @@ def _observable_metaclass_attr(mcls: type) -> "str | None":
 
 
 def _is_baked_base_type(klass: type) -> bool:
-    """True for a library base a baked value can subclass without adding observable state: a builtin primitive,
-    ``object``, or a *static* ``np.generic`` subclass (a NumPy scalar). Their attributes are framework internals, so
-    the walk in ``_reject_stateful_primitive_subclass`` stops here.
-
-    A NumPy scalar base is recognised by ``issubclass(klass, np.generic)`` plus the absence of ``Py_TPFLAGS_HEAPTYPE``
-    (a static C type), never by the mutable ``__module__`` string - so a user ``class Foo(np.float64)`` (always a heap
-    type, even spoofing ``__module__ = "numpy"``) cannot masquerade as a trusted base.
+    """True for a base a baked value may subclass without adding observable state: a builtin primitive, ``object``, or
+    a *static* ``np.generic`` subclass. A NumPy scalar base is a static type (no ``Py_TPFLAGS_HEAPTYPE``), so a user
+    ``class Foo(np.float64)`` (a heap type, even spoofing ``__module__``) cannot masquerade as one.
     """
     if _is_exact_baked_type(klass) or klass is object:
         return True
-    # A genuine NumPy scalar base is a static ``np.generic`` subclass; a user subclass is a heap type.
     is_heap_type = bool(klass.__flags__ & _HEAPTYPE_FLAG)
     return issubclass(klass, np.generic) and not is_heap_type
 
 
 def _reject_stateful_primitive_subclass(value: Any) -> None:
-    """Reject a *subclass* of a baked scalar (``bool``/``int``/``float``/``str`` or a NumPy scalar) whose instance
-    carries observable state a kernel could read but the key (typed value + ``module``/``qualname``) cannot capture:
-
-    - *Per-instance* state (``class TaggedFloat(float)`` with a ``unit``, in ``__dict__`` or a populated slot): two
-      instances equal in value but not state would bake different kernels yet select one specialization.
-    - *Class-level* behavior/state (a factory's ``float`` subclasses whose ``unit`` property or overridden
-      ``__eq__``/``__int__``/``__repr__`` differ): ``module``/``qualname`` does not uniquely identify a dynamic class,
-      so two same-named subclasses collide. Any class member outside ``_STRUCTURAL_CLASS_ATTRS`` (including an
-      overridden dunder) is rejected, and the *metaclass* is inspected the same way (``cfg.x.__class__.label``
-      resolves to ``type(cls).label``), skipping the framework ``type``/``object`` layers.
-
-    No bounded, process-stable way to serialise arbitrary state exists, so reject rather than mis-specialise. Exact
-    primitives, exact NumPy scalars, and behavior-free subclasses (``class Meters(float): pass``) are unaffected.
+    """Reject a subclass of a baked scalar (or NumPy scalar) that carries observable state the key cannot capture:
+    per-instance state (``__dict__`` or a populated slot), or class-level behavior/state (a method/property/class var
+    or overridden dunder, on the subclass chain or its metaclass). ``module``/``qualname`` does not identify a dynamic
+    class, so two same-named factory subclasses would collide. Exact primitives/NumPy scalars and behavior-free
+    subclasses (``class Meters(float): pass``) pass.
     """
     cls = type(value)
     if _is_exact_baked_type(cls):
@@ -404,7 +332,7 @@ def _reject_stateful_primitive_subclass(value: Any) -> None:
     if not (isinstance(value, (int, float, str)) or isinstance(value, np.generic)):
         return  # not a baked-primitive / NumPy-scalar value at all
     if isinstance(value, np.generic) and _is_baked_base_type(cls):
-        return  # an exact NumPy library scalar (a static ``np.generic`` type): a pure value, no user state/behavior
+        return  # an exact NumPy library scalar: a pure value, no user state/behavior
     if getattr(value, "__dict__", None):
         stateful = True
     else:
@@ -424,12 +352,10 @@ def _reject_stateful_primitive_subclass(value: Any) -> None:
             f"distinct specialization. Pass a plain ``bool`` / ``int`` / ``float`` / ``str`` (or an ``enum`` "
             f"member) instead."
         )
-    for klass in cls.__mro__:  # subclass chain above the base type; stop at the library base (its attrs are fine)
+    for klass in cls.__mro__:  # stop at the library base (its attrs are framework internals)
         if _is_baked_base_type(klass):
             break
         for attr in vars(klass):
-            # Only the auto-generated structural members are exempt; a method/property/class var or an overridden
-            # dunder counts.
             if attr not in _STRUCTURAL_CLASS_ATTRS:
                 raise TypeError(
                     f"A ``Final`` field received {cls.__module__}.{cls.__qualname__}, a subclass of a baked "
@@ -440,9 +366,9 @@ def _reject_stateful_primitive_subclass(value: Any) -> None:
                     f"specialization. Pass a plain ``bool`` / ``int`` / ``float`` / ``str`` (or an ``enum`` "
                     f"member) instead."
                 )
-    # ``cfg.x.__class__.label`` resolves to ``type(cls).label``, invisible to the subclass MRO walk, so the metaclass
-    # must be inspected too (as ``_enum_class_behavior_attr`` does). ``: type`` keeps ``__mro__`` an instance read.
-    metacls: type = type(cls)  # user-authored layers sit below ``type`` (``class Unit(int, metaclass=M)``)
+    # metaclass too: ``cfg.x.__class__.label`` -> ``type(cls).label``, off the MRO walk. ``: type`` keeps ``__mro__``
+    # an instance read.
+    metacls: type = type(cls)
     for mcls in metacls.__mro__:
         if mcls in _FRAMEWORK_PRIMITIVE_METACLASSES:
             continue
@@ -458,20 +384,15 @@ def _reject_stateful_primitive_subclass(value: Any) -> None:
             )
 
 
-# Allowlist of ``enum`` member attribute names that are standard bookkeeping, not per-member state. A strict allowlist
-# (not "skip all dunders") on purpose: a user can stash state under a dunder name (``self.__unit__``). ``_name_`` /
-# ``_value_`` / ``_sort_order_`` / ``__objclass__`` are member fields; ``_inverted_`` is the value-derived cache
-# CPython lazily stores on an inverted ``Flag``/``IntFlag`` member (>=3.11); ``__dict__`` / ``__weakref__`` are slots.
+# Standard per-member bookkeeping (not user state). A strict allowlist, not "skip all dunders", since a user could
+# stash state under a dunder (``self.__unit__``). ``_inverted_`` is CPython's lazy inverted-Flag cache (>=3.11).
 _ENUM_INTERNAL_MEMBER_ATTRS = frozenset(
     {"_name_", "_value_", "_sort_order_", "_inverted_", "__objclass__", "__dict__", "__weakref__"}
 )
 
 
 def _enum_member_state_attr(value: Any) -> "str | None":
-    """Name of a user-defined per-member state attribute on ``value``, or None if it carries only enum bookkeeping
-    (see ``_ENUM_INTERNAL_MEMBER_ATTRS``). State can live in ``__dict__`` or a populated slot; both are inspected. Any
-    name off the allowlist (including a user dunder like ``__unit__``) counts as observable state.
-    """
+    """Name of a user-defined per-member state attribute on ``value`` (in ``__dict__`` or a populated slot), or None."""
     d = getattr(value, "__dict__", None)
     if d:
         for k in d:
@@ -489,24 +410,21 @@ def _enum_member_state_attr(value: Any) -> "str | None":
     return None
 
 
-# Standard-library enum base classes. A user enum's MRO contains these too; only the user-authored classes below them
-# are inspected for observable class-level behavior.
+# Library enum bases; only user classes below them are inspected for observable behavior.
 _FRAMEWORK_ENUM_CLASSES = frozenset(
     c
     for c in (getattr(enum, n, None) for n in ("Enum", "IntEnum", "StrEnum", "Flag", "IntFlag", "ReprEnum"))
     if isinstance(c, type)
 )
 
-# Framework metaclass layers on an enum's *metaclass* MRO (a plain enum's metaclass is exactly ``EnumMeta`` / >=3.11
-# ``EnumType``); only user-authored ``EnumMeta`` subclasses below them are inspected (``_enum_class_behavior_attr``).
+# Library enum metaclasses (``EnumMeta`` / >=3.11 ``EnumType``); only user subclasses below them are inspected.
 _FRAMEWORK_ENUM_METACLASSES = frozenset(
     c for c in (type, object, getattr(enum, "EnumMeta", None), getattr(enum, "EnumType", None)) if isinstance(c, type)
 )
 
-# Dunders that make behavior observable at compile time (comparison/hashing/conversion/container/callable/arithmetic).
-# One in a user enum's own dict is a *candidate* override two factory enums could define differently (``cfg.mode ==
-# 1``). NOTE: on >=3.11 the machinery copies the mix-in's ``__str__`` / ``__format__`` / ``__repr__`` onto the
-# subclass dict, so ``_dunder_copied_from_base`` filters those out and only a genuine fresh override is rejected.
+# Dunders whose override is observable at compile time. One in an enum's own dict is a candidate override; on >=3.11
+# the machinery copies the mix-in's ``__str__`` / ``__format__`` / ``__repr__`` in, so ``_dunder_copied_from_base``
+# filters those out.
 _OBSERVABLE_DUNDERS = frozenset(
     {
         "__eq__",
@@ -578,11 +496,9 @@ _OBSERVABLE_DUNDERS = frozenset(
 
 
 def _class_not_uniquely_identified(cls: type) -> bool:
-    """True if ``cls`` cannot be recovered from its ``module``/``qualname`` - i.e. locally/dynamically created
-    (qualname contains ``<locals>``, or ``module.qualname`` does not resolve back to it). Such a class shares its
-    identity string with every other class built the same way, yet distinct class objects are observably distinct
-    (``cfg.x.__class__ is First``), so callers add a class-identity token to the key (a ``_ClassRef`` in-process, a
-    ``_dynamic_class_serial`` offline).
+    """True if ``cls`` cannot be recovered from ``module``/``qualname`` (a ``<locals>`` qualname, or it does not
+    resolve back): such a class shares its identity string with every other built the same way, yet is observably
+    distinct (``cfg.x.__class__ is First``), so callers add a class-identity token to the key.
     """
     module = sys.modules.get(cls.__module__)
     if module is None:
@@ -598,14 +514,9 @@ def _class_not_uniquely_identified(cls: type) -> bool:
 
 
 class _ClassRef:
-    """A strong reference to a class that hashes and compares by *object identity*, never via the metaclass. Embedded
-    in the in-process (``live``) spec key:
-
-    - It pins ``cls`` while the key lives, so the class cannot be collected and its ``id`` recycled by a later
-      same-named factory class (which would collide).
-    - Its ``__hash__`` / ``__eq__`` use ``object`` identity, so a metaclass ``__eq__`` cannot merge two classes and
-      ``__hash__ = None`` cannot make the key unhashable. (Such (meta)class behavior is rejected upstream anyway; this
-      is defense-in-depth and also keeps a module-reload rebind distinct.)
+    """A strong ref to a class that hashes/compares by *object identity* (never via the metaclass), for the in-process
+    spec key: it pins ``cls`` so its ``id`` cannot be recycled, and stays distinct even under a metaclass ``__eq__`` /
+    ``__hash__ = None`` (rejected upstream anyway) or a module reload.
     """
 
     __slots__ = ("cls",)
@@ -623,22 +534,17 @@ class _ClassRef:
         return f"<_ClassRef 0x{id(self.cls):x}>"  # identity only; the live key is never serialized
 
 
-# Monotonic, never-reused serials for locally/dynamically created classes, used only in the *offline* key (see
-# ``_subclass_identity``). ``id(cls)`` is unusable there: the on-disk artifact outlives the class, and after
-# ``qd.reset()`` collects a class CPython can hand its freed address to the next same-qualified factory class, which
-# would then serialize an identical ``(nonce, id)`` key and load the dead class's kernel. A serial is never handed out
-# twice, so a later class keys distinctly even at a recycled address. Held *weakly* (this component pins nothing); the
-# counter only advances so a slot is never reissued. Classes reaching here hash/compare by identity, safe as keys.
+# Monotonic, never-reused serials for dynamically created classes, used only in the *offline* key. ``id(cls)`` is
+# unsafe there: after ``qd.reset()`` frees a class, CPython can reuse its address for the next same-qualified class,
+# which would serialize an identical ``(nonce, id)`` and load the dead class's kernel. Held weakly (pins nothing).
 _dynamic_class_serials: "weakref.WeakKeyDictionary[type, int]" = weakref.WeakKeyDictionary()
 _dynamic_class_serial_counter = itertools.count()
 
 
 def _dynamic_class_serial(cls: type) -> int:
-    """A process-unique, non-recyclable serial for a locally/dynamically created ``cls``, stable for its lifetime.
-
-    Distinct class objects always get distinct serials (the counter only advances) even at a recycled address, so the
-    offline key never mistakes a later same-qualified class for a dead one. A class that cannot be weakly referenced
-    (already rejected upstream) draws a fresh serial each call - a redundant miss, never a stale reuse.
+    """A process-unique, non-recyclable serial for a dynamically created ``cls``, stable for its lifetime. A class
+    that cannot be weakly referenced (rejected upstream) draws a fresh serial each call - a redundant miss, never a
+    stale reuse.
     """
     serial = _dynamic_class_serials.get(cls)
     if serial is not None:
@@ -652,19 +558,13 @@ def _dynamic_class_serial(cls: type) -> int:
 
 
 def _subclass_identity(cls: type, live: bool) -> tuple:
-    """Key component identifying a user *subclass* of a baked base type or an ``enum`` class. ``module``/``qualname``
-    never uniquely identify the *class object* (two factory-built classes share both, and a module-level name can be
-    rebound by a reload), yet ``cfg.x.__class__ is First`` is observable, so distinct class objects must key apart.
-    ``live`` selects the strategy:
+    """Class-identity component for a subclass of a baked type or an ``enum``. ``module``/``qualname`` do not identify
+    the class *object* (factory-built, or reload-rebound) yet ``cfg.x.__class__ is First`` is observable, so distinct
+    objects must key apart:
 
-    - ``live=True`` (in-process spec key): a ``_ClassRef(cls)`` token - a strong ref that pins ``cls`` (so its ``id``
-      cannot be recycled) yet hashes/compares by object identity (distinct classes stay apart across a reload or under
-      a metaclass ``__eq__`` / ``__hash__ = None``). Process-local; must never reach the offline key.
-    - ``live=False`` (offline fastcache key, ``str``-ified by ``args_hasher``): ``None`` for a resolvable (module-level)
-      class - a stable cross-process string - and ``(_PROCESS_NONCE, _dynamic_class_serial(cls))`` for a non-resolvable
-      one: the serial separates dynamic classes within this process (never recycled, unlike ``id``) and the nonce makes
-      them a guaranteed cross-process miss. A reloaded module-level class still cannot reuse across processes, which is
-      unavoidable and safe (the old object does not exist there).
+    - ``live=True`` (in-process): a ``_ClassRef`` identity token (pins the ``id``); must never reach the offline key.
+    - ``live=False`` (offline, ``str``-ified): ``None`` for a resolvable class (stable cross-process), else
+      ``(_PROCESS_NONCE, serial)`` - the serial separates dynamic classes here, the nonce forces a cross-process miss.
     """
     if live:
         return (cls.__module__, cls.__qualname__, _ClassRef(cls))
@@ -673,10 +573,8 @@ def _subclass_identity(cls: type, live: bool) -> tuple:
 
 
 def _dunder_copied_from_base(klass: type, name: str, value: Any) -> bool:
-    """True if ``klass.__dict__[name]`` is the *exact same object* as the attribute in one of ``klass``'s strict
-    bases. On >=3.11 the enum machinery copies the mix-in's ``__str__`` / ``__format__`` / ``__repr__`` onto the
-    subclass dict verbatim; that base method is not a user override, whereas a genuine override is a fresh object
-    appearing in no base's ``__dict__``.
+    """True if ``klass.__dict__[name]`` is the *same object* as a strict base's: on >=3.11 the machinery copies the
+    mix-in's ``__str__`` / ``__format__`` / ``__repr__`` in verbatim, whereas a real override is a fresh object.
     """
     for base in klass.__mro__[1:]:
         if base.__dict__.get(name, _MISSING) is value:
@@ -685,11 +583,10 @@ def _dunder_copied_from_base(klass: type, name: str, value: Any) -> bool:
 
 
 def _enum_probe_classes() -> "list[type]":
-    """One freshly-built enum of each framework kind (plain / ``IntEnum`` / ``IntFlag`` / ``Flag`` / ``StrEnum``) plus
-    a *direct* ``int`` / ``str`` mix-in, used to learn on the *running* Python which sunder/dunder names the machinery
-    injects and which track the bases/mix-in. The direct-mix-in probes matter: a hook like ``_value_repr_`` holds the
-    mix-in's value (not an enum-base copy), so framework subclasses alone would misjudge a user ``class M(int,
-    enum.Enum)``."""
+    """One fresh enum of each framework kind plus a *direct* ``int`` / ``str`` mix-in, to learn on the running Python
+    which sunder/dunder names the machinery injects and which track the bases/mix-in. The direct-mix-in probes matter:
+    a hook like ``_value_repr_`` holds the mix-in's value, so framework subclasses alone would misjudge a user
+    ``class M(int, enum.Enum)``."""
 
     class _E(enum.Enum):
         A = 1
@@ -734,10 +631,9 @@ def _enum_probe_classes() -> "list[type]":
 
 
 def _dict_entry_is_inherited_default(klass: type, name: str, member: Any) -> bool:
-    """True if ``klass.__dict__[name]`` is the inherited default (the machinery copied an inherited hook in), not a
-    user-authored one. Compares *unwrapped* callable identity (``staticmethod``/``classmethod`` -> ``__func__``): 3.12+
-    ``EnumMeta`` copies ``_generate_next_value_`` as a *fresh* wrapper around the same function, so a wrapper-identity
-    test would wrongly flag every plain enum. A genuine override supplies a different function (returns False)."""
+    """True if ``klass.__dict__[name]`` is the inherited default (machinery-copied), not user-authored. Compares
+    *unwrapped* callable identity: 3.12+ copies ``_generate_next_value_`` as a fresh wrapper, so a wrapper-identity
+    test would flag every plain enum."""
     target = getattr(member, "__func__", member)
     for base in klass.__mro__[1:]:
         base_member = vars(base).get(name, _MISSING)
@@ -747,21 +643,14 @@ def _dict_entry_is_inherited_default(klass: type, name: str, member: Any) -> boo
 
 
 def _enum_machinery_class_dict(cls: type) -> "dict[str, Any] | None":
-    """The own ``__dict__`` the enum machinery would produce for a *member-free* class with ``cls``'s exact bases and
-    metaclass: every injected sunder/dunder (``_value_repr_`` / ``__new__`` / ``_new_member_`` / ...) at its value for
-    *this* mix-in shape, with no user members/hooks. ``_observable_class_dict_attr`` compares ``cls``'s own entry
-    against this to tell a user override (``Mode._value_repr_ = ...``) from untouched bookkeeping - even for
-    mix-in-dependent hooks that are not verbatim base copies (so ``_dict_entry_is_inherited_default`` cannot judge
-    them: a direct ``class M(int, enum.Enum)`` legitimately carries ``int``'s ``_value_repr_``).
-
-    Built via the metaclass's own ``__prepare__`` namespace (``EnumMeta`` rejects a plain ``dict`` body). Returns None
-    if unbuildable (a base refusing re-subclassing, an objecting ``__init_subclass__``, ...); the caller then falls
-    back to ``_ENUM_OVERRIDABLE_HOOK_NAMES``. Off the hot path, built at most once per class per validation."""
+    """The own ``__dict__`` the machinery produces for a *member-free* class with ``cls``'s exact bases/metaclass:
+    every injected hook at its value for this mix-in shape, no members. ``_observable_class_dict_attr`` compares
+    against it to tell a user override from bookkeeping, even for mix-in-dependent hooks a nearest-base check cannot
+    judge. Built via the metaclass's ``__prepare__`` (``EnumMeta`` rejects a plain ``dict``); None if unbuildable."""
     mcls = type(cls)
     try:
-        # ``__prepare__`` returns the metaclass's own namespace (``EnumMeta`` -> ``_EnumDict``), which must be passed
-        # through verbatim (``EnumMeta`` rejects a plain ``dict``). Pyright types it as ``MutableMapping``, hence the
-        # local ignore.
+        # ``__prepare__`` returns the metaclass's own namespace (``_EnumDict``), which must be passed through verbatim.
+        # Pyright types it as ``MutableMapping``, hence the local ignore.
         namespace = mcls.__prepare__("_qd_enum_probe", cls.__bases__)
         reference = mcls("_qd_enum_probe", cls.__bases__, namespace)  # pyright: ignore[reportArgumentType]
     except Exception:  # pylint: disable=broad-except  # any build failure -> conservative allowlist fallback
@@ -770,22 +659,14 @@ def _enum_machinery_class_dict(cls: type) -> "dict[str, Any] | None":
 
 
 def _compute_enum_generated_class_attrs() -> "frozenset[str]":
-    """Names the class machinery (``type`` + enum) puts in a *user* class's own ``__dict__``: generic bookkeeping
-    (``__doc__`` / ``__module__`` / ``__qualname__`` / ..., plus 3.13+ ``__firstlineno__`` / ``__static_attributes__``)
-    and enum bookkeeping (``_member_map_`` / ``_value2member_map_`` / ``_generate_next_value_`` / ``__new__`` / ...).
-
-    Computed once by probing a plain class and each framework enum kind, so the set tracks the *running* Python (3.13
-    added several dunders). A sunder/dunder NOT here is a user hook (``_missing_``, ``_repr_html_``, ...) that
-    ``_enum_class_behavior_attr`` rejects. (Machinery-copied operator dunders are handled earlier via
-    ``_OBSERVABLE_DUNDERS`` + ``_dunder_copied_from_base``.)
-    """
+    """Union across enum kinds of sunder/dunder names the machinery generates, learned by probing the running Python.
+    Used only as the fallback allowlist when the per-class reference cannot be built."""
 
     class _Plain:
         pass
 
     def _generated(probe: type) -> "set[str]":
-        # Exclude enum members/aliases (enum-valued, plain name) but keep enum-valued *machinery sunders* like
-        # ``_boundary_`` (a ``FlagBoundary`` member on ``IntFlag``): bookkeeping, not user members.
+        # Keep enum-valued machinery sunders (``_boundary_``); exclude members/aliases (enum-valued, plain name).
         return {
             n for n, v in vars(probe).items() if not isinstance(v, enum.Enum) or (n.startswith("_") and n.endswith("_"))
         }
@@ -797,17 +678,11 @@ def _compute_enum_generated_class_attrs() -> "frozenset[str]":
 
 
 def _compute_enum_reference_checked_attrs() -> "frozenset[str]":
-    """The subset of machinery-generated sunder/dunder names whose value is fixed by an enum's *bases / mix-in* (not
-    its members): ``_value_repr_`` / ``__new__`` / ``_new_member_`` / ``_generate_next_value_`` / copied operator
-    dunders / the enum-valued ``_boundary_`` on ``Flag``/``IntFlag`` / ... For these a clean enum's own entry equals a
-    *member-free* rebuild of the same bases (``_enum_machinery_class_dict``), so ``_observable_class_dict_attr`` can
-    flag a user override by comparison (including a changed ``_boundary_``).
-
-    Member-*derived* bookkeeping (``_member_map_`` / ``_value2member_map_`` / ``_flag_mask_`` / ...) differs from the
-    reference even for a clean enum and is a function of the already-keyed members, so it is excluded (its stored
-    object is a distinct container, failing the identity match); structural names too. A name qualifies only if in
-    *every* probe carrying it the stored object *is* (unwrapped) the reference's, so the set tracks the running
-    Python."""
+    """Machinery sunder/dunder names whose value is fixed by the bases/mix-in (``_value_repr_`` / ``__new__`` /
+    ``_generate_next_value_`` / copied operator dunders / ``_boundary_`` / ...): a clean enum's entry equals a
+    member-free rebuild, so ``_observable_class_dict_attr`` can flag an override by comparison. Member-*derived*
+    bookkeeping differs even for a clean enum (a distinct container) and is excluded; a name qualifies only if it
+    matches in every probe carrying it."""
     appears: "dict[str, int]" = {}
     matches: "dict[str, int]" = {}
     for probe in _enum_probe_classes():
@@ -824,29 +699,21 @@ def _compute_enum_reference_checked_attrs() -> "frozenset[str]":
     return frozenset(name for name, count in appears.items() if matches.get(name, 0) == count) - _STRUCTURAL_CLASS_ATTRS
 
 
-# Union (across all enum kinds) of sunder/dunder names the machinery puts in a user enum/class dict. Used only as a
-# fallback when the per-class member-free reference cannot be built; the primary path checks names against that
-# per-class reference instead, so a name generated only for another kind cannot exempt a user attribute here.
+# Fallback allowlist (see ``_compute_enum_generated_class_attrs``); the primary path uses the per-class reference.
 _ENUM_GENERATED_CLASS_ATTRS = _compute_enum_generated_class_attrs()
 
-# The generated names fixed by an enum's bases/mix-in, so a user override is caught by comparing against a member-free
-# reference (see ``_observable_class_dict_attr``). Member-derived data + structural names stay exempt.
+# Names fixed by the bases/mix-in, so an override is caught by comparing to a member-free reference.
 _ENUM_REFERENCE_CHECKED_ATTRS = _compute_enum_reference_checked_attrs()
 
-# Fallback allowlist used only when the member-free reference (``_enum_machinery_class_dict``) cannot be built. The
-# machinery copies these defaults into every subclass dict, so the name alone cannot distinguish a user override; they
-# are exempt only when the stored object *is* the inherited default (see ``_dict_entry_is_inherited_default``). The
-# preferred reference path also catches mix-in-dependent hooks this allowlist omits.
+# Fallback allowlist used only when the member-free reference cannot be built: exempt only when the stored object *is*
+# the inherited default (``_dict_entry_is_inherited_default``); the reference path also catches mix-in-dependent hooks.
 _ENUM_OVERRIDABLE_HOOK_NAMES = frozenset({"_generate_next_value_"})
 
 
 def _generated_attr_is_user_override(klass: type, name: str, member: Any, reference: "dict[str, Any] | None") -> bool:
-    """True if ``klass.__dict__[name]`` (a reference-checked machinery sunder/dunder) is a *user* override, comparing
-    unwrapped callable identity (``staticmethod``/``classmethod`` -> ``__func__``).
-
-    Against the member-free ``reference``: present-and-differing => override; absent from the reference => not an
-    override. If ``reference`` is None (unbuildable) it degrades to the inherited-default allowlist, still catching
-    ``_generate_next_value_``."""
+    """True if ``klass.__dict__[name]`` is a *user* override of a reference-checked hook (unwrapped-callable identity
+    vs the member-free ``reference``). Absent from the reference => not an override; ``reference is None`` =>
+    inherited-default allowlist fallback."""
     if reference is None:
         return name in _ENUM_OVERRIDABLE_HOOK_NAMES and not _dict_entry_is_inherited_default(klass, name, member)
     default = reference.get(name, _MISSING)
@@ -856,69 +723,48 @@ def _generated_attr_is_user_override(klass: type, name: str, member: Any, refere
 
 
 def _is_official_enum_member(klass: type, name: str, member: Any) -> bool:
-    """True if ``klass.__dict__[name]`` (an ``enum`` member) is a machinery-defined member/alias of ``klass`` (``name``
-    is its own name in ``klass._member_map_``), not a user-added enum-valued attribute (``Mode.X = Mode.A``). Members
-    and aliases live in ``_member_map_`` and are captured by the class/name/value key; a user-added attribute never
-    enters it yet is observable as ``cfg.mode.__class__.X``, so it must be reported. A missing/non-dict ``_member_map_``
-    yields False (so the attribute is reported too)."""
+    """True if ``klass.__dict__[name]`` is a real member/alias of ``klass`` (its own name in ``_member_map_``), not a
+    user-added enum-valued attribute (``Mode.X = Mode.A``) that is observable but absent from the key."""
     member_map = klass.__dict__.get("_member_map_")
     return isinstance(member_map, dict) and member_map.get(name, _MISSING) is member
 
 
 def _observable_class_dict_attr(klass: type) -> "str | None":
-    """Name of a user-authored observable attribute in ``klass.__dict__`` (a method/property/class var, a genuine
-    operator-dunder override, a user sunder/dunder hook including an override of a machinery hook like ``_value_repr_``,
-    or a user-added enum-valued attribute), or None. Machinery members/aliases (``_is_official_enum_member``),
-    base-copied dunders (>=3.11, ``_dunder_copied_from_base``), and *untouched* machinery sunders/dunders are skipped.
-    Used on an enum class's own MRO and its metaclass MRO.
-
-    A machinery name is not exempt by name alone: the machinery copies overridable hooks (``_value_repr_``, ...) into
-    every enum dict, so a user reassignment would slip through; each is compared against a member-free reference
-    (``_enum_machinery_class_dict``), reporting only a genuine override. Whether a sunder/dunder is machinery-generated
-    is judged against *this* class's reference, not the global union across enum kinds, so a name generated only for
-    another kind (``_boundary_`` on ``Flag``) cannot exempt a user-added attribute of that name on an unrelated enum.
-    An enum-valued attribute is exempt only when a real member/alias, not a user-added ``Mode.X``.
+    """Name of a user-authored observable attribute in ``klass.__dict__`` (method/property/class var, a real
+    operator-dunder override, a user sunder/dunder hook or override of a machinery hook, or a user-added enum-valued
+    attribute), or None. Whether a sunder/dunder is machinery bookkeeping is judged against *this* class's member-free
+    reference (not the global union across kinds), so a name generated only for another kind - ``_boundary_`` on
+    ``Flag`` - cannot exempt a user attribute of that name on an unrelated enum.
     """
     reference: Any = _MISSING  # member-free machinery reference; built lazily, at most once per call
     for name, member in vars(klass).items():
         is_sunder_dunder = name.startswith("_") and name.endswith("_")
-        if isinstance(member, enum.Enum) and not is_sunder_dunder:  # a member name holding an enum value
+        if isinstance(member, enum.Enum) and not is_sunder_dunder:
             if _is_official_enum_member(klass, name, member):
                 continue  # a machinery member/alias - keyed by member identity
             return name  # a user-added enum-valued attribute (``Mode.X = Mode.A``), absent from the key
         if name in _OBSERVABLE_DUNDERS:
             if _dunder_copied_from_base(klass, name, member):
-                continue  # base/data-type dunder copied by the machinery (>=3.11), not a user override
+                continue  # base/data-type dunder copied by the machinery (>=3.11)
             return name  # a genuine user operator/behavior dunder override
-        if is_sunder_dunder:  # ``_member_map_`` bookkeeping, ``_boundary_`` on a ``Flag``/``IntFlag``, ...
+        if is_sunder_dunder:
             if name in _STRUCTURAL_CLASS_ATTRS:
-                # Generic structural bookkeeping (``__module__`` / ``__doc__`` / ``__slots__`` / 3.13's
-                # ``__firstlineno__`` / ``__static_attributes__`` / ...); always exempt, and some are absent from the
-                # programmatic member-free reference (CPython fills them from the class's source), so skip before it.
-                continue
+                continue  # structural names (some absent from the programmatic reference); always exempt
             if reference is _MISSING:
                 reference = _enum_machinery_class_dict(klass)
             if reference is not None:
-                # Machinery-generated for THIS enum's shape iff a member-free rebuild of ``klass``'s own bases and
-                # metaclass carries ``name``. Using the per-class reference (not the global union across kinds) stops a
-                # name generated only for another kind - ``_boundary_``, made for ``Flag``/``IntFlag`` - from exempting
-                # ``Mode._boundary_ = 1`` on a plain ``Enum``, whose value a kernel can observe yet the key ignores.
                 if name not in reference:
                     return name  # a user-added sunder/dunder the machinery does not generate for this shape
-                # A bases/mix-in-fixed hook (incl. ``_boundary_``) is exempt only while it still holds the machinery's
-                # value; a user override (distinct object) is observable behavior the fixed key cannot capture.
+                # A bases/mix-in-fixed hook (incl. ``_boundary_``) is a user override iff it no longer holds the
+                # machinery's value.
                 if name in _ENUM_REFERENCE_CHECKED_ATTRS and _generated_attr_is_user_override(
                     klass, name, member, reference
                 ):
                     return name
-                # Otherwise this is untouched machinery bookkeeping for this shape - member-derived data
-                # (``_member_map_`` / ``_member_names_`` / ``_value2member_map_`` / ``_flag_mask_`` / ...) or a matched
-                # hook - and is exempt. Member-derived data is a pure function of the member map, which the spec/offline
-                # keys already fold in via ``_enum_member_map_key``, so a legitimately-defined enum keys correctly.
-                # Directly *reassigning* one of these CPython enum sunder internals (e.g. ``Mode._member_names_ =
-                # [...]``) is unsupported: they are the enum machinery's private bookkeeping, not a public API, so like
-                # the ``_qd_``-prefixed names reserved for Quadrants they must not be mutated by user code. We do not
-                # spend a per-launch digest defending against that (it cannot arise from ordinary enum definition).
+                # Otherwise untouched machinery bookkeeping for this shape: member-derived data or a matched hook,
+                # exempt. Member-derived data is a function of the member map, already folded into the keys via
+                # ``_enum_member_map_key``. Directly reassigning these private enum internals (``Mode._member_names_ =
+                # [...]``) is unsupported - like the ``_qd_`` names reserved for Quadrants - so we do not guard it.
                 continue
             # Reference unbuildable: best-effort fallback to the global-union allowlist.
             if name in _ENUM_GENERATED_CLASS_ATTRS:
@@ -931,25 +777,20 @@ def _observable_class_dict_attr(klass: type) -> "str | None":
 
 
 def _enum_class_behavior_attr(enum_cls: type) -> "str | None":
-    """Name of a user-defined class-level attribute (method/property/class var/operator dunder) on ``enum_cls``, one of
-    its user-authored bases (*including a non-enum mixin*), or its *metaclass*, or None. ``module``/``qualname``/name/
-    value do not uniquely identify a dynamic enum class, so two same-named factory enums whose ``label`` or ``__eq__``
-    differ key identically while ``qd.static(cfg.mode.label == "x")`` / ``qd.static(cfg.mode == 1)`` differ; a non-enum
-    mixin's behavior (``class Mode(Labels, enum.Enum)``) is observable as ``cfg.mode.label`` too.
-
-    The *metaclass* is inspected as well (``cfg.mode.__class__.label`` -> ``type(enum_cls).label``, off the MRO walk);
-    only user-authored layers, so a plain enum (metaclass exactly ``EnumMeta``) is unaffected.
+    """Name of a user-defined class-level attribute on ``enum_cls``, one of its user bases (*including a non-enum
+    mixin*), or its metaclass, or None. Two same-named factory enums whose ``label`` / ``__eq__`` differ key
+    identically otherwise, yet ``qd.static(cfg.mode.label == ...)`` differs; the metaclass is walked too
+    (``cfg.mode.__class__.label``).
     """
     for klass in enum_cls.__mro__:
-        # Skip the mixed-in primitive, ``object`` / a NumPy base, and the library enum bases (framework internals).
-        # Every user-authored base is inspected, enum or not: a non-enum mixin can add observable behavior too.
+        # Framework internals: the mixed-in primitive, ``object`` / a NumPy base, and library enum bases. Every user
+        # base is inspected, enum or not: a non-enum mixin can add observable behavior too.
         if _is_baked_base_type(klass) or klass in _FRAMEWORK_ENUM_CLASSES:
             continue
         attr = _observable_class_dict_attr(klass)
         if attr is not None:
             return attr
-    # ``: type`` keeps ``__mro__`` an instance read (a class object), not a read of the ``type.__mro__`` descriptor.
-    enum_metacls: type = type(enum_cls)  # user-authored metaclass layers below the framework ``EnumMeta``
+    enum_metacls: type = type(enum_cls)  # ``: type`` keeps ``__mro__`` an instance read
     for mcls in enum_metacls.__mro__:
         if mcls in _FRAMEWORK_ENUM_METACLASSES:
             continue
@@ -960,14 +801,8 @@ def _enum_class_behavior_attr(enum_cls: type) -> "str | None":
 
 
 def _reject_stateful_enum_member(value: Any) -> None:
-    """Reject an ``enum`` member carrying observable state the key (``module``/``qualname``/name/value) cannot capture,
-    like ``_reject_stateful_primitive_subclass``. Two sources are rejected:
-
-    - *per-member* state (an attribute on the member, in ``__dict__`` or a populated slot), and
-    - *class-level* behavior (a user method/property/class var on the enum class) two factory enums could define
-      differently while sharing ``module``/``qualname``.
-
-    Plain enums (and unnamed ``IntFlag`` composites) carry only name/value bookkeeping and pass both.
+    """Reject an ``enum`` member with observable state the key cannot capture: per-member state, or class-level
+    behavior two factory enums could define differently. Plain enums (and unnamed ``IntFlag`` composites) pass.
     """
     cls = type(value)
     extra = _enum_member_state_attr(value)
@@ -992,13 +827,9 @@ def _reject_stateful_enum_member(value: Any) -> None:
 
 
 def _enum_member_map_key(cls: type, live: bool) -> tuple:
-    """A hashable digest of ``cls``'s *entire* member map - every member/alias name paired with its value routed
-    through ``final_scalar_key`` (so ``True`` vs ``1`` cannot collide and an unsupported/mutable value is rejected). A
-    baked ``Final`` member keys on this, not only the selected member, because a *sibling* is observable
-    (``cfg.mode.__class__.OTHER.value``): without it, changing another member's value would leave the key unchanged and
-    reuse a stale specialization. Preserves insertion order, so it is stable for a fixed definition.
-
-    Returns ``()`` if ``cls`` has no member map (defensive); off the hot path, so re-walking the small map is cheap."""
+    """Hashable digest of ``cls``'s entire member map (each name + its value via ``final_scalar_key``). A baked
+    ``Final`` member keys on this, not only the selected member, because a sibling is observable
+    (``cfg.mode.__class__.OTHER.value``). ``()`` if there is no member map."""
     member_map = getattr(cls, "_member_map_", None)
     if not isinstance(member_map, dict):
         return ()
@@ -1006,46 +837,23 @@ def _enum_member_map_key(cls: type, live: bool) -> tuple:
 
 
 def final_scalar_key(value: Any, live: bool = False) -> Any:
-    """Return a collision-free key component for a baked ``Final`` field value.
+    """Collision-free key component for a baked ``Final`` value. Each value is *type-tagged*, because Python treats
+    distinct compile-time constants as equal with equal hashes:
 
-    Every value becomes a *type-tagged* component, because Python treats several distinct compile-time constants as
-    equal (with equal hashes) and annotations are not enforced, so one field can receive any of them. Encodings:
+    - ``float`` (builtin/subclass/NumPy) -> exact IEEE-754 bits (so ``-0.0``/``0.0`` and NaN payloads stay distinct).
+    - ``enum`` member -> ``(_ENUM_KEY_TAG, *class-identity, name, value-key, member-map)``, keyed by identity (an
+      ``IntEnum`` member ``==`` its bare scalar); per-member-state members are rejected.
+    - other scalar (``bool``/``int``/``str`` + NumPy) -> ``(_SCALAR_KEY_TAG, module, qualname, canonical-value)``, the
+      value coerced via a base slot so the offline string is faithful under a nonstandard ``repr``.
 
-    - a ``float`` (builtin/subclass/NumPy scalar) -> exact IEEE-754 bits under ``_FLOAT_KEY_TAG`` (a subclass adds its
-      class identity; a NumPy scalar uses ``(<dtype str>, <raw bytes>)``). Bits, not value, so ``-0.0``/``0.0`` and
-      NaNs differing only in sign/payload stay distinct and widths never alias.
-    - an ``enum`` member -> ``(_ENUM_KEY_TAG, *class-identity, name, final_scalar_key(value), member-map)``. An
-      ``IntEnum``/``StrEnum`` member is ``==`` to its bare scalar and to a same-valued member of another class, so
-      keying on identity keeps them distinct. ``name`` + value separate same-named members of two factory-shared
-      classes; the value recurses (so ``True`` vs ``1`` cannot collide and an unsupported value is rejected). Members
-      with per-member state are rejected. The member-map (``_enum_member_map_key``) folds in every sibling, observable
-      as ``cfg.mode.__class__.OTHER.value``.
-    - every remaining scalar (``bool``/``int``/``str`` and NumPy analogues) -> ``(_SCALAR_KEY_TAG, module, qualname,
-      canonical-value)``. ``True == 1 == np.int64(1)`` but bake observably different constants, so the exact type is
-      tagged. A subclass is accepted only if behavior-free, and its value is coerced via a base slot
-      (``int.__int__``/``str.__str__``, ``.item()`` for NumPy) so the offline string is faithful even under a
-      nonstandard ``repr``.
-
-    A subclass or ``enum`` is keyed by class identity via ``_subclass_identity`` (``cfg.x.__class__`` is observable).
-    ``live=True`` uses a ``_ClassRef`` identity token (distinct classes never collide, and its retained ref pins the
-    ``id``); ``live=False`` (default, offline) uses a process-stable component. A value that is none of the above (an
-    arbitrary/mutable object) is *rejected* rather than keyed by its own ``__eq__`` / ``__hash__``.
-
-    Off the hot path for Final-free dataclasses (cached, never reach here). A Final-bearing subtree deliberately does
-    not cache (``subtree_has_final_fields``), so this re-runs per launch and catches a value whose class turned
-    behaviorful (e.g. a monkey-patched enum) after launch one.
+    A subclass/enum carries class identity via ``_subclass_identity`` (``live`` = ``_ClassRef``, offline =
+    process-stable). An unsupported/arbitrary value is *rejected*, not keyed by its own ``__eq__``. Re-runs per launch
+    for Final subtrees (not cached), catching a class turned behaviorful after launch one.
     """
     if type(value) is float:
         return (_FLOAT_KEY_TAG, _unpack_u64(_pack_f64(value))[0])
     if isinstance(value, enum.Enum):
-        # Checked before the ``float``/``int`` branches so a mixed-in enum keys by identity, not value. The key carries
-        # both ``name`` (``None`` for an unnamed ``IntFlag`` composite) and the value, recursed through
-        # ``final_scalar_key`` so ``True`` vs ``1`` cannot collide and a mutable/unsupported value is rejected.
-        # ``module``/``qualname``/name/value do not uniquely identify the class *object* (factory-built or reload-
-        # rebound), so ``_subclass_identity`` adds a ``_ClassRef`` (in-process) or ``(nonce, serial)`` / ``None``
-        # (offline). The whole member map (``_enum_member_map_key``) is folded in because a sibling is observable
-        # (``cfg.mode.__class__.OTHER.value``); for a resolvable class (``None`` identity) it is the only guard against
-        # a changed sibling.
+        # Before the ``float``/``int`` branches so a mixed-in enum keys by identity, not value.
         _reject_stateful_enum_member(value)
         cls = type(value)
         return (
@@ -1056,44 +864,37 @@ def final_scalar_key(value: Any, live: bool = False) -> Any:
             _enum_member_map_key(cls, live),
         )
     if isinstance(value, np.floating):
-        # ``dtype.str`` + ``tobytes()`` preserves sign bit, NaN payload and width, in the same tagged space as the
-        # builtin-float branch. An exact NumPy float is keyed by dtype+bytes; a stateful subclass is rejected and a
-        # behavior-free one additionally carries its class identity.
+        # ``dtype.str`` + ``tobytes()`` preserves sign/NaN/width, in the float-tagged space.
         _reject_stateful_primitive_subclass(value)
         cls = type(value)
         if _is_baked_base_type(cls):  # an exact NumPy float scalar (``np.float32``/``np.float64``/...)
             return (_FLOAT_KEY_TAG, value.dtype.str, value.tobytes())
         return (_FLOAT_KEY_TAG, *_subclass_identity(cls, live), value.dtype.str, value.tobytes())
     if isinstance(value, float):
-        # A ``float`` subclass (the exact builtin took the fast path above). Bit-encode like a plain float but keep the
-        # subclass identity so it is not confused with a plain float or another factory subclass; a stateful subclass
-        # is rejected.
+        # A ``float`` subclass (the exact builtin took the fast path); bit-encode but keep the subclass identity.
         _reject_stateful_primitive_subclass(value)
         cls = type(value)
         return (_FLOAT_KEY_TAG, *_subclass_identity(cls, live), _unpack_u64(_pack_f64(value))[0])
-    # ``bool`` / ``int`` / ``str`` and their NumPy analogues. The exact type completes the tag so value-equal but
-    # distinct-typed constants (``True`` vs ``1``, ``np.int64(1)`` vs ``1``) never share a specialization; a stateful
-    # subclass is rejected.
+    # ``bool``/``int``/``str`` + NumPy analogues; the exact type completes the tag so value-equal but distinct-typed
+    # constants (``True``/``1``/``np.int64(1)``) never share a specialization.
     _reject_stateful_primitive_subclass(value)
     cls = type(value)
-    # Embed a *canonical* base value, not the object: the offline key ``str``-ifies this tuple, so a subclass whose
-    # ``__repr__`` drops its value would serialize two distinct values to one string. Coercing keeps the string
-    # faithful and stable.
+    # Embed a *canonical* base value: the offline key ``str``-ifies this, so a subclass whose ``__repr__`` drops its
+    # value must not serialize two distinct values to one string.
     if _is_exact_baked_type(cls):
         canonical = value
     elif isinstance(value, int):  # a Python ``int`` subclass (``bool`` cannot be subclassed)
         canonical = int.__int__(value)  # base slot: bypass an overridden ``__int__`` / ``__index__``
-    elif isinstance(value, np.integer):  # NumPy integer scalar (not a Python ``int`` subclass, so no base int slot)
-        canonical = value.item()  # native, override-proof extraction of the underlying Python ``int``
+    elif isinstance(value, np.integer):  # NumPy integer scalar (no base int slot)
+        canonical = value.item()  # override-proof extraction of the Python ``int``
     elif isinstance(value, str):  # a ``str`` subclass, including ``np.str_``; bypass any ``__str__`` override
         canonical = str.__str__(value)
     elif isinstance(value, np.bool_):  # NumPy boolean scalar -> plain ``bool``
         canonical = bool(value)
     else:
-        # Annotations are not enforced, so a ``Final`` field (or an enum member's value routed here) can be any type.
-        # An arbitrary object is not fully key-determined by value: two ``==`` instances with differing attributes
-        # would share a specialization while ``qd.static(cfg.x.tag == 1)`` reads the difference, and a mutable value
-        # could change under the cached ``_qd_spec_key``. Reject rather than trust its ``__eq__`` / ``__hash__``.
+        # An arbitrary object is not key-determined by value (two ``==`` instances with differing attributes would
+        # share a specialization) and may be mutable under the cached key, so reject rather than trust its
+        # ``__eq__`` / ``__hash__``.
         raise TypeError(
             f"A ``Final`` field received {cls.__module__}.{cls.__qualname__}, which is not a supported "
             f"compile-time constant. A ``Final`` value - or an ``enum`` member's underlying value - must be a "
@@ -1103,6 +904,5 @@ def final_scalar_key(value: Any, live: bool = False) -> Any:
         )
     if _is_baked_base_type(cls):  # exact builtin primitive or exact NumPy scalar
         return (_SCALAR_KEY_TAG, cls.__module__, cls.__qualname__, canonical)
-    # A behavior-free user subclass (``class Grams(int): pass``): ``_subclass_identity`` carries the class-identity
-    # token so two same-named subclasses key apart, matching the enum and float-subclass branches.
+    # A behavior-free user subclass (``class Grams(int): pass``): carry the class-identity token like the other cases.
     return (_SCALAR_KEY_TAG, *_subclass_identity(cls, live), canonical)
