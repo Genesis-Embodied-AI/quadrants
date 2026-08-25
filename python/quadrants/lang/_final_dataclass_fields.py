@@ -361,9 +361,12 @@ def _reject_stateful_primitive_subclass(value: Any) -> None:
             f"distinct specialization. Pass a plain ``bool`` / ``int`` / ``float`` / ``str`` (or an ``enum`` "
             f"member) instead."
         )
-    for klass in cls.__mro__:  # stop at the library base (its attrs are framework internals)
+    # Inspect every user class on the MRO, skipping trusted bases - not a scan-terminating break at the first one: a
+    # mixin *after* the primitive base (``class Unit(int, Labels)`` -> MRO ``(Unit, int, Labels, object)``) is
+    # observable too (``cfg.x.__class__.label``).
+    for klass in cls.__mro__:
         if _is_baked_base_type(klass):
-            break
+            continue
         for attr in vars(klass):
             if attr not in _STRUCTURAL_CLASS_ATTRS:
                 raise TypeError(
@@ -814,15 +817,23 @@ def _reject_stateful_enum_member(value: Any) -> None:
     behavior two factory enums could define differently. Plain enums (and unnamed ``IntFlag`` composites) pass.
     """
     cls = type(value)
-    extra = _enum_member_state_attr(value)
-    if extra is not None:
-        raise TypeError(
-            f"A ``Final`` field received {cls.__module__}.{cls.__qualname__}.{value.name}, an ``enum`` member "
-            f"with user-defined per-member state (e.g. attribute {extra!r}). A ``Final`` value is baked as a "
-            f"compile-time literal keyed by member identity, so per-member state a kernel could read (e.g. "
-            f"``cfg.mode.unit``) would not select a distinct specialization. Use a plain ``enum`` (state-free "
-            f"members), or bake the needed value as a separate ``Final`` field."
-        )
+    # Check *every* member, not just the selected one: a sibling's per-member state (``Mode.B.unit``) is observable
+    # (``cfg.mode.__class__.B.unit``) yet the member-map key records only each member's value, so any member carrying
+    # state must be rejected. ``value`` is appended in case it is an ``IntFlag`` composite (absent from the map).
+    member_map = getattr(cls, "_member_map_", None)
+    members = list(member_map.values()) if isinstance(member_map, dict) else []
+    members.append(value)
+    for member in members:
+        extra = _enum_member_state_attr(member)
+        if extra is not None:
+            member_name = getattr(member, "name", None) or "<value>"
+            raise TypeError(
+                f"A ``Final`` field received a member of {cls.__module__}.{cls.__qualname__}: ``{member_name}`` "
+                f"has user-defined per-member state (e.g. attribute {extra!r}). A ``Final`` value is baked as a "
+                f"compile-time literal keyed by member identity, so per-member state a kernel could read (e.g. "
+                f"``cfg.mode.unit``) would not select a distinct specialization. Use a plain ``enum`` (state-free "
+                f"members), or bake the needed value as a separate ``Final`` field."
+            )
     behavior = _enum_class_behavior_attr(cls)
     if behavior is not None:
         raise TypeError(
@@ -845,13 +856,21 @@ def _enum_member_map_key(cls: type, live: bool) -> tuple:
     return tuple((name, final_scalar_key(member.value, live)) for name, member in member_map.items())
 
 
+def _enum_kind_key(cls: type) -> tuple:
+    """The enum's kind/mix-in as its base chain (``(module, qualname)`` per MRO entry). Redefining ``enum.Enum`` ->
+    ``enum.IntEnum`` while keeping module/qualname/names/values flips compile-time behavior (``cfg.mode == 1``); the
+    live key already separates the two class objects by identity, so this exists to separate them in the *offline*
+    key. Over-separating behaviour-equal kinds only costs a cache miss, never a wrong reuse."""
+    return tuple((base.__module__, base.__qualname__) for base in cls.__mro__)
+
+
 def final_scalar_key(value: Any, live: bool = False) -> Any:
     """Collision-free key component for a baked ``Final`` value. Each value is *type-tagged*, because Python treats
     distinct compile-time constants as equal with equal hashes:
 
     - ``float`` (builtin/subclass/NumPy) -> exact IEEE-754 bits (so ``-0.0``/``0.0`` and NaN payloads stay distinct).
-    - ``enum`` member -> ``(_ENUM_KEY_TAG, *class-identity, name, value-key, member-map)``, keyed by identity (an
-      ``IntEnum`` member ``==`` its bare scalar); per-member-state members are rejected.
+    - ``enum`` member -> ``(_ENUM_KEY_TAG, *class-identity, kind, name, value-key, member-map)``, keyed by identity
+      (an ``IntEnum`` member ``==`` its bare scalar); per-member-state members are rejected.
     - other scalar (``bool``/``int``/``str`` + NumPy) -> ``(_SCALAR_KEY_TAG, module, qualname, canonical-value)``, the
       value coerced via a base slot so the offline string is faithful under a nonstandard ``repr``.
 
@@ -868,6 +887,7 @@ def final_scalar_key(value: Any, live: bool = False) -> Any:
         return (
             _ENUM_KEY_TAG,
             *_subclass_identity(cls, live),
+            _enum_kind_key(cls),
             value.name,
             final_scalar_key(value.value, live),
             _enum_member_map_key(cls, live),

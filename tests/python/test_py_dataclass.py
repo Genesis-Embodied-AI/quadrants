@@ -5034,6 +5034,75 @@ def test_final_enum_rejects_cross_kind_machinery_sunder():
 
 
 @test_utils.test()
+def test_final_primitive_subclass_rejects_mixin_after_base():
+    """The observable-behavior scan on a baked-primitive subclass must inspect *every* user class on the MRO, not stop
+    at the first primitive base. ``class Unit(int, Labels)`` has MRO ``(Unit, int, Labels, object)``, so a scan that
+    broke at ``int`` would never see ``Labels.label`` - observable as ``cfg.x.__class__.label`` yet absent from the
+    key (which identifies the subclass only by module/qualname). A behavior-free subclass is still accepted."""
+    from quadrants.lang._final_dataclass_fields import final_scalar_key
+
+    class Labels:
+        label = "kg"
+
+    class Unit(int, Labels):
+        pass
+
+    assert [c.__name__ for c in Unit.__mro__] == ["Unit", "int", "Labels", "object"]
+    with pytest.raises(TypeError, match="observable class-level behavior"):
+        final_scalar_key(Unit(1))
+
+    class Plain(int):  # no mixin, no observable attrs -> accepted (keyed by class identity)
+        pass
+
+    final_scalar_key(Plain(1))
+
+
+@test_utils.test()
+def test_final_enum_rejects_state_on_unselected_member():
+    """Per-member state is rejected for *any* member, not only the selected one. With ``cfg.mode = Mode.A``
+    (state-free) but a sibling carrying imperatively-assigned state (``Mode.B.unit = "m"``), the state is still
+    observable as ``cfg.mode.__class__.B.unit`` while the member-map key records only each member's value - so it must
+    be rejected."""
+    import enum
+
+    from quadrants.lang._final_dataclass_fields import final_scalar_key
+
+    class Mode(enum.Enum):
+        A = 1
+        B = 2
+
+    final_scalar_key(Mode.A)  # clean, accepted
+    Mode.B.unit = "m"  # state on a *sibling* of the selected member
+    assert not Mode.A.__dict__.get("unit")  # the selected member itself stays state-free
+    with pytest.raises(TypeError, match="per-member state"):
+        final_scalar_key(Mode.A)
+
+
+@test_utils.test()
+def test_final_enum_kind_in_offline_key():
+    """Redefining an enum's kind (``enum.Enum`` -> ``enum.IntEnum``) while keeping module/qualname/names/values flips
+    compile-time behavior like ``cfg.mode == 1`` (false vs true), so the *offline* fastcache key must differ.
+    In-process the class-identity token already separates the two class objects; this covers the cross-process key,
+    where a resolvable enum's identity is only its module/qualname. Same-kind definitions still key identically."""
+    import sys
+    import types
+
+    from quadrants.lang._final_dataclass_fields import final_scalar_key
+
+    def offline_key(base_name):
+        mod = types.ModuleType("qd_enum_kind_probe")
+        sys.modules[mod.__name__] = mod
+        try:
+            exec(f"import enum\nclass Mode(enum.{base_name}):\n    A = 1\n    B = 2\n", mod.__dict__)
+            return str(final_scalar_key(mod.Mode.A, live=False))
+        finally:
+            sys.modules.pop(mod.__name__, None)
+
+    assert offline_key("Enum") != offline_key("IntEnum")
+    assert offline_key("Enum") == offline_key("Enum")  # same kind, same module/qualname -> stable reuse
+
+
+@test_utils.test()
 def test_final_enum_key_incorporates_full_member_map():
     """A baked ``Final`` enum member keys on the *entire* member map, not only the selected member: a kernel can read a
     sibling at compile time (``cfg.mode.__class__.OTHER.value``), so changing another member's value must invalidate
