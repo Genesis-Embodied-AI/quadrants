@@ -5161,6 +5161,33 @@ def test_final_subclass_metaclass_kind_in_offline_key():
 
 
 @test_utils.test()
+def test_final_subclass_docstring_in_key():
+    """``__doc__`` is the one structural class attr that is user-writable and readable at compile time
+    (``cfg.x.__class__.__doc__``), so mutating it between launches must change both the in-process and offline keys
+    rather than reuse a stale specialization. It is *keyed*, not rejected - documented classes stay legal."""
+    import enum
+
+    from quadrants.lang._final_dataclass_fields import final_scalar_key
+
+    class Unit(int):
+        pass
+
+    live_before = final_scalar_key(Unit(1), live=True)
+    offline_before = str(final_scalar_key(Unit(1), live=False))
+    Unit.__doc__ = "mutated between launches"
+    assert final_scalar_key(Unit(1), live=True) != live_before  # in-process key flips (same class object)
+    assert str(final_scalar_key(Unit(1), live=False)) != offline_before  # offline string flips too
+
+    class Mode(enum.Enum):
+        A = 1
+        B = 2
+
+    enum_before = final_scalar_key(Mode.A, live=True)
+    Mode.__doc__ = "changed"
+    assert final_scalar_key(Mode.A, live=True) != enum_before
+
+
+@test_utils.test()
 def test_final_enum_key_incorporates_full_member_map():
     """A baked ``Final`` enum member keys on the *entire* member map, not only the selected member: a kernel can read a
     sibling at compile time (``cfg.mode.__class__.OTHER.value``), so changing another member's value must invalidate

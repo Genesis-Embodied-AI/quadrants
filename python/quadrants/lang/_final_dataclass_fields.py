@@ -569,13 +569,22 @@ def _dynamic_class_serial(cls: type) -> int:
     return serial
 
 
+def _kind_entry(klass: type) -> tuple:
+    """``(module, qualname, doc)`` for one MRO entry. ``__doc__`` is the lone structural attr that is user-writable
+    *and* readable at compile time (``cfg.x.__class__.__doc__``), so it must be keyed - but only for a heap (Python)
+    class; a static/builtin base's doc is immutable, so it is omitted to avoid bloating the key with e.g. ``int``'s."""
+    doc = klass.__doc__ if klass.__flags__ & _HEAPTYPE_FLAG else None
+    return (klass.__module__, klass.__qualname__, doc)
+
+
 def _class_kind(cls: type) -> tuple:
-    """The class's compile-time-observable *kind* as ``(base MRO, metaclass MRO)``, each a ``(module, qualname)``
-    chain. Redefining a resolvable subclass's primitive/enum base (``class Unit(int)`` -> ``np.int64``, ``enum.Enum``
-    -> ``enum.IntEnum``) or its metaclass (``metaclass=EmptyMeta``) keeps module/qualname/canonical unchanged yet flips
-    ``cfg.x.__class__.__mro__[1]`` / ``cfg.x.__class__.__class__``, so the offline key must separate them."""
-    base_kind = tuple((base.__module__, base.__qualname__) for base in cls.__mro__)
-    meta_kind = tuple((meta.__module__, meta.__qualname__) for meta in type(cls).__mro__)
+    """The class's compile-time-observable *kind* as ``(base MRO, metaclass MRO)``, each entry ``(module, qualname,
+    doc)`` (see ``_kind_entry``). Redefining a resolvable subclass's primitive/enum base (``class Unit(int)`` ->
+    ``np.int64``, ``enum.Enum`` -> ``enum.IntEnum``) or its metaclass (``metaclass=EmptyMeta``), or mutating a user
+    class's ``__doc__``, keeps module/qualname/canonical unchanged yet is observable (``cfg.x.__class__.__mro__[1]``,
+    ``cfg.x.__class__.__class__``, ``cfg.x.__class__.__doc__``), so the offline key must separate them."""
+    base_kind = tuple(_kind_entry(base) for base in cls.__mro__)
+    meta_kind = tuple(_kind_entry(meta) for meta in type(cls).__mro__)
     return (base_kind, meta_kind)
 
 
