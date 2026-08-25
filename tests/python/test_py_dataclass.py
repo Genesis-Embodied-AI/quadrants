@@ -5103,6 +5103,35 @@ def test_final_enum_kind_in_offline_key():
 
 
 @test_utils.test()
+def test_final_scalar_subclass_base_kind_in_offline_key():
+    """Symmetric to the enum-kind case, for a behavior-free scalar subclass: redefining ``class Unit(int)`` with a
+    different primitive/NumPy base (``np.int64``, or a different width) keeps the resolvable module/qualname and
+    canonicalizes ``Unit(1)`` to the same integer, so the offline key would collide - yet ``cfg.x.__class__.__mro__[1]
+    is int`` changes. The base-kind component of ``_subclass_identity`` must separate them; same-base definitions stay
+    identical."""
+    import sys
+    import types
+
+    import numpy as np
+
+    from quadrants.lang._final_dataclass_fields import final_scalar_key
+
+    def offline_key(base_expr):
+        mod = types.ModuleType("qd_scalar_kind_probe")
+        mod.np = np
+        sys.modules[mod.__name__] = mod
+        try:
+            exec(f"class Unit({base_expr}):\n    pass\n", mod.__dict__)
+            return str(final_scalar_key(mod.Unit(1), live=False))
+        finally:
+            sys.modules.pop(mod.__name__, None)
+
+    assert offline_key("int") != offline_key("np.int64")  # int vs NumPy integer base
+    assert offline_key("np.int32") != offline_key("np.int64")  # different NumPy integer widths
+    assert offline_key("int") == offline_key("int")  # same base -> stable reuse
+
+
+@test_utils.test()
 def test_final_enum_key_incorporates_full_member_map():
     """A baked ``Final`` enum member keys on the *entire* member map, not only the selected member: a kernel can read a
     sibling at compile time (``cfg.mode.__class__.OTHER.value``), so changing another member's value must invalidate

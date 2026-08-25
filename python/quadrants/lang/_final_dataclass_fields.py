@@ -577,11 +577,18 @@ def _subclass_identity(cls: type, live: bool) -> tuple:
     - ``live=True`` (in-process): a ``_ClassRef`` identity token (pins the ``id``); must never reach the offline key.
     - ``live=False`` (offline, ``str``-ified): ``None`` for a resolvable class (stable cross-process), else
       ``(_PROCESS_NONCE, serial)`` - the serial separates dynamic classes here, the nonce forces a cross-process miss.
+
+    Both carry the *base kind* - the MRO as a ``(module, qualname)`` chain. A resolvable subclass redefined with a
+    different primitive/enum base (``class Unit(int)`` -> ``class Unit(np.int64)``, ``enum.Enum`` -> ``enum.IntEnum``)
+    keeps the same module/qualname and canonical value, but its compile-time behavior differs
+    (``cfg.x.__class__.__mro__[1] is int``, ``cfg.mode == 1``), so the offline key must separate them; the live key
+    already does via ``_ClassRef``. Over-separating behaviour-equal kinds only costs a cache miss, never a wrong reuse.
     """
+    base_kind = tuple((base.__module__, base.__qualname__) for base in cls.__mro__)
     if live:
-        return (cls.__module__, cls.__qualname__, _ClassRef(cls))
+        return (cls.__module__, cls.__qualname__, base_kind, _ClassRef(cls))
     identity = (_PROCESS_NONCE, _dynamic_class_serial(cls)) if _class_not_uniquely_identified(cls) else None
-    return (cls.__module__, cls.__qualname__, identity)
+    return (cls.__module__, cls.__qualname__, base_kind, identity)
 
 
 def _dunder_copied_from_base(klass: type, name: str, value: Any) -> bool:
@@ -856,27 +863,20 @@ def _enum_member_map_key(cls: type, live: bool) -> tuple:
     return tuple((name, final_scalar_key(member.value, live)) for name, member in member_map.items())
 
 
-def _enum_kind_key(cls: type) -> tuple:
-    """The enum's kind/mix-in as its base chain (``(module, qualname)`` per MRO entry). Redefining ``enum.Enum`` ->
-    ``enum.IntEnum`` while keeping module/qualname/names/values flips compile-time behavior (``cfg.mode == 1``); the
-    live key already separates the two class objects by identity, so this exists to separate them in the *offline*
-    key. Over-separating behaviour-equal kinds only costs a cache miss, never a wrong reuse."""
-    return tuple((base.__module__, base.__qualname__) for base in cls.__mro__)
-
-
 def final_scalar_key(value: Any, live: bool = False) -> Any:
     """Collision-free key component for a baked ``Final`` value. Each value is *type-tagged*, because Python treats
     distinct compile-time constants as equal with equal hashes:
 
     - ``float`` (builtin/subclass/NumPy) -> exact IEEE-754 bits (so ``-0.0``/``0.0`` and NaN payloads stay distinct).
-    - ``enum`` member -> ``(_ENUM_KEY_TAG, *class-identity, kind, name, value-key, member-map)``, keyed by identity
-      (an ``IntEnum`` member ``==`` its bare scalar); per-member-state members are rejected.
+    - ``enum`` member -> ``(_ENUM_KEY_TAG, *class-identity, name, value-key, member-map)``, keyed by identity (an
+      ``IntEnum`` member ``==`` its bare scalar); per-member-state members are rejected.
     - other scalar (``bool``/``int``/``str`` + NumPy) -> ``(_SCALAR_KEY_TAG, module, qualname, canonical-value)``, the
       value coerced via a base slot so the offline string is faithful under a nonstandard ``repr``.
 
     A subclass/enum carries class identity via ``_subclass_identity`` (``live`` = ``_ClassRef``, offline =
-    process-stable). An unsupported/arbitrary value is *rejected*, not keyed by its own ``__eq__``. Re-runs per launch
-    for Final subtrees (not cached), catching a class turned behaviorful after launch one.
+    process-stable), including the base kind so redefining the primitive/enum base keys apart offline. An
+    unsupported/arbitrary value is *rejected*, not keyed by its own ``__eq__``. Re-runs per launch for Final subtrees
+    (not cached), catching a class turned behaviorful after launch one.
     """
     if type(value) is float:
         return (_FLOAT_KEY_TAG, _unpack_u64(_pack_f64(value))[0])
@@ -887,7 +887,6 @@ def final_scalar_key(value: Any, live: bool = False) -> Any:
         return (
             _ENUM_KEY_TAG,
             *_subclass_identity(cls, live),
-            _enum_kind_key(cls),
             value.name,
             final_scalar_key(value.value, live),
             _enum_member_map_key(cls, live),
