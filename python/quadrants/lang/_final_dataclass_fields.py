@@ -10,6 +10,7 @@ import itertools
 import os
 import struct
 import sys
+import types
 import typing
 import uuid
 import weakref
@@ -582,20 +583,48 @@ def _dynamic_class_serial(cls: type) -> int:
 _KEYED_STRUCTURAL_ATTRS = ("__doc__", "__slots__", "__weakref__")
 _ATTR_ABSENT = "<qd:attr-absent>"  # not a valid identifier, so it can never equal a real ``__slots__`` name/value
 
+# Non-data types whose only stable, address-free observable content is ``(type, __name__)``: an auto-generated
+# ``__dict__``/``__weakref__`` slot descriptor (the common case, on a base's own dict) and, defensively, any callable
+# or class a user might bind. These are *tokenized* rather than value-serialized (a per-process pointer repr would
+# poison the offline key); anything outside this set that is not plain data is rejected as unrepresentable.
+_TOKENIZED_ATTR_TYPES = (
+    types.GetSetDescriptorType,
+    types.MemberDescriptorType,
+    types.WrapperDescriptorType,
+    types.MethodWrapperType,
+    types.BuiltinFunctionType,
+    types.FunctionType,
+    types.MethodType,
+    classmethod,
+    staticmethod,
+    property,
+    type,
+)
+
 
 def _canonical_attr_value(val: Any):
-    """A deterministic, hashable snapshot of a class-dict value. Plain scalars/strings are kept by value; containers
-    keep their type tag (``()`` vs ``[]`` compare unequal, so a kernel observes them differently); descriptors,
-    functions and other objects reduce to an address-free ``(type, name)`` token so an auto-generated
-    ``__dict__``/``__weakref__`` slot does not perturb the offline key with a per-process pointer repr."""
+    """A deterministic, hashable, *lossless* snapshot of a class-dict value read at compile time
+    (``cfg.x.__class__.<attr>``). Scalars/str/bytes/None by value; tuples/lists/dicts recursively and sets
+    order-independently, each keeping its container type (``()`` vs ``[]`` compare unequal); slot descriptors /
+    callables / classes reduce to an address-free ``(type, name)`` token (their only stable observable content). An
+    arbitrary object we cannot represent faithfully is rejected rather than collapsed to a lossy token that could
+    reuse a stale specialization after the value changes."""
     if val is None or isinstance(val, (bool, int, float, complex, str, bytes)):
         return val
-    if isinstance(val, (tuple, list, set, frozenset)):
-        try:
-            return (type(val).__qualname__, tuple(val))
-        except TypeError:
-            return (type(val).__qualname__, repr(val))
-    return (type(val).__qualname__, getattr(val, "__name__", None))
+    if isinstance(val, (tuple, list)):
+        return (type(val).__qualname__, tuple(_canonical_attr_value(v) for v in val))
+    if isinstance(val, (set, frozenset)):
+        return (type(val).__qualname__, frozenset(_canonical_attr_value(v) for v in val))
+    if isinstance(val, dict):
+        return ("dict", tuple((_canonical_attr_value(k), _canonical_attr_value(v)) for k, v in val.items()))
+    if isinstance(val, _TOKENIZED_ATTR_TYPES):
+        return (type(val).__qualname__, getattr(val, "__name__", None))
+    raise TypeError(
+        f"A ``Final``-baked class carries a structural attribute holding {val!r} (type {type(val).__qualname__}), "
+        f"which cannot be keyed faithfully. A kernel can read it at compile time (``cfg.x.__class__.<attr>``), so "
+        f"reusing a specialization across a change to it would be unsound. Use a plain value (scalar/str/tuple/"
+        f"list/set/dict of such)."
+    )
 
 
 def _attr_kind(klass: type, name: str):
@@ -607,19 +636,26 @@ def _attr_kind(klass: type, name: str):
 
 
 def _kind_entry(klass: type) -> tuple:
-    """``(module, qualname, *keyed-structural-attr-values)`` for one MRO entry - but only for a heap (Python) class; a
-    static/builtin base's values are immutable, so they are omitted to avoid bloating the key (e.g. ``int``'s doc)."""
+    """``(module, qualname, name, *keyed-structural-attr-values)`` for one MRO entry - but only for a heap (Python)
+    class; a static/builtin base's values are immutable, so they are omitted to avoid bloating the key (e.g. ``int``'s
+    doc). ``__name__`` is a ``type`` getset (not in ``vars(cls)``, so the behavior scan misses it) that is independently
+    reassignable from ``__qualname__`` and observable as ``cfg.x.__class__.__name__``, so it is keyed too."""
     if not klass.__flags__ & _HEAPTYPE_FLAG:
         return (klass.__module__, klass.__qualname__)
-    return (klass.__module__, klass.__qualname__, *(_attr_kind(klass, name) for name in _KEYED_STRUCTURAL_ATTRS))
+    return (
+        klass.__module__,
+        klass.__qualname__,
+        klass.__name__,
+        *(_attr_kind(klass, name) for name in _KEYED_STRUCTURAL_ATTRS),
+    )
 
 
 def _class_kind(cls: type) -> tuple:
     """The class's compile-time-observable *kind* as ``(base MRO, metaclass MRO)``, each entry
-    ``(module, qualname, *structural-attr-values)`` (see ``_kind_entry``/``_KEYED_STRUCTURAL_ATTRS``). Redefining a
-    resolvable subclass's primitive/enum base (``class Unit(int)`` -> ``np.int64``, ``enum.Enum`` -> ``enum.IntEnum``)
-    or its metaclass (``metaclass=EmptyMeta``), or mutating a user class's ``__doc__``/``__slots__``/``__weakref__``,
-    keeps module/qualname/canonical unchanged yet is observable (``cfg.x.__class__.__mro__[1]``,
+    ``(module, qualname, name, *structural-attr-values)`` (see ``_kind_entry``/``_KEYED_STRUCTURAL_ATTRS``). Redefining
+    a resolvable subclass's primitive/enum base (``class Unit(int)`` -> ``np.int64``, ``enum.Enum`` -> ``enum.IntEnum``)
+    or its metaclass (``metaclass=EmptyMeta``), or mutating a user class's ``__name__``/``__doc__``/``__slots__``/
+    ``__weakref__``, keeps module/qualname/canonical unchanged yet is observable (``cfg.x.__class__.__mro__[1]``,
     ``cfg.x.__class__.__class__``, ``cfg.x.__class__.<attr>``), so the offline key must separate them."""
     metaclass: type = type(cls)  # annotate as instance so ``.__mro__`` is the tuple, not the descriptor (pyright)
     base_kind = tuple(_kind_entry(base) for base in cls.__mro__)

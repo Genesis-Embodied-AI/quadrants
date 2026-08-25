@@ -5260,6 +5260,46 @@ def test_final_subclass_weakref_in_key():
 
 
 @test_utils.test()
+def test_final_subclass_name_in_key():
+    """``__name__`` is a mutable ``type`` getset (not in ``vars(cls)``, so the behavior scan misses it) that is
+    independently reassignable from ``__qualname__`` and observable as ``cfg.x.__class__.__name__``, so renaming a
+    class between launches must change the key."""
+    from quadrants.lang._final_dataclass_fields import final_scalar_key
+
+    class Unit(int):
+        pass
+
+    live_before = final_scalar_key(Unit(1), live=True)
+    offline_before = str(final_scalar_key(Unit(1), live=False))
+    Unit.__name__ = "Renamed"  # __qualname__ stays "…​.Unit", so only a __name__-aware key separates them
+    assert final_scalar_key(Unit(1), live=True) != live_before
+    assert str(final_scalar_key(Unit(1), live=False)) != offline_before
+
+
+@test_utils.test()
+def test_final_subclass_structural_dict_value_is_lossless():
+    """A structural attr rebound to a ``dict`` must be serialized faithfully: two distinct mappings cannot collapse to
+    one token (a compile-time branch can tell them apart). A value we cannot represent faithfully is rejected, not
+    silently collapsed."""
+    from quadrants.lang._final_dataclass_fields import final_scalar_key
+
+    class Unit(int):
+        pass
+
+    Unit.__slots__ = {"a": 1}
+    key_a = final_scalar_key(Unit(1), live=True)
+    Unit.__slots__ = {"b": 2}
+    assert final_scalar_key(Unit(1), live=True) != key_a  # distinct dicts -> distinct keys, no lossy collapse
+
+    class Opaque(int):
+        pass
+
+    Opaque.__slots__ = object()  # not plain data and not a descriptor/callable -> unrepresentable
+    with pytest.raises(TypeError, match="cannot be keyed faithfully"):
+        final_scalar_key(Opaque(1), live=True)
+
+
+@test_utils.test()
 def test_final_enum_key_incorporates_full_member_map():
     """A baked ``Final`` enum member keys on the *entire* member map, not only the selected member: a kernel can read a
     sibling at compile time (``cfg.mode.__class__.OTHER.value``), so changing another member's value must invalidate
