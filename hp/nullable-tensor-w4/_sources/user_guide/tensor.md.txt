@@ -222,8 +222,8 @@ def add_bias(out: qd.types.NDArray[qd.f32, 1], bias: qd.Tensor | None):
         else:
             out[i] = qd.f32(i)
 
-add_bias(out, None)          # absent: the bias branch is specialized away
-add_bias(out, qd.wrap(bias)) # present
+add_bias(out, None)   # absent: the bias branch is specialized away
+add_bias(out, bias)   # present: bias is a qd.Tensor (or a bare field / ndarray)
 ```
 
 The bare `qd.Tensor` spelling (above) keeps accepting `None`, so `x: qd.Tensor` and `x: qd.Tensor | None` behave the same at runtime; `T | None` is the form to prefer when you want the optionality visible in the signature. Only the two-member `T | None` union is accepted - other unions (`A | B`, `A | B | None`) and `| None` on any other annotation family are rejected at kernel-registration time.

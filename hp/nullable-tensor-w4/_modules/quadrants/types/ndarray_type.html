@@ -433,13 +433,9 @@
         <span class="k">return</span> <span class="bp">cls</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">)</span>
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__or__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
-        <span class="c1"># Shim so ``qd.types.NDArray[...] | None`` forms an optional-ndarray annotation. Needed only because</span>
-        <span class="c1"># ``NDArray[...]`` currently evaluates to an *instance* (see ``__class_getitem__`` above), so the interpreter</span>
-        <span class="c1"># cannot build a ``types.UnionType`` from it the way it can for the class-style ``qd.Tensor`` /</span>
-        <span class="c1"># ``qd.types.Template`` annotations. The kernel annotation validator recognizes the returned marker.</span>
-        <span class="c1">#</span>
-        <span class="c1"># TODO(quadrants#831): delete this shim once ``NDArray[...]`` evaluates to a type rather than an instance, at</span>
-        <span class="c1"># which point ``NDArray[...] | None`` yields a real ``types.UnionType`` handled by the generic union path.</span>
+        <span class="c1"># ``NDArray[...]`` is an instance, not a class, so ``|`` cannot build a ``types.UnionType`` the way it does</span>
+        <span class="c1"># for class-style annotations; hand back a marker the annotation validator understands instead.</span>
+        <span class="c1"># TODO(quadrants#831): drop this once ``NDArray[...]`` evaluates to a type.</span>
         <span class="k">if</span> <span class="n">other</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">other</span> <span class="ow">is</span> <span class="nb">type</span><span class="p">(</span><span class="kc">None</span><span class="p">):</span>
             <span class="k">return</span> <span class="n">_OptionalNdarray</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
         <span class="k">return</span> <span class="bp">NotImplemented</span>
@@ -501,11 +497,7 @@
 
 
 <span class="k">class</span><span class="w"> </span><span class="nc">_OptionalNdarray</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">"""Marker produced by ``qd.types.NDArray[...] | None``; see ``NdarrayType.__or__``.</span>
-
-<span class="sd">    Wraps the underlying :class:`NdarrayType` instance so the kernel annotation validator can unwrap it and record the</span>
-<span class="sd">    slot as optional. Superseded by quadrants#831 (delete alongside ``NdarrayType.__or__``).</span>
-<span class="sd">    """</span>
+<span class="w">    </span><span class="sd">"""Marks ``NDArray[...] | None``; the validator unwraps ``.inner`` and records the slot as optional."""</span>
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">inner</span><span class="p">:</span> <span class="s2">"NdarrayType"</span><span class="p">):</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">inner</span> <span class="o">=</span> <span class="n">inner</span>
