@@ -150,23 +150,15 @@ def _REPL_findsource(obj):
 
 
 def _direct_file_findsource(obj):
-    """Locate an object's source by reading its file directly, bypassing linecache.
-
-    ``inspect.findsource`` relies on ``linecache.getlines``, which can transiently
-    return an empty list under memory or filesystem pressure: a ``MemoryError``
-    makes ``linecache.getlines`` call ``linecache.clearcache()`` and return ``[]``,
-    and a transient ``os.stat``/``open`` failure in ``linecache.updatecache`` has
-    the same effect. Because Quadrants materializes kernels by re-reading their
-    ``.py`` source at runtime, such a transient turns a perfectly readable file
-    into a fatal "cannot find source" error. Re-reading the file directly recovers
-    from that transient. Returns ``(lines, lineno)`` in the same shape as
-    ``inspect.findsource`` so it is a drop-in last-resort fallback.
-    """
+    # Fallback for when linecache.getlines() transiently returns [] for a readable
+    # file (MemoryError -> linecache.clearcache(), or a transient os.stat/open
+    # failure), which would otherwise abort kernel compilation. Returns
+    # (lines, lineno) like inspect.findsource.
     code = getattr(obj, "__code__", None)
     if code is None:
         raise IOError(f"No __code__ to locate source for {obj}")
     file = _builtin_getfile(obj)
-    with tokenize.open(file) as fp:  # honor the file's PEP 263 encoding cookie
+    with tokenize.open(file) as fp:
         lines = fp.readlines()
     if not lines:
         raise IOError(f"Empty or unreadable source file for {obj}: {file}")
@@ -186,9 +178,7 @@ def _custom_findsource(obj):
         return _blender_findsource(obj)
     except Exception:
         pass
-    # Last resort: bypass linecache and read the source file directly. This
-    # recovers from a transient empty ``linecache.getlines`` (see
-    # ``_direct_file_findsource``) instead of failing kernel compilation.
+    # Last resort: re-read the file directly, recovering from a transient linecache miss.
     try:
         return _direct_file_findsource(obj)
     except Exception:
