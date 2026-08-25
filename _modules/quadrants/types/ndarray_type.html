@@ -432,6 +432,14 @@
             <span class="n">args</span> <span class="o">=</span> <span class="p">(</span><span class="n">args</span><span class="p">,)</span>
         <span class="k">return</span> <span class="bp">cls</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">)</span>
 
+    <span class="k">def</span><span class="w"> </span><span class="fm">__or__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">other</span><span class="p">):</span>
+        <span class="c1"># ``NDArray[...]`` is an instance, not a class, so ``|`` cannot build a ``types.UnionType`` the way it does</span>
+        <span class="c1"># for class-style annotations; hand back a marker the annotation validator understands instead.</span>
+        <span class="c1"># TODO(quadrants#831): drop this once ``NDArray[...]`` evaluates to a type.</span>
+        <span class="k">if</span> <span class="n">other</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">other</span> <span class="ow">is</span> <span class="nb">type</span><span class="p">(</span><span class="kc">None</span><span class="p">):</span>
+            <span class="k">return</span> <span class="n">_OptionalNdarray</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">NotImplemented</span>
+
     <span class="k">def</span><span class="w"> </span><span class="nf">check_matched</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ndarray_type</span><span class="p">:</span> <span class="n">NdarrayTypeMetadata</span><span class="p">,</span> <span class="n">arg_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
         <span class="c1"># FIXME(Haidong) Cannot use Vector/MatrixType due to circular import</span>
         <span class="c1"># Use the CompuoundType instead to determine the specific typs.</span>
@@ -486,6 +494,16 @@
     <span class="k">def</span><span class="w"> </span><span class="nf">to_dlpack</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">object</span><span class="p">:</span>
         <span class="c1"># needed for pyright</span>
         <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">()</span>
+
+
+<span class="k">class</span><span class="w"> </span><span class="nc">_OptionalNdarray</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Marks ``NDArray[...] | None``; the validator unwraps ``.inner`` and records the slot as optional."""</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">inner</span><span class="p">:</span> <span class="s2">"NdarrayType"</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">inner</span> <span class="o">=</span> <span class="n">inner</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="sa">f</span><span class="s2">"_OptionalNdarray(inner=</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">inner</span><span class="si">!r}</span><span class="s2">)"</span>
 
 
 <div class="viewcode-block" id="ndarray">
