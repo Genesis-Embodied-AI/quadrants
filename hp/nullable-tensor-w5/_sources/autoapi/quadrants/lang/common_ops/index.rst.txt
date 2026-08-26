@@ -1,0 +1,22 @@
+quadrants.lang.common_ops
+=========================
+
+.. py:module:: quadrants.lang.common_ops
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   quadrants.lang.common_ops.QuadrantsOperations
+
+
+Module Contents
+---------------
+
+.. py:class:: QuadrantsOperations
+
+   The base class of quadrants operations of expressions. Subclasses: :class:`~quadrants.lang.expr.Expr`, :class:`~quadrants.lang.matrix.Matrix`
+
+
