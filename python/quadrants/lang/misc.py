@@ -490,9 +490,7 @@ def init(
         runtime.print_non_pure = print_non_pure
         _logging.set_logging_level(spec_cfg.log_level.lower())
 
-    # select arch (backend). The qd.init argument takes priority over the QD_ARCH env var (mirroring default_fp/ip);
-    # the env var is only consulted when no arch argument was passed. When neither is set, adaptive_arch_select falls
-    # back to cpu, so arch remains optional.
+    # select arch (backend):
     env_arch = os.environ.get("QD_ARCH")
     if env_arch is not None:
         if arch is not None:
