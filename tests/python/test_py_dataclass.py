@@ -5510,6 +5510,73 @@ def test_final_subclass_structural_container_subclass_rejected():
 
 
 @test_utils.test()
+def test_final_subclass_structural_foreign_descriptor_identity():
+    """A *foreign* descriptor bound in a keyed structural attr (``Unit.__weakref__ = A.__weakref__``) must carry its
+    owner's identity: its address-based ``repr`` is unkeyable and its own ``__qualname__`` is just the slot name, so
+    without the owner two distinct descriptors collapse to one token and a compile-time ``... is A.__weakref__`` branch
+    would reuse the wrong specialization."""
+    from quadrants.lang._final_dataclass_fields import final_scalar_key
+
+    class OwnerA:
+        pass
+
+    class OwnerB:
+        pass
+
+    class Unit(int):
+        pass
+
+    Unit.__weakref__ = OwnerA.__dict__["__weakref__"]
+    live_a = final_scalar_key(Unit(1), live=True)
+    offline_a = str(final_scalar_key(Unit(1), live=False))
+    Unit.__weakref__ = OwnerB.__dict__["__weakref__"]  # distinct owner -> distinct qualname
+    assert final_scalar_key(Unit(1), live=True) != live_a
+    assert str(final_scalar_key(Unit(1), live=False)) != offline_a
+
+    def make_owner():  # two owners sharing a qualname but distinct identity
+        class Owner:
+            pass
+
+        return Owner
+
+    Unit.__weakref__ = make_owner().__dict__["__weakref__"]
+    live_c = final_scalar_key(Unit(1), live=True)
+    Unit.__weakref__ = make_owner().__dict__["__weakref__"]
+    assert final_scalar_key(Unit(1), live=True) != live_c  # separated by the owner's identity component
+
+
+@test_utils.test()
+def test_final_subclass_dynamic_serial_keyed_by_identity():
+    """The offline serial registry for dynamically created attr values keys by object identity, not ``__eq__``: a
+    metaclass that makes distinct ``<locals>`` classes compare equal with equal hashes must not alias them to one
+    serial (a ``WeakKeyDictionary`` would), or a ``fastcache`` kernel could load code baked for the previous class."""
+    from quadrants.lang._final_dataclass_fields import final_scalar_key
+
+    class Meta(type):
+        def __eq__(cls, other):
+            return isinstance(other, Meta)
+
+        def __hash__(cls):
+            return 0
+
+    def make():
+        class Local(metaclass=Meta):
+            pass
+
+        return Local
+
+    first, second = make(), make()  # first == second and hash-equal, but distinct identities
+
+    class Unit(int):
+        pass
+
+    Unit.__doc__ = first
+    offline_first = str(final_scalar_key(Unit(1), live=False))
+    Unit.__doc__ = second
+    assert str(final_scalar_key(Unit(1), live=False)) != offline_first
+
+
+@test_utils.test()
 def test_final_enum_key_incorporates_full_member_map():
     """A baked ``Final`` enum member keys on the *entire* member map, not only the selected member: a kernel can read a
     sibling at compile time (``cfg.mode.__class__.OTHER.value``), so changing another member's value must invalidate

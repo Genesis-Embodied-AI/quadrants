@@ -559,10 +559,11 @@ class _ClassRef:
 
 
 # Monotonic, never-reused serials for dynamically created objects (classes, or callables bound as attr values), used
-# only in the *offline* key. ``id`` is unsafe there: after ``qd.reset()`` frees an object, CPython can reuse its
-# address for the next same-qualified one, which would serialize an identical ``(nonce, id)`` and load the dead
-# object's kernel. Held weakly (pins nothing).
-_dynamic_class_serials: "weakref.WeakKeyDictionary[Any, int]" = weakref.WeakKeyDictionary()
+# only in the *offline* key. Keyed by ``id`` with an identity (``is``) guard - not a ``WeakKeyDictionary``, whose
+# ``get`` compares keys by ``__eq__``/``__hash__``, so a metaclass making distinct classes compare equal would alias
+# two objects to one serial. ``id`` alone is unsafe (after an object is freed CPython recycles its address), so the
+# entry holds a weakref: a callback drops it on death and the guard rejects a stale entry whose ``id`` was recycled.
+_dynamic_object_serials: "dict[int, tuple[weakref.ref, int]]" = {}
 _dynamic_class_serial_counter = itertools.count()
 
 
@@ -571,14 +572,22 @@ def _dynamic_class_serial(obj: Any) -> int:
     lifetime. An object that cannot be weakly referenced draws a fresh serial each call - a redundant miss, never a
     stale reuse.
     """
-    serial = _dynamic_class_serials.get(obj)
-    if serial is not None:
-        return serial
+    key = id(obj)
+    entry = _dynamic_object_serials.get(key)
+    if entry is not None and entry[0]() is obj:  # identity guard: same live object, ``id`` not recycled
+        return entry[1]
     serial = next(_dynamic_class_serial_counter)
+
+    def _drop(ref: "weakref.ref", k: int = key) -> None:
+        cur = _dynamic_object_serials.get(k)
+        if cur is not None and cur[0] is ref:  # only our own entry, never one that recycled the ``id``
+            del _dynamic_object_serials[k]
+
     try:
-        _dynamic_class_serials[obj] = serial
+        ref = weakref.ref(obj, _drop)
     except TypeError:
-        pass
+        return serial
+    _dynamic_object_serials[key] = (ref, serial)
     return serial
 
 
@@ -684,7 +693,19 @@ def _canonical_attr_value(val: Any, live: bool):
         items = tuple((_canonical_attr_value(k, live), _canonical_attr_value(v, live)) for k, v in val.items())
         return ("dict", items)
     if isinstance(val, _DESCRIPTOR_ATTR_TYPES):
-        return (type(val).__qualname__, getattr(val, "__name__", None))
+        # An auto-generated descriptor has an address-based ``repr`` (unkeyable) and its own ``__qualname__`` is just
+        # the slot name, so its identity is its owner (``__objclass__``): a *foreign* descriptor (``A.__weakref__``
+        # bound elsewhere) must carry ``A``'s module/qualname + identity so it never collides with ``B``'s. An own
+        # descriptor's owner is this class (identity ``None`` when module-resolvable), keeping the offline key stable.
+        owner = getattr(val, "__objclass__", None)
+        identified = owner if owner is not None else val
+        return (
+            type(val).__qualname__,
+            getattr(val, "__name__", None),
+            getattr(identified, "__module__", None),
+            getattr(identified, "__qualname__", None),
+            _identity_component(identified, live),
+        )
     if isinstance(val, _IDENTIFIED_ATTR_TYPES):
         # module + qualname separate two *resolvable* objects that share a ``__name__`` (offline identity is ``None``);
         # ``_identity_component`` separates dynamic ones.
