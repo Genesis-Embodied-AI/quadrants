@@ -196,7 +196,7 @@ If you want the opposite trade-off for a `@qd.data_oriented` class (primitive me
 
 A `dataclasses.dataclass` is a Python-only container. The compiler reads it at compile time and flattens its members into individual kernel parameters — the container itself has no memory layout and doesn't exist on the kernel side. Inside a kernel, tensor members are read-write through indexing (`s.x[i] = ...`), but the member *binding* itself (`s.x = other_tensor`) cannot be reassigned from inside a kernel.
 
-**Reserved field names (`_qd_` prefix).** To make repeated launches fast, Quadrants stores small internal caches directly on the dataclass instances you pass to a kernel - for example the key that selects which compiled kernel to reuse. These attributes always begin with `_qd_`, so that prefix is reserved: do not give a dataclass field a name starting with `_qd_`. Such a field would shadow Quadrants' internal state, which can make a kernel silently reuse a value from an earlier launch. Any other name (including a leading underscore, like `_key`) is fine.
+**Reserved field names (`_qd_` prefix).** Field names beginning with `_qd_` are reserved for Quadrants' internal state; defining a dataclass field with such a name is unsupported and gives undefined behavior.
 
 ## qd.data_oriented
 
