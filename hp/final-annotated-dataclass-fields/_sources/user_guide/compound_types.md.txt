@@ -157,20 +157,20 @@ from typing import Final
 @dataclasses.dataclass(frozen=True)
 class SimConfig:
     enable_gravity: Final[bool]   # compile-time constant
-    dt: Final[float]              # compile-time constant
-    n_substeps: int               # ordinary runtime kernel argument
+    n_substeps: Final[int]        # compile-time constant
+    gain: int                     # ordinary runtime kernel argument
 
 @qd.kernel
-def integrate(config: SimConfig, positions: qd.types.NDArray[qd.f32, 1]):
-    # Legal because dt is Final: qd.static requires a compile-time constant.
-    dt = qd.static(config.dt)
+def integrate(config: SimConfig, positions: qd.types.NDArray[qd.i32, 1]):
+    # Legal because n_substeps is Final: qd.static requires a compile-time constant.
+    steps = qd.static(config.n_substeps)
     for i in positions:
         # This branch is resolved at compile time; the untaken side is not compiled at all.
         if qd.static(config.enable_gravity):
-            positions[i] -= 9.8 * dt
-        positions[i] += config.n_substeps * dt   # n_substeps read at runtime
+            positions[i] -= 1
+        positions[i] += config.gain * steps   # gain read at runtime
 
-integrate(SimConfig(enable_gravity=True, dt=0.01, n_substeps=4), positions)
+integrate(SimConfig(enable_gravity=True, n_substeps=4, gain=3), positions)
 ```
 
 This is the recommended pattern for **static configuration objects** - bags of flags and sizes that are fixed once at setup time and used to specialize kernels. It replaces the older approach of declaring such a config as `@qd.data_oriented` and passing it via `qd.Template` purely to obtain compile-time member reads.
@@ -196,7 +196,7 @@ If you want the opposite trade-off for a `@qd.data_oriented` class (primitive me
 
 A `dataclasses.dataclass` is a Python-only container. The compiler reads it at compile time and flattens its members into individual kernel parameters — the container itself has no memory layout and doesn't exist on the kernel side. Inside a kernel, tensor members are read-write through indexing (`s.x[i] = ...`), but the member *binding* itself (`s.x = other_tensor`) cannot be reassigned from inside a kernel.
 
-**Reserved field names (`_qd_` prefix).** To make repeated launches fast, Quadrants stores small internal caches directly on the dataclass instances you pass to a kernel - for example the key that selects which compiled kernel to reuse. These attributes always begin with `_qd_`, so that prefix is reserved: do not give a dataclass field a name starting with `_qd_`. Such a field would shadow Quadrants' internal state, which can make a kernel silently reuse a value from an earlier launch. Any other name (including a leading underscore, like `_key`) is fine.
+**Reserved field names (`_qd_` prefix).** Field names beginning with `_qd_` are reserved for Quadrants' internal state; defining a dataclass field with such a name is unsupported and gives undefined behavior.
 
 ## qd.data_oriented
 
