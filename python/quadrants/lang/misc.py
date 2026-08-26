@@ -661,14 +661,6 @@ def _block_dim(dim):
     get_runtime().compiling_callable.ast_builder().block_dim(dim)
 
 
-def _block_dim_adaptive(block_dim_adaptive):
-    """Enable/Disable backends set block_dim adaptively."""
-    if get_runtime().prog.config().arch != cpu:
-        _logging.warn("Adaptive block_dim is supported on CPU backend only")
-    else:
-        get_runtime().prog.config().cpu_block_dim_adaptive = block_dim_adaptive
-
-
 def _bit_vectorize():
     """Enable bit vectorization of struct fors on quant_arrays."""
     get_runtime().compiling_callable.ast_builder().bit_vectorize()
@@ -679,7 +671,6 @@ def loop_config(
     block_dim=None,
     serialize=False,
     parallelize=None,
-    block_dim_adaptive=True,
     bit_vectorize=False,
     name=None,
 ):
@@ -689,7 +680,6 @@ def loop_config(
         block_dim (int): The number of threads in a block on GPU
         serialize (bool): Whether to let the for loop execute serially, `serialize=True` equals to `parallelize=1`
         parallelize (int): The number of threads to use on CPU
-        block_dim_adaptive (bool): Whether to allow backends set block_dim adaptively, enabled by default
         bit_vectorize (bool): Whether to enable bit vectorization of struct fors on quant_arrays.
         name (str): Optional name for this loop, used in GPU kernel names for profiling and debugging.
 
@@ -740,9 +730,6 @@ def loop_config(
         _parallelize(1)
     elif parallelize is not None:
         _parallelize(parallelize)
-
-    if not block_dim_adaptive:
-        _block_dim_adaptive(block_dim_adaptive)
 
     if bit_vectorize:
         _bit_vectorize()
