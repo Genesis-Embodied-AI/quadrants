@@ -611,11 +611,16 @@ def test_per_construct_frontend_split_fallback_external_func_write() -> None:
 
 
 @test_utils.test(arch=qd.cuda, offline_cache=False)
-def test_per_construct_frontend_split_graph_do_while_correct() -> None:
-    # A split-eligible `qd.graph.do_while` kernel must stay correct through the split-and-reassemble path: its body runs
-    # once per host-loop iteration. This exercises `SubsetCloner`'s `region_tag` copy -- `Stmt::clone()` drops the graph
-    # region tag, and the subset clone restores it so the reassembled do_while body keeps its host-loop level. The
-    # do_while runs 3 times and increments x each time, so x must end at 3.
+def test_per_construct_frontend_split_fallback_graph_do_while() -> None:
+    # A `qd.graph.do_while` kernel is driven from the HOST: `offload` flattens the loop body into a CONTIGUOUS run of
+    # tasks and the host graph driver relaunches that run each iteration until the on-device break flag fires. The
+    # per-construct split offloads each construct in isolation and reassembles, which re-runs the offloader's serial-
+    # bucket / region-tag assignment out of whole-kernel context; a pure serial bucket at the do_while level can then be
+    # tagged at the wrong level and wedged out of the body's contiguous run, so the host loop counter never decrements
+    # and the kernel spins forever (this is what hung Genesis's decomposed rigid constraint solver on coupled contact).
+    # `maybe_split_frontend_per_construct` therefore declines to split ANY kernel containing a do_while region -- see
+    # `block_has_graph_do_while`. Assert the split did NOT fire and the kernel is still correct via the whole-kernel
+    # path: the do_while runs 3 times and increments x each time, so x must end at 3.
     @qd.kernel(graph=True)
     def run(x: qd.types.ndarray(qd.i32, ndim=1), counter: qd.types.ndarray(qd.i32, ndim=0)) -> None:
         while qd.graph.do_while(counter):
@@ -631,7 +636,9 @@ def test_per_construct_frontend_split_graph_do_while_correct() -> None:
     run(x, counter)
 
     obs = run._primal.per_offload_cache_observations
-    assert obs.frontend_constructs_total >= 1, obs  # the split fired (so the clone / region-tag path was exercised)
+    assert (
+        obs.frontend_constructs_total == -1
+    ), obs  # do_while kernels fall back to the whole-kernel path, not the split
 
     assert np.all(x.to_numpy() == 3), x.to_numpy()
 

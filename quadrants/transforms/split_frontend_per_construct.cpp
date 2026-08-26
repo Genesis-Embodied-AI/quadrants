@@ -27,6 +27,7 @@
 #include <memory>
 #include <mutex>
 #include <set>
+#include <sstream>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -101,11 +102,13 @@ class SubsetCloner : public IRVisitor {
       // The hand-written container clones (IfStmt / RangeForStmt / StructForStmt / WhileStmt) rebuild via a typed
       // constructor, not the copy ctor, so they drop two fields the whole-kernel path keeps; restore both here for
       // every cloned statement (a no-op re-copy for leaf stmts, whose QD_DEFINE_CLONE copy-ctor clone already has
-      // them). region_tag marks the graph region (`qd.graph.do_while`) a serial statement belongs to; losing it makes
-      // the serial offloader tag the task at level -1 so a conditional/loop nested in a host loop runs once instead of
-      // once per host-loop iteration. dbg_info carries the source traceback; losing it empties `get_tb()` so later
-      // per-construct diagnostics (e.g. offload.cpp's block-dim-too-large warning on a cloned StructForStmt) print
-      // without a source location.
+      // them). region_tag marks the graph region (`qd.checkpoint` cp_id, `qd.graph.do_while` level, ...) a statement
+      // belongs to; losing it makes the serial offloader tag the task at the default (e.g. checkpoint_id -1 =
+      // always-run instead of gated on `resume`) so a statement gated inside a region is mis-scheduled. (do_while
+      // kernels now fall back to the whole-kernel path before reaching the split -- see `block_has_graph_do_while` --
+      // but checkpoint kernels still split, so this copy is still load-bearing.) dbg_info carries the source traceback;
+      // losing it empties `get_tb()` so later per-construct diagnostics (e.g. offload.cpp's block-dim-too-large warning
+      // on a cloned StructForStmt) print without a source location.
       other_stmt->region_tag = stmt->region_tag;
       other_stmt->dbg_info = stmt->dbg_info;
     } else {
@@ -293,6 +296,37 @@ bool block_has_concurrent_region(Block *block) {
             if (auto *sf = s->cast<StructForStmt>())
               return sf->stream_parallel_group_id != 0 || sf->graph_parallel_region_id != 0;
             return false;
+          }).empty();
+}
+
+// Whether the kernel contains a `qd.graph.do_while` loop (any statement tagged with a graph_do_while level >= 0; -1 is
+// "outside any do_while"). A do_while is driven from the HOST: `offload` flattens the loop body into a CONTIGUOUS run
+// of tasks all tagged with the loop's `graph_do_while_level_id`, and the host graph driver rebuilds the loop nesting
+// from that flat, contiguity-assuming task list -- relaunching the run each iteration until the on-device break flag
+// fires (see the serial-bucket region-tagging logic in transforms/offload.cpp, esp. the note that a stray top-level
+// task wedged into a loop body's run makes "the loop counter never decrement"). The per-construct split offloads each
+// construct in ISOLATION and reassembles, which re-runs that per-construct serial-bucket / region-tag assignment out of
+// whole-kernel context: a serial task can be tagged at the wrong do_while level (its own region_tag is only trusted
+// when side-effecting; a pure bucket borrows the region of whatever for-loop triggers its flush, which differs once the
+// construct is offloaded alone) and get wedged into or pulled out of the body's contiguous run. The host driver then
+// never sees the loop terminate and spins forever -- Genesis's decomposed rigid constraint solver (a graph_do_while CG
+// loop) hangs on coupled contact even though each individual task's codegen is unchanged. Fall back to the whole-kernel
+// path for any kernel with a do_while region; the monolith (non-do_while) solver arm and every other kernel still
+// split. Gathers containers so a do_while nested inside another loop is seen.
+bool block_has_graph_do_while(Block *block) {
+  if (block == nullptr)
+    return false;
+  return !gather_stmts_incl_containers(block, [](Stmt *s) {
+            if (auto *rf = s->cast<RangeForStmt>())
+              if (rf->graph_do_while_level_id >= 0)
+                return true;
+            if (auto *sf = s->cast<StructForStmt>())
+              if (sf->graph_do_while_level_id >= 0)
+                return true;
+            if (auto *mf = s->cast<MeshForStmt>())
+              if (mf->graph_do_while_level_id >= 0)
+                return true;
+            return s->region_tag.is_set && s->region_tag.graph_do_while_level_id >= 0;
           }).empty();
 }
 
@@ -627,6 +661,39 @@ bool split_is_recompute_safe(Block *block) {
   return true;
 }
 
+// How much frontend work the split would do relative to the whole-kernel path. Each construct is compiled over its
+// BACKWARD SLICE, so a statement several constructs read (e.g. a serial prefix that computes a value every construct
+// consumes) is recomputed into -- and recompiled once per -- each of them. The split's frontend cost is therefore
+// `sum over constructs of |slice|`, versus the whole-kernel path's single pass over the block. The ratio of the two is
+// ~1 when constructs are close to disjoint (the split is compile-neutral -- verified: a kernel of independent loops
+// compiles in the same time split or not) and grows toward ~#constructs when they share a large prefix (each extra
+// construct re-pays the whole prefix). This PR ships the split with NO reuse cache, so that recompute is pure overhead;
+// `maybe_split_frontend_per_construct` uses this to fall back before paying an unbounded multiple of the whole-kernel
+// compile (a real kernel with a large shared prefix and many loops otherwise blows the frontend up by 10x+, which -- on
+// Genesis's biggest kernels under CI load -- pushed a single test past the per-test timeout).
+struct SplitCost {
+  long long sum_slice_stmts = 0;
+  int total_stmts = 0;
+  int n_constructs = 0;
+  double ratio() const {
+    return total_stmts > 0 ? (double)sum_slice_stmts / (double)total_stmts : 1.0;
+  }
+};
+
+SplitCost estimate_split_cost(Block *block) {
+  SplitCost c;
+  c.total_stmts = (int)gather_stmts_incl_containers(block, [](Stmt *) { return true; }).size();
+  auto segs = segment_top_level(block);
+  auto alloca_writers = gather_top_level_alloca_writers(block);
+  for (int k = 0; k < segs.n_segs; k++) {
+    if (!segs.seg_emits_task[k])
+      continue;
+    c.n_constructs++;
+    c.sum_slice_stmts += (long long)compute_construct_needed(block, segs.seg_id, k, alloca_writers).size();
+  }
+  return c;
+}
+
 // Split the flat top-level block into constructs right after lower_ast + the structural prefix, run the full
 // per-construct frontend on each (recomputing shared top-level defs into every construct that reads them), and
 // reassemble the produced OffloadedStmts in source order. Compiling each construct independently keeps its
@@ -730,7 +797,36 @@ bool maybe_split_frontend_per_construct(IRNode *ir,
     return false;
   if (block_has_concurrent_region(block))
     return false;  // concurrent constructs share one global-temp buffer; per-construct offload would alias offsets
+  if (block_has_graph_do_while(block))
+    return false;  // host-driven do_while loop body must stay one contiguous task run; reassembly breaks termination
   if (!split_is_recompute_safe(block))
+    return false;
+  // Cost guard. The split recompiles each construct over its backward slice, so a kernel whose constructs share a large
+  // serial prefix recompiles that prefix once per construct -- O(#constructs x prefix) frontend work for NO benefit
+  // until the cross-process cache lands. Bound the split to a small multiple of the whole-kernel compile and fall back
+  // above it. QD_SPLIT_MAX_COST_RATIO overrides the cap (for tuning / to disable the guard); QD_SPLIT_STATS=1 prints
+  // the per-kernel estimate. See `estimate_split_cost`.
+  SplitCost cost = estimate_split_cost(block);
+  double max_ratio = 4.0;
+  if (const char *r = std::getenv("QD_SPLIT_MAX_COST_RATIO"))
+    max_ratio = std::atof(r);
+  const bool would_fall_back = cost.ratio() > max_ratio;
+  // QD_SPLIT_STATS: "1" prints per-kernel cost to stdout; any other value is treated as a file path to APPEND to
+  // (robust when kernels compile inside pytest-forked children, whose stdout is not captured). Debug/tuning only.
+  if (const char *sf = std::getenv("QD_SPLIT_STATS")) {
+    std::ostringstream line;
+    line << kernel->get_name() << " constructs=" << cost.n_constructs << " total_stmts=" << cost.total_stmts
+         << " sum_slice_stmts=" << cost.sum_slice_stmts << " ratio=" << cost.ratio() << " max_ratio=" << max_ratio
+         << (would_fall_back ? " -> FALLBACK" : " -> SPLIT") << "\n";
+    if (std::string(sf) == "1") {
+      std::cout << "[per-construct split] " << line.str();
+    } else {
+      std::ofstream ofs(sf, std::ios::app);
+      if (ofs.good())
+        ofs << line.str();
+    }
+  }
+  if (would_fall_back)
     return false;
   split_frontend_per_construct(ir, config, kernel, verbose);
   return true;
