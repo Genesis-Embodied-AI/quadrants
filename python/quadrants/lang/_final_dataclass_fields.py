@@ -624,16 +624,21 @@ _IDENTIFIED_ATTR_TYPES = (
 
 def _canonical_attr_value(val: Any, live: bool):
     """A deterministic, hashable, *lossless* snapshot of a class-dict value read at compile time
-    (``cfg.x.__class__.<attr>``). Scalars/str/bytes/None by value (type-tagged, so ``True``/``1``/``1.0`` differ);
-    tuples/lists/dicts recursively and sets order-independently, each keeping its container type (``()`` vs ``[]``
+    (``cfg.x.__class__.<attr>``). Ints/str/bytes/None by value (type-tagged, so ``True``/``1`` differ); floats/complex
+    by exact IEEE bits (``0.0``/``-0.0`` never collapse); tuples/lists/dicts recursively and sets order-independently,
+    each keeping its container type (``()`` vs ``[]``
     compare unequal); an auto-generated slot descriptor reduces to an address-free ``(type, name)`` token (the owning
     class carries identity); a user-bound class/callable also carries an identity component so distinct same-named
     ``<locals>`` objects never collide. Anything else is rejected rather than collapsed to a lossy token that could
     reuse a stale specialization after the value changes."""
     if val is None:
         return None
-    if isinstance(val, (bool, int, float, complex, str, bytes)):
-        return (type(val).__qualname__, val)  # tag the exact type: ``True``/``1``/``1.0`` compare equal but differ
+    if isinstance(val, float):  # exact IEEE bits, so ``0.0``/``-0.0`` and NaN payloads never collapse (0.0 == -0.0)
+        return (type(val).__qualname__, _unpack_u64(_pack_f64(val))[0])
+    if isinstance(val, complex):
+        return (type(val).__qualname__, _unpack_u64(_pack_f64(val.real))[0], _unpack_u64(_pack_f64(val.imag))[0])
+    if isinstance(val, (bool, int, str, bytes)):
+        return (type(val).__qualname__, val)  # tag the exact type: ``True``/``1`` compare equal but differ
     if isinstance(val, (tuple, list)):
         return (type(val).__qualname__, tuple(_canonical_attr_value(v, live) for v in val))
     if isinstance(val, (set, frozenset)):
@@ -644,7 +649,15 @@ def _canonical_attr_value(val: Any, live: bool):
     if isinstance(val, _DESCRIPTOR_ATTR_TYPES):
         return (type(val).__qualname__, getattr(val, "__name__", None))
     if isinstance(val, _IDENTIFIED_ATTR_TYPES):
-        return (type(val).__qualname__, getattr(val, "__name__", None), _identity_component(val, live))
+        # module + qualname separate two *resolvable* objects that share a ``__name__`` (offline identity is ``None``);
+        # ``_identity_component`` separates dynamic ones.
+        return (
+            type(val).__qualname__,
+            getattr(val, "__module__", None),
+            getattr(val, "__qualname__", None),
+            getattr(val, "__name__", None),
+            _identity_component(val, live),
+        )
     raise TypeError(
         f"A ``Final``-baked class carries a structural attribute holding {val!r} (type {type(val).__qualname__}), "
         f"which cannot be keyed faithfully. A kernel can read it at compile time (``cfg.x.__class__.<attr>``), so "

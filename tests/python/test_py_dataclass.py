@@ -5246,6 +5246,49 @@ def test_final_subclass_structural_attr_holds_identified_object():
 
 
 @test_utils.test()
+def test_final_subclass_structural_float_bits_in_key():
+    """A keyed structural attr holding a float is encoded by exact IEEE bits, so ``0.0`` and ``-0.0`` (equal with equal
+    hashes, yet distinguishable at compile time via ``float.hex()``/``math.copysign``) do not share a key."""
+    from quadrants.lang._final_dataclass_fields import final_scalar_key
+
+    class Unit(int):
+        pass
+
+    Unit.__doc__ = 0.0
+    live_before = final_scalar_key(Unit(1), live=True)
+    offline_before = str(final_scalar_key(Unit(1), live=False))
+    Unit.__doc__ = -0.0  # == 0.0 with an equal hash, but a distinct bit pattern
+    assert final_scalar_key(Unit(1), live=True) != live_before
+    assert str(final_scalar_key(Unit(1), live=False)) != offline_before
+
+
+@test_utils.test()
+def test_final_subclass_resolvable_attr_object_records_module():
+    """A *resolvable* class/callable bound into a keyed structural attr has offline identity ``None``, so its module +
+    qualname must still be recorded: two module-level classes sharing a ``__name__`` across different modules must not
+    collapse to one offline token, else a later fastcache process could load the wrong artifact."""
+    import sys
+    import types
+
+    from quadrants.lang._final_dataclass_fields import final_scalar_key
+
+    class Unit(int):
+        pass
+
+    def offline_key(modname):
+        mod = types.ModuleType(modname)
+        sys.modules[modname] = mod
+        try:
+            exec("class Foo:\n    pass\n", mod.__dict__)  # resolvable class, __name__ == 'Foo', offline identity None
+            Unit.__doc__ = mod.Foo
+            return str(final_scalar_key(Unit(1), live=False))
+        finally:
+            sys.modules.pop(modname, None)
+
+    assert offline_key("qd_attr_module_probe_a") != offline_key("qd_attr_module_probe_b")
+
+
+@test_utils.test()
 def test_final_subclass_docstring_in_key():
     """``__doc__`` is the one structural class attr that is user-writable and readable at compile time
     (``cfg.x.__class__.__doc__``), so mutating it between launches must change both the in-process and offline keys

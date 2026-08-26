@@ -707,7 +707,10 @@ class FuncBase:
                         callbacks,
                     )
                     idx += num_args_
-                return idx, True
+                # A Final-bearing subtree must not cache its launch context (``args_hash`` keys on ``id(arg)``, so a
+                # cached buffer would resend the first-launch values): re-read every launch so a mutated ordinary field
+                # supplies its new value and ``final_scalar_key`` re-validates. Matches ``args_hasher``'s repr gate.
+                return idx, not subtree_has_final_fields(needed_arg_type)
             # Non-frozen dataclass: original path. No ``Final`` handling - ``final_field_names`` rejects ``Final`` on a
             # non-frozen class, so such a class already failed during template mapping.
             is_launch_ctx_cacheable = False
