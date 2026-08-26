@@ -157,20 +157,20 @@ from typing import Final
 @dataclasses.dataclass(frozen=True)
 class SimConfig:
     enable_gravity: Final[bool]   # compile-time constant
-    dt: Final[float]              # compile-time constant
-    n_substeps: int               # ordinary runtime kernel argument
+    n_substeps: Final[int]        # compile-time constant
+    gain: int                     # ordinary runtime kernel argument
 
 @qd.kernel
-def integrate(config: SimConfig, positions: qd.types.NDArray[qd.f32, 1]):
-    # Legal because dt is Final: qd.static requires a compile-time constant.
-    dt = qd.static(config.dt)
+def integrate(config: SimConfig, positions: qd.types.NDArray[qd.i32, 1]):
+    # Legal because n_substeps is Final: qd.static requires a compile-time constant.
+    steps = qd.static(config.n_substeps)
     for i in positions:
         # This branch is resolved at compile time; the untaken side is not compiled at all.
         if qd.static(config.enable_gravity):
-            positions[i] -= 9.8 * dt
-        positions[i] += config.n_substeps * dt   # n_substeps read at runtime
+            positions[i] -= 1
+        positions[i] += config.gain * steps   # gain read at runtime
 
-integrate(SimConfig(enable_gravity=True, dt=0.01, n_substeps=4), positions)
+integrate(SimConfig(enable_gravity=True, n_substeps=4, gain=3), positions)
 ```
 
 This is the recommended pattern for **static configuration objects** - bags of flags and sizes that are fixed once at setup time and used to specialize kernels. It replaces the older approach of declaring such a config as `@qd.data_oriented` and passing it via `qd.Template` purely to obtain compile-time member reads.
