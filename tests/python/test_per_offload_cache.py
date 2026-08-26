@@ -648,6 +648,56 @@ def test_per_construct_frontend_split_graph_do_while() -> None:
     assert np.all(x.to_numpy() == 3), x.to_numpy()
 
 
+@test_utils.test(arch=qd.cuda, offline_cache=False)
+def test_per_construct_frontend_split_nested_graph_do_while() -> None:
+    # NESTED `qd.graph.do_while`: an outer loop resets and drives an inner loop. The graph_do_while transformer FLATTENS
+    # the nest before the frontend split runs, so the top-level block is a flat run of single-level constructs -- the
+    # inner-body range-for and the inner counter decrement carry `graph_do_while_level_id == 1`, while the inner reset
+    # and outer decrement carry level 0. This guards `construct_gdw_level`'s container branch (which re-stamps a whole
+    # construct to a for-loop's own level): if it recovered the WRONG level for a deeper-nested construct it would
+    # collapse the two levels together, and the host driver -- which rebuilds the loop nest purely from the flat tasks'
+    # level ids -- would either run the inner loop the wrong number of times or strand a counter and hang. Assert the
+    # split FIRES on the nested kernel and the reassembled two-level nest is still correct: x is incremented once per
+    # (outer, inner) iteration, so it must end at _OUTER * _INNER, and the outer counter must drain to 0.
+    _OUTER, _INNER = 3, 4
+
+    @qd.kernel(graph=True)
+    def run(
+        x: qd.types.ndarray(qd.i32, ndim=1),
+        outer: qd.types.ndarray(qd.i32, ndim=0),
+        inner: qd.types.ndarray(qd.i32, ndim=0),
+    ) -> None:
+        while qd.graph.do_while(outer):
+            for _ in range(1):
+                inner[()] = _INNER
+            while qd.graph.do_while(inner):
+                for i in range(_N):
+                    x[i] = x[i] + 1
+                for _ in range(1):
+                    inner[()] = inner[()] - 1
+            for _ in range(1):
+                outer[()] = outer[()] - 1
+
+    x = qd.ndarray(qd.i32, shape=(_N,))
+    x.from_numpy(np.zeros(_N, dtype=np.int32))
+    outer = qd.ndarray(qd.i32, shape=())
+    outer.from_numpy(np.array(_OUTER, dtype=np.int32))
+    inner = qd.ndarray(qd.i32, shape=())
+    inner.from_numpy(np.array(0, dtype=np.int32))
+    run(x, outer, inner)
+
+    obs = run._primal.per_offload_cache_observations
+    # Split fired on the nested kernel (no per-level gating), every construct recompiled (no reuse tier).
+    assert obs.frontend_constructs_total >= 1, obs
+    assert obs.frontend_constructs_recompiled == obs.frontend_constructs_total, obs
+    assert obs.frontend_constructs_cache_hit == 0, obs
+
+    # Correct + terminating: collapsing the inner level onto the outer (or vice versa) would miscount the nested work or
+    # strand a counter -> wrong total or a hang.
+    assert np.all(x.to_numpy() == _OUTER * _INNER), x.to_numpy()
+    assert outer.to_numpy() == 0, outer.to_numpy()
+
+
 @test_utils.test(arch=[qd.cpu, qd.cuda], offline_cache=False)
 def test_per_construct_frontend_split_struct_member_recomputed() -> None:
     # A local `qd.Struct` member is written at top level -- lowered to `LocalStoreStmt(GetElementStmt(alloca), ...)` --
