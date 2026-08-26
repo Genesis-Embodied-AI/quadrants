@@ -425,9 +425,9 @@ constexpr int kKeepOffloadGdwLevel = INT_MIN;
 // Genesis's decomposed rigid solver `_kernel_solve_graph`). We recover the level from construct k's OWN source segment
 // -- which at the split seam is still frontend-tagged (is_set=true), before any pass manufactures untagged stores: a
 // container segment's reliable `graph_do_while_level_id`, else its side-effecting serial statements' `region_tag`.
-// Returns kKeepOffloadGdwLevel (no re-stamp) for the rare serial segment whose side effects straddle >1 level -- offload
-// already split those into per-level tasks, so re-stamping them to one level would be wrong. A no-op for non-graph
-// kernels (every construct is level -1, which offload already assigned).
+// Returns kKeepOffloadGdwLevel (no re-stamp) for the rare serial segment whose side effects straddle >1 level --
+// offload already split those into per-level tasks, so re-stamping them to one level would be wrong. A no-op for
+// non-graph kernels (every construct is level -1, which offload already assigned).
 int construct_gdw_level(Block *block, const std::vector<int> &seg_id, int k) {
   const int n = (int)block->statements.size();
   int level = kKeepOffloadGdwLevel;
