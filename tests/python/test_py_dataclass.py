@@ -5221,28 +5221,36 @@ def test_final_subclass_dynamic_metaclass_identity_in_offline_key():
 
 
 @test_utils.test()
-def test_final_subclass_structural_attr_holds_identified_object():
-    """A user class/callable bound into a keyed structural attr (here ``__doc__``) is tokenized as ``(type, __name__)``
-    plus an identity component, so two distinct ``<locals>`` objects sharing a ``__name__`` do not collapse to one
-    token: the in-process key uses object identity, the offline key a dynamic serial (auto-generated slot descriptors
-    stay bare ``(type, name)`` since the owning class already carries identity)."""
+def test_final_subclass_structural_identified_object_rejected():
+    """A Python class or callable bound into a keyed structural attr (here ``__doc__``) is *rejected*, not keyed: its
+    mutable behavior (``__code__``/``__defaults__``/a class dict) is readable at compile time
+    (``cfg.x.__class__.__doc__.__defaults__``) yet uncapturable by the key, and it is not among the sources the source
+    cache validates, so keying it by identity/qualname alone could reuse a stale specialization after its body
+    changes. Rejection also covers such an object nested in a container structural value."""
     from quadrants.lang._final_dataclass_fields import final_scalar_key
-
-    def make_payload():
-        class Payload:  # <locals>, same qualname each call, distinct object
-            pass
-
-        return Payload
 
     class Unit(int):
         pass
 
-    Unit.__doc__ = make_payload()
-    live_before = final_scalar_key(Unit(1), live=True)
-    offline_before = str(final_scalar_key(Unit(1), live=False))
-    Unit.__doc__ = make_payload()  # distinct class object, identical __name__ 'Payload'
-    assert final_scalar_key(Unit(1), live=True) != live_before  # identity-safe live token
-    assert str(final_scalar_key(Unit(1), live=False)) != offline_before  # dynamic serial -> distinct offline
+    def helper(a=1):  # a callable whose __defaults__ a kernel could read at compile time
+        return a
+
+    Unit.__doc__ = helper
+    with pytest.raises(TypeError, match="mutable behavior"):
+        final_scalar_key(Unit(1), live=True)
+    with pytest.raises(TypeError, match="mutable behavior"):
+        final_scalar_key(Unit(1), live=False)
+
+    class Payload:  # a class bound as a structural value
+        pass
+
+    Unit.__doc__ = Payload
+    with pytest.raises(TypeError, match="mutable behavior"):
+        final_scalar_key(Unit(1), live=False)
+
+    Unit.__slots__ = (helper,)  # nested inside a container value -> rejected recursively
+    with pytest.raises(TypeError, match="mutable behavior"):
+        final_scalar_key(Unit(1), live=True)
 
 
 @test_utils.test()
@@ -5260,32 +5268,6 @@ def test_final_subclass_structural_float_bits_in_key():
     Unit.__doc__ = -0.0  # == 0.0 with an equal hash, but a distinct bit pattern
     assert final_scalar_key(Unit(1), live=True) != live_before
     assert str(final_scalar_key(Unit(1), live=False)) != offline_before
-
-
-@test_utils.test()
-def test_final_subclass_resolvable_attr_object_records_module():
-    """A *resolvable* class/callable bound into a keyed structural attr has offline identity ``None``, so its module +
-    qualname must still be recorded: two module-level classes sharing a ``__name__`` across different modules must not
-    collapse to one offline token, else a later fastcache process could load the wrong artifact."""
-    import sys
-    import types
-
-    from quadrants.lang._final_dataclass_fields import final_scalar_key
-
-    class Unit(int):
-        pass
-
-    def offline_key(modname):
-        mod = types.ModuleType(modname)
-        sys.modules[modname] = mod
-        try:
-            exec("class Foo:\n    pass\n", mod.__dict__)  # resolvable class, __name__ == 'Foo', offline identity None
-            Unit.__doc__ = mod.Foo
-            return str(final_scalar_key(Unit(1), live=False))
-        finally:
-            sys.modules.pop(modname, None)
-
-    assert offline_key("qd_attr_module_probe_a") != offline_key("qd_attr_module_probe_b")
 
 
 @test_utils.test()

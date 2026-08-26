@@ -626,8 +626,9 @@ _DESCRIPTOR_ATTR_TYPES = (
     types.BuiltinFunctionType,
 )
 
-# User-bound classes/callables: two distinct ``<locals>`` objects share ``(type, __name__)`` yet are observably
-# distinct (``cfg.x.__class__.<attr> is First``), so they also carry an identity component (``_identity_component``).
+# User-bound Python classes/callables: rejected as structural attr values (their mutable behavior/state - ``__code__``
+# / ``__defaults__`` / a class dict - is observable at compile time yet uncapturable by the key, and unvalidated by the
+# source cache). Contrast ``_DESCRIPTOR_ATTR_TYPES``, whose behavior is fixed at the C level, so they stay keyable.
 _IDENTIFIED_ATTR_TYPES = (
     types.FunctionType,
     types.MethodType,
@@ -707,14 +708,18 @@ def _canonical_attr_value(val: Any, live: bool):
             _identity_component(identified, live),
         )
     if isinstance(val, _IDENTIFIED_ATTR_TYPES):
-        # module + qualname separate two *resolvable* objects that share a ``__name__`` (offline identity is ``None``);
-        # ``_identity_component`` separates dynamic ones.
-        return (
-            type(val).__qualname__,
-            getattr(val, "__module__", None),
-            getattr(val, "__qualname__", None),
-            getattr(val, "__name__", None),
-            _identity_component(val, live),
+        # A Python-level class/callable carries mutable behavior/state (``__code__`` / ``__defaults__`` / a class
+        # dict) that no ``module``/``qualname``/identity token captures, and - unlike a kernel or ``@qd.func`` - it is
+        # not among the sources the source cache validates. So a *resolvable* one keeps the same offline key even after
+        # its body changes between processes (``cfg.x.__class__.<attr>.__defaults__`` flips), which would reuse a stale
+        # specialization. Reject rather than key it unsoundly.
+        cls = type(val)
+        raise TypeError(
+            f"A ``Final``-baked class carries a structural attribute holding a {cls.__qualname__} "
+            f"({getattr(val, '__module__', None)}.{getattr(val, '__qualname__', None)}), a class/callable whose "
+            f"mutable behavior a kernel can read at compile time (``cfg.x.__class__.<attr>``) but the key cannot "
+            f"capture, so reusing a specialization across a change to it would be unsound. Use a plain value "
+            f"(scalar/str/tuple/list/set/dict of such) instead."
         )
     raise TypeError(
         f"A ``Final``-baked class carries a structural attribute holding {val!r} (type {type(val).__qualname__}), "
