@@ -235,7 +235,11 @@ def test_ndarray_union_absent_in_middle_preserves_arg_binding():
     np.testing.assert_array_equal(last.to_numpy(), np.arange(4, dtype=np.float32) * 2.0)
 
 
-@test_utils.test(require=qd.extension.adstack)
+# ndarray autodiff is only supported on these backends (mirrors test_ad_ndarray.py; vulkan is excluded).
+_archs_support_ndarray_ad = [qd.cpu, qd.cuda, qd.amdgpu, qd.metal]
+
+
+@test_utils.test(arch=_archs_support_ndarray_ad, require=qd.extension.adstack)
 def test_ndarray_union_autodiff_present():
     """Autodiff through a present optional ndarray slot matches the non-optional case: the forward pass writes p and
     the backward pass (.grad) accumulates a.grad."""
