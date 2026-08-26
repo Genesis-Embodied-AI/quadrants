@@ -358,7 +358,7 @@
 <span class="sd">    Metadata about an argument to a function</span>
 <span class="sd">    """</span>
 
-    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">annotation</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="n">inspect</span><span class="o">.</span><span class="n">Parameter</span><span class="o">.</span><span class="n">empty</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">annotation</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="n">inspect</span><span class="o">.</span><span class="n">Parameter</span><span class="o">.</span><span class="n">empty</span><span class="p">,</span> <span class="n">optional</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
 <div class="viewcode-block" id="ArgMetadata.annotation">
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/kernel_arguments/index.html#quadrants.lang.kernel_arguments.ArgMetadata.annotation">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">annotation</span> <span class="o">=</span> <span class="n">annotation</span></div>
@@ -371,9 +371,17 @@
 <a class="viewcode-back" href="../../../autoapi/quadrants/lang/kernel_arguments/index.html#quadrants.lang.kernel_arguments.ArgMetadata.default">[docs]</a>
         <span class="bp">self</span><span class="o">.</span><span class="n">default</span> <span class="o">=</span> <span class="n">default</span></div>
 
+        <span class="c1"># ``None`` is an accepted value for this slot (spelled ``T | None``); ``annotation`` is the unwrapped ``T``.</span>
+<div class="viewcode-block" id="ArgMetadata.optional">
+<a class="viewcode-back" href="../../../autoapi/quadrants/lang/kernel_arguments/index.html#quadrants.lang.kernel_arguments.ArgMetadata.optional">[docs]</a>
+        <span class="bp">self</span><span class="o">.</span><span class="n">optional</span> <span class="o">=</span> <span class="n">optional</span></div>
+
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
-        <span class="k">return</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="vm">__class__</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">(annotation=</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">annotation</span><span class="si">}</span><span class="s2">, name=</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">, default=</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">default</span><span class="si">}</span><span class="s2">)"</span></div>
+        <span class="k">return</span> <span class="p">(</span>
+            <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="vm">__class__</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">(annotation=</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">annotation</span><span class="si">}</span><span class="s2">, name=</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2">, default=</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">default</span><span class="si">}</span><span class="s2">, "</span>
+            <span class="sa">f</span><span class="s2">"optional=</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">optional</span><span class="si">}</span><span class="s2">)"</span>
+        <span class="p">)</span></div>
 
 
 
