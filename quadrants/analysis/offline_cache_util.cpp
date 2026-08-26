@@ -57,7 +57,6 @@ static std::vector<std::uint8_t> get_offline_cache_key_of_compile_config(const C
     serializer(config.cpu_max_num_threads);
   } else if (arch_is_gpu(config.arch)) {
     serializer(config.default_gpu_block_dim);
-    serializer(config.gpu_max_reg);
     serializer(config.saturating_grid_dim);
     serializer(config.cpu_max_num_threads);
     // Mix the per-arch subgroup / warp / wave size into the cache key so cached kernels are invalidated whenever the

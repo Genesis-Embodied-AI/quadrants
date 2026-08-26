@@ -197,8 +197,6 @@ void export_lang(nb::module_ &m) {
       .def_rw("print_accessor_ir", &CompileConfig::print_accessor_ir,
               "Also include field accessor kernels in the IR printout. Only has an effect together with print_ir on "
               "the LLVM backends, which otherwise suppress accessor kernels.")
-      .def_rw("use_llvm", &CompileConfig::use_llvm,
-              "Intended to select the LLVM backend for code generation; currently has no effect, as nothing reads it.")
       .def_rw("print_struct_llvm_ir", &CompileConfig::print_struct_llvm_ir,
               "Print the LLVM IR generated for the data-structure (SNode) module.")
       .def_rw("print_kernel_llvm_ir", &CompileConfig::print_kernel_llvm_ir,
@@ -214,15 +212,6 @@ void export_lang(nb::module_ &m) {
               "variables. The print_* options ignore this path: the IR-printing ones (e.g. print_ir) go to stdout, "
               "while the LLVM-IR and assembly ones (e.g. print_kernel_llvm_ir, print_kernel_asm) write files in the "
               "current working directory.")
-      .def_rw("simplify_before_lower_access", &CompileConfig::simplify_before_lower_access,
-              "Intended to run the simplify pass before the lower-access pass; currently has no effect, as nothing "
-              "reads it.")
-      .def_rw("simplify_after_lower_access", &CompileConfig::simplify_after_lower_access,
-              "Intended to run the simplify pass after the lower-access pass; currently has no effect, as nothing "
-              "reads it.")
-      .def_rw("lower_access", &CompileConfig::lower_access,
-              "Intended to lower high-level field accesses to low-level pointer arithmetic; currently has no effect, "
-              "as nothing reads it (this lowering always runs).")
       .def_rw("move_loop_invariant_outside_if", &CompileConfig::move_loop_invariant_outside_if,
               "Hoist loop-invariant computations out of conditional branches. Runs only within the "
               "advanced_optimization pipeline.")
@@ -234,9 +223,6 @@ void export_lang(nb::module_ &m) {
               "Intended to let the CPU backend choose the parallel-for block size adaptively; currently has no effect, "
               "as nothing reads it (the CPU block size is always default_cpu_block_dim).")
       .def_rw("default_gpu_block_dim", &CompileConfig::default_gpu_block_dim, "Default GPU thread-block size.")
-      .def_rw("gpu_max_reg", &CompileConfig::gpu_max_reg,
-              "Intended to cap the number of registers per GPU thread (0 = driver default); currently has no effect, "
-              "as the value is not yet passed to the GPU JIT.")
       .def_rw("saturating_grid_dim", &CompileConfig::saturating_grid_dim,
               "Target GPU grid size (number of blocks) on the CUDA/AMDGPU backends; 0 lets Quadrants pick based on "
               "occupancy. It is an upper bound rather than a guarantee: reverse-mode kernels that carry an autodiff "
@@ -250,10 +236,6 @@ void export_lang(nb::module_ &m) {
               "Maximum number of CPU threads used to run kernels (the runtime thread pool and CPU parallel-for loops). "
               "Compilation threads are governed separately by num_compile_threads.")
       .def_rw("random_seed", &CompileConfig::random_seed, "Seed for Quadrants' random-number generation.")
-      .def_rw("verbose_kernel_launches", &CompileConfig::verbose_kernel_launches,
-              "Intended to log a message on every kernel launch; currently has no effect.")
-      .def_rw("verbose", &CompileConfig::verbose,
-              "Intended to print verbose logging during initialization and compilation; currently has no effect.")
       .def_rw("demote_dense_struct_fors", &CompileConfig::demote_dense_struct_fors,
               "Lower dense struct-for loops to ordinary range-for loops. Forced on for the Vulkan/Metal (SPIR-V) "
               "backends, where the value you pass is ignored.")
