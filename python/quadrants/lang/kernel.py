@@ -640,9 +640,14 @@ class Kernel(FuncBase):
                     template_num += 1
                     i_out += 1
                     continue
-                if val is None and type(needed_) is ndarray_type.NdarrayType and self.arg_metas[i_in].optional:
+                if (
+                    val is None
+                    and self.arg_metas[i_in].optional
+                    and type(self.arg_metas[i_in].annotation) is ndarray_type.NdarrayType
+                ):
                     # Optional ndarray slot passed None: specialized away at compile time, so it consumes no runtime
-                    # arg (mirrors the qd.Tensor + None launch no-op). See design.md W5.
+                    # arg (mirrors the qd.Tensor + None launch no-op). See design.md W5. The type check reads
+                    # arg_metas fresh rather than narrowing ``needed_``, which is passed on to _recursive_set_args.
                     continue
                 # FIXME: This shortcut skips _recursive_set_args() solely when val._qd_all_field is true and the annotation is
                 # a dataclass, but _recursive_set_args() is where the strict provided_arg_type-is-needed_arg_type check lives.
