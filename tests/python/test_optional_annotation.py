@@ -211,3 +211,60 @@ def test_ndarray_union_none_and_present_specialize_separately():
     np.testing.assert_array_equal(out.to_numpy(), np.arange(4, dtype=np.float32) + 100.0)
 
     assert len(add_bias._primal.mapper.mapping) == 2
+
+
+@test_utils.test()
+def test_ndarray_union_absent_in_middle_preserves_arg_binding():
+    """An absent optional ndarray slot between two required ndarray slots consumes no runtime arg, so both required
+    slots still bind to their own buffers (runtime-arg accounting stays aligned)."""
+    first = qd.ndarray(qd.f32, shape=(4,))
+    last = qd.ndarray(qd.f32, shape=(4,))
+
+    @qd.kernel
+    def k(
+        first: qd.types.NDArray[qd.f32, 1],
+        mid: qd.types.NDArray[qd.f32, 1] | None,
+        last: qd.types.NDArray[qd.f32, 1],
+    ):
+        for i in range(first.shape[0]):
+            first[i] = qd.f32(i)
+            last[i] = qd.f32(i) * 2.0
+
+    k(first, None, last)
+    np.testing.assert_array_equal(first.to_numpy(), np.arange(4, dtype=np.float32))
+    np.testing.assert_array_equal(last.to_numpy(), np.arange(4, dtype=np.float32) * 2.0)
+
+
+@test_utils.test(require=qd.extension.adstack)
+def test_ndarray_union_autodiff_present():
+    """Autodiff through a present optional ndarray slot matches the non-optional case: the forward pass writes p and
+    the backward pass (.grad) accumulates a.grad."""
+    N = 10
+
+    @qd.kernel
+    def compute(
+        a: qd.types.NDArray[qd.f32, 1] | None,
+        b: qd.types.NDArray[qd.i32, 1],
+        p: qd.types.NDArray[qd.f32, 1],
+    ):
+        for i in range(N):
+            ret = 1.0
+            for j in range(b[i]):
+                ret = ret + a[i]
+            p[i] = ret
+
+    a = qd.ndarray(qd.f32, shape=N, needs_grad=True)
+    b = qd.ndarray(qd.i32, shape=N)
+    p = qd.ndarray(qd.f32, shape=N, needs_grad=True)
+    for i in range(N):
+        a[i] = 3
+        b[i] = i
+
+    compute(a, b, p)
+    for i in range(N):
+        assert p[i] == a[i] * b[i] + 1
+        p.grad[i] = 1
+
+    compute.grad(a, b, p)
+    for i in range(N):
+        assert a.grad[i] == b[i]
