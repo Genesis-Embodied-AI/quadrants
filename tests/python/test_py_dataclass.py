@@ -5248,6 +5248,7 @@ def test_final_subclass_structural_identified_object_rejected():
     with pytest.raises(TypeError, match="mutable behavior"):
         final_scalar_key(Unit(1), live=False)
 
+    Unit.__doc__ = "plain"  # reset so the next rejection is attributable to the nested value, not this attr
     Unit.__slots__ = (helper,)  # nested inside a container value -> rejected recursively
     with pytest.raises(TypeError, match="mutable behavior"):
         final_scalar_key(Unit(1), live=True)
@@ -5529,10 +5530,12 @@ def test_final_subclass_structural_foreign_descriptor_identity():
 
 @test_utils.test()
 def test_final_subclass_dynamic_serial_keyed_by_identity():
-    """The offline serial registry for dynamically created attr values keys by object identity, not ``__eq__``: a
-    metaclass that makes distinct ``<locals>`` classes compare equal with equal hashes must not alias them to one
-    serial (a ``WeakKeyDictionary`` would), or a ``fastcache`` kernel could load code baked for the previous class."""
-    from quadrants.lang._final_dataclass_fields import final_scalar_key
+    """The offline serial registry (backing every dynamic object's identity token - a subclass, its metaclass, or a
+    descriptor owner) keys by object *identity*, not ``__eq__``: a metaclass that makes distinct ``<locals>`` classes
+    compare equal with equal hashes must not alias them to one serial (a ``WeakKeyDictionary`` would), or a
+    ``fastcache`` offline key could load code baked for a different object. Each serial is stable per object and
+    distinct across objects."""
+    from quadrants.lang._final_dataclass_fields import _dynamic_class_serial
 
     class Meta(type):
         def __eq__(cls, other):
@@ -5547,15 +5550,11 @@ def test_final_subclass_dynamic_serial_keyed_by_identity():
 
         return Local
 
-    first, second = make(), make()  # first == second and hash-equal, but distinct identities
-
-    class Unit(int):
-        pass
-
-    Unit.__doc__ = first
-    offline_first = str(final_scalar_key(Unit(1), live=False))
-    Unit.__doc__ = second
-    assert str(final_scalar_key(Unit(1), live=False)) != offline_first
+    first, second = make(), make()
+    assert first == second and hash(first) == hash(second) and first is not second  # equality-aliased, distinct id
+    serial_first = _dynamic_class_serial(first)
+    assert _dynamic_class_serial(first) == serial_first  # stable for the same object
+    assert _dynamic_class_serial(second) != serial_first  # distinct object -> distinct serial despite == aliasing
 
 
 @test_utils.test()
