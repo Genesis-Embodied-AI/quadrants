@@ -72,14 +72,16 @@ class TemplateMapper:
         self._prog_weakref: ReferenceType[Program] | None = None
 
     def extract(self, raise_on_templated_floats: bool, args: tuple[Any, ...]) -> Key:
+        # An optional ndarray slot passed None specializes on absence: give it a stable, dedicated key instead of
+        # running _extract_arg, whose NdarrayType branch reads .shape off the value and raises on None. (qd.Tensor /
+        # Template already produce a valid None key, so leave those to _extract_arg.)
         return tuple(
             [
-                # An optional ndarray slot passed None specializes on absence: give it a stable, dedicated key
-                # instead of running _extract_arg, whose NdarrayType branch reads .shape off the value and raises on
-                # None. (qd.Tensor / Template already produce a valid None key, so leave those to _extract_arg.)
-                OPTIONAL_ABSENT
-                if arg is None and kernel_arg.optional and type(kernel_arg.annotation) is ndarray_type.NdarrayType
-                else _extract_arg(raise_on_templated_floats, arg, kernel_arg.annotation, kernel_arg.name)
+                (
+                    OPTIONAL_ABSENT
+                    if arg is None and kernel_arg.optional and type(kernel_arg.annotation) is ndarray_type.NdarrayType
+                    else _extract_arg(raise_on_templated_floats, arg, kernel_arg.annotation, kernel_arg.name)
+                )
                 for arg, kernel_arg in zip(args, self.arguments)
             ]
         )
