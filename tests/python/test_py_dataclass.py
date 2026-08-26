@@ -5428,6 +5428,88 @@ def test_final_subclass_structural_dict_value_is_lossless():
 
 
 @test_utils.test()
+def test_final_subclass_313_metadata_in_key():
+    """3.13 adds ``__firstlineno__`` / ``__static_attributes__`` to a class dict; both are writable and readable at
+    compile time (``cfg.x.__class__.__firstlineno__``), so mutating either - or redefining a class at a different source
+    line - must change the key. On older runtimes they are absent (``_ATTR_ABSENT``) and this is a no-op."""
+    import sys
+
+    if sys.version_info < (3, 13):
+        return
+
+    from quadrants.lang._final_dataclass_fields import final_scalar_key
+
+    class Unit(int):
+        pass
+
+    live_before = final_scalar_key(Unit(1), live=True)
+    offline_before = str(final_scalar_key(Unit(1), live=False))
+    Unit.__firstlineno__ = 424242
+    assert final_scalar_key(Unit(1), live=True) != live_before
+    assert str(final_scalar_key(Unit(1), live=False)) != offline_before
+
+    class Other(int):
+        pass
+
+    static_before = final_scalar_key(Other(1), live=True)
+    Other.__static_attributes__ = ("zzz",)
+    assert final_scalar_key(Other(1), live=True) != static_before
+
+
+@test_utils.test()
+def test_final_subclass_structural_scalar_subclass_state_rejected():
+    """A scalar subclass bound in a keyed structural attr routes through ``final_scalar_key``, not a bare-value token:
+    per-instance state (``cfg.x.__class__.__doc__.label``) is rejected, and two distinct stateless subclasses sharing a
+    qualname/value key apart instead of collapsing."""
+    from quadrants.lang._final_dataclass_fields import final_scalar_key
+
+    class Unit(int):
+        pass
+
+    class Labelled(float):
+        pass
+
+    stateful = Labelled(1.0)
+    stateful.label = "a"  # per-instance state a kernel could read; the bare value would drop it
+    Unit.__doc__ = stateful
+    with pytest.raises(TypeError, match="per-instance state"):
+        final_scalar_key(Unit(1), live=True)
+
+    def make_plain():
+        class Plain(float):
+            pass
+
+        return Plain
+
+    class UnitA(int):
+        pass
+
+    class UnitB(int):
+        pass
+
+    UnitA.__doc__ = make_plain()(1.0)  # distinct <locals> classes, same qualname/value
+    UnitB.__doc__ = make_plain()(1.0)
+    assert final_scalar_key(UnitA(1), live=True) != final_scalar_key(UnitB(1), live=True)
+
+
+@test_utils.test()
+def test_final_subclass_structural_container_subclass_rejected():
+    """A container *subclass* in a keyed structural attr can add per-instance state / a distinct identity that keying by
+    its elements alone would drop, so it is rejected (exact ``tuple``/``list``/``set``/``dict`` stay legal)."""
+    from quadrants.lang._final_dataclass_fields import final_scalar_key
+
+    class MyList(list):
+        pass
+
+    class Unit(int):
+        pass
+
+    Unit.__slots__ = MyList()
+    with pytest.raises(TypeError, match="builtin subclass"):
+        final_scalar_key(Unit(1), live=True)
+
+
+@test_utils.test()
 def test_final_enum_key_incorporates_full_member_map():
     """A baked ``Final`` enum member keys on the *entire* member map, not only the selected member: a kernel can read a
     sibling at compile time (``cfg.mode.__class__.OTHER.value``), so changing another member's value must invalidate

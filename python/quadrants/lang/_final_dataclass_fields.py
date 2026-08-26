@@ -595,8 +595,15 @@ def _identity_component(obj: Any, live: bool):
 # Structural attrs (from ``_STRUCTURAL_CLASS_ATTRS``) that are user-writable *and* readable at compile time
 # (``cfg.x.__class__.<attr>``), so their *value* is folded into the class kind rather than exempted. ``__module__`` /
 # ``__qualname__`` are omitted (already the entry's leading elements). Absence is itself observable, so it is kept
-# distinct from an explicit ``None`` via ``_ATTR_ABSENT``.
-_KEYED_STRUCTURAL_ATTRS = ("__doc__", "__slots__", "__weakref__")
+# distinct from an explicit ``None`` via ``_ATTR_ABSENT``. ``__firstlineno__`` / ``__static_attributes__`` are 3.13+
+# (absent -> ``_ATTR_ABSENT`` on older runtimes); both are writable and observable, so their value is keyed too.
+_KEYED_STRUCTURAL_ATTRS = (
+    "__doc__",
+    "__slots__",
+    "__weakref__",
+    "__firstlineno__",
+    "__static_attributes__",
+)
 _ATTR_ABSENT = "<qd:attr-absent>"  # not a valid identifier, so it can never equal a real ``__slots__`` name/value
 
 # Auto-generated slot descriptors (the common case: a class's own ``__dict__``/``__weakref__``). Their only stable,
@@ -622,6 +629,19 @@ _IDENTIFIED_ATTR_TYPES = (
 )
 
 
+def _reject_structural_subclass(val: Any):
+    """Reject a builtin *subclass* bound in a keyed structural attr. Scalar subclasses route through
+    ``final_scalar_key`` (identity + stateful-subclass rejection); this covers the rest (``complex`` / ``bytes`` /
+    container subclasses) that may add per-instance state or a distinct identity the bare value/elements would drop."""
+    cls = type(val)
+    raise TypeError(
+        f"A ``Final``-baked class carries a structural attribute holding a {cls.__module__}.{cls.__qualname__} "
+        f"instance (a builtin subclass), which cannot be keyed faithfully: a kernel can read it at compile time "
+        f"(``cfg.x.__class__.<attr>``) and the subclass may add per-instance state or identity, so reusing a "
+        f"specialization across a change would be unsound. Use a plain builtin value instead."
+    )
+
+
 def _canonical_attr_value(val: Any, live: bool):
     """A deterministic, hashable, *lossless* snapshot of a class-dict value read at compile time
     (``cfg.x.__class__.<attr>``). Ints/str/bytes/None by value (type-tagged, so ``True``/``1`` differ); floats/complex
@@ -633,17 +653,34 @@ def _canonical_attr_value(val: Any, live: bool):
     reuse a stale specialization after the value changes."""
     if val is None:
         return None
-    if isinstance(val, float):  # exact IEEE bits, so ``0.0``/``-0.0`` and NaN payloads never collapse (0.0 == -0.0)
+    # A scalar *subclass* (or enum member) may carry per-instance state or a distinct class identity that the bare
+    # value discards, so route it through the full baked-scalar machinery (stateful-subclass rejection + subclass
+    # identity + IEEE bits). Exact builtins below skip that and encode directly.
+    if (isinstance(val, (bool, int, float, str)) and type(val) not in (bool, int, float, str)) or isinstance(
+        val, enum.Enum
+    ):
+        return ("scalarsub", final_scalar_key(val, live))
+    if isinstance(val, float):  # exact float (subclasses routed above); IEEE bits so ``0.0``/``-0.0`` never collapse
         return (type(val).__qualname__, _unpack_u64(_pack_f64(val))[0])
     if isinstance(val, complex):
+        if type(val) is not complex:  # a ``complex`` subclass may add state/identity the bare bits drop
+            _reject_structural_subclass(val)
         return (type(val).__qualname__, _unpack_u64(_pack_f64(val.real))[0], _unpack_u64(_pack_f64(val.imag))[0])
-    if isinstance(val, (bool, int, str, bytes)):
+    if isinstance(val, (bool, int, str, bytes)):  # exact only: bool/int/str subclasses routed above, so a subclass here
+        if type(val) not in (bool, int, str, bytes):  # is a ``bytes`` subclass, unkeyable by ``final_scalar_key``
+            _reject_structural_subclass(val)
         return (type(val).__qualname__, val)  # tag the exact type: ``True``/``1`` compare equal but differ
     if isinstance(val, (tuple, list)):
+        if type(val) not in (tuple, list):  # a container subclass may add per-instance state / a distinct identity
+            _reject_structural_subclass(val)
         return (type(val).__qualname__, tuple(_canonical_attr_value(v, live) for v in val))
     if isinstance(val, (set, frozenset)):
+        if type(val) not in (set, frozenset):
+            _reject_structural_subclass(val)
         return (type(val).__qualname__, frozenset(_canonical_attr_value(v, live) for v in val))
     if isinstance(val, dict):
+        if type(val) is not dict:
+            _reject_structural_subclass(val)
         items = tuple((_canonical_attr_value(k, live), _canonical_attr_value(v, live)) for k, v in val.items())
         return ("dict", items)
     if isinstance(val, _DESCRIPTOR_ATTR_TYPES):
