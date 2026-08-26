@@ -291,7 +291,15 @@ class FuncBase:
 
         self.template_slot_locations: list[int] = []
         for i, arg in enumerate(self.arg_metas):
-            if arg.annotation == template or isinstance(arg.annotation, template) or arg.annotation is _TensorClass:
+            if (
+                arg.annotation == template
+                or isinstance(arg.annotation, template)
+                or arg.annotation is _TensorClass
+                # An optional ndarray slot is dual-nature: registering it as a template slot is what lets presence
+                # (``None`` vs an array) specialize, exactly as a qd.Tensor slot does. A present value still consumes
+                # a runtime arg via the NdarrayType decl path. See design.md W5.
+                or (arg.optional and type(arg.annotation) is ndarray_type.NdarrayType)
+            ):
                 self.template_slot_locations.append(i)
 
     def _populate_global_vars_for_templates(

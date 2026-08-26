@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 
 import quadrants as qd
-from quadrants.lang.exception import QuadrantsRuntimeTypeError, QuadrantsSyntaxError
+from quadrants.lang.exception import QuadrantsSyntaxError
 from quadrants.types.ndarray_type import NdarrayType
 
 from tests import test_utils
@@ -157,7 +157,7 @@ def test_template_union_none_and_present_run():
     assert out.to_numpy()[0] == 7
 
 
-# Runtime: qd.types.NDArray[...] | None. Present value works now; None is not supported yet.
+# Runtime: qd.types.NDArray[...] | None launches with a value present and with None (dual-nature slot).
 
 
 @test_utils.test()
@@ -174,8 +174,9 @@ def test_ndarray_union_present_value_runs():
 
 
 @test_utils.test()
-def test_ndarray_union_none_not_yet_supported():
-    """An optional ndarray slot parses, but launching it with ``None`` is not supported yet."""
+def test_ndarray_union_none_launches_absent():
+    """None on an optional ndarray slot is specialized away and consumes no runtime arg, so a following required
+    ndarray slot is still bound correctly."""
     a = qd.ndarray(qd.f32, shape=(4,))
 
     @qd.kernel
@@ -183,5 +184,30 @@ def test_ndarray_union_none_not_yet_supported():
         for i in range(out.shape[0]):
             out[i] = qd.f32(i)
 
-    with pytest.raises(QuadrantsRuntimeTypeError):
-        maybe_fill(None, a)
+    maybe_fill(None, a)
+    np.testing.assert_array_equal(a.to_numpy(), np.arange(4, dtype=np.float32))
+
+
+@test_utils.test()
+def test_ndarray_union_none_and_present_specialize_separately():
+    """qd.static(x is not None) selects the branch: present adds x, absent leaves out untouched. The two calls
+    compile distinct specializations."""
+    out = qd.ndarray(qd.f32, shape=(4,))
+    bias = qd.ndarray(qd.f32, shape=(4,))
+    bias.from_numpy(np.full(4, 100.0, dtype=np.float32))
+
+    @qd.kernel
+    def add_bias(out: qd.types.NDArray[qd.f32, 1], bias: qd.types.NDArray[qd.f32, 1] | None):
+        for i in range(out.shape[0]):
+            if qd.static(bias is not None):
+                out[i] = qd.f32(i) + bias[i]
+            else:
+                out[i] = qd.f32(i)
+
+    add_bias(out, None)
+    np.testing.assert_array_equal(out.to_numpy(), np.arange(4, dtype=np.float32))
+
+    add_bias(out, bias)
+    np.testing.assert_array_equal(out.to_numpy(), np.arange(4, dtype=np.float32) + 100.0)
+
+    assert len(add_bias._primal.mapper.mapping) == 2

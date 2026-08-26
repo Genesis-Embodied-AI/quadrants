@@ -10,6 +10,23 @@ from quadrants.types import ndarray_type, template
 _NoneType = type(None)
 
 
+class _OptionalAbsent:
+    """Spec-key sentinel for an optional ndarray slot passed ``None``.
+
+    A distinct, hashable singleton so the absent specialization gets its own cache key and the arg-declaration path
+    recognizes it as "no runtime arg; bind the name to the injected ``None`` template var so the present-only body
+    specializes away". Mirrors how a ``qd.Tensor`` slot handles ``None``.
+    """
+
+    __slots__ = ()
+
+    def __repr__(self) -> str:
+        return "<optional-absent>"
+
+
+OPTIONAL_ABSENT = _OptionalAbsent()
+
+
 def _is_optional_capable(inner) -> bool:
     """The families with an absent-value path; ``T | None`` on anything else has no runtime meaning."""
     if inner is _TensorClass:
