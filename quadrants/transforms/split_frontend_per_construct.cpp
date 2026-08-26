@@ -19,6 +19,7 @@
 #include "quadrants/program/program.h"
 #include "quadrants/program/per_construct_cache.h"
 
+#include <climits>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -104,11 +105,12 @@ class SubsetCloner : public IRVisitor {
       // every cloned statement (a no-op re-copy for leaf stmts, whose QD_DEFINE_CLONE copy-ctor clone already has
       // them). region_tag marks the graph region (`qd.checkpoint` cp_id, `qd.graph.do_while` level, ...) a statement
       // belongs to; losing it makes the serial offloader tag the task at the default (e.g. checkpoint_id -1 =
-      // always-run instead of gated on `resume`) so a statement gated inside a region is mis-scheduled. (do_while
-      // kernels now fall back to the whole-kernel path before reaching the split -- see `block_has_graph_do_while` --
-      // but checkpoint kernels still split, so this copy is still load-bearing.) dbg_info carries the source traceback;
-      // losing it empties `get_tb()` so later per-construct diagnostics (e.g. offload.cpp's block-dim-too-large warning
-      // on a cloned StructForStmt) print without a source location.
+      // always-run instead of gated on `resume`) so a statement gated inside a region is mis-scheduled. This copy keeps
+      // side-effecting statements' checkpoint/level tags through the clone; the graph_do_while level is additionally
+      // reattached per construct on reassembly (see `construct_gdw_level`) to cover pass-made tasks whose tags the
+      // clone can't recover. dbg_info carries the source traceback; losing it empties `get_tb()` so later per-construct
+      // diagnostics (e.g. offload.cpp's block-dim-too-large warning on a cloned StructForStmt) print without a source
+      // location.
       other_stmt->region_tag = stmt->region_tag;
       other_stmt->dbg_info = stmt->dbg_info;
     } else {
@@ -299,37 +301,6 @@ bool block_has_concurrent_region(Block *block) {
           }).empty();
 }
 
-// Whether the kernel contains a `qd.graph.do_while` loop (any statement tagged with a graph_do_while level >= 0; -1 is
-// "outside any do_while"). A do_while is driven from the HOST: `offload` flattens the loop body into a CONTIGUOUS run
-// of tasks all tagged with the loop's `graph_do_while_level_id`, and the host graph driver rebuilds the loop nesting
-// from that flat, contiguity-assuming task list -- relaunching the run each iteration until the on-device break flag
-// fires (see the serial-bucket region-tagging logic in transforms/offload.cpp, esp. the note that a stray top-level
-// task wedged into a loop body's run makes "the loop counter never decrement"). The per-construct split offloads each
-// construct in ISOLATION and reassembles, which re-runs that per-construct serial-bucket / region-tag assignment out of
-// whole-kernel context: a serial task can be tagged at the wrong do_while level (its own region_tag is only trusted
-// when side-effecting; a pure bucket borrows the region of whatever for-loop triggers its flush, which differs once the
-// construct is offloaded alone) and get wedged into or pulled out of the body's contiguous run. The host driver then
-// never sees the loop terminate and spins forever -- Genesis's decomposed rigid constraint solver (a graph_do_while CG
-// loop) hangs on coupled contact even though each individual task's codegen is unchanged. Fall back to the whole-kernel
-// path for any kernel with a do_while region; the monolith (non-do_while) solver arm and every other kernel still
-// split. Gathers containers so a do_while nested inside another loop is seen.
-bool block_has_graph_do_while(Block *block) {
-  if (block == nullptr)
-    return false;
-  return !gather_stmts_incl_containers(block, [](Stmt *s) {
-            if (auto *rf = s->cast<RangeForStmt>())
-              if (rf->graph_do_while_level_id >= 0)
-                return true;
-            if (auto *sf = s->cast<StructForStmt>())
-              if (sf->graph_do_while_level_id >= 0)
-                return true;
-            if (auto *mf = s->cast<MeshForStmt>())
-              if (mf->graph_do_while_level_id >= 0)
-                return true;
-            return s->region_tag.is_set && s->region_tag.graph_do_while_level_id >= 0;
-          }).empty();
-}
-
 // Resolve a local pointer to its base AllocaStmt: an AllocaStmt directly, a MatrixPtrStmt into one (matrix/vector
 // element), or a GetElementStmt into one (`qd.Struct` member). Returns nullptr when the pointer is not alloca-based
 // (e.g. a global pointer / global temporary), in which case it is not a local variable. Chasing GetElementStmt matters
@@ -434,6 +405,53 @@ TopLevelSegments segment_top_level(Block *block) {
   }
   segs.n_segs = (int)segs.seg_emits_task.size();
   return segs;
+}
+
+// Sentinel from `construct_gdw_level`: leave the construct's per-task levels as offload assigned them.
+constexpr int kKeepOffloadGdwLevel = INT_MIN;
+
+// The graph_do_while level ALL of construct k's reassembled tasks must carry so the host driver keeps a do_while body
+// as one contiguous, same-level task run. A `qd.graph.do_while` loop is driven from the HOST: `offload` flattens the
+// body into a contiguous run of tasks all tagged with the loop's `graph_do_while_level_id`, and the host graph driver
+// rebuilds the loop nesting from that flat, contiguity-assuming task list, relaunching the run until the on-device
+// break flag fires (see offload.cpp's serial-bucket note that a stray task wedged into a body's run makes "the loop
+// counter never decrement"). WHY the level needs recovering after a per-construct offload: the whole-kernel offloader
+// runs a serial task at the level its side-effecting statements were WRITTEN at (their `region_tag`), OR -- for a task
+// created by a later pass (a recomputed global-temp materialization, whose `region_tag.is_set` is false -> level -1) --
+// at whatever level the neighbouring properly-tagged work in its serial bucket sets. Offloading a construct in
+// ISOLATION strands such a pass-made store alone in its bucket with no level-0 neighbour, so it flushes at the default
+// level -1 and, once reassembled, wedges a stray -1 task into the middle of the do_while body's level-0 run -- the loop
+// counter is then stranded outside the body and never decrements, so the kernel spins forever (this is what hung
+// Genesis's decomposed rigid solver `_kernel_solve_graph`). We recover the level from construct k's OWN source segment
+// -- which at the split seam is still frontend-tagged (is_set=true), before any pass manufactures untagged stores: a
+// container segment's reliable `graph_do_while_level_id`, else its side-effecting serial statements' `region_tag`.
+// Returns kKeepOffloadGdwLevel (no re-stamp) for the rare serial segment whose side effects straddle >1 level -- offload
+// already split those into per-level tasks, so re-stamping them to one level would be wrong. A no-op for non-graph
+// kernels (every construct is level -1, which offload already assigned).
+int construct_gdw_level(Block *block, const std::vector<int> &seg_id, int k) {
+  const int n = (int)block->statements.size();
+  int level = kKeepOffloadGdwLevel;
+  for (int j = 0; j < n; j++) {
+    if (seg_id[j] != k)
+      continue;
+    Stmt *s = block->statements[j].get();
+    // A container is its own segment (see `segment_top_level`), so its own reliable level tags the whole construct --
+    // including any recomputed serial prefix the loop consumes, matching the whole-kernel offloader's pre-for flush.
+    if (auto *rf = s->cast<RangeForStmt>())
+      return rf->graph_do_while_level_id;
+    if (auto *sf = s->cast<StructForStmt>())
+      return sf->graph_do_while_level_id;
+    if (auto *mf = s->cast<MeshForStmt>())
+      return mf->graph_do_while_level_id;
+    if (stmt_is_task_effect(s) && s->region_tag.is_set) {
+      const int lv = s->region_tag.graph_do_while_level_id;
+      if (level == kKeepOffloadGdwLevel)
+        level = lv;
+      else if (level != lv)
+        return kKeepOffloadGdwLevel;  // serial run straddles levels: trust offload's per-region task split
+    }
+  }
+  return level;
 }
 
 // The locals (allocas) a statement writes. Reads the shared `Store` trait (`get_store_destination`) so it covers EVERY
@@ -741,8 +759,18 @@ void split_frontend_per_construct(IRNode *ir, const CompileConfig &config, const
     // (by a stable per-construct cache key it introduces) and reuses an unchanged construct's tasks instead.
     run_construct_frontend(cb, config, kernel, verbose, /*construct_index=*/n_constructs - 1);
     n_recompiled++;
-    while (!cb->statements.empty())
-      tasks.push_back(cb->extract(0));
+    // Reattach the construct's graph_do_while level onto its produced tasks so the reassembled body stays one
+    // contiguous same-level run (see `construct_gdw_level`). Load-bearing for `qd.graph.do_while` kernels, where a
+    // pass-made serial task otherwise flushes at level -1 in isolation and wedges into the body's level-0 run, hanging
+    // the host loop. A no-op for non-graph kernels and for tasks offload already tagged correctly.
+    const int level = construct_gdw_level(block, segs.seg_id, k);
+    while (!cb->statements.empty()) {
+      auto t = cb->extract(0);
+      if (level != kKeepOffloadGdwLevel)
+        if (auto *off = t->cast<OffloadedStmt>())
+          off->graph_do_while_level_id = level;
+      tasks.push_back(std::move(t));
+    }
   }
   while (!block->statements.empty())
     block->extract(0);
@@ -797,8 +825,6 @@ bool maybe_split_frontend_per_construct(IRNode *ir,
     return false;
   if (block_has_concurrent_region(block))
     return false;  // concurrent constructs share one global-temp buffer; per-construct offload would alias offsets
-  if (block_has_graph_do_while(block))
-    return false;  // host-driven do_while loop body must stay one contiguous task run; reassembly breaks termination
   if (!split_is_recompute_safe(block))
     return false;
   // Cost guard. The split recompiles each construct over its backward slice, so a kernel whose constructs share a large
