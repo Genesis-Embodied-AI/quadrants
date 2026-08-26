@@ -45,7 +45,6 @@ struct CompileConfig {
   DataType default_ip;
   DataType default_up;
   int default_cpu_block_dim;
-  bool cpu_block_dim_adaptive;
   int default_gpu_block_dim;
   bool ad_stack_experimental_enabled{false};
   int ad_stack_size{0};  // 0 = adaptive

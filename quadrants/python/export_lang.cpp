@@ -219,9 +219,6 @@ void export_lang(nb::module_ &m) {
               "Cache loop-invariant global loads into locals inside loops.")
       .def_rw("default_cpu_block_dim", &CompileConfig::default_cpu_block_dim,
               "Number of iterations per CPU parallel-for block.")
-      .def_rw("cpu_block_dim_adaptive", &CompileConfig::cpu_block_dim_adaptive,
-              "Intended to let the CPU backend choose the parallel-for block size adaptively; currently has no effect, "
-              "as nothing reads it (the CPU block size is always default_cpu_block_dim).")
       .def_rw("default_gpu_block_dim", &CompileConfig::default_gpu_block_dim, "Default GPU thread-block size.")
       .def_rw("saturating_grid_dim", &CompileConfig::saturating_grid_dim,
               "Target GPU grid size (number of blocks) on the CUDA/AMDGPU backends; 0 lets Quadrants pick based on "

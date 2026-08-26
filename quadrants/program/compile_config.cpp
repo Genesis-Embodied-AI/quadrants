@@ -28,7 +28,6 @@ CompileConfig::CompileConfig() {
   default_up = PrimitiveType::u32;
   kernel_profiler = false;
   default_cpu_block_dim = 32;
-  cpu_block_dim_adaptive = true;
   default_gpu_block_dim = 128;
   fast_math = true;
   flatten_if = false;
