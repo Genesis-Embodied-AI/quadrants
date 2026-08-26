@@ -209,6 +209,27 @@ For a parameter annotated `qd.Tensor`, calls to the same kernel may alternate am
 
 A `qd.Tensor` parameter also accepts **external arrays** - `numpy.ndarray` and `torch.Tensor` - in addition to the `qd.field` / `qd.ndarray` tensors and `None`. An external array is specialized by its dtype, rank and gradient state rather than by the identity of the array object, so two distinct arrays that share those properties reuse the same compiled kernel, while any difference between them - including a torch tensor's `requires_grad` - compiles a separate one.
 
+### Declaring that an argument may be `None`: `T | None`
+
+To make it explicit in the signature that an argument accepts `None`, spell it `T | None`. This is supported for three annotation families: `qd.Tensor`, `qd.types.Template`, and [`qd.types.NDArray`](tensor_types.md). The `typing.Optional[T]` spelling is equivalent for the two class-style families (`qd.Tensor`, `qd.types.Template`) but not for `qd.types.NDArray[...]`: a subscripted ndarray annotation evaluates to an instance that `typing.Optional[...]` cannot wrap (it raises `TypeError` while the annotation is being constructed), so ndarray arguments must use the `T | None` spelling. Guard the present-only operations with `qd.static(x is not None)` exactly as above:
+
+```python
+@qd.kernel
+def add_bias(out: qd.types.NDArray[qd.f32, 1], bias: qd.Tensor | None):
+    for i in range(out.shape[0]):
+        if qd.static(bias is not None):
+            out[i] = qd.f32(i) + bias[i]
+        else:
+            out[i] = qd.f32(i)
+
+add_bias(out, None)   # absent: the bias branch is specialized away
+add_bias(out, bias)   # present: bias is a qd.Tensor (or a bare field / ndarray)
+```
+
+The bare `qd.Tensor` spelling (above) keeps accepting `None`, so `x: qd.Tensor` and `x: qd.Tensor | None` behave the same at runtime; `T | None` is the form to prefer when you want the optionality visible in the signature. Only the two-member `T | None` union is accepted - other unions (`A | B`, `A | B | None`) and `| None` on any other annotation family are rejected at kernel-registration time.
+
+Support is not yet uniform at launch: `qd.Tensor | None` and `qd.types.Template | None` accept `None` now, but `qd.types.NDArray[...] | None` currently accepts only a present array - passing `None` raises at launch until optional ndarray slots land. The annotation parses either way, so signatures can already be written in the target form.
+
 `qd.Tensor` is also the right annotation when storing a tensor as a `dataclasses.dataclass` member:
 
 ```python

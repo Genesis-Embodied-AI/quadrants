@@ -73,6 +73,7 @@ from quadrants.types.utils import is_signed
 _TENSOR_T_NDARRAY_LAUNCH_ANNOTATION = ndarray_type.NdarrayType()
 
 from ._kernel_types import KernelBatchedArgType
+from ._optional_annotation import split_optional
 from ._template_mapper import TemplateMapper
 from ._template_mapper_hotpath import _is_external_array
 
@@ -241,12 +242,14 @@ class FuncBase:
             if param.kind != inspect.Parameter.POSITIONAL_OR_KEYWORD:
                 raise QuadrantsSyntaxError('Quadrants kernels only support "positional or keyword" parameters')
             annotation = param.annotation
+            optional = False
             if param.annotation is inspect.Parameter.empty:
                 if i == 0 and (self.is_classkernel or self.is_classfunc):  # The |self| parameter
                     annotation = template()
                 elif self.is_kernel or self.is_real_function:
                     raise QuadrantsSyntaxError("Quadrants kernels parameters must be type annotated")
             else:
+                annotation, optional = split_optional(annotation)
                 annotation_type = type(annotation)
                 if annotation_type is ndarray_type.NdarrayType:
                     pass
@@ -283,8 +286,8 @@ class FuncBase:
                     raise QuadrantsSyntaxError(
                         f"Invalid type annotation (argument {i}) of Quadrants kernel: {annotation}"
                     )
-            self.arg_metas.append(ArgMetadata(annotation, param.name, param.default))
-            self.orig_arguments.append(ArgMetadata(annotation, param.name, param.default))
+            self.arg_metas.append(ArgMetadata(annotation, param.name, param.default, optional=optional))
+            self.orig_arguments.append(ArgMetadata(annotation, param.name, param.default, optional=optional))
 
         self.template_slot_locations: list[int] = []
         for i, arg in enumerate(self.arg_metas):
