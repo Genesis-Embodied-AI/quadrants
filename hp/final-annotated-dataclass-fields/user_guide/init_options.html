@@ -646,13 +646,6 @@
 </dd></dl>
 
 <dl class="py property">
-<dt class="sig sig-object py" id="quadrants._lib.core.quadrants_python.CompileConfig.cpu_block_dim_adaptive">
-<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">cpu_block_dim_adaptive</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">bool</span></em><a class="headerlink" href="#quadrants._lib.core.quadrants_python.CompileConfig.cpu_block_dim_adaptive" title="Link to this definition">#</a></dt>
-<dd><p>Intended to let the CPU backend choose the parallel-for block size adaptively; currently has no effect, as nothing reads it (the CPU block size is always default_cpu_block_dim).</p>
-<p>Default: <code class="docutils literal notranslate"><span class="pre">True</span></code>.</p>
-</dd></dl>
-
-<dl class="py property">
 <dt class="sig sig-object py" id="quadrants._lib.core.quadrants_python.CompileConfig.cpu_max_num_threads">
 <em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">cpu_max_num_threads</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">int</span></em><a class="headerlink" href="#quadrants._lib.core.quadrants_python.CompileConfig.cpu_max_num_threads" title="Link to this definition">#</a></dt>
 <dd><p>Maximum number of CPU threads used to run kernels (the runtime thread pool and CPU parallel-for loops). Compilation threads are governed separately by num_compile_threads.</p>
@@ -801,13 +794,6 @@
 </dd></dl>
 
 <dl class="py property">
-<dt class="sig sig-object py" id="quadrants._lib.core.quadrants_python.CompileConfig.gpu_max_reg">
-<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">gpu_max_reg</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">int</span></em><a class="headerlink" href="#quadrants._lib.core.quadrants_python.CompileConfig.gpu_max_reg" title="Link to this definition">#</a></dt>
-<dd><p>Intended to cap the number of registers per GPU thread (0 = driver default); currently has no effect, as the value is not yet passed to the GPU JIT.</p>
-<p>Default: <code class="docutils literal notranslate"><span class="pre">0</span></code>.</p>
-</dd></dl>
-
-<dl class="py property">
 <dt class="sig sig-object py" id="quadrants._lib.core.quadrants_python.CompileConfig.half2_vectorization">
 <em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">half2_vectorization</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">bool</span></em><a class="headerlink" href="#quadrants._lib.core.quadrants_python.CompileConfig.half2_vectorization" title="Link to this definition">#</a></dt>
 <dd><p>Vectorize pairs of float16 operations into half2 ops. CUDA only, and only when real_matrix_scalarize is also enabled.</p>
@@ -819,13 +805,6 @@
 <em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">kernel_profiler</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">bool</span></em><a class="headerlink" href="#quadrants._lib.core.quadrants_python.CompileConfig.kernel_profiler" title="Link to this definition">#</a></dt>
 <dd><p>Enable the on-device kernel profiler to collect per-kernel timings. Only the CPU, CUDA, and AMDGPU backends emit the timing hooks; on Vulkan/Metal it produces no per-kernel timings.</p>
 <p>Default: <code class="docutils literal notranslate"><span class="pre">False</span></code>.</p>
-</dd></dl>
-
-<dl class="py property">
-<dt class="sig sig-object py" id="quadrants._lib.core.quadrants_python.CompileConfig.lower_access">
-<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">lower_access</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">bool</span></em><a class="headerlink" href="#quadrants._lib.core.quadrants_python.CompileConfig.lower_access" title="Link to this definition">#</a></dt>
-<dd><p>Intended to lower high-level field accesses to low-level pointer arithmetic; currently has no effect, as nothing reads it (this lowering always runs).</p>
-<p>Default: <code class="docutils literal notranslate"><span class="pre">True</span></code>.</p>
 </dd></dl>
 
 <dl class="py property">
@@ -1068,44 +1047,9 @@
 </dd></dl>
 
 <dl class="py property">
-<dt class="sig sig-object py" id="quadrants._lib.core.quadrants_python.CompileConfig.simplify_after_lower_access">
-<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">simplify_after_lower_access</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">bool</span></em><a class="headerlink" href="#quadrants._lib.core.quadrants_python.CompileConfig.simplify_after_lower_access" title="Link to this definition">#</a></dt>
-<dd><p>Intended to run the simplify pass after the lower-access pass; currently has no effect, as nothing reads it.</p>
-<p>Default: <code class="docutils literal notranslate"><span class="pre">True</span></code>.</p>
-</dd></dl>
-
-<dl class="py property">
-<dt class="sig sig-object py" id="quadrants._lib.core.quadrants_python.CompileConfig.simplify_before_lower_access">
-<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">simplify_before_lower_access</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">bool</span></em><a class="headerlink" href="#quadrants._lib.core.quadrants_python.CompileConfig.simplify_before_lower_access" title="Link to this definition">#</a></dt>
-<dd><p>Intended to run the simplify pass before the lower-access pass; currently has no effect, as nothing reads it.</p>
-<p>Default: <code class="docutils literal notranslate"><span class="pre">True</span></code>.</p>
-</dd></dl>
-
-<dl class="py property">
 <dt class="sig sig-object py" id="quadrants._lib.core.quadrants_python.CompileConfig.timeline">
 <em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">timeline</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">bool</span></em><a class="headerlink" href="#quadrants._lib.core.quadrants_python.CompileConfig.timeline" title="Link to this definition">#</a></dt>
 <dd><p>Record a chrome-tracing timeline of GPU kernel execution, sourced from the CUDA/AMDGPU kernel profiler (so kernel_profiler must be enabled). Compilation is not recorded.</p>
-<p>Default: <code class="docutils literal notranslate"><span class="pre">False</span></code>.</p>
-</dd></dl>
-
-<dl class="py property">
-<dt class="sig sig-object py" id="quadrants._lib.core.quadrants_python.CompileConfig.use_llvm">
-<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">use_llvm</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">bool</span></em><a class="headerlink" href="#quadrants._lib.core.quadrants_python.CompileConfig.use_llvm" title="Link to this definition">#</a></dt>
-<dd><p>Intended to select the LLVM backend for code generation; currently has no effect, as nothing reads it.</p>
-<p>Default: <code class="docutils literal notranslate"><span class="pre">True</span></code>.</p>
-</dd></dl>
-
-<dl class="py property">
-<dt class="sig sig-object py" id="quadrants._lib.core.quadrants_python.CompileConfig.verbose">
-<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">verbose</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">bool</span></em><a class="headerlink" href="#quadrants._lib.core.quadrants_python.CompileConfig.verbose" title="Link to this definition">#</a></dt>
-<dd><p>Intended to print verbose logging during initialization and compilation; currently has no effect.</p>
-<p>Default: <code class="docutils literal notranslate"><span class="pre">True</span></code>.</p>
-</dd></dl>
-
-<dl class="py property">
-<dt class="sig sig-object py" id="quadrants._lib.core.quadrants_python.CompileConfig.verbose_kernel_launches">
-<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">verbose_kernel_launches</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">bool</span></em><a class="headerlink" href="#quadrants._lib.core.quadrants_python.CompileConfig.verbose_kernel_launches" title="Link to this definition">#</a></dt>
-<dd><p>Intended to log a message on every kernel launch; currently has no effect.</p>
 <p>Default: <code class="docutils literal notranslate"><span class="pre">False</span></code>.</p>
 </dd></dl>
 
@@ -1130,6 +1074,11 @@
 <li><p><code class="docutils literal notranslate"><span class="pre">print_full_traceback</span></code> (<code class="docutils literal notranslate"><span class="pre">bool</span></code>, default <code class="docutils literal notranslate"><span class="pre">False</span></code>): print the full Python traceback when an exception propagates out of Quadrants (also settable via <code class="docutils literal notranslate"><span class="pre">QD_PRINT_FULL_TRACEBACK</span></code>).</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">unrolling_limit</span></code> (<code class="docutils literal notranslate"><span class="pre">int</span></code>, default <code class="docutils literal notranslate"><span class="pre">32</span></code>): maximum number of iterations a static loop may be unrolled before a warning is emitted; <code class="docutils literal notranslate"><span class="pre">0</span></code> disables the warning (also settable via <code class="docutils literal notranslate"><span class="pre">QD_UNROLLING_LIMIT</span></code>).</p></li>
 </ul>
+</section>
+<section id="removed-options">
+<h2>Removed options<a class="headerlink" href="#removed-options" title="Link to this heading">#</a></h2>
+<p>These options were accepted by <code class="docutils literal notranslate"><span class="pre">qd.init</span></code> in earlier versions but never had any effect (nothing in the compiler or runtime read their value), so they have been removed: <code class="docutils literal notranslate"><span class="pre">use_llvm</span></code>, <code class="docutils literal notranslate"><span class="pre">lower_access</span></code>, <code class="docutils literal notranslate"><span class="pre">simplify_before_lower_access</span></code>, <code class="docutils literal notranslate"><span class="pre">simplify_after_lower_access</span></code>, <code class="docutils literal notranslate"><span class="pre">verbose</span></code>, <code class="docutils literal notranslate"><span class="pre">verbose_kernel_launches</span></code>, <code class="docutils literal notranslate"><span class="pre">gpu_max_reg</span></code>, and <code class="docutils literal notranslate"><span class="pre">cpu_block_dim_adaptive</span></code>. Passing any of them to <code class="docutils literal notranslate"><span class="pre">qd.init</span></code> now raises a <code class="docutils literal notranslate"><span class="pre">KeyError</span></code> (they were previously ignored), and the corresponding <code class="docutils literal notranslate"><span class="pre">QD_&lt;NAME&gt;</span></code> environment variables are no longer read. If your code passed any of these, drop them: none of them changed behavior.</p>
+<p>The <code class="docutils literal notranslate"><span class="pre">block_dim_adaptive</span></code> keyword of <code class="docutils literal notranslate"><span class="pre">qd.loop_config</span></code> (the helper that sets directives such as GPU block size and CPU parallelization for the loop that immediately follows it) has also been removed. It was the only setter for <code class="docutils literal notranslate"><span class="pre">cpu_block_dim_adaptive</span></code> and equally had no effect, so <code class="docutils literal notranslate"><span class="pre">qd.loop_config(block_dim_adaptive=...)</span></code> now raises a <code class="docutils literal notranslate"><span class="pre">TypeError</span></code>; drop the argument. The CPU parallel-for block size is controlled by <code class="docutils literal notranslate"><span class="pre">default_cpu_block_dim</span></code>.</p>
 </section>
 </section>
 
@@ -1218,7 +1167,6 @@
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants._lib.core.quadrants_python.CompileConfig.cache_loop_invariant_global_vars"><code class="docutils literal notranslate"><span class="pre">CompileConfig.cache_loop_invariant_global_vars</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants._lib.core.quadrants_python.CompileConfig.cfg_optimization"><code class="docutils literal notranslate"><span class="pre">CompileConfig.cfg_optimization</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants._lib.core.quadrants_python.CompileConfig.check_out_of_bound"><code class="docutils literal notranslate"><span class="pre">CompileConfig.check_out_of_bound</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants._lib.core.quadrants_python.CompileConfig.cpu_block_dim_adaptive"><code class="docutils literal notranslate"><span class="pre">CompileConfig.cpu_block_dim_adaptive</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants._lib.core.quadrants_python.CompileConfig.cpu_max_num_threads"><code class="docutils literal notranslate"><span class="pre">CompileConfig.cpu_max_num_threads</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants._lib.core.quadrants_python.CompileConfig.cuda_stack_limit"><code class="docutils literal notranslate"><span class="pre">CompileConfig.cuda_stack_limit</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants._lib.core.quadrants_python.CompileConfig.debug"><code class="docutils literal notranslate"><span class="pre">CompileConfig.debug</span></code></a></li>
@@ -1238,10 +1186,8 @@
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants._lib.core.quadrants_python.CompileConfig.fast_math"><code class="docutils literal notranslate"><span class="pre">CompileConfig.fast_math</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants._lib.core.quadrants_python.CompileConfig.flatten_if"><code class="docutils literal notranslate"><span class="pre">CompileConfig.flatten_if</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants._lib.core.quadrants_python.CompileConfig.force_scalarize_matrix"><code class="docutils literal notranslate"><span class="pre">CompileConfig.force_scalarize_matrix</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants._lib.core.quadrants_python.CompileConfig.gpu_max_reg"><code class="docutils literal notranslate"><span class="pre">CompileConfig.gpu_max_reg</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants._lib.core.quadrants_python.CompileConfig.half2_vectorization"><code class="docutils literal notranslate"><span class="pre">CompileConfig.half2_vectorization</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants._lib.core.quadrants_python.CompileConfig.kernel_profiler"><code class="docutils literal notranslate"><span class="pre">CompileConfig.kernel_profiler</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants._lib.core.quadrants_python.CompileConfig.lower_access"><code class="docutils literal notranslate"><span class="pre">CompileConfig.lower_access</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants._lib.core.quadrants_python.CompileConfig.make_block_local"><code class="docutils literal notranslate"><span class="pre">CompileConfig.make_block_local</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants._lib.core.quadrants_python.CompileConfig.make_cpu_multithreading_loop"><code class="docutils literal notranslate"><span class="pre">CompileConfig.make_cpu_multithreading_loop</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants._lib.core.quadrants_python.CompileConfig.make_mesh_block_local"><code class="docutils literal notranslate"><span class="pre">CompileConfig.make_mesh_block_local</span></code></a></li>
@@ -1274,17 +1220,13 @@
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants._lib.core.quadrants_python.CompileConfig.random_seed"><code class="docutils literal notranslate"><span class="pre">CompileConfig.random_seed</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants._lib.core.quadrants_python.CompileConfig.real_matrix_scalarize"><code class="docutils literal notranslate"><span class="pre">CompileConfig.real_matrix_scalarize</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants._lib.core.quadrants_python.CompileConfig.saturating_grid_dim"><code class="docutils literal notranslate"><span class="pre">CompileConfig.saturating_grid_dim</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants._lib.core.quadrants_python.CompileConfig.simplify_after_lower_access"><code class="docutils literal notranslate"><span class="pre">CompileConfig.simplify_after_lower_access</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants._lib.core.quadrants_python.CompileConfig.simplify_before_lower_access"><code class="docutils literal notranslate"><span class="pre">CompileConfig.simplify_before_lower_access</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants._lib.core.quadrants_python.CompileConfig.timeline"><code class="docutils literal notranslate"><span class="pre">CompileConfig.timeline</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants._lib.core.quadrants_python.CompileConfig.use_llvm"><code class="docutils literal notranslate"><span class="pre">CompileConfig.use_llvm</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants._lib.core.quadrants_python.CompileConfig.verbose"><code class="docutils literal notranslate"><span class="pre">CompileConfig.verbose</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants._lib.core.quadrants_python.CompileConfig.verbose_kernel_launches"><code class="docutils literal notranslate"><span class="pre">CompileConfig.verbose_kernel_launches</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#quadrants._lib.core.quadrants_python.CompileConfig.vk_api_version"><code class="docutils literal notranslate"><span class="pre">CompileConfig.vk_api_version</span></code></a></li>
 </ul>
 </li>
 </ul>
 </li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#removed-options">Removed options</a></li>
 </ul>
   </nav></div>
 
