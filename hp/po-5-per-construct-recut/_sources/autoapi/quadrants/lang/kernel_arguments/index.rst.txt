@@ -31,7 +31,7 @@ Functions
 Module Contents
 ---------------
 
-.. py:class:: ArgMetadata(annotation, name, default=inspect.Parameter.empty)
+.. py:class:: ArgMetadata(annotation, name, default=inspect.Parameter.empty, optional=False)
 
    Metadata about an argument to a function
 
@@ -43,6 +43,11 @@ Module Contents
 
 
    .. py:attribute:: default
+
+
+   .. py:attribute:: optional
+      :value: False
+
 
 
 .. py:class:: SparseMatrixEntry(ptr, i, j, dtype)
