@@ -300,7 +300,7 @@ Module Contents
        10
 
 
-.. py:function:: loop_config(*, block_dim=None, serialize=False, parallelize=None, block_dim_adaptive=True, bit_vectorize=False, name=None)
+.. py:function:: loop_config(*, block_dim=None, serialize=False, parallelize=None, bit_vectorize=False, name=None)
 
    Sets directives for the next loop
 
@@ -310,8 +310,6 @@ Module Contents
    :type serialize: bool
    :param parallelize: The number of threads to use on CPU
    :type parallelize: int
-   :param block_dim_adaptive: Whether to allow backends set block_dim adaptively, enabled by default
-   :type block_dim_adaptive: bool
    :param bit_vectorize: Whether to enable bit vectorization of struct fors on quant_arrays.
    :type bit_vectorize: bool
    :param name: Optional name for this loop, used in GPU kernel names for profiling and debugging.
