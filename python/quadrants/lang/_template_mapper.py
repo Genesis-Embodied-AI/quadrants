@@ -6,9 +6,11 @@ from quadrants.lang import impl
 from quadrants.lang.impl import Program
 from quadrants.lang.kernel_arguments import ArgMetadata
 from quadrants.lang.util import is_data_oriented
+from quadrants.types import ndarray_type
 
 from .._test_tools import warnings_helper
 from ._kernel_types import ArgsHash
+from ._optional_annotation import OPTIONAL_ABSENT
 from ._template_mapper_hotpath import (
     _extract_arg,
     _primitive_types,
@@ -74,9 +76,14 @@ class TemplateMapper:
         self._mapping_cache_disabled: bool | None = None
 
     def extract(self, raise_on_templated_floats: bool, args: tuple[Any, ...]) -> Key:
+        # Optional ndarray + None gets its own key: _extract_arg's NdarrayType branch reads .shape and raises on None.
         return tuple(
             [
-                _extract_arg(raise_on_templated_floats, arg, kernel_arg.annotation, kernel_arg.name)
+                (
+                    OPTIONAL_ABSENT
+                    if arg is None and kernel_arg.optional and type(kernel_arg.annotation) is ndarray_type.NdarrayType
+                    else _extract_arg(raise_on_templated_floats, arg, kernel_arg.annotation, kernel_arg.name)
+                )
                 for arg, kernel_arg in zip(args, self.arguments)
             ]
         )

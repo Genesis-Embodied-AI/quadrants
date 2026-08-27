@@ -315,7 +315,13 @@ class FuncBase:
 
         self.template_slot_locations: list[int] = []
         for i, arg in enumerate(self.arg_metas):
-            if arg.annotation == template or isinstance(arg.annotation, template) or arg.annotation is _TensorClass:
+            if (
+                arg.annotation == template
+                or isinstance(arg.annotation, template)
+                or arg.annotation is _TensorClass
+                # An optional ndarray registers as a template slot so presence (None vs array) can specialize.
+                or (arg.optional and type(arg.annotation) is ndarray_type.NdarrayType)
+            ):
                 self.template_slot_locations.append(i)
 
     def _populate_global_vars_for_templates(

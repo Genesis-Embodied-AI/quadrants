@@ -6,12 +6,12 @@ import numpy as np
 import pytest
 
 import quadrants as qd
-from quadrants.lang.exception import QuadrantsRuntimeTypeError, QuadrantsSyntaxError
+from quadrants.lang.exception import QuadrantsSyntaxError
 from quadrants.types.ndarray_type import NdarrayType
 
 from tests import test_utils
 
-# Parse + normalization (decoration-time, no qd.init()): the union spelling is accepted and marks the slot optional.
+# Parse + normalization (decoration-time): the union spelling is accepted and marks the slot optional.
 
 
 def _arg0(kernel):
@@ -25,7 +25,7 @@ def test_tensor_union_parses_and_marks_optional():
 
     meta = _arg0(k)
     assert meta.optional is True
-    # None is stripped: the stored annotation is the bare qd.Tensor, so downstream dispatch is unchanged.
+    # None is stripped: the stored annotation is the bare qd.Tensor.
     assert meta.annotation is qd.Tensor
 
 
@@ -157,7 +157,7 @@ def test_template_union_none_and_present_run():
     assert out.to_numpy()[0] == 7
 
 
-# Runtime: qd.types.NDArray[...] | None. Present value works now; None is not supported yet.
+# Runtime: qd.types.NDArray[...] | None
 
 
 @test_utils.test()
@@ -174,8 +174,8 @@ def test_ndarray_union_present_value_runs():
 
 
 @test_utils.test()
-def test_ndarray_union_none_not_yet_supported():
-    """An optional ndarray slot parses, but launching it with ``None`` is not supported yet."""
+def test_ndarray_union_none_launches_absent():
+    """Absent optional ndarray consumes no runtime arg; the following required slot still binds correctly."""
     a = qd.ndarray(qd.f32, shape=(4,))
 
     @qd.kernel
@@ -183,5 +183,88 @@ def test_ndarray_union_none_not_yet_supported():
         for i in range(out.shape[0]):
             out[i] = qd.f32(i)
 
-    with pytest.raises(QuadrantsRuntimeTypeError):
-        maybe_fill(None, a)
+    maybe_fill(None, a)
+    np.testing.assert_array_equal(a.to_numpy(), np.arange(4, dtype=np.float32))
+
+
+@test_utils.test()
+def test_ndarray_union_none_and_present_specialize_separately():
+    """Present and absent calls compile distinct specializations via qd.static(x is not None)."""
+    out = qd.ndarray(qd.f32, shape=(4,))
+    bias = qd.ndarray(qd.f32, shape=(4,))
+    bias.from_numpy(np.full(4, 100.0, dtype=np.float32))
+
+    @qd.kernel
+    def add_bias(out: qd.types.NDArray[qd.f32, 1], bias: qd.types.NDArray[qd.f32, 1] | None):
+        for i in range(out.shape[0]):
+            if qd.static(bias is not None):
+                out[i] = qd.f32(i) + bias[i]
+            else:
+                out[i] = qd.f32(i)
+
+    add_bias(out, None)
+    np.testing.assert_array_equal(out.to_numpy(), np.arange(4, dtype=np.float32))
+
+    add_bias(out, bias)
+    np.testing.assert_array_equal(out.to_numpy(), np.arange(4, dtype=np.float32) + 100.0)
+
+    assert len(add_bias._primal.mapper.mapping) == 2
+
+
+@test_utils.test()
+def test_ndarray_union_absent_in_middle_preserves_arg_binding():
+    """An absent optional ndarray between two required slots keeps runtime-arg accounting aligned."""
+    first = qd.ndarray(qd.f32, shape=(4,))
+    last = qd.ndarray(qd.f32, shape=(4,))
+
+    @qd.kernel
+    def k(
+        first: qd.types.NDArray[qd.f32, 1],
+        mid: qd.types.NDArray[qd.f32, 1] | None,
+        last: qd.types.NDArray[qd.f32, 1],
+    ):
+        for i in range(first.shape[0]):
+            first[i] = qd.f32(i)
+            last[i] = qd.f32(i) * 2.0
+
+    k(first, None, last)
+    np.testing.assert_array_equal(first.to_numpy(), np.arange(4, dtype=np.float32))
+    np.testing.assert_array_equal(last.to_numpy(), np.arange(4, dtype=np.float32) * 2.0)
+
+
+# ndarray autodiff is only supported on these backends (vulkan excluded).
+_archs_support_ndarray_ad = [qd.cpu, qd.cuda, qd.amdgpu, qd.metal]
+
+
+@test_utils.test(arch=_archs_support_ndarray_ad, require=qd.extension.adstack)
+def test_ndarray_union_autodiff_present():
+    """Autodiff through a present optional ndarray slot matches the non-optional case."""
+    N = 10
+
+    @qd.kernel
+    def compute(
+        a: qd.types.NDArray[qd.f32, 1] | None,
+        b: qd.types.NDArray[qd.i32, 1],
+        p: qd.types.NDArray[qd.f32, 1],
+    ):
+        for i in range(N):
+            ret = 1.0
+            for j in range(b[i]):
+                ret = ret + a[i]
+            p[i] = ret
+
+    a = qd.ndarray(qd.f32, shape=N, needs_grad=True)
+    b = qd.ndarray(qd.i32, shape=N)
+    p = qd.ndarray(qd.f32, shape=N, needs_grad=True)
+    for i in range(N):
+        a[i] = 3
+        b[i] = i
+
+    compute(a, b, p)
+    for i in range(N):
+        assert p[i] == a[i] * b[i] + 1
+        p.grad[i] = 1
+
+    compute.grad(a, b, p)
+    for i in range(N):
+        assert a.grad[i] == b[i]

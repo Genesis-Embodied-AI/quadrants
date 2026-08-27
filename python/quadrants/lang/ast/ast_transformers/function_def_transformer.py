@@ -27,6 +27,7 @@ from quadrants.lang._final_dataclass_fields import (
     final_field_names,
     is_final_annotation,
 )
+from quadrants.lang._optional_annotation import OPTIONAL_ABSENT
 from quadrants.lang.ast.ast_transformer_utils import (
     ASTTransformerFuncContext,
 )
@@ -65,6 +66,13 @@ class FunctionDefTransformer:
         full_name = prefix_name + "_" + name
         if not isinstance(annotation, primitive_types.RefType):
             ctx.kernel_args.append(name)
+        # Optional ndarray + None declares no runtime arg; bind the name to the injected None global so
+        # qd.static(x is not None) specializes the present-only body away.
+        if this_arg_features is OPTIONAL_ABSENT:
+            if name in ctx.template_vars:
+                return True, ctx.template_vars[name]
+            assert ctx.global_vars is not None
+            return True, ctx.global_vars.get(name)
         # qd.Tensor value-dispatch. The first slot of this_arg_features is a string marker placed by
         # _template_mapper_hotpath. The annotation is the wrapper class itself (``qd.Tensor``).
         if annotation is _TensorClass:

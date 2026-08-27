@@ -62,6 +62,7 @@ from quadrants.lang.impl import Program
 from quadrants.lang.shell import _shell_pop_print
 from quadrants.lang.util import cook_dtype, is_data_oriented
 from quadrants.types import (
+    ndarray_type,
     primitive_types,
     template,
 )
@@ -641,6 +642,13 @@ class Kernel(FuncBase):
                 if needed_ is template or type(needed_) is template:
                     template_num += 1
                     i_out += 1
+                    continue
+                if (
+                    val is None
+                    and self.arg_metas[i_in].optional
+                    and type(self.arg_metas[i_in].annotation) is ndarray_type.NdarrayType
+                ):
+                    # Optional ndarray + None is specialized away at compile time, so it consumes no runtime arg.
                     continue
                 # FIXME: This shortcut skips _recursive_set_args() solely when val._qd_all_field is true and the annotation is
                 # a dataclass, but _recursive_set_args() is where the strict provided_arg_type-is-needed_arg_type check lives.
