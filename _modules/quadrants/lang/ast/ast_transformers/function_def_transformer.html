@@ -356,6 +356,10 @@
 <span class="p">)</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang</span><span class="w"> </span><span class="kn">import</span> <span class="n">ops</span> <span class="k">as</span> <span class="n">qd_ops</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._dataclass_util</span><span class="w"> </span><span class="kn">import</span> <span class="n">create_flat_name</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang._final_dataclass_fields</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">final_field_names</span><span class="p">,</span>
+    <span class="n">is_final_annotation</span><span class="p">,</span>
+<span class="p">)</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">quadrants.lang.ast.ast_transformer_utils</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
     <span class="n">ASTTransformerFuncContext</span><span class="p">,</span>
 <span class="p">)</span>
@@ -478,14 +482,25 @@
         <span class="n">argument_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
         <span class="n">argument_type</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
         <span class="n">this_arg_features</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">Any</span><span class="p">,</span> <span class="o">...</span><span class="p">],</span>
+        <span class="n">arg_value</span><span class="p">:</span> <span class="n">Any</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
         <span class="n">pruning</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">global_context</span><span class="o">.</span><span class="n">pruning</span>
         <span class="n">func_id</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">func</span><span class="o">.</span><span class="n">func_id</span>
         <span class="k">if</span> <span class="n">dataclasses</span><span class="o">.</span><span class="n">is_dataclass</span><span class="p">(</span><span class="n">argument_type</span><span class="p">):</span>
             <span class="n">ctx</span><span class="o">.</span><span class="n">create_variable</span><span class="p">(</span><span class="n">argument_name</span><span class="p">,</span> <span class="n">argument_type</span><span class="p">)</span>
+            <span class="n">final_names</span> <span class="o">=</span> <span class="n">final_field_names</span><span class="p">(</span><span class="n">argument_type</span><span class="p">)</span>
             <span class="k">for</span> <span class="n">field_idx</span><span class="p">,</span> <span class="n">field</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">dataclasses</span><span class="o">.</span><span class="n">fields</span><span class="p">(</span><span class="n">argument_type</span><span class="p">)):</span>
                 <span class="n">flat_name</span> <span class="o">=</span> <span class="n">create_flat_name</span><span class="p">(</span><span class="n">argument_name</span><span class="p">,</span> <span class="n">field</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
                 <span class="k">if</span> <span class="n">pruning</span><span class="o">.</span><span class="n">enforcing</span> <span class="ow">and</span> <span class="n">flat_name</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">pruning</span><span class="o">.</span><span class="n">used_vars_by_func_id</span><span class="p">[</span><span class="n">func_id</span><span class="p">]:</span>
+                    <span class="k">continue</span>
+                <span class="c1"># Bind ``flat_name`` to the value off the instance so a rewritten ``config.field`` resolves to a Python</span>
+                <span class="c1"># constant in ``build_Name`` - what makes ``qd.static(config.field)`` legal on a plain frozen dataclass.</span>
+                <span class="k">if</span> <span class="n">field</span><span class="o">.</span><span class="n">name</span> <span class="ow">in</span> <span class="n">final_names</span><span class="p">:</span>
+                    <span class="k">assert</span> <span class="n">arg_value</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">,</span> <span class="p">(</span>
+                        <span class="sa">f</span><span class="s2">"Final-annotated dataclass field </span><span class="si">{</span><span class="n">field</span><span class="o">.</span><span class="n">name</span><span class="si">!r}</span><span class="s2"> needs the runtime dataclass instance to "</span>
+                        <span class="sa">f</span><span class="s2">"bake its value; kernel-arg dispatch omitted ``arg_value``"</span>
+                    <span class="p">)</span>
+                    <span class="n">ctx</span><span class="o">.</span><span class="n">create_variable</span><span class="p">(</span><span class="n">flat_name</span><span class="p">,</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">arg_value</span><span class="p">,</span> <span class="n">field</span><span class="o">.</span><span class="n">name</span><span class="p">))</span>
                     <span class="k">continue</span>
                 <span class="c1"># if a field is a dataclass, then feed back into process_kernel_arg recursively</span>
                 <span class="k">if</span> <span class="n">dataclasses</span><span class="o">.</span><span class="n">is_dataclass</span><span class="p">(</span><span class="n">field</span><span class="o">.</span><span class="n">type</span><span class="p">):</span>
@@ -494,6 +509,7 @@
                         <span class="n">flat_name</span><span class="p">,</span>
                         <span class="n">field</span><span class="o">.</span><span class="n">type</span><span class="p">,</span>
                         <span class="n">this_arg_features</span><span class="p">[</span><span class="n">field_idx</span><span class="p">],</span>
+                        <span class="nb">getattr</span><span class="p">(</span><span class="n">arg_value</span><span class="p">,</span> <span class="n">field</span><span class="o">.</span><span class="n">name</span><span class="p">)</span> <span class="k">if</span> <span class="n">arg_value</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="kc">None</span><span class="p">,</span>
                     <span class="p">)</span>
                 <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">field</span><span class="o">.</span><span class="n">type</span><span class="p">,</span> <span class="nb">type</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">field</span><span class="o">.</span><span class="n">type</span><span class="p">,</span> <span class="s2">"_data_oriented"</span><span class="p">,</span> <span class="kc">False</span><span class="p">):</span>
                     <span class="c1"># ``@qd.data_oriented`` field type inside a typed-dataclass kernel arg. The two patterns are</span>
@@ -557,6 +573,7 @@
                 <span class="n">arg_meta</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
                 <span class="n">arg_meta</span><span class="o">.</span><span class="n">annotation</span><span class="p">,</span>
                 <span class="n">ctx</span><span class="o">.</span><span class="n">arg_features</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="k">if</span> <span class="n">ctx</span><span class="o">.</span><span class="n">arg_features</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="p">(),</span>
+                <span class="n">ctx</span><span class="o">.</span><span class="n">py_args</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="k">if</span> <span class="n">ctx</span><span class="o">.</span><span class="n">py_args</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="kc">None</span><span class="p">,</span>
             <span class="p">)</span>
 
         <span class="n">FunctionDefTransformer</span><span class="o">.</span><span class="n">_predeclare_struct_ndarrays</span><span class="p">(</span><span class="n">ctx</span><span class="p">)</span>
@@ -658,6 +675,11 @@
         <span class="n">argument_type</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
         <span class="n">data</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="c1"># A ``Final[T]`` leaf @qd.func arg: ``data`` already carries the resolved Python value, so bind it directly for</span>
+        <span class="c1"># ``qd.static(cfg.field)``. Before the ``annotations.template`` check (``Final[T]`` is not a ``template``).</span>
+        <span class="k">if</span> <span class="n">is_final_annotation</span><span class="p">(</span><span class="n">argument_type</span><span class="p">):</span>
+            <span class="n">ctx</span><span class="o">.</span><span class="n">create_variable</span><span class="p">(</span><span class="n">argument_name</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span>
+            <span class="k">return</span> <span class="kc">None</span>
         <span class="c1"># Template arguments are passed by reference.</span>
         <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">argument_type</span><span class="p">,</span> <span class="n">annotations</span><span class="o">.</span><span class="n">template</span><span class="p">):</span>
             <span class="n">ctx</span><span class="o">.</span><span class="n">create_variable</span><span class="p">(</span><span class="n">argument_name</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span>
