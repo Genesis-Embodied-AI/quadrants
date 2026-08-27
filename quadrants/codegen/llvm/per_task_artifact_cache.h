@@ -80,7 +80,16 @@ class PerTaskArtifactCache {
     write_to_binary_file(rec, tmp);
     std::filesystem::rename(tmp, p, ec);
     if (ec) {
-      std::filesystem::remove(tmp, ec);
+      // POSIX rename atomically replaces an existing `p`, but on Windows it fails when `p` exists -- including when `p`
+      // is a corrupt record `try_load` just declined. Without repair that entry would miss and recompile in every
+      // future process. Drop the stale destination and retry so it self-heals; if it still fails, remove the temp so we
+      // never leak a `.tmp`. (On POSIX the first rename succeeds, so this path is Windows-only.)
+      std::error_code repair_ec;
+      std::filesystem::remove(p, repair_ec);
+      std::filesystem::rename(tmp, p, ec);
+      if (ec) {
+        std::filesystem::remove(tmp, repair_ec);
+      }
     }
   }
 
