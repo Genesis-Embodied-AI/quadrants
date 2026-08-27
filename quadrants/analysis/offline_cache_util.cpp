@@ -301,6 +301,11 @@ std::string get_hashed_per_task_cache_key(const CompileConfig &config,
                            std::to_string(task->stream_parallel_group_id) + ":" +
                            std::to_string(task->graph_parallel_region_id) + ":" + std::to_string(task->checkpoint_id);
   hasher.process(region_key.begin(), region_key.end());
+  // bit_vectorized (quant-array struct-for): omitted by the offload printer, but CUDA codegen branches on it in
+  // create_offload_struct_for() to pick a different leaf block / coordinate-refinement path. Without it, a task
+  // switched between normal and bit-vectorized traversal keeps its key and could reuse PTX for the wrong traversal.
+  std::string bit_vectorized_key = task->is_bit_vectorized ? "bv1" : "bv0";
+  hasher.process(bit_vectorized_key.begin(), bit_vectorized_key.end());
   // Fold in the Quadrants build version. The whole-kernel `.qdc` cache is version-gated by its metadata (loader /
   // cleaner drop a version-mismatched entry), but the per-task artifact cache has no such gate, so without this a probe
   // on an upgraded Quadrants would hit a byte-identical key and reuse the OLD build's PTX. Keying on the version turns
