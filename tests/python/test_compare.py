@@ -182,7 +182,7 @@ def test_static_is_rejects_runtime_operands():
 
     with pytest.raises(
         qd.QuadrantsSyntaxError,
-        match=r'Operator "is" inside `qd.static` requires a direct kernel argument annotated',
+        match=r'Operator "is" inside `qd.static` compares a direct kernel argument against `None`',
     ):
         scalar(0)
 
@@ -194,7 +194,7 @@ def test_static_is_rejects_runtime_operands():
     value = qd.ndarray(qd.i32, shape=(1,))
     with pytest.raises(
         qd.QuadrantsSyntaxError,
-        match=r'Operator "is not" inside `qd.static` requires a direct kernel argument annotated',
+        match=r'Operator "is not" inside `qd.static` compares a direct kernel argument against `None`',
     ):
         array(value)
 
@@ -204,7 +204,7 @@ def test_static_is_rejects_runtime_operands():
 
     with pytest.raises(
         qd.QuadrantsSyntaxError,
-        match=r'Operator "is" inside `qd.static` requires a direct kernel argument annotated',
+        match=r'Operator "is" inside `qd.static` compares a direct kernel argument against `None`',
     ):
         reserved_name(None)
 
@@ -217,7 +217,7 @@ def test_static_is_rejects_runtime_operands():
 
     with pytest.raises(
         qd.QuadrantsSyntaxError,
-        match=r'Operator "is" inside `qd.static` requires a direct kernel argument annotated',
+        match=r'Operator "is" inside `qd.static` compares a direct kernel argument against `None`',
     ):
         shadowed_template(7)
 
@@ -256,7 +256,7 @@ def test_static_is_rejects_non_none_identity():
 
     with pytest.raises(
         qd.QuadrantsSyntaxError,
-        match=r'Operator "is" inside `qd.static` requires a direct kernel argument annotated',
+        match=r'Operator "is" inside `qd.static` compares a direct kernel argument against `None`',
     ):
         same(qd.i32)
 
