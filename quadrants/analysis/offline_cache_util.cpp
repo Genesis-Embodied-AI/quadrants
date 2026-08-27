@@ -293,6 +293,14 @@ std::string get_hashed_per_task_cache_key(const CompileConfig &config,
   }
   hasher.process(task_body_string.begin(), task_body_string.end());
   hasher.process(autodiff_mode_string.begin(), autodiff_mode_string.end());
+  // Graph-region tags: gdw level, stream-parallel group, graph_parallel_context region, checkpoint id. The printed
+  // body carries only gdw_level, yet all four steer CUDA codegen / the launcher's OffloadedTask metadata. That is why
+  // the whole-kernel key hashes them out-of-band (gen_offline_cache_key.cpp, emit_graph_region_key); without it, two
+  // tasks with identical bodies but different regions would alias to one artifact.
+  std::string region_key = std::to_string(task->graph_do_while_level_id) + ":" +
+                           std::to_string(task->stream_parallel_group_id) + ":" +
+                           std::to_string(task->graph_parallel_region_id) + ":" + std::to_string(task->checkpoint_id);
+  hasher.process(region_key.begin(), region_key.end());
   // Fold in the Quadrants build version. The whole-kernel `.qdc` cache is version-gated by its metadata (loader /
   // cleaner drop a version-mismatched entry), but the per-task artifact cache has no such gate, so without this a probe
   // on an upgraded Quadrants would hit a byte-identical key and reuse the OLD build's PTX. Keying on the version turns

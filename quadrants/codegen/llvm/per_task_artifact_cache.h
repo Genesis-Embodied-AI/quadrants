@@ -44,8 +44,15 @@ class PerTaskArtifactCache {
     if (!std::filesystem::exists(p, ec)) {
       return false;
     }
-    // A truncated/corrupt record (e.g. a crash mid-write) must degrade to a miss, not a hard failure.
-    return read_from_binary_file(*out, p);
+    // A truncated/corrupt record (bad disk, tampering, format skew) must degrade to a miss, not a hard failure.
+    // `read_from_binary_file` trusts the on-disk length header and can over-read / assert on a partial file, so read
+    // the bytes and decode via the length-checked `read_from_binary`, as the offline-cache metadata loader does.
+    // The size guard stops `retrieve_length()` reading past a file shorter than the length header itself.
+    const std::vector<uint8_t> bytes = read_data_from_file(p);
+    if (bytes.size() < sizeof(std::size_t)) {
+      return false;
+    }
+    return read_from_binary(*out, bytes.data(), bytes.size());
   }
 
   void store(const std::string &ir_key, const PerTaskArtifact &rec) const {

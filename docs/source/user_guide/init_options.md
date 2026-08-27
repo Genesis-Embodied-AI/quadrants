@@ -15,6 +15,7 @@ When `offline_cache=True`, compilation artifacts persist on disk under `offline_
 The flag gates two disk tiers, not just the whole-kernel one:
 - On CUDA it also enables a **per-task artifact cache**: each offloaded task's compiled code is stored keyed by that task's own IR, so editing one task in a large kernel reuses the *other* tasks' compiled code across processes instead of recompiling the whole kernel.
 - Per-task reuse for the most recent compile is reported at `kernel._primal.per_offload_cache_observations.tasks_{total,cache_hit,recompiled}`; each is `-1` when the tier did not run (non-CUDA, or `offline_cache=False`).
+- Known limitation: per-task artifacts are not yet counted toward `offline_cache_max_size_of_files`. They are reclaimed only on version invalidation (a Quadrants upgrade or corrupted metadata clears the whole tier), so a workload that keeps producing new task keys can grow the directory until then. Folding this tier into size-based eviction is a planned follow-up.
 
 The separate source-level cache used by [fastcache](./fastcache.md) kernels is controlled by `src_ll_cache` (on by default), not by `offline_cache`; with `offline_cache=False` it still writes its own bookkeeping files to disk, so set `src_ll_cache=False` as well to stop that too.
 
