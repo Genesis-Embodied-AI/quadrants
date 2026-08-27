@@ -978,8 +978,8 @@ class ASTTransformer(Builder):
                 ):
                     raise QuadrantsSyntaxError(
                         f'Operator "{name}" inside `qd.static` compares a direct kernel argument against `None`. '
-                        "The argument must be annotated `qd.types.Template`, `qd.Tensor`, "
-                        "or optional `qd.types.NDArray[...] | None`."
+                        "The argument must be annotated `qd.Tensor | None`, `qd.types.Template | None`, "
+                        "or `qd.types.NDArray[...] | None`."
                     )
                 if template_side == "left":
                     l = ctx.template_vars[template_node.id]
